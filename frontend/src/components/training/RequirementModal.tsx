@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { CallTypeRequirementPicker } from './CallTypeRequirementPicker';
 import { useDialog } from '../../hooks/useDialog';
 import { AlertCircle, CheckCircle, X } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -69,6 +70,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
     required_hours: seed?.required_hours || undefined,
     required_shifts: seed?.required_shifts || undefined,
     required_calls: seed?.required_calls || undefined,
+    required_call_types: seed?.required_call_types ?? ([] as string[]),
     checklist_items: seed?.checklist_items ?? [],
     passing_score: seed?.passing_score || undefined,
     max_attempts: seed?.max_attempts || undefined,
@@ -79,6 +81,9 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
     // unbounded date window for one_time and ignores `year` entirely).
     year: seedFrequency === 'one_time' ? undefined : seed?.year || (new Date().getFullYear() as number | undefined),
     allows_external_credit: seed?.allows_external_credit ?? false,
+    // null until the officer touches it: a new requirement then follows its
+    // type (SHIFTS on, HOURS off), matching the backend default.
+    shift_credited: seed?.shift_credited ?? null,
     applies_to_all: seed?.applies_to_all ?? true,
     required_membership_types: seed?.required_membership_types || ([] as string[]),
     due_date: seed?.due_date || '',
@@ -193,12 +198,17 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
           : null,
       required_shifts: formData.requirement_type === 'shifts' ? (formData.required_shifts ?? null) : null,
       required_calls: formData.requirement_type === 'calls' ? (formData.required_calls ?? null) : null,
+      // An empty list means every call counts, so switching away clears it.
+      required_call_types: formData.requirement_type === 'calls' ? formData.required_call_types : [],
       checklist_items: formData.requirement_type === 'checklist' ? checklistItems : null,
       passing_score: formData.requirement_type === 'knowledge_test' ? (formData.passing_score ?? null) : null,
       max_attempts: formData.requirement_type === 'knowledge_test' ? (formData.max_attempts ?? null) : null,
       frequency: formData.frequency,
       ...(!isOneTime && formData.year ? { year: formData.year } : {}),
       allows_external_credit: formData.allows_external_credit,
+      ...(formData.requirement_type === 'hours' || formData.requirement_type === 'shifts'
+        ? { shift_credited: formData.shift_credited ?? formData.requirement_type === 'shifts' }
+        : {}),
       applies_to_all: formData.applies_to_all,
       required_membership_types:
         formData.required_membership_types.length > 0 ? formData.required_membership_types : undefined,
@@ -503,6 +513,12 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                     placeholder="e.g., 24"
                     min="1"
                   />
+                  <div className="mt-3">
+                    <CallTypeRequirementPicker
+                      value={formData.required_call_types}
+                      onChange={(next) => setFormData({ ...formData, required_call_types: next })}
+                    />
+                  </div>
                 </div>
               )}
 
@@ -936,6 +952,32 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                     </label>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Which requirements the scheduling Shift Compliance report grades
+              from shifts worked. Training screens grade from training records,
+              so an HOURS requirement left unticked is not on that report. */}
+            {(formData.requirement_type === 'hours' || formData.requirement_type === 'shifts') && (
+              <div className="space-y-3">
+                <h4 className="text-theme-text-primary border-theme-surface-border border-b pb-2 font-semibold">
+                  Shift Credit
+                </h4>
+                <label className="flex cursor-pointer items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.shift_credited ?? formData.requirement_type === 'shifts'}
+                    onChange={(e) => setFormData({ ...formData, shift_credited: e.target.checked })}
+                    className="form-checkbox mt-0.5"
+                  />
+                  <span className="text-theme-text-secondary text-sm">
+                    Shift attendance satisfies this requirement
+                    <span className="text-theme-text-muted block text-xs">
+                      Graded from shifts worked on the scheduling Shift Compliance report. Leave unticked for training
+                      hours, which are graded from training records.
+                    </span>
+                  </span>
+                </label>
               </div>
             )}
 

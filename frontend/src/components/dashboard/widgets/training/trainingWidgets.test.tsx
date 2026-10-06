@@ -13,6 +13,8 @@ const data = {
     active_courses: 1,
     training_sessions: 1,
     active_programs: 0,
+    graded_members: 2,
+    not_applicable_members: 0,
     compliant_members: 1,
     compliance_percentage: 50,
     expiring_count: 1,
@@ -61,7 +63,31 @@ describe('training dashboard widgets', () => {
   it('reports the compliance percentage when requirements exist', () => {
     render(<ComplianceOverviewWidget data={data} />);
     expect(screen.getByText('50%')).toBeInTheDocument();
-    expect(screen.getByText('1 of 2 active, non-exempt members')).toBeInTheDocument();
+    expect(screen.getByText('1 of 2 graded members')).toBeInTheDocument();
+  });
+  it('counts only graded members, and names the not-applicable ones', () => {
+    const mixed = {
+      ...data,
+      stats: { ...data.stats, tracked_members: 3, graded_members: 2, not_applicable_members: 1 },
+    };
+    render(<ComplianceOverviewWidget data={mixed} />);
+    expect(screen.getByText('1 of 2 graded members · 1 not applicable')).toBeInTheDocument();
+  });
+  it('shows N/A, not 100%, when no requirement applies to any member', () => {
+    const nothingApplies = {
+      ...data,
+      stats: {
+        ...data.stats,
+        graded_members: 0,
+        not_applicable_members: 2,
+        compliant_members: 0,
+        compliance_percentage: null,
+      },
+    };
+    render(<ComplianceOverviewWidget data={nothingApplies} />);
+    expect(screen.getByText('N/A')).toBeInTheDocument();
+    expect(screen.queryByText('100%')).not.toBeInTheDocument();
+    expect(screen.getByText('No active requirement applies to any tracked member.')).toBeInTheDocument();
   });
   it('says compliance is not set up, not 100%, when no requirements exist', () => {
     const empty = {

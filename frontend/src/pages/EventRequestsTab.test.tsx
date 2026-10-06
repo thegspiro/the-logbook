@@ -1,14 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const listRequests = vi.fn();
 const getRequest = vi.fn();
+const postponeRequest = vi.fn();
+const toastError = vi.fn();
+
+vi.mock('react-hot-toast', () => ({
+  default: Object.assign(vi.fn(), {
+    error: (...args: unknown[]) => toastError(...args) as unknown,
+    success: vi.fn(),
+  }),
+}));
 
 vi.mock('../services/api', () => ({
   eventRequestService: {
     listRequests: (...args: unknown[]) => listRequests(...args) as unknown,
     getRequest: (...args: unknown[]) => getRequest(...args) as unknown,
+    postponeRequest: (...args: unknown[]) => postponeRequest(...args) as unknown,
     getOutreachTypeLabels: () => Promise.resolve({}),
     listEmailTemplates: () => Promise.resolve([]),
     getOutreachRoles: () => Promise.resolve([]),
@@ -77,5 +87,61 @@ describe('EventRequestsTab pipeline tasks', () => {
     await user.click(await screen.findByRole('button', { name: 'Assign' }));
 
     expect(screen.getByRole('option', { name: 'Sam Ortiz — Fire Chief' })).toBeInTheDocument();
+  });
+});
+
+// The request queue reads as "nothing to handle" when empty, so a 200 whose
+// body is not a list (a captive portal's HTML page) must show the tab's error
+// rather than an empty queue — and must not crash on `requests.reduce`, which
+// took the whole Events hub down.
+describe('EventRequestsTab with a malformed request list', () => {
+  beforeEach(() => {
+    listRequests.mockReset();
+    listRequests.mockResolvedValue('<html>Sign in to Wi-Fi</html>');
+    getRequest.mockReset();
+  });
+
+  it('shows its load error', async () => {
+    render(<EventRequestsTab />);
+
+    expect(await screen.findByText('Failed to load event requests.')).toBeInTheDocument();
+  });
+});
+
+describe('EventRequestsTab refusals', () => {
+  beforeEach(() => {
+    listRequests.mockReset();
+    getRequest.mockReset();
+    postponeRequest.mockReset();
+    toastError.mockReset();
+    listRequests.mockResolvedValue([request]);
+    getRequest.mockResolvedValue({ ...request, activity_log: [] });
+  });
+
+  it("shows the server's reason when a postpone is refused", async () => {
+    // A closed event's attendance and a bad date are different fixes; the
+    // coordinator can only tell which by reading the sentence.
+    const detail = "This event's attendance has been finalized, so postponing it is not allowed.";
+    postponeRequest.mockRejectedValue({ response: { status: 409, data: { detail } } });
+    const user = userEvent.setup();
+    render(<EventRequestsTab />);
+
+    await user.click(await screen.findByRole('button', { name: /Pat Requester/ }));
+    await user.click(await screen.findByRole('button', { name: 'Postpone' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm Postpone' }));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith(detail));
+  });
+
+  it('falls back to a generic message when the server gave no reason', async () => {
+    postponeRequest.mockRejectedValue(new Error('Network Error'));
+    const user = userEvent.setup();
+    render(<EventRequestsTab />);
+
+    await user.click(await screen.findByRole('button', { name: /Pat Requester/ }));
+    await user.click(await screen.findByRole('button', { name: 'Postpone' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm Postpone' }));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Failed to postpone request.'));
   });
 });

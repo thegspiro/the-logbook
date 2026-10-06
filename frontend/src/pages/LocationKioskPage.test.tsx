@@ -83,3 +83,53 @@ describe('LocationKioskPage badge reader', () => {
     expect(screen.queryByText('Or tap your ID card here')).not.toBeInTheDocument();
   });
 });
+
+describe('LocationKioskPage revocation', () => {
+  // Rotating a display code is the documented way to revoke a leaked one, and
+  // deactivating the room or the department has the same effect: the public
+  // endpoint stops resolving that code and answers 404. A tablet already on
+  // the wall only learns this on its next poll, so the 404 has to take the
+  // display down — otherwise the revocation reaches the URL and never reaches
+  // the screen it exists to clear.
+  const notFound = { ok: false, status: 404, json: () => Promise.resolve({}) };
+
+  it('stops showing a revoked room instead of serving its last payload forever', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      mockFetch.mockResolvedValueOnce(feed({})).mockResolvedValue(notFound);
+      renderKiosk();
+
+      expect(await screen.findByText('Monthly Drill')).toBeInTheDocument();
+
+      // One poll later the code no longer resolves.
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      expect(await screen.findByText('Display Unavailable')).toBeInTheDocument();
+      expect(screen.queryByText('Monthly Drill')).not.toBeInTheDocument();
+      // Named for whoever walks past a wall-mounted tablet: "check the URL"
+      // asks something of a reader who has no URL bar and no way to know a
+      // code was rotated.
+      expect(screen.getByText(/ask an officer for this room's current display link/i)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the last payload through a transient failure, which is not a revocation', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      mockFetch.mockResolvedValueOnce(feed({})).mockRejectedValue(new Error('network down'));
+      renderKiosk();
+
+      expect(await screen.findByText('Monthly Drill')).toBeInTheDocument();
+
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      // Still showing the room: a blip must not blank a working display.
+      expect(screen.getByText('Monthly Drill')).toBeInTheDocument();
+      expect(screen.queryByText('Display Unavailable')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

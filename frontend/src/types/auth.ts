@@ -34,7 +34,12 @@ export interface CurrentUser {
   email: string;
   first_name?: string;
   last_name?: string;
+  /** The name the member goes by, in place of first_name on everyday screens. */
+  preferred_name?: string | null;
+  /** Legal name (first + last). */
   full_name?: string;
+  /** Preferred (else first) + last name. */
+  display_name?: string;
   organization_id: string;
   timezone: string;
   /** @deprecated Use `positions` instead. Kept for backward compatibility. */
@@ -74,6 +79,8 @@ export interface PasswordResetRequestResponse {
   expires_in_minutes?: number | undefined;
   /** Set when the department signs in through an outside provider, and no link is sent. */
   auth_provider?: string | undefined;
+  /** Set when the department's email is off, and no link is sent. */
+  email_disabled?: boolean | undefined;
 }
 
 export interface PasswordResetConfirm {

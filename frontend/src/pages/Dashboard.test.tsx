@@ -51,6 +51,7 @@ const {
   mockGetUserInventory,
   mockGetInventorySummary,
   mockGetEligiblePositions,
+  mockGetEligiblePositionsBulk,
   mockGetMyCompliance,
   mockGetSchedulingSummary,
   mockGetTrainingEnrollments,
@@ -77,6 +78,7 @@ const {
   mockGetUserInventory: vi.fn(),
   mockGetInventorySummary: vi.fn(),
   mockGetEligiblePositions: vi.fn(),
+  mockGetEligiblePositionsBulk: vi.fn(),
   mockGetMyCompliance: vi.fn(),
   mockGetSchedulingSummary: vi.fn(),
   mockGetTrainingEnrollments: vi.fn(),
@@ -93,6 +95,7 @@ vi.mock('../modules/scheduling/services/api', () => ({
     getSummary: mockGetSchedulingSummary,
     signupForShift: mockSignupForShift,
     getEligiblePositions: mockGetEligiblePositions,
+    getEligiblePositionsBulk: mockGetEligiblePositionsBulk,
   },
 }));
 
@@ -159,10 +162,17 @@ vi.mock('../modules/admin-hours/services/api', () => ({
 // every caller the whole state object, so a consumer selecting one primitive
 // (`state.user?.id`) gets a fresh object each render and spins any effect keyed
 // on it — which is exactly what DashboardOrientation does.
+const authUser = vi.hoisted(() => ({ preferredName: null as string | null }));
 vi.mock('../stores/authStore', () => {
   const state = () => ({
     checkPermission: mockCheckPermission,
-    user: { id: 'user-1', first_name: 'Test', last_name: 'User', organization_id: 'org-1' },
+    user: {
+      id: 'user-1',
+      first_name: 'Test',
+      last_name: 'User',
+      preferred_name: authUser.preferredName,
+      organization_id: 'org-1',
+    },
   });
   // The real store is callable *and* carries getState. A hook-only double
   // breaks every consumer that reads the store outside React — the scheduling
@@ -236,6 +246,7 @@ const ALL_SERVICE_MOCKS = [
   mockGetUserInventory,
   mockGetInventorySummary,
   mockGetEligiblePositions,
+  mockGetEligiblePositionsBulk,
   mockGetMyCompliance,
   mockGetSchedulingSummary,
   mockGetAdminHoursSummary,
@@ -249,6 +260,7 @@ const ALL_SERVICE_MOCKS = [
 describe('Dashboard', () => {
   beforeEach(() => {
     registeredPullToRefresh = undefined;
+    authUser.preferredName = null;
     // mockReset, not just clearAllMocks: clearAllMocks wipes recorded calls but
     // leaves implementations AND any unconsumed mockRejectedValueOnce still
     // queued, so a test that arms a one-shot rejection and then returns early
@@ -270,6 +282,9 @@ describe('Dashboard', () => {
     mockGetMyTraining.mockResolvedValue({ hours_summary: { total_hours: 0, hours_this_month: 0 }, certifications: [] });
     mockGetEvents.mockResolvedValue([]);
     mockGetEligiblePositions.mockResolvedValue({ positions: ['firefighter'], is_excluded: false });
+    mockGetEligiblePositionsBulk.mockImplementation((ids: string[]) =>
+      Promise.resolve(Object.fromEntries(ids.map((id) => [id, ['firefighter']])))
+    );
     // Default: a department that tracks no screenings.
     mockGetMyCompliance.mockResolvedValue({
       total_requirements: 0,
@@ -299,6 +314,21 @@ describe('Dashboard', () => {
       active_checkouts: 0,
       overdue_checkouts: 0,
       maintenance_due_count: 0,
+    });
+  });
+
+  describe('greeting', () => {
+    it('greets the member by first name', async () => {
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByRole('heading', { level: 1, name: 'Hi, Test' })).toBeInTheDocument();
+    });
+
+    it('greets the member by the name they go by', async () => {
+      authUser.preferredName = 'Terry';
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByRole('heading', { level: 1, name: 'Hi, Terry' })).toBeInTheDocument();
     });
   });
 
@@ -1820,6 +1850,32 @@ describe('Dashboard', () => {
 
       expect(await screen.findByRole('button', { name: /^Sign Up$/ })).toBeInTheDocument();
       expect(screen.getByText(/Nothing else through/)).toBeInTheDocument();
+    });
+
+    it('says a shift the member cannot take is not eligible, without a Sign Up', async () => {
+      mockGetOpenShifts.mockResolvedValue([
+        makeShift({ id: 'open-ok', shift_date: inWindow(1) }),
+        makeShift({ id: 'open-no', shift_date: inWindow(2) }),
+      ]);
+      mockGetEligiblePositionsBulk.mockResolvedValue({ 'open-ok': ['firefighter'], 'open-no': [] });
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Not eligible')).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: /^Sign Up$/ })).toHaveLength(1);
+      expect(mockGetEligiblePositionsBulk).toHaveBeenCalledTimes(1);
+      expect(mockGetEligiblePositionsBulk).toHaveBeenCalledWith(['open-ok', 'open-no']);
+    });
+
+    it('keeps Sign Up when the eligibility lookup fails', async () => {
+      mockGetOpenShifts.mockResolvedValue([makeShift({ id: 'open-1', shift_date: inWindow(1) })]);
+      mockGetEligiblePositionsBulk.mockRejectedValue(new Error('offline'));
+
+      renderWithRouter(<Dashboard />);
+
+      await waitFor(() => expect(mockGetEligiblePositionsBulk).toHaveBeenCalled());
+      expect(await screen.findByRole('button', { name: /^Sign Up$/ })).toBeInTheDocument();
+      expect(screen.queryByText('Not eligible')).not.toBeInTheDocument();
     });
 
     it('signs the member up for an open shift', async () => {

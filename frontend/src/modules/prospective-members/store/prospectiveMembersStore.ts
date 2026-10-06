@@ -150,7 +150,7 @@ interface ProspectiveMembersState {
   fetchApplicants: (page?: number) => Promise<void>;
   fetchApplicant: (id: string) => Promise<void>;
   setCurrentApplicant: (applicant: Applicant | null) => void;
-  advanceApplicant: (id: string, notes?: string) => Promise<void>;
+  advanceApplicant: (id: string, notes?: string, completedItems?: string[]) => Promise<void>;
   regressApplicant: (id: string, notes?: string) => Promise<void>;
   completeStep: (id: string, stepId: string, notes?: string) => Promise<void>;
   rejectApplicant: (id: string, reason?: string) => Promise<void>;
@@ -525,10 +525,18 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     set({ currentApplicant: applicant });
   },
 
-  advanceApplicant: async (id: string, notes?: string) => {
+  advanceApplicant: async (id: string, notes?: string, completedItems?: string[]) => {
     set({ isAdvancing: true, error: null });
     try {
-      await applicantService.advanceStage(id, notes ? { notes } : undefined);
+      await applicantService.advanceStage(
+        id,
+        notes || completedItems
+          ? {
+              ...(notes ? { notes } : {}),
+              ...(completedItems ? { completed_items: completedItems } : {}),
+            }
+          : undefined
+      );
       // Advancing moves a stage count, and can move a status when the new
       // stage closes the application, so the header is refreshed with the list.
       // Landing on an Election Vote stage creates its election package on the

@@ -15,7 +15,15 @@ vi.mock('./apiClient', () => ({
   },
 }));
 
-import { trainingService } from './trainingServices';
+import {
+  trainingService,
+  recertificationService,
+  competencyService,
+  instructorService,
+  effectivenessService,
+  multiAgencyService,
+} from './trainingServices';
+import { TRAINING_RECORDS_PAGE_SIZE } from '../constants/config';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -89,23 +97,42 @@ describe('trainingService', () => {
   // ── Records ──────────────────────────────────────────────────────────
 
   describe('getRecords', () => {
-    it('should GET /training/records without params', async () => {
+    it('should GET /training/records a page at a time', async () => {
       const records = [{ id: 'r1', course_name: 'CPR' }];
       mockGet.mockResolvedValueOnce({ data: records });
 
       const result = await trainingService.getRecords();
 
-      expect(mockGet).toHaveBeenCalledWith('/training/records', { params: undefined });
+      expect(mockGet).toHaveBeenCalledWith('/training/records', {
+        params: { skip: 0, limit: TRAINING_RECORDS_PAGE_SIZE },
+      });
       expect(result).toEqual(records);
     });
 
-    it('should pass filter params', async () => {
+    it('should pass filter params on every page', async () => {
       mockGet.mockResolvedValueOnce({ data: [] });
       const params = { user_id: 'u1', status: 'completed' };
 
       await trainingService.getRecords(params);
 
-      expect(mockGet).toHaveBeenCalledWith('/training/records', { params });
+      expect(mockGet).toHaveBeenCalledWith('/training/records', {
+        params: { ...params, skip: 0, limit: TRAINING_RECORDS_PAGE_SIZE },
+      });
+    });
+
+    it('walks every page until a short one, so a long history is not truncated', async () => {
+      const page = (offset: number, size: number) => Array.from({ length: size }, (_, i) => ({ id: `r${offset + i}` }));
+      mockGet
+        .mockResolvedValueOnce({ data: page(0, TRAINING_RECORDS_PAGE_SIZE) })
+        .mockResolvedValueOnce({ data: page(TRAINING_RECORDS_PAGE_SIZE, 3) });
+
+      const result = await trainingService.getRecords({ user_id: 'u1' });
+
+      expect(result).toHaveLength(TRAINING_RECORDS_PAGE_SIZE + 3);
+      expect(mockGet).toHaveBeenCalledTimes(2);
+      expect(mockGet).toHaveBeenLastCalledWith('/training/records', {
+        params: { user_id: 'u1', skip: TRAINING_RECORDS_PAGE_SIZE, limit: TRAINING_RECORDS_PAGE_SIZE },
+      });
     });
   });
 
@@ -316,5 +343,27 @@ describe('trainingService', () => {
 
       await expect(trainingService.deleteRequirement('nonexistent')).rejects.toThrow('Not found');
     });
+  });
+});
+
+// The Program Management tabs map these lists straight into rows, so a body
+// that is not a list (a captive portal's HTML page answering 200) must arrive
+// as an empty one rather than take the Training hub down through the
+// ErrorBoundary — which is what each of these five tabs did.
+describe('Program Management list methods', () => {
+  beforeEach(() => {
+    mockGet.mockReset();
+    mockGet.mockResolvedValue({ data: '<html>Sign in to Wi-Fi</html>' });
+  });
+
+  it.each([
+    ['recertificationService.getPathways', () => recertificationService.getPathways()],
+    ['recertificationService.getMyRenewalTasks', () => recertificationService.getMyRenewalTasks()],
+    ['competencyService.getMatrices', () => competencyService.getMatrices()],
+    ['instructorService.getQualifications', () => instructorService.getQualifications()],
+    ['effectivenessService.getEvaluations', () => effectivenessService.getEvaluations()],
+    ['multiAgencyService.getExercises', () => multiAgencyService.getExercises()],
+  ])('%s returns an empty list for a body that is not a list', async (_name, call) => {
+    await expect(call()).resolves.toEqual([]);
   });
 });

@@ -105,6 +105,7 @@ from app.utils.label_renderer import (
     render_labels,
     sanitize_barcode_value,
 )
+from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.name_matching import normalize_name
 from app.utils.org_scoping import assert_in_org, is_in_org
@@ -411,6 +412,16 @@ LABEL_HIDE_NAME = "no_name"
 # Joins a storage area to its parents. ASCII, because the ZPL and ESC/POS
 # renderers drop anything a printer's font may not carry.
 _AREA_PATH_SEPARATOR = " > "
+
+_RETIRE_VIA_RETIRE_ACTION = "Use the item's retire action to deactivate it"
+
+
+class ItemOutsideDomainError(LookupError):
+    """A domain-scoped bulk write named an item outside that domain.
+
+    Raised by ``add_lots_bulk`` after its under-lock recheck; the medical
+    supplies route answers it with the same 404 its preflight gives.
+    """
 
 
 def storage_area_paths(areas) -> Dict[str, str]:
@@ -2688,13 +2699,24 @@ class InventoryService:
         return result.scalar_one_or_none()
 
     async def update_item(
-        self, item_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
+        self,
+        item_id: UUID,
+        organization_id: UUID,
+        update_data: Dict[str, Any],
+        required_item_types: Optional[Iterable[ItemType]] = None,
     ) -> Tuple[Optional[InventoryItem], Optional[str]]:
-        """Update an inventory item"""
+        """Update an inventory item.
+
+        ``required_item_types``, when given, re-validates under the item's
+        lock that the item — and the category it is moving to, if any — is
+        in that domain (see ``_items_in_domain_locked``). A miss reads as
+        "Item not found", matching the domain routes' 404.
+        """
         try:
             # Lock the row when status, condition, or assignment changes to
-            # prevent concurrent mutations from creating inconsistent state.
-            needs_lock = bool(
+            # prevent concurrent mutations from creating inconsistent state —
+            # and always for a domain-scoped caller, whose recheck needs it.
+            needs_lock = required_item_types is not None or bool(
                 {
                     "status",
                     "condition",
@@ -2704,6 +2726,19 @@ class InventoryService:
                 }
                 & update_data.keys()
             )
+            if required_item_types is not None:
+                types = list(required_item_types)
+                if not await self._items_in_domain_locked(
+                    [str(item_id)], str(organization_id), types
+                ):
+                    return None, "Item not found"
+                if "category_id" in update_data and not await self.category_in_domain(
+                    update_data["category_id"],
+                    str(organization_id),
+                    types,
+                    for_update=True,
+                ):
+                    return None, "Item not found"
             if needs_lock:
                 item = await self._get_item_locked(item_id, organization_id)
             else:
@@ -2765,7 +2800,7 @@ class InventoryService:
                 or update_data.get("status") == ItemStatus.RETIRED.value
                 or update_data.get("condition") == ItemCondition.RETIRED.value
             ):
-                return None, "Use the item's retire action to deactivate it"
+                return None, _RETIRE_VIA_RETIRE_ACTION
 
             # The guard above only catches *entering* retirement through
             # this path; it says nothing about an already-retired item's
@@ -4016,6 +4051,22 @@ class InventoryService:
         "is_completed",
     }
 
+    @staticmethod
+    def _retires_via_maintenance(safe_data: Dict[str, Any]) -> bool:
+        """Would this record's ``condition_after`` write RETIRED onto the item?
+
+        Completion copies ``condition_after`` straight onto the item, which
+        took an item to RETIRED with none of ``retire_item``'s lock, blocker
+        checks or audit event, and left ``active`` true (MSUP-25). The same
+        rule ``update_item`` applies: retirement is ``retire_item``'s alone.
+        """
+        value = safe_data.get("condition_after")
+        return (
+            getattr(value, "value", value) == ItemCondition.RETIRED.value
+            if value
+            else False
+        )
+
     async def create_maintenance_record(
         self,
         item_id: UUID,
@@ -4047,6 +4098,8 @@ class InventoryService:
                 for k, v in maintenance_data.items()
                 if k in self._MAINTENANCE_ALLOWED_FIELDS
             }
+            if self._retires_via_maintenance(safe_data):
+                return None, _RETIRE_VIA_RETIRE_ACTION
             # INV-4 (XC-1): a client-supplied performed_by must be an in-org user.
             await assert_in_org(
                 self.db,
@@ -4158,6 +4211,8 @@ class InventoryService:
                 for k, v in update_data.items()
                 if k in self._MAINTENANCE_ALLOWED_FIELDS
             }
+            if self._retires_via_maintenance(safe_data):
+                return None, _RETIRE_VIA_RETIRE_ACTION
 
             was_completed_before = record.is_completed
 
@@ -4876,6 +4931,7 @@ class InventoryService:
                 User.username,
                 User.first_name,
                 User.last_name,
+                User.preferred_name,
                 User.membership_number,
                 func.coalesce(assign_sub.c.cnt, 0).label("permanent_count"),
                 func.coalesce(checkout_sub.c.cnt, 0).label("checkout_count"),
@@ -4902,6 +4958,7 @@ class InventoryService:
                 or_(
                     User.username.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
                     User.first_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                    User.preferred_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
                     User.last_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
                     User.membership_number.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
                 )
@@ -4916,13 +4973,19 @@ class InventoryService:
             co = row.checkout_count
             iss = row.issued_count
             full_name = " ".join(filter(None, [row.first_name, row.last_name])) or None
+            display_name = (
+                format_display_name(row.first_name, row.last_name, row.preferred_name)
+                or None
+            )
             result.append(
                 {
                     "user_id": row.id,
                     "username": row.username,
                     "first_name": row.first_name,
                     "last_name": row.last_name,
+                    "preferred_name": row.preferred_name,
                     "full_name": full_name,
+                    "display_name": display_name,
                     "membership_number": row.membership_number,
                     "permanent_count": perm,
                     "checkout_count": co,
@@ -5278,7 +5341,7 @@ class InventoryService:
             holding, holder = row
             return {
                 "holder_id": holding.user_id,
-                "holder_name": holder.full_name,
+                "holder_name": holder.display_name,
                 "holding_type": "assignment",
                 "record_id": holding.id,
                 "held_since": holding.assigned_date,
@@ -5298,7 +5361,7 @@ class InventoryService:
             holding, holder = row
             return {
                 "holder_id": holding.user_id,
-                "holder_name": holder.full_name,
+                "holder_name": holder.display_name,
                 "holding_type": "checkout",
                 "record_id": holding.id,
                 "held_since": holding.checked_out_at,
@@ -7828,6 +7891,53 @@ class InventoryService:
             lot.inventory_item_id, organization_id, item_types
         )
 
+    async def _items_in_domain_locked(
+        self,
+        item_ids: Iterable[str],
+        organization_id: str,
+        item_types: Iterable[ItemType],
+    ) -> bool:
+        """Lock these items, then re-check their domain against current rows.
+
+        The domain-scoped routes (medical_supplies.py) check membership in a
+        preflight before calling a mutation. Between that read and the write,
+        a broad ``inventory.manage`` caller can move the item to another
+        category, or change the category's ``item_type``, and a medical-only
+        manager would then edit an item outside the domain their permission
+        grants (MSUP-25). This is ``retire_item``'s recheck generalized:
+        lock the item rows (in id order, so two bulk receipts cannot
+        deadlock each other), so their ``category_id`` cannot change under
+        us, then read each category with a locking read — the preflight
+        already opened this transaction's REPEATABLE READ snapshot, and a
+        plain read would answer from before a concurrent reclassification of
+        the category row itself.
+
+        Fails closed: a missing item, or any item outside the domain, is
+        ``False``.
+        """
+        ids = sorted({str(i) for i in item_ids})
+        if not ids:
+            return True
+        result = await self.db.execute(
+            select(InventoryItem.id, InventoryItem.category_id)
+            .where(
+                InventoryItem.id.in_(ids),
+                InventoryItem.organization_id == str(organization_id),
+            )
+            .order_by(InventoryItem.id)
+            .with_for_update()
+        )
+        rows = result.all()
+        if len(rows) != len(ids):
+            return False
+        types = list(item_types)
+        for category_id in sorted({str(r.category_id) for r in rows if r.category_id}):
+            if not await self.category_in_domain(
+                category_id, str(organization_id), types, for_update=True
+            ):
+                return False
+        return all(r.category_id for r in rows)
+
     async def _get_lot(
         self, lot_id: str, organization_id: str
     ) -> Optional[InventoryLot]:
@@ -7952,8 +8062,17 @@ class InventoryService:
         organization_id: str,
         data: Dict[str, Any],
         created_by: Optional[str] = None,
+        required_item_types: Optional[Iterable[ItemType]] = None,
     ) -> Optional[InventoryLot]:
-        """Add a ready-stock lot to an item."""
+        """Add a ready-stock lot to an item.
+
+        ``required_item_types``: see ``_items_in_domain_locked``; a miss
+        returns ``None``, the same as an unknown item.
+        """
+        if required_item_types is not None and not await self._items_in_domain_locked(
+            [item_id], organization_id, required_item_types
+        ):
+            return None
         item = await self._get_item(item_id, organization_id)
         if not item:
             return None
@@ -7978,8 +8097,13 @@ class InventoryService:
         organization_id: str,
         entries: List[Dict[str, Any]],
         created_by: Optional[str] = None,
+        required_item_types: Optional[Iterable[ItemType]] = None,
     ) -> List[InventoryLot]:
         """Record a whole delivery at once — one lot per item line.
+
+        ``required_item_types``: every line's item is re-validated under lock
+        (``_items_in_domain_locked``); one miss raises
+        ``ItemOutsideDomainError`` and nothing is received.
 
         Pre-stocking is how dated stock reaches the crews: a lot added here is
         immediately offered in the check screen's swap picker, so a member
@@ -8011,6 +8135,10 @@ class InventoryService:
                 f"{len(missing)} item(s) in this delivery are not in your "
                 f"inventory and were not received"
             )
+        if required_item_types is not None and not await self._items_in_domain_locked(
+            known, organization_id, required_item_types
+        ):
+            raise ItemOutsideDomainError()
 
         await self._carry_forward_column_stock(
             organization_id, sorted(known), created_by
@@ -8200,6 +8328,7 @@ class InventoryService:
         lot_id: str,
         organization_id: str,
         data: Dict[str, Any],
+        required_item_types: Optional[Iterable[ItemType]] = None,
     ) -> Optional[InventoryLot]:
         """Update a stock lot.
 
@@ -8207,19 +8336,39 @@ class InventoryService:
         NOT NULL column (`quantity`) — callers already catch `ValueError`
         from the sibling `add_lots_bulk` on this same router and convert it
         to a 400.
+
+        ``required_item_types``: the lot's item is re-validated under lock
+        (``_items_in_domain_locked``); a miss returns ``None``.
         """
         lot = await self._get_lot(lot_id, organization_id)
         if not lot:
+            return None
+        if required_item_types is not None and not await self._items_in_domain_locked(
+            [lot.inventory_item_id], organization_id, required_item_types
+        ):
             return None
         apply_updates(lot, data, skip={"id", "organization_id", "inventory_item_id"})
         await self.db.commit()
         await self.db.refresh(lot)
         return lot
 
-    async def delete_lot(self, lot_id: str, organization_id: str) -> bool:
-        """Delete a stock lot."""
+    async def delete_lot(
+        self,
+        lot_id: str,
+        organization_id: str,
+        required_item_types: Optional[Iterable[ItemType]] = None,
+    ) -> bool:
+        """Delete a stock lot.
+
+        ``required_item_types``: the lot's item is re-validated under lock
+        (``_items_in_domain_locked``); a miss returns ``False``.
+        """
         lot = await self._get_lot(lot_id, organization_id)
         if not lot:
+            return False
+        if required_item_types is not None and not await self._items_in_domain_locked(
+            [lot.inventory_item_id], organization_id, required_item_types
+        ):
             return False
         await self.db.delete(lot)
         await self.db.commit()

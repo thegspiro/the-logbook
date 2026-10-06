@@ -24,6 +24,15 @@
 >
 > Three beats are new: the **prerequisites screen**, **member numbering** in
 > step 1, and the **rank and tier ladders** in step 4.
+>
+> **PRODUCTION NOTE — 2026-09-30.** Three more beats were **wrong**, not dated,
+> and have been rewritten: the IT & Backup Contacts chapter (there is no backup
+> access code, and the step has **Skip for now**), the module overview (cards
+> with **Enable** / **Later** / **Skip**, not toggles), and the logo formats
+> (SVG is refused). The top officer is seeded as **Chief**, not Fire Chief, and
+> the completion page offers **Go to Department Setup** and **Skip to
+> Dashboard**. Re-shoot Chapters 2 (logo), 4, 5 (Chief), 7, 10 and 11 and the
+> password close-up.
 
 ---
 
@@ -131,8 +140,10 @@ lists: what setup requires and what it will ask for but can skip.]**
 **[SCREEN: Click the dropdown and select "Volunteer Fire Department"]**
 
 > "**Address and Contact Information** — enter your station's physical address
-> and the department's main phone number and email. This appears on public-facing
-> pages if you enable the public portal module later."
+> and the department's main phone number and email. None of this is published
+> automatically. If you later use the Public Portal, you choose field by field
+> what an outside website can read, and the phone, email and addresses are
+> flagged PII so you think twice."
 
 **[SCREEN: Fill in a sample address, phone, and email]**
 
@@ -141,6 +152,15 @@ lists: what setup requires and what it will ask for but can skip.]**
 > department is in the Eastern time zone, select `America/New_York`. Central is
 > `America/Chicago`. Make sure this is correct — members will see event times,
 > shift schedules, and deadlines in this timezone."
+
+> "And it decides more than display. It's the department's clock: when 'today'
+> starts for expiry alerts and compliance, and the times printed in emails,
+> PDFs and exports. Set it wrong and a certificate can read as lapsed on its
+> last valid day."
+
+**[PRODUCTION NOTE — 2026-10-04. Added; about 10 seconds, re-time Chapter 2.
+Through late September 2026 compliance, alerts and printed times moved onto the
+department's date instead of the server's UTC date.]**
 
 **[SCREEN: Select a timezone from the dropdown]**
 
@@ -160,7 +180,7 @@ and the starting number.]**
 > "If your department gives members a number, switch this on here and say where
 > the sequence starts. The counter only numbers members created **after** it's
 > switched on — and this wizard is about to create your administrator account
-> in step two and your IT team in step seven."
+> in step two and your IT contacts in step seven."
 
 **[CALLOUT: "Set this now — the counter only numbers accounts created after it
 is on"]**
@@ -170,7 +190,7 @@ is on"]**
 > number those accounts should have had. Nobody notices until somebody prints a
 > badge."
 
-**[SCREEN: Click "Next" to proceed]**
+**[SCREEN: Click "Continue" to proceed]**
 
 **[TRANSITION: Page transition to next step]**
 
@@ -211,11 +231,14 @@ is on"]**
 **[SCREEN: Type "Alex" / "Rivera" / "alex.rivera@anytown-vfd.org"]**
 
 > "**Set a strong password.** The system enforces minimum complexity — at least
-> twelve characters, with a mix of uppercase, lowercase, numbers, and symbols.
-> This is a HIPAA-compliant application, so the password requirements are
-> intentionally strict."
+> twelve characters, upper and lower case, a number and a symbol — and no runs
+> like 1-2-3 or a-b-c, and no character three times in a row. The checklist
+> under the field shows all seven, and **Create Account & Continue** stays
+> greyed out until every one is ticked. This is a HIPAA-compliant application,
+> so the password requirements are intentionally strict."
 
-**[SCREEN: Type a password. Show the strength indicator updating.]**
+**[SCREEN: Type a password. Show the seven-item checklist ticking off, and the
+button enabling on the last tick.]**
 
 **[CALLOUT: "Use a password manager — you'll create this password once"]**
 
@@ -233,7 +256,8 @@ onboarding, or note that it can be enabled after first login.]**
 > authenticator apps. Scan the QR code with your app, enter the six-digit code
 > to verify, and you're set."
 
-> "If you skip this now, you can always enable it later from User Settings.
+> "If you skip this now, you can always enable it later from **My Account →
+> Security**.
 > But for any account with admin access, I'd set it up right away."
 
 **[SCREEN: Click "Next" to proceed]**
@@ -252,8 +276,8 @@ onboarding, or note that it can be enabled after first login.]**
 
 ### THE MODULE OVERVIEW (7:30 – 8:30)
 
-**[SCREEN: The ModuleOverview page loads — a grid/list of all available modules
-with toggle switches, organized by category.]**
+**[SCREEN: The ModuleOverview page loads — a grid/list of all available modules,
+organized by category, each card with **Enable**, **Later** and **Skip**.]**
 
 > "This is one of the most important steps — choosing which modules to enable.
 > The Logbook is fully modular. You only turn on what your department actually
@@ -302,7 +326,7 @@ with toggle switches, organized by category.]**
 > analytics for reporting, and the Prospective Members pipeline if you're
 > actively recruiting."
 
-**[SCREEN: Toggle on a selection of modules for a mid-size department demo:
+**[SCREEN: Press Enable on a selection of modules for a mid-size department demo:
 Members, Events, Documents, Forms, Training, Inventory, Scheduling, Apparatus,
 Elections, Minutes]**
 
@@ -319,7 +343,7 @@ Enabled state.]**
 > through. Turning a module on makes it appear in the navigation for everyone
 > whose position can see it, and that's it."
 
-> "Who can _manage_ each module is the step you already did — positions. And
+> "Who can _manage_ each module is the very next step — positions. And
 > every module's own settings, the detail like event types or training
 > requirement categories, live inside that module once you're in the app.
 > They're all changeable later, so nothing here is a decision you're stuck
@@ -329,7 +353,15 @@ Enabled state.]**
 
 > "And if you skip something now, this same list is under Settings → Modules.
 > A department that decides in March it wants the store can turn it on in
-> March."
+> March. **Later** and **Skip** both leave a module off; Later just keeps it
+> on your list of things to come back to."
+
+**[SCREEN: Click "Continue to Ranks & Positions"]**
+
+**[PRODUCTION NOTE — 2026-10-04. The module cards' buttons were renamed on
+2026-09-29 — **Enable**, **Later**, **Skip** (some read "Skip For Now" and
+"Ignore" before) — and they were never toggle switches. Re-record the overview
+pan and the continue button.]**
 
 **[TRANSITION: Progress to next section]**
 
@@ -374,6 +406,15 @@ electorate"]**
 > "One more: automatic advancement is **on** by default, and a monthly job acts
 > on it. If your department promotes by vote, by application, or on a date of
 > its own choosing, turn it off here."
+
+**[SCREEN: The "When a former member rejoins" box under the switch — Continue
+prior service and Restart at zero.]**
+
+> "Years of service count only the time someone was actually in the
+> department. When a former member comes back, **Continue prior service** keeps
+> their earlier years; **Restart at zero** starts them over and keeps the old
+> years on record. This is just the default — whoever reinstates them can
+> choose the other."
 
 > "The same editor lives at Members, Administration, Settings, Membership Tiers
 > after setup — so this isn't your only chance."
@@ -422,7 +463,7 @@ positions with permission toggles.]**
 **[CALLOUT: Two-column layout]**
 
 > "**Positions** are organizational or operational roles that carry permissions —
-> Fire Chief, Captain, President, Secretary, Training Officer, IT Manager. A
+> Chief, Captain, President, Secretary, Training Officer, IT Manager. A
 > member can hold multiple positions."
 
 > "**Membership standing** is a classification, and it is **two facts, not
@@ -453,7 +494,7 @@ deciding shift access.]**
 
 **[SCREEN: Scroll through the positions list, highlighting each category]**
 
-> "**Operational Ranks:** Fire Chief, Deputy Chief, Assistant Chief, Captain,
+> "**Operational Ranks:** Chief, Deputy Chief, Assistant Chief, Captain,
 > Lieutenant, Engineer/Driver Operator, and Firefighter. Each has permissions
 > appropriate to their rank — the Chief has near-full access, a Firefighter has
 > view access to most things."
@@ -465,8 +506,15 @@ deciding shift access.]**
 
 > "**Specialist Positions:** Training Officer, Safety Officer, Quartermaster,
 > Scheduling Officer, Apparatus Officer, Facilities Manager, Communications
-> Officer, and Membership Coordinator. Each has permissions scoped to their
+> Officer, Membership Coordinator and Assistant Membership Coordinator, EMS
+> Supply Officer, and Compliance Officer. Each has permissions scoped to their
 > area."
+
+**[PRODUCTION NOTE — 2026-10-04. The top rank is seeded as plain **Chief**, not
+"Fire Chief" (migration `d4e1a7c93b58`, 2026-09-25 — label only; a department
+that renamed it keeps its own name). The Compliance Officer and Assistant
+Membership Coordinator positions were added 2026-09-24; EMS Supply Officer was
+already seeded and missing from this list. Re-record the positions scroll.]**
 
 ### CUSTOMIZING PERMISSIONS (15:00 – 15:30)
 
@@ -488,14 +536,14 @@ from view to manage or vice versa.]**
 > permissions at any time from the Settings page — you're not locked into
 > anything you set during onboarding."
 
-**[CALLOUT: "All permissions can be changed later in Settings → Position
+**[CALLOUT: "All permissions can be changed later in Settings → Role
 Management"]**
 
 > "You can also create entirely custom positions. If your department has a role
 > like 'Social Media Coordinator' or 'Chaplain' that doesn't exist in the
 > defaults, add it and assign the appropriate permissions."
 
-**[SCREEN: Click "Next"]**
+**[SCREEN: Click "Continue to Stations"]**
 
 **[TRANSITION: Move to next section]**
 
@@ -549,7 +597,12 @@ from the address given in step 1.]**
 > "Step six: your apparatus. Unit number, type, minimum staffing, and the
 > riding positions."
 
-**[SCREEN: Fill in a unit — Engine 1, minimum staffing, riding positions]**
+**[SCREEN: Fill in a unit — Engine 1, minimum staffing, riding positions. Add
+Firefighter twice so two Firefighter chips show.]**
+
+> "Add a position once for every seat — an engine that rides two firefighters
+> gets Firefighter twice. Each chip is one seat, and its × removes just that
+> seat."
 
 > "These are deliberately lightweight records — enough for shift staffing to
 > know that Engine One needs four people and what seats those four sit in. The
@@ -567,14 +620,15 @@ from the address given in step 1.]**
 
 ---
 
-## CHAPTER 7: IT Team & Backup Access (17:30 – 18:30)
+## CHAPTER 7: IT & Backup Contacts (17:30 – 18:30)
 
 > **EDITOR NOTE (2026-09-11): this chapter moved.** It is **step 7**, not step
 > 4 as the previous take had it. The narration is otherwise unchanged.
 
-### IT TEAM & BACKUP ACCESS (17:30 – 18:30)
+### IT & BACKUP CONTACTS (17:30 – 18:30)
 
-**[SCREEN: The ITTeamBackupAccess page loads.]**
+**[SCREEN: The ITTeamBackupAccess page loads, titled "IT & Backup Contacts".
+Retitled 2026-09-29 — re-record the opening frame.]**
 
 > "This step lets you configure backup access — who gets emergency access if the
 > System Owner is unavailable. In a fire department context, think of this as
@@ -584,7 +638,7 @@ from the address given in step 1.]**
 > during setup. These aren't full admin accounts — they're an emergency recovery
 > mechanism."
 
-**[SCREEN: Optionally add a backup email or skip]**
+**[SCREEN: Optionally add a backup email, or press "Skip for now"]**
 
 > "If your department has a shared leadership email or a Deputy Chief who should
 > have recovery access, add their email here. Otherwise, you can skip this and
@@ -621,9 +675,9 @@ no longer exist.]**
 > "You have several options. **Gmail** and **Microsoft 365** send over ordinary
 > SMTP with an **app password** — the host, port and encryption are filled in
 > for you, so all you supply is the From address and the app password.
-> **Self-Hosted SMTP** is the most universal — any provider with SMTP
-> credentials. And if your domain is on **Cloudflare**, **Cloudflare Email
-> Service** sends via REST API, so you don't need an SMTP server at all;
+> **SMTP** is the most universal — any provider with SMTP
+> credentials. And if your domain is on **Cloudflare**, the **Cloudflare** option
+> sends via REST API, so you don't need an SMTP server at all;
 > Cloudflare handles SPF, DKIM and DMARC automatically."
 
 > "For most departments, Gmail or Microsoft 365 with an app password is the
@@ -688,7 +742,7 @@ do.]**
 > your server isn't, treat that as still on your list after setup, not done by
 > it."
 
-**[SCREEN: Click "Next"]**
+**[SCREEN: Click "Continue"]**
 
 ---
 
@@ -713,8 +767,8 @@ do.]**
 > with Argon2id. No external service, nothing to configure. This is what most
 > volunteer departments should pick, and it's what I'm picking here."
 
-> "**Sign in with Google.** If your department is on Google Workspace, members
-> use their Google account. **Sign in with Microsoft** does the same for
+> "**Google OAuth.** If your department is on Google Workspace, members
+> use their Google account. **Microsoft Azure AD** does the same for
 > Microsoft 365, through Entra ID — single tenant."
 
 **[CALLOUT: "Google and Microsoft are link-existing-only — they never create
@@ -726,7 +780,7 @@ accounts"]**
 > Google does not create an account. That's deliberate — it means somebody with
 > a Google address can't let themselves into your department."
 
-> "**Authentik.** Don't pick this one yet."
+> "**Authentik SSO.** Don't pick this one yet."
 
 **[CALLOUT: "⚠️ Authentik: selectable, not yet usable"]**
 
@@ -740,7 +794,7 @@ accounts"]**
 > "And you can add methods later from Settings without disrupting any existing
 > account."
 
-**[SCREEN: Select "Local Passwords" and click Next]**
+**[SCREEN: Select "Local Passwords" and click "Continue"]**
 
 ---
 
@@ -780,7 +834,11 @@ Navigation Layout.]**
 > "And you can change it afterwards — Settings, General, Profile,
 > Navigation Layout. It applies to everyone from their next page load."
 
-**[SCREEN: Select a layout and proceed]**
+> "One more thing if you pick the top bar: on a narrower screen it keeps the
+> groups that fit and puts the rest under **More** at the right-hand end."
+
+**[SCREEN: The page asks "Where should the main menu go?" — select a layout and
+press **Finish setup**]**
 
 **[TRANSITION: Completion transition]**
 
@@ -790,20 +848,22 @@ Navigation Layout.]**
 
 ### ONBOARDING COMPLETE (22:30 – 23:00)
 
-**[SCREEN: The onboarding completion page with a success message and summary
-of what was configured.]**
+**[SCREEN: The completion page — "<department> is set up", the What you
+configured summary, and the What's left list.]**
 
 > "And that's it — onboarding is complete! Let's see what we've set up."
 
 **[SCREEN: Show the summary: organization name, modules enabled, positions
 configured, etc.]**
 
-> "The Logbook is now configured for your department. Let's click through to the
-> dashboard and see what it looks like."
+> "Underneath is **What's left** — the real data your department still has to
+> add, each with a button that takes you to the page it needs. **Go to
+> Department Setup** opens the full checklist, which ticks itself off as you go.
+> For now, let's look at the dashboard."
 
 ### FIRST LOOK AT THE DASHBOARD (23:00 – 23:30)
 
-**[SCREEN: Click "Go to Dashboard." The main dashboard loads with the sidebar
+**[SCREEN: Click "Skip to Dashboard." The main dashboard loads with the
 navigation showing all enabled modules.]**
 
 > "Welcome to your dashboard. You can see the sidebar on the left with all the
@@ -821,7 +881,10 @@ navigation showing all enabled modules.]**
 
 > "**Step one: Add your members.** Go to the Members module and add your
 > department roster. You can add members one at a time or use the CSV import for
-> bulk upload. Each member needs at least a name, email, and position."
+> bulk upload. Adding one by hand asks for a name, home address, primary phone,
+> email and one emergency contact — plus a membership number, unless you
+> switched on automatic numbering in step one; position and rank are optional
+> there, and you assign them next."
 
 > "**Step two: Assign positions.** Make sure your Chief, officers, and key
 > personnel are assigned their correct positions. This controls what they can see
@@ -832,8 +895,10 @@ navigation showing all enabled modules.]**
 > start RSVPing and checking in."
 
 > "**Step four: Invite your members.** Once accounts are created, send out the
-> login credentials. If email is configured, The Logbook can send invitation
-> emails automatically."
+> login credentials. If email is configured, The Logbook emails each new member
+> a temporary password. If it isn't, the Add Member form makes you set an
+> initial password yourself, so nobody ends up with an account they can't sign
+> in to."
 
 > "**Step five: Explore.** Click through the modules. The interface is designed
 > to be intuitive, and every module has consistent patterns — lists, detail

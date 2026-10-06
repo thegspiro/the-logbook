@@ -29,6 +29,7 @@ from app.schemas.organization import MembershipTierSettings
 from app.services.admin_continuity_service import (
     LastAdministratorError,
     assert_not_last_administrator,
+    lock_administrator_continuity,
 )
 from app.services.member_service_history_service import (
     MemberServiceHistoryService,
@@ -320,6 +321,12 @@ async def change_member_status(
     # populate_existing, so the request that waits reads the status the first
     # one committed -- and stops at the "already" check -- rather than the
     # snapshot or identity-map copy from before it.
+    #
+    # Leaving ACTIVE may remove an administrator, and the continuity guard
+    # below locks the organization's administrator scope. Take that first,
+    # before this row lock, so every path locks in the same order.
+    if new_status != UserStatus.ACTIVE:
+        await lock_administrator_continuity(db, str(current_user.organization_id))
     result = await db.execute(
         select(User)
         .where(User.id == str(user_id))
@@ -727,7 +734,7 @@ async def archive_member(
 
     return {
         "user_id": str(user_id),
-        "member_name": member.full_name,
+        "member_name": member.display_name,
         "previous_status": previous_status,
         "new_status": UserStatus.ARCHIVED.value,
         "archived_at": now.isoformat(),
@@ -798,7 +805,7 @@ async def get_archived_members(
         "members": [
             {
                 "user_id": str(m.id),
-                "name": m.full_name,
+                "name": m.display_name,
                 "email": m.email,
                 "membership_number": m.membership_number,
                 "rank": m.rank,
@@ -952,7 +959,7 @@ async def change_membership_type(
 
     return {
         "user_id": str(user_id),
-        "member_name": member.full_name,
+        "member_name": member.display_name,
         "previous_membership_type": previous_type,
         "new_membership_type": request.membership_type,
         "changed_at": now.isoformat(),
@@ -1313,6 +1320,6 @@ async def set_compliance_exemption(
 
     return {
         "user_id": str(user_id),
-        "member_name": member.full_name,
+        "member_name": member.display_name,
         "compliance_exempt": request.exempt,
     }

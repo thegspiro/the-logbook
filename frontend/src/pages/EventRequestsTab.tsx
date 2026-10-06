@@ -53,8 +53,12 @@ import type {
 import { useTimezone } from '../hooks/useTimezone';
 import { useRanks } from '../hooks/useRanks';
 import { formatShortDateTime, localToUTC } from '../utils/dateFormatting';
-import { getErrorMessage } from '../utils/errorHandling';
+import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
 import { positionLabel } from '../modules/scheduling/utils/positionLabels';
+import { asArray, expectArray } from '../utils/asArray';
+import { displayNameOf } from '../utils/memberName';
+
+const isRecord = (value: unknown): value is Record<string, string> => typeof value === 'object' && value !== null;
 
 const STATUS_CONFIG: Record<EventRequestStatus, { label: string; color: string; icon: React.ElementType }> = {
   submitted: {
@@ -114,6 +118,8 @@ interface OrgMember {
   id: string;
   first_name: string;
   last_name: string;
+  preferred_name?: string | null | undefined;
+  display_name?: string | undefined;
   rank?: string;
 }
 
@@ -179,7 +185,9 @@ const EventRequestsTab: React.FC = () => {
       const params: Record<string, string> = {};
       if (statusFilter) params.status = statusFilter;
       const data = await eventRequestService.listRequests(params);
-      setRequests(data);
+      // Verified, not substituted: an empty queue reads as "no requests to
+      // handle", so a body that is not a list takes the error path instead.
+      setRequests(expectArray(data, 'event requests'));
     } catch {
       setError('Failed to load event requests.');
     } finally {
@@ -203,15 +211,16 @@ const EventRequestsTab: React.FC = () => {
           eventRequestService.listEmailTemplates(),
           eventRequestService.getOutreachRoles(),
         ]);
-        setOutreachLabels(labels);
-        setOutreachRoles(roles);
+        setOutreachLabels(isRecord(labels) ? labels : {});
+        const roleList = asArray(roles);
+        setOutreachRoles(roleList);
         // Seed the sheet with one of the first role the department configured,
         // so a coordinator opening signups for a simple event can just press
         // the button.
-        setRoleNeeds(roles[0] ? [{ role: roles[0].value, count: 1 }] : []);
-        setPipelineTasks(settings.request_pipeline?.tasks || []);
+        setRoleNeeds(roleList[0] ? [{ role: roleList[0].value, count: 1 }] : []);
+        setPipelineTasks(asArray(settings?.request_pipeline?.tasks ?? []));
         setMembers(memberList);
-        setLocations(locationList);
+        setLocations(asArray(locationList));
         setEmailTemplates(templates);
       } catch {
         // Silently fail — we'll fall back to defaults
@@ -428,10 +437,11 @@ const EventRequestsTab: React.FC = () => {
       setScheduleNotes('');
       await refreshDetail(requestId);
     } catch (err) {
-      const message = getErrorMessage(err, 'Failed to schedule request.');
-      toast.error(
-        message.includes('already booked') ? message : 'Failed to schedule request. The room may be double-booked.'
-      );
+      // The server's sentence when it gave one: a double-booked room, or an
+      // event whose attendance is already closed, are different fixes and the
+      // coordinator can only tell them apart by reading which it was. The
+      // room hint is kept for a failure that came back without a reason.
+      toast.error(getErrorDetail(err) || 'Failed to schedule request. The room may be double-booked.');
     } finally {
       setActionLoading(false);
     }
@@ -449,8 +459,8 @@ const EventRequestsTab: React.FC = () => {
       setPostponeReason('');
       setPostponeNewDate('');
       await refreshDetail(requestId);
-    } catch {
-      toast.error('Failed to postpone request.');
+    } catch (err) {
+      toast.error(getErrorDetail(err) || 'Failed to postpone request.');
     } finally {
       setActionLoading(false);
     }
@@ -520,7 +530,7 @@ const EventRequestsTab: React.FC = () => {
 
   if (loading && requests.length === 0) {
     return (
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl py-8">
         <div className="flex h-64 items-center justify-center" role="status" aria-live="polite">
           <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
         </div>
@@ -530,12 +540,12 @@ const EventRequestsTab: React.FC = () => {
 
   if (error) {
     return (
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl py-8">
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
           <p className="text-red-700 dark:text-red-300">{error}</p>
           <button
             onClick={() => void fetchRequests()}
-            className="mt-2 text-sm text-red-700 underline dark:text-red-400"
+            className="mt-2 min-h-11 text-sm text-red-700 underline dark:text-red-400"
           >
             Try again
           </button>
@@ -545,7 +555,7 @@ const EventRequestsTab: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-6xl py-8">
       <div className="space-y-6">
         {/* Header */}
         <div>
@@ -770,7 +780,7 @@ const EventRequestsTab: React.FC = () => {
                                 </option>
                                 {members.map((m) => (
                                   <option key={m.id} value={m.id}>
-                                    {m.first_name} {m.last_name}
+                                    {displayNameOf(m)}
                                     {m.rank ? ` — ${formatRank(m.rank)}` : ''}
                                   </option>
                                 ))}

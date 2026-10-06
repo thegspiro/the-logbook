@@ -57,4 +57,30 @@ describe('useOverrideAttendance openModal', () => {
     expect(result.current.overrideCheckIn).toBe('2030-04-15T17:40');
     expect(result.current.overrideCheckOut).toBe('2030-04-15T20:10');
   });
+
+  it('pre-fills the credited check-in, not an early tap', () => {
+    // An override is never clamped to the scheduled start, so pre-filling the
+    // 17:20 tap would make an unchanged save credit forty extra minutes.
+    const { result } = renderHook(() =>
+      useOverrideAttendance({
+        eventId: 'event-1',
+        timezone: 'UTC',
+        officialStartTime: '2030-04-15T18:00:00Z',
+        officialEndTime: '2030-04-15T20:00:00Z',
+        onSuccess: vi.fn(),
+      })
+    );
+
+    act(() =>
+      result.current.openModal(
+        rsvp({
+          checked_in: true,
+          checked_in_at: '2030-04-15T17:20:00Z',
+          credited_check_in_at: '2030-04-15T18:00:00Z',
+        })
+      )
+    );
+
+    expect(result.current.overrideCheckIn).toBe('2030-04-15T18:00');
+  });
 });

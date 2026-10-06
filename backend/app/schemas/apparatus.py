@@ -1228,7 +1228,7 @@ class ApparatusOperatorResponse(ApparatusOperatorBase):
             if not data.get("user_name"):
                 user = data.get("user")
                 if user is not None:
-                    data["user_name"] = getattr(user, "full_name", None)
+                    data["user_name"] = getattr(user, "display_name", None)
             return data
         if getattr(data, "user_name", None):
             return data
@@ -1240,7 +1240,7 @@ class ApparatusOperatorResponse(ApparatusOperatorBase):
                     for field in cls.model_fields
                     if field != "user_name"
                 },
-                "user_name": getattr(user, "full_name", None),
+                "user_name": getattr(user, "display_name", None),
             }
         return data
 
@@ -1518,6 +1518,10 @@ class ApparatusNFPAComplianceBase(BaseModel):
 class ApparatusNFPAComplianceCreate(ApparatusNFPAComplianceBase):
     """Schema for creating NFPA compliance record"""
 
+    # The apparatus screens send camelCase, as for maintenance records;
+    # populate_by_name keeps snake_case callers working.
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
 
 class ApparatusNFPAComplianceUpdate(BaseModel):
     """Schema for updating NFPA compliance record"""
@@ -1532,6 +1536,8 @@ class ApparatusNFPAComplianceUpdate(BaseModel):
     notes: Optional[str] = None
     exemption_reason: Optional[str] = None
 
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
 
 class ApparatusNFPAComplianceResponse(ApparatusNFPAComplianceBase):
     """Schema for NFPA compliance response"""
@@ -1541,6 +1547,56 @@ class ApparatusNFPAComplianceResponse(ApparatusNFPAComplianceBase):
     last_checked_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+
+    model_config = _response_config
+
+
+class NFPARequiredMaintenanceStatus(BaseModel):
+    """One NFPA-required maintenance test and where this apparatus stands."""
+
+    maintenance_type_id: str
+    name: str
+    nfpa_reference: Optional[str] = None
+    last_completed_date: Optional[date] = None
+    last_record_id: Optional[str] = None
+    next_due_date: Optional[date] = None
+    # current, due_soon, overdue, scheduled, never_performed
+    status: str
+
+    model_config = _response_config
+
+
+class NFPAComplianceItemStatus(BaseModel):
+    """A compliance-list record, with an overdue status the server worked out."""
+
+    record: ApparatusNFPAComplianceResponse
+    # The stored status, or "overdue" once its next due date has passed.
+    status: str
+
+    model_config = _response_config
+
+
+class ApparatusNFPASummaryResponse(BaseModel):
+    """NFPA standing for one apparatus (``ApparatusService.get_nfpa_summary``)."""
+
+    apparatus_id: str
+    as_of: date
+    required_maintenance: List[NFPARequiredMaintenanceStatus]
+    compliance_items: List[NFPAComplianceItemStatus]
+    overdue_count: int
+    due_soon_count: int
+    never_performed_count: int
+
+    model_config = _response_config
+
+
+class ApparatusNFPASettingsResponse(BaseModel):
+    """Whether this department tracks NFPA apparatus compliance, and why."""
+
+    enabled: bool
+    default_for_organization_type: bool
+    # None until the department chooses; then the choice overrides the default.
+    explicit_choice: Optional[bool] = None
 
     model_config = _response_config
 

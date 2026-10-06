@@ -508,30 +508,65 @@ class TestMemberCreditReachesThePerson:
         # Types are drawn from the shift's tally, capped at the member's credit.
         assert len(per_member["u2"]["types"]) == 1
 
+    @staticmethod
+    def _counts_service(row, shift_total, type_counts=None):
+        """A service whose attendance lookup returns ``row`` (None = no row)."""
+        from app.services.shift_completion_service import ShiftCompletionService
+
+        db = MagicMock()
+        result = MagicMock()
+        result.first.return_value = row
+        db.execute = AsyncMock(return_value=result)
+        svc = ShiftCompletionService(db)
+        return svc, patch.multiple(
+            "app.services.shift_completion_service.CallTrackingService",
+            shift_response_count=AsyncMock(return_value=shift_total),
+            shift_type_counts=AsyncMock(return_value=type_counts or {}),
+        )
+
     async def test_trainee_fallback_uses_attendance_not_shift_total(self):
         """The training-credit path. A late arrival must not be credited with
         the whole tour."""
-        from app.services.shift_completion_service import ShiftCompletionService
-
-        db = MagicMock()
-        result = MagicMock()
-        result.scalar_one_or_none.return_value = 2
-        db.execute = AsyncMock(return_value=result)
-
-        svc = ShiftCompletionService(db)
-        count, types = await svc._get_trainee_call_data_from_counts("shift-1", "u1")
+        svc, patched = self._counts_service(
+            SimpleNamespace(id="a1", call_count=2), shift_total=5
+        )
+        with patched:
+            count, types = await svc._get_trainee_call_data_from_counts("shift-1", "u1")
         assert count == 2
+        # Credited with fewer than the apparatus ran: which ones is unknown.
+        assert types == []
 
-    async def test_trainee_fallback_with_no_credit_returns_zero(self):
-        from app.services.shift_completion_service import ShiftCompletionService
+    async def test_trainee_fallback_with_no_attendance_returns_zero(self):
+        svc, patched = self._counts_service(None, shift_total=5)
+        with patched:
+            assert await svc._get_trainee_call_data_from_counts("shift-1", "u1") == (
+                0,
+                [],
+            )
 
-        db = MagicMock()
-        result = MagicMock()
-        result.scalar_one_or_none.return_value = None
-        db.execute = AsyncMock(return_value=result)
+    async def test_an_explicit_zero_credit_stays_zero(self):
+        svc, patched = self._counts_service(
+            SimpleNamespace(id="a1", call_count=0), shift_total=5
+        )
+        with patched:
+            assert await svc._get_trainee_call_data_from_counts("shift-1", "u1") == (
+                0,
+                [],
+            )
 
-        svc = ShiftCompletionService(db)
-        assert await svc._get_trainee_call_data_from_counts("shift-1", "u1") == (0, [])
+    async def test_unset_credit_defaults_to_the_apparatus_count(self):
+        """Before finalize every member's credit is NULL. Finalize and the
+        close-out wizard default an unadjusted member to the apparatus count;
+        a report filed in that window used to credit nothing."""
+        svc, patched = self._counts_service(
+            SimpleNamespace(id="a1", call_count=None),
+            shift_total=3,
+            type_counts={"ems": 2, "fire": 1},
+        )
+        with patched:
+            count, types = await svc._get_trainee_call_data_from_counts("shift-1", "u1")
+        assert count == 3
+        assert types == ["ems", "ems", "fire"]
 
 
 class TestPartitionExisting:
@@ -1566,7 +1601,7 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
     so the check has to exist on this side too."""
 
     @staticmethod
-    def _guard(stored_slugs, locked):
+    def _guard(stored_slugs, locked, required=()):
         """Patch the reads the guard makes: the slugs in force, the persisted
         list the cap ratchet measures, and the locked set. Raw, not the
         reader's normalized list — a slug the reader hid is still what its
@@ -1591,9 +1626,14 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
                 "slugs_locked_by_history",
                 AsyncMock(return_value=set(locked)),
             ),
+            patch.object(
+                CallTrackingService,
+                "slugs_named_by_requirements",
+                AsyncMock(return_value=set(required)),
+            ),
         )
 
-    async def _save(self, incoming_slugs, stored_slugs, locked):
+    async def _save(self, incoming_slugs, stored_slugs, locked, required=()):
         from app.api.v1.endpoints.scheduling import (
             _reject_deleting_a_used_call_type,
         )
@@ -1602,9 +1642,15 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
             mode=CallTrackingMode.COUNT_ONLY,
             call_types=[{"slug": s, "label": s} for s in incoming_slugs],
         )
-        a, b, s, c = self._guard(stored_slugs, locked)
-        with a, b, s, c:
+        a, b, s, c, r = self._guard(stored_slugs, locked, required)
+        with a, b, s, c, r:
             await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
+
+    async def test_dropping_a_type_a_requirement_counts_is_refused(self):
+        """No calls filed under it yet, but a requirement advances members on
+        it: deleting it would stall them on calls nobody can log."""
+        with pytest.raises(ValueError, match="training requirement counts: fire"):
+            await self._save(["ems"], ["fire", "ems"], set(), required={"fire"})
 
     async def test_the_reserved_slug_does_not_deadlock_the_settings_screen(self):
         """An org that had configured `unclassified` cannot send it back — the
@@ -1637,8 +1683,8 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
             mode=CallTrackingMode.COUNT_ONLY,
             call_types=[{"slug": "fire", "label": "Fire", "active": False}],
         )
-        a, b, s, c = self._guard(["fire"], {"fire"})
-        with a, b, s, c:
+        a, b, s, c, r = self._guard(["fire"], {"fire"})
+        with a, b, s, c, r:
             await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
 
     async def test_an_unchanged_list_costs_no_usage_query(self):
@@ -1653,7 +1699,7 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
             call_types=[{"slug": "fire", "label": "Fire"}],
         )
         locked = AsyncMock(return_value=set())
-        a, b, s, _ = self._guard(["fire"], set())
+        a, b, s, _, _r = self._guard(["fire"], set())
         with a, b, s, patch.object(
             CallTrackingService, "slugs_locked_by_history", locked
         ):
@@ -2072,6 +2118,10 @@ class TestTheEditorCannotDeleteADefaultWithHistory:
             CallTrackingService,
             "slugs_locked_by_history",
             AsyncMock(return_value=set(locked)),
+        ), patch.object(
+            CallTrackingService,
+            "slugs_named_by_requirements",
+            AsyncMock(return_value=set()),
         ):
             await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
 
@@ -2112,6 +2162,10 @@ class TestTheCapIsARatchet:
         ), patch.object(
             CallTrackingService,
             "slugs_locked_by_history",
+            AsyncMock(return_value=set()),
+        ), patch.object(
+            CallTrackingService,
+            "slugs_named_by_requirements",
             AsyncMock(return_value=set()),
         ):
             await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
@@ -2215,3 +2269,82 @@ class TestCloseoutCallStepBelongsToCountOnlyTracking:
             str(shift.id)
         )
         assert recorded == 3
+
+
+class TestCountOnlyReportUnitRuns:
+    """The per-unit run counts reach the screen with the unit's name.
+
+    ``by_apparatus_runs`` is keyed by apparatus id, which is meaningless to an
+    officer; the report serves the labels beside it (SCHED-16).
+    """
+
+    async def test_serves_a_label_for_each_unit_with_runs(self):
+        from app.services.reports_service import ReportsService
+
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_scalars([]))
+        call_service = MagicMock()
+        call_service.apparatus_run_counts = AsyncMock(
+            return_value={"app-1": 3, "app-2": 1}
+        )
+        call_service.type_labels = AsyncMock(return_value={})
+
+        with patch(
+            "app.services.reports_service.resolve_apparatus_labels",
+            AsyncMock(return_value={"app-1": "E1"}),
+        ) as labels:
+            report = await ReportsService(db)._generate_call_volume_from_counts(
+                "org-1", date(2026, 8, 1), date(2026, 8, 31), call_service
+            )
+
+        assert report["summary"]["by_apparatus_runs"] == {"app-1": 3, "app-2": 1}
+        assert report["apparatus_labels"] == {"app-1": "E1"}
+        ids = set(labels.await_args.args[1])
+        assert ids == {"app-1", "app-2"}
+        assert labels.await_args.args[2] == "org-1"
+
+
+@pytest.mark.integration
+class TestCallVolumeReportPreliminaryMarker:
+    """Both call sources are written at close-out, so a period read before its
+    last shift is finalized under-reports. The report counts those shifts so
+    the screen can say the figures are preliminary (SCHED-11)."""
+
+    async def _report(self, db_session, org):
+        from app.services.reports_service import ReportsService
+
+        return await ReportsService(db_session)._generate_call_volume(
+            org.id, date(2026, 8, 1), date(2026, 8, 31)
+        )
+
+    @pytest.mark.parametrize("mode", [CallTrackingMode.COUNT_ONLY, "detailed"])
+    async def test_counts_a_started_shift_not_yet_closed_out(self, db_session, mode):
+        org = await _make_org(db_session)
+        org.settings = {"scheduling": {"call_tracking": {"mode": mode}}}
+        await _make_shift(db_session, org, "e1")
+
+        report = await self._report(db_session, org)
+
+        assert report["unfinalized_shifts"] == 1
+
+    async def test_finalized_and_cancelled_shifts_are_not_counted(self, db_session):
+        from app.models.training import ShiftStatus
+
+        org = await _make_org(db_session)
+        finalized = await _make_shift(db_session, org, "e1")
+        finalized.is_finalized = True
+        cancelled = await _make_shift(db_session, org, "e2")
+        cancelled.status = ShiftStatus.CANCELLED
+        await db_session.flush()
+
+        report = await self._report(db_session, org)
+
+        assert report["unfinalized_shifts"] == 0
+
+    async def test_a_shift_outside_the_period_is_not_counted(self, db_session):
+        org = await _make_org(db_session)
+        await _make_shift(db_session, org, "e1", date(2026, 7, 31))
+
+        report = await self._report(db_session, org)
+
+        assert report["unfinalized_shifts"] == 0

@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Download,
   Printer,
+  CreditCard,
   RotateCcw,
 } from 'lucide-react';
 import { userService } from '../services/api';
@@ -32,6 +33,7 @@ import type { SortDirection } from '../components/ux/SortableHeader';
 import type { MemberStats } from '../types/member';
 import { UserStatus } from '../constants/enums';
 import { buildCsv, downloadCsv } from '../utils/csv';
+import { displayNameOf } from '../utils/memberName';
 
 const Members: React.FC = () => {
   const navigate = useNavigate();
@@ -46,6 +48,10 @@ const Members: React.FC = () => {
   // mean nothing to a member looking someone up. A member without the grant
   // gets a directory; a coordinator gets the management table unchanged.
   const canManageMembers = checkPermission('members.manage');
+  // Selecting members exists to print their badges or ID cards, which the
+  // officer who issues ID credentials does too; exporting the selection stays
+  // with members.manage.
+  const canPrintBadges = canManageMembers || checkPermission('members.manage_id_cards');
   const { formatRank } = useRanks();
   // Adding and importing answer to users.create, not members.manage. Both
   // buttons navigate to tabs on MembersAdminHub, which gates them on the same
@@ -163,14 +169,18 @@ const Members: React.FC = () => {
 
   const filteredMembers = useMemo(() => {
     let result = members.filter((member) => {
-      const fullName = `${member.first_name || ''} ${member.last_name || ''}`.toLowerCase();
+      // Both the name the member goes by and their legal first name match, so
+      // "Terry" and "John" each find John "Terry" Heather.
+      const displayName = displayNameOf(member).toLowerCase();
+      const legalName = `${member.first_name || ''} ${member.last_name || ''}`.toLowerCase();
       const searchLower = searchQuery.toLowerCase();
 
       // Username is only searchable where it is also displayed: a member who
       // cannot see "@ladams" anywhere on the page cannot account for the row
       // that a search for "ladams" returns.
       const matchesSearch =
-        fullName.includes(searchLower) ||
+        displayName.includes(searchLower) ||
+        legalName.includes(searchLower) ||
         (canManageMembers && !!member.username && member.username.toLowerCase().includes(searchLower)) ||
         (member.membership_number && member.membership_number.toLowerCase().includes(searchLower)) ||
         (member.email && member.email.toLowerCase().includes(searchLower));
@@ -184,7 +194,7 @@ const Members: React.FC = () => {
     result = sortItems(result, sortField, sortDirection, (item, field) => {
       switch (field) {
         case 'name':
-          return `${item.first_name || ''} ${item.last_name || ''}`;
+          return displayNameOf(item);
         case 'status':
           return item.status;
         case 'hire_date':
@@ -412,7 +422,7 @@ const Members: React.FC = () => {
               <div className="flex w-full items-center space-x-2 sm:space-x-3 md:w-auto">
                 <button
                   onClick={() => void navigate('/members/import')}
-                  className="flex flex-1 items-center justify-center space-x-2 rounded-lg bg-purple-600 px-3 py-2 text-white transition-colors hover:bg-purple-700 max-md:min-h-[44px] sm:px-4 md:flex-none"
+                  className="touch:min-h-[44px] flex flex-1 items-center justify-center space-x-2 rounded-lg bg-purple-600 px-3 py-2 text-white transition-colors hover:bg-purple-700 sm:px-4 md:flex-none"
                 >
                   <Upload className="h-4 w-4" />
                   <span className="hidden sm:inline">Import CSV</span>
@@ -490,6 +500,7 @@ const Members: React.FC = () => {
                     <div className="flex min-w-0 flex-1 items-center">
                       <Avatar
                         firstName={member.first_name}
+                        preferredName={member.preferred_name}
                         lastName={member.last_name}
                         photoUrl={member.photo_url}
                         size="md"
@@ -499,7 +510,7 @@ const Members: React.FC = () => {
                           to={`/members/${member.id}`}
                           className="text-theme-text-primary hover:text-theme-text-primary block truncate font-medium hover:underline max-md:py-2.5"
                         >
-                          {member.first_name} {member.last_name}
+                          {displayNameOf(member)}
                         </Link>
                         {canManageMembers && <div className="text-theme-text-muted text-sm">@{member.username}</div>}
                         {member.rank && (
@@ -535,7 +546,7 @@ const Members: React.FC = () => {
                           onClick={() => openMemberProfile(member.id)}
                           className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-blue-700 transition-colors hover:bg-blue-500/10 dark:text-blue-400"
                           title="View/Edit Profile"
-                          aria-label={`View or edit ${member.first_name} ${member.last_name}`}
+                          aria-label={`View or edit ${displayNameOf(member)}`}
                         >
                           <Edit className="h-4 w-4" />
                         </button>
@@ -544,7 +555,7 @@ const Members: React.FC = () => {
                             onClick={() => setReactivateModalMember(member)}
                             className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-green-700 transition-colors hover:bg-green-500/10 dark:text-green-400"
                             title="Reactivate"
-                            aria-label={`Reactivate ${member.first_name} ${member.last_name}`}
+                            aria-label={`Reactivate ${displayNameOf(member)}`}
                           >
                             <RotateCcw className="h-4 w-4" />
                           </button>
@@ -554,7 +565,7 @@ const Members: React.FC = () => {
                             onClick={() => handleDeleteMember(member)}
                             className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-400"
                             title="Delete"
-                            aria-label={`Delete ${member.first_name} ${member.last_name}`}
+                            aria-label={`Delete ${displayNameOf(member)}`}
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -567,7 +578,7 @@ const Members: React.FC = () => {
             </div>
 
             {/* Bulk action bar (#33) */}
-            {canManageMembers && selectedIds.size > 0 && (
+            {canPrintBadges && selectedIds.size > 0 && (
               <div className="mb-3 hidden items-center gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2 md:flex">
                 <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
                   {selectedIds.size} selected
@@ -581,12 +592,21 @@ const Members: React.FC = () => {
                     Print Badges
                   </button>
                   <button
-                    onClick={handleExportCSV}
-                    className="inline-flex items-center gap-1 rounded-sm bg-blue-600 px-3 py-1.5 text-xs text-white transition-colors hover:bg-blue-700"
+                    onClick={() => void navigate(`/members/print-id-cards?ids=${[...selectedIds].join(',')}`)}
+                    className="inline-flex items-center gap-1 rounded-sm bg-emerald-700 px-3 py-1.5 text-xs text-white transition-colors hover:bg-emerald-800"
                   >
-                    <Download className="h-3 w-3" />
-                    Export Selected
+                    <CreditCard className="h-3 w-3" />
+                    Print ID Cards
                   </button>
+                  {canManageMembers && (
+                    <button
+                      onClick={handleExportCSV}
+                      className="inline-flex items-center gap-1 rounded-sm bg-red-800 px-3 py-1.5 text-xs text-white transition-colors hover:bg-red-900"
+                    >
+                      <Download className="h-3 w-3" />
+                      Export Selected
+                    </button>
+                  )}
                   <button
                     onClick={() => setSelectedIds(new Set())}
                     className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1.5 text-xs transition-colors"
@@ -603,7 +623,7 @@ const Members: React.FC = () => {
                 <table className="w-full">
                   <thead className="bg-theme-input-bg border-theme-surface-border border-b">
                     <tr>
-                      {canManageMembers && (
+                      {canPrintBadges && (
                         <th scope="col" className="w-10 py-3 pr-1 pl-4">
                           <input
                             type="checkbox"
@@ -685,14 +705,14 @@ const Members: React.FC = () => {
                         onClick={(e) => handleRowClick(e, member.id)}
                         className={`hover:bg-theme-surface-secondary cursor-pointer transition-colors ${selectedIds.has(member.id) ? 'bg-blue-500/5' : ''}`}
                       >
-                        {canManageMembers && (
+                        {canPrintBadges && (
                           <td className="w-10 py-4 pr-1 pl-4">
                             <input
                               type="checkbox"
                               checked={selectedIds.has(member.id)}
                               onChange={() => toggleSelect(member.id)}
                               className="border-theme-input-border focus:ring-theme-focus-ring rounded-sm text-blue-600"
-                              aria-label={`Select ${member.first_name} ${member.last_name}`}
+                              aria-label={`Select ${displayNameOf(member)}`}
                             />
                           </td>
                         )}
@@ -700,6 +720,7 @@ const Members: React.FC = () => {
                           <div className="flex items-center">
                             <Avatar
                               firstName={member.first_name}
+                              preferredName={member.preferred_name}
                               lastName={member.last_name}
                               photoUrl={member.photo_url}
                               size="md"
@@ -709,7 +730,7 @@ const Members: React.FC = () => {
                                 to={`/members/${member.id}`}
                                 className="text-theme-text-primary hover:text-theme-text-primary font-medium hover:underline"
                               >
-                                {member.first_name} {member.last_name}
+                                {displayNameOf(member)}
                               </Link>
                               {canManageMembers && (
                                 <div className="text-theme-text-muted text-sm">@{member.username}</div>
@@ -780,7 +801,7 @@ const Members: React.FC = () => {
                                 onClick={() => openMemberProfile(member.id)}
                                 className="rounded-sm p-2 text-blue-700 transition-colors hover:bg-blue-500/10 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                                 title="View/Edit Profile"
-                                aria-label={`View or edit ${member.first_name} ${member.last_name}`}
+                                aria-label={`View or edit ${displayNameOf(member)}`}
                               >
                                 <Edit className="h-4 w-4" />
                               </button>
@@ -789,7 +810,7 @@ const Members: React.FC = () => {
                                   onClick={() => setReactivateModalMember(member)}
                                   className="rounded-sm p-2 text-green-700 transition-colors hover:bg-green-500/10 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
                                   title="Reactivate"
-                                  aria-label={`Reactivate ${member.first_name} ${member.last_name}`}
+                                  aria-label={`Reactivate ${displayNameOf(member)}`}
                                 >
                                   <RotateCcw className="h-4 w-4" />
                                 </button>
@@ -799,7 +820,7 @@ const Members: React.FC = () => {
                                   onClick={() => handleDeleteMember(member)}
                                   className="rounded-sm p-2 text-red-700 transition-colors hover:bg-red-500/10 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                                   title="Delete"
-                                  aria-label={`Delete ${member.first_name} ${member.last_name}`}
+                                  aria-label={`Delete ${displayNameOf(member)}`}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </button>
@@ -837,9 +858,7 @@ const Members: React.FC = () => {
             deleteModalMember
               ? {
                   id: deleteModalMember.id,
-                  full_name:
-                    deleteModalMember.full_name ||
-                    `${deleteModalMember.first_name || ''} ${deleteModalMember.last_name || ''}`.trim(),
+                  display_name: displayNameOf(deleteModalMember),
                   username: deleteModalMember.username,
                   status: deleteModalMember.status,
                 }
@@ -858,10 +877,7 @@ const Members: React.FC = () => {
             reactivateModalMember
               ? {
                   id: reactivateModalMember.id,
-                  name:
-                    reactivateModalMember.full_name ||
-                    `${reactivateModalMember.first_name || ''} ${reactivateModalMember.last_name || ''}`.trim() ||
-                    reactivateModalMember.username,
+                  name: displayNameOf(reactivateModalMember) || reactivateModalMember.username,
                 }
               : null
           }

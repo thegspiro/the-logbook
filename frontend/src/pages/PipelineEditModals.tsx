@@ -4,6 +4,7 @@
  * matching training-program service method and then asks the parent to reload.
  */
 
+import { CallTypeRequirementPicker } from '../components/training/CallTypeRequirementPicker';
 import React, { useEffect, useState } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import toast from 'react-hot-toast';
@@ -552,6 +553,7 @@ export const RequirementFormModal: React.FC<{
   const [hours, setHours] = useState(req?.required_hours?.toString() ?? '');
   const [shifts, setShifts] = useState(req?.required_shifts?.toString() ?? '');
   const [calls, setCalls] = useState(req?.required_calls?.toString() ?? '');
+  const [callTypes, setCallTypes] = useState<string[]>(req?.required_call_types ?? []);
   const [passing, setPassing] = useState(req?.passing_score?.toString() ?? '');
   const [attempts, setAttempts] = useState(req?.max_attempts?.toString() ?? '');
   const [checklist, setChecklist] = useState<ChecklistItem[]>(req?.checklist_items ?? []);
@@ -627,6 +629,8 @@ export const RequirementFormModal: React.FC<{
         required_hours: type === 'hours' && hours ? Number(hours) : null,
         required_shifts: type === 'shifts' && shifts ? Number(shifts) : null,
         required_calls: type === 'calls' && calls ? Number(calls) : null,
+        // Empty means every call counts, so switching away clears it.
+        required_call_types: type === 'calls' ? callTypes : [],
         passing_score: type === 'knowledge_test' && passing ? Number(passing) : null,
         max_attempts: type === 'knowledge_test' && attempts ? Number(attempts) : null,
         checklist_items: type === 'checklist' ? checklist.filter((i) => i.text.trim()) : null,
@@ -800,6 +804,9 @@ export const RequirementFormModal: React.FC<{
                 value={calls}
                 onChange={(e) => setCalls(e.target.value)}
               />
+              <div className="mt-3">
+                <CallTypeRequirementPicker value={callTypes} onChange={setCallTypes} />
+              </div>
             </div>
           )}
           {type === 'knowledge_test' && (

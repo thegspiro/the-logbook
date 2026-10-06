@@ -114,6 +114,7 @@ describe('skillsTestingStore', () => {
       templatesLoading: false,
       templateLoading: false,
       tests: [],
+      testsTotal: 0,
       currentTest: null,
       testsLoading: false,
       testLoading: false,
@@ -271,23 +272,31 @@ describe('skillsTestingStore', () => {
   });
 
   describe('Test actions', () => {
-    it('should load tests', async () => {
-      vi.mocked(skillsTestingService.getTests).mockResolvedValue([
-        {
-          id: 'test-1',
-          template_name: 'SCBA Evaluation',
-          candidate_name: 'John Smith',
-          examiner_name: 'Captain Jones',
-          status: 'in_progress',
-          result: 'incomplete',
-          is_practice: false,
-          created_at: '2026-01-01T00:00:00Z',
-        },
-      ]);
+    it('should load a page of tests and the total behind it', async () => {
+      vi.mocked(skillsTestingService.getTests).mockResolvedValue({
+        items: [
+          {
+            id: 'test-1',
+            template_id: 'tpl-1',
+            template_name: 'SCBA Evaluation',
+            candidate_id: 'user-1',
+            candidate_name: 'John Smith',
+            examiner_id: 'user-2',
+            examiner_name: 'Captain Jones',
+            status: 'in_progress',
+            result: 'incomplete',
+            is_practice: false,
+            created_at: '2026-01-01T00:00:00Z',
+          },
+        ],
+        total: 37,
+      });
 
-      await useSkillsTestingStore.getState().loadTests();
+      await useSkillsTestingStore.getState().loadTests({ limit: 25, offset: 25 });
 
+      expect(skillsTestingService.getTests).toHaveBeenCalledWith({ limit: 25, offset: 25 });
       expect(useSkillsTestingStore.getState().tests).toHaveLength(1);
+      expect(useSkillsTestingStore.getState().testsTotal).toBe(37);
     });
 
     it('should load a single test', async () => {
@@ -364,6 +373,7 @@ describe('skillsTestingStore', () => {
             created_at: '',
           },
         ],
+        testsTotal: 3,
         currentTest: mockTest,
       });
       vi.mocked(skillsTestingService.deleteTest).mockResolvedValue(undefined);
@@ -371,6 +381,9 @@ describe('skillsTestingStore', () => {
       await useSkillsTestingStore.getState().deleteTest('test-1');
 
       expect(useSkillsTestingStore.getState().tests).toHaveLength(0);
+      // The pager's count follows the removal, or it offers a page with
+      // nothing left on it.
+      expect(useSkillsTestingStore.getState().testsTotal).toBe(2);
       expect(useSkillsTestingStore.getState().currentTest).toBeNull();
     });
 

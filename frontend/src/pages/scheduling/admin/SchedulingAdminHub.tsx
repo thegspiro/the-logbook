@@ -136,7 +136,7 @@ const SchedulingAdminHub: React.FC = () => {
       refreshToken={frameToken}
     >
       {activeTab === 'settings' ? (
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl py-6">
           <AdminMetricsSettings
             moduleKey="scheduling"
             moduleLabel="Scheduling"
@@ -145,7 +145,7 @@ const SchedulingAdminHub: React.FC = () => {
           />
         </div>
       ) : (
-        <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
+        <div className="mx-auto max-w-5xl py-6 sm:py-8">
           {/* Reachable when the department has the Scheduling module switched
               off: the module gate is a usability gate, not access control, so
               this route still opens and every card filters itself away. A

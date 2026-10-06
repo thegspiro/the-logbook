@@ -45,6 +45,7 @@ import {
   Scale,
   Stethoscope,
   Store,
+  HandCoins,
 } from 'lucide-react';
 import { Sun, Moon, Monitor, Contrast, WifiOff, RefreshCw, Loader2 } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
@@ -64,6 +65,7 @@ import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
 import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
+import { GRANTS_NAV_ITEMS } from './grantsNavigation';
 
 interface SideNavigationProps {
   departmentName: string;
@@ -409,6 +411,19 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
           : []),
       ],
     },
+    // Every grants route requires `fundraising.view` as well as the module, so
+    // the entry carries the same gate (a nav gate is a subset of its route's).
+    ...(isModuleOn('grants')
+      ? [
+          {
+            label: 'Grants & Fundraising',
+            path: '/grants',
+            icon: HandCoins,
+            permission: 'fundraising.view',
+            subItems: GRANTS_NAV_ITEMS.map((item) => ({ ...item, icon: HandCoins, permission: 'fundraising.view' })),
+          } as NavItem,
+        ]
+      : []),
     ...(isModuleOn('notifications')
       ? [{ label: 'Notifications', path: '/notifications?tab=inbox', icon: Bell } as NavItem]
       : []),
@@ -991,7 +1006,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                                   onMouseEnter={() => prefetchRoute(subItem.path)}
                                   onFocus={() => prefetchRoute(subItem.path)}
                                   aria-current={subActive ? 'page' : undefined}
-                                  className={`focus:ring-theme-focus-ring flex w-full items-center rounded-lg px-4 py-2 transition-all duration-150 focus:ring-2 focus:outline-hidden max-md:min-h-[44px] ${
+                                  className={`focus:ring-theme-focus-ring touch:min-h-[44px] flex w-full items-center rounded-lg px-4 py-2 transition-all duration-150 focus:ring-2 focus:outline-hidden ${
                                     subActive
                                       ? 'bg-red-800 text-white shadow-sm'
                                       : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary active:scale-[0.98]'
@@ -1084,7 +1099,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                 onClick={() => {
                   void triggerOfflineDrain();
                 }}
-                className={`focus:ring-theme-focus-ring flex w-full items-center rounded-lg bg-blue-500/15 text-blue-700 transition-colors hover:bg-blue-500/25 focus:ring-2 focus:outline-hidden max-md:min-h-[44px] dark:text-blue-300 ${
+                className={`focus:ring-theme-focus-ring touch:min-h-[44px] flex w-full items-center rounded-lg bg-blue-500/15 text-blue-700 transition-colors hover:bg-blue-500/25 focus:ring-2 focus:outline-hidden dark:text-blue-300 ${
                   collapsed ? 'justify-center p-2' : 'px-3 py-2'
                 }`}
                 title={collapsed ? `${pendingSyncCount} pending sync — click to retry` : undefined}

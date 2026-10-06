@@ -34,6 +34,15 @@ from app.services.integration_services.base import (
     create_integration_client,
 )
 from app.services.integration_services.calcom_service import CalcomService
+from app.utils.ssrf_transport import SSRFSafeAsyncTransport
+
+
+def _pool_of(transport: httpx.AsyncBaseTransport):
+    """The httpcore pool under the factory's wrappers — the size cap, and on
+    the direct path the SCH-10 pinning transport inside it."""
+    while isinstance(transport, (_SizeLimitedTransport, SSRFSafeAsyncTransport)):
+        transport = transport._transport
+    return transport._pool
 
 
 class _ChunkedStream(httpx.AsyncByteStream):
@@ -90,10 +99,11 @@ async def test_create_integration_client_wires_the_size_limited_transport():
 def _mock_public_dns():
     """Mock DNS resolution to a public IP the way test_integrations_security.py
     does — assert_outbound_url_safe() (called by every connector's
-    _assert_base_url_safe()) resolves the configured hostname before the
-    patched transport is ever reached, so a test running with no outbound
-    network access needs this or it fails on `Could not resolve hostname`
-    rather than on anything this file is testing."""
+    _assert_base_url_safe()) and the factory's SCH-10 pinning transport both
+    resolve the hostname before the patched transport is ever reached, so a
+    test running with no outbound network access needs this or it fails on
+    `Could not resolve hostname` rather than on anything this file is
+    testing. Both patch the one `socket` module, so this covers both."""
     return patch(
         "app.utils.url_validator.socket.getaddrinfo",
         return_value=[(2, 1, 6, "", ("104.18.0.62", 0))],
@@ -339,7 +349,10 @@ async def test_paypal_get_access_token_enforces_response_size_cap():
         async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
             return await self._inner.handle_async_request(request)
 
-    with patch.object(base_module.httpx, "AsyncHTTPTransport", _FakeNetworkTransport):
+    with (
+        _mock_public_dns(),
+        patch.object(base_module.httpx, "AsyncHTTPTransport", _FakeNetworkTransport),
+    ):
         with pytest.raises(ResponseTooLargeError):
             await get_access_token(
                 "https://api-m.sandbox.paypal.com", "client-id", "client-secret"
@@ -377,7 +390,10 @@ async def test_paypal_verify_webhook_signature_fails_closed_on_oversized_respons
         "paypal-transmission-time": "2026-09-06T00:00:00Z",
     }
 
-    with patch.object(base_module.httpx, "AsyncHTTPTransport", _FakeNetworkTransport):
+    with (
+        _mock_public_dns(),
+        patch.object(base_module.httpx, "AsyncHTTPTransport", _FakeNetworkTransport),
+    ):
         # get_access_token itself hits the oversized response first; either
         # way the surrounding try/except in verify_webhook_signature must
         # catch it and fail closed rather than raising past the caller.
@@ -444,7 +460,7 @@ async def test_create_integration_client_http2_kwarg_reaches_the_transport():
     AsyncHTTPTransport so the underlying httpcore pool actually enables it."""
     client = create_integration_client(http2=True, trust_env=False)
     try:
-        pool = client._transport._transport._pool
+        pool = _pool_of(client._transport)
         assert pool._http2 is True
     finally:
         await client.aclose()
@@ -454,7 +470,7 @@ async def test_create_integration_client_http1_false_reaches_the_transport():
     """Same gap as above, for disabling HTTP/1 in favor of HTTP/2-only."""
     client = create_integration_client(http1=False, http2=True, trust_env=False)
     try:
-        pool = client._transport._transport._pool
+        pool = _pool_of(client._transport)
         assert pool._http1 is False
         assert pool._http2 is True
     finally:
@@ -466,7 +482,7 @@ async def test_create_integration_client_default_still_has_http2_disabled():
     default to HTTP/1-only, matching stock httpx.AsyncClient()."""
     client = create_integration_client()
     try:
-        pool = client._transport._transport._pool
+        pool = _pool_of(client._transport)
         assert pool._http2 is False
     finally:
         await client.aclose()

@@ -11,6 +11,15 @@
  *
  * Nothing in the type system connects a `to=` string to a `path=` string, so
  * this walks the source and checks the one against the other.
+ *
+ * It walks the *backend* too, because some navigation targets are server data
+ * rather than source: the dashboard's asset widgets and the administration
+ * hub's attention queue both ship an `href` per row, and the frontend navigates
+ * to whatever arrives. Three asset-widget tiles pointed at `/inventory/lots`,
+ * `/inventory/requests` and `/apparatus/maintenance` — all three API paths with
+ * no route behind them — so clicking a tile bounced the user to the dashboard.
+ * A frontend-only scan could never see them, which is why they survived two
+ * review passes over that endpoint.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -85,7 +94,41 @@ const resolveTemplate = (raw: string): string | null => {
   return raw.replace(/\$\{[^}]*\}/g, INTERPOLATION_PLACEHOLDER);
 };
 
+/**
+ * Backend modules that build in-app navigation targets as response data.
+ *
+ * Deliberately a list rather than a sweep of `backend/app`: most `href=` in
+ * Python is an anchor in an HTML email, whose target is an interpolated
+ * absolute URL (`href="{url}"`) and not a router path at all. Restricting the
+ * match below to a literal leading `/` excludes those, and naming the files
+ * keeps the scan honest about its scope. Add a file here when it starts
+ * emitting `href` values the SPA navigates to.
+ *
+ * One accepted limit: a target assembled from adjacent string literals across
+ * lines yields only its first piece, so `"/inventory/checklists/log"
+ * "?status=…&submitted=1"` is checked as the path alone. That is the half that
+ * can fall through to the catch-all, so the check still does its job — a query
+ * string never decides whether a route matches.
+ */
+const SERVER_NAV_SOURCES = ['app/api/v1/endpoints/dashboard.py', 'app/services/admin_hub_service.py'];
+
+const BACKEND = path.resolve(SRC, '../../backend');
+
 const navTargets: NavTarget[] = [];
+for (const relative of SERVER_NAV_SOURCES) {
+  const full = path.join(BACKEND, relative);
+  // A renamed or moved module must fail loudly rather than silently reducing
+  // this scan to the frontend half.
+  if (!fs.existsSync(full)) throw new Error(`SERVER_NAV_SOURCES names a missing file: ${relative}`);
+  fs.readFileSync(full, 'utf8')
+    .split('\n')
+    .forEach((line, index) => {
+      for (const match of line.matchAll(/\bhref=\s*['"](\/[^'"\n]*)['"]/g)) {
+        navTargets.push({ file: `backend/${relative}`, line: index + 1, target: match[1] ?? '' });
+      }
+    });
+}
+
 for (const file of files) {
   const relative = path.relative(SRC, file);
   fs.readFileSync(file, 'utf8')
@@ -117,6 +160,22 @@ describe('route integrity', () => {
     // assertion below while checking nothing at all.
     expect(declaredRoutes.size).toBeGreaterThan(100);
     expect(navTargets.length).toBeGreaterThan(100);
+  });
+
+  it('reads the server-supplied navigation targets too', () => {
+    // Without a floor of its own, a Python-side rename or a regex that stops
+    // matching would drop this half of the scan and every assertion below
+    // would still pass — which is the state that let three dead asset-widget
+    // links ship.
+    const serverTargets = navTargets.filter((nav) => nav.file.startsWith('backend/'));
+    expect(serverTargets.length, 'the backend href scan matched nothing at all').toBeGreaterThan(30);
+    // Both named sources have to contribute; one alone would mask the other.
+    for (const relative of SERVER_NAV_SOURCES) {
+      expect(
+        serverTargets.some((nav) => nav.file === `backend/${relative}`),
+        `no navigation targets found in ${relative}`
+      ).toBe(true);
+    }
   });
 
   it('reads interpolated targets rather than skipping them', () => {

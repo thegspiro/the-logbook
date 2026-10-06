@@ -20,6 +20,7 @@
 import { FACILITY_ENTRY_PERMISSIONS } from '../facilities/routes';
 import { MEDICAL_VIEW_PERMISSIONS } from '../medical-supplies/routes';
 import { LEGAL_DOCUMENTS_PERMISSIONS } from '../governance/routes';
+import { VIEW_OTHER_MEMBER_ID_CARD_PERMISSIONS } from '../../utils/memberIdCardAccess';
 import {
   MEMBERS_SETTINGS_ANY_PERMISSION,
   MEMBERS_SETTINGS_EVOC_GATE,
@@ -207,7 +208,16 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/members/:userId', label: 'Member profile' },
       { path: '/members/:userId/training', label: 'Member training history', module: 'training' },
       { path: '/members/:userId/id-card', label: 'Member ID card' },
-      { path: '/members/print-labels', label: 'Print member labels', permission: 'members.view' },
+      {
+        path: '/members/print-labels',
+        label: 'Print member labels',
+        anyPermission: VIEW_OTHER_MEMBER_ID_CARD_PERMISSIONS,
+      },
+      {
+        path: '/members/print-id-cards',
+        label: 'Print member ID cards',
+        anyPermission: VIEW_OTHER_MEMBER_ID_CARD_PERMISSIONS,
+      },
       { path: '/members/scan', label: 'Scan a member ID', anyPermission: ['users.view', 'members.manage'] },
       { path: '/members/check-in-station', label: 'Check-in station', permission: 'members.check_in' },
       { path: '/members/admin', label: 'Members administration hub', permission: 'members.manage' },

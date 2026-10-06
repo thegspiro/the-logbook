@@ -115,14 +115,43 @@ The ledger is keyed on IP address only and holds no account or member data.
 Redis-backed and shared across workers, with a capped, evicted per-process
 fallback.
 
+### Account Lockout, Unlock and the Sign-In Audit Trail _(2026-10-04)_
+
+After `MAX_LOGIN_ATTEMPTS` (5) consecutive failures, password or second
+factor, an account is locked for `ACCOUNT_LOCKOUT_DURATION_MINUTES` (15). With
+`ACCOUNT_LOCKOUT_REVEAL=False` (the default) the sign-in screen still answers
+"Incorrect username or password", so it never confirms that an account exists.
+The lock is visible instead to the people who can lift it: the **Members**
+admin page shows "Sign-in locked until …" to `members.manage` holders, with an
+**Unlock** action (`POST /users/{id}/unlock`). Unlocking clears the failure
+count and is audited as `account_unlocked`. Resetting the password also clears
+the lock.
+
+Every sign-in event is written to the tamper-evident audit log under category
+`authentication`: `login` (with `method`: `password`, `password+totp` or
+`password+recovery_code`), `login_failed` (with `reason` and `stage`),
+`account_locked` on the attempt that sets the lock, and `logout`. A failure
+against an identifier that matches no account is recorded with no member and
+no organization, and the identifier itself is not stored, because members
+type passwords into that box. The security dashboard's "failed logins in the
+last hour" counts the organization's `login_failed` rows.
+
 ---
 
 ## OAuth
 
 Connect external identity providers for single sign-on. _(2026-05-29)_ "Sign in
-with Google" and "Sign in with Microsoft" (Azure AD, single-tenant) are
-implemented via the OpenID Connect authorization-code flow in
-`services/oauth_service.py`.
+with Google" and "Sign in with Microsoft" (Azure AD, single-tenant), and
+_(2026-10-05)_ "Authentik SSO", are implemented via the OpenID Connect
+authorization-code flow in `services/oauth_service.py`.
+
+**The credentials come from the server's environment, not the Settings
+screen.** Settings → Authentication chooses which provider the login page
+offers; the client ID, secret and server URL fields there are kept for the
+department's records and read by nothing. A provider shows a button only when
+the department chose it **and** the server is configured for it. Until then,
+members keep signing in with passwords and can reset them: forgot-password
+refers people to a provider only when that provider is actually live.
 
 ### How It Works
 
@@ -141,6 +170,16 @@ implemented via the OpenID Connect authorization-code flow in
      `audience=AZURE_AD_CLIENT_ID`, issuer `{authority}/v2.0`, and the token's
      `tid` claim required to equal `AZURE_AD_TENANT_ID` (single-tenant lock —
      only accounts in the configured directory can sign in)
+   - **Authentik** — endpoints come from the issuer's discovery document
+     (`<AUTHENTIK_ISSUER_URL>.well-known/openid-configuration`, cached for an
+     hour), which must name the configured issuer and keep every endpoint on
+     the issuer's origin. The token is verified against the provider's JWKS
+     with `audience=AUTHENTIK_CLIENT_ID` and the configured issuer, using an
+     asymmetric algorithm only: give the Authentik provider a **signing key**,
+     because a client-secret (HS256) token is refused. The email links an
+     account only when `email_verified` is `true` — make sure the provider's
+     email scope mapping sets it, or every sign-in fails with
+     `unverified_email`
 4. **Link-existing-only policy:** OAuth never auto-creates an account. The
    verified IdP email must match an existing, **active** local user in the
    organization. On first use the provider/subject is bound to that user
@@ -167,10 +206,12 @@ implemented via the OpenID Connect authorization-code flow in
 
 - **Google Workspace** — "Sign in with Google" (OpenID Connect)
 - **Microsoft 365 / Azure AD** — "Sign in with Microsoft" (single-tenant)
+- **Authentik** — "Authentik SSO" (self-hosted OpenID Connect)
 
 ### Domain Restriction
 
-Set `GOOGLE_ALLOWED_DOMAINS` / `AZURE_AD_ALLOWED_DOMAINS` (comma-separated) to
+Set `GOOGLE_ALLOWED_DOMAINS` / `AZURE_AD_ALLOWED_DOMAINS` /
+`AUTHENTIK_ALLOWED_DOMAINS` (comma-separated) to
 restrict which email domains may sign in. Empty (default) means no domain
 restriction. Enforced server-side after token verification; when exactly one
 Google domain is configured, the consent screen is hinted via the `hd`
@@ -196,6 +237,14 @@ AZURE_AD_CLIENT_ID=your-client-id
 AZURE_AD_CLIENT_SECRET=your-client-secret
 AZURE_AD_REDIRECT_URI=https://your-domain.com/api/v1/auth/oauth/microsoft/callback
 AZURE_AD_ALLOWED_DOMAINS=yourdept.org
+
+# Authentik (OpenID Connect provider with a signing key)
+AUTHENTIK_ENABLED=true
+AUTHENTIK_ISSUER_URL=https://auth.your-domain.com/application/o/the-logbook/
+AUTHENTIK_CLIENT_ID=your-client-id
+AUTHENTIK_CLIENT_SECRET=your-client-secret
+AUTHENTIK_REDIRECT_URI=https://your-domain.com/api/v1/auth/oauth/authentik/callback
+AUTHENTIK_ALLOWED_DOMAINS=yourdept.org
 ```
 
 ### Callback Error Codes _(2026-05-29)_
@@ -203,21 +252,23 @@ AZURE_AD_ALLOWED_DOMAINS=yourdept.org
 The callback redirects to `OAUTH_FAILURE_REDIRECT?error=<code>` for these
 recoverable failures:
 
-| Code                    | Meaning                                                                |
-| ----------------------- | ---------------------------------------------------------------------- |
-| `access_denied`         | The provider returned an error (e.g. user cancelled consent)           |
-| `invalid_state`         | Missing/mismatched `state` vs. the `oauth_state` cookie (CSRF guard)   |
-| `token_exchange_failed` | Authorization-code exchange with the provider failed                   |
-| `missing_id_token`      | Provider response contained no ID token                                |
-| `invalid_id_token`      | ID token failed cryptographic verification (signature/audience/expiry) |
-| `invalid_issuer`        | ID token issuer is not the expected provider                           |
-| `invalid_tenant`        | Microsoft `tid` claim does not match `AZURE_AD_TENANT_ID`              |
-| `unverified_email`      | IdP did not mark the email as verified                                 |
-| `no_email`              | No email present in the verified claims                                |
-| `domain_not_allowed`    | Email domain not in the configured allowlist                           |
-| `no_account`            | No matching active local user for the verified email                   |
-| `inactive`              | Matched local user is not active                                       |
-| `account_conflict`      | Email already bound to a different IdP subject/provider                |
+| Code                     | Meaning                                                                |
+| ------------------------ | ---------------------------------------------------------------------- |
+| `access_denied`          | The provider returned an error (e.g. user cancelled consent)           |
+| `invalid_state`          | Missing/mismatched `state` vs. the `oauth_state` cookie (CSRF guard)   |
+| `token_exchange_failed`  | Authorization-code exchange with the provider failed                   |
+| `missing_id_token`       | Provider response contained no ID token                                |
+| `invalid_id_token`       | ID token failed cryptographic verification (signature/audience/expiry) |
+| `invalid_issuer`         | ID token issuer is not the expected provider                           |
+| `invalid_tenant`         | Microsoft `tid` claim does not match `AZURE_AD_TENANT_ID`              |
+| `unverified_email`       | IdP did not mark the email as verified (Google, Authentik)             |
+| `provider_unavailable`   | Authentik discovery could not be fetched                               |
+| `provider_misconfigured` | Authentik discovery names another issuer or an off-origin endpoint     |
+| `no_email`               | No email present in the verified claims                                |
+| `domain_not_allowed`     | Email domain not in the configured allowlist                           |
+| `no_account`             | No matching active local user for the verified email                   |
+| `inactive`               | Matched local user is not active                                       |
+| `account_conflict`       | Email already bound to a different IdP subject/provider                |
 
 ---
 
@@ -325,9 +376,9 @@ over a session for 30 seconds after every legitimate refresh. Presenting any
 stale refresh token is now treated as replay/theft and **revokes all of that
 user's sessions** (logout everywhere). Concurrent refreshes from multiple tabs
 that previously slid through the grace window will now trip this — an accepted
-trade. The `REFRESH_ROTATION_GRACE_SECONDS` setting and the
-`user_sessions.previous_refresh_token` column still exist but are no longer
-consulted; the column is actively nulled on each rotation.
+trade. The `REFRESH_ROTATION_GRACE_SECONDS` setting and the columns behind it
+were removed on 2026-10-04; a `.env` that still sets it boots and logs that the
+setting has no effect.
 
 ### Deactivated Organizations Cannot Log In _(2026-08-12)_
 
@@ -370,3 +421,38 @@ GET    /api/v1/auth/oauth/microsoft/callback # Microsoft OAuth callback
 ---
 
 **See also:** [Security Overview](Security-Overview) | [Security Configuration](Configuration-Security) | [Encryption](Security-Encryption)
+
+## Sign-in, reset and MFA fixes _(2026-09-27 → 09-29)_
+
+Found by driving the flows in a browser (workflow review W02–W04,
+`docs/workflow-review/`):
+
+- **The MFA lockout now trips.** For an account with MFA, a correct password
+  used to reset the failed-attempt counter, so wrong authenticator codes never
+  accumulated to a lockout. The password step now leaves the counter and lock
+  alone; `mfa_login` clears both once the second factor succeeds. Password-only
+  accounts are unchanged (`tests/test_auth_mfa_lockout_reset.py`).
+- **Recovery codes are shown.** Enabling MFA closed the card before the ten
+  recovery codes could be read; they stay up until **Done**.
+- **The sign-in countdown is the server's.** A 429's `Retry-After` reaches the
+  page, so _"Too many failed attempts. Try again in N seconds."_ shows the real
+  wait (60s for the per-address limit) instead of a 4-second client backoff.
+- **Deep links survive sign-in** with their query and anchor, through one
+  `postLoginRedirect` helper that keeps the open-redirect guard (a single
+  leading `/`, never `//host` or a full URL).
+- **Forgot password** reports the link lifetime the server returns
+  (`expires_in_minutes`, 30 — the page said an hour), and shows **No Reset Link
+  Was Sent** with the server's message when the organization uses an SSO
+  provider, instead of "Check Your Email". A rate-limited reset link reads
+  **Too Many Attempts** with the wait, rather than "invalid".
+- **Both password checklists list every server rule** — length, the four
+  classes, no runs (123, abc), no character three times in a row — from the
+  moment the form opens.
+- **A password change signs you out everywhere** and the sign-in page now says
+  so.
+
+Still flagged (see `docs/KNOWN_LIMITATIONS.md`): password sign-in, failure,
+lockout and sign-out are not written to the audit log (W02-3); a locked
+account is indistinguishable from a wrong password to the member and to
+administrators (W02-4); Authentik is offered at setup with no sign-in flow
+behind it, and choosing it turns off self-service password reset (W01-11).

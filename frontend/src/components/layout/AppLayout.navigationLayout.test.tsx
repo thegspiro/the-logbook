@@ -46,6 +46,7 @@ vi.mock('./SideNavigation', () => ({ SideNavigation: () => <nav data-testid="sid
 vi.mock('./BottomNavigation', () => ({ BottomNavigation: () => null }));
 vi.mock('../PullToRefreshIndicator', () => ({ PullToRefreshIndicator: () => null }));
 vi.mock('../ux/ConfirmDialog', () => ({ ConfirmDialog: () => null }));
+vi.mock('../HeldOfflineItemsNotice', () => ({ HeldOfflineItemsNotice: () => null }));
 vi.mock('../ux', () => ({
   TopProgressBar: () => null,
   CommandPalette: () => null,

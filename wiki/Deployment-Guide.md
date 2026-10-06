@@ -108,7 +108,7 @@ it is written to `FRONTEND_URL`, which every emailed link — password resets,
 ballots, reminders — is built from. Without it the installer exits before
 installing anything, unless an existing `.env` in the install directory already
 has a public `FRONTEND_URL`. A `localhost` or `127.0.0.1` URL is refused, and a
-production backend refuses to start with one — see
+production backend refuses to start with one — unless `ALLOWED_ORIGINS` names a public address, in which case the first such origin is used for links instead (logged at startup; 2026-09-25) — see
 [UPGRADING.md](../docs/UPGRADING.md#frontend_url-must-be-a-public-address-2026-09-25).
 
 ### Manual Installation

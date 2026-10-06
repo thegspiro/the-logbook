@@ -614,8 +614,11 @@ const MyTrainingPage: React.FC = () => {
   const v = data?.visibility;
 
   const allRecords = data?.training_records ?? [];
+  // A record still awaiting approval has no completion date, so a date range
+  // cannot place it; hiding it behind the default 12-month window made a
+  // member's own pending submission vanish from their history.
   const recordInRange = (completionDate?: string | null): boolean => {
-    if (!completionDate) return !rangeStart && !rangeEnd;
+    if (!completionDate) return true;
     if (rangeStart && completionDate < rangeStart) return false;
     if (rangeEnd && completionDate > rangeEnd) return false;
     return true;
@@ -672,7 +675,7 @@ const MyTrainingPage: React.FC = () => {
         <div className="hscroll mb-6 flex gap-2">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors max-md:min-h-[44px] ${
+            className={`touch:min-h-[44px] rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
               tab === 'overview'
                 ? 'bg-red-800 text-white'
                 : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
@@ -682,7 +685,7 @@ const MyTrainingPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('settings')}
-            className={`flex items-center space-x-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors max-md:min-h-[44px] ${
+            className={`touch:min-h-[44px] flex items-center space-x-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
               tab === 'settings'
                 ? 'bg-red-800 text-white'
                 : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'

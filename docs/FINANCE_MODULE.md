@@ -228,7 +228,10 @@ Components:
 
 - **ApprovalTimeline** — shown on PurchaseRequestDetailPage, ExpenseReportDetailPage, CheckRequestDetailPage. Displays each step's status, timestamps and notes
 - **ApprovalStepActions** — above the timeline on the same three pages. When the request is pending approval, shows "Waiting on <assigneeLabel>." for the step it is waiting on, to anyone who can see the request. Buttons come from that step's `canAct` / `requiresOverride`, which the detail endpoint sets for the viewer (false on notification steps and without `finance.approve`): Approve / Deny for the named approver, "Approve / Deny as approvals admin" with a required override reason for an approvals admin who is not. A requester who is also the named approver still sees Approve; the API refuses it (separation of duties) and the dialog shows why. Re-fetches the request after a decision. Shares **ApprovalDecisionDialog** with the Approvals page
-- **ApprovalChainPreview** — shown on request forms before submission: "This request will require approval from: 1. Training Officer → 2. Board of Trustees"
+- **ManualApprovalPanel** _(2026-09-30)_ — on the same three pages, for a request in `pending_approval` with **no** approval steps (no chain matched, or the chain had none). Shown only to `finance.approve` holders; offers Approve (optional note, audit log only) and Deny (reason required, shown to the requester) through `/finance/approvals/manual/...`. The requester sees Deny only — the backend refuses their approval too. These requests are not on the Approvals page, which lists step records; `GET /finance/approvals/unrouted` lists them but no screen reads it yet
+- **ApprovalChainPreview** — _planned, not built._ `GET /finance/approval-chains/preview` and `approvalChainService.preview()` exist, but no component calls them; request forms show no chain preview and the settings page has no preview tool
+
+**Request bodies accept camelCase and snake_case** _(2026-09-30)_. Every request schema in `app/schemas/finance.py` uses `_REQUEST_CONFIG` (`alias_generator=to_camel`, `populate_by_name=True`, `loc_by_alias=False`). Before this the pages sent camelCase and no schema carried an alias: creates were refused with a 422 for "missing" required fields (`POST /finance/fiscal-years` with `startDate`), and updates silently dropped every multi-word key, so clearing a purchase request's `budgetId` returned 200 and changed nothing. Dumps stay by field name, `exclude_unset` keeps "omitted = leave alone, null = clear", and 422 field names stay snake_case. `tests/test_finance_request_camelcase.py` fails if a new request schema lacks the config.
 
 ### Impact on Phases 2-3
 
@@ -427,7 +430,7 @@ Pages:
 
 Export format:
 
-- **CSV** (Phase 5 MVP): Date, Type, Num, Name, Memo, Account, Debit, Credit — standard QuickBooks import format
+- **CSV** (Phase 5 MVP): Date, Type, Num, Name, Memo, Account, Debit, Credit — standard QuickBooks import format. _(2026-09-25)_ **Date** is the department's calendar day: `paid_at` / `check_date` are converted through `resolve_scheduling_timezone` (the organization's timezone, `America/New_York` when unset) before formatting, so an evening payment no longer books on the next UTC day. The lookup runs inside the export's `try`, so a failure is recorded on the export log like any other interruption
 - **IIF** (future): QuickBooks Desktop interchange format
 - Design the export service with a strategy pattern so adding QBO API later is straightforward
 

@@ -54,6 +54,17 @@ Example signature block:
 An office nobody holds renders as an empty string, never as a literal
 `{{president_name}}`.
 
+> **`compliance_officer` is new** _(2026-09-24)_. The office was added alongside
+> the seeded **Compliance Officer** position (`compliance_officer`, migration
+> `3c918c06466d`), so on a department that has never opened the Officers screen
+> it auto-detects whoever holds that position, and is `Vacant` — rendering
+> empty — until somebody does. Templates written before then that hard-coded a
+> compliance contact can switch to `{{compliance_officer_name}}` /
+> `{{compliance_officer_email}}`. There is no office for the Membership
+> Coordinator or the new Assistant Membership Coordinator; pipeline notices go
+> to the holders of those positions directly (see
+> [PROSPECTIVE_MEMBERS_MODULE.md](./PROSPECTIVE_MEMBERS_MODULE.md#applicant-self-withdrawal-2026-09-24)).
+
 ## How a holder is resolved
 
 Highest priority first:

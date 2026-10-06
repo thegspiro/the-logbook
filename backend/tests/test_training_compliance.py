@@ -9,7 +9,7 @@ Tests cover the pure calculation logic in:
 All tests run without a database by using mock requirement/record objects.
 """
 
-from datetime import date
+from datetime import date, datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -65,6 +65,10 @@ def _make_requirement(**kwargs):
         "period_start_day": None,
         "period_end_month": None,
         "period_end_day": None,
+        # A requirement that existed when the name-match cut-off migration
+        # ran, so a record's course name can still credit a certification
+        # for records completed by then.
+        "name_match_until": date(2026, 10, 5),
     }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
@@ -89,6 +93,7 @@ def _make_record(**kwargs):
         "credit_hours": 8.0,
         "certification_number": None,
         "issuing_agency": None,
+        "created_at": None,
     }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
@@ -149,17 +154,18 @@ class TestRequirementAppliesToMember:
         req = _make_requirement(
             applies_to_all=False,
             required_membership_types=None,
-            required_roles=["role-1", "role-2"],
+            required_roles=["lieutenant", "captain"],
         )
-        assert requirement_applies_to_member(req, "active", ["role-2"]) is True
+        # required_roles holds rank slugs, matched against User.rank (CMP4-5).
+        assert requirement_applies_to_member(req, "active", "captain") is True
 
     def test_role_mismatch_does_not_apply(self):
         req = _make_requirement(
             applies_to_all=False,
             required_membership_types=None,
-            required_roles=["role-1"],
+            required_roles=["captain"],
         )
-        assert requirement_applies_to_member(req, "active", ["role-2"]) is False
+        assert requirement_applies_to_member(req, "active", "firefighter") is False
 
     def test_no_criteria_at_all_applies_to_nobody(self):
         req = _make_requirement(
@@ -167,7 +173,80 @@ class TestRequirementAppliesToMember:
             required_membership_types=None,
             required_roles=None,
         )
-        assert requirement_applies_to_member(req, "active", ["role-1"]) is False
+        assert requirement_applies_to_member(req, "active", "captain") is False
+
+    # CMP4-2: required_positions holds position slugs, and nothing read it,
+    # so a requirement scoped only that way graded nobody.
+
+    def test_position_slug_match_applies(self):
+        req = _make_requirement(
+            applies_to_all=False, required_positions=["driver_candidate"]
+        )
+        assert (
+            requirement_applies_to_member(
+                req, "active", None, position_slugs=["firefighter", "driver_candidate"]
+            )
+            is True
+        )
+
+    def test_position_slug_mismatch_does_not_apply(self):
+        req = _make_requirement(applies_to_all=False, required_positions=["officer"])
+        assert (
+            requirement_applies_to_member(
+                req, "active", None, position_slugs=["firefighter"]
+            )
+            is False
+        )
+
+    def test_roles_and_positions_are_either_or(self):
+        # The scheduling compliance report ORs them; a role miss must not stop
+        # a position match from counting.
+        req = _make_requirement(
+            applies_to_all=False,
+            required_roles=["captain"],
+            required_positions=["officer"],
+        )
+        assert (
+            requirement_applies_to_member(
+                req, "active", "firefighter", position_slugs=["officer"]
+            )
+            is True
+        )
+
+    def test_user_form_reads_position_slugs_off_the_member(self):
+        from app.services.training_compliance import requirement_applies_to_user
+
+        req = _make_requirement(applies_to_all=False, required_positions=["officer"])
+        member = SimpleNamespace(
+            membership_type="active",
+            positions=[SimpleNamespace(id="pos-1", slug="officer")],
+            hire_date=None,
+            created_at=None,
+        )
+        assert requirement_applies_to_user(req, member) is True
+
+    def test_user_form_matches_required_roles_against_the_rank(self):
+        """CMP4-5: required_roles holds rank slugs. Matching it against the
+        member's position ids, as every grader did, matched nobody."""
+        from app.services.training_compliance import requirement_applies_to_user
+
+        req = _make_requirement(applies_to_all=False, required_roles=["captain"])
+        captain = SimpleNamespace(
+            membership_type="active",
+            rank="captain",
+            positions=[],
+            hire_date=None,
+            created_at=None,
+        )
+        firefighter = SimpleNamespace(
+            membership_type="active",
+            rank="firefighter",
+            positions=[SimpleNamespace(id="captain", slug="captain")],
+            hire_date=None,
+            created_at=None,
+        )
+        assert requirement_applies_to_user(req, captain) is True
+        assert requirement_applies_to_user(req, firefighter) is False
 
 
 # =====================================================
@@ -233,10 +312,18 @@ class TestGetDateWindow:
         assert end is None
 
     def test_biannual(self):
+        # "Every 2 Years": this calendar year and the one before (owner
+        # decision BIANNUAL-window). It used to have no window at all.
         req = _make_requirement(frequency=SimpleNamespace(value="biannual"))
         start, end = TrainingService._get_date_window(req, date(2026, 6, 15))
-        assert start is None
-        assert end is None
+        assert start == date(2025, 1, 1)
+        assert end == date(2026, 12, 31)
+
+    def test_biannual_named_year(self):
+        req = _make_requirement(frequency=SimpleNamespace(value="biannual"), year=2024)
+        start, end = TrainingService._get_date_window(req, date(2026, 6, 15))
+        assert start == date(2023, 1, 1)
+        assert end == date(2024, 12, 31)
 
     def test_rolling_period(self):
         req = _make_requirement(
@@ -1305,6 +1392,8 @@ class TestEvaluateRequirementDetailFields:
         record = _make_record(
             course_name="EMT Certification",
             completion_date=None,
+            # An undated record is dated by entry for the name match.
+            created_at=datetime(2025, 3, 1, tzinfo=timezone.utc),
             expiration_date=date(2027, 3, 1),
         )
         result = TrainingService.evaluate_requirement_detail(
@@ -1429,3 +1518,22 @@ class TestCheckRequirementProgressZeroTarget:
 
         assert progress.is_complete is False
         assert progress.percentage_complete == 0.0
+
+
+class TestForecastPct:
+    """The compliance forecast's per-member percentages (TR4-4)."""
+
+    def test_member_nothing_grades_has_no_percentage(self):
+        from app.services.training_enhancement_service import _forecast_pct
+
+        # Was 100 for every horizon, which the compliance officer dashboard
+        # then averaged into the department's "current" figure.
+        assert _forecast_pct(0, 0, 0) is None
+        assert _forecast_pct(0, 0, 2) is None
+
+    def test_expiring_certifications_lower_the_forecast(self):
+        from app.services.training_enhancement_service import _forecast_pct
+
+        assert _forecast_pct(2, 4, 0) == 50.0
+        assert _forecast_pct(2, 4, 1) == 25.0
+        assert _forecast_pct(2, 4, 3) == 0

@@ -23,10 +23,10 @@ been through a review pass.
 | A3  | Scheduled tasks & cron         | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py`                                                                                                                                   | CRON   | ✅     |
 | A4  | Email templates & delivery     | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L)                                                                                                                                                        | MAIL   | ✅     |
 | A5  | Course cohorts & syllabus      | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx`                                                                                    | CC     | ✅     |
-| A6  | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L)                             | LIFE   | ⬜     |
-| A7  | Dashboard & action items       | `endpoints/dashboard.py` (456 L), `services/attendance_dashboard_service.py` (329 L); `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items`                                                                                                                | DASH   | ⬜     |
-| A8  | Locations & kiosk              | `endpoints/locations.py` (294 L), `services/location_service.py` (279 L); `pages/LocationKioskPage.tsx`                                                                                                                                                                   | LOC    | ⬜     |
-| A9  | Platform ops & data lifecycle  | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (136 L), `data_export_service.py` (169 L), `separation_of_duties.py` (70 L)                                                                                                                       | OPS    | ⬜     |
+| A6  | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L)                             | LIFE   | ✅     |
+| A7  | Dashboard & action items       | `endpoints/dashboard.py` (1452 L, 7 routes), `services/attendance_dashboard_service.py` (329 L), `dashboard_widget_service.py`; `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items`, `components/dashboard/`                                             | DASH   | ✅     |
+| A8  | Locations & kiosk              | `endpoints/locations.py` (434 L, 8 routes), `services/location_service.py` (394 L), `api/public/display.py` (550 L, 4 routes); `pages/LocationKioskPage.tsx`, `RoomCheckInPage.tsx`, `RoomQRCodesPage.tsx`                                                                | LOC    | ✅     |
+| A9  | Platform ops & data lifecycle  | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (165 L), `data_export_service.py` (192 L), `separation_of_duties.py` (70 L, 20 call sites in 8 modules)                                                                                           | OPS    | ✅     |
 
 ## Tier B — second pass over the audited 27
 
@@ -39,7 +39,7 @@ from its open list.
 
 | #   | Feature                    | Prefix | Status |
 | --- | -------------------------- | ------ | ------ |
-| B1  | medical-screening          | MS2    | ⬜     |
+| B1  | medical-screening          | MS2    | ✅     |
 | B2  | apparatus                  | AP2    | ⬜     |
 | B3  | inventory                  | INV2   | ⬜     |
 | B4  | facilities                 | FAC2   | ⬜     |
@@ -2417,3 +2417,385 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   1.6.0 installed against the repo's pinned 1.7.0 (2 failures). Neither fix
   touched the repository. See course-cohorts.md → Pass 3.
   Next: A6 member lifecycle & offboarding.
+- **A6 member lifecycle & offboarding ✅ (pass 3) — the +602 lines passes 1–2
+  never saw. 2 fixes, 1 hardening, 1 verification mechanised.** Every one of the
+  six services has grown since 2026-08-08, two by more than half
+  (`membership_tier_service` 267→471, `retention_service` 224→357), so this pass
+  went at the growth and at the half of `property_return_service` pass 2
+  recorded as _sampled rather than read_. **LIFE-5 (MED, fixed):**
+  `advance_all` committed the membership-type changes and _then_ wrote their
+  audit events, so on the scheduled path the audit trail was discarded —
+  `log_audit_event` opens a SAVEPOINT whose release does not commit the
+  enclosing transaction, `_for_each_org` never commits, and the task loop's
+  `async with async_session_factory()` only closes the session. **Measured
+  rather than reasoned about:** a cron-shaped advance moved a member from
+  `active` to `senior` and wrote **zero** `membership_tier_auto_advanced` rows;
+  after the fix, one, with the advancement still persisted. It matters more than
+  a missing log line because the job is unattended and **clears the operational
+  rank** of anyone it moves into an administrative tier — the audit row, which
+  carries `cleared_rank`, is the only record those permissions went away. The
+  endpoint path survived only because FastAPI's `get_session` commits on
+  teardown, which is not something a service should rely on for its own audit
+  trail. Fixed by auditing inside the same transaction and committing both
+  together, which also closes a smaller pre-existing hole on _both_ paths (the
+  change and its record used to commit separately). An AST scan of all six
+  services found this site and no other, so it is one fix, not a class.
+  **LIFE-6 (LOW, fixed as hardening):** `generate_report` resolved its member
+  with no `organization_id` filter. Pass 2 flagged it as defence-in-depth;
+  re-verified, the caller count has gone from two to **one** and that one does
+  pre-verify, so still not live — fixed rather than flagged a third time
+  because it is one line in the single path that builds a letter naming a member
+  and stating a chargeable liability. **Anonymization PII coverage mechanised:**
+  pass 2 did that diff by hand and recorded the obvious problem with having done
+  so; `User` has since gained a column (58→59). It is now a ratchet test — a new
+  column fails the build until somebody clears it or names it with a reason.
+  Re-run correctly, no PII column is missed, so pass 2's conclusion holds. Worth
+  knowing **how my first attempt got it wrong**, since the trap is now encoded
+  in the test: `sa_inspect(User).columns` is keyed by column name, which for an
+  encrypted field is not the attribute the service assigns (`mfa_secret` vs the
+  `_mfa_secret_encrypted` the service correctly writes), so diffing those
+  namespaces made a scrubbed field look untouched and briefly suggested MFA
+  secrets were ignored — against a docstring that promises them — when they are
+  cleared on three adjacent lines. **Verified good:** all six retention record
+  classes checked mechanically for the `timestamp_attr` they declare and an
+  `organization_id` column (a mismatch would fail inside the per-org `except`
+  and silently never sweep); `enforce()` confirmed cron-only, so its raw
+  `str(e)` errors never reach a client; both retention endpoints gated, scoped,
+  and actually committing; `advance_all`'s row-lock-and-recheck concurrency left
+  alone; no float on money anywhere in `property_return_service`. **Re-verified
+  still open:** LIFE-2 (FIN-7), LIFE-3 (NULL retention timestamps), the
+  pool-issuance valuation disagreement, and the anonymization docstring still
+  not mentioning that membership numbers survive. **One self-inflicted failure,
+  recorded because it is the second time:** the first lifecycle run showed 4
+  failures in `test_audit_retention_archival.py`, which were not a regression —
+  the probe that measured LIFE-5 cleaned up its org and user but not the audit
+  row it caused, and that row was the only one in `audit_logs`. A probe that
+  writes _through a service_ must clean up what the service wrote. Gate: tsc 0 ·
+  flake8 0 · black/isort clean · eslint 0 · docs links 422 files 0 broken ·
+  lifecycle-related tests **257 passed, 1 skipped**. **The whole-suite run caught one failure the targeted selection could not:** LIFE-6's org filter resolved a query `test_org_scoping_ratchet` had frozen in its baseline, so that entry went stale and the ratchet's both-directions check went red. Line removed (215 → 214 entries); the suite then ran **15,723 passed, 21 skipped, 0 failed**. The lesson is procedural — the pre-commit hook and the lifecycle selection both passed, because neither covers a check that sweeps the repo for a query _shape_; a change touching a globally-policed pattern wants the whole suite. See member-lifecycle.md →
+  Pass 3. Next: A7 dashboard & action items.
+- **A9 platform ops & data lifecycle ✅ (pass 3).** Pass 2 changed no code — its
+  deliverable was reconciling the docs with four sound services — so pass 3 ran
+  as a delta, and the delta is large in one place: **`assert_different_person`
+  has gone from 4 call sites to 20 across 8 modules**, closing three of pass 2's
+  own flags. **4 fixes, 2 flagged.** Two services are byte-identical to what
+  pass 2 signed off (`separation_of_duties.py`, `admin_continuity_service.py`);
+  `audit_ship_service.py` (136→165) and `data_export_service.py` (169→192) grew
+  and were read in full. For the unchanged pair the drift risk is the **call
+  sites**, not the service, so all 20 were extracted from the AST with their
+  `action=`/`record=` arguments and read individually. **Closed since pass 2:**
+  OPS-3 (FIN-4's disbursement half — `mark_pr_paid`, `mark_expense_paid`,
+  `issue_check`, `waive_dues` all now compare actor against
+  requester/submitter/member), OPS-5 (storefront, five call sites, pass 2's
+  option (a)), OPS-6 (the public `approve_by_token` path), and admin-continuity
+  went 5→7 guard sites. **OPS-6 closed by a better mechanism than pass 2
+  proposed, and its residual recommendation should be dropped rather than
+  carried:** an external approver has no Logbook id, so the conflict is enforced
+  **by email address** — a step whose `approver_value` is the requester's own
+  email is refused unless that step sets `allow_self_approval`, which is exactly
+  the chain-config decision pass 2 said the owner had to make. Pass 2 also asked
+  to "record `acted_by`/`approver_value` for audit parity"; `acted_by` is a
+  **foreign key to `users.id`**, so there is no value an external approver could
+  be written into it, and copying the email into the audit payload would put PII
+  in a log payload, which CLAUDE.md forbids — the event already carries
+  `step_record_id`, the join key to the step holding `approver_value`, so the
+  attribution is reconstructible without the disclosure. **OPS-9** — audit
+  shipping wrapped the URL guard and the whole batch loop in one
+  `except ValueError` labelled "unsafe collector URL", so a misconfigured audit
+  **signing key** was reported as a URL problem and sent the operator to the
+  wrong setting while the trail kept not shipping; the guard now has its own
+  handler and runs _before_ `_get_or_create_state`, so a blocking DNS lookup is
+  no longer held across a `FOR UPDATE` lock and a run that cannot ship creates
+  no watermark row. It still returns rather than raises on purpose — the first
+  shape of this fix let the loop's `ValueError` propagate, which the scheduler
+  handles but the manual `/scheduled/run-task` trigger does not wrap, so it
+  would have turned a misconfiguration into a 500. **OPS-10** — the personal
+  data export resolved each shift-report visibility setting with
+  `visibility.get(setting, setting != "show_officer_narrative")`, a second copy
+  of a policy `to_visibility_dict()` already owns, defaulting a _missing_ key to
+  **visible**; unreachable today (that method always returns every key, hence
+  LOW) but an export is the one path where handing a member their officer's
+  written evaluation cannot be taken back, so it now fails closed. **OPS-11** —
+  `KNOWN_LIMITATIONS.md` **contradicted itself**: the FIN-4 row called the
+  disbursement actions "still open" while the money-disbursement row, updated
+  through 2026-09-08, recorded them fixed. Verified all seven named methods
+  individually: four guarded, two (`void_check`, `unwaive_dues`) correctly
+  unguarded because they take no actor and are reversals that move money _away_
+  from the actor, one genuinely open (OPS-8). This page's own preamble carried
+  the same staleness and more pointedly — it uses FIN-4 as the worked example
+  for "read the call site, not the import" and asserted in the present tense
+  that those methods "remain gated by `finance.manage` alone", immediately below
+  a paragraph warning that overstating open risk is the dangerous direction
+  because this is the page a compliance reviewer reads. **OPS-12** —
+  `docs/COMPLIANCE.md` mapped ISO 27001 A.5.3 to **one** call site out of
+  twenty; implemented pass 2's own future-dev #5 as a coverage section listing
+  every guarded path _and_ every deliberately-unguarded one with its reason
+  (denial/withdrawal everywhere, the no-actor reversals, `approve_by_token`'s
+  address-based check, training auto-approve having no reviewer to compare,
+  and `record_dues_payment` as open) — **with a machine check behind it**, since
+  that claim rotted precisely because nothing verified it: three AST-walking
+  tests assert the guarded module set and call-site total match the table, so a
+  new guarded module fails the build until the table is updated. **Flagged:**
+  OPS-7 (MED) — audit shipping's `FOR UPDATE` watermark lock serializes only the
+  **first batch**, because the per-batch `db.commit()` that makes progress
+  durable is also what releases the lock, and `expire_on_commit=False` means
+  neither run ever observes the other; no row is lost (at-least-once, and the
+  collector gets First-Id/Last-Id to dedupe) but a run can deliver later batches
+  twice, and the in-code comment claimed otherwise. Durable per-batch progress
+  and whole-run exclusion genuinely conflict, so it needs a run-scoped claim
+  (the `core/background_claim.py` shape from CRON-40) rather than a bolt-on.
+  OPS-8 (MED) — `record_dues_payment` accepts a `recorded_by`, settles money and
+  has no guard, while its exact storefront analogue (`record_payment`, guarded
+  after SF-6 found this same shape) and its own sibling `waive_dues` on the same
+  record both do; the exemption mechanism already exists (the guard no-ops on a
+  missing id), the one-line fix is given in KNOWN_LIMITATIONS, and it is left to
+  the owner because it would stop a treasurer recording their own cash dues
+  payment — the single-officer cost OPS-1 already recorded. **Also
+  re-verified:** the A6 attribute-vs-column trap does **not** apply to the
+  export (all eight `_EXCLUDED_COLUMNS` entries match real `User` columns, and a
+  regex sweep over the real columns found only `mfa_enabled`,
+  `must_change_password`, `oauth_provider`, `password_changed_at` exported —
+  legitimate subject data); pass 2's "no latent-500" claim survives the file's
+  growth (every column type across all 24 exported models enumerated — the only
+  non-primitives are `EncryptedText`/`EncryptedJSON`, which decode to `str` and
+  a parsed object). Gate: tsc 0 · flake8 0 · black 1350 unchanged · isort clean
+  · docs links 428 files 0 broken · 98 scoped backend tests passed, 1 skipped
+  (was 92 — 6 added). Marker split confirmed by collection, not a local run.
+  Both code fixes and the coverage guard mutation-verified. See platform-ops.md
+  → Pass 3. **Tier A is complete again (A1–A9, pass 3); the rotation moves to
+  Tier B.**
+- **A8 locations & kiosk ✅ (pass 3).** The feature has roughly doubled since
+  pass 2 — `locations.py` 294 → 434 lines and 6 → 8 routes,
+  `location_service.py` 279 → 394, `public/display.py` to 550 and 4 routes, plus
+  `RoomCheckInPage`, `RoomQRCodesPage` and the `locations.manage_nfc_tags`
+  permission pair. **6 fixes, 3 flagged.** **Dimension 2 was deliberately not
+  re-derived:** the security rotation reached this same feature _today_
+  (`LOC5-32-locations-kiosk.md`, its fifth pass) and enumerated all 15 routes'
+  auth, permissions, org scoping, rate limits and the badge-tap response's data
+  minimisation. Re-running that lens would have produced a worse copy of a
+  better document, so this pass re-read its open items and spent its effort on
+  the five dimensions it does not cover. **LOC-3 is resolved by the branch
+  nobody picked** — pass 2 said delete the dead authenticated
+  `GET /locations/{id}/display` or give it a caller, and it got a caller
+  (`RoomCheckInPage`, where a room's NFC tag lands a phone).
+  **LOC-33** — rotating a leaked display code, which is the documented
+  revocation ("kiosk tablets pointing at the old URL stop working"), did not
+  take the kiosk down: on a 404 the poll set an error and returned **without
+  clearing `data`**, and the permanent-error screen is guarded on `!data`, so a
+  wall-mounted tablet kept rendering the room's last-known events indefinitely
+  behind a green "connected" icon. The URL stopped working; the one screen
+  revocation exists to clear never learned. Same path covers deactivating the
+  room or the department. Fixed by clearing `data` on a 404 — categorically
+  different from the transient failure in the `catch` below, which must keep
+  showing the last payload so a blip does not blank a working display — and the
+  copy changed from "Display not found. Check the URL." which asks something of
+  a reader standing at a tablet with no URL bar. **LOC-34** — the
+  (name, building) uniqueness rule has **no constraint behind it** (four plain
+  indexes, no `UniqueConstraint`) and is a read-then-write, so a duplicate pair
+  is reachable; after that `scalar_one_or_none()` raises `MultipleResultsFound`
+  on every later write of that name, which is not a `ValueError`, so
+  `handle_service_errors` renders it as a **500 with a generic message** and one
+  name becomes permanently unsaveable with no clue why. Capped both queries with
+  `.limit(1)`, which makes multiplicity unrepresentable; the durable fix is a
+  migration (LOC-41). This is the shape pass 1 checked and cleared for
+  `display_code`, where a global unique constraint does back the assumption —
+  two call sites away it did not. **LOC-35** — `selectinload(Event.rsvps)` on
+  the kiosk's check-in-window query, read by **no** caller (both display
+  endpoints project scalars; `_only_event_checked_into` runs its own narrowed
+  query), so a drill with 150 RSVPs loaded 150 unread rows per 30-second poll
+  per open event behind a public endpoint. Verified safe _before_ removing,
+  since a caller that did read it would have begun raising `MissingGreenlet` in
+  production. **LOC-36** — two comments documented `check_in_minutes_before` as
+  defaulting to 30; it is **60** in the column, both schemas and the helper
+  fallback — and **this file's own prior reasoning is corrected with it**, since
+  pass 1 claimed the old `start - 1h` opened the window "twice as early as the
+  default" (true only at 30; at 60 it was identical) and pass 2 cited "the
+  30-min canonical default". Their _fixes_ were right for the half of the
+  reasoning that held; only the magnitude was wrong, and it was wrong in two
+  code comments. **LOC-38** — three `# noqa: E712` replaced with `.is_()`, the
+  idiom the same file already used eleven lines away; pass 2 swept one and left
+  three. **LOC-39** — `wiki/API-Reference.md` listed three of the four public
+  `/display/` endpoints, omitting `POST …/badge-tap`, a public unauthenticated
+  endpoint that writes attendance, and had no `/api/v1/locations` row at all
+  while listing every sibling module. **Flagged:** LOC-37 (MED) — the room-tag
+  landing page is the only route in the app entered cold from a physical object
+  and carries no `ProtectedRoute`, so an expired session gets a hard
+  `window.location.href = '/login'` with no `state.from`, and the member lands
+  on the dashboard having to walk back and re-tap; every `ProtectedRoute` passes
+  `state={{ from: location }}` which `postLoginRedirect` honours, so the
+  machinery exists and this route never reaches it — not fixed because
+  `/events/:id/check-in` is ungated identically, making it a shared convention
+  whose fix belongs to both pages at once and to a session flow this repo puts
+  behind confirmation. LOC-40 (LOW) — both display implementations are live now
+  and fill the same six-field schema differently (`is_valid`, `timezone`,
+  `badge_check_in_enabled`, `allow_guest_check_in`), which is how LOC-1 happened
+  the first time; consolidating needs `is_valid` as a parameter and touches a
+  public kiosk endpoint. LOC-41 (LOW) — the missing unique constraint, blocked
+  on MySQL permitting repeated NULLs for a nullable `building` and on existing
+  duplicates a migration would have to resolve. **Also assessed rather than
+  assumed:** pass 2's precondition that the newly-live endpoint "must compute
+  `is_valid` like the public path and populate `timezone`" — neither holds as
+  stated, since the selection query already applied the _stricter_ window
+  (`_validate_check_in_window` is the permissive one) and `timezone` exists for
+  an _unauthenticated_ tablet, while this endpoint's only caller is reached
+  signed in, where `useTimezone()` already resolves the department zone. Both
+  recorded in the code so the next reader does not mistake them for LOC-2
+  returning. Gate: tsc 0 · flake8 0 · black 1351 unchanged · isort clean ·
+  eslint 0 (full run) · docs links 428 files 0 broken · route permissions 244
+  routes 0 errors · backend location/kiosk 267 passed 1 skipped (was 264) ·
+  `LocationKioskPage.test.tsx` 6 passed (was 4). New backend tests are DB-free,
+  marked `unit` per class, confirmed by collection rather than a local run.
+  Every fix mutation-verified. See locations-kiosk.md → Pass 3.
+  Next: A9 platform ops & data lifecycle.
+- **B1 medical-screening ✅ (pass 5).** Ten prior passes cover this surface —
+  four here and **six** in `docs/security-review/MS-09-medical-screening.md`,
+  the latest 2026-09-16 — so this pass reviewed the delta since the newest of
+  them and spent the rest on the dimensions the security track does not carry.
+  **2 fixes, 1 flagged.** **The delta is two commits, both clean, and both
+  verified rather than skimmed:** `78f52e4a` swapped
+  `cascade="all, delete-orphan"` for `passive_deletes=True` so deleting a
+  requirement unlinks records instead of destroying members' medical history —
+  its claim that the FK "has been SET NULL and nullable since the table was
+  created" is exactly CLAUDE.md Pitfall #2's pairing and checks out, and the
+  design is consistent with compliance matching records by `screening_type`
+  rather than `requirement_id`, so unlinking costs nobody their compliance; and
+  `25cf5c01` replaced `date.today()` with `resolve_org_today`, **checked for
+  completeness** rather than trusted, since a sweep that fixes what it searched
+  for and misses the rest is the failure CLAUDE.md records for the contrast
+  palette — grep for `date.today()|datetime.now()|utcnow()` across the service
+  and endpoint returns nothing. **MS2-6** — `get_compliance_status` counted
+  expiring-soon as `0 < days <= 30` while `get_expiring_soon` selects
+  `expiration_date >= today`, so the two differed by exactly one day: **today**,
+  the day a member's physical actually lapses. The compliance summary said
+  nothing was due while the expiring list it links to named them — Pitfall #29's
+  failure mode, and quiet, since both numbers look plausible alone. Fixed to
+  `0 <=` with a comment naming the other site; the lower bound stays because an
+  already-lapsed screening is reported by `non_compliant_count` and must not
+  read as though there is still time. Two tests, one per bound, both
+  mutation-verified — the existing coverage used `days=15`, so neither edge had
+  one. **MS2-8** — reached by the ordinary route of checking this module's
+  frontend types against its schema for drift (there is none): **CLAUDE.md
+  asserted in two places that response schemas use `alias_generator=to_camel`,
+  unconditionally, and 37 of the 54 schema modules declaring a `Response` class
+  carry no alias generator at all** (17 do). The split is real on the wire,
+  since FastAPI dumps response models `by_alias=True` — `schemas/apparatus.py`
+  uses it and its frontend type is `organizationId`/`unitNumber`, while
+  `schemas/medical_screening.py` does not and its type is
+  `organization_id`/`screening_type`. Both conventions are internally consistent
+  and every module's types match their own module, which is why nothing is
+  broken today and why nothing would catch a new mistake either: a hand-written
+  interface in the wrong casing type-checks, passes lint, satisfies
+  `tsc --noEmit`, and reads every field as `undefined` at runtime — and somebody
+  following the documented rule gets it wrong two times in three, against a
+  checklist in the same file that says "Schema fields match". Corrected with the
+  measurement and an actionable rule in place of a wrong one (check the module
+  with a named grep; a new schema in an existing module follows that module's
+  choice, because switching one is a breaking change for its frontend). No
+  machine check, deliberately: the rule stays in CLAUDE.md in full so none is
+  required, and a test asserting 17/37 would fail on every new schema module —
+  noise, where the corrected guidance is self-verifying. **Flagged:** MS2-7
+  (LOW) — the _same_ two surfaces also disagree about a **waived** screening,
+  which compliance counts toward expiring-soon and the list (filtered to
+  PASSED/COMPLETED) never shows; left open because either reading is defensible
+  — a lapsing waiver is work coming, or a waiver is an exemption rather than a
+  screening — and they are opposite one-line changes on a PHI-adjacent surface.
+  **Re-verified, all still open:** the exactly-one-of `user_id`/`prospect_id`
+  validator and MS-13 (the Add Record form has no subject control) are **two
+  halves of one defect** — the validator would reject every create the UI makes,
+  which is why neither half can land alone; MS-6's unbounded lists; and the
+  compliance-by-id 404, now stated more precisely — an unknown id reads as
+  **non-compliant against every active requirement**, and in an org with no
+  active requirements comes back `is_fully_compliant: true` for a member who
+  does not exist. MS-9's `grace_period_days` is still read by nothing, and the
+  gap is concrete: documented "days past due before flagging non-compliant",
+  default 30, while `is_compliant` applies no grace at all. **Clean, each
+  checked:** no org-level N+1 (all four compliance callers resolve one subject);
+  the module avoids Pitfall #11 without re-fetching, because all four
+  record-returning routes — including create and update — call
+  `attach_record_names`, which is also why the two unused by-id service methods
+  are mild dead code rather than a skipped re-fetch; Pitfall #7 satisfied via
+  the shared `createApiClient()`; `_resolve_names` org-scoped on all three
+  lookups; `/compliance/me` declared before `/compliance/{user_id}`. Gate:
+  flake8 0 · black 1350 unchanged · isort clean · docs links 428 files 0 broken
+  · 162 backend medical tests passed, 1 skipped. No frontend source changed, so
+  per CLAUDE.md's own "Match the Verification to the Change" the frontend suites
+  were not run. See medical-screening.md → Pass 5. Next: B2 apparatus.
+- **A7 dashboard & action items ✅ (pass 3).** `dashboard.py` has grown from the
+  456 lines and 4 routes pass 2 reviewed to **1452 lines and 7 routes**;
+  `/asset-widgets`, `/operations` and `/widgets` all arrived after it and are
+  where this pass concentrated. **7 fixes, 4 flagged.** The authorization lens
+  came back clean, including the lead worth chasing: `minutes_visibility_filter`
+  is applied at one of the four places this file reads `ActionItem`, which looks
+  like DASH-1 returning and is not — the filter returns `None` for
+  `minutes.manage` holders and the new `/operations` read is gated on exactly
+  that, so applying it there is a no-op by construction. Same for the meeting
+  half of `/action-items`: `MeetingStatus` has a `DRAFT` state, but
+  `MeetingsService.get_open_action_items` restricts neither draft nor status, so
+  the dashboard mirrors its owning module exactly, which is what DASH-3 asked
+  for. (That meetings restricts nothing where minutes restricts drafts and
+  executive session is a real asymmetry — recorded in the findings file as a
+  **B6** question, not a dashboard bug, so it is not rediscovered as one.)
+  What this pass found instead is a dimension nothing was checking: **the
+  dashboard's links.** **DASH-30** — five server-supplied navigation targets
+  pointed at paths no route declares (`/inventory/lots`, `/inventory/requests`,
+  `/apparatus/maintenance`, `/notifications/manage`, `/training/reports` — the
+  first three are API paths), and `App.tsx`'s catch-all turned every click into
+  a silent redirect back to the dashboard, indistinguishable from a dead button.
+  `routeIntegrity.test.ts` has checked precisely this since the Add Member
+  button broke, but it scans `frontend/src/**/*.tsx?` and these five are Python
+  string literals served as response data, so no frontend sweep could have seen
+  them — which is why two passes over this endpoint did not. **The fix is for
+  the class:** that test now also walks a named list of backend modules that
+  build navigation targets as data (`dashboard.py`, `admin_hub_service.py`, 40
+  targets), matching `href="/…"` with a literal leading slash so the
+  HTML-email anchors elsewhere in `app/services/` are excluded; a missing file
+  throws rather than quietly halving the scan, and a per-source floor guards a
+  regex that stops matching. It found two of the five on its first run that I
+  had not spotted by reading. `admin_hub_service.py`'s 19 hrefs were all
+  already valid. **DASH-31** — `facilities-maintenance` and
+  `facilities-urgent-work-orders` rendered the same overdue count, so a
+  department with three overdue work orders read "Urgent work orders: 3" beside
+  "Maintenance due: 3"; the duplicate's title said "due" where its query said
+  overdue, its empty state said "overdue" where its title said due, and its
+  `href` was `?status=due`, a value `MaintenanceListPage` does not accept.
+  Removed; a genuine upcoming figure needs a second query **and** a page filter,
+  flagged as DASH-39 rather than guessed. **DASH-32** — the apparatus block
+  carries a careful `_may_open_apparatus` guard against handing out a tile whose
+  only action is Access Denied, and **the lesson landed on one of three
+  blocks**: inventory and facilities grant on `settings.manage` with no
+  destination check, so a delegated settings role holding neither module grant
+  got **nine** dead tiles. Same guard on both; the existing apparatus test is
+  now parametrized across all three, and its comment claiming `settings.manage`
+  "legitimately opens the inventory and facilities blocks" is corrected, because
+  the fix makes it false. **DASH-33** — `wiki/API-Reference.md` described
+  `/asset-widgets` as gated on `*.view` with "no module check here"; both are
+  wrong and wrong in the lax direction, since the code requires each module's
+  _manage_ grant or `settings.manage` **and** the module enabled, and the
+  endpoint's own comments explain at length why view is deliberately not enough.
+  **DASH-34** (LOW) — the `/operations` 30-day event window was
+  `local_midnight + timedelta(days=30)` on an already-UTC instant, so it ended
+  at 23:00 or 01:00 local across a DST transition; same class as CC-5. Its test
+  freezes the clock on purpose, because with the real one the assertion holds
+  most of the year under the arithmetic it is meant to reject. **DASH-35** (LOW)
+  — `/community-engagement`'s attendee tallies counted cancelled events while
+  the event count beside them did not, and the comment above them claimed the
+  figures described one population. **DASH-36** (LOW) — the wiki published the
+  legacy alias `equipment_check.manage` for a section whose real grant has been
+  `inventory.check_manage` since the module segment changed, and
+  `OPERATIONS_SECTION_PERMISSIONS["critical_exceptions"]` is the one entry of
+  six `_has_any` is never called with (the section is assembled per item, which
+  is strictly finer), now documented as contract rather than control.
+  **Flagged:** DASH-37 (MED) — every tile announces "Open filtered results" and
+  **13 of 16** parameterised targets land on a page that ignores the parameter;
+  the three that work are the two whose hrefs carry an explanatory comment plus
+  the training hub, so the rest were written as if the pages already filtered.
+  Eight components would need query-param support, which is its own iteration.
+  DASH-38, DASH-39, DASH-40 (`/action-items` is unpaginated and carries free
+  text, so the payload grows with content). **DASH-2 re-verified still open** —
+  `/dashboard/stats` still returns three fabricated constants and
+  `dashboardService.getStats` still has zero callers. Every fix is
+  mutation-verified: the fix reverted, the new test confirmed to fail naming the
+  right file and line, and the revert undone with the mechanism that applied it.
+  Gate: tsc 0 · flake8 0 · black 1351 unchanged · eslint 0 (full run) ·
+  `routeIntegrity` 7 passed (was 5) · backend dashboard suite 97 passed, 1
+  skipped. See dashboard.md → Pass 3. Next: A8 locations & kiosk.

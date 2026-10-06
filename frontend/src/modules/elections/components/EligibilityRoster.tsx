@@ -26,7 +26,9 @@ import {
   Loader2,
 } from 'lucide-react';
 import { electionService } from '../../../services/api';
+import { useTimezone } from '../../../hooks/useTimezone';
 import type { EligibilityRoster as EligibilityRosterType, RosterMember } from '../../../types/election';
+import { formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 
 interface EligibilityRosterProps {
@@ -45,10 +47,13 @@ type FilterValue = (typeof FILTER_OPTIONS)[number]['value'];
 
 const MemberRow: React.FC<{
   member: RosterMember;
+  /** When the live ballot send went out; the roster carries one stamp for every sent row. */
+  emailSentAt: string | null;
   expanded: boolean;
   onToggle: () => void;
-}> = ({ member, expanded, onToggle }) => {
+}> = ({ member, emailSentAt, expanded, onToggle }) => {
   const hasItems = member.item_eligibility.length > 0;
+  const tz = useTimezone();
 
   const rowBg = member.has_voted
     ? 'bg-theme-surface-secondary/50'
@@ -134,12 +139,27 @@ const MemberRow: React.FC<{
           )}
         </td>
 
-        {/* Will receive ballot */}
+        {/* Ballot: sent, will be sent, or withheld. A sent row says so with the
+            send time, because after the send a bare check mark read as "still
+            to come" and contradicted the election's own email_sent status. */}
         <td className="py-3 pr-3 text-center">
-          {member.will_receive_ballot ? (
-            <CheckCircle2 className="mx-auto h-5 w-5 text-green-600 dark:text-green-400" />
+          {member.ballot_sent ? (
+            <span className="inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-400">
+              <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+              Received ballot{emailSentAt ? ` ${formatDateTime(emailSentAt, tz)}` : ''}
+            </span>
+          ) : member.will_receive_ballot ? (
+            <CheckCircle2
+              className="mx-auto h-5 w-5 text-green-600 dark:text-green-400"
+              role="img"
+              aria-label="Will receive ballot"
+            />
           ) : (
-            <XCircle className="mx-auto h-5 w-5 text-red-500 dark:text-red-400" />
+            <XCircle
+              className="mx-auto h-5 w-5 text-red-500 dark:text-red-400"
+              role="img"
+              aria-label="Will not receive ballot"
+            />
           )}
         </td>
 
@@ -195,6 +215,7 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({ electionId
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterValue>('all');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const tz = useTimezone();
 
   const fetchRoster = useCallback(async () => {
     try {
@@ -301,7 +322,9 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({ electionId
               <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4">
                 <div className="rounded-lg bg-green-500/10 p-3 text-center">
                   <div className="text-2xl font-bold text-green-700 dark:text-green-400">{roster.total_eligible}</div>
-                  <div className="text-xs font-medium text-green-600 dark:text-green-500">Will Receive Ballot</div>
+                  <div className="text-xs font-medium text-green-600 dark:text-green-500">
+                    {roster.total_ballots_sent > 0 ? 'Eligible' : 'Will Receive Ballot'}
+                  </div>
                 </div>
                 <div className="rounded-lg bg-red-500/10 p-3 text-center">
                   <div className="text-2xl font-bold text-red-700 dark:text-red-400">{roster.total_ineligible}</div>
@@ -316,6 +339,24 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({ electionId
                   <div className="text-theme-text-muted text-xs font-medium">Already Voted</div>
                 </div>
               </div>
+
+              {/* Counter legend. "Eligible" is the roll the send reads — after the
+                  election opens that is the frozen roll, so a member added since
+                  counts as ineligible here even when every item rule would admit
+                  them; the row's reason says which it is. */}
+              <p className="text-theme-text-muted px-4 pb-3 text-xs">
+                {roster.total_ballots_sent > 0 && (
+                  <>
+                    <span className="text-theme-text-secondary font-semibold">
+                      {roster.total_ballots_sent} ballot(s) sent
+                      {roster.email_sent_at ? ` ${formatDateTime(roster.email_sent_at, tz)}` : ''}.
+                    </span>{' '}
+                  </>
+                )}
+                <span className="font-semibold">Eligible</span> counts members who receive a ballot on this
+                election&apos;s voter roll; <span className="font-semibold">Ineligible</span> includes members who
+                joined after the roll was frozen when the election opened, as well as those excluded by an item rule.
+              </p>
 
               {/* Ineligible members warning */}
               {roster.total_ineligible > 0 && (
@@ -402,6 +443,7 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({ electionId
                         <MemberRow
                           key={member.user_id}
                           member={member}
+                          emailSentAt={roster.email_sent_at}
                           expanded={expandedIds.has(member.user_id)}
                           onToggle={() => toggleExpanded(member.user_id)}
                         />

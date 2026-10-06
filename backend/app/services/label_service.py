@@ -149,6 +149,17 @@ async def _build_facility_specs(db, org_id, ids, extra_lines):
     return specs, 0
 
 
+def member_badge_value(user) -> str:
+    """What a member's printed badge encodes: their server-issued badge code.
+
+    One definition for the label sheet and the CR80 ID card, so a member's
+    sticker and their plastic card always scan as the same person. Callers
+    run ``MemberBadgeService.ensure_codes`` first; the reader that turns the
+    code back into a member is ``MemberBadgeService.resolve``.
+    """
+    return user.badge_code
+
+
 async def _build_member_specs(db, org_id, ids, extra_lines):
     from app.models.user import User
 
@@ -158,16 +169,17 @@ async def _build_member_specs(db, org_id, ids, extra_lines):
             User.id.in_([str(i) for i in ids]),
         )
     )
+    from app.services.member_badge_service import MemberBadgeService
+
+    users = rows.all()
+    await MemberBadgeService(db).ensure_codes(users)
     specs = []
-    for u in rows.all():
-        name = " ".join(filter(None, [u.first_name, u.last_name])) or "Member"
-        barcode = _first_scannable_identifier(
-            u.membership_number, fallback=_short_id(u.id)
-        )
+    for u in users:
+        name = u.display_name or "Member"
         specs.append(
             LabelSpec(
                 name=name,
-                barcode_value=barcode,
+                barcode_value=member_badge_value(u),
                 asset_tag=u.membership_number,
             )
         )
@@ -260,8 +272,8 @@ MODULE_LABELS: Dict[str, Tuple[Tuple[str, ...], SpecBuilder]] = {
     # itself requires inventory.manage, and a label document naming arbitrary
     # item ids is a read of it — accepting inventory.view (which every seeded
     # member holds) would leave this generic endpoint as a way around that.
-    # apparatus/facilities/membership stay view-level because their own pages
-    # are view-level; prospective_members.view is not a baseline grant.
+    # apparatus/facilities stay view-level because their own pages are
+    # view-level; prospective_members.view is not a baseline grant.
     "inventory": (("inventory.manage",), _build_inventory_specs),
     "apparatus": (("apparatus.view", "apparatus.manage"), _build_apparatus_specs),
     "prospective_members": (
@@ -269,7 +281,16 @@ MODULE_LABELS: Dict[str, Tuple[Tuple[str, ...], SpecBuilder]] = {
         _build_prospect_specs,
     ),
     "facilities": (("facilities.view", "facilities.manage"), _build_facility_specs),
-    "membership": (("members.view", "members.manage"), _build_member_specs),
+    # A member label is a badge: its barcode is what the check-in station and
+    # the badge scanner accept as "this member is here". It follows the ID-card
+    # rule (frontend/src/utils/memberIdCardAccess.ts) — members.manage or
+    # members.manage_id_cards — and never members.view, which every seeded
+    # position carries: that let any member print a colleague's badge through
+    # this endpoint while the card page itself refused them.
+    "membership": (
+        ("members.manage", "members.manage_id_cards"),
+        _build_member_specs,
+    ),
     # Manage-only like inventory: the storage-areas screen is, and printing
     # can assign a barcode to an area that lacks one.
     "storage_areas": (("inventory.manage",), _build_storage_area_specs),

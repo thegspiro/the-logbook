@@ -27,6 +27,9 @@ import { useRanks } from '../hooks/useRanks';
 import { UserStatus } from '../constants/enums';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { ADMINISTRATIVE_RANK_HINT, isAdministrativeMember } from '../utils/membership';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatTime } from '../utils/dateFormatting';
+import { displayNameOf, givenName } from '../utils/memberName';
 
 type ViewMode = 'by-member' | 'by-role';
 
@@ -46,6 +49,8 @@ export const MembersAdminPage: React.FC = () => {
   const navigate = useNavigate();
   const { checkPermission, user: currentUser } = useAuthStore();
   const { rankOptions } = useRanks();
+  const tz = useTimezone();
+  const [unlockingUserId, setUnlockingUserId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('by-member');
   const [users, setUsers] = useState<UserWithRoles[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -248,7 +253,7 @@ export const MembersAdminPage: React.FC = () => {
           await userService.assignUserRoles(user.id, roleIds);
         } catch (err: unknown) {
           failures.push({
-            name: user.full_name || user.username,
+            name: displayNameOf(user) || user.username,
             reason: getErrorDetail(err) || 'the change was refused',
           });
         }
@@ -294,7 +299,7 @@ export const MembersAdminPage: React.FC = () => {
     if (
       !(await confirm({
         title: 'Remove role',
-        message: `Remove ${roleName} from ${user.full_name || user.username}?`,
+        message: `Remove ${roleName} from ${displayNameOf(user) || user.username}?`,
         confirmLabel: 'Remove',
         cancelLabel: 'Keep it',
       }))
@@ -322,7 +327,7 @@ export const MembersAdminPage: React.FC = () => {
     if (
       !(await confirm({
         title: 'Remove from role',
-        message: `Remove ${user.full_name || user.username} from ${role.name}?`,
+        message: `Remove ${displayNameOf(user) || user.username} from ${role.name}?`,
         confirmLabel: 'Remove',
         cancelLabel: 'Keep it',
       }))
@@ -339,6 +344,20 @@ export const MembersAdminPage: React.FC = () => {
       setError(
         getErrorDetail(err) || 'Unable to remove the member from this role. Check your connection and try again.'
       );
+    }
+  };
+
+  const handleUnlock = async (user: UserWithRoles) => {
+    try {
+      setUnlockingUserId(user.id);
+      setError(null);
+      await userService.adminUnlockAccount(user.id);
+      toast.success(`${user.full_name || user.username} can sign in again`);
+      await fetchData();
+    } catch (err: unknown) {
+      setError(getErrorDetail(err) || 'Unable to unlock this account. Try again.');
+    } finally {
+      setUnlockingUserId(null);
     }
   };
 
@@ -406,7 +425,7 @@ export const MembersAdminPage: React.FC = () => {
       await userService.adminResetPassword(resetPasswordUser.id, resetNewPassword, resetForceChange);
       // The dialog closing was the only sign it worked, which reads the same
       // as a dismissed dialog.
-      toast.success(`Password reset for ${resetPasswordUser.full_name || resetPasswordUser.username}`);
+      toast.success(`Password reset for ${displayNameOf(resetPasswordUser) || resetPasswordUser.username}`);
       setResetPasswordUser(null);
       setResetNewPassword('');
       setResetConfirmPassword('');
@@ -422,7 +441,7 @@ export const MembersAdminPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl py-8">
           <div className="flex h-64 items-center justify-center">
             <div className="text-theme-text-muted" role="status" aria-live="polite">
               Loading...
@@ -436,7 +455,7 @@ export const MembersAdminPage: React.FC = () => {
   if (error && !editingRoles && !editingMembers && !editingProfile && !resetPasswordUser && !resetMfaUser) {
     return (
       <div className="min-h-screen">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl py-8">
           <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
             <div className="flex">
               <div className="ml-3">
@@ -451,7 +470,7 @@ export const MembersAdminPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl py-8">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-theme-text-primary text-2xl font-bold">Member Management</h2>
@@ -573,12 +592,12 @@ export const MembersAdminPage: React.FC = () => {
                       <div className="flex items-center">
                         <div className="bg-theme-surface flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
                           <span className="text-theme-text-secondary font-medium">
-                            {(user.first_name?.[0] ?? user.username[0] ?? '').toUpperCase()}
+                            {(givenName(user)[0] || user.username[0] || '').toUpperCase()}
                           </span>
                         </div>
                         <div className="ml-4">
                           <div className="text-theme-text-primary text-sm font-medium">
-                            {user.full_name || user.username}
+                            {displayNameOf(user) || user.username}
                           </div>
                           <div className="text-theme-text-muted text-sm">@{user.username}</div>
                         </div>
@@ -607,7 +626,7 @@ export const MembersAdminPage: React.FC = () => {
                                   void handleQuickRemoveRole(user, role.id);
                                 }}
                                 className="touch-target-phone ml-1 hover:text-red-600"
-                                aria-label={`Remove ${role.name} role from ${user.full_name || user.username}`}
+                                aria-label={`Remove ${role.name} role from ${displayNameOf(user) || user.username}`}
                               >
                                 ×
                               </button>
@@ -626,6 +645,11 @@ export const MembersAdminPage: React.FC = () => {
                       >
                         {user.status}
                       </span>
+                      {user.locked_until && (
+                        <span className="mt-1 block text-xs font-semibold text-red-700 dark:text-red-400">
+                          Sign-in locked until {formatTime(user.locked_until, tz)}
+                        </span>
+                      )}
                     </td>
                     <td data-label="Actions" className="px-6 py-4 text-right text-sm font-medium whitespace-nowrap">
                       <div className="flex flex-wrap justify-end gap-3">
@@ -647,6 +671,15 @@ export const MembersAdminPage: React.FC = () => {
                             className="touch-target-phone text-yellow-700 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300"
                           >
                             Reset Password
+                          </button>
+                        )}
+                        {currentUser?.id !== user.id && user.locked_until && (
+                          <button
+                            onClick={() => void handleUnlock(user)}
+                            disabled={unlockingUserId === user.id}
+                            className="touch-target-phone text-yellow-700 hover:text-yellow-800 disabled:opacity-50 dark:text-yellow-400 dark:hover:text-yellow-300"
+                          >
+                            {unlockingUserId === user.id ? 'Unlocking…' : 'Unlock'}
                           </button>
                         )}
                         {currentUser?.id !== user.id && user.mfa_enabled && (
@@ -720,12 +753,12 @@ export const MembersAdminPage: React.FC = () => {
                             <div className="flex items-center gap-2">
                               <div className="bg-theme-surface flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
                                 <span className="text-theme-text-muted text-xs font-medium">
-                                  {(user.first_name?.[0] || user.username[0] || '').toUpperCase()}
+                                  {(givenName(user)[0] || user.username[0] || '').toUpperCase()}
                                 </span>
                               </div>
                               <div>
                                 <div className="text-theme-text-primary text-sm font-medium">
-                                  {user.full_name || user.username}
+                                  {displayNameOf(user) || user.username}
                                 </div>
                                 {user.membership_number && (
                                   <div className="text-theme-text-muted text-xs">#{user.membership_number}</div>
@@ -737,7 +770,7 @@ export const MembersAdminPage: React.FC = () => {
                                 void handleQuickRemoveUser(user.id, role);
                               }}
                               className="text-theme-text-muted touch-target-phone ml-2 hover:text-red-600"
-                              aria-label={`Remove ${user.full_name || user.username} from ${role.name}`}
+                              aria-label={`Remove ${displayNameOf(user) || user.username} from ${role.name}`}
                             >
                               ×
                             </button>
@@ -907,7 +940,7 @@ export const MembersAdminPage: React.FC = () => {
             setResetConfirmPassword('');
             setError(null);
           }}
-          title={`Reset Password for ${resetPasswordUser?.full_name || resetPasswordUser?.username}`}
+          title={`Reset Password for ${(resetPasswordUser ? displayNameOf(resetPasswordUser) : '') || resetPasswordUser?.username}`}
           footer={
             <>
               <button
@@ -1016,7 +1049,7 @@ export const MembersAdminPage: React.FC = () => {
             setResetMfaUser(null);
             setError(null);
           }}
-          title={`Reset MFA for ${resetMfaUser?.full_name || resetMfaUser?.username}`}
+          title={`Reset MFA for ${(resetMfaUser ? displayNameOf(resetMfaUser) : '') || resetMfaUser?.username}`}
           footer={
             <>
               <button
@@ -1062,7 +1095,7 @@ export const MembersAdminPage: React.FC = () => {
             setSelectedUser(null);
             setError(null);
           }}
-          title={`Manage Roles for ${selectedUser?.full_name || selectedUser?.username}`}
+          title={`Manage Roles for ${(selectedUser ? displayNameOf(selectedUser) : '') || selectedUser?.username}`}
           footer={
             <>
               <button
@@ -1187,11 +1220,13 @@ export const MembersAdminPage: React.FC = () => {
                 <div className="ml-3 flex items-center gap-2">
                   <div className="bg-theme-surface flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
                     <span className="text-theme-text-muted text-xs font-medium">
-                      {(user.first_name?.[0] || user.username[0] || '').toUpperCase()}
+                      {(givenName(user)[0] || user.username[0] || '').toUpperCase()}
                     </span>
                   </div>
                   <div>
-                    <div className="text-theme-text-primary text-sm font-medium">{user.full_name || user.username}</div>
+                    <div className="text-theme-text-primary text-sm font-medium">
+                      {displayNameOf(user) || user.username}
+                    </div>
                     <div className="text-theme-text-muted text-xs">
                       @{user.username}
                       {user.membership_number && ` • #${user.membership_number}`}

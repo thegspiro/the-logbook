@@ -35,6 +35,12 @@ vi.mock('@/modules/scheduling/services/shiftSettingsApi', () => ({
   }),
 }));
 
+let nfpaDepartmentEnabled = false;
+
+vi.mock('../hooks/useApparatusNfpaSettings', () => ({
+  useApparatusNfpaSettings: () => ({ enabled: nfpaDepartmentEnabled }),
+}));
+
 const store = {
   currentApparatus: null,
   types: [],
@@ -224,5 +230,29 @@ describe('ApparatusFormPage clearing a field on edit', () => {
     expect(payload).toMatchObject({ name: null, year: null, make: 'Pierce', unitNumber: 'E-2', minStaffing: 3 });
     // A stored 0 the form loaded as blank is not a clear.
     expect(payload).not.toHaveProperty('currentMileage', null);
+  });
+});
+
+describe('ApparatusFormPage NFPA tracking checkbox', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    ranksState = { ranks: [], loading: false };
+    localStorage.setItem('has_session', 'true');
+  });
+
+  afterEach(() => {
+    nfpaDepartmentEnabled = false;
+  });
+
+  it('is hidden when the department does not track NFPA compliance', () => {
+    nfpaDepartmentEnabled = false;
+    renderWithRouter(<ApparatusFormPage />);
+    expect(screen.queryByLabelText('Enable NFPA compliance tracking')).not.toBeInTheDocument();
+  });
+
+  it('is offered when the department tracks NFPA compliance', () => {
+    nfpaDepartmentEnabled = true;
+    renderWithRouter(<ApparatusFormPage />);
+    expect(screen.getByLabelText('Enable NFPA compliance tracking')).toBeInTheDocument();
   });
 });

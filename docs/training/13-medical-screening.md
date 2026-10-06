@@ -38,6 +38,8 @@ The Medical Screening page uses a **three-tab layout**:
 
 ![Medical Screening landing page with its three-tab navigation](./images/13-01-medical-landing.png)
 
+**[SCREENSHOT — REPLACE `13-01-medical-landing.png`.** The page subtitle now reads "Set screening requirements, record screenings, and see which ones expire soon."**]**
+
 ### Permissions
 
 | Action                                              | Required Permission         |
@@ -121,18 +123,38 @@ Navigate to **Medical Screening > Requirements** tab to view all requirements.
 | **Grace Period (Days)** | 30                                                                                                   |
 | **Is Active**           | Yes                                                                                                  |
 
-4. Click **Save**.
+4. Click **Add Requirement** (editing an existing one saves with **Save Changes**).
 
 ![Add screening requirement form with type, frequency, and grace period](./images/13-05-add-requirement.png)
+
+**[SCREENSHOT — REPLACE `13-05-add-requirement.png`.** The submit button reads **Add Requirement** (was Create), and the note under Applies to Roles reads "Not enforced yet — this requirement applies to every active member and prospect, whatever roles you list here."**]**
 
 ### Editing and Deleting Requirements
 
 - Click the **Edit** button on any requirement row to modify its fields. Changes take effect immediately for future compliance calculations.
-- Click the **Delete** button to remove a requirement. A confirmation dialog appears. Deleting a requirement does not delete associated screening records — it only removes the requirement from compliance calculations.
+- Click the **Delete** button to remove a requirement. The confirmation reads _"Delete “(name)”? Screening records filed under it are kept, but will no longer be linked to a requirement. You can't undo this."_ and its button is **Delete Requirement**. The records stay in each member's screening history; the requirement simply leaves compliance calculations.
+
+> **Corrected 2026-09-29.** Until this date that sentence was not true.
+> The requirement-to-record relationship was declared with an ORM delete
+> cascade, so deleting a requirement **deleted every screening record filed
+> under it** before the database's own `SET NULL` could apply — a member's
+> medical history, gone with a configuration change. Records are now kept and
+> unlinked. Records already lost to an earlier delete are not recoverable from
+> the application; restore them from a backup if they matter.
+
+> **Screenshot needed:**
+> _[Admin with medical_screening.manage, /medical-screening, Requirements tab. Click the delete button on a seeded requirement that has records filed under it and capture the Delete Requirement confirmation, reading "Screening records filed under it are kept, but will no longer be linked to a requirement.", with both buttons visible. Never confirm. No member names or results in frame.]_
 
 ### Role-Based Requirements
 
-When **Applies to Roles** is populated, only members assigned to those roles are evaluated for compliance against that requirement. This is useful for role-specific mandates:
+> **Corrected 2026-10-04 — not enforced.** **Applies to Roles** is stored and
+> shown, but nothing reads it: every active member and prospect is evaluated
+> against every active requirement, whatever roles it lists. The requirement
+> dialog says so under the field — _"Not enforced yet — this requirement
+> applies to every active member and prospect, whatever roles you list
+> here."_ The table and edge cases below describe the intended design.
+
+When **Applies to Roles** is populated, only members assigned to those roles are meant to be evaluated for compliance against that requirement. This is useful for role-specific mandates:
 
 | Requirement               | Applies to Roles                                    |
 | ------------------------- | --------------------------------------------------- |
@@ -159,6 +181,8 @@ Records capture the **result** of an individual screening event — who was scre
 Navigate to **Medical Screening > Records** tab to view all records.
 
 ![Medical screening records tab listing completed screenings](./images/13-03-records-tab.png)
+
+**[SCREENSHOT — CHECK `13-03-records-tab.png`.** A record with no member or prospect now reads **Not linked to a member or prospect** in the name column, where it read Unknown; replace if the frame shows one.**]**
 
 ### Record Statuses
 
@@ -216,7 +240,7 @@ Navigate to **Medical Screening > Records** tab to view all records.
 | **Result Summary**  | Cleared for full duty, no restrictions                     |
 | **Notes**           | Stress test normal. Follow-up recommended for elevated BP. |
 
-4. Click **Save**.
+4. Click **Add Record** (editing saves with **Save Changes**).
 
 > **Corrected 2026-08-12.** **There is no member dropdown.**
 > `ScreeningRecordForm` builds its payload from nine fields — requirement,
@@ -226,17 +250,20 @@ Navigate to **Medical Screening > Records** tab to view all records.
 > toward nobody's compliance. Recorded in [Medical Screening — The Add Record Form Attaches to Nobody](../KNOWN_LIMITATIONS.md#medical-screening--the-add-record-form-attaches-to-nobody-2026-08-08), which is worth reading before
 > using this form.
 >
-> **The dialog now says so itself** _(2026-09-16)_. Opening **Add Record** shows
-> an amber notice at the top: _"Not linked to a member or prospect — this dialog
-> has no way to choose who the screening is for, so the record it creates will
-> not count toward any member's or prospect's compliance status, and won't
-> appear on their screening history."_ The success message after saving used to
+> **The dialog now says so itself** _(2026-09-16; reworded 2026-09-29)_. Opening **Add Record** shows
+> an amber notice at the top: _"Not linked to a member or prospect. You can't
+> choose who a screening is for here, so this record won't count toward
+> anyone's compliance or appear in their screening history."_ In the records
+> list such a record's name column reads **Not linked to a member or prospect**
+> (it read "Unknown"). The success message after saving used to
 > imply the record was usable. **Nothing else about the dialog changed** — the
 > member picker is still missing, and a record created here still counts toward
 > nobody. The **Edit** dialog does not show the notice, because editing never
 > changes who a record belongs to.
 
 ![The Add Screening Record dialog with the amber notice at the top: not linked to a member or prospect, so the record will not count toward anyone's compliance](./images/13-07-add-record-linkage-notice.png)
+
+**[SCREENSHOT — REPLACE `13-07-add-record-linkage-notice.png`.** The amber notice is reworded ("Not linked to a member or prospect. You can't choose who a screening is for here, …") and the submit button reads **Add Record** (was Create).**]**
 
 ### Status Workflow
 
@@ -257,7 +284,7 @@ Passed → Expired (automatic, when expiration_date passes)
 ### Editing and Deleting Records
 
 - Click the **Edit** button on any record row to update its fields (e.g., updating status from Scheduled to Passed after a screening is completed).
-- Click the **Delete** button to remove a record. A confirmation dialog appears. Deletion is permanent and logged in the audit trail.
+- Click the **Delete** button to remove a record. The confirmation reads _"Delete this (type) record? You can't undo this."_ with a **Delete Record** button. Deletion is permanent and logged in the audit trail.
 
 **Edge Cases:**
 
@@ -652,6 +679,24 @@ Captain Alvarez immediately contacts FF Odom (3 days remaining) and schedules he
 | API returns 422 when creating a record                    | Check the request payload. Common causes: missing required fields (`screening_type`, `status`), providing both `user_id` and `prospect_id`, providing neither `user_id` nor `prospect_id`, or invalid enum values for `screening_type` or `status`.     |
 | Compliance data seems stale                               | Compliance is calculated on each request — there is no cached state. If data appears stale, verify the underlying records are correct. Refresh the page to re-fetch.                                                                                    |
 | Grace period not working as expected                      | The grace period starts from the `expiration_date` on the record, not from the completed date. Verify the expiration date is set correctly. A grace period of 0 means the member becomes non-compliant immediately after expiration.                    |
+
+---
+
+## Changes September 24 – October 4, 2026
+
+- **Expiry is judged on the department's date** _(2026-09-26)_. The
+  compliance and expiring-screenings views used the server's date, which is
+  UTC and already tomorrow every evening for a US department, so a screening
+  could read as expired a few hours early. They now use the timezone under
+  **Settings → Organization → Profile → Timezone** (America/New_York when none
+  is set).
+- **Deleting a requirement keeps its screening records** _(2026-09-29)_ — see
+  [Editing and Deleting Requirements](#editing-and-deleting-requirements).
+- **Wording** _(2026-09-29)_. The dialogs' buttons read **Add Requirement** /
+  **Add Record** / **Save Changes** (they read Create and Update), the delete
+  confirmations name what is deleted (**Delete Requirement**, **Delete
+  Record**), and the expiring list's empty state reads _"No screenings expire
+  in the next 60 days."_
 
 ---
 

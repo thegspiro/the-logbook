@@ -273,6 +273,9 @@ class TestMfaLoginBruteForceWiring:
                 detect,
             ),
             patch("app.api.v1.endpoints.auth.record_auth_failure", new=AsyncMock()),
+            # The bare AsyncMock session cannot host the audit write's
+            # savepoint; the sign-in audit has its own tests.
+            patch("app.api.v1.endpoints.auth.log_audit_event", new=AsyncMock()),
         ):
             with pytest.raises(CodedHTTPException):
                 await mfa_login(
@@ -308,6 +311,7 @@ class TestMfaLoginBruteForceWiring:
                 "app.api.v1.endpoints.auth.AuthService.create_user_tokens",
                 new=AsyncMock(return_value=("access-token", "refresh-token")),
             ),
+            patch("app.api.v1.endpoints.auth.log_audit_event", new=AsyncMock()),
         ):
             await mfa_login(
                 data=MFALogin(temp_token=temp_token, code=code),

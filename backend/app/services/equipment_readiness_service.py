@@ -62,6 +62,7 @@ from app.models.training import (
     ShiftTemplateEquipmentCheck,
 )
 from app.models.user import User
+from app.utils.apparatus_ref import ApparatusRef
 from app.utils.org_timezone import (
     local_date,
     resolve_org_today,
@@ -314,13 +315,17 @@ class EquipmentReadinessService:
         if rows:
             fleet: Dict[str, FleetUnit] = {}
             for apparatus, status in rows:
-                type_name = getattr(apparatus.apparatus_type, "name", None)
                 key = str(apparatus.id)
                 fleet[key] = FleetUnit(
                     key=key,
                     label=apparatus.unit_number or apparatus.name or "",
                     name=apparatus.name,
-                    type_slug=type_name.lower() if type_name else None,
+                    # The type *code*, which is what type-level checklists are
+                    # keyed on. The lowercased display name matched only
+                    # single-word types: "Ladder/Aerial" became
+                    # "ladder/aerial", so a ladder's checklist read as not
+                    # configured here while the crew was being offered it.
+                    type_slug=ApparatusRef(full=apparatus).type_slug,
                     source="apparatus",
                     full_id=key,
                     status_label=status.name,
@@ -344,6 +349,32 @@ class EquipmentReadinessService:
                 source="basic",
             )
             for row in basic_result.scalars().all()
+        }
+
+    async def apparatus_with_checklists(
+        self, organization_id: str, apparatus: Sequence[Apparatus]
+    ) -> Set[str]:
+        """Ids of the full apparatus records any active checklist reaches.
+
+        Apparatus resolution only, as in :meth:`_configured_units`: a
+        checklist a shift template names reaches whichever shifts are built
+        from it, not a vehicle. ``apparatus`` must have ``apparatus_type``
+        loaded.
+        """
+        by_apparatus, by_type, _ = await self._load_templates(organization_id)
+        return {
+            str(a.id)
+            for a in apparatus
+            if self._templates_for(
+                FleetUnit(
+                    key=str(a.id),
+                    label="",
+                    full_id=str(a.id),
+                    type_slug=ApparatusRef(full=a).type_slug,
+                ),
+                by_apparatus,
+                by_type,
+            )
         }
 
     async def _configured_units(
@@ -1153,10 +1184,7 @@ class EquipmentReadinessService:
             return payload
 
         result = await self.db.execute(select(User).where(User.id.in_(list(user_ids))))
-        names = {
-            str(u.id): f"{u.first_name or ''} {u.last_name or ''}".strip()
-            for u in result.scalars().all()
-        }
+        names = {str(u.id): u.display_name for u in result.scalars().all()}
         for record in payload.get("apparatus", []) or []:
             record["last_check_by_name"] = names.get(record.get("last_check_by") or "")
         for entry in payload.get("entries", []) or []:

@@ -1,7 +1,248 @@
 # Application Review — Member Lifecycle & Offboarding
 
 **Prefix:** `LIFE` · **Iteration:** A6 · **Reviewed:** 2026-08-05 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-10-04 (pass 3)
+
+> **Finding ids continue at LIFE-5.** LIFE-1…LIFE-4 are taken by passes 1–2.
+
+## Pass 3 (2026-10-04) — the +602 lines passes 1–2 never saw
+
+Every one of the six services has grown since pass 2, and two of them by more
+than half:
+
+| Service                        | Pass 2 | Now | Δ        |
+| ------------------------------ | ------ | --- | -------- |
+| `membership_tier_service`      | 267    | 471 | **+76%** |
+| `retention_service`            | 224    | 357 | +59%     |
+| `property_return_service`      | 529    | 658 | +24%     |
+| `member_anonymization_service` | 283    | 375 | +33%     |
+| `member_archive_service`       | 322    | 359 | +11%     |
+| `departure_clearance_service`  | 572    | 579 | +1%      |
+
+So this pass went at the growth, and at the half of `property_return_service`
+pass 2 recorded as **sampled rather than read** — the honest scope note that
+tells a later pass where to look. **2 fixes, 1 hardening, 1 verification
+mechanised.**
+
+### LIFE-5 — MED — A tier advance committed the change and discarded its audit trail — ✅ FIXED
+
+**What:** `advance_all` committed the membership-type changes and _then_ wrote
+their audit events, leaving the trail dependent on somebody else committing
+afterwards. On the scheduled path nobody does:
+
+```
+main.py:1848   async with async_session_factory() as db:   # close(), no commit
+main.py:1849       result = await runner(db)
+                     run_membership_tier_advance(db)
+                       _for_each_org(db, ...)              # never commits
+                         advance_all(org)                  # commits changes,
+                                                           #  THEN audits
+```
+
+`log_audit_event` opens a SAVEPOINT (`db.begin_nested()`); releasing it does
+not commit the enclosing transaction, and `AsyncSession.__aexit__` only calls
+`close()`.
+
+**Where:** `membership_tier_service.py:447-459` (pre-fix).
+
+**Impact:** **measured, not reasoned about.** A cron-shaped advance — seed in
+one session, `advance_all` in a session closed without committing, read back in
+a third — reported `advanced: 1`, persisted the member as `senior`, and wrote
+**zero** `membership_tier_auto_advanced` rows. After the fix the same run wrote
+one, with the advancement still persisted.
+
+That matters more than a missing log line. This job runs unattended, and it
+**clears the operational rank** of anyone it moves into an administrative tier
+(`:430-434`) — the audit row is the only record that those permissions went
+away. The payload carries `cleared_rank` precisely so somebody can see it.
+
+The endpoint path (`member_status.py:982`) survived the original ordering only
+because FastAPI's `get_session` dependency commits on teardown. A service
+should not depend on its caller to persist its own audit trail.
+
+**Fix:** audit inside the same transaction as the change, then one commit for
+both. Written after the mutations and before the commit deliberately: the
+SAVEPOINT means an audit failure rolls back only itself and still lets the
+advancement land, while a success is durable with the row it describes rather
+than separately from it. That also closes a smaller pre-existing hole on _both_
+paths — the change and its audit record previously committed separately, so a
+crash between them left an unaudited change.
+
+**Scope checked before fixing:** an AST scan of all six services for
+"audit-after-commit with no later commit" found this site and no other, so it
+is one fix rather than a class.
+
+**Guarded:** `tests/test_membership_tier_audit_durability.py` (3 tests, `unit`,
+so they run in the no-database job). Restoring the original order fails
+`test_the_audit_write_precedes_the_commit`, and the empirical probe re-measures
+zero audit rows. The guard pins the ordering rather than the durability, and
+says so: measuring durability needs three real sessions and a committing write,
+which is not something to leave in a suite whose fixture rolls back.
+
+### LIFE-6 — LOW — The property-return letter resolved its member without an org filter — ✅ FIXED (hardening)
+
+**What:** `generate_report` fetched the member with
+`select(User).where(User.id == str(user_id))` — no `organization_id`
+(`property_return_service.py:77`, pre-fix). Pass 2 flagged this as
+defence-in-depth, "both callers pre-verify org, so not live".
+
+**Re-verified, and the caller count has changed:** there is now exactly **one**
+caller, the drop path at `member_status.py:427`, and it does resolve the member
+in-org first. So it is still not live. The two `generate_report` call sites in
+`scheduled_tasks.py` belong to `ComplianceReportService`, not this one.
+
+**Fixed rather than flagged a third time** because it is a one-line,
+behaviour-preserving change in the single path that builds a letter naming a
+member and stating a chargeable liability: an unscoped by-id fetch there is one
+upstream mistake away from addressing another department's member. Behaviour
+differs only in the case that is currently a bug — the service now raises its
+existing `Member not found` instead of generating the letter.
+
+### Anonymization PII coverage — mechanised, and it caught my own bad method first
+
+Pass 2 diffed the `User` columns against the ones anonymization clears **by
+hand**, found nothing missed, and recorded the problem with having done it that
+way: a PII column added later is not picked up and nothing notices. `User` has
+since gained a column (58 → 59). The check is now
+`tests/test_anonymization_pii_coverage.py` (3 tests, `unit`), in the ratchet
+shape `test_org_scoping_ratchet` uses: a new column fails the build until
+somebody classifies it, either by clearing it or by naming it with a reason.
+
+**Re-run correctly, no PII column was missed at the time** — the 28 untouched
+attributes are row identity and tenancy, department-assigned keys, operational
+role and standing, sign-in metadata with no credential left behind it, interface
+preferences, and one pointer to a different member. Pass 2's conclusion held.
+
+**It stopped holding three days later, and the check is what said so** — see
+LIFE-7 below. `users.preferred_name` landed on `main` on 2026-10-04, after this
+branch was cut, and the test went red on the merge: the exact event pass 2
+predicted and could not detect. Nothing about that is a defect in the check; it
+is the check working on its first real occasion, which is worth recording
+because a ratchet nobody has seen fire is only a claim.
+
+Worth recording **how the first attempt got it wrong**, because the trap is in
+the test now: `sa_inspect(User).columns` is keyed by _column_ name, and for an
+encrypted field that is not the attribute the service assigns. The MFA secret
+appears there as `mfa_secret` while the service correctly writes
+`_mfa_secret_encrypted`. Diffing those two namespaces made a scrubbed field look
+untouched, and briefly suggested the service ignored MFA secrets — against a
+docstring that explicitly promises them — when it clears them on three adjacent
+lines. The third test now asserts the docstring's credential claim against the
+code directly, which is the ELEC-5/CI-5 check applied to this file.
+
+### LIFE-7 — MED — Anonymization left `preferred_name`, the name every screen prefers — ✅ FIXED
+
+`backend/app/services/member_anonymization_service.py:115-118` scrubbed
+`first_name`, `middle_name` and `last_name` and did not touch
+`preferred_name`, a column `main` added on 2026-10-04 holding the name the
+member actually goes by.
+
+The consequence is worse than one missed column, because of which column it is.
+`format_display_name` **prefers** `preferred_name` over `first_name`
+(`app/utils/member_names.py:30-35`), and `User.display_name` wraps it — so
+shift boards, event rosters, the dashboard, notifications, messages and the
+inventory custody search all name a member by it. A member who exercised the
+right to erasure would keep appearing as "Terry Member-1a2b3c4d" on every
+everyday surface, while the columns a privacy reviewer inspects first —
+`first_name`, `email`, `phone` — all read correctly scrubbed. The scrub would
+look complete in the database and be visibly incomplete in the product.
+
+Fixed by clearing it alongside the other name columns, with the reason stated
+at the assignment since the ordering dependency on `format_display_name` is
+not visible from the service. `Prospect` has no such column, so the applicant
+path needed nothing.
+
+Two tests, because they answer different questions:
+`test_anonymization_pii_coverage.py` is the structural guard that reported the
+drift, and `test_member_anonymization.py::test_clears_the_preferred_name_the_display_name_prefers`
+asserts the behaviour — that `display_name` stops naming the member — which no
+column diff can express. Mutation-tested: reverting the one assignment fails
+the behavioural test at the `display_name` assertion.
+
+### Verified good this pass
+
+- **`retention_service` is structurally sound where it matters most.** All six
+  registered record classes were checked mechanically rather than by eye: every
+  one has the `timestamp_attr` it declares and an `organization_id` column, and
+  the one `row_filter` (`practice_skill_tests`, which shares a table with
+  official results that must never be swept) builds without error. A mismatch
+  here would fail inside the per-org `except`, be logged, and silently never
+  sweep that class.
+- **`enforce()` is cron-only.** Its `results["errors"]` carry raw `str(e)`,
+  which would be an exposure if an endpoint returned them — checked, and the
+  only callers are `scheduled_tasks.py:3831` and `:3848`. The two exposed
+  endpoints use `get_policy` / `set_policy` only.
+- **The retention endpoints are gated and scoped.** Both require
+  `settings.manage` **or** `organization.update_settings`, resolve the org from
+  `current_user.organization_id`, and `days` is `int | None` with `ge=0`, so
+  `set_policy`'s floor comparison cannot be handed a string. `set_policy`
+  flushes and the endpoint commits (`organizations.py:1756`) — the setting
+  actually persists, which is the Pitfall #19 failure this could have been.
+- **`advance_all`'s concurrency handling is careful and was left alone.** It
+  re-selects each candidate `with_for_update()` + `populate_existing=True`,
+  re-checks eligibility under the lock because the batch read may be stale, and
+  counts off-ladder members rather than silently skipping them. The comments
+  name the specific defects each guard closes.
+- **No float on money anywhere in `property_return_service`** — LIFE-4's fix
+  held, and nothing new reintroduced it.
+
+### Re-verified, still open
+
+- **LIFE-2** (per-unit value divides in float, `departure_clearance_service.py`)
+  — unchanged, still deferred to the module-wide FIN-7 float→Decimal refactor.
+- **LIFE-3** (a row whose retention timestamp is NULL is never eligible, since
+  `ts_col < cutoff` is unknown for NULL) — unchanged at
+  `retention_service.py:238`, and still arguably the safer default.
+- **The pool-issuance valuation disagreement** — the return letter charges the
+  full item value × quantity while the clearance service values it per-unit, so
+  two member-facing figures disagree. An owner reconciliation, untouched.
+- **The anonymization docstring still does not mention that
+  `membership_number` / `previous_membership_number` survive.** Pass 2 asked for
+  one line and it has not been added. Now also encoded in the coverage test's
+  "department-assigned keys" group, so the reasoning is at least somewhere a
+  reader will hit.
+
+### Pass 3 completion gate
+
+| Check                       | Result                                                                  |
+| --------------------------- | ----------------------------------------------------------------------- |
+| `npm run typecheck`         | ✅ 0 errors (no frontend change)                                        |
+| `flake8 app/ tests/`        | ✅ 0 violations                                                         |
+| `black --check app/ tests/` | ✅ unchanged                                                            |
+| `isort --check-only`        | ✅ clean                                                                |
+| `npm run lint`              | ✅ 0 errors                                                             |
+| Docs link check             | ✅ 0 broken                                                             |
+| Lifecycle-related tests     | ✅ **257 passed, 1 skipped**                                            |
+| Whole backend suite         | ✅ **15,723 passed, 21 skipped, 0 failed** after the baseline fix below |
+
+**The whole-suite run found a failure the targeted selection could not.**
+`test_org_scoping_ratchet.py::test_baseline_has_no_stale_entries` went red on
+LIFE-6: the ratchet freezes the unscoped by-id queries that existed on
+2026-09-06, and adding the org filter resolved one of them, so its baseline
+entry went stale. The test checks **both** directions and said exactly what to
+do — _"If you fixed them, delete the lines"_ — so the line is gone
+(`tests/org_scoping_baseline.txt`, 215 → 214 entries) and the ratchet's 12
+tests pass.
+
+Worth drawing the procedural lesson rather than just the fix: the pre-commit
+hook passed, and so did the 257-test lifecycle selection, because neither
+covers a check that sweeps the whole repository for a query _shape_. A one-line
+org filter is exactly the kind of change whose only observer is the global
+ratchet. CLAUDE.md's "match the verification to the change" still holds — but
+when a change touches a pattern the repo polices globally, the whole suite is
+the matching verification.
+
+**One self-inflicted failure worth recording.** The first lifecycle run showed
+4 failures in `test_audit_retention_archival.py`. They were not a regression:
+the probe that measured LIFE-5 cleaned up its organization and user but **not
+the audit row it caused**, and that row was the only one in `audit_logs`, which
+is a table those tests make assumptions about. Deleting it returned all 8 to
+green. This is the second time in this review cycle that a scratch script's
+incomplete cleanup produced failures in an unrelated file — the lesson is that
+a probe which writes through a service must clean up what the _service_ wrote,
+not just what the probe inserted.
+
+---
 
 ## Pass 2 (2026-08-08) — six-lens sweep
 

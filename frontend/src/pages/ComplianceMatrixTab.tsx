@@ -130,12 +130,26 @@ const STANDING_CLASSES: Record<Standing, { pill: string; dot: string; head: stri
     dot: 'bg-green-600 dark:bg-green-400',
     head: 'bg-green-500/10 text-green-700 dark:text-green-300',
   },
+  // Muted, not green: nothing grades these, so there is no standing to colour.
+  [Standing.NOT_APPLICABLE]: {
+    pill: 'border-theme-surface-border bg-theme-surface-secondary text-theme-text-muted',
+    dot: 'bg-slate-400 dark:bg-slate-500',
+    head: 'bg-theme-surface-secondary text-theme-text-muted',
+  },
 };
 
 const STANDING_LABELS: Record<Standing, string> = {
   [Standing.NON_COMPLIANT]: 'Non-compliant',
   [Standing.AT_RISK]: 'At risk',
   [Standing.COMPLIANT]: 'Compliant',
+  [Standing.NOT_APPLICABLE]: 'Not applicable',
+};
+
+const STANDING_BADGE_TEXT: Record<Standing, string> = {
+  [Standing.NON_COMPLIANT]: 'text-red-700 dark:text-red-300',
+  [Standing.AT_RISK]: 'text-orange-700 dark:text-orange-300',
+  [Standing.COMPLIANT]: 'text-green-700 dark:text-green-300',
+  [Standing.NOT_APPLICABLE]: 'text-theme-text-muted',
 };
 
 const Pips: React.FC<{ tones: CellTone[] }> = ({ tones }) => (
@@ -224,7 +238,7 @@ const ComplianceMatrixTab: React.FC = () => {
         id: m.member.user_id,
         title: m.member.member_name,
         sub: [m.member.membership_type, `${m.met} of ${m.total} met`].filter(Boolean).join(' · '),
-        badge: m.open > 0 ? `${m.open} open` : `${m.pct}%`,
+        badge: m.open > 0 ? `${m.open} open` : m.pct === null ? 'n/a' : `${m.pct}%`,
         pips: m.cells.map((c) => c.tone),
         standing: m.standing,
       });
@@ -233,6 +247,7 @@ const ComplianceMatrixTab: React.FC = () => {
           { key: 'nc', label: 'Non-compliant', standing: Standing.NON_COMPLIANT },
           { key: 'ar', label: 'At risk', standing: Standing.AT_RISK },
           { key: 'ok', label: 'Compliant', standing: Standing.COMPLIANT },
+          { key: 'na', label: 'Not applicable', standing: Standing.NOT_APPLICABLE },
         ] as const
       )
         .map((g) => ({
@@ -282,7 +297,7 @@ const ComplianceMatrixTab: React.FC = () => {
       {
         key: 'na',
         label: 'No applicable members',
-        standing: Standing.AT_RISK,
+        standing: Standing.NOT_APPLICABLE,
         items: ordered.filter((r) => r.total === 0).map(toItem),
       },
     ].filter((g) => g.items.length > 0);
@@ -309,7 +324,7 @@ const ComplianceMatrixTab: React.FC = () => {
       STANDING_LABELS[m.standing],
       m.met,
       m.total,
-      m.pct,
+      m.pct ?? '',
     ]);
     downloadCsv(buildCsv([header, ...rows]), 'compliance-matrix.csv');
   }, [evaluated]);
@@ -319,7 +334,7 @@ const ComplianceMatrixTab: React.FC = () => {
     // role="status" nests one status inside another, and a screen reader
     // announces only the inner one.
     return (
-      <div className="mx-auto max-w-full px-4 py-6 sm:px-6 lg:px-8">
+      <div className="py-6">
         <SkeletonPage rows={6} />
       </div>
     );
@@ -327,7 +342,7 @@ const ComplianceMatrixTab: React.FC = () => {
 
   if (error || !matrix) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-8">
+      <div className="py-8">
         <div className="alert-danger" role="alert">
           {error || 'No data available'}
         </div>
@@ -337,7 +352,7 @@ const ComplianceMatrixTab: React.FC = () => {
 
   if (requirements.length === 0) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-8">
+      <div className="py-8">
         <EmptyState
           icon={AlertTriangle}
           title="No active training requirements"
@@ -349,6 +364,7 @@ const ComplianceMatrixTab: React.FC = () => {
 
   const nonCompliant = evaluated.filter((m) => m.standing === Standing.NON_COMPLIANT).length;
   const atRisk = evaluated.filter((m) => m.standing === Standing.AT_RISK).length;
+  const notApplicable = evaluated.filter((m) => m.standing === Standing.NOT_APPLICABLE).length;
 
   const activeMember = axis === 'members' ? evaluated.find((m) => m.member.user_id === activeId) : undefined;
   const activeRollup = axis === 'requirements' ? rollups.find((r) => r.requirement.id === activeId) : undefined;
@@ -392,7 +408,7 @@ const ComplianceMatrixTab: React.FC = () => {
   const stepNoun = axis === 'members' ? 'Member' : 'Requirement';
 
   return (
-    <div className="mx-auto max-w-full px-4 py-6 sm:px-6 lg:px-8">
+    <div className="py-6">
       <div className="card overflow-hidden">
         {/* Header — what this is, and which way round it is being read */}
         <div className="border-theme-surface-border flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -401,6 +417,7 @@ const ComplianceMatrixTab: React.FC = () => {
             <p className="text-theme-text-muted text-sm">
               {evaluated.length} tracked member{evaluated.length === 1 ? '' : 's'} · {requirements.length} requirement
               {requirements.length === 1 ? '' : 's'} · {nonCompliant} non-compliant, {atRisk} at risk
+              {notApplicable > 0 ? `, ${notApplicable} not applicable` : ''}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -549,13 +566,7 @@ const ComplianceMatrixTab: React.FC = () => {
                         <div className="flex items-baseline justify-between gap-2">
                           <span className="text-theme-text-primary truncate text-sm font-semibold">{item.title}</span>
                           <span
-                            className={`shrink-0 text-xs font-bold tabular-nums ${
-                              item.standing === Standing.COMPLIANT
-                                ? 'text-green-700 dark:text-green-300'
-                                : item.standing === Standing.AT_RISK
-                                  ? 'text-orange-700 dark:text-orange-300'
-                                  : 'text-red-700 dark:text-red-300'
-                            }`}
+                            className={`shrink-0 text-xs font-bold tabular-nums ${STANDING_BADGE_TEXT[item.standing]}`}
                           >
                             {item.badge}
                           </span>
@@ -691,7 +702,7 @@ const ComplianceMatrixTab: React.FC = () => {
                     />
                     <StatTile
                       label="Standing"
-                      value={`${activeMember.pct}%`}
+                      value={activeMember.pct === null ? 'N/A' : `${activeMember.pct}%`}
                       note={STANDING_LABELS[activeMember.standing].toLowerCase()}
                     />
                   </div>

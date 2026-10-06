@@ -29,7 +29,7 @@ import {
   Archive,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type { Applicant, MultiApprovalConfig, StageHistoryEntry } from '../types';
+import type { Applicant, ChecklistConfig, MultiApprovalConfig, StageHistoryEntry } from '../types';
 import { StepProgressStatus } from '../types';
 import { isSafeUrl, getInitials } from '../utils';
 import { STAGE_TYPE_ICONS } from '../constants';
@@ -128,6 +128,25 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   const tz = useTimezone();
 
   const { isLoadingApplicant } = useProspectiveMembersStore();
+
+  // Ticks on a checklist stage. They are sent with the Advance that completes
+  // the stage — the server grades them on that call — so they live here and
+  // are handed to the action panel. Held under the applicant-and-stage key
+  // they were made for: a different applicant or stage starts again from the
+  // ticks stored for it, while a refetch of the same stage keeps them.
+  const checklistStageKey = `${applicant?.id ?? ''}:${applicant?.current_stage_id ?? ''}`;
+  const storedTicks = (() => {
+    const entry = applicant?.stage_history.find((h) => h.stage_id === applicant.current_stage_id);
+    const stored = entry?.action_result?.completed_items;
+    return Array.isArray(stored) ? stored.filter((i): i is string => typeof i === 'string') : [];
+  })();
+  const [tickState, setTickState] = useState<{ key: string; ticks: string[] }>({ key: '', ticks: [] });
+  const checklistTicks = tickState.key === checklistStageKey ? tickState.ticks : storedTicks;
+  const toggleChecklistItem = (label: string, ticked: boolean) =>
+    setTickState({
+      key: checklistStageKey,
+      ticks: ticked ? [...checklistTicks, label] : checklistTicks.filter((i) => i !== label),
+    });
 
   const [showPii, setShowPii] = useState(true);
   const [activityLog, setActivityLog] = useState<
@@ -625,36 +644,40 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
               {applicant.current_stage_type === StageTypeEnum.CHECKLIST &&
                 applicant.status === ApplicantStatus.ACTIVE &&
                 (() => {
-                  const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
-                  const actionResult = currentEntry?.action_result ?? {};
-                  const completedItems = (actionResult.completed_items as string[] | undefined) ?? [];
-                  const totalItems = (actionResult.total_items as number | undefined) ?? 0;
+                  const stageConfig = applicant.current_stage_config as Partial<ChecklistConfig> | undefined;
+                  const items = (stageConfig?.items ?? []).map((item) => item.label).filter(Boolean);
+                  const ticked = items.filter((label) => checklistTicks.includes(label)).length;
                   return (
                     <div className="border-theme-surface-border border-b p-4">
                       <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
-                        Checklist Progress
+                        Checklist
                       </h3>
-                      {totalItems > 0 ? (
-                        <div className="space-y-2">
-                          <div className="text-theme-text-secondary flex items-center justify-between text-xs">
-                            <span>
-                              {completedItems.length} of {totalItems} items completed
-                            </span>
-                            <span
-                              className={completedItems.length === totalItems ? 'text-emerald-500' : 'text-amber-500'}
-                            >
-                              {Math.round((completedItems.length / totalItems) * 100)}%
-                            </span>
-                          </div>
-                          <div className="bg-theme-surface-hover h-1.5 w-full rounded-full">
-                            <div
-                              className={`h-1.5 rounded-full transition-all ${completedItems.length === totalItems ? 'bg-emerald-500' : 'bg-amber-500'}`}
-                              style={{ width: `${(completedItems.length / totalItems) * 100}%` }}
-                            />
-                          </div>
-                        </div>
+                      {items.length > 0 ? (
+                        <>
+                          <p className="text-theme-text-secondary mb-2 text-xs">
+                            {ticked} of {items.length} items done
+                            {stageConfig?.require_all !== false && ticked < items.length
+                              ? ' — tick every item to advance'
+                              : ''}
+                          </p>
+                          <ul className="space-y-1">
+                            {items.map((label) => (
+                              <li key={label}>
+                                <label className="text-theme-text-primary flex items-center gap-2 text-sm">
+                                  <input
+                                    type="checkbox"
+                                    className="form-checkbox"
+                                    checked={checklistTicks.includes(label)}
+                                    onChange={(e) => toggleChecklistItem(label, e.target.checked)}
+                                  />
+                                  {label}
+                                </label>
+                              </li>
+                            ))}
+                          </ul>
+                        </>
                       ) : (
-                        <p className="text-theme-text-muted text-xs">No checklist data recorded yet.</p>
+                        <p className="text-theme-text-muted text-xs">This stage has no checklist items.</p>
                       )}
                     </div>
                   );
@@ -1123,6 +1146,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
             {/* Footer Actions */}
             <ApplicantActionPanels
               applicant={applicant}
+              checklistTicks={checklistTicks}
               isLastStage={isLastStage}
               isFirstStage={isFirstStage}
               onClose={onClose}

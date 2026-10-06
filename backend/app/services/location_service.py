@@ -10,7 +10,6 @@ from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.core.utils import generate_display_code
 from app.models.event import Event
@@ -18,6 +17,7 @@ from app.models.facilities import Facility, FacilityRoom
 from app.models.location import Location
 from app.models.user import Organization
 from app.schemas.location import LocationCreate, LocationUpdate
+from app.utils.org_locks import ROOM_BOOKING, lock_organization_scope
 from app.utils.org_scoping import assert_in_org
 
 
@@ -51,7 +51,16 @@ class LocationService:
             dup_query = dup_query.where(Location.building == location_data.building)
         else:
             dup_query = dup_query.where(Location.building.is_(None))
-        result = await self.db.execute(dup_query)
+        # `.limit(1)` is load-bearing, not an optimization. This rule has no
+        # unique constraint behind it (only a plain `ix_locations_name`) and it
+        # is a read-then-write, so two concurrent creates can both pass it and
+        # leave a duplicate pair behind. Unbounded, `scalar_one_or_none()` then
+        # raises MultipleResultsFound on every later create or update of that
+        # name — not a ValueError, so `handle_service_errors` renders it as a
+        # 500 with a generic message, and the one name nobody can save again is
+        # diagnosable only from the logs. Capped at one row, multiplicity is
+        # unrepresentable and the duplicate still reports as a clean 400.
+        result = await self.db.execute(dup_query.limit(1))
         existing = result.scalar_one_or_none()
         if existing:
             raise ValueError(
@@ -145,7 +154,8 @@ class LocationService:
                 dup_query = dup_query.where(Location.building == effective_building)
             else:
                 dup_query = dup_query.where(Location.building.is_(None))
-            result = await self.db.execute(dup_query)
+            # Capped for the same reason as `create_location`'s — see there.
+            result = await self.db.execute(dup_query.limit(1))
             existing = result.scalar_one_or_none()
             if existing:
                 raise ValueError(
@@ -234,9 +244,10 @@ class LocationService:
         """
         Get events at this location whose check-in window is open right now.
 
-        The window is per-event — FLEXIBLE opens N minutes before start (default
-        30), STRICT opens at ``actual_start_time``, WINDOW opens N minutes either
-        side — so the exact boundaries are resolved via the canonical
+        The window is per-event — FLEXIBLE opens ``check_in_minutes_before``
+        minutes before start (the column defaults to 60), STRICT opens at
+        ``actual_start_time``, WINDOW opens N minutes either side — so the exact
+        boundaries are resolved via the canonical
         ``EventService._get_check_in_window`` per candidate rather than assuming a
         fixed 1-hour lead. The old hardcoded "1 hour before start" returned a
         superset, so the kiosk showed an active check-in QR for STRICT and
@@ -269,7 +280,13 @@ class LocationService:
                     Event.actual_end_time >= now,
                 )
             )
-            .options(selectinload(Event.rsvps))
+            # No `selectinload(Event.rsvps)` here. It was eager-loading every
+            # RSVP row of every event in the window, and no caller reads the
+            # collection: the two display endpoints project scalar columns
+            # only, and `NfcTagService._only_event_checked_into` runs its own
+            # query narrowed to one member's open check-ins. The kiosk polls
+            # this every 30 seconds, so a drill with 150 RSVPs was loading 150
+            # unread rows a poll, per open event, on a public endpoint.
             .order_by(Event.start_datetime)
         )
 
@@ -283,6 +300,15 @@ class LocationService:
                 current.append(event)
         return current
 
+    async def lock_room_bookings(self, organization_id: str) -> None:
+        """Serialize room booking decisions for this organization (EV-26).
+
+        Held until the caller's transaction ends. A caller that will also
+        lock an event row must take this first; see
+        ``EventService.update_event``.
+        """
+        await lock_organization_scope(self.db, organization_id, ROOM_BOOKING)
+
     async def check_overlapping_events(
         self,
         location_id: UUID,
@@ -290,17 +316,27 @@ class LocationService:
         start_datetime: datetime,
         end_datetime: datetime,
         exclude_event_id: Optional[UUID] = None,
+        for_booking: bool = True,
     ) -> List[Event]:
         """
         Check for events that overlap with the given time range at this location
 
         Returns list of overlapping events
+
+        ``for_booking`` is for a caller about to book the room on the strength
+        of this answer. It takes the organization's booking lock and reads
+        with a locking read: a plain SELECT answers from the snapshot taken at
+        the request's first read, which predates a booking another
+        coordinator committed while this one waited for the lock (pitfall
+        #27). Only a read-only preview may pass False.
         """
+        if for_booking:
+            await self.lock_room_bookings(organization_id)
         query = (
             select(Event)
             .where(Event.location_id == str(location_id))
             .where(Event.organization_id == str(organization_id))
-            .where(Event.is_cancelled == False)  # noqa: E712
+            .where(Event.is_cancelled.is_(False))
             .where(
                 or_(
                     # New event starts during existing event
@@ -324,6 +360,8 @@ class LocationService:
 
         if exclude_event_id:
             query = query.where(Event.id != str(exclude_event_id))
+        if for_booking:
+            query = query.with_for_update()
 
         result = await self.db.execute(query)
         return list(result.scalars().all())
@@ -376,8 +414,8 @@ class LocationService:
             select(Location)
             .join(Organization, Organization.id == Location.organization_id)
             .where(Location.display_code == display_code)
-            .where(Location.is_active == True)  # noqa: E712
-            .where(Organization.active == True)  # noqa: E712
+            .where(Location.is_active.is_(True))
+            .where(Organization.active.is_(True))
         )
         return result.scalar_one_or_none()
 

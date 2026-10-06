@@ -125,7 +125,7 @@ const InventoryMatchModal: React.FC<InventoryMatchModalProps> = ({ templateId, i
         type="button"
         onClick={() => void apply()}
         disabled={saving || selectedCount === 0}
-        className="flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-40"
+        className="flex items-center gap-1.5 rounded-md bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-40"
       >
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
         Link {selectedCount} item{selectedCount === 1 ? '' : 's'}

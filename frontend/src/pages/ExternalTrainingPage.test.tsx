@@ -10,6 +10,8 @@ const mockGetCategoryMappings = vi.fn();
 const mockGetUserMappings = vi.fn();
 const mockUpdateCategoryMapping = vi.fn();
 const mockGetCategories = vi.fn();
+const mockUpdateUserMapping = vi.fn();
+const mockGetUsers = vi.fn();
 const mockDeleteProvider = vi.fn();
 const mockCreateProvider = vi.fn();
 const mockUpdateProvider = vi.fn();
@@ -21,12 +23,16 @@ vi.mock('../services/api', () => ({
     getCategoryMappings: (...a: unknown[]) => mockGetCategoryMappings(...a) as unknown,
     getUserMappings: (...a: unknown[]) => mockGetUserMappings(...a) as unknown,
     updateCategoryMapping: (...a: unknown[]) => mockUpdateCategoryMapping(...a) as unknown,
+    updateUserMapping: (...a: unknown[]) => mockUpdateUserMapping(...a) as unknown,
     deleteProvider: (...a: unknown[]) => mockDeleteProvider(...a) as unknown,
     createProvider: (...a: unknown[]) => mockCreateProvider(...a) as unknown,
     updateProvider: (...a: unknown[]) => mockUpdateProvider(...a) as unknown,
   },
   trainingService: {
     getCategories: (...a: unknown[]) => mockGetCategories(...a) as unknown,
+  },
+  userService: {
+    getUsers: (...a: unknown[]) => mockGetUsers(...a) as unknown,
   },
 }));
 
@@ -60,6 +66,7 @@ beforeEach(() => {
   mockGetImportBatches.mockResolvedValue([]);
   mockGetCategoryMappings.mockResolvedValue([unmapped]);
   mockGetUserMappings.mockResolvedValue([]);
+  mockGetUsers.mockResolvedValue([]);
   mockGetCategories.mockResolvedValue([
     { id: 'cat-1', organization_id: 'org-1', name: 'Hazmat', sort_order: 0, active: true },
     { id: 'cat-2', organization_id: 'org-1', name: 'Fireground Operations', sort_order: 1, active: true },
@@ -112,6 +119,99 @@ describe('ExternalTrainingPage — category mappings', () => {
         is_mapped: false,
       })
     );
+  });
+});
+
+const unmappedUser = {
+  id: 'umap-1',
+  provider_id: 'prov-1',
+  organization_id: 'org-1',
+  external_user_id: 'EXT-42',
+  external_name: 'Pat Rivera',
+  external_email: 'privera@personal.test',
+  is_mapped: false,
+  auto_mapped: false,
+  created_at: '2026-08-01T00:00:00Z',
+  updated_at: '2026-08-01T00:00:00Z',
+};
+
+const roster = [
+  {
+    id: 'user-1',
+    organization_id: 'org-1',
+    username: 'privera',
+    first_name: 'Pat',
+    last_name: 'Rivera',
+    membership_number: '114',
+    status: 'active',
+  },
+  { id: 'user-2', organization_id: 'org-1', username: 'jdoe', first_name: 'Jane', last_name: 'Doe', status: 'active' },
+];
+
+describe('ExternalTrainingPage — user mappings', () => {
+  // The Map User button carried no handler at all: an officer clicked it,
+  // nothing happened, and a provider user whose email matched nobody could
+  // only be mapped through the API.
+  beforeEach(() => {
+    mockGetUserMappings.mockReset();
+    mockGetUserMappings.mockResolvedValue([unmappedUser]);
+    mockGetUsers.mockReset();
+    mockGetUsers.mockResolvedValue(roster);
+    mockUpdateUserMapping.mockReset();
+    mockUpdateUserMapping.mockImplementation((_p: string, _m: string, updates: { internal_user_id: string | null }) =>
+      Promise.resolve({
+        ...unmappedUser,
+        internal_user_id: updates.internal_user_id ?? undefined,
+        is_mapped: updates.internal_user_id !== null,
+        internal_user_name: updates.internal_user_id ? 'Pat Rivera' : undefined,
+      })
+    );
+  });
+
+  const openUsersTab = async () => {
+    await openMappings();
+    await userEvent.click(await screen.findByRole('tab', { name: /Users/ }));
+  };
+
+  it('offers the members an external user can be pointed at', async () => {
+    await openUsersTab();
+
+    expect(await screen.findByLabelText('Member for Pat Rivera')).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Pat Rivera (#114)' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Jane Doe' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Map User' })).not.toBeInTheDocument();
+  });
+
+  it('saves the member the officer picks', async () => {
+    await openUsersTab();
+
+    await userEvent.selectOptions(await screen.findByLabelText('Member for Pat Rivera'), 'user-1');
+
+    await waitFor(() =>
+      expect(mockUpdateUserMapping).toHaveBeenCalledWith('prov-1', 'umap-1', { internal_user_id: 'user-1' })
+    );
+  });
+
+  it('sends an explicit null to unmap, which the endpoint reads as "clear"', async () => {
+    mockGetUserMappings.mockResolvedValue([{ ...unmappedUser, is_mapped: true, internal_user_id: 'user-1' }]);
+    await openUsersTab();
+
+    await userEvent.selectOptions(await screen.findByLabelText('Member for Pat Rivera'), '');
+
+    await waitFor(() =>
+      expect(mockUpdateUserMapping).toHaveBeenCalledWith('prov-1', 'umap-1', { internal_user_id: null })
+    );
+  });
+
+  it('keeps showing a mapped member the roster no longer lists', async () => {
+    mockGetUserMappings.mockResolvedValue([
+      { ...unmappedUser, is_mapped: true, internal_user_id: 'user-gone', internal_user_name: 'Sam Former' },
+    ]);
+    await openUsersTab();
+
+    const select = await screen.findByLabelText('Member for Pat Rivera');
+    expect(select).toHaveValue('user-gone');
+    expect(screen.getByRole('option', { name: 'Sam Former' })).toBeInTheDocument();
   });
 });
 

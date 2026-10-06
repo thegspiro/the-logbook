@@ -32,7 +32,10 @@ from app.schemas.course_cohort import (
     CohortAdHocClassCreate,
     CohortClassCancel,
     CohortClassReschedule,
+    CohortMakeupCreate,
     CohortMemberAdd,
+    CohortMissedClassDecisionResult,
+    CohortMissedClassResponse,
     CohortOperationResult,
     CohortSchedulePreviewRequest,
     CohortSchedulePreviewResponse,
@@ -134,7 +137,12 @@ def _class_response(
 
 
 def _member_response(
-    row, full_name=None, email=None, progress_percentage=None
+    row,
+    full_name=None,
+    email=None,
+    progress_percentage=None,
+    display_name=None,
+    missed_classes_pending=0,
 ) -> CourseCohortMemberResponse:
     """Map a roster row onto its response."""
     return CourseCohortMemberResponse(
@@ -148,8 +156,10 @@ def _member_response(
         withdrawn_at=row.withdrawn_at,
         added_at=row.added_at,
         full_name=full_name,
+        display_name=display_name,
         email=email,
         progress_percentage=progress_percentage,
+        missed_classes_pending=missed_classes_pending,
     )
 
 
@@ -343,8 +353,10 @@ async def _build_detail(
             _member_response(
                 m["row"],
                 full_name=m.get("full_name"),
+                display_name=m.get("display_name"),
                 email=m.get("email"),
                 progress_percentage=m.get("progress_percentage"),
+                missed_classes_pending=m.get("missed_classes_pending", 0),
             )
             for m in detail["members"]
         ],
@@ -717,3 +729,181 @@ async def remove_cohort_member(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
         )
+
+
+def _missed_class_response(entry: dict) -> CohortMissedClassResponse:
+    cohort_class = entry["cohort_class"]
+    resolution = entry.get("resolution")
+    makeup = entry.get("makeup_class")
+    return CohortMissedClassResponse(
+        cohort_class_id=cohort_class.id,
+        sequence=cohort_class.sequence,
+        title=cohort_class.title,
+        scheduled_start=cohort_class.scheduled_start,
+        scheduled_end=cohort_class.scheduled_end,
+        credit_hours=cohort_class.credit_hours,
+        resolution=(
+            resolution.resolution.value
+            if resolution is not None and hasattr(resolution.resolution, "value")
+            else (resolution.resolution if resolution is not None else None)
+        ),
+        pending=entry["pending"],
+        training_record_id=resolution.training_record_id if resolution else None,
+        makeup_class_id=resolution.makeup_class_id if resolution else None,
+        makeup_scheduled_start=makeup.scheduled_start if makeup else None,
+        makeup_status=(
+            makeup.status.value if makeup and hasattr(makeup.status, "value") else None
+        ),
+        recorded_at=resolution.recorded_at if resolution else None,
+    )
+
+
+async def _missed_entry(
+    service: CourseCohortService, cohort_id: UUID, user_id: UUID, class_id, org_id
+) -> dict:
+    entries = await service.list_missed_classes(cohort_id, user_id, org_id)
+    return next(e for e in entries if e["cohort_class"].id == str(class_id))
+
+
+@router.get(
+    "/{cohort_id}/members/{user_id}/missed-classes",
+    response_model=List[CohortMissedClassResponse],
+)
+async def list_missed_classes(
+    cohort_id: UUID,
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Classes held before a member joined the cohort, and what was decided
+
+    A member added to a running cohort is RSVP'd only to classes still to come.
+    Each class before they joined needs a decision: credit it, or schedule a
+    make-up session for them.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    service = CourseCohortService(db)
+    try:
+        entries = await service.list_missed_classes(
+            cohort_id, user_id, current_user.organization_id
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
+        )
+    return [_missed_class_response(e) for e in entries]
+
+
+@router.post(
+    "/{cohort_id}/members/{user_id}/missed-classes/{cohort_class_id}/credit",
+    response_model=CohortMissedClassDecisionResult,
+)
+async def credit_missed_class(
+    cohort_id: UUID,
+    user_id: UUID,
+    cohort_class_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Credit a late joiner for a class held before they joined
+
+    Writes a completed training record for the class and, when the class feeds
+    a pipeline requirement, applies it to the member's enrollment.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    service = CourseCohortService(db)
+    try:
+        _, record, warnings = await service.credit_missed_class(
+            cohort_id,
+            user_id,
+            cohort_class_id,
+            current_user.organization_id,
+            current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="course_cohort_missed_class_credited",
+        event_category="training",
+        severity="info",
+        event_data={
+            "cohort_id": str(cohort_id),
+            "member_id": str(user_id),
+            "class_id": str(cohort_class_id),
+            "training_record_id": str(record.id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    entry = await _missed_entry(
+        service, cohort_id, user_id, cohort_class_id, current_user.organization_id
+    )
+    return CohortMissedClassDecisionResult(
+        missed_class=_missed_class_response(entry), warnings=warnings
+    )
+
+
+@router.post(
+    "/{cohort_id}/members/{user_id}/missed-classes/{cohort_class_id}/makeup",
+    response_model=CohortMissedClassDecisionResult,
+)
+async def schedule_makeup_class(
+    cohort_id: UUID,
+    user_id: UUID,
+    cohort_class_id: UUID,
+    data: CohortMakeupCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Schedule a make-up session for one late joiner
+
+    Copies the missed class onto a new date and RSVPs only this member. It is
+    credited like any class, when its attendance is finalized.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    service = CourseCohortService(db)
+    try:
+        _, makeup = await service.schedule_makeup_class(
+            cohort_id,
+            user_id,
+            cohort_class_id,
+            data,
+            current_user.organization_id,
+            current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="course_cohort_makeup_scheduled",
+        event_category="training",
+        severity="info",
+        event_data={
+            "cohort_id": str(cohort_id),
+            "member_id": str(user_id),
+            "class_id": str(cohort_class_id),
+            "makeup_class_id": str(makeup.id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    entry = await _missed_entry(
+        service, cohort_id, user_id, cohort_class_id, current_user.organization_id
+    )
+    return CohortMissedClassDecisionResult(missed_class=_missed_class_response(entry))

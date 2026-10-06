@@ -152,7 +152,8 @@ class TestExemptExistingMembers:
         )
 
         assert rows["Veteran"]["requirements"] == []
-        assert rows["Veteran"]["standing"] == "compliant"
+        assert rows["Veteran"]["standing"] == "not_applicable"
+        assert rows["Veteran"]["completion_pct"] is None
         recruit_cells = rows["Recruit"]["requirements"]
         assert [c["requirement_id"] for c in recruit_cells] == [req_id]
         assert recruit_cells[0]["status"] == "not_started"
@@ -164,7 +165,9 @@ class TestExemptExistingMembers:
         await _insert_member(db_session, org_id, "Recruit", RECRUIT_HIRED)
         await _insert_cert_req(db_session, org_id, "Live Fire", cutoff=CUTOFF)
 
-        assert await compute_org_compliance_pct(db_session, org_id) == 50.0
+        # The veteran is not applicable and outside the percentage (TR4-4):
+        # one graded member, not compliant.
+        assert await compute_org_compliance_pct(db_session, org_id) == 0.0
 
     async def test_my_training_list_omits_it_for_a_veteran(self, db_session):
         org_id = await _insert_org(db_session)
@@ -198,7 +201,8 @@ class TestCatchUpDeadline:
         assert cell["status"] == CATCH_UP_STATUS
         assert cell["catch_up_deadline"] == deadline.isoformat()
         assert veteran["requirements_total"] == 0
-        assert veteran["standing"] == "compliant"
+        # Every requirement is still in catch-up, so nothing grades them yet.
+        assert veteran["standing"] == "not_applicable"
 
     async def test_counts_once_the_deadline_has_passed(self, db_session):
         org_id = await _insert_org(db_session)

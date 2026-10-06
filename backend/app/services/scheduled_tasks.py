@@ -105,6 +105,7 @@ from loguru import logger
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.error_reporting import persist_task_error_log
 from app.models.call_tracking import CallTrackingMode
 from app.models.event import (
     EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS,
@@ -310,6 +311,12 @@ SCHEDULE = {
         "recommended_time": "03:30",
         "cron": "30 3 * * *",
     },
+    "self_report_attachment_retention": {
+        "description": "Delete self-reported training certificate files once a decided submission is older than the department's retention period (self-report settings). Departments that never set one keep files indefinitely.",
+        "frequency": "daily",
+        "recommended_time": "03:45",
+        "cron": "45 3 * * *",
+    },
     "scheduled_emails": {
         "description": "Process pending scheduled emails that are due to be sent",
         "frequency": "every 1 minute",
@@ -353,7 +360,7 @@ SCHEDULE = {
         "cron": "0 8 * * 1",
     },
     "supply_expiration_alerts": {
-        "description": "Send weekly alerts for consumables expiring on apparatus and the replacement lots held for them, flagging which have no in-date stock behind them",
+        "description": "Send weekly alerts for consumables on apparatus that are expiring, reported used, or short, and the expiring replacement lots held for them, flagging which have no in-date stock behind them",
         "frequency": "weekly",
         "recommended_time": "Monday 07:15",
         "cron": "15 7 * * 1",
@@ -441,6 +448,18 @@ SCHEDULE = {
         "frequency": "every 30 minutes",
         "recommended_time": "*/30 * * * *",
         "cron": "*/30 * * * *",
+    },
+    "reap_expired_sessions": {
+        "description": "Delete sign-in session rows 30 days after their refresh token expired (each holds an IP address and browser)",
+        "frequency": "daily",
+        "recommended_time": "00:45",
+        "cron": "45 0 * * *",
+    },
+    "notify_expired_passwords": {
+        "description": "Tell members whose password has expired, once, by email and in-app; the API refuses it a grace period later",
+        "frequency": "daily",
+        "recommended_time": "07:50",
+        "cron": "50 7 * * *",
     },
     "expire_ip_exceptions": {
         "description": "Mark approved IP allowlist/blocklist exceptions past their valid_until as expired (nothing else recomputes the stored status)",
@@ -609,6 +628,7 @@ async def _for_each_org(
             total += count
         except Exception as e:
             logger.error(f"{task_name} failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), task_name, e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # The orgs share one session; roll back the failed unit of work so a
             # broken commit doesn't leave the session in a failed state that
@@ -904,7 +924,7 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
 
     from app.models.meeting import ActionItemStatus, MeetingActionItem
     from app.models.minute import ActionItem as MinutesActionItem
-    from app.models.minute import MinutesActionItemStatus
+    from app.models.minute import MeetingMinutes, MinutesActionItemStatus
 
     todays = await _org_todays(db)
     fallback_today = org_today(None)
@@ -913,9 +933,14 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     three_days = max(todays.values(), default=fallback_today) + timedelta(days=3)
     total_reminders = 0
 
+    # Both sweeps run platform-wide, so each joins back to its organization
+    # and skips a deactivated one, as the per-org jobs do (CRON2-31-12).
     # ── Meeting action items ──
     meeting_items = await db.execute(
-        select(MeetingActionItem).where(
+        select(MeetingActionItem)
+        .join(Organization, Organization.id == MeetingActionItem.organization_id)
+        .where(
+            Organization.active.isnot(False),
             MeetingActionItem.status.in_(
                 [ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]
             ),
@@ -964,7 +989,10 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     minutes_items = await db.execute(
         select(MinutesActionItem)
         .options(selectinload(MinutesActionItem.minutes))
+        .join(MeetingMinutes, MeetingMinutes.id == MinutesActionItem.minutes_id)
+        .join(Organization, Organization.id == MeetingMinutes.organization_id)
         .where(
+            Organization.active.isnot(False),
             MinutesActionItem.status.in_(
                 [
                     MinutesActionItemStatus.PENDING.value,
@@ -1247,7 +1275,7 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                 for hours in due_intervals:
                     for user in recipients:
                         prefs = user.notification_preferences or {}
-                        user_name = f"{user.first_name} {user.last_name}"
+                        user_name = user.display_name
 
                         # In-app notification — always created regardless of
                         # email preference so users who opt out of email still
@@ -1317,6 +1345,7 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
 
         except Exception as e:
             logger.error(f"Event reminders failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), "Event reminders", e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
@@ -1474,7 +1503,9 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                         from app.services.email_service import wrap_email_body
 
                         full_event_url = f"{settings.FRONTEND_URL}/events/{event.id}"
-                        e_first = _html.escape(creator.first_name or "")
+                        e_first = _html.escape(
+                            creator.preferred_name or creator.first_name or ""
+                        )
                         e_title = _html.escape(event.title or "")
                         email_service = EmailService(organization=org)
                         sent_count, _ = await email_service.send_email(
@@ -1493,7 +1524,7 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                                 f"Review Event</a></p>",
                             ),
                             text_body=(
-                                f"Hi {creator.first_name},\n\n"
+                                f"Hi {creator.preferred_name or creator.first_name},\n\n"
                                 f'Your event "{event.title}" has ended. '
                                 f"{checked_in_count} of {rsvp_count} attendees checked in.\n\n"
                                 f"Please review and confirm the attendance records and "
@@ -1517,6 +1548,7 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
 
         except Exception as e:
             logger.error(f"Post-event validation failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), "Post-event validation", e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
@@ -1843,7 +1875,9 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         full_url = (
                             f"{settings.FRONTEND_URL}/scheduling?shift={shift.id}"
                         )
-                        e_first = _html.escape(officer.first_name or "")
+                        e_first = _html.escape(
+                            officer.preferred_name or officer.first_name or ""
+                        )
                         e_shift_date = _html.escape(shift_date_str)
                         email_service = EmailService(organization=org)
 
@@ -1897,7 +1931,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                                 "Review Shift</a></p>",
                             ),
                             text_body=(
-                                f"Hi {officer.first_name},\n\n"
+                                f"Hi {officer.preferred_name or officer.first_name},\n\n"
                                 f"Your shift on {shift_date_str} "
                                 "has ended. "
                                 f"{att_count} member"
@@ -1926,6 +1960,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
 
         except Exception as e:
             logger.error(f"Post-shift validation failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), "Post-shift validation", e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
@@ -2104,8 +2139,9 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                     roster.append(
                         {
                             "user_id": str(assignment.user_id),
-                            "name": user.full_name or user.email or "Member",
-                            "first_name": user.first_name,
+                            "name": user.display_name or user.email or "Member",
+                            # The greeting uses the name the member goes by.
+                            "first_name": user.preferred_name or user.first_name,
                             "email": user.email,
                             "position": pos_value,
                             "position_label": position_label(pos_value),
@@ -2392,6 +2428,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
 
         except Exception as e:
             logger.error(f"Shift reminders failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), "Shift reminders", e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
@@ -2909,6 +2946,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                     }
 
                     # In-app notification
+                    in_app_ok = False
                     try:
                         notif = NotificationLog(
                             id=generate_uuid(),
@@ -2924,6 +2962,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                         )
                         db.add(notif)
                         org_notifications += 1
+                        in_app_ok = True
                     except Exception as e:
                         logger.error(
                             "Failed end-of-shift in-app summary for user "
@@ -2934,16 +2973,25 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                         )
 
                     # Email
-                    if user.email and member_receives_email(
-                        user.notification_preferences,
-                        EmailKind.SHIFT_NOTICES,
-                        department_required_kinds(org),
-                    ):
+                    # An email is due only where one can go: with email off for
+                    # the department, waiting on it would re-send the in-app
+                    # notice every run for the whole lookback window.
+                    email_svc = EmailService(organization=org)
+                    email_due = (
+                        bool(user.email)
+                        and email_svc.can_send
+                        and member_receives_email(
+                            user.notification_preferences,
+                            EmailKind.SHIFT_NOTICES,
+                            department_required_kinds(org),
+                        )
+                    )
+                    email_ok = False
+                    if email_due:
                         try:
                             from app.services.email_service import wrap_email_body
 
                             full_url = f"{settings.FRONTEND_URL}{action_url}"
-                            email_svc = EmailService(organization=org)
 
                             details_rows = [
                                 "<tr><td style='padding:2px 8px;color:#555'>"
@@ -3019,7 +3067,9 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                                 else "End-of-Shift Summary"
                             )
 
-                            e_first = _html.escape(user.first_name or "")
+                            e_first = _html.escape(
+                                user.preferred_name or user.first_name or ""
+                            )
                             sent, _ = await email_svc.send_email(
                                 to_emails=[user.email],
                                 subject=subject,
@@ -3039,7 +3089,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                                     "View Shift Details</a></p>",
                                 ),
                                 text_body=(
-                                    f"Hi {user.first_name or ''},\n\n"
+                                    f"Hi {user.preferred_name or user.first_name or ''},\n\n"
                                     f"End-of-Shift Summary\n"
                                     f"Date: {shift_date_str}\n"
                                     f"Time: {time_range}\n"
@@ -3069,6 +3119,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                             )
                             if sent > 0:
                                 org_emails += 1
+                                email_ok = True
                         except Exception as email_err:
                             logger.error(
                                 "End-of-shift summary email failed for {}: {}",
@@ -3076,7 +3127,14 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                                 email_err,
                             )
 
-                    newly_sent.append(uid)
+                    # Delivered means the email went, when one was due: email
+                    # is the channel of record (pitfall #18), so a member whose
+                    # email failed is retried on the next run, inside the
+                    # lookback window, even though that repeats the in-app
+                    # notice (owner decision CRON-31-7). A member who gets no
+                    # email is delivered once the in-app notice is written.
+                    if email_ok if email_due else in_app_ok:
+                        newly_sent.append(uid)
 
                 if newly_sent:
                     shift.activities = {
@@ -3088,6 +3146,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
 
         except Exception as e:
             logger.error(f"End-of-shift summary failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), "End-of-shift summary", e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
@@ -3267,7 +3326,9 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
                     department_required_kinds(org),
                 ):
                     try:
-                        e_first = _html.escape(trainee.first_name or "")
+                        e_first = _html.escape(
+                            trainee.preferred_name or trainee.first_name or ""
+                        )
                         e_date = _html.escape(shift_date_str)
                         sent, _ = await email_svc.send_email(
                             to_emails=[trainee.email],
@@ -3287,7 +3348,7 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
                                 "Review Report</a></p>",
                             ),
                             text_body=(
-                                f"Hi {trainee.first_name or ''},\n\n"
+                                f"Hi {trainee.preferred_name or trainee.first_name or ''},\n\n"
                                 f"{trainee_message}\n\n"
                                 f"Review Report: {full_url}"
                             ),
@@ -3307,7 +3368,7 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
                 # spamming them with one email per overdue report)
                 officer_subject = f"Trainee report unacknowledged — {shift_date_str}"
                 officer_message = (
-                    f"{trainee.full_name or trainee.email or 'Trainee'} "
+                    f"{trainee.display_name or trainee.email or 'Trainee'} "
                     f"has not acknowledged the shift report you filed for "
                     f"{shift_date_str} ({ack_days}+ days overdue)."
                 )
@@ -3361,6 +3422,7 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
 
         except Exception as e:
             logger.error(f"Trainee report escalation failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), "Trainee report escalation", e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
@@ -3834,6 +3896,23 @@ async def run_retention_enforcement(db: AsyncSession) -> Dict[str, Any]:
     return result
 
 
+async def run_self_report_attachment_retention(db: AsyncSession) -> Dict[str, Any]:
+    """Expire self-reported certificate files per each department's setting.
+
+    The reader of ``SelfReportConfig.attachment_retention_days``; see
+    app/services/self_report_attachment_retention.py. Commits per
+    organization itself, so one department's failure does not discard
+    another's completed sweep.
+    """
+    from app.services.self_report_attachment_retention import (
+        SelfReportAttachmentRetention,
+    )
+
+    result = await SelfReportAttachmentRetention(db).sweep()
+    result["task"] = "self_report_attachment_retention"
+    return result
+
+
 async def run_message_history_cleanup(db: AsyncSession) -> Dict[str, Any]:
     """
     Legacy alias for message-history retention (kept for existing crontabs).
@@ -4240,6 +4319,7 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
     Daily at 07:00.
     """
     from app.services.email_service import EmailService
+    from app.services.email_theme import WRAP_STYLE, with_subline
     from app.services.inventory_service import InventoryService
 
     def _row_domain(item) -> str:
@@ -4259,15 +4339,18 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             # will not match the item's own quantity column, and an unexplained
             # mismatch reads as a bug rather than as the count that matters.
             source = "in-date lots" if from_lots else "on hand"
+            # The category rides under the item name rather than taking a
+            # fourth column, which ran the table past a phone-width card.
             items_html += (
-                f"<tr><td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
-                f"{_html.escape(item.name)}</td>"
-                f"<td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
-                f"{_html.escape(cat_name)}</td>"
-                f"<td style='padding:6px 12px;border-bottom:1px solid #eee;text-align:center;'>"
+                f"<tr><td style='padding:8px;border-bottom:1px solid #eee;"
+                f"vertical-align:top;{WRAP_STYLE}'>"
+                f"{with_subline(_html.escape(item.name), _html.escape(cat_name))}</td>"
+                f"<td style='padding:8px;border-bottom:1px solid #eee;"
+                f"vertical-align:top;text-align:center;'>"
                 f"<strong style='color:#dc2626;'>{on_hand}</strong>"
                 f"<br><span style='color:#6b7280;font-size:11px;'>{source}</span></td>"
-                f"<td style='padding:6px 12px;border-bottom:1px solid #eee;text-align:center;'>"
+                f"<td style='padding:8px;border-bottom:1px solid #eee;"
+                f"vertical-align:top;text-align:center;'>"
                 f"{item.reorder_point}</td></tr>"
             )
 
@@ -4275,10 +4358,9 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             '<table style="width:100%;border-collapse:collapse;margin:16px 0;">'
             "<thead>"
             '<tr style="background:#f3f4f6;">'
-            '<th style="padding:8px 12px;text-align:left;">Item</th>'
-            '<th style="padding:8px 12px;text-align:left;">Category</th>'
-            '<th style="padding:8px 12px;text-align:center;">Current Qty</th>'
-            '<th style="padding:8px 12px;text-align:center;">Reorder Point</th>'
+            '<th style="padding:8px;text-align:left;">Item</th>'
+            '<th style="padding:8px;text-align:center;">Current Qty</th>'
+            '<th style="padding:8px;text-align:center;">Reorder Point</th>'
             "</tr></thead>"
             f"<tbody>{items_html}</tbody></table>"
         )
@@ -4534,7 +4616,7 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
             html_body = wrap_email_body(
                 org,
                 "Overdue Equipment",
-                f"<p>Hello {_html.escape(user_obj.first_name or 'Member')},</p>"
+                f"<p>Hello {_html.escape(user_obj.preferred_name or user_obj.first_name or 'Member')},</p>"
                 f"<p>The following items are overdue for return:</p>"
                 f'<ul style="margin:16px 0;">{items_list}</ul>'
                 f"<p>Please return these items as soon as possible.</p>",
@@ -4567,6 +4649,7 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
     Tiers: 180 days, 90 days, 30 days, past due.
     """
     from app.services.email_service import EmailService
+    from app.services.email_theme import WRAP_STYLE, with_subline
     from app.services.inventory_service import InventoryService
 
     async def process(db_session: AsyncSession, org: Organization) -> int:
@@ -4589,24 +4672,31 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
                 return ""
             rows = ""
             for it in items:
+                # The serial or asset tag rides under the item name; as its
+                # own column it pushed the table past a phone-width card.
+                ident = it.get("serial_number") or it.get("asset_tag")
                 rows += (
-                    f"<tr><td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
-                    f"{_html.escape(it['item_name'])}</td>"
-                    f"<td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
-                    f"{_html.escape(it.get('serial_number') or it.get('asset_tag') or 'N/A')}</td>"
-                    f"<td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
-                    f"{it['retirement_date']}</td>"
-                    f"<td style='padding:6px 12px;border-bottom:1px solid #eee;text-align:center;'>"
+                    f"<tr><td style='padding:8px;border-bottom:1px solid #eee;"
+                    f"vertical-align:top;{WRAP_STYLE}'>"
+                    + with_subline(
+                        _html.escape(it["item_name"]),
+                        _html.escape(str(ident)) if ident else "",
+                    )
+                    + "</td>"
+                    f"<td style='padding:8px;border-bottom:1px solid #eee;"
+                    f"vertical-align:top;white-space:nowrap;'>"
+                    f"{_html.escape(str(it['retirement_date']))}</td>"
+                    f"<td style='padding:8px;border-bottom:1px solid #eee;"
+                    f"vertical-align:top;text-align:center;'>"
                     f"<strong style='color:{color};'>{it['days_until_retirement']}d</strong></td></tr>"
                 )
             return f"""
                 <h3 style="color:{color};margin-top:16px;">{title} ({len(items)})</h3>
                 <table style="width:100%;border-collapse:collapse;margin:8px 0;">
                     <thead><tr style="background:#f3f4f6;">
-                        <th style="padding:8px 12px;text-align:left;">Item</th>
-                        <th style="padding:8px 12px;text-align:left;">ID</th>
-                        <th style="padding:8px 12px;text-align:left;">Retirement Date</th>
-                        <th style="padding:8px 12px;text-align:center;">Days</th>
+                        <th style="padding:8px;text-align:left;">Item</th>
+                        <th style="padding:8px;text-align:left;">Retires</th>
+                        <th style="padding:8px;text-align:center;">Days</th>
                     </tr></thead>
                     <tbody>{rows}</tbody>
                 </table>
@@ -4658,9 +4748,28 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
     return await _for_each_org(db, "nfpa_retirement_alerts", process)
 
 
+def _supply_summary(expiring: int, restock: int, shelf_lots: int) -> str:
+    """One clause per kind of row, naming only the kinds present.
+
+    Used for the subject, the opening line and the plain-text body, so the
+    three cannot drift apart. Example: "2 expiring on apparatus, 1 to restock
+    on apparatus, 3 stock lots expiring".
+    """
+    parts = []
+    if expiring:
+        parts.append(f"{expiring} expiring on apparatus")
+    if restock:
+        parts.append(f"{restock} to restock on apparatus")
+    if shelf_lots:
+        noun = "stock lot" if shelf_lots == 1 else "stock lots"
+        parts.append(f"{shelf_lots} {noun} expiring")
+    return ", ".join(parts)
+
+
 async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
     """
-    Alert supply officers about expiring supplies. Weekly on Mondays at 07:15.
+    Alert supply officers about supplies that need replacing. Weekly on Mondays
+    at 07:15.
 
     Covers both ends of the same shelf-to-truck loop: consumables deployed on
     apparatus (from the equipment-check templates) and the replacement lots
@@ -4679,17 +4788,45 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
 
     window_days = 30
 
+    # Three columns, not six: a phone gives the email about 300px of card, and
+    # six columns of headers alone overran it, pushing the stock count — the
+    # number the officer acts on — off the right edge. Where an item is and
+    # how long it has left ride as a second line under the item and the date.
     def _cell(content: str, extra: str = "") -> str:
         return (
-            f"<td style='padding:6px 12px;border-bottom:1px solid #eee;{extra}'>"
-            f"{content}</td>"
+            "<td style='padding:8px;border-bottom:1px solid #eee;"
+            f"vertical-align:top;{extra}'>{content}</td>"
+        )
+
+    def _th(label: str, align: str = "left") -> str:
+        return f'<th style="padding:8px;text-align:{align};">{label}</th>'
+
+    def _stacked(primary: str, secondary: str) -> str:
+        """*primary* over a smaller grey *secondary*; both already escaped."""
+        if not secondary:
+            return primary
+        return (
+            f"{primary}<br><span style='color:#6b7280;font-size:12px;'>"
+            f"{secondary}</span>"
         )
 
     def _days_label(days: Optional[int], color: str) -> str:
         if days is None:
-            return "&mdash;"
-        text = "expired" if days < 0 else f"{days}d"
+            return ""
+        text = "expired" if days < 0 else f"{days}d left"
         return f"<strong style='color:{color};'>{text}</strong>"
+
+    def _expires_cell(
+        expiration: Optional[date], days: Optional[int], color: str
+    ) -> str:
+        # The fallback is markup, so it is never passed through escape():
+        # doing so is what mailed a literal "&mdash;" for an undated row.
+        when = _html.escape(str(expiration)) if expiration else "&mdash;"
+        return _cell(_stacked(when, _days_label(days, color)), "white-space:nowrap;")
+
+    # Long unbroken names (a part number, a lot code) must wrap inside the
+    # cell rather than widen the table past the card.
+    _wrap = "word-break:break-word;overflow-wrap:anywhere;"
 
     async def process(db_session: AsyncSession, org: Organization) -> int:
         # One department-local date for every count in the email; the job runs
@@ -4726,25 +4863,77 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
         needs_reorder = [i for i in deployed if i.get("ready_stock", 0) <= 0]
         swap_ready = [i for i in deployed if i.get("ready_stock", 0) > 0]
 
+        # The overview returns more than expiring items: a crew's report that
+        # something was used or pulled, and a counted position below its
+        # target, belong on the same worklist but have no date to expire by.
+        # Calling the whole email "Expiring Supplies" told the officer a
+        # tourniquet was about to expire when a crew had reported it used, so
+        # the wording counts the two kinds separately.
+        def _is_expiring(item: dict) -> bool:
+            days = item.get("days_until_expiration")
+            return days is not None and days <= window_days
+
+        expiring_count = sum(1 for i in deployed if _is_expiring(i))
+        restock_count = len(deployed) - expiring_count
+
+        def _status_cell(item: dict, color: str) -> str:
+            """The date for an expiring row; for any other row, why it is here."""
+            if _is_expiring(item):
+                return _expires_cell(
+                    item.get("expiration_date"),
+                    item.get("days_until_expiration"),
+                    color,
+                )
+            if item.get("restock_needed"):
+                note = str(item.get("restock_note") or "").strip()
+                return _cell(
+                    _stacked(
+                        f"<strong style='color:{color};'>Restock reported</strong>",
+                        _html.escape(note),
+                    ),
+                    _wrap,
+                )
+            on_truck = item.get("quantity_on_truck")
+            target = item.get("target_quantity")
+            if item.get("is_short") and on_truck is not None and target is not None:
+                return _cell(
+                    f"<strong style='color:{color};'>Short</strong>"
+                    f"<br><span style='color:#6b7280;font-size:12px;'>"
+                    f"{on_truck} of {target} aboard</span>",
+                    "white-space:nowrap;",
+                )
+            # Shouldn't be reachable — every row the overview returns is one
+            # of the three — but a date (or a dash) is the honest fallback.
+            return _expires_cell(
+                item.get("expiration_date"),
+                item.get("days_until_expiration"),
+                color,
+            )
+
         def _deployed_section(title: str, rows: list, color: str, note: str) -> str:
             if not rows:
                 return ""
             body = ""
             for item in rows:
-                days = item.get("days_until_expiration")
+                location = " &middot; ".join(
+                    _html.escape(str(part))
+                    for part in (
+                        item.get("apparatus_name"),
+                        item.get("compartment_name"),
+                    )
+                    if part
+                )
                 body += (
                     "<tr>"
-                    + _cell(_html.escape(str(item.get("item_name") or "Unknown")))
-                    + _cell(_html.escape(str(item.get("apparatus_name") or "&mdash;")))
                     + _cell(
-                        _html.escape(str(item.get("compartment_name") or "&mdash;"))
+                        _stacked(
+                            _html.escape(str(item.get("item_name") or "Unknown")),
+                            location,
+                        ),
+                        _wrap,
                     )
-                    + _cell(_html.escape(str(item.get("expiration_date") or "&mdash;")))
-                    + _cell(_days_label(days, color), "text-align:center;")
-                    + _cell(
-                        str(item.get("ready_stock", 0)),
-                        "text-align:center;",
-                    )
+                    + _status_cell(item, color)
+                    + _cell(str(item.get("ready_stock", 0)), "text-align:center;")
                     + "</tr>"
                 )
             return f"""
@@ -4752,12 +4941,7 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                 <p style="color:#6b7280;font-size:13px;margin:4px 0;">{note}</p>
                 <table style="width:100%;border-collapse:collapse;margin:8px 0;">
                     <thead><tr style="background:#f3f4f6;">
-                        <th style="padding:8px 12px;text-align:left;">Item</th>
-                        <th style="padding:8px 12px;text-align:left;">Apparatus</th>
-                        <th style="padding:8px 12px;text-align:left;">Compartment</th>
-                        <th style="padding:8px 12px;text-align:left;">Expires</th>
-                        <th style="padding:8px 12px;text-align:center;">In</th>
-                        <th style="padding:8px 12px;text-align:center;">Ready stock</th>
+                        {_th("Item")}{_th("Status")}{_th("Ready stock", "center")}
                     </tr></thead>
                     <tbody>{body}</tbody>
                 </table>
@@ -4772,12 +4956,16 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                     (lot.expiration_date - today).days if lot.expiration_date else None
                 )
                 color = "#dc2626" if days is not None and days < 0 else "#ca8a04"
+                lot_label = (
+                    f"Lot {_html.escape(str(lot.lot_number))}" if lot.lot_number else ""
+                )
                 body += (
                     "<tr>"
-                    + _cell(_html.escape(item_name or "Unknown"))
-                    + _cell(_html.escape(lot.lot_number or "&mdash;"))
-                    + _cell(_html.escape(str(lot.expiration_date or "&mdash;")))
-                    + _cell(_days_label(days, color), "text-align:center;")
+                    + _cell(
+                        _stacked(_html.escape(item_name or "Unknown"), lot_label),
+                        _wrap,
+                    )
+                    + _expires_cell(lot.expiration_date, days, color)
                     + _cell(str(lot.quantity), "text-align:center;")
                     + "</tr>"
                 )
@@ -4791,11 +4979,7 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                 </p>
                 <table style="width:100%;border-collapse:collapse;margin:8px 0;">
                     <thead><tr style="background:#f3f4f6;">
-                        <th style="padding:8px 12px;text-align:left;">Item</th>
-                        <th style="padding:8px 12px;text-align:left;">Lot</th>
-                        <th style="padding:8px 12px;text-align:left;">Expires</th>
-                        <th style="padding:8px 12px;text-align:center;">In</th>
-                        <th style="padding:8px 12px;text-align:center;">Qty</th>
+                        {_th("Item")}{_th("Expires")}{_th("Qty", "center")}
                     </tr></thead>
                     <tbody>{body}</tbody>
                 </table>
@@ -4820,10 +5004,11 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
             if not emails or (not deployed and not rows):
                 continue
 
+            summary = _supply_summary(expiring_count, restock_count, len(rows))
             html_body = wrap_email_body(
                 org,
-                "Expiring Supplies",
-                f"<p>Supplies expiring within {window_days} days:</p>"
+                "Supplies to Replace",
+                f"<p>{_html.escape(summary)}.</p>"
                 + _deployed_section(
                     "On apparatus — no replacement stock",
                     needs_reorder,
@@ -4841,15 +5026,12 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
             )
             success_count, _ = await email_svc.send_email(
                 to_emails=emails,
-                subject=(
-                    f"Expiring Supplies — {len(deployed)} on apparatus, "
-                    f"{len(rows)} in stock"
-                ),
+                subject=f"Supplies to Replace — {summary}",
                 html_body=html_body,
                 text_body=(
-                    f"{len(deployed)} item(s) on apparatus and {len(rows)} "
-                    f"stock lot(s) expire within {window_days} days. "
-                    f"{len(needs_reorder)} have no replacement stock on hand."
+                    f"{summary} (expiring means within {window_days} days). "
+                    f"{len(needs_reorder)} on apparatus have no replacement "
+                    "stock on hand."
                 ),
             )
             sent_any = sent_any or success_count > 0
@@ -4962,6 +5144,9 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
         except Exception as e:
             logger.error(
                 f"Compliance auto-report failed for org {config.organization_id}: {e}"
+            )
+            await persist_task_error_log(
+                str(config.organization_id), "Compliance auto-report", e
             )
             try:
                 await db.rollback()
@@ -5107,7 +5292,7 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
 
                 for recipient in recipients:
                     prefs = recipient.notification_preferences or {}
-                    user_name = f"{recipient.first_name} {recipient.last_name}"
+                    user_name = recipient.display_name
 
                     # In-app notification
                     try:
@@ -5195,6 +5380,7 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
 
         except Exception as e:
             logger.error(f"Series end reminders failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), "Series end reminders", e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
@@ -6039,6 +6225,7 @@ async def run_event_request_reminders(db: AsyncSession) -> Dict[str, Any]:
                 results.append({"organization": str(org.id), "reminders": org_sent})
         except Exception as e:
             logger.warning("Event request reminders failed for org {}: {}", org.id, e)
+            await persist_task_error_log(str(org.id), "Event request reminders", e)
             try:
                 await db.rollback()
             except Exception:
@@ -6084,6 +6271,7 @@ async def run_officer_directory_sync(db: AsyncSession) -> Dict[str, Any]:
             synced += 1
         except Exception as e:
             logger.warning("Officer directory sync failed for org {}: {}", org_id, e)
+            await persist_task_error_log(str(org_id), "Officer directory sync", e)
             try:
                 await db.rollback()
             except Exception:
@@ -6184,6 +6372,7 @@ async def run_prospect_attendance_advance(db: AsyncSession) -> Dict[str, Any]:
             logger.warning(
                 "Prospect attendance advance failed for org {}: {}", org_id, e
             )
+            await persist_task_error_log(str(org_id), "Prospect attendance advance", e)
             try:
                 await db.rollback()
             except Exception:
@@ -6213,6 +6402,136 @@ async def run_admin_hours_auto_close(db: AsyncSession) -> Dict[str, Any]:
     if closed:
         logger.info("Admin-hours auto-close: {} stale session(s)", closed)
     return {"task": "admin_hours_auto_close", "closed": closed}
+
+
+# Days a session row is kept after its refresh token can no longer be used.
+# Long enough to answer "where was I signed in last month", short enough that
+# an IP address and browser string do not outlive the session by years
+# (owner decision AUTH-17, 2026-10-04).
+SESSION_RETENTION_DAYS_AFTER_REFRESH_EXPIRY = 30
+_SESSION_REAP_BATCH = 1000
+
+
+async def run_reap_expired_sessions(db: AsyncSession) -> Dict[str, Any]:
+    """Delete session rows well past the point anyone could use them.
+
+    A session ends quietly when its tokens lapse, and nothing deleted the
+    row: each one kept an IP address and user agent forever, one per sign-in
+    per device. A refresh token is issued at a rotation, which also sets
+    ``expires_at`` to that moment plus the access-token lifetime, so the
+    refresh token is dead by ``expires_at + REFRESH_TOKEN_EXPIRE_DAYS``. Rows
+    past that by the retention window go. Batched, because the first run on
+    an older installation can find years of rows on a table every request
+    reads.
+    """
+    from sqlalchemy import delete
+
+    from app.core.config import settings
+    from app.models.user import Session as UserSession
+
+    cutoff = datetime.now(timezone.utc) - timedelta(
+        days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+        + SESSION_RETENTION_DAYS_AFTER_REFRESH_EXPIRY
+    )
+    deleted = 0
+    while True:
+        ids = (
+            (
+                await db.execute(
+                    select(UserSession.id)
+                    .where(UserSession.expires_at < cutoff)
+                    .limit(_SESSION_REAP_BATCH)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if not ids:
+            break
+        await db.execute(delete(UserSession).where(UserSession.id.in_(ids)))
+        await db.commit()
+        deleted += len(ids)
+        if len(ids) < _SESSION_REAP_BATCH:
+            break
+    if deleted:
+        logger.info("Reaped {} expired session row(s)", deleted)
+    return {"task": "reap_expired_sessions", "deleted": deleted}
+
+
+async def run_notify_expired_passwords(db: AsyncSession) -> Dict[str, Any]:
+    """Tell each member whose password has expired, once, and start their grace.
+
+    AUTH-15: the API refuses an expired password
+    ``HIPAA_PASSWORD_EXPIRY_GRACE_DAYS`` after the member was told, so the
+    telling has to reach members who are not signing in. In-app and by email
+    (security notices are always sent). ``password_expiry_notified_at`` makes
+    it once per expiry: it is cleared when the password changes.
+    """
+    from app.core.config import settings
+    from app.models.user import UserStatus
+    from app.utils.password_expiry import password_change_deadline
+    from app.utils.security_notifications import notify_security_event
+
+    max_age_days = settings.HIPAA_MAXIMUM_PASSWORD_AGE_DAYS
+    if max_age_days <= 0:
+        return {"task": "notify_expired_passwords", "notified": 0}
+
+    now = datetime.now(timezone.utc)
+    expired_before = now - timedelta(days=max_age_days)
+    # Ids, not instances: a rollback after one member's failure expires every
+    # loaded object, and an async session cannot lazy-load them back.
+    pairs = (
+        await db.execute(
+            select(User.id, User.organization_id)
+            .join(Organization, Organization.id == User.organization_id)
+            .where(
+                Organization.active.isnot(False),
+                User.status == UserStatus.ACTIVE,
+                User.deleted_at.is_(None),
+                User.password_hash.is_not(None),
+                User.password_changed_at <= expired_before,
+                User.password_expiry_notified_at.is_(None),
+            )
+            .order_by(User.organization_id)
+        )
+    ).all()
+
+    notified = 0
+    for user_id, org_id in pairs:
+        try:
+            user = await db.get(User, user_id)
+            org = await db.get(Organization, org_id)
+            if user is None:
+                continue
+            user.password_expiry_notified_at = now
+            deadline = password_change_deadline(user)
+            when = (
+                f"{deadline:%B} {deadline.day}, {deadline.year}" if deadline else "soon"
+            )
+            await notify_security_event(
+                db,
+                user,
+                subject="Your password has expired",
+                message=(
+                    f"Your password is more than {max_age_days} days old. "
+                    f"Change it from your account settings by {when} (UTC); "
+                    "after that you will not be able to use The Logbook until "
+                    "you do."
+                ),
+                action_url="/account",
+                org=org,
+            )
+            # Committed per member, so a notice that went out is never sent
+            # again because a later one failed.
+            await db.commit()
+            notified += 1
+        except Exception as exc:
+            await db.rollback()
+            logger.error(f"Expired-password notice failed for user {user_id}: {exc}")
+
+    if notified:
+        logger.info("Sent {} expired-password notice(s)", notified)
+    return {"task": "notify_expired_passwords", "notified": notified}
 
 
 async def run_expire_ip_exceptions(db: AsyncSession) -> Dict[str, Any]:
@@ -6289,11 +6608,12 @@ async def run_salesforce_auto_sync(db: AsyncSession) -> Dict[str, Any]:
             integration.last_sync_at = datetime.now(dt_timezone.utc)
             await db.commit()
             synced += 1
-        except Exception:
+        except Exception as e:
             await db.rollback()
             logger.opt(exception=True).warning(
                 "Salesforce auto-sync failed for org {}", org_id
             )
+            await persist_task_error_log(str(org_id), "Salesforce auto-sync", e)
             failed += 1
 
     return {
@@ -6348,6 +6668,7 @@ TASK_RUNNERS = {
     "audit_log_archival": run_audit_log_archival,
     "audit_log_ship": run_audit_log_ship,
     "retention_enforcement": run_retention_enforcement,
+    "self_report_attachment_retention": run_self_report_attachment_retention,
     "scheduled_emails": run_scheduled_emails,
     "storefront_window_lifecycle": run_storefront_window_lifecycle,
     "storefront_payment_reminders": run_storefront_payment_reminders,
@@ -6369,6 +6690,8 @@ TASK_RUNNERS = {
     "mark_overdue_maintenance": run_mark_overdue_maintenance,
     "admin_hours_auto_close": run_admin_hours_auto_close,
     "expire_ip_exceptions": run_expire_ip_exceptions,
+    "reap_expired_sessions": run_reap_expired_sessions,
+    "notify_expired_passwords": run_notify_expired_passwords,
     "membership_inactivity_warnings": run_membership_inactivity_warnings,
     "shift_pattern_generation": run_shift_pattern_generation,
     "swap_offer_expiry": run_swap_offer_expiry,
@@ -6422,6 +6745,8 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "mark_overdue_maintenance": 86400,
     "admin_hours_auto_close": 1800,
     "expire_ip_exceptions": 86400,
+    "reap_expired_sessions": 86400,
+    "notify_expired_passwords": 86400,
     "membership_inactivity_warnings": 86400,
     "recert_resets": 86400,
     "enrollment_expiry": 86400,
@@ -6440,6 +6765,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "audit_log_ship": 1800,
     # Daily — org-configured records retention
     "retention_enforcement": 86400,
+    "self_report_attachment_retention": 86400,
     # Monthly (approx — 30 days)
     "membership_tier_advance": 2592000,
 }

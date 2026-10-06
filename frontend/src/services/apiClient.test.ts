@@ -135,6 +135,40 @@ describe('apiClient — 401 handling on auth-flow endpoints', () => {
     expect(seen).toHaveLength(2);
   });
 
+  it('retries with the new cookies when another tab won the refresh', async () => {
+    mockAxiosPost.mockRejectedValue(
+      Object.assign(new Error('Request failed with status code 409'), {
+        isAxiosError: true,
+        config: { url: '/auth/refresh' },
+        response: { status: 409, data: { detail: 'refreshed elsewhere', code: 'LB-AUTH-012' } },
+      })
+    );
+    const seen: InternalAxiosRequestConfig[] = [];
+    withAdapter(failThenOkAdapter(401, 1, seen));
+
+    const response = await api.get('/inventory');
+
+    expect(response.data).toEqual({ retried: true });
+    expect(seen).toHaveLength(2);
+    expect(mockPurgeLocalMemberData).not.toHaveBeenCalled();
+    expect(window.location.href).toBe('');
+  });
+
+  it('still signs out on any other 409 from the refresh', async () => {
+    mockAxiosPost.mockRejectedValue(
+      Object.assign(new Error('Request failed with status code 409'), {
+        isAxiosError: true,
+        config: { url: '/auth/refresh' },
+        response: { status: 409, data: { detail: 'something else' } },
+      })
+    );
+    withAdapter(failThenOkAdapter(401, 99, []));
+
+    await api.get('/inventory').catch(() => undefined);
+
+    expect(window.location.href).toBe('/login');
+  });
+
   it('purges local data and redirects when a protected-endpoint refresh fails', async () => {
     mockAxiosPost.mockRejectedValue(
       Object.assign(new Error('refresh failed'), {

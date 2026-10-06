@@ -37,7 +37,9 @@ export interface UserWithRoles {
   first_name?: string | undefined;
   middle_name?: string | undefined;
   last_name?: string | undefined;
+  preferred_name?: string | null | undefined;
   full_name?: string | undefined;
+  display_name?: string | undefined;
   membership_number?: string | undefined;
   phone?: string | undefined;
   mobile?: string | undefined;
@@ -45,6 +47,8 @@ export interface UserWithRoles {
   photo_url?: string | undefined;
   status: UserStatus;
   mfa_enabled?: boolean | undefined;
+  /** Set while a sign-in lockout is in force; sent to members.manage holders only. */
+  locked_until?: string | null | undefined;
   membership_type?: string | undefined;
   hire_date?: string | undefined;
   date_of_birth?: string | undefined;
@@ -85,7 +89,11 @@ export interface RoleUserItem {
   email: string;
   first_name?: string;
   last_name?: string;
+  preferred_name?: string | null;
+  /** Legal name (first + last). */
   full_name?: string;
+  /** Preferred (else first) + last name. */
+  display_name?: string;
   is_active: boolean;
 }
 

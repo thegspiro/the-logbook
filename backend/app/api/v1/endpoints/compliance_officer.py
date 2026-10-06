@@ -36,21 +36,21 @@ router = APIRouter()
 
 
 class AttestationCreate(BaseModel):
-    """Request body for creating a compliance attestation."""
+    """Request body for creating a compliance attestation.
+
+    Carries no percentage: the server computes the figure being attested
+    (CS-8). A ``compliance_percentage`` sent by an older client is ignored.
+    """
 
     period_type: str = Field(
         ..., description="Period type, e.g. 'annual' or 'quarterly'"
     )
-    period_year: int = Field(..., description="Year of the attestation period")
+    period_year: int = Field(
+        ..., ge=2000, le=2100, description="Year of the attestation period"
+    )
     period_quarter: Optional[int] = Field(
         None,
         description="Quarter number (1-4) if period_type is quarterly",
-    )
-    compliance_percentage: float = Field(
-        ...,
-        ge=0,
-        le=100,
-        description="Overall compliance percentage",
     )
     notes: str = Field("", description="Additional notes or observations")
     areas_reviewed: List[str] = Field(
@@ -188,10 +188,12 @@ async def export_annual_report(
 
         members = report.get("member_compliance", [])
         for member in members:
+            # None for a member nothing grades (status "not_applicable").
+            pct = member.get("compliance_pct")
             writer.writerow(
                 [
                     member.get("name", ""),
-                    member.get("compliance_pct", 0),
+                    "N/A" if pct is None else pct,
                     member.get("hours_completed", 0),
                     member.get("admin_hours_approved", 0),
                     member.get("total_contributed_hours", 0),

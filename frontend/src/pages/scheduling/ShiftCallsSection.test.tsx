@@ -13,6 +13,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const mockGetShiftCalls = vi.fn();
 const mockCreateCall = vi.fn();
@@ -25,6 +26,17 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     createCall: (...a: unknown[]) => mockCreateCall(...a) as unknown,
     updateCall: (...a: unknown[]) => mockUpdateCall(...a) as unknown,
     deleteCall: (...a: unknown[]) => mockDeleteCall(...a) as unknown,
+    getFeatureSettings: () =>
+      Promise.resolve({
+        call_tracking: {
+          mode: 'detailed',
+          call_types: [
+            { slug: 'fire', label: 'Fire', active: true },
+            { slug: 'mva', label: 'Motor Vehicle Accident', active: true },
+            { slug: 'brush', label: 'Brush Fire', active: false },
+          ],
+        },
+      }),
   },
 }));
 
@@ -113,5 +125,44 @@ describe('ShiftCallsSection', () => {
       expect(screen.queryByRole('button', { name: /log call/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /remove call/i })).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('ShiftCallsSection — the incident type comes from the department list', () => {
+  beforeEach(() => {
+    mockGetShiftCalls.mockReset();
+    mockGetShiftCalls.mockResolvedValue([]);
+    mockCreateCall.mockReset();
+    mockCreateCall.mockResolvedValue({ ...call, incident_type: 'Motor Vehicle Accident' });
+  });
+
+  it('offers the active types and stores the chosen label', async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await screen.findByRole('button', { name: /log call/i }));
+
+    const select = screen.getByLabelText(/Incident Type/);
+    expect(await screen.findByRole('option', { name: 'Motor Vehicle Accident' })).toBeInTheDocument();
+    // Retired: not offered for a new call.
+    expect(screen.queryByRole('option', { name: 'Brush Fire' })).not.toBeInTheDocument();
+
+    await user.selectOptions(select, 'Motor Vehicle Accident');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => {
+      expect(mockCreateCall).toHaveBeenCalledWith(
+        'shift-1',
+        expect.objectContaining({ incident_type: 'Motor Vehicle Accident' })
+      );
+    });
+  });
+
+  it('keeps the wording of a call logged before the picker when editing it', async () => {
+    mockGetShiftCalls.mockResolvedValue([call]);
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await screen.findByRole('button', { name: /edit call/i }));
+
+    expect(screen.getByLabelText(/Incident Type/)).toHaveValue('structure fire');
   });
 });

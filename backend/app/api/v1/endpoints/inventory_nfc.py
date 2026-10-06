@@ -856,7 +856,7 @@ async def resolve_inventory_nfc_member(
                 refusal, "This card belongs to a member who is not currently active."
             ),
         )
-    name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+    name = user.display_name
     return InventoryNfcMemberResponse(
         user_id=str(user.id),
         member_name=name or user.username,

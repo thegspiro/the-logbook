@@ -160,14 +160,16 @@ const ShiftReportPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div data-page-main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+      <div data-page-main className="mx-auto max-w-4xl py-8">
         {/* Header */}
         <div className="mb-6 flex items-center space-x-4">
           <button
+            type="button"
             onClick={() => void navigate('/training/officer')}
-            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded-lg p-2"
+            aria-label="Back to Training Dashboard"
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface btn-icon"
           >
-            <ArrowLeft className="h-5 w-5" />
+            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
           </button>
           <div className="flex-1">
             <h1 className="text-theme-text-primary flex items-center space-x-2 text-2xl font-bold">
@@ -201,10 +203,15 @@ const ShiftReportPage: React.FC = () => {
         )}
 
         {/* Tabs */}
-        <div className="bg-theme-surface hscroll mb-6 flex space-x-1 rounded-lg p-1">
+        <div
+          className="bg-theme-surface hscroll mb-6 flex space-x-1 rounded-lg p-1"
+          role="group"
+          aria-label="Shift report views"
+          data-mobile-scroll-region
+        >
           <button
             onClick={() => setActiveTab('new')}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            className={`touch:min-h-11 flex-1 rounded-md px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
               activeTab === 'new'
                 ? 'bg-red-800 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
@@ -214,7 +221,7 @@ const ShiftReportPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('filed')}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            className={`touch:min-h-11 flex-1 rounded-md px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
               activeTab === 'filed'
                 ? 'bg-red-800 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
@@ -224,7 +231,7 @@ const ShiftReportPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('received')}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            className={`touch:min-h-11 flex-1 rounded-md px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
               activeTab === 'received'
                 ? 'bg-red-800 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'

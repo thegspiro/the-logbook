@@ -10,6 +10,7 @@
 
 import { useEffect, useState } from 'react';
 import { roleService, userService } from '../../../services/api';
+import { displayNameOf } from '../../../utils/memberName';
 
 export interface ApproverOption {
   value: string;
@@ -47,7 +48,7 @@ export function useApproverOptions(): ApproverOptions {
               ? users.value
                   .map((u) => ({
                     value: u.id,
-                    label: u.full_name || [u.first_name, u.last_name].filter(Boolean).join(' ').trim() || u.username,
+                    label: displayNameOf(u) || u.username,
                   }))
                   .sort(byLabel)
               : null,

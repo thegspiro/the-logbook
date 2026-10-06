@@ -205,7 +205,20 @@ passes) recorded is intact:
   uses `copy.deepcopy(organization.settings or {})` before mutating the
   nested `"legal"` key.
 
-### DOC-30 — LOW — The MCP surface's own folder-ACL scan is the same unbounded shape as DOC-9's open half — 🚩 flagged, not fixed
+### DOC-30 — LOW — The MCP surface's own folder-ACL scan is the same unbounded shape as DOC-9's open half — ✅ fixed 2026-10-05
+
+> **✅ Fixed 2026-10-05 (DOC-9's open half and DOC-30 together).** Neither
+> scan loads every folder any more. `restricted_folders_query` selects only
+> the folders carrying a restriction of their own (non-organization
+> visibility, an owner, allowed roles or required permissions; JSON `null` and
+> empty lists count as none), those are judged in Python by the same
+> per-folder rule as before (`_folder_admits_user` for a member,
+> `_folder_is_open` for the MCP key), and `reachable_folder_ids` walks the
+> tree in SQL with a recursive CTE from the org's roots, stopping at each
+> folder that turns the caller away. Missing, cross-organization and cyclic
+> ancestry stay unreachable, so they still fail closed. An integration test
+> checks the result equals the per-folder `can_access_folder` walk for five
+> callers over a tree with every restriction, a foreign parent and a cycle.
 
 **What:** `app/mcp/tools/documents.py`'s `_open_folder_ids` selects and
 materializes **every `DocumentFolder` row in the organization** with no
@@ -365,7 +378,20 @@ existence checks as locking reads — the same Pitfall #27 shape
 already-filed reports, and states its own irreversibility — restoring the
 disclosure — in the downgrade). Sound; not re-implemented here.
 
-### DOC-9 — MED — `get_folders` unbounded and N+1 — 🩹 partially fixed (external work, credited); the ACL scan behind it is still unbounded
+### DOC-9 — MED — `get_folders` unbounded and N+1 — ✅ fixed (N+1 by external work, the ACL scan 2026-10-05)
+
+> **✅ Fixed 2026-10-05 (DOC-9's open half and DOC-30 together).** Neither
+> scan loads every folder any more. `restricted_folders_query` selects only
+> the folders carrying a restriction of their own (non-organization
+> visibility, an owner, allowed roles or required permissions; JSON `null` and
+> empty lists count as none), those are judged in Python by the same
+> per-folder rule as before (`_folder_admits_user` for a member,
+> `_folder_is_open` for the MCP key), and `reachable_folder_ids` walks the
+> tree in SQL with a recursive CTE from the org's roots, stopping at each
+> folder that turns the caller away. Missing, cross-organization and cyclic
+> ancestry stay unreachable, so they still fail closed. An integration test
+> checks the result equals the per-folder `can_access_folder` walk for five
+> callers over a tree with every restriction, a foreign parent and a cycle.
 
 Previously flagged (pass 1) and re-verified still open as recently as pass 3. As of this pass the N+1-per-folder part is fixed — not by this rotation,
 but as a byproduct of the facilities concurrency work described above,

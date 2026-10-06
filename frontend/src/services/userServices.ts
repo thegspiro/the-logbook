@@ -127,6 +127,7 @@ export const userService = {
     first_name: string;
     middle_name?: string | undefined;
     last_name: string;
+    preferred_name?: string | undefined;
     membership_number?: string | undefined;
     phone?: string | undefined;
     mobile?: string | undefined;
@@ -185,6 +186,15 @@ export const userService = {
    */
   async adminResetMfa(userId: string): Promise<{ message: string }> {
     const response = await api.post<{ message: string }>(`/users/${userId}/reset-mfa`);
+    return response.data;
+  },
+
+  /**
+   * Lift a sign-in lockout before it expires (members.manage). Clears the
+   * failed-attempt count with it.
+   */
+  async adminUnlockAccount(userId: string): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>(`/users/${userId}/unlock`);
     return response.data;
   },
 

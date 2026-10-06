@@ -1387,7 +1387,24 @@ zero-row count.
 (static, asserts `TrackingType.POOL` no longer appears in
 `_deactivation_block_reason`'s source).
 
-### MSUP-25 — LOW/MED, flagged (not fixed this pass) — every other medical-domain write shares retire_item's original preflight-then-mutate TOCTOU shape
+### MSUP-25 — LOW/MED, ✅ FIXED 2026-10-05 — every other medical-domain write shares retire_item's original preflight-then-mutate TOCTOU shape
+
+> **Fixed 2026-10-05 (owner chose the per-method under-lock recheck).**
+> `InventoryService._items_in_domain_locked` generalizes `retire_item`'s
+> recheck: it locks the item rows (id order) so `category_id` cannot move,
+> then reads each category with `category_in_domain(..., for_update=True)`.
+> `update_item` (which now always locks for a domain caller, and also
+> rechecks a target `category_id`), `add_lot`, `add_lots_bulk` (raises
+> `ItemOutsideDomainError`, mapped to the route's 404, and receives nothing),
+> `update_lot` and `delete_lot` take `required_item_types`, and every
+> medical-supplies write route passes `MEDICAL_ITEM_TYPES`. Callers that pass
+> nothing are unchanged. The maintenance-completion bypass is closed too:
+> `create_maintenance_record` and `update_maintenance_record` refuse a
+> `condition_after` of RETIRED with the same message `update_item` gives,
+> and the maintenance form no longer offers it. Tests:
+> `tests/test_medical_supply_domain_under_lock.py`,
+> `tests/test_medical_supplies_domain.py::TestEveryWriteRechecksUnderTheLock`,
+> `InventoryMaintenancePage.test.tsx`.
 
 **What:** `update_medical_item`, `add_medical_item_lot`,
 `receive_medical_delivery`, `update_medical_lot`, and `delete_medical_lot`

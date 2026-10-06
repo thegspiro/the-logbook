@@ -484,3 +484,71 @@ describe('Members roster — archived members', () => {
     });
   });
 });
+
+describe('Members roster — ID card officer (members.manage_id_cards only)', () => {
+  // The officer who issues ID credentials selects members to print their
+  // badges and cards, but does not thereby gain the roster CSV export.
+  beforeEach(() => installDefaults(['members.manage_id_cards']));
+
+  it('can select members and print badges or ID cards, but not export them', async () => {
+    const user = userEvent.setup();
+    await renderRoster();
+
+    await user.click(screen.getByLabelText('Select Laura Adams'));
+
+    expect(screen.getByRole('button', { name: /Print Badges/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Export/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Print ID Cards/i }));
+    expect(mockNavigate).toHaveBeenCalledWith(expect.stringMatching(/^\/members\/print-id-cards\?ids=/));
+  });
+});
+
+describe('Members roster — bulk bar for members.manage', () => {
+  beforeEach(() => installDefaults(['members.manage']));
+
+  it('offers ID cards alongside badges and the selected-member export', async () => {
+    const user = userEvent.setup();
+    await renderRoster();
+
+    await user.click(screen.getByLabelText('Select Laura Adams'));
+
+    expect(screen.getByRole('button', { name: /Print ID Cards/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Export Selected/i })).toBeInTheDocument();
+  });
+});
+
+describe('Members roster — preferred names', () => {
+  const terry = makeMember({
+    id: 'u4',
+    username: 'jheather',
+    email: 'jh@example.org',
+    first_name: 'John',
+    last_name: 'Heather',
+    preferred_name: 'Terry',
+    membership_number: '044',
+  });
+
+  beforeEach(() => {
+    installDefaults([]);
+    mockGetUsers.mockResolvedValue([...ROSTER, terry]);
+  });
+
+  it('lists a member by the name they go by, avatar included', async () => {
+    await renderRoster();
+
+    const row = within(table()).getByRole('row', { name: /Terry Heather/ });
+    expect(within(table()).queryByText('John Heather')).not.toBeInTheDocument();
+    expect(within(row).getByRole('img', { name: 'Terry Heather' })).toHaveTextContent('TH');
+  });
+
+  it.each([['Terry'], ['John']])('finds the member by "%s"', async (query) => {
+    const user = userEvent.setup();
+    await renderRoster();
+
+    await user.type(screen.getByLabelText(/search by name/i), query);
+
+    expect(await within(table()).findByText('Terry Heather')).toBeInTheDocument();
+    expect(within(table()).queryByText('Laura Adams')).not.toBeInTheDocument();
+  });
+});

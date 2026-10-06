@@ -2205,6 +2205,7 @@ app.add_middleware(
         "X-Captcha-Token",
         "X-CSRF-Token",
         "X-Session-ID",
+        "Idempotency-Key",
         "Accept",
         "Origin",
     ],

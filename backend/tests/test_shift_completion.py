@@ -1583,3 +1583,711 @@ class TestCallCountAutoPopulation:
         assert result["created"] == 2
         assert by_trainee[d["crew_1"]].calls_responded == 2
         assert by_trainee[d["crew_2"]].calls_responded == 1
+
+
+class TestNoSelfReports:
+    """A member never files a shift report about themselves."""
+
+    async def test_single_report_about_yourself_is_refused(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        svc = ShiftCompletionService(db_session)
+        with pytest.raises(ValueError, match="about yourself"):
+            await svc.create_report(
+                organization_id=uuid.UUID(d["org_id"]),
+                officer_id=uuid.UUID(d["officer_id"]),
+                trainee_id=d["officer_id"],
+                shift_date=d["shift_date"],
+                hours_on_shift=12.0,
+                shift_id=d["shift_id"],
+            )
+
+    async def test_batch_skips_the_author_and_files_the_rest(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        svc = ShiftCompletionService(db_session)
+        result = await svc.batch_create_reports(
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=uuid.UUID(d["officer_id"]),
+            shift_id=d["shift_id"],
+            shift_date=d["shift_date"],
+            hours_on_shift=12.0,
+            calls_responded=0,
+            call_types=None,
+            officer_narrative=None,
+            crew_member_ids=[d["officer_id"], d["crew_1"]],
+            trainee_evaluations=None,
+        )
+        assert result["created"] == 1
+        assert result["skipped"] == 1
+        trainees = (
+            (
+                await db_session.execute(
+                    text(
+                        "SELECT trainee_id FROM shift_completion_reports "
+                        "WHERE shift_id = :sid"
+                    ),
+                    {"sid": d["shift_id"]},
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert trainees == [d["crew_1"]]
+
+    async def _draft_for_training_slot(self, db_session, d, finalized_by):
+        from app.services.scheduling_service import SchedulingService
+
+        await db_session.execute(
+            text(
+                "UPDATE shift_assignments SET is_training = 1 "
+                "WHERE shift_id = :sid AND user_id = :uid"
+            ),
+            {"sid": d["shift_id"], "uid": d["crew_1"]},
+        )
+        await db_session.flush()
+        shift = SimpleNamespace(
+            id=d["shift_id"],
+            shift_date=d["shift_date"],
+            start_time=None,
+            end_time=None,
+        )
+        return await SchedulingService(db_session)._create_draft_reports_for_trainees(
+            shift=shift,
+            organization_id=uuid.UUID(d["org_id"]),
+            finalized_by_user_id=finalized_by,
+        )
+
+    async def test_finalize_drafts_a_report_for_someone_elses_trainee_slot(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        assert await self._draft_for_training_slot(db_session, d, d["officer_id"]) == 1
+
+    async def test_finalize_skips_a_trainee_who_closed_out_their_own_shift(
+        self, db_session, setup_shift_with_crew
+    ):
+        # With no evaluator named on the slot the draft would be attributed to
+        # the finalizer — the trainee themselves.
+        d = setup_shift_with_crew
+        assert await self._draft_for_training_slot(db_session, d, d["crew_1"]) == 0
+
+
+class TestOfficerAnalyticsScope:
+    """ "Written by me" covers the caller's reports; department covers all."""
+
+    async def _file(self, svc, d, officer_id, trainee_id, shift_date, hours):
+        await svc.create_report(
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=uuid.UUID(officer_id),
+            trainee_id=trainee_id,
+            shift_date=shift_date,
+            hours_on_shift=hours,
+        )
+
+    async def test_scoped_to_the_officer_who_filed(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        svc = ShiftCompletionService(db_session)
+        today = date.today()
+        await self._file(svc, d, d["officer_id"], d["crew_1"], today, 12.0)
+        # crew_1 files one about crew_2: someone else's report.
+        await self._file(svc, d, d["crew_1"], d["crew_2"], today, 6.0)
+
+        mine = await svc.get_officer_analytics(
+            uuid.UUID(d["org_id"]), officer_id=d["officer_id"]
+        )
+        department = await svc.get_officer_analytics(uuid.UUID(d["org_id"]))
+
+        assert mine["total_reports"] == 1
+        assert mine["total_hours"] == 12.0
+        assert [t["trainee_id"] for t in mine["trainees"]] == [d["crew_1"]]
+        assert department["total_reports"] == 2
+        assert department["total_hours"] == 18.0
+
+    async def test_trainees_are_named_by_preferred_name(
+        self, db_session, setup_shift_with_crew
+    ):
+        """The per-trainee summary groups by the name columns it selects, so
+        ``preferred_name`` must be in the GROUP BY or MySQL's
+        ONLY_FULL_GROUP_BY rejects the query."""
+        d = setup_shift_with_crew
+        await db_session.execute(
+            text(
+                "UPDATE users SET first_name = 'John', last_name = 'Heather', "
+                "preferred_name = 'Terry' WHERE id = :id"
+            ),
+            {"id": d["crew_1"]},
+        )
+        svc = ShiftCompletionService(db_session)
+        today = date.today()
+        await self._file(svc, d, d["officer_id"], d["crew_1"], today, 12.0)
+        await self._file(svc, d, d["officer_id"], d["crew_1"], today, 6.0)
+        await self._file(svc, d, d["officer_id"], d["crew_2"], today, 4.0)
+
+        analytics = await svc.get_officer_analytics(uuid.UUID(d["org_id"]))
+
+        by_id = {t["trainee_id"]: t for t in analytics["trainees"]}
+        assert by_id[d["crew_1"]]["name"] == "Terry Heather"
+        assert by_id[d["crew_1"]]["reports"] == 2
+        assert by_id[d["crew_2"]]["name"] != "Terry Heather"
+
+        crew = await svc.get_shift_crew_status(uuid.UUID(d["org_id"]), d["shift_id"])
+        names = {m["user_id"]: m["user_name"] for m in crew}
+        assert names[d["crew_1"]] == "Terry Heather"
+
+    async def test_monthly_trend_keeps_the_latest_six_months(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        svc = ShiftCompletionService(db_session)
+        first = date.today().replace(day=1)
+        for back in range(8):
+            month = first
+            for _ in range(back):
+                month = (month - timedelta(days=1)).replace(day=1)
+            await self._file(svc, d, d["officer_id"], d["crew_1"], month, 1.0)
+
+        months = [
+            m["month"]
+            for m in (await svc.get_officer_analytics(uuid.UUID(d["org_id"])))[
+                "monthly"
+            ]
+        ]
+        assert len(months) == 6
+        assert months == sorted(months)
+        # Ascending-then-LIMIT kept the oldest six and dropped this month.
+        assert months[-1] == first.strftime("%Y-%m")
+
+
+class TestPerMemberCalls:
+    """The crew list previews each member's calls; the batch stores them, or
+    the officer's correction."""
+
+    async def _log_calls(self, db_session, d, responders_per_call):
+        from app.models.training import ShiftCall
+
+        for responders in responders_per_call:
+            db_session.add(
+                ShiftCall(
+                    shift_id=d["shift_id"],
+                    organization_id=d["org_id"],
+                    incident_type="medical",
+                    responding_members=responders,
+                )
+            )
+        await db_session.flush()
+
+    async def test_crew_status_previews_each_members_derived_calls(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        await self._log_calls(
+            db_session, d, [[d["crew_1"], d["crew_2"]], [d["crew_1"]]]
+        )
+        svc = ShiftCompletionService(db_session)
+        crew = {
+            m["user_id"]: m
+            for m in await svc.get_shift_crew_status(
+                uuid.UUID(d["org_id"]), d["shift_id"]
+            )
+        }
+        assert crew[d["crew_1"]]["calls_responded"] == 2
+        assert crew[d["crew_2"]]["calls_responded"] == 1
+        assert crew[d["crew_1"]]["calls_source"] == "call_log"
+
+    async def _batch(self, svc, d, member_call_counts):
+        return await svc.batch_create_reports(
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=uuid.UUID(d["officer_id"]),
+            shift_id=d["shift_id"],
+            shift_date=d["shift_date"],
+            hours_on_shift=12.0,
+            calls_responded=0,
+            call_types=None,
+            officer_narrative=None,
+            crew_member_ids=[d["crew_1"], d["crew_2"]],
+            trainee_evaluations=None,
+            member_call_counts=member_call_counts,
+        )
+
+    async def _stored(self, db_session, d):
+        rows = (
+            await db_session.execute(
+                text(
+                    "SELECT trainee_id, calls_responded, call_types "
+                    "FROM shift_completion_reports WHERE shift_id = :sid"
+                ),
+                {"sid": d["shift_id"]},
+            )
+        ).all()
+        return {
+            r.trainee_id: (
+                r.calls_responded,
+                (
+                    json.loads(r.call_types)
+                    if isinstance(r.call_types, str)
+                    else r.call_types
+                ),
+            )
+            for r in rows
+        }
+
+    async def test_batch_stores_the_previewed_figures_when_untouched(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        await self._log_calls(
+            db_session, d, [[d["crew_1"], d["crew_2"]], [d["crew_1"]]]
+        )
+        svc = ShiftCompletionService(db_session)
+        await self._batch(svc, d, None)
+        stored = await self._stored(db_session, d)
+        assert stored[d["crew_1"]] == (2, ["medical", "medical"])
+        assert stored[d["crew_2"]] == (1, ["medical"])
+
+    async def test_batch_applies_a_correction_to_that_member_only(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        await self._log_calls(
+            db_session, d, [[d["crew_1"], d["crew_2"]], [d["crew_1"]]]
+        )
+        svc = ShiftCompletionService(db_session)
+        await self._batch(svc, d, {d["crew_2"]: 0})
+        stored = await self._stored(db_session, d)
+        assert stored[d["crew_1"]] == (2, ["medical", "medical"])
+        # Lowered by the officer: the count is theirs, and the derived types
+        # no longer describe it, so none are kept.
+        assert stored[d["crew_2"]] == (0, [])
+
+    async def test_a_correction_equal_to_the_derived_figure_changes_nothing(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        await self._log_calls(db_session, d, [[d["crew_1"]]])
+        svc = ShiftCompletionService(db_session)
+        await self._batch(svc, d, {d["crew_1"]: 1})
+        stored = await self._stored(db_session, d)
+        assert stored[d["crew_1"]] == (1, ["medical"])
+
+
+class TestShiftOfficerAuthorship:
+    """settings.shift_reports.authorship = "shift_officer": only the shift's
+    assigned officer files its reports."""
+
+    async def _set(self, db_session, d, shift_reports):
+        await db_session.execute(
+            text("UPDATE organizations SET settings = :s WHERE id = :id"),
+            {"s": json.dumps({"shift_reports": shift_reports}), "id": d["org_id"]},
+        )
+        await db_session.flush()
+
+    async def _single(self, svc, d, author, trainee):
+        return await svc.create_report(
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=uuid.UUID(author),
+            trainee_id=trainee,
+            shift_date=d["shift_date"],
+            hours_on_shift=12.0,
+            shift_id=d["shift_id"],
+        )
+
+    async def test_absent_setting_keeps_the_original_rule(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        svc = ShiftCompletionService(db_session)
+        # crew_1 is not the shift officer, and may file under the default.
+        assert await self._single(svc, d, d["crew_1"], d["crew_2"])
+
+    async def test_malformed_setting_degrades_to_the_original_rule(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        await self._set(db_session, d, "not-a-dict")
+        svc = ShiftCompletionService(db_session)
+        assert await self._single(svc, d, d["crew_1"], d["crew_2"])
+
+    async def test_the_shift_officer_may_file(self, db_session, setup_shift_with_crew):
+        d = setup_shift_with_crew
+        await self._set(db_session, d, {"authorship": "shift_officer"})
+        svc = ShiftCompletionService(db_session)
+        assert await self._single(svc, d, d["officer_id"], d["crew_1"])
+
+    async def test_another_officer_may_not(self, db_session, setup_shift_with_crew):
+        d = setup_shift_with_crew
+        await self._set(db_session, d, {"authorship": "shift_officer"})
+        svc = ShiftCompletionService(db_session)
+        with pytest.raises(ValueError, match="filed by that shift's officer"):
+            await self._single(svc, d, d["crew_1"], d["crew_2"])
+
+    async def test_a_shift_with_no_officer_says_so(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        await self._set(db_session, d, {"authorship": "shift_officer"})
+        await db_session.execute(
+            text("UPDATE shifts SET shift_officer_id = NULL WHERE id = :id"),
+            {"id": d["shift_id"]},
+        )
+        svc = ShiftCompletionService(db_session)
+        with pytest.raises(ValueError, match="none assigned"):
+            await self._single(svc, d, d["officer_id"], d["crew_1"])
+
+    async def test_a_batch_by_another_officer_is_refused_outright(
+        self, db_session, setup_shift_with_crew
+    ):
+        # Not "skipped" row by row: the officer needs to be told why.
+        d = setup_shift_with_crew
+        await self._set(db_session, d, {"authorship": "shift_officer"})
+        svc = ShiftCompletionService(db_session)
+        with pytest.raises(ValueError, match="filed by that shift's officer"):
+            await svc.batch_create_reports(
+                organization_id=uuid.UUID(d["org_id"]),
+                officer_id=uuid.UUID(d["crew_1"]),
+                shift_id=d["shift_id"],
+                shift_date=d["shift_date"],
+                hours_on_shift=12.0,
+                calls_responded=0,
+                call_types=None,
+                officer_narrative=None,
+                crew_member_ids=[d["crew_2"]],
+                trainee_evaluations=None,
+            )
+
+    async def _drafts(self, db_session, d, finalized_by):
+        from app.services.scheduling_service import SchedulingService
+
+        await db_session.execute(
+            text(
+                "UPDATE shift_assignments SET is_training = 1, "
+                "training_evaluator_id = :ev WHERE shift_id = :sid AND user_id = :uid"
+            ),
+            {"sid": d["shift_id"], "uid": d["crew_1"], "ev": d["crew_2"]},
+        )
+        officer = (
+            await db_session.execute(
+                text("SELECT shift_officer_id FROM shifts WHERE id = :id"),
+                {"id": d["shift_id"]},
+            )
+        ).scalar()
+        shift = SimpleNamespace(
+            id=d["shift_id"],
+            shift_date=d["shift_date"],
+            start_time=None,
+            end_time=None,
+            shift_officer_id=officer,
+        )
+        return await SchedulingService(db_session)._create_draft_reports_for_trainees(
+            shift=shift,
+            organization_id=uuid.UUID(d["org_id"]),
+            finalized_by_user_id=finalized_by,
+        )
+
+    async def test_finalize_drafts_belong_to_the_shift_officer(
+        self, db_session, setup_shift_with_crew
+    ):
+        # Not the slot's evaluator (crew_2), not the finalizer (crew_2): only
+        # the shift officer may complete a draft under this rule.
+        d = setup_shift_with_crew
+        await self._set(db_session, d, {"authorship": "shift_officer"})
+        assert await self._drafts(db_session, d, d["crew_2"]) == 1
+        author = (
+            await db_session.execute(
+                text(
+                    "SELECT officer_id FROM shift_completion_reports "
+                    "WHERE shift_id = :sid"
+                ),
+                {"sid": d["shift_id"]},
+            )
+        ).scalar()
+        assert author == d["officer_id"]
+
+    async def test_finalize_drafts_nothing_without_a_shift_officer(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        await self._set(db_session, d, {"authorship": "shift_officer"})
+        await db_session.execute(
+            text("UPDATE shifts SET shift_officer_id = NULL WHERE id = :id"),
+            {"id": d["shift_id"]},
+        )
+        assert await self._drafts(db_session, d, d["crew_2"]) == 0
+
+
+class TestCallTypesNamedByRequirements:
+    """A type a requirement counts is locked against deletion, matched by type
+    — slug, label, or legacy text — and only within the department."""
+
+    async def _requirement(self, db_session, org_id, types):
+        from app.models.training import (
+            RequirementFrequency,
+            RequirementType,
+            TrainingRequirement,
+        )
+
+        db_session.add(
+            TrainingRequirement(
+                organization_id=org_id,
+                name=f"Calls {types}",
+                requirement_type=RequirementType.CALLS,
+                frequency=RequirementFrequency.ANNUAL,
+                required_calls=5,
+                required_call_types=types,
+            )
+        )
+        await db_session.flush()
+
+    async def test_slug_and_label_both_lock_the_type(
+        self, db_session, setup_shift_with_crew
+    ):
+        from app.services.call_tracking_service import CallTrackingService
+
+        d = setup_shift_with_crew
+        await self._requirement(db_session, d["org_id"], ["mva"])
+        await self._requirement(db_session, d["org_id"], ["Fire"])
+        named = await CallTrackingService(db_session).slugs_named_by_requirements(
+            d["org_id"], {"mva", "fire", "ems", "hazmat"}
+        )
+        assert named == {"mva", "fire"}
+
+    async def test_another_departments_requirement_does_not_lock(
+        self, db_session, two_orgs
+    ):
+        from app.services.call_tracking_service import CallTrackingService
+
+        org_a, org_b = two_orgs["org_a"], two_orgs["org_b"]
+        await self._requirement(db_session, org_b, ["hazmat"])
+        named = await CallTrackingService(db_session).slugs_named_by_requirements(
+            org_a, {"hazmat"}
+        )
+        assert named == set()
+
+
+class TestTypeSpecificCallCredit:
+    """A requirement counts the calls of its type however the report spelled
+    them. Exact string matching credited a slug requirement nothing from a
+    report holding the type's label."""
+
+    async def test_slug_requirement_credits_label_calls(
+        self, db_session, setup_training_org
+    ):
+        from app.models.training import (
+            ProgramEnrollment,
+            ProgramRequirement,
+            RequirementFrequency,
+            RequirementProgress,
+            RequirementType,
+            TrainingProgram,
+            TrainingRequirement,
+        )
+
+        org_id, officer_id, trainee_id = setup_training_org
+        program = TrainingProgram(organization_id=org_id, name="Driver")
+        requirement = TrainingRequirement(
+            organization_id=org_id,
+            name="MVA responses",
+            requirement_type=RequirementType.CALLS,
+            frequency=RequirementFrequency.ONE_TIME,
+            required_calls=10,
+            required_call_types=["mva"],
+        )
+        db_session.add_all([program, requirement])
+        await db_session.flush()
+        enrollment = ProgramEnrollment(
+            organization_id=org_id, user_id=trainee_id, program_id=program.id
+        )
+        db_session.add_all(
+            [
+                enrollment,
+                ProgramRequirement(
+                    program_id=program.id, requirement_id=requirement.id
+                ),
+            ]
+        )
+        await db_session.flush()
+        progress = RequirementProgress(
+            enrollment_id=enrollment.id, requirement_id=requirement.id
+        )
+        db_session.add(progress)
+        await db_session.flush()
+
+        svc = ShiftCompletionService(db_session)
+        await svc.create_report(
+            organization_id=uuid.UUID(org_id),
+            officer_id=uuid.UUID(officer_id),
+            trainee_id=trainee_id,
+            shift_date=date.today(),
+            hours_on_shift=12.0,
+            calls_responded=3,
+            # The built-in list labels mva "Motor Vehicle Accident".
+            call_types=["Motor Vehicle Accident", "Fire", "motor vehicle accident"],
+        )
+        await db_session.refresh(progress)
+        assert progress.progress_value == 2
+
+
+class TestShiftOfficerFilesWithoutTrainingManage:
+    """The assigned Shift Officer files and completes their own shift's
+    reports without training.manage — and gets nothing beyond that shift."""
+
+    @staticmethod
+    def _user(user_id, org_id, *permissions):
+        return SimpleNamespace(
+            id=user_id,
+            organization_id=org_id,
+            username=f"u-{user_id[:6]}",
+            positions=[SimpleNamespace(permissions=list(permissions))],
+            rank=None,
+        )
+
+    async def test_officer_may_load_the_crew_and_file(
+        self, db_session, setup_shift_with_crew
+    ):
+        from app.api.v1.endpoints import shift_completion as ep
+        from app.schemas.shift_completion import BatchShiftReportCreate
+
+        d = setup_shift_with_crew
+        officer = self._user(d["officer_id"], d["org_id"])  # no permissions
+        crew = await ep.get_shift_crew_status(
+            d["shift_id"], db=db_session, current_user=officer
+        )
+        assert {m["user_id"] for m in crew} >= {d["crew_1"], d["crew_2"]}
+
+        result = await ep.batch_create_shift_reports(
+            BatchShiftReportCreate(
+                shift_id=d["shift_id"],
+                shift_date=d["shift_date"],
+                hours_on_shift=12.0,
+                crew_member_ids=[d["crew_1"]],
+            ),
+            db=db_session,
+            current_user=officer,
+        )
+        assert result["created"] == 1
+
+    async def test_another_crew_member_is_refused(
+        self, db_session, setup_shift_with_crew
+    ):
+        from fastapi import HTTPException
+
+        from app.api.v1.endpoints import shift_completion as ep
+
+        d = setup_shift_with_crew
+        member = self._user(d["crew_1"], d["org_id"])
+        with pytest.raises(HTTPException) as exc:
+            await ep.get_shift_crew_status(
+                d["shift_id"], db=db_session, current_user=member
+            )
+        assert exc.value.status_code == 403
+
+    async def test_officer_of_one_shift_gets_nothing_unlinked(
+        self, db_session, setup_shift_with_crew
+    ):
+        from fastapi import HTTPException
+
+        from app.api.v1.endpoints import shift_completion as ep
+        from app.schemas.shift_completion import ShiftCompletionReportCreate
+
+        d = setup_shift_with_crew
+        officer = self._user(d["officer_id"], d["org_id"])
+        with pytest.raises(HTTPException) as exc:
+            await ep.create_shift_report(
+                ShiftCompletionReportCreate(
+                    trainee_id=d["crew_1"],
+                    shift_date=d["shift_date"],
+                    hours_on_shift=4.0,
+                ),
+                db=db_session,
+                current_user=officer,
+            )
+        assert exc.value.status_code == 403
+
+    async def test_a_shift_id_from_another_department_never_matches(
+        self, db_session, setup_shift_with_crew
+    ):
+        from fastapi import HTTPException
+
+        from app.api.v1.endpoints import shift_completion as ep
+
+        d = setup_shift_with_crew
+        # Same user id, but presenting as a member of a different org.
+        outsider = self._user(d["officer_id"], str(uuid.uuid4()))
+        with pytest.raises(HTTPException) as exc:
+            await ep.get_shift_crew_status(
+                d["shift_id"], db=db_session, current_user=outsider
+            )
+        assert exc.value.status_code == 403
+
+    async def test_drafts_list_shows_only_their_own(
+        self, db_session, setup_shift_with_crew
+    ):
+        from app.api.v1.endpoints import shift_completion as ep
+
+        d = setup_shift_with_crew
+        svc = ShiftCompletionService(db_session)
+        for author, trainee in (
+            (d["officer_id"], d["crew_1"]),
+            (d["crew_1"], d["crew_2"]),
+        ):
+            await svc.create_report(
+                organization_id=uuid.UUID(d["org_id"]),
+                officer_id=uuid.UUID(author),
+                trainee_id=trainee,
+                shift_date=d["shift_date"],
+                hours_on_shift=12.0,
+                shift_id=d["shift_id"],
+                review_status="draft",
+            )
+        officer = self._user(d["officer_id"], d["org_id"])
+        drafts = await ep.get_draft_reports(db=db_session, current_user=officer)
+        assert [r.officer_id for r in drafts] == [d["officer_id"]]
+
+        manager = self._user(d["crew_2"], d["org_id"], "training.manage")
+        assert len(await ep.get_draft_reports(db=db_session, current_user=manager)) == 2
+
+    async def test_officer_completes_their_draft_but_not_one_off_their_shift(
+        self, db_session, setup_shift_with_crew
+    ):
+        from fastapi import HTTPException
+
+        from app.api.v1.endpoints import shift_completion as ep
+        from app.schemas.shift_completion import ShiftCompletionReportUpdate
+
+        d = setup_shift_with_crew
+        svc = ShiftCompletionService(db_session)
+        draft = await svc.create_report(
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=uuid.UUID(d["officer_id"]),
+            trainee_id=d["crew_1"],
+            shift_date=d["shift_date"],
+            hours_on_shift=12.0,
+            shift_id=d["shift_id"],
+            review_status="draft",
+        )
+        officer = self._user(d["officer_id"], d["org_id"])
+        updated = await ep.update_shift_report(
+            str(draft.id),
+            ShiftCompletionReportUpdate(officer_narrative="Solid first tour"),
+            db=db_session,
+            current_user=officer,
+        )
+        assert updated.officer_narrative == "Solid first tour"
+
+        # The officer seat moves on: the draft is no longer theirs to touch.
+        await db_session.execute(
+            text("UPDATE shifts SET shift_officer_id = :o WHERE id = :id"),
+            {"o": d["crew_2"], "id": d["shift_id"]},
+        )
+        with pytest.raises(HTTPException) as exc:
+            await ep.update_shift_report(
+                str(draft.id),
+                ShiftCompletionReportUpdate(officer_narrative="edit"),
+                db=db_session,
+                current_user=officer,
+            )
+        assert exc.value.status_code == 403

@@ -19,12 +19,12 @@ import type { CountryBlockRuleCreate } from '../types';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 
 // `btn-md` rather than a hand-typed box: it carries the phone-only 44px
-// minimum these tabs were missing (they rendered 36px tall), and blue-800
-// matches the fill `btn-info` uses — white on blue-600 is 5.17:1, which clears
-// AA and misses the 7:1 the rest of the palette holds to.
+// minimum these tabs were missing (they rendered 36px tall). The selected fill
+// is the primary red-800 every other segmented control uses, which also holds
+// the 7:1 the palette is held to — white on blue-600 measured only 5.17:1.
 const tabClass = (active: boolean) =>
   `btn-md font-medium transition-colors ${
-    active ? 'bg-blue-800 text-white' : 'text-theme-text-secondary hover:bg-theme-surface-hover'
+    active ? 'bg-red-800 text-white' : 'text-theme-text-secondary hover:bg-theme-surface-hover'
   }`;
 
 const inputClass = 'form-input';
@@ -282,7 +282,7 @@ const IPSecurityAdminPage: React.FC = () => {
               <div className="border-theme-surface-border flex items-center justify-end border-b px-4 py-3">
                 <button
                   onClick={() => setCountryModal(true)}
-                  className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                  className="flex items-center gap-2 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-900"
                 >
                   <Plus className="h-4 w-4" />
                   Add Country
@@ -509,7 +509,7 @@ const IPSecurityAdminPage: React.FC = () => {
                   void handleAddCountry();
                 }}
                 disabled={isSaving || !newCountry.countryCode.trim() || !newCountry.reason.trim()}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                className="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-50"
               >
                 {isSaving ? 'Adding...' : 'Add Country'}
               </button>

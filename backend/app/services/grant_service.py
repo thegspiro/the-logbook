@@ -1228,20 +1228,28 @@ class GrantService:
         )
         applications = list(result.scalars().unique().all())
 
-        total_requested = sum(float(a.amount_requested or 0) for a in applications)
+        # Money is summed as Decimal and converted once, at the end: a float
+        # running total drifts by fractions of a cent over many rows (GF-9).
+        total_requested = sum(
+            (Decimal(a.amount_requested or 0) for a in applications), Decimal(0)
+        )
         total_awarded = sum(
-            float(a.amount_awarded or 0)
-            for a in applications
-            if a.application_status
-            in (
-                ApplicationStatus.AWARDED,
-                ApplicationStatus.ACTIVE,
-                ApplicationStatus.REPORTING,
-                ApplicationStatus.CLOSED,
-            )
+            (
+                Decimal(a.amount_awarded or 0)
+                for a in applications
+                if a.application_status
+                in (
+                    ApplicationStatus.AWARDED,
+                    ApplicationStatus.ACTIVE,
+                    ApplicationStatus.REPORTING,
+                    ApplicationStatus.CLOSED,
+                )
+            ),
+            Decimal(0),
         )
         total_spent = sum(
-            sum(float(e.amount) for e in a.expenditures) for a in applications
+            (Decimal(e.amount or 0) for a in applications for e in a.expenditures),
+            Decimal(0),
         )
 
         awarded_count = sum(
@@ -1279,7 +1287,7 @@ class GrantService:
         )
 
         # Spending by budget category
-        spending_by_category: Dict[str, float] = {}
+        spending_by_category: Dict[str, Decimal] = {}
         for a in applications:
             for item in a.budget_items:
                 cat = (
@@ -1287,15 +1295,15 @@ class GrantService:
                     if hasattr(item.category, "value")
                     else item.category
                 )
-                spending_by_category[cat] = spending_by_category.get(cat, 0) + float(
-                    item.amount_spent or 0
-                )
+                spending_by_category[cat] = spending_by_category.get(
+                    cat, Decimal(0)
+                ) + Decimal(item.amount_spent or 0)
 
         return {
             "total_applications": len(applications),
-            "total_requested": total_requested,
-            "total_awarded": total_awarded,
-            "total_spent": total_spent,
+            "total_requested": float(total_requested),
+            "total_awarded": float(total_awarded),
+            "total_spent": float(total_spent),
             "success_rate": round(success_rate, 1),
             "awarded_count": awarded_count,
             "denied_count": denied_count,
@@ -1305,5 +1313,7 @@ class GrantService:
                 "overdue": tasks_overdue,
                 "pending": tasks_pending,
             },
-            "spending_by_category": spending_by_category,
+            "spending_by_category": {
+                cat: float(amount) for cat, amount in spending_by_category.items()
+            },
         }

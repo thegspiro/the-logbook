@@ -7,8 +7,11 @@
  * inventory operation (e.g. open the InventoryScanModal).
  *
  * Supported inputs:
- *   - QR code  — JSON payload `{ type: "member_id", id, membership_number?, org? }`
- *   - Code128 barcode — plain membership number string
+ *   - A badge (QR or Code128). What the camera reads goes to
+ *     POST /member-badges/resolve, which decides on the server, inside the
+ *     caller's department, who it names. The modal used to match in the
+ *     browser and, for a QR naming an id it could not find, handed that id
+ *     straight to the caller — so a hand-made QR could book gear to anyone.
  *   - An NFC ID card tapped on the phone (`MemberCardTap`), where the
  *     department has the cards and inventory NFC switched on
  *
@@ -18,16 +21,14 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { ScanLine, Camera, CameraOff, AlertCircle, Loader2, X, Flashlight, FlashlightOff } from 'lucide-react';
-import { inventoryService, type MemberInventorySummary } from '../services/api';
+import { memberBadgeService } from '../services/memberBadgeService';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useHtml5Scanner } from '../hooks/useHtml5Scanner';
 import { useScanFeedback } from '../hooks/useScanFeedback';
 import { ScanSuccessFlash } from './ux/ScanSuccessFlash';
-import { isMemberIdPayload } from '../types/scanner';
 import { describeCameraError, QR_SCAN_CONFIG } from '../constants/camera';
 import { useOverlaySurface } from '../hooks/useOverlaySurface';
 import { MemberCardTap } from './MemberCardTap';
-import { matchesMemberBadgeCode } from '../utils/memberBadgeCode';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -51,7 +52,6 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({ isOp
   const [error, setError] = useState<string | null>(null);
   const [lookingUp, setLookingUp] = useState(false);
   const handledRef = useRef(false);
-  const membersRef = useRef<MemberInventorySummary[] | null>(null);
   const { flashing, signalScanSuccess } = useScanFeedback();
 
   /** Resolve a scanned value to a member. */
@@ -65,49 +65,17 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({ isOp
       setError(null);
 
       try {
-        let parsed: unknown = null;
-        try {
-          parsed = JSON.parse(decoded);
-        } catch {
-          // Not JSON — treat as plain membership number
-        }
-
-        if (isMemberIdPayload(parsed)) {
-          if (!membersRef.current) {
-            const data = await inventoryService.getMembersSummary();
-            membersRef.current = data.members;
-          }
-          const match = membersRef.current.find((m) => m.user_id === parsed.id);
-          if (match) {
-            onMemberIdentified({
-              userId: match.user_id,
-              memberName: match.full_name || match.username,
-            });
-            return;
-          }
-          onMemberIdentified({
-            userId: parsed.id,
-            memberName: parsed.membership_number ?? 'Member',
-          });
-          return;
-        }
-
-        if (!membersRef.current) {
-          const data = await inventoryService.getMembersSummary();
-          membersRef.current = data.members;
-        }
-        const match = membersRef.current.find((m) =>
-          matchesMemberBadgeCode(decoded, { id: m.user_id, membership_number: m.membership_number })
-        );
-
-        if (match) {
-          onMemberIdentified({
-            userId: match.user_id,
-            memberName: match.full_name || match.username,
-          });
-        } else {
+        const match = await memberBadgeService.resolve(decoded);
+        if (!match) {
           setError(`No member found for "${decoded}"`);
           handledRef.current = false;
+        } else if (!match.is_active) {
+          // Gear is issued to active members only, as the member picker's own
+          // list already is.
+          setError(`${match.name} is not an active member`);
+          handledRef.current = false;
+        } else {
+          onMemberIdentified({ userId: match.user_id, memberName: match.name });
         }
       } catch (err: unknown) {
         setError(getErrorMessage(err, 'Member lookup failed'));
@@ -159,7 +127,6 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({ isOp
       setError(null);
       setLookingUp(false);
       handledRef.current = false;
-      membersRef.current = null;
     }
   }, [isOpen, stopScanner]);
 

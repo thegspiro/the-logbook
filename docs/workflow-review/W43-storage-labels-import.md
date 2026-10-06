@@ -61,6 +61,10 @@ CSV now reports "Row 6: Quantity cannot be negative: '-3'", and the list stays 2
 **Flagged:** an installation that already imported such a row has a broken
 Items page now. Repairing stored negative values is a data migration, so it is
 left to the owner. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+**Resolved 2026-10-05 (owner decision):** migration `7d2e4f6a8b13` sets any
+negative value in the eight columns the item response bounds at zero to 0, and
+logs each affected item id under `alembic.runtime.migration` so the right
+figure can be entered.
 
 ### W43-2 — MED — Deleting a storage area that still held items hid where those items are — ✅ FIXED
 

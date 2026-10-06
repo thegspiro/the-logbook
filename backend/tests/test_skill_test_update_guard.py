@@ -159,3 +159,52 @@ class TestOfficerControlledFields:
         # Only the offending field is named.
         assert "expected_version" not in str(exc.value.detail)
         assert not db.committed
+
+
+class TestOutcomeIsNotSavedDirectly:
+    """SKT4-7: a save cannot set the outcome; finishing the test computes it."""
+
+    @pytest.mark.parametrize(
+        "fields",
+        [
+            {"status": "completed"},
+            {"status": "draft"},
+            {"result": "pass"},
+            {"overall_score": 100},
+            {"status": "completed", "result": "pass", "overall_score": 100},
+        ],
+    )
+    async def test_an_outcome_field_is_refused(self, fields):
+        db = StubSession(_completed_test(status="in_progress"))
+
+        with pytest.raises(HTTPException) as exc:
+            await update_test(
+                test_id=TEST_ID,
+                test_update=SkillTestUpdate(**fields),
+                db=db,
+                current_user=_examiner(),
+            )
+
+        assert exc.value.status_code == 400
+        for field in fields:
+            assert field in str(exc.value.detail)
+        assert not db.committed
+
+    async def test_starting_a_draft_is_still_a_save(self, monkeypatch):
+        """The examiner screen sends status="in_progress" to start a draft."""
+        monkeypatch.setattr(
+            "app.api.v1.endpoints.skills_testing._build_test_response",
+            lambda test, *args, **kwargs: test,
+        )
+        test = _completed_test(status="draft", template_id=str(uuid4()))
+        db = StubSession(test)
+
+        saved = await update_test(
+            test_id=TEST_ID,
+            test_update=SkillTestUpdate(status="in_progress"),
+            db=db,
+            current_user=_examiner(),
+        )
+
+        assert db.committed
+        assert saved.status == "in_progress"

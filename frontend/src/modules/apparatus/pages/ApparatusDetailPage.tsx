@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
-import { Truck, Wrench, Fuel, Users, Package, FileText, AlertTriangle, Info } from 'lucide-react';
+import { Truck, Wrench, Fuel, Users, Package, FileText, AlertTriangle, Info, Shield } from 'lucide-react';
 import { useApparatusStore } from '../store/apparatusStore';
 import { ApparatusDetailHeader } from '../components/ApparatusDetailHeader';
 import { ApparatusOverviewTab } from '../components/ApparatusOverviewTab';
@@ -16,6 +16,8 @@ import { FuelLogsTab } from '../components/FuelLogsTab';
 import { OperatorsTab } from '../components/OperatorsTab';
 import { EquipmentTab } from '../components/EquipmentTab';
 import { DocumentsTab } from '../components/DocumentsTab';
+import { NfpaComplianceTab } from '../components/NfpaComplianceTab';
+import { useApparatusNfpaSettings } from '../hooks/useApparatusNfpaSettings';
 import type { ApparatusMaintenance, ApparatusFuelLog, ApparatusOperator, ApparatusEquipment } from '../types';
 import {
   apparatusMaintenanceService,
@@ -26,7 +28,7 @@ import {
 import { useTimezone } from '../../../hooks/useTimezone';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 
-type TabType = 'overview' | 'maintenance' | 'fuel' | 'operators' | 'equipment' | 'documents';
+type TabType = 'overview' | 'maintenance' | 'fuel' | 'operators' | 'equipment' | 'documents' | 'nfpa';
 
 export const ApparatusDetailPage: React.FC = () => {
   const navigate = useNavigate();
@@ -41,6 +43,7 @@ export const ApparatusDetailPage: React.FC = () => {
   const [loadingTab, setLoadingTab] = useState(false);
 
   const tz = useTimezone();
+  const { enabled: nfpaEnabled } = useApparatusNfpaSettings();
 
   const { currentApparatus, types, statuses, isLoading, error, fetchApparatus, fetchTypes, fetchStatuses, clearError } =
     useApparatusStore();
@@ -56,7 +59,8 @@ export const ApparatusDetailPage: React.FC = () => {
   const loadTabData = useCallback(
     async (tab: TabType) => {
       if (!id || !currentApparatus) return;
-      if (tab === 'overview' || tab === 'documents') return;
+      // Overview, Documents and NFPA load their own data.
+      if (tab === 'overview' || tab === 'documents' || tab === 'nfpa') return;
 
       setLoadingTab(true);
       try {
@@ -151,6 +155,12 @@ export const ApparatusDetailPage: React.FC = () => {
     { id: 'equipment', label: 'Equipment', icon: <Package className="h-4 w-4" /> },
     { id: 'documents', label: 'Documents', icon: <FileText className="h-4 w-4" /> },
   ];
+  // Only for a department that tracks NFPA compliance, on an apparatus with
+  // tracking turned on.
+  const showNfpa = nfpaEnabled && currentApparatus.nfpaTrackingEnabled;
+  if (showNfpa) {
+    tabs.push({ id: 'nfpa', label: 'NFPA', icon: <Shield className="h-4 w-4" /> });
+  }
 
   return (
     <div className="min-h-screen">
@@ -209,7 +219,13 @@ export const ApparatusDetailPage: React.FC = () => {
       {/* Tab Content */}
       <div data-page-main className="mx-auto max-w-7xl px-6 py-6">
         {activeTab === 'overview' && (
-          <ApparatusOverviewTab currentApparatus={currentApparatus} apparatusType={apparatusType} timezone={tz} />
+          <ApparatusOverviewTab
+            currentApparatus={currentApparatus}
+            apparatusType={apparatusType}
+            timezone={tz}
+            nfpaEnabled={nfpaEnabled}
+            onOpenNfpa={() => handleTabChange('nfpa')}
+          />
         )}
 
         {activeTab === 'maintenance' && (
@@ -252,6 +268,14 @@ export const ApparatusDetailPage: React.FC = () => {
         )}
 
         {activeTab === 'documents' && <DocumentsTab id={id || ''} />}
+
+        {activeTab === 'nfpa' && showNfpa && (
+          <NfpaComplianceTab
+            apparatusId={id || ''}
+            timezone={tz}
+            onOpenMaintenance={() => handleTabChange('maintenance')}
+          />
+        )}
       </div>
     </div>
   );

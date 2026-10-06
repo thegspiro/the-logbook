@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import { MemberIdCardPage } from './MemberIdCardPage';
@@ -18,6 +18,16 @@ vi.mock('../services/api', () => ({
 // The card being opened and what the viewer holds; the viewer is user-123.
 let routeUserId = 'user-123';
 let grantedPermissions: string[] = [];
+
+const BADGE = 'MB-23456789AB';
+const mockGetBadge = vi.fn();
+const mockReissue = vi.fn();
+vi.mock('../services/memberBadgeService', () => ({
+  memberBadgeService: {
+    getBadge: (...args: unknown[]) => mockGetBadge(...args) as unknown,
+    reissue: (...args: unknown[]) => mockReissue(...args) as unknown,
+  },
+}));
 
 // Mock react-router
 vi.mock('react-router', async () => {
@@ -144,6 +154,9 @@ describe('MemberIdCardPage', () => {
     vi.clearAllMocks();
     routeUserId = 'user-123';
     grantedPermissions = [];
+    mockGetBadge.mockReset();
+    mockGetBadge.mockImplementation((id: string) => Promise.resolve({ user_id: id, badge_code: BADGE }));
+    mockReissue.mockReset();
   });
 
   describe('Loading State', () => {
@@ -196,6 +209,22 @@ describe('MemberIdCardPage', () => {
       await waitFor(() => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
       });
+    });
+
+    it('shows the name the member goes by, and its initial', async () => {
+      vi.mocked(userService.getUserWithRoles).mockResolvedValue({
+        ...mockMember,
+        preferred_name: 'Terry',
+        display_name: 'Terry Doe',
+      } as never);
+
+      renderWithRouter(<MemberIdCardPage />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: 'Terry Doe' })).toBeInTheDocument();
+      });
+      expect(screen.queryByText('John Doe')).not.toBeInTheDocument();
+      expect(screen.getByText('T')).toBeInTheDocument();
     });
 
     it('should display membership number', async () => {
@@ -265,21 +294,13 @@ describe('MemberIdCardPage', () => {
       });
     });
 
-    it('should display QR code with member data', async () => {
+    it('encodes the server-issued badge code in the QR, never the member id', async () => {
       renderWithRouter(<MemberIdCardPage />);
 
-      await waitFor(() => {
-        const qrCode = screen.getByTestId('qr-code');
-        expect(qrCode).toBeInTheDocument();
-
-        const qrValue = JSON.parse(qrCode.getAttribute('data-value') ?? '{}') as Record<string, unknown>;
-        expect(qrValue).toEqual({
-          type: 'member_id',
-          id: 'user-123',
-          membership_number: 'FD-0042',
-          org: 'org-456',
-        });
-      });
+      const qrCode = await screen.findByTestId('qr-code');
+      expect(qrCode).toHaveAttribute('data-value', BADGE);
+      expect(qrCode.getAttribute('data-value')).not.toContain('user-123');
+      expect(mockGetBadge).toHaveBeenCalledWith('user-123');
     });
 
     it('should display "Member ID" header label', async () => {
@@ -314,25 +335,25 @@ describe('MemberIdCardPage', () => {
       });
     });
 
-    it('should render barcode container when membership number exists', async () => {
+    it('renders the barcode from the badge code, not the membership number', async () => {
+      const { default: JsBarcode } = await import('jsbarcode');
       renderWithRouter(<MemberIdCardPage />);
 
-      await waitFor(() => {
-        expect(screen.getByTestId('barcode-container')).toBeInTheDocument();
-        expect(screen.getByTestId('barcode')).toBeInTheDocument();
-      });
+      expect(await screen.findByTestId('barcode-container')).toBeInTheDocument();
+      expect(screen.getByTestId('barcode')).toBeInTheDocument();
+      expect(screen.getByTestId('badge-code')).toHaveTextContent(BADGE);
+      expect(vi.mocked(JsBarcode)).toHaveBeenCalledWith(expect.anything(), BADGE, expect.any(Object));
+      expect(vi.mocked(JsBarcode)).not.toHaveBeenCalledWith(expect.anything(), 'FD-0042', expect.anything());
     });
 
-    it('should not render barcode when membership number is absent', async () => {
+    it('still renders a scannable badge for a member without a membership number', async () => {
       const memberNoNumber = { ...mockMember, membership_number: undefined };
       vi.mocked(userService.getUserWithRoles).mockResolvedValue(memberNoNumber as never);
 
       renderWithRouter(<MemberIdCardPage />);
 
-      await waitFor(() => {
-        expect(screen.getByText('John Doe')).toBeInTheDocument();
-      });
-      expect(screen.queryByTestId('barcode-container')).not.toBeInTheDocument();
+      expect(await screen.findByTestId('barcode-container')).toBeInTheDocument();
+      expect(screen.queryByText('Membership #')).not.toBeInTheDocument();
     });
 
     it('should show photo when available', async () => {
@@ -490,6 +511,7 @@ describe('MemberIdCardPage', () => {
       expect(screen.queryByTestId('qr-code')).not.toBeInTheDocument();
       expect(screen.queryByTestId('barcode-container')).not.toBeInTheDocument();
       expect(userService.getUserWithRoles).not.toHaveBeenCalled();
+      expect(mockGetBadge).not.toHaveBeenCalled();
     });
 
     it.each(['members.manage', 'members.manage_id_cards'])('shows the card to a holder of %s', async (permission) => {
@@ -498,6 +520,48 @@ describe('MemberIdCardPage', () => {
 
       expect(await screen.findByTestId('qr-code')).toBeInTheDocument();
       expect(userService.getUserWithRoles).toHaveBeenCalledWith('someone-else');
+    });
+  });
+  describe('Reissuing a badge', () => {
+    beforeEach(() => {
+      vi.mocked(userService.getUserWithRoles).mockReset();
+      vi.mocked(userService.getUserWithRoles).mockResolvedValue(mockMember as never);
+      vi.mocked(organizationService.getProfile).mockReset();
+      vi.mocked(organizationService.getProfile).mockResolvedValue(mockOrg);
+      mockReissue.mockResolvedValue({ user_id: 'user-123', badge_code: 'MB-ZZZZZZZZZZ' });
+    });
+
+    it('is not offered to a member viewing their own card', async () => {
+      renderWithRouter(<MemberIdCardPage />);
+
+      await screen.findByTestId('barcode-container');
+      expect(screen.queryByRole('button', { name: /Reissue badge/ })).not.toBeInTheDocument();
+    });
+
+    it('lets a badge officer replace the code after confirming', async () => {
+      grantedPermissions = ['members.manage_id_cards'];
+      const user = userEvent.setup();
+      renderWithRouter(<MemberIdCardPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Reissue badge/ }));
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: 'Reissue badge' }));
+
+      expect(mockReissue).toHaveBeenCalledWith('user-123');
+      expect(await screen.findByTestId('badge-code')).toHaveTextContent('MB-ZZZZZZZZZZ');
+      expect(screen.getByTestId('qr-code')).toHaveAttribute('data-value', 'MB-ZZZZZZZZZZ');
+    });
+
+    it('keeps the current code when the officer backs out', async () => {
+      grantedPermissions = ['members.manage'];
+      const user = userEvent.setup();
+      renderWithRouter(<MemberIdCardPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Reissue badge/ }));
+      await user.click(await screen.findByRole('button', { name: 'Keep current badge' }));
+
+      expect(mockReissue).not.toHaveBeenCalled();
+      expect(screen.getByTestId('badge-code')).toHaveTextContent(BADGE);
     });
   });
 });

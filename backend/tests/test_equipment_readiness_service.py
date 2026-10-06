@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from app.models.user import User
 from app.services.equipment_readiness_service import (
     READY_ATTENTION,
     READY_IN_SERVICE,
@@ -847,7 +848,11 @@ class TestSummary:
 
 class TestUserNameResolution:
     async def test_names_filled_for_apparatus_and_entries(self, service, mock_db):
-        user = SimpleNamespace(id="u1", first_name="Kelly", last_name="Moreno")
+        # The readiness board is an everyday screen: the checker appears under
+        # the name they go by, not their legal first name.
+        user = User(
+            id="u1", first_name="Katherine", last_name="Moreno", preferred_name="Kelly"
+        )
         mock_db.execute.return_value = SimpleNamespace(
             scalars=lambda: SimpleNamespace(all=lambda: [user])
         )
@@ -863,3 +868,48 @@ class TestUserNameResolution:
         payload = {"apparatus": [{"last_check_by": None}], "entries": []}
         await service.resolve_user_names(payload)
         mock_db.execute.assert_not_awaited()
+
+
+class TestTypeCodeMatching:
+    """Type-level checklists are keyed on the apparatus type *code*. The fleet
+    used the lowercased display name, so a multi-word type such as
+    "Ladder/Aerial" (code ``ladder``) read as having no checklist here while
+    shifts on it were offered one."""
+
+    def _apparatus(self, apparatus_id, code, name):
+        return SimpleNamespace(
+            id=apparatus_id,
+            unit_number=apparatus_id.upper(),
+            name=None,
+            apparatus_type=SimpleNamespace(code=code, name=name),
+            status_reason=None,
+        )
+
+    async def test_fleet_keys_type_on_the_code(self, service, mock_db):
+        ladder = self._apparatus("l1", "ladder", "Ladder/Aerial")
+        status = SimpleNamespace(name="In Service", is_available=True)
+        result = SimpleNamespace(all=lambda: [(ladder, status)])
+        mock_db.execute = AsyncMock(return_value=result)
+
+        fleet = await service._load_fleet("org-1")
+
+        assert fleet["l1"].type_slug == "ladder"
+
+    async def test_apparatus_with_checklists_by_id_type_and_none(self, service):
+        ladder = self._apparatus("l1", "ladder", "Ladder/Aerial")
+        rescue = self._apparatus("r1", "rescue", "Heavy Rescue")
+        brush = self._apparatus("b1", "brush", "Brush")
+        ladder_list = SimpleNamespace(apparatus_id=None, apparatus_type="ladder")
+        rescue_list = SimpleNamespace(apparatus_id="r1", apparatus_type=None)
+        with patch.object(
+            service,
+            "_load_templates",
+            AsyncMock(
+                return_value=({"r1": [rescue_list]}, {"ladder": [ladder_list]}, {})
+            ),
+        ):
+            reached = await service.apparatus_with_checklists(
+                "org-1", [ladder, rescue, brush]
+            )
+
+        assert reached == {"l1", "r1"}

@@ -731,7 +731,7 @@ export default function ComplianceRequirementsConfigPage() {
             <button
               onClick={() => void handleSaveConfig()}
               disabled={isSaving}
-              className="flex min-h-11 items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              className="flex min-h-11 items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
             >
               <Save className="h-4 w-4" />
               {isSaving ? 'Saving...' : 'Save Configuration'}
@@ -753,7 +753,7 @@ export default function ComplianceRequirementsConfigPage() {
                   resetProfileForm();
                   setShowProfileForm(true);
                 }}
-                className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                className="flex items-center gap-2 rounded-lg bg-red-800 px-3 py-2 text-sm font-medium text-white hover:bg-red-900"
               >
                 <Plus className="h-4 w-4" />
                 Add Profile
@@ -1046,7 +1046,7 @@ export default function ComplianceRequirementsConfigPage() {
                 <button
                   onClick={() => void handleSaveProfile()}
                   disabled={isSaving}
-                  className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
                 >
                   <Save className="h-4 w-4" />
                   {isSaving ? 'Saving...' : editingProfileId ? 'Update Profile' : 'Create Profile'}
@@ -1254,7 +1254,7 @@ export default function ComplianceRequirementsConfigPage() {
             <button
               onClick={() => void handleSaveConfig()}
               disabled={isSaving}
-              className="flex min-h-11 items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              className="flex min-h-11 items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
             >
               <Save className="h-4 w-4" />
               {isSaving ? 'Saving...' : 'Save Schedule'}
@@ -1434,8 +1434,12 @@ export default function ComplianceRequirementsConfigPage() {
                         </p>
                         {report.summary && (
                           <p className="text-theme-text-secondary mt-1 text-xs">
-                            Compliance: {report.summary.overall_compliance_pct.toFixed(1)}% ·{' '}
-                            {report.summary.fully_compliant_members}/{report.summary.total_members} members compliant
+                            Compliance:{' '}
+                            {report.summary.overall_compliance_pct === null
+                              ? 'N/A'
+                              : `${report.summary.overall_compliance_pct.toFixed(1)}%`}{' '}
+                            · {report.summary.fully_compliant_members}/
+                            {report.summary.graded_members ?? report.summary.total_members} members compliant
                           </p>
                         )}
                         {report.errorMessage && (
@@ -1506,7 +1510,7 @@ export default function ComplianceRequirementsConfigPage() {
               </button>
               <button
                 onClick={() => void handleEmailReport()}
-                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                className="flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900"
               >
                 <Send className="h-4 w-4" />
                 Send

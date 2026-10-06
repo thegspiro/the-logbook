@@ -139,3 +139,69 @@ class TestMeetingActionItemReminder:
 
         assert result["total_reminders"] >= 1
         assert await _notification_count(db_session, assignee.id) == 1
+
+
+class TestDeactivatedOrganization:
+    """A deactivated department gets no reminders from either table.
+
+    The task sweeps both tables platform-wide rather than looping over
+    organizations, so it was outside the CRON-2 deactivated-org fix
+    (CRON2-31-12).
+    """
+
+    async def test_meeting_action_item_is_skipped(self, db_session):
+        org = await _make_org(db_session)
+        org.active = False
+        assignee = await _make_user(db_session, org)
+        meeting = Meeting(
+            organization_id=org.id,
+            title="Monthly Business Meeting",
+            meeting_date=org_today(org),
+        )
+        db_session.add(meeting)
+        await db_session.flush()
+        db_session.add(
+            MeetingActionItem(
+                meeting_id=meeting.id,
+                organization_id=org.id,
+                description="Inspect ladder truck",
+                assigned_to=assignee.id,
+                due_date=org_today(org) + timedelta(days=1),
+                status=ActionItemStatus.OPEN.value,
+            )
+        )
+        await db_session.flush()
+
+        await run_action_item_reminders(db_session)
+
+        assert await _notification_count(db_session, assignee.id) == 0
+
+    async def test_minutes_action_item_is_skipped(self, db_session):
+        org = await _make_org(db_session)
+        org.active = False
+        assignee = await _make_user(db_session, org)
+        minutes = MeetingMinutes(
+            organization_id=org.id,
+            title="Monthly Business Meeting",
+            meeting_date=datetime.now(timezone.utc),
+        )
+        db_session.add(minutes)
+        await db_session.flush()
+        db_session.add(
+            ActionItem(
+                minutes_id=minutes.id,
+                description="Order new hose",
+                assignee_id=assignee.id,
+                due_date=datetime.combine(
+                    org_today(org) + timedelta(days=1),
+                    datetime.min.time(),
+                    tzinfo=timezone.utc,
+                ),
+                status=MinutesActionItemStatus.PENDING.value,
+            )
+        )
+        await db_session.flush()
+
+        await run_action_item_reminders(db_session)
+
+        assert await _notification_count(db_session, assignee.id) == 0

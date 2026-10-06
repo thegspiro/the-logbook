@@ -120,6 +120,13 @@ How it is recorded:
   like one who refused. The UI shows "(not answered)" so an unanswered choice
   is distinguishable from a deliberate no, but consumers must call
   `ConsentService.has_consent()` and get `False` either way.
+- **The column itself defaults to a refusal** _(2026-09-24, migration
+  `b4014469fd76`)_. `user_consents.granted` was `NOT NULL` with no default, so a
+  row inserted without a value failed outright. It now defaults to `false` in
+  the model and the database: the only safe value to record for a consent
+  nobody gave is "no" — and for SMS a default grant would breach the TCPA
+  express-consent requirement. Existing rows all held explicit values, so no
+  stored consent changed.
 
 ---
 
@@ -230,6 +237,11 @@ task.
 - **Documents and meeting minutes are deliberately excluded** from automatic
   deletion. Destroying official records on a timer is a department decision
   belonging in its own retention schedule, executed by a person.
+- **Self-reported training certificates** are kept indefinitely unless the
+  department sets a period in the self-report settings
+  (`self_report_configs.attachment_retention_days`, 90-day floor), enforced
+  daily by the `self_report_attachment_retention` task. It deletes the files
+  only; the submission and training record rows stay.
 - **Audit records** follow their own 7-year rule — see
   [Audit Logging → Retention Policy](Security-Audit-Logging#retention-policy).
 
@@ -318,6 +330,45 @@ names, direct email and phone of whoever administers the deployment, plus
 `backup_access`, a free-text field holding whatever an admin wrote about
 break-glass procedures. It is now emptied for callers without
 `settings.manage` alongside the rest.
+
+**Profile writes return what a read returns** _(2026-09-30)_. A `users.edit`
+holder without `members.manage` could save a colleague's profile and read back
+the date of birth, emergency contacts and home address that `GET
+/users/{id}/with-roles` withholds from them — the two write routes returned the
+unredacted row. All three routes now pass through one
+`_redact_profile_for_viewer`. The profile page also stopped offering that
+viewer edit forms on a redacted record: the forms are seeded from what is on
+screen and an update sends blanks as `null`, so a save would have erased every
+field the editor was never shown. Which viewer got the full record is read from
+the payload (the server keeps `profile_visibility` only for those it does not
+redact), not re-derived from local permissions.
+
+**A colleague's ID card is not directory information** _(2026-09-30)_. The ID
+Card page assembled a scannable badge — QR code and barcode — for any member
+holding `members.view`, which is every member. It now opens for your own card,
+or anyone's with `members.manage` or `members.manage_id_cards`. The underlying
+profile data is still served to `members.view`; what is withheld is the
+assembled credential. See [Member ID Cards](Member-ID-Cards#viewing-a-members-id-card-2026-09-30).
+
+**An applicant's status token stays out of staff hands** _(2026-09-28, W17-3)_.
+The token is the applicant's only credential for the public status page, which
+since 2026-09-24 can also **withdraw** the application. The label preview
+returned every applicant's token to anyone with `prospective_members.view`, and
+every printed applicant badge encoded it. Labels now carry a short id. Badges
+printed earlier still carry the token and should be destroyed.
+
+**Applicant data minimization is manual** _(2026-09-30)_. **Purge Selected** on
+the Inactive Applications tab now deletes the selected inactive applications
+and their uploaded files from disk, audited by count and id; until then it
+deleted nothing while reporting success. The pipeline's **Auto-Purge** setting
+is stored but no task reads it, so nothing is purged on a timer — a department
+relying on it for data minimization must purge by hand. Tracked in
+`docs/KNOWN_LIMITATIONS.md`.
+
+**Former members in the directory** _(open, 2026-09-28, W15-4)_. Archived
+members still appear to every member under the directory's default "All
+Statuses" filter. Whether former members should be visible to members, and how
+much of them, is an open policy decision.
 
 ---
 

@@ -63,6 +63,9 @@ _EXCLUDED_COLUMNS = frozenset(
         "password_reset_expires_at",
         "calendar_feed_token",
         "oauth_subject",
+        # A credential like the feed token: a file that leaves the system
+        # must not carry a code that scans as the member at a station.
+        "badge_code",
     }
 )
 
@@ -156,10 +159,19 @@ class DataExportService:
             user.organization_id
         )
         visibility = config.to_visibility_dict()
+        # Fail closed, and do not restate the default. `to_visibility_dict`
+        # always returns every key already coerced to a real boolean — its own
+        # `_b()` encodes "officer narrative off, everything else on" — so the
+        # second argument here is unreachable today. It was
+        # `setting != "show_officer_narrative"`, a second copy of that policy
+        # which would have defaulted a *missing* key to visible: an export is
+        # the one path where silently revealing an officer's evaluation of a
+        # trainee cannot be taken back. If a key ever does go missing, hide the
+        # field and let the gap show up as an absence rather than a disclosure.
         hidden_report_columns = frozenset(
             column
             for setting, column in _SHIFT_REPORT_VISIBILITY_COLUMNS.items()
-            if not visibility.get(setting, setting != "show_officer_narrative")
+            if not visibility.get(setting, False)
         )
         report_result = await self.db.execute(
             select(ShiftCompletionReport).where(

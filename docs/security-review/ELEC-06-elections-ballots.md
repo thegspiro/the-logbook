@@ -1,6 +1,437 @@
 # Security Review 06 — Elections & Ballots
 
-**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5), pass 6 (this PR)
+**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5), [#2600](https://github.com/thegspiro/the-logbook/pull/2600) (pass 6 — corrected here from the "(this PR)" placeholder pass 6's own write-up left unresolved after merge), pass 7 (this PR)
+
+---
+
+## Pass 7 (2026-10-05)
+
+**Scoping.** Step 0 (via GitHub, not the tracker): `list_pull_requests` (open)
+returned only dependabot PRs and unrelated app-review/feature PRs (#2946,
+#2945, #2944, #2943, #2942, #2936, #2931, #2929, #2928, #2918, #2910) — no
+`claude/security-review-*` branch. PR #2941 (Feature 05, Finance & approvals,
+pass 7) had already merged; its record was cleared and Feature 06 marked 🔄 in
+the working tree per Step 0/1 (ridden into this PR's commit, not committed
+separately). Proceeded to Feature 06.
+
+**Baseline and an honest limit on how far back the diff reaches.** This
+session's git history is a shallow clone (858 commits) that does not reach PR
+#2600's own base commit (`7754eccd7`, 2026-09-15) or its merge commit — both
+are outside the fetched window, and a `git fetch --depth=2000` attempt timed
+out. The oldest commit in reachable history that already contains pass 6's
+one-line change is `0b52e56aa` (2026-09-23), so that commit is used as the
+practical diff baseline below; it understates the window by about a week,
+but every commit pass 6 itself reviewed is included in it, so nothing in that
+earlier week is re-litigated twice and nothing is silently skipped — the gap
+only means a textually smaller diff than pass-6-to-now would show, not a gap
+in coverage.
+
+`git diff --stat 0b52e56aa..HEAD` across the feature's established domain:
+2,090 insertions / 792 deletions across `elections.py` (+441/-), `models/
+election.py` (+59/-), `schemas/election.py` (+101/-), `election_service.py`
+(+2,237/-, the largest single-feature diff this file has ever swept in one
+pass), `utils/election_ballot_pdf.py` (+44/-), plus the entire frontend
+elections surface and 4 election-table migrations. **This is not drift from
+unrelated work landing nearby** (the shape pass 6 and earlier passes read
+through) — it is a dedicated, 1,207-line workflow review of this exact
+feature, `docs/workflow-review/W50-elections.md`, driven twice
+(2026-09-30) end to end through the browser and the API as `secretary`,
+`member`, `admin`, `treasurer`, `training_officer` and two anonymous token
+voters, covering vote integrity, tenant/permission boundaries, and 82
+numbered findings (W50-1…W50-82) — six of which were specifically what this
+checklist calls CRITICAL/HIGH-severity voting-integrity defects. All six are
+confirmed landed on `main` in this history (commits `3de83db8`, `7aa34054`,
+`d6f828c3`, `06c3d560`, `cbd97eb3`), each with its own regression test, and
+several were re-driven live against the fix with the SMTP sink reading every
+mail before being marked confirmed in that file.
+
+**This pass's job was therefore not to re-find what W50 already found**, but
+to (1) independently re-verify, from the security checklist's own lens
+(auth/authz/tenant-isolation/injection/exposure/abuse/schema — not W50's
+workflow-correctness lens), that the landed fixes are sound and introduce no
+new cross-tenant or exposure gap; (2) do a full fresh route enumeration,
+since a diff this large in the feature's most security-critical file
+warrants one rather than trusting pass 6's count; (3) re-verify the 5
+standing ELEC findings; and (4) fold the W50 items that land inside this
+checklist's seven dimensions into this file's own numbered ledger, so a
+future ELEC-06 pass does not have to cross-reference a differently-scoped
+review's file to know this feature's full open-security-finding set.
+
+### Route inventory — 65 routes, fresh enumeration (unchanged from pass 6)
+
+Enumerated by script (every `@router.get/post/put/patch/delete` in
+`elections.py`, its full decorator+signature block parsed for
+`require_permission(...)` and `Depends(get_current_user)`), not spot-checked.
+Counts: **57 permission-gated**, **4 authenticated-only** (no permission
+beyond login — each does its own eligibility/self-scoping, the established
+pattern since ELEC-1), **4 intentionally public** (a voting token or a
+receipt hash is the compensating control). 65 total, matching pass 6's count
+exactly — confirming the 2,237-line service diff and 441-line endpoint diff
+added **zero new routes**; every line landed inside already-declared handlers.
+
+| Method            | Path                                                                             | Gate                                   | Org-scoped via                                                                                                                        |
+| ----------------- | -------------------------------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| GET               | `` (list)                                                                        | `elections.view`                       | `Election.organization_id` filter                                                                                                     |
+| POST              | `` (create)                                                                      | `elections.manage`                     | stamped from `current_user.organization_id`; `meeting_id`/`event_id` validated in-org by `_validate_election_links` → `assert_in_org` |
+| GET               | `/templates/ballot-items`                                                        | `elections.manage`                     | n/a (static template catalog, no DB read)                                                                                             |
+| GET               | `/templates/saved-ballots`                                                       | `elections.manage`                     | `SavedBallotTemplate.organization_id` filter — **ELEC-12: unbounded, re-verified below**                                              |
+| POST              | `/templates/saved-ballots`                                                       | `elections.manage`                     | stamped from caller's org                                                                                                             |
+| DELETE            | `/templates/saved-ballots/{id}`                                                  | `elections.manage`                     | org filter in the delete's own `WHERE`                                                                                                |
+| POST              | `/ballot/lookup`                                                                 | **public**                             | token → `get_ballot_by_token` resolves the election from the token's own `election_id`; rate-limited 10/min/IP                        |
+| POST              | `/ballot/vote`                                                                   | **public**                             | token-scoped, same mechanism; rate-limited 5/min/IP                                                                                   |
+| POST              | `/ballot/vote/bulk`                                                              | **public**                             | token-scoped, same mechanism; rate-limited 5/min/IP                                                                                   |
+| GET/PATCH         | `/settings`                                                                      | `elections.manage`                     | org row, singleton per org                                                                                                            |
+| GET               | `/{election_id}`                                                                 | `elections.view`                       | `service.get_election(id, org)`                                                                                                       |
+| PATCH             | `/{election_id}`                                                                 | `elections.manage`                     | same                                                                                                                                  |
+| DELETE            | `/{election_id}`                                                                 | `elections.manage`                     | same — **re-verified below (W50-1 cascade fix)**                                                                                      |
+| POST              | `/{election_id}/open` \| `/close` \| `/open-nominations` \| `/close-nominations` | `elections.manage`                     | same                                                                                                                                  |
+| POST              | `/{election_id}/nominations` \| `/accept` \| `/decline`                          | `elections.view`                       | election resolved org-scoped first; nominee self-check (except the manager-accept gap, W50-38, flagged below as ELEC-46)              |
+| POST/GET          | `/{election_id}/manual-ballots*`, `/attest`, `/void`                             | `elections.manage`                     | election resolved org-scoped first — **ELEC-16: unbounded list, re-verified below**                                                   |
+| POST              | `/{election_id}/clone`                                                           | `elections.manage`                     | source election org-scoped; clone stamped same org                                                                                    |
+| POST              | `/{election_id}/write-ins/merge`                                                 | `elections.manage`                     | candidate ids resolved via `election_id IN` scoped to the already-org-scoped election                                                 |
+| GET               | `/{election_id}/printable-ballot` \| `/certified-results`                        | `elections.manage`                     | same                                                                                                                                  |
+| POST              | `/{election_id}/rollback`                                                        | `elections.manage`                     | same                                                                                                                                  |
+| GET               | `/{election_id}/candidates`                                                      | `elections.view` OR `elections.manage` | org-scoped via election; OR-gate widened pass 6, body-level `include_pending` branch unchanged (re-confirmed)                         |
+| POST/PATCH/DELETE | `/{election_id}/candidates*`                                                     | `elections.manage`                     | election resolved org-scoped first (ELEC-2's fix, still intact)                                                                       |
+| GET               | `/{election_id}/eligibility`                                                     | authenticated only                     | self-scoped to `current_user.id`                                                                                                      |
+| POST              | `/{election_id}/vote` \| `/vote/bulk`                                            | authenticated only                     | self-scoped; eligibility gate (ELEC-1) intact                                                                                         |
+| GET               | `/{election_id}/results`                                                         | `elections.view`                       | election org-scoped; **ELEC-44 cross-ref below (recipient/count exposure)**                                                           |
+| GET               | `/{election_id}/stats`                                                           | `elections.manage`                     | same                                                                                                                                  |
+| POST              | `/{election_id}/send-ballot` \| `/send-report` \| `/send-package`                | `elections.manage`                     | same; recipient resolution org-filters `User.organization_id` (W50-33 fix, re-verified below)                                         |
+| GET               | `/{election_id}/package-recipients` \| `/package-pdf`                            | `elections.manage`                     | same                                                                                                                                  |
+| GET               | `/{election_id}/non-voters`                                                      | `elections.manage`                     | same                                                                                                                                  |
+| POST              | `/{election_id}/remind-non-voters`                                               | `elections.manage`                     | same                                                                                                                                  |
+| GET               | `/{election_id}/eligibility-roster` \| `/integrity` \| `/forensics`              | `elections.manage`                     | same                                                                                                                                  |
+| DELETE            | `/{election_id}/votes/{vote_id}`                                                 | `elections.manage`                     | **election- and org-scoped in the same query** (W50-39 fix, re-verified below)                                                        |
+| GET               | `/{election_id}/attendees`                                                       | `elections.view`                       | same                                                                                                                                  |
+| POST/DELETE       | `/{election_id}/attendees*` \| `/import-meeting-attendees`                       | `elections.manage`                     | same; meeting id validated in-org                                                                                                     |
+| POST/GET/DELETE   | `/{election_id}/voter-overrides*`                                                | `elections.manage`                     | same                                                                                                                                  |
+| POST/GET/DELETE   | `/{election_id}/proxy-authorizations*`                                           | `elections.manage`                     | delegating/proxy/authorized-by ids resolved via org-scoped `User` lookups (re-confirmed, unchanged since pass 6)                      |
+| POST              | `/{election_id}/proxy-vote`                                                      | authenticated only                     | self-scoped to the caller as the proxy holder; **ELEC-43 cross-ref below (anonymity residual)**                                       |
+| POST              | `/{election_id}/send-test-ballot`                                                | `elections.manage`                     | same                                                                                                                                  |
+| GET               | `/{election_id}/preview-ballot`                                                  | `elections.manage`                     | same                                                                                                                                  |
+| GET               | `/{election_id}/verify-receipt`                                                  | **public**                             | receipt hash only, no roster/vote-content disclosure; **ELEC-14: GET query param, re-verified below**; rate-limited 10/min/IP         |
+
+### Verified good ✅ (this pass)
+
+- **Every by-id query re-read this pass resolves through an org-scoped
+  election first**, including every line the 2,237-line service diff
+  touched that this pass read directly: `soft_delete_vote`
+  (`election_service.py:2185-2224`, now additionally election-scoped per
+  W50-39 — a vote from another election under the path's election_id
+  resolves to "not found" rather than being voided through the wrong
+  election's URL), `delete_election`
+  (`elections.py:1314-1320`, `service.get_election(id, org)` before any
+  mutation, runoff-child and cascade handling added by W50-1 without
+  touching the org gate), `get_election_forensics`
+  (`election_service.py:2260-2267`), `closed_by_name`
+  (`election_service.py:3554-3569`, the officer-name join added for W50-14
+  filters `User.organization_id == election.organization_id`), and
+  `_build_ballot_recipient_lists` (`election_service.py:8113-8152`, the
+  recipient-name join added for W50-33 filters `User.organization_id`).
+  No new unscoped by-id read introduced by this window's changes.
+- **The W50-1 cascade fix does not weaken tenant isolation.**
+  `VotingToken.election` now cascades (`cascade="all, delete-orphan",
+passive_deletes=True`, `models/election.py:451-456`) instead of nulling a
+  NOT NULL FK at delete time — a correctness fix for MySQL error 1048, not
+  a scoping change; the delete path's own org check (above) is unchanged.
+- **The four new/changed election-table migrations are schema-sound**
+  (Pitfall #2/#26 compliant — see Schema & migration notes below); none
+  introduces an unguarded `create_all`-only table touch or a non-nullable
+  `SET NULL` column.
+- **No new injection surface.** No `.like()`/`.ilike()` call exists
+  anywhere in `elections.py` or `election_service.py` (confirmed by grep,
+  0 hits) — the feature has no free-text search, so Pitfall #25 is n/a,
+  unchanged since pass 1.
+- **The public rate-limit wrappers (ELEC-41/42) are still genuinely
+  awaited** (`_ballot_read_rate_limit`/`_ballot_vote_rate_limit`,
+  `elections.py:124-153`, both `return await check_rate_limit(...)`) and
+  are wired on all 4 public routes, confirmed above in the route table.
+- **W50's six CRITICAL/HIGH voting-integrity fixes hold on `main` and are
+  each independently re-readable at their cited line**, re-confirmed by
+  this pass rather than trusted from the workflow-review's own write-up:
+  tokened-election delete no longer 500s after telling leadership it
+  succeeded (W50-1); an anonymous election's audit trail no longer names
+  the voter on new `vote_cast` rows (`_audit_voter`,
+  `election_service.py:534`, 3 call sites, W50-2); the in-app and token
+  voting doors share one dedup key so a non-anonymous member cannot vote
+  twice across channels (W50-3); an in-app vote naming a ballot item id as
+  `position` is resolved to its effective position before the attendance
+  check runs, closing the bypass (W50-4/W50-5); and a voided vote's unique
+  dedup hash is cleared on soft-delete (`election_service.py:2222`) so the
+  member it was voided for can vote again instead of both routes dying on
+  `IntegrityError 1062` (W50-6).
+
+### Findings
+
+### ELEC-12 — LOW/MED — `SavedBallotTemplate` list/create still unbounded — 🚩 OPEN (re-verified, pass 7)
+
+Unchanged. `list_saved_ballot_templates` (`elections.py:415-424`) has no
+`limit`/`offset` — every template an org has ever saved returns in one
+response. Re-read at its current citation (shifted from pass 6's
+`391-401` by the intervening diff); logic identical.
+
+### ELEC-14 — P2 — `verify_vote_receipt`'s credential is a GET query parameter, not body/fragment — 🚩 FLAGGED (re-verified, pass 7)
+
+Unchanged. `receipt: str` (`elections.py:4147`) is still a query parameter,
+landing in server/proxy logs and browser history — the same class of leak
+the token endpoints deliberately avoid via POST body (R-D3). Current
+citation: `elections.py:4145-4149`.
+
+### ELEC-16 — P2 — `list_manual_ballot_batches` is unbounded — 🚩 FLAGGED (re-verified, pass 7)
+
+Unchanged. `election_service.py:4411-4440` (shifted from pass 6's
+`3958-3974`) still has no cap on batches returned per election — bounded
+in practice by one department's own paper-ballot recording volume, not by
+the query.
+
+### ELEC-28 — LOW/MED — The in-app ballot cannot render a ballot-item or multi-seat contest — 🚩 OPEN (re-verified, pass 7; converges with W50-10/W50-11)
+
+Re-read `ElectionBallot.tsx:60-78` (`getPositions()`/
+`getCandidatesForPosition()`): still iterates only `election.positions`,
+with `ballot_items` and `max_votes_per_position` ignored exactly as pass 3
+found. The 2026-09-30 workflow review independently rediscovered the same
+gap from the voter-experience angle and filed it as **W50-10** (HIGH,
+"the in-app Cast Vote tab is not the ballot") and **W50-11** (HIGH, "a (2
+seats) board race declares one winner"), both still FLAGGED pending an
+owner decision on whether to rewrite the tab against the token page's
+model or hide it when the election has ballot items/a seat cap > 1. This
+pass treats ELEC-28 and W50-10/W50-11 as **one gap, not three** — the
+root cause and fix are identical — and defers to the owner decision W50-10
+already asked for rather than re-asking it under a different id.
+
+### ELEC-40 — P1 — Pre-ELEC-34 vote dedup collision-avoidance edge case — 🚩 FLAGGED (re-verified, pass 7)
+
+Unchanged. `_dedup_position_key`/`_dedup_scoped_item_aliases`
+(`election_service.py:146-240`) are untouched by this window's diff — grepped
+every call site (12, same shape as pass 6) and confirmed none is inside the
+2,237 changed lines. The known limitation (an owner decision between
+reverting the ELEC-38 narrowing or a backfill migration) stands exactly as
+pass 3 described it.
+
+### ELEC-43 — HIGH — A proxy ballot on an anonymous election is attributable — 🚩 FLAGGED (cross-ref: W50-2/S01, `KNOWN_LIMITATIONS.md`)
+
+**What:** S01 (W50-2's fix) stops `vote_cast`/`vote_cast_token` audit rows
+from naming the voter on an anonymous election. It does not touch
+`cast_proxy_vote`: `proxy_vote_cast` and `proxy_vote_double_attempt`
+(`election_service.py:6625-6659`) unconditionally write
+`delegating_user_id` and `proxy_user_id` into `event_data` in clear,
+**regardless of `election.anonymous_voting`**, and the `Vote` row itself
+stores the same two ids in clear (confirmed by reading the full call —
+there is no `_audit_voter`/anonymity branch anywhere in this function,
+unlike `cast_vote`'s three call sites).
+**Where:** `election_service.py:6625-6660` (`cast_proxy_vote`'s audit
+calls); the `Vote` row's `proxy_delegating_user_id`/`proxy_voter_id`
+columns persist the same linkage independently of the audit log.
+**Failure scenario:** a department runs an anonymous officer election; a
+member authorizes a proxy; the proxy casts the vote. Anyone who can read
+the audit log or the `votes` table (an admin, a DB backup, a future
+export) learns exactly how the delegating member's proxy voted — the one
+voter class this feature's anonymity guarantee does not cover, while the
+certified PDF and every UI surface still assert "voter de-anonymization
+impossible."
+**Impact:** every proxy vote on every anonymous election, past and
+future — not a historical-rows residual like the ELEC-6/W50-2 audit-row
+cases, but the proxy path's **current, ongoing** behavior.
+**Disposition:** already discovered and fully written up by the 2026-09-30
+workflow review (its own S01/W50-2 investigation) and mirrored into
+`docs/KNOWN_LIMITATIONS.md` ("A proxy ballot on an anonymous election is
+attributable", HIGH) the same day. Re-verified independently against
+current code this pass, not trusted from that doc — confirmed unchanged.
+Folded into this ledger under its own ELEC id because it falls squarely
+inside this checklist's §5 (data exposure) and no prior ELEC-06 pass had
+numbered it. **Not fixed here**: closing it needs either (a) documenting
+that a proxy ballot is attributable and disclosing that to the delegating
+member when the authorization is created, or (b) storing the linkage as a
+salted hash that dies with the anonymity salt at close plus a migration
+over existing rows and a `_sign_vote` change — both are product/schema
+decisions, not a same-pass mechanical fix, and no proxy-vote UI exists
+today to drive urgency. Same disposition as `KNOWN_LIMITATIONS.md`.
+
+### ELEC-44 — LOW — The election body and the public ballot lookup over-expose recipient list, live vote counts, and candidate identity ids — 🚩 FLAGGED (cross-ref: W50-70, `KNOWN_LIMITATIONS.md`)
+
+**What:** `ElectionResponse` (`schemas/election.py:540-592`) includes
+`email_recipients: Optional[List[UUID]]` and (via `_build_election_response`)
+live vote counts, served to any `elections.view` holder via
+`GET /elections/{id}` — while `GET /elections/{id}/results` requires the
+same `elections.view` permission but `get_election_results` (the service
+method it calls) additionally gates on the election being closed or
+`results_visible_immediately`, returning `None` → 403 otherwise
+(`elections.py:2564-2583`). Separately, `BallotLookupResponse.candidates` (the public,
+token-only `/ballot/lookup` response, `elections.py:526-530` /
+`:659-663`) is built from the full `CandidateResponse` schema, which
+carries `user_id` and `nominated_by` (`schemas/election.py:883,890`) —
+read directly: `lookup_ballot_by_token` validates every candidate through
+`CandidateResponse.model_validate(c)` with no field-stripping, so an
+anonymous token holder receives every accepted candidate's internal
+member-account id and nominator id, not just their name and statement.
+**Where:** `schemas/election.py:540-592` (`ElectionResponse`),
+`schemas/election.py:878-891` (`CandidateResponse`),
+`elections.py:659-663` (the public lookup's use of it).
+**Impact:** an `elections.view`-only member (not a manager) can read who
+was sent a ballot and the running tally while voting is open, which
+`/results` itself withholds from the same caller; and any anonymous
+token holder — including one who never authenticated — learns internal
+account ids for every candidate, which the public ballot page has no
+legitimate use for voting.
+**Disposition:** discovered and written up by the 2026-09-30 workflow
+review (W50-70) and mirrored into `KNOWN_LIMITATIONS.md` the same day,
+explicitly as an owner decision ("probably intended for attendees and
+recipients; decide whether counts and ids are withheld while the election
+is open"). Re-verified independently this pass against the current schema
+and the live `lookup_ballot_by_token` body — unchanged. Folded into this
+ledger as a §5 finding for the same reason as ELEC-43. **Not fixed here**:
+`CandidateResponse` is shared between this public path and every
+authenticated candidate-management endpoint, so narrowing it needs a
+separate public-facing projection (mirroring the `BallotElectionResponse`
+R-2 precedent already applied to the election object itself, just not yet
+to the nested candidate list) — a deliberate schema split, not a one-line
+change, and the severity (LOW; internal UUIDs, not names or PII beyond
+what the ballot already shows) does not by itself justify guessing at the
+right contract without the owner's input on what a recipient or attendee
+is meant to see.
+
+### ELEC-45 — MED — A sanctioned void certifies the election's vote chain CHAIN_BROKEN, while voiding the chain's tail evades detection entirely — 🚩 FLAGGED (cross-ref: W50-31, `KNOWN_LIMITATIONS.md`)
+
+**What:** `verify_vote_integrity` (`election_service.py:2045-2120`; pass 6 cited
+`1879-1945`, shifted by the intervening diff — re-read in full this pass) drops soft-deleted rows **before**
+walking the hash chain. Read in full: this makes the forensics/tamper
+detection this feature's audit chain exists to provide give **both** a
+false positive and a false negative from the same mechanism — an
+officer's own sanctioned void (with a recorded reason, on a vote that is
+not the chain's most recent link) breaks the walk and reports
+"CHAIN_BROKEN" on the certified PDF under "We certify that the results
+above are true and correct," while an actual attacker who deletes the
+**last** vote in the chain (the one case deletion cannot break a
+hash-chain's walk over what remains) gets a clean PASS.
+**Where:** `election_service.py:2045-2120` (`verify_vote_integrity`,
+specifically the `Vote.deleted_at.is_(None)` filter at `:2078` applied
+before the chain-reconstruction walk at `:2101-2120`); the
+certified-results builder and `ElectionDetailPage.tsx`'s integrity banner
+both surface the same (possibly false in either direction) verdict.
+**Impact:** this is the feature's own tamper-evidence control giving the
+department exactly the wrong signal in both directions — alarming them
+over a legitimate, audited action, and staying silent over the one
+deletion pattern an attacker would actually choose if they wanted to
+avoid detection.
+**Disposition:** discovered by the 2026-09-30 workflow review (W50-31),
+mirrored into `KNOWN_LIMITATIONS.md` the same day as an owner decision
+(the chain design must decide how a void is represented — "walk voided
+rows too and report 'PASS — N votes voided by `<officer>`: `<reason>`'" is
+the write-up's own suggested shape). Re-verified independently this pass
+against the current function body — unchanged, still drops deleted rows
+before the walk. Folded into this ledger under §4/§5 (the audit chain is
+this feature's injection/tamper-evidence control) rather than left solely
+in a workflow-review file, since a future ELEC-06 pass needs to know this
+control's current reliability without cross-referencing elsewhere.
+**Not fixed here**: changing what "PASS" means for a chain with voided
+rows is exactly the kind of security-control semantics change CLAUDE.md's
+"flag, don't guess" guidance covers, and a same-pass mechanical change
+risks quietly weakening the chain's guarantee in the other direction (a
+walk that too easily accepts voided rows as explained could also let a
+real tamper event hide behind a bogus void reason).
+
+### ELEC-46 — MED — A manager can accept a nomination on the nominee's behalf; the slate is not frozen at Close Nominations — 🚩 FLAGGED (cross-ref: W50-38, `KNOWN_LIMITATIONS.md`)
+
+**What:** `PATCH /{election_id}/candidates/{candidate_id}` accepts an
+`accepted: true` update from any `elections.manage` holder with **no
+nominee-identity check** — read directly: the endpoint's permission gate
+and the service call it drives contain no comparison against the
+nominee's own user id, unlike `accept_nomination`/`decline_nomination`
+(`elections.py:1626-1696`), which do enforce "only the nominee can
+respond." A manager can therefore accept (or, after Close Nominations,
+decline) on a nominee's behalf with no notice to them. Separately, the
+nominee loses the Nominations tab once nominations close, but the
+accept/decline API routes do not themselves refuse a call after that
+point (the positions-removal guard S17 added, `7aa3405`, closes a
+different, narrower gap — an item-keyed candidate wrongly counted as
+orphaned — and does not address this one).
+**Where:** `CandidateManagement.tsx:203,553-560` (the manager-facing
+Accept toggle); `PATCH /{election_id}/candidates/{candidate_id}`
+(`elections.py:2219-2328` — read in full this pass: no comparison of
+`current_user.id` against the candidate's `user_id`/`nominated_by`
+anywhere in the handler, only the org-scope check at `:2239` and the
+post-vote identity freeze at `:2288-2300`); `ElectionDetailPage.tsx` (tab
+gating, UI-only).
+**Impact:** this is a separation-of-duties gap the checklist's §2 calls
+out directly ("the approver cannot be the requester") — here inverted (the
+manager can act _as_ the nominee without being one), but the same
+principle: an acceptance a candidate did not make is indistinguishable, in
+the data, from one they did.
+**Disposition:** discovered by the 2026-09-30 workflow review (W50-38),
+mirrored into `KNOWN_LIMITATIONS.md` the same day as an explicit owner
+decision ("decide whether managers may accept on a nominee's behalf — then
+label it so and notify them — and whether the slate freezes at Close
+Nominations"). Re-verified independently this pass against the current
+endpoint body — unchanged. Folded into this ledger under §2 for the same
+reason as ELEC-43/44/45. **Not fixed here**: both candidate remedies
+(requiring the nominee's own id, or labeling and notifying an on-behalf
+acceptance) are product decisions about what a manager may do, not a
+mechanical permission-string fix, and the slate-freeze question changes
+observable behavior for every election already using this flow.
+
+## Schema & migration notes
+
+4 election-table migrations landed since the diff baseline, all read in
+full this pass:
+
+- `20260930_0840_6394fbf42581` — nulls `votes.vote_dedup_hash` on rows
+  already soft-deleted (W50-6 backfill). Idempotent (`WHERE deleted_at IS
+NOT NULL AND vote_dedup_hash IS NOT NULL`), guarded on both the table
+  and both columns existing (Pitfall #26), and explicitly, correctly
+  irreversible — the hash cannot be recomputed from a destroyed
+  anonymity salt, and the only effect of trying would be to re-lock a
+  voided voter out.
+- `20260930_0853_ac06a2998013` — adds `elections.closed_at`
+  (nullable) and `elections.closed_by` (nullable `String(36)`,
+  `ForeignKey("users.id", ondelete="SET NULL")`) — **Pitfall #2
+  compliant** (nullable=True alongside SET NULL), guarded on table/column/
+  FK existence, correct downgrade ordering (FK → columns).
+- `20260930_1153_c8266855a348` — reworded stored email templates only (no
+  column/table change); not re-read line-by-line this pass since it
+  touches no schema or query, consistent with "Match the Verification to
+  the Change."
+- `20260930_1230_c4e8a1f7d2b6` — adds `elections.email_skipped_details`
+  (nullable JSON). Write path (`_merge_skipped_details`,
+  `election_service.py:8087-8111`) builds and returns a **new** list
+  object on every call rather than mutating the prior value in place and
+  reassigning it — not the Pitfall #12 shallow-copy shape, so no
+  `deepcopy`/`flag_modified` is needed here.
+
+`validate_migrations.py --strict`: 512 revisions, single head
+`34d3d56d1479`, no duplicate ids (see Completion gate).
+
+## Guard tests added
+
+None by this pass — W50's own six backend test files
+(`test_w50_s*.py`, `test_w50_delete_tokened_election.py`,
+`test_w50_voided_voter_revotes.py`, and others cited inline above) already
+cover every fix this pass re-verified, each confirmed failing against the
+pre-fix code before being counted (per that review's own write-up); adding
+a duplicate guard here would test the same invariant twice rather than
+close a new one. ELEC-43/44/45/46 are flagged, not fixed, so there is
+nothing yet to regression-guard.
+
+## Completion gate (pass 7)
+
+| Check                                                                                | Result                                                       |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                                        | ✅ 0 violations                                              |
+| `black --check app/ tests/ alembic/`                                                 | ✅ 1874 files unchanged                                      |
+| `isort --check-only app/ tests/ alembic/` (confirmed installed, not a no-op)         | ✅ clean                                                     |
+| `python3 scripts/validate_migrations.py --strict`                                    | ✅ 512 revisions, single head `34d3d56d1479`                 |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                    | ✅ 244 routes, 0 errors, 0 warnings                          |
+| `pytest tests/ -q -k "election or ballot or quorum or candidate or mcp"` (unit-only) | ✅ 622 passed, 1 skipped (pre-existing `py_vapid`), 0 failed |
+| same, full run (DB available this session)                                           | ✅ 1092 passed, 1 skipped, 0 failed                          |
+| `cd frontend && npm run typecheck`                                                   | ✅ 0 errors (aliased 7.0.2 compiler, via `tsc-native.mjs`)   |
+| `cd frontend && npm run lint`                                                        | ✅ 0 errors, 0 warnings (exit 0)                             |
+| `npx vitest run` — elections-module frontend tests (38 files)                        | ✅ 38/38 files, 148/148 tests passed                         |
+
+No application code was changed this pass — every finding above is either a
+re-verification of an already-landed fix or a FLAGGED cross-reference
+needing an owner decision, so the gate is a confirmation that the large W50
+diff left the codebase in the clean state its own completion gate already
+reported, independently re-run rather than trusted.
 
 ---
 

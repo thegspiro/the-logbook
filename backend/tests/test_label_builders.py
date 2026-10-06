@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 from app.services.label_service import LabelService
+from app.utils.member_badge import is_badge_code
 
 
 def _service_returning(*records):
@@ -22,6 +23,7 @@ def _service_returning(*records):
     result = MagicMock()
     result.all.return_value = list(records)
     db.scalars = AsyncMock(return_value=result)
+    db.flush = AsyncMock()
     return LabelService(db)
 
 
@@ -126,20 +128,23 @@ class TestMemberBuilder:
             first_name=kw.get("first_name", "John"),
             last_name=kw.get("last_name", "Smith"),
             membership_number=kw.get("membership_number", "M-042"),
+            badge_code=kw.get("badge_code"),
         )
 
-    async def test_maps_name_and_membership_number(self):
-        u = self._user()
+    async def test_encodes_the_issued_badge_code_not_the_membership_number(self):
+        """The membership number is in the directory; a badge that encoded it
+        could be printed by any member. It stays on the label as text only."""
+        u = self._user(badge_code="MB-23456789AB")
         preview = await _service_returning(u).preview(uuid4(), "membership", [u.id])
         assert preview[0]["name"] == "John Smith"
-        assert preview[0]["barcode_value"] == "M-042"
+        assert preview[0]["barcode_value"] == "MB-23456789AB"
         assert preview[0]["subtitle"] == "M-042"
 
-    async def test_falls_back_when_no_membership_number(self):
+    async def test_issues_a_code_for_a_member_without_one(self):
         u = self._user(membership_number=None)
         preview = await _service_returning(u).preview(uuid4(), "membership", [u.id])
-        # Short id fallback — no real membership number.
-        assert preview[0]["barcode_value"]
+        assert is_badge_code(preview[0]["barcode_value"])
+        assert preview[0]["barcode_value"] == u.badge_code
         assert preview[0]["subtitle"] is None
 
     async def test_renders_pdf(self):

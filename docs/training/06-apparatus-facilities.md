@@ -52,6 +52,8 @@ The apparatus list shows all vehicles with:
 
 ![Apparatus listing with unit numbers, type badges, and status badges](./images/06-01-apparatus-list.png)
 
+**[SCREENSHOT — REPLACE `06-01-apparatus-list.png`.** The stat tile above the list reads **Maintenance Due** (was "Maint. Due"), and an empty fleet reads "No apparatus have been added yet." Re-shoot the list with the stat tiles in frame.**]**
+
 > **Hint:** If your department has the full Apparatus module disabled, you will see a simplified **Apparatus Basic** view that provides a lightweight list of apparatus for shift scheduling purposes. It is open to every member.
 
 ### Crew Seats
@@ -72,6 +74,32 @@ nothing is lost on opening the form. Choosing a current position replaces it.
 _Each closed control already names the ranks eligible for that seat. The open
 option list is not pictured: these are native `<select>`s, and an open one is
 drawn by the operating system rather than by the page._
+
+### Adding and editing an apparatus _(2026-09-29)_
+
+The form's buttons read **Add Apparatus** and, when editing, **Save Changes**
+(they were "Create Apparatus" / "Update Apparatus"), and its dates card is
+**Expiration Dates** (was "Important Dates") — the same heading as the card on
+the unit's Overview. The crew-seat help now reads "List seats in riding order.
+Each option shows the ranks that can fill it. Repeat a position for each seat of
+that kind. New shifts on this apparatus start with these seats."
+
+Two fixes worth knowing if you have edited a unit before:
+
+- **Emptying a field now clears it.** The form used to leave an emptied text,
+  date or number field out of the save, which the server reads as "leave it
+  alone" — so clearing a registration date or a VIN typo showed **Apparatus
+  updated** and kept the old value. An emptied field is now saved as empty.
+  The four fields a unit cannot be without — unit number, type, status and
+  minimum staffing — cannot be cleared.
+- **Fuel Type is no longer quietly Diesel.** A new unit whose fuel type nobody
+  chose was stored as diesel by default; it now stays empty until somebody
+  picks one. Units already saved keep whatever they hold — check gasoline and
+  electric units that may have been recorded as diesel.
+
+On a phone, the unit page's header wraps instead of pushing **Edit** and
+**Archive** off the side of the screen, and each list row's actions are named
+for the unit ("Edit E1", "Print label for E1").
 
 ### Printing Apparatus Labels
 
@@ -98,6 +126,8 @@ Click on any apparatus to view its complete record:
 
 ![Apparatus detail page with the unit header and tabbed sections](./images/06-03-apparatus-detail.png)
 
+**[SCREENSHOT — REPLACE `06-03-apparatus-detail.png`.** The Overview's dates card is now **Expiration Dates** (was "Important Dates"). Re-shoot the Overview tab with that card in frame; check also that the header's **Edit** / **Archive** buttons sit as they now wrap.**]**
+
 ---
 
 ## Maintenance Scheduling
@@ -117,10 +147,10 @@ Each apparatus has a maintenance section showing:
 
 1. Open the apparatus detail page.
 2. Navigate to the **Maintenance** tab.
-3. Click **Add Maintenance**.
+3. Click **Add Record**.
 4. Select the maintenance type (e.g., Oil Change, Pump Test, Annual Inspection).
 5. Enter the date, description, cost, and vendor.
-6. Save.
+6. Click **Add Record** (**Save Changes** when editing).
 
 ![Apparatus maintenance tab with past records and the add-maintenance form](./images/06-04-apparatus-maintenance-tab.png)
 
@@ -157,21 +187,32 @@ Track equipment stored on each apparatus (tools, medical supplies, SCBA, etc.):
 
 ## NFPA Compliance
 
-Track compliance with NFPA standards for each apparatus:
+Whether a department tracks NFPA apparatus compliance is a department-wide
+switch. Until an administrator sets it, it follows the organization type: **on**
+for fire departments and combined fire/EMS departments, **off** for EMS-only
+agencies.
 
-- NFPA 1901 (Automotive Fire Apparatus)
-- NFPA 1911 (Inspection, Maintenance, Testing)
-- NFPA 1912 (Refurbishing)
+**Turning it on or off** (requires `settings.manage`): on the **Apparatus**
+page, use the **NFPA Compliance** switch above the fleet list. The card says
+whether the organization-type default or an administrator's choice is in force.
+Turning it off hides the NFPA tab and the per-vehicle checkbox and the server
+refuses NFPA requests; nothing is deleted, so turning it back on restores every
+record.
 
-The compliance section shows which standards apply and whether the apparatus is compliant, with dates of last assessment.
+With the switch on, tick **Enable NFPA compliance tracking** on an apparatus's
+edit form, and its detail page gains an **NFPA** tab with two lists:
 
-> **Corrected 2026-08-12.** There is no NFPA Compliance **tab**, and no
-> per-standard status, assessment date or due date anywhere.
-> `ApparatusOverviewTab` renders a single card reading "Tracking Enabled" when
-> the flag is set; the flag's only other consumer is a checkbox on the edit
-> form. The standards above are the ones a department is expected to track, not
-> ones the application tracks for you. Recorded in
-> [Apparatus & Facilities — Four Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#apparatus--facilities--four-guide-sections-with-no-screen-2026-08-08).
+- **Required NFPA Tests** — every maintenance type marked NFPA-required that
+  applies to this apparatus type, with the last test, the next due date and a
+  status: _Current_, _Due soon_ (within 30 days), _Overdue_, _Scheduled_ or _No
+  record yet_. The next due date is the one recorded on the last test, else a
+  booked test's due date, else the type's calendar interval from the last test.
+  Tests are recorded on the **Maintenance** tab; the NFPA tab reads them.
+- **Compliance Items** — a list a department keeps by hand, one row per
+  standard and section (for example NFPA 1911, NFPA 1962 hose, NFPA 1932 ground
+  ladders), with status, last checked and next due dates. An item whose next due
+  date has passed reads _Overdue_ whatever its stored status. Members with
+  `apparatus.edit` or `apparatus.manage` can add, edit and remove items.
 
 ---
 
@@ -196,7 +237,12 @@ The facilities dashboard shows:
 
 ![Facilities dashboard with summary cards and facility cards](./images/06-09-facilities-dashboard.png)
 
+**[SCREENSHOT — REPLACE `06-09-facilities-dashboard.png`.** The header button reads **Print Labels** (was "Print Page Labels"), and the facility cards now size by the grid's own width (`card-grid`, 2026-10-03/04), so a laptop frame with the sidebar open shows fewer, wider cards. An empty dashboard reads "No facilities yet. Select Add Facility to add one." Re-shoot at laptop width.**]**
+
 > **Hint:** If your department has the Facilities module disabled, you will see a simplified **Locations** page that provides basic location management for events and meetings.
+
+> **Screenshot needed:**
+> _[Plain member (no locations.\* or settings permissions), /locations, department with at least one station holding a room. Stations and rooms listed, with no QR toggle, kiosk URL, Add Station, Add Room, edit, delete, Change or Run Setup Wizard control. Do not capture a kiosk URL or display code.]_
 
 ### Printing Facility Labels
 
@@ -225,6 +271,23 @@ sitting. Each apparatus card carries a **Write NFC tag** action alongside Copy
 URL, Download PNG and Regenerate. Tap it, hold a blank tag to the phone, move to
 the next card.
 
+> **Who may write which tag** _(2026-10-03)_. Until now anyone who could see a
+> card could write its tag. The department now decides, by position:
+>
+> | Tag                                            | Permission                  | Seeded on                                                                          |
+> | ---------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------- |
+> | Apparatus (this directory and the shift panel) | `apparatus.manage_nfc_tags` | President, Vice President, Chief, Deputy Chief, Assistant Chief, Apparatus Officer |
+> | Room door tags (below)                         | `locations.manage_nfc_tags` | the same leadership, and the Facilities Manager                                    |
+>
+> Both grants are new. Migration `5bed4c485d2f` adds them to existing
+> departments' seeded positions (skipping a position somebody emptied, and any
+> that already cover the grant); an administrator can move them on the
+> positions screen. They decide only who is **offered** the writer — writing a
+> tag never reaches the server and the tag carries no secret. Without the
+> grant, the apparatus card and the shift panel's QR block show the QR code
+> with no **Write NFC tag** action. The same migration adds
+> `members.manage_id_cards` to the Assistant Membership Coordinator.
+
 **Not pictured.** Web NFC is Chrome-on-Android over HTTPS only, and the
 compact **Write NFC tag** action in this grid renders **nothing at all** where it
 is unsupported — a card on a desktop browser shows Copy URL, Download PNG and
@@ -234,32 +297,66 @@ runs headless Chromium over `http://localhost`, so it cannot produce the fourth
 button, and staging one would be a picture of a control the reader's browser may
 correctly not have.
 
-A shift's detail panel can write the same tag: its apparatus QR block carries
-the writer beside the code, and what it writes is that truck's apparatus
-check-in code rather than the shift's.
+A shift's detail panel can write the same tag — for a holder of
+`apparatus.manage_nfc_tags` — its apparatus QR block carries the writer beside
+the code, and what it writes is that truck's apparatus check-in code rather than
+the shift's. Filling the roster is not fitting out the rig, so a roster officer
+without the grant sees the QR only.
 
 **Write the apparatus tag, not a shift tag.** The apparatus code resolves when
 it is used rather than naming a shift, so one sticker on the dashboard serves
 every shift for the life of the truck. A tag tied to a single shift is dead the
 moment that shift ends.
 
-**What it resolves to is looser than "the shift running right now."** It takes
-the truck's earliest open shift dated today, then one that ended within the last
-two hours, then the next one coming up — it does not check the shift's start and
-end times, and it does not skip cancelled shifts. On a truck with a day and a
-night crew, a tap at 2000 lands on the day shift; a shift nobody closed out
-keeps winning until somebody does.
+**What it resolves to.** The truck's shift running right now; if none is, one
+that ended within the last two hours (a late check-in after the tour); if none
+did, the next one coming up. Cancelled and closed-out shifts are skipped. On a
+truck with a day and a night crew, a tap at 2000 lands on the night shift.
 
 The member lands on a page naming the unit, the date and the hours, so they can
 see which shift they were matched to before confirming. **Tell members to
 actually read it** — that page is the only thing standing between a mis-resolved
 tag and an hour logged against the wrong shift.
 
-> **Room cards do not offer the button, and that is deliberate.** A room's kiosk
-> display code opens a public, unauthenticated screen and is effectively a
-> check-in credential. Writing it to a sticker in a hallway hands it to whoever
-> walks past — and sending a member's phone to a wall display is not a check-in
-> anyway.
+#### Room door tags _(2026-10-02)_
+
+> **Changed 2026-10-02.** Room cards used to offer no **Write NFC tag** action,
+> because the only thing a room card carried was its kiosk display code — a
+> public, unauthenticated check-in credential that must not sit on a sticker in
+> a hallway. That reasoning still holds, and the kiosk code is still never
+> written to a tag. What changed is that a room tag now carries something else.
+
+A room card's **Write NFC tag** writes `/locations/<room id>/check-in`, which
+names the room, not its kiosk. A member who taps it signs in as usual and lands
+on a page that asks the room what is in its check-in window right now:
+
+- **One event** — they are forwarded to that event's own self check-in, and
+  attendance is recorded there exactly as from its QR code.
+- **Several** — "Which event are you here for?" lists them, rather than
+  guessing.
+- **None** — "Nothing to check in to", with **Check again**.
+
+> **Screenshot needed:**
+> _[Signed in as a member, open `/locations/<room id>/check-in` for a room with two events in their check-in window → the "Which event are you here for?" page listing both events.]_
+
+A writer whom the server does not give kiosk codes to (the Vice President, by
+default) sees a **Room NFC Tags** list instead of the room cards — "Write a tag
+for a room's door. Tapping it checks a member into whatever event is open in
+that room." — since a room tag never needed the code. A room deleted after its
+tag was written answers "This tag points at a room that no longer exists. Let an
+officer know so it can be rewritten."
+
+**Badge check-in at a room's kiosk** is a separate, per-room switch on the same
+cards: **Badge check-in**, off for every room until a `locations.manage_nfc_tags`
+holder turns it on, and offered only while the NFC ID Cards integration is
+connected. With it on, the room's public kiosk display reads member ID cards
+(Web NFC on an Android tablet, or a USB reader) and checks the member in to the
+event open there — or out, if they are already in — with nobody signed in at
+the kiosk. Turning it on asks first ("Turn it on only where a card reader is
+mounted beside the display."). The kiosk shows only a first name and last
+initial. A copied card works at an unattended kiosk; that accepted risk is in
+`docs/KNOWN_LIMITATIONS.md`, and the full setup is in
+[Member ID Cards](../../wiki/Member-ID-Cards.md#tapping-in-at-a-room-kiosk-2026-10-03). Migration `040ae44ad286` adds the switch, off for every existing room.
 
 > **A write that fails says so.** You will get an error toast rather than
 > silence. A silent failure looks exactly like a tag that was written, and the
@@ -392,10 +489,10 @@ The **Maintenance** tab (at the facility level or the department-wide view) trac
 ### Creating a Maintenance Record
 
 1. Open the facility or use the department-wide Maintenance tab.
-2. Click **Add Maintenance**.
+2. Click **New Record**.
 3. Select the facility, maintenance type, priority, and description.
 4. Set the scheduled or completed date.
-5. Save.
+5. Click **Create Record** (**Save Changes** when editing one).
 
 ![Facility maintenance view with upcoming items and completed history](./images/06-13-facility-maintenance.png)
 
@@ -414,15 +511,32 @@ The **Inspections** tab tracks scheduled and completed facility inspections:
 ### Recording an Inspection
 
 1. Navigate to the **Inspections** tab.
-2. Click **Add Inspection**.
-3. Select the facility, inspection type, and date.
+2. Click **New Inspection**.
+3. Select the facility, inspection type, and date. The inspector's agency goes in **Inspector Organization**.
 4. Record the findings, pass/fail status, and any deficiencies.
 5. Upload inspection reports or photos.
-6. Save.
+6. Click **Create Inspection** (**Save Changes** when editing one).
+
+> **Corrected 2026-10-04.** These steps named **Add Maintenance** and **Add
+> Inspection**; the buttons are **New Record** and **New Inspection**. Since the
+> 2026-09-29 plain-language pass every facility dialog's save button names what
+> it saves — **Create Record**, **Create Inspection**, **Save Room**, **Save
+> System**, **Save Contact** — or reads **Save Changes** when editing, in place
+> of a bare "Create", "Add" or "Update".
 
 ![Facility inspections table with type, date, inspector, and result](./images/06-14-facility-inspections.png)
 
 ---
+
+### Facility forms check the email address _(2026-09-30)_
+
+The add-facility form and a facility's Overview edit form refuse an email that
+is not one ("Enter an email address like office@example.org."). The server
+accepted any text, and the add form submits from a button rather than a form, so
+the browser never checked it either. From the same review (W49): the four
+maintenance and inspection dialogs, the Overview edit form and the lookup
+editor in **Facility Settings** are named for screen readers, and the section
+navigation and filter strips say which option is selected.
 
 ## Building Systems and Utilities
 
@@ -444,11 +558,7 @@ Track utility accounts and monitor usage:
 2. Add utility accounts (electric, gas, water, internet, etc.).
 3. Record monthly readings to track consumption trends.
 
-> **Corrected 2026-08-12.** There is no Utilities section. Nine
-> `facilitiesService` methods sit over `/facilities/utility-accounts` and
-> `/utility-readings` with **no UI consumer** — `FacilityDetailPage` renders
-> seven sections and this is not one of them. The steps above describe the
-> intended design. Recorded in [Apparatus & Facilities — Four Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#apparatus--facilities--four-guide-sections-with-no-screen-2026-08-08).
+Each utility account lists its twelve most recent readings, newest first, with an **Add reading** button for members who can edit the facility.
 
 ---
 
@@ -462,9 +572,7 @@ Track building improvement and capital projects:
 - Status (Planning, In Progress, Completed)
 - Contractor information
 
-> **Corrected 2026-08-12.** There is no capital-projects screen. Five
-> `facilitiesService` methods exist over `/facilities/capital-projects` with no
-> UI consumer, no route and no page. Recorded in [Apparatus & Facilities — Four Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#apparatus--facilities--four-guide-sections-with-no-screen-2026-08-08).
+Projects are kept in the facility's **Capital Projects** section.
 
 ---
 
@@ -715,34 +823,25 @@ The Equipment Check system provides structured vehicle and equipment inspections
 
 ### Key Points for Apparatus & Facilities Users
 
-- **Deficiency tracking**: When any equipment check item fails, the apparatus is automatically flagged as deficient (`has_deficiency = true`, `deficiency_since` records the date). The deficiency badge appears on the apparatus list and detail pages
+- **Deficiency tracking**: When any equipment check item fails, the apparatus is automatically flagged as deficient. A **Deficiency** badge appears beside the status badge, on the apparatus list row and the detail header. The badge is the whole indicator: it does not show when the deficiency began or link to the failed check. Find the check in **Inventory Administration > Checklist Reports** (`/inventory/admin/checklists/reports`). A healthy apparatus simply carries no badge.
 - **Auto-clear**: When a subsequent full check passes all items, the deficiency flag is automatically cleared
 - **Failure notifications**: Failed check items trigger in-app notifications to shift officers and configurable roles (e.g., apparatus maintenance officer)
 - **Cross-reference**: Equipment check reports are accessible from both the Inventory module (**Inventory Administration > Checklist Reports**, `/inventory/admin/checklists/reports`) and the apparatus detail page
-
-> **Corrected 2026-08-12.** The **Deficiency badge is real** and appears on
-> both the list row and the detail header. The **date is not**:
-> `deficiencySince` is on the TypeScript type and is never rendered, so no
-> screen shows when the deficiency began. There is also no green "OK" badge —
-> a healthy apparatus simply carries no deficiency badge. Recorded in [Apparatus & Facilities — Four Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#apparatus--facilities--four-guide-sections-with-no-screen-2026-08-08).
-
-> **Corrected 2026-08-12.** There is no deficiency **banner** — only the badge
-> described above, beside the status badge — and no link from the apparatus to
-> the equipment check that failed. Reach the check from **Inventory
-> Administration > Checklist Reports** (`/inventory/admin/checklists/reports`)
-> instead — this was _Scheduling > Check Reports_ until 2026-08-31. Recorded in [Apparatus & Facilities — Four Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#apparatus--facilities--four-guide-sections-with-no-screen-2026-08-08).
+- **Lightweight apparatus**: Deficiency flags need the full Apparatus module. A department that tracks vehicles in the lightweight apparatus list gets no badge.
 
 ### Edge Cases — Equipment Checks
 
-| Scenario                                       | Behavior                                                                                                                                           |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Apparatus with no template assigned            | No checklist appears for shifts using this apparatus                                                                                               |
-| Single failed item                             | Marks entire apparatus as deficient                                                                                                                |
-| Passing check after deficiency                 | Clears flag only when ALL items pass                                                                                                               |
-| Expired item (past expiration date)            | Auto-fails regardless of submitted result                                                                                                          |
-| Item below required quantity                   | Auto-fails                                                                                                                                         |
-| Equipment check status: `incomplete` vs `fail` | If not all items are completed, overall status is `incomplete` (overrides `fail`). An incomplete check is distinct from a failed check in reports. |
-| Template resolution fallback                   | System first looks for templates tied to the specific apparatus ID, then falls back to templates matching the apparatus type.                      |
+| Scenario                                                           | Behavior                                                                                                                                                                                    |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Apparatus with no template assigned                                | No checklist appears for shifts using this apparatus                                                                                                                                        |
+| Single failed item                                                 | Marks entire apparatus as deficient                                                                                                                                                         |
+| Passing check after deficiency                                     | Clears flag only when ALL items pass                                                                                                                                                        |
+| Expired item (past expiration date)                                | Auto-fails regardless of submitted result                                                                                                                                                   |
+| Item below required quantity                                       | Auto-fails                                                                                                                                                                                  |
+| Equipment check status: `incomplete` vs `fail`                     | If not all items are completed, overall status is `incomplete` (overrides `fail`). An incomplete check is distinct from a failed check in reports.                                          |
+| Template resolution fallback                                       | A shift template that names checklists wins outright; otherwise the system looks for templates tied to the specific apparatus ID, then falls back to templates matching the apparatus type. |
+| Item marked Fail or Out of service by the crew _(2026-10-04)_      | Needs a note saying what is wrong before the check can be submitted. A fail that a count, reading or expiry date already explains does not                                                  |
+| Department on basic apparatus (no Apparatus module) _(2026-09-30)_ | The checklist builder offers only Apparatus-module units under **Specific Apparatus**, so assign checklists by type. Pinning one basic unit is an open item in `docs/KNOWN_LIMITATIONS.md`  |
 
 ---
 
@@ -972,6 +1071,8 @@ module's lookup configuration — the values you would previously have been
 editing through one-off dialogs scattered across the facility screens.
 
 ![Facility Settings at laptop width: the Facility Types lookup list with order, name, state, owner and usage columns, and the further lookup categories below it](./images/06-28-facility-settings.png)
+
+**[SCREENSHOT — REPLACE `06-28-facility-settings.png`.** The subtitle now reads "Choose the types and statuses offered on facility and maintenance record forms.", each list's line says where its values are offered ("Offered …") instead of "Ordered as shown in facility forms.", and the add button names the value ("Add facility type" rather than "Add"). Re-shoot the same frame.**]**
 
 ### File edits could be silently swallowed
 

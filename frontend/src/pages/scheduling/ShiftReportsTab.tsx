@@ -36,7 +36,7 @@ import {
 import toast from 'react-hot-toast';
 import StarRating from '../../modules/scheduling/components/StarRating';
 import { shiftCompletionService, trainingModuleConfigService } from '../../services/api';
-import { userService } from '../../services/api';
+import { organizationService, userService } from '../../services/api';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
@@ -58,33 +58,37 @@ import { formatDateCustom, formatTime, getTodayLocalDate, toLocalDateString } fr
 import { formatHours } from '../../utils/hoursFormatting';
 import {
   DEFAULT_SKILLS,
-  DEFAULT_CALL_TYPE_OPTIONS,
   DEFAULT_COMPETENCY_LABELS,
   REVIEW_STATUS_STYLES,
   shiftHoursForOneMember,
 } from '../../modules/scheduling/constants/shiftReportConstants';
 import { ReportContentDisplay } from '../../modules/scheduling/components/ReportContentDisplay';
 import { CallTypeChips } from '../../modules/scheduling/components/CallTypeChips';
-import { orgCallTypeChoices, textCallTypeChoices } from '../../modules/scheduling/components/callTypeChoices';
+import { labelCallTypeChoices, orgCallTypeChoices } from '../../modules/scheduling/components/callTypeChoices';
 import { callTypesAreOrgSlugs, useOrgCallTypes } from '../../modules/scheduling/hooks/useCallTypeLabels';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { saveDraft, loadDraft, deleteDraft } from '../../utils/shiftReportDrafts';
 import {
   enqueueShiftReport,
-  listPendingReports,
+  listOwnPendingReports,
   dequeueShiftReport,
   pendingReportCount,
 } from '../../utils/shiftReportOfflineQueue';
+import { isOwnedByCurrentMember } from '../../utils/offlineQueueOwner';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 import { EmptyState } from '../../components/ux/EmptyState';
 
-type ViewMode = 'my-reports' | 'filed-by-me' | 'create' | 'pending-review' | 'flagged' | 'drafts';
+type ViewMode = 'my-reports' | 'filed-by-me' | 'department' | 'create' | 'pending-review' | 'flagged' | 'drafts';
 
 export const ShiftReportsTab: React.FC = () => {
   const { user, checkPermission } = useAuthStore();
+  const userId = user?.id;
   const tz = useTimezone();
   const canManage = checkPermission('training.manage');
+  // Department-wide totals are a leadership view. Every company officer holds
+  // training.manage to file reports, so it cannot be what gates them.
+  const canViewDepartment = canManage && checkPermission('training.view_analytics');
   const isOnline = useOnlineStatus();
   const [pendingOfflineCount, setPendingOfflineCount] = useState(0);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -103,6 +107,11 @@ export const ShiftReportsTab: React.FC = () => {
     const viewParam = searchParams.get('view') as ViewMode | null;
     if (viewParam === 'my-reports') return 'my-reports';
     if (viewParam && canManage && OFFICER_VIEWS.includes(viewParam)) return viewParam;
+    // The server lists only the caller's own drafts to anyone without
+    // training.manage, so the view is safe to open for an acting Shift
+    // Officer arriving from a finalization notice.
+    if (viewParam === 'drafts') return 'drafts';
+    if (viewParam === 'department' && canViewDepartment) return 'department';
     return canManage ? 'filed-by-me' : 'my-reports';
   };
 
@@ -143,6 +152,12 @@ export const ShiftReportsTab: React.FC = () => {
 
   // Batch create state
   const [crewMembers, setCrewMembers] = useState<ShiftCrewMember[]>([]);
+  // Department rule: only each shift's assigned officer files its reports.
+  // The server enforces it; this only keeps the form from offering shifts the
+  // viewer would be refused on.
+  const [officerOnly, setOfficerOnly] = useState(false);
+  // Per-member calls the officer typed over the derived figure, as typed.
+  const [memberCalls, setMemberCalls] = useState<Record<string, string>>({});
   const [selectedCrewIds, setSelectedCrewIds] = useState<Set<string>>(new Set());
   const [traineeEvals, setTraineeEvals] = useState<Record<string, CrewMemberEvaluation>>({});
   const [expandedTraineeId, setExpandedTraineeId] = useState<string | null>(null);
@@ -181,15 +196,41 @@ export const ShiftReportsTab: React.FC = () => {
   const [traineeStats, setTraineeStats] = useState<TraineeShiftStats | null>(null);
   const [officerAnalytics, setOfficerAnalytics] = useState<OfficerShiftAnalytics | null>(null);
   const [draftBadgeCount, setDraftBadgeCount] = useState(0);
+  // A member without training.manage who is the Shift Officer of the linked
+  // shift. The server lets exactly that officer file the shift's reports and
+  // complete the drafts assigned to them, so the tab offers those two things
+  // and nothing else.
+  const [filesAsShiftOfficer, setFilesAsShiftOfficer] = useState(false);
 
-  // Load draft count badge for managers
+  // Draft count badge. Without training.manage the server returns only the
+  // caller's own drafts, which is what makes this safe to ask for everyone.
   useEffect(() => {
-    if (!canManage) return;
     shiftCompletionService
       .getDraftReports()
       .then((drafts) => setDraftBadgeCount(drafts.length))
       .catch(() => {});
-  }, [canManage, viewMode]);
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (canManage || !linkedShiftId) return;
+    let cancelled = false;
+    schedulingService
+      .getShift(linkedShiftId)
+      .then((shift) => {
+        if (cancelled || !userId || String(shift.shift_officer_id ?? '') !== String(userId)) return;
+        setFilesAsShiftOfficer(true);
+        setViewMode('create');
+      })
+      .catch(() => {
+        /* not this member's shift to file — they keep their own view */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canManage, linkedShiftId, userId]);
+
+  // Shown the officer's switch only when there is something behind it.
+  const showOfficerSwitch = !canManage && (filesAsShiftOfficer || draftBadgeCount > 0 || viewMode === 'drafts');
 
   // Load config for visibility and rating settings
   useEffect(() => {
@@ -201,30 +242,53 @@ export const ShiftReportsTab: React.FC = () => {
       });
   }, []);
 
+  // Whether any report is sitting flagged while review is switched off. The
+  // review endpoint does not consult `report_review_required`, so a report
+  // flagged before an administrator turned review off stays flagged — and
+  // with the Flagged view gated on the setting alone it was in no list an
+  // officer could act from. Asked only when review is off: with it on the
+  // view is always offered, and a department that never flags sees nothing
+  // new because the answer is empty.
+  const [hasFlaggedWithReviewOff, setHasFlaggedWithReviewOff] = useState(false);
+  useEffect(() => {
+    if (!canManage || !config || config.report_review_required) return;
+    let cancelled = false;
+    shiftCompletionService
+      .getFlaggedReports()
+      .then((flagged) => {
+        if (!cancelled) setHasFlaggedWithReviewOff(flagged.length > 0);
+      })
+      .catch(() => {
+        /* the view stays hidden, exactly as before this probe existed */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canManage, config]);
+  // Kept while the view is open so clearing the last flag does not pull the
+  // tab out from under the officer who just did it.
+  const showFlaggedView = Boolean(config?.report_review_required) || hasFlaggedWithReviewOff || viewMode === 'flagged';
+
   // Rating display helpers using config
   const ratingLabel = config?.rating_label || 'Performance Rating';
   const ratingScaleType = config?.rating_scale_type || 'stars';
   const ratingScaleLabels = config?.rating_scale_labels || DEFAULT_COMPETENCY_LABELS;
-  const callTypeOptions = config?.shift_review_call_types?.length
-    ? config.shift_review_call_types
-    : DEFAULT_CALL_TYPE_OPTIONS;
-
   const orgCallTypes = useOrgCallTypes();
 
   /**
    * Which vocabulary the draft editor offers for a given report.
    *
-   * A report filed against a count-only shift stores this department's own
-   * type slugs; everything else stores what an officer typed. Offering the
-   * free-text list on the first kind is what let an edit mix the two, leaving
-   * the stored slug unselected on screen and unresolvable afterwards.
+   * Both are the department's one list. A report filed against a count-only
+   * shift stores its slugs; everything else stores text, so it is offered the
+   * same types by label. Offering slugs to a text report is what let an edit
+   * mix the two, leaving values unresolvable afterwards.
    */
   const draftCallTypeChoices = useCallback(
     (report: ShiftCompletionReport) =>
       callTypesAreOrgSlugs(report)
         ? orgCallTypeChoices(orgCallTypes, report.call_types || [])
-        : textCallTypeChoices(callTypeOptions),
-    [orgCallTypes, callTypeOptions]
+        : labelCallTypeChoices(orgCallTypes, report.call_types || []),
+    [orgCallTypes]
   );
 
   const skillOptions = useMemo(() => {
@@ -244,24 +308,31 @@ export const ShiftReportsTab: React.FC = () => {
   }, [config, shiftApparatusType]);
 
   // Load crew status when a shift is selected
-  const loadCrewForShift = useCallback(async (shiftId: string) => {
-    setLoadingCrew(true);
-    setCrewLoadError(false);
-    try {
-      const crew = await shiftCompletionService.getShiftCrewStatus(shiftId);
-      setCrewMembers(crew);
-      const eligible = crew.filter((m) => !m.has_existing_report);
-      setSelectedCrewIds(new Set(eligible.map((m) => m.user_id)));
-      setTraineeEvals({});
-      setCrewRemarks({});
-      setExpandedTraineeId(null);
-    } catch {
-      setCrewLoadError(true);
-      toast.error('Failed to load crew members');
-    } finally {
-      setLoadingCrew(false);
-    }
-  }, []);
+  const loadCrewForShift = useCallback(
+    async (shiftId: string) => {
+      setLoadingCrew(true);
+      setCrewLoadError(false);
+      try {
+        // The author is left off their own crew list: a report about yourself
+        // is refused server-side, and offering the checkbox would only turn it
+        // into a silently skipped row.
+        const crew = (await shiftCompletionService.getShiftCrewStatus(shiftId)).filter((m) => m.user_id !== userId);
+        setCrewMembers(crew);
+        const eligible = crew.filter((m) => !m.has_existing_report);
+        setSelectedCrewIds(new Set(eligible.map((m) => m.user_id)));
+        setTraineeEvals({});
+        setCrewRemarks({});
+        setMemberCalls({});
+        setExpandedTraineeId(null);
+      } catch {
+        setCrewLoadError(true);
+        toast.error('Failed to load crew members');
+      } finally {
+        setLoadingCrew(false);
+      }
+    },
+    [userId]
+  );
 
   // Pre-fill form when navigated with a linked shift ID
   useEffect(() => {
@@ -299,6 +370,8 @@ export const ShiftReportsTab: React.FC = () => {
       if (viewMode === 'my-reports') {
         const data = await shiftCompletionService.getMyReports();
         setReports(data);
+      } else if (viewMode === 'department') {
+        setReports([]);
       } else if (viewMode === 'filed-by-me') {
         const data = await shiftCompletionService.getReportsByOfficer();
         setReports(data);
@@ -333,15 +406,17 @@ export const ShiftReportsTab: React.FC = () => {
         .catch(() => {
           /* stats not critical */
         });
-    } else if (viewMode === 'filed-by-me' && canManage) {
+    } else if ((viewMode === 'filed-by-me' && canManage) || (viewMode === 'department' && canViewDepartment)) {
+      // Cleared first so one view never shows a frame of the other's figures.
+      setOfficerAnalytics(null);
       shiftCompletionService
-        .getOfficerAnalytics()
+        .getOfficerAnalytics(viewMode === 'department' ? 'department' : 'mine')
         .then(setOfficerAnalytics)
         .catch(() => {
           /* analytics not critical */
         });
     }
-  }, [viewMode, canManage]);
+  }, [viewMode, canManage, canViewDepartment]);
 
   // Load members for draft edit forms
   useEffect(() => {
@@ -354,6 +429,21 @@ export const ShiftReportsTab: React.FC = () => {
         });
     }
   }, [viewMode]); // eslint-disable-line react-hooks/exhaustive-deps -- only load once when entering create mode
+
+  useEffect(() => {
+    if (!canManage) return;
+    organizationService
+      .getSettings()
+      .then((settings) => {
+        const block = (settings as Record<string, unknown>).shift_reports as { authorship?: unknown } | undefined;
+        setOfficerOnly(block?.authorship === 'shift_officer');
+      })
+      .catch(() => {
+        /* the server still enforces the rule */
+      });
+  }, [canManage]);
+
+  const offeredShifts = officerOnly ? shiftList.filter((s) => s.shift_officer_id === userId) : shiftList;
 
   // Load recent shifts when entering create mode without a linked shift
   useEffect(() => {
@@ -403,7 +493,9 @@ export const ShiftReportsTab: React.FC = () => {
       return;
     }
     if (draft.crewSelections.length > 0) {
-      setSelectedCrewIds(new Set(draft.crewSelections));
+      // A draft saved before the author was left off the list can still name
+      // them.
+      setSelectedCrewIds(new Set(draft.crewSelections.filter((id) => id !== userId)));
     }
     if (draft.crewRemarks && Object.keys(draft.crewRemarks).length > 0) {
       setCrewRemarks(draft.crewRemarks);
@@ -411,16 +503,19 @@ export const ShiftReportsTab: React.FC = () => {
     if (draft.formData.officer_narrative) {
       setForm((prev) => ({ ...prev, officer_narrative: draft.formData.officer_narrative as string }));
     }
-  }, [form.shift_id, crewMembers.length]);
+  }, [form.shift_id, crewMembers.length, userId]);
 
   // Sync offline queue when connectivity returns
   useEffect(() => {
     if (!isOnline) return;
     const syncQueue = async () => {
-      const pending = await listPendingReports();
+      // Only this member's own reports go out under their session (FE3-34-5).
+      const pending = await listOwnPendingReports();
       if (pending.length === 0) return;
       let synced = 0;
       for (const entry of pending) {
+        // Asked again per entry: the member can change while earlier ones send.
+        if (!isOwnedByCurrentMember(entry)) continue;
         try {
           await shiftCompletionService.batchCreateReports(entry.payload);
           await dequeueShiftReport(entry.id);
@@ -469,8 +564,6 @@ export const ShiftReportsTab: React.FC = () => {
       return { ...prev, skills_observed: [...skills, { skill_name: skillName, demonstrated: true }] };
     });
   };
-
-  const handleToggleCallType = (type: string) => toggleCallType(setForm, type);
 
   const resetNewForm = () => {
     setLinkedShiftLabel(null);
@@ -583,14 +676,27 @@ export const ShiftReportsTab: React.FC = () => {
       ),
     ];
 
+    // Only figures that differ from what the server would derive: an
+    // unchanged member keeps the derived count and the call types with it.
+    const callCorrections: Record<string, number> = {};
+    for (const m of crewMembers) {
+      const typed = memberCalls[m.user_id];
+      if (!selectedCrewIds.has(m.user_id) || typed === undefined || typed.trim() === '') continue;
+      const n = Number.parseInt(typed, 10);
+      if (Number.isNaN(n) || n < 0) continue;
+      if (n !== (m.calls_responded ?? 0)) callCorrections[m.user_id] = n;
+    }
+
     const payload: BatchShiftReportCreate = {
       shift_id: form.shift_id || '',
       shift_date: form.shift_date || '',
       hours_on_shift: form.hours_on_shift || 0,
-      calls_responded: form.calls_responded || 0,
-      ...(form.call_types?.length ? { call_types: form.call_types } : {}),
+      // Read only for an unlinked batch; a linked shift derives each member's
+      // calls server-side, with member_call_counts carrying corrections.
+      calls_responded: 0,
       ...(form.officer_narrative?.trim() ? { officer_narrative: form.officer_narrative.trim() } : {}),
       crew_member_ids: Array.from(selectedCrewIds),
+      ...(Object.keys(callCorrections).length > 0 ? { member_call_counts: callCorrections } : {}),
       ...(allEvaluations.length > 0 ? { trainee_evaluations: allEvaluations } : {}),
       save_as_draft: asDraft,
     };
@@ -617,9 +723,12 @@ export const ShiftReportsTab: React.FC = () => {
       setSelectedCrewIds(new Set());
       setTraineeEvals({});
       setCrewRemarks({});
+      setMemberCalls({});
       setCrewLoadError(false);
       setExpandedTraineeId(null);
-      setViewMode(asDraft ? 'drafts' : 'filed-by-me');
+      // "Written by me" is a training.manage view; an acting Shift Officer
+      // returns to their own.
+      setViewMode(asDraft ? 'drafts' : canManage ? 'filed-by-me' : 'my-reports');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, asDraft ? 'Failed to save drafts' : 'Failed to submit reports'));
     } finally {
@@ -867,7 +976,20 @@ export const ShiftReportsTab: React.FC = () => {
   };
 
   const renderOfficerDashboard = () => {
-    if (!officerAnalytics || officerAnalytics.total_reports === 0) return null;
+    if (!officerAnalytics) return null;
+    const isDepartment = viewMode === 'department';
+    if (officerAnalytics.total_reports === 0) {
+      // "Written by me" has its list's own empty state beneath; the
+      // department view has no list, so it has to say something itself.
+      return isDepartment ? (
+        <EmptyState
+          icon={BarChart3}
+          className="border-theme-surface-border rounded-xl border border-dashed"
+          title="No reports filed yet"
+          description="Department totals appear here once officers file shift reports."
+        />
+      ) : null;
+    }
     const maxReports = Math.max(...officerAnalytics.monthly.map((m) => m.reports), 1);
     const draftCount = officerAnalytics?.status_counts?.['draft'] ?? 0;
     const pendingCount = officerAnalytics?.status_counts?.['pending_review'] ?? 0;
@@ -880,12 +1002,16 @@ export const ShiftReportsTab: React.FC = () => {
     return (
       <div className="card space-y-4 p-4 sm:p-5">
         <h2 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
-          <BarChart3 className="h-4 w-4 text-violet-500" aria-hidden="true" /> Your reporting summary
+          <BarChart3 className="h-4 w-4 text-violet-500" aria-hidden="true" />{' '}
+          {isDepartment ? 'Department reporting summary' : 'Your reporting summary'}
         </h2>
+        {isDepartment && (
+          <p className="text-theme-text-muted -mt-2 text-xs">Every officer&apos;s reports, not only yours.</p>
+        )}
         <div className={`grid grid-cols-2 gap-3 ${tileGrid}`}>
           <div className="rounded-lg border border-violet-500/15 bg-violet-500/5 p-3 text-center">
             <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">{officerAnalytics.total_reports}</p>
-            <p className="text-theme-text-muted mt-0.5 text-xs">Reports written</p>
+            <p className="text-theme-text-muted mt-0.5 text-xs">{isDepartment ? 'Reports filed' : 'Reports written'}</p>
           </div>
           <div className="rounded-lg border border-blue-500/15 bg-blue-500/5 p-3 text-center">
             <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
@@ -1298,19 +1424,22 @@ export const ShiftReportsTab: React.FC = () => {
             )}
 
             {/* Draft edit actions */}
-            {viewMode === 'drafts' && report.review_status === 'draft' && canManage && editingDraftId !== report.id && (
-              <div className="pt-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleEditDraft(report);
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
-                >
-                  <Pencil className="h-4 w-4" /> Complete Draft
-                </button>
-              </div>
-            )}
+            {viewMode === 'drafts' &&
+              report.review_status === 'draft' &&
+              (canManage || report.officer_id === userId) &&
+              editingDraftId !== report.id && (
+                <div className="pt-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditDraft(report);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+                  >
+                    <Pencil className="h-4 w-4" /> Complete Draft
+                  </button>
+                </div>
+              )}
 
             {/* Inline draft edit form */}
             {editingDraftId === report.id && (
@@ -1472,11 +1601,46 @@ export const ShiftReportsTab: React.FC = () => {
             <FileText className="h-5 w-5 text-violet-700 dark:text-violet-300" aria-hidden="true" />
           </div>
           <div>
-            <h2 className="text-theme-text-primary text-lg font-semibold">Shift reports about you</h2>
+            <h2 className="text-theme-text-primary text-lg font-semibold">
+              {viewMode === 'create'
+                ? 'File this shift’s reports'
+                : viewMode === 'drafts'
+                  ? 'Reports to finish'
+                  : 'Shift reports about you'}
+            </h2>
             <p className="text-theme-text-muted text-sm">
-              Feedback your officers write after shifts you worked. Open a report to read it and acknowledge it.
+              {viewMode === 'create' || viewMode === 'drafts'
+                ? 'You were the Shift Officer, so the crew’s reports are yours to file.'
+                : 'Feedback your officers write after shifts you worked. Open a report to read it and acknowledge it.'}
             </p>
           </div>
+        </div>
+      )}
+      {showOfficerSwitch && viewMode !== 'create' && (
+        <div className="segmented-group inline-flex items-center gap-1">
+          {(
+            [
+              ['my-reports', 'About me'],
+              ['drafts', 'Drafts'],
+            ] as const
+          ).map(([mode, label]) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
+                viewMode === mode
+                  ? 'bg-violet-600 text-white'
+                  : 'text-theme-text-secondary hover:text-theme-text-primary'
+              }`}
+            >
+              {label}
+              {mode === 'drafts' && draftBadgeCount > 0 && viewMode !== 'drafts' && (
+                <span className="ml-1 rounded-full bg-blue-600 px-1.5 py-0.5 text-xs leading-none font-bold text-white">
+                  {draftBadgeCount}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
       )}
 
@@ -1509,6 +1673,19 @@ export const ShiftReportsTab: React.FC = () => {
             >
               Written by me
             </button>
+            {canViewDepartment && (
+              <button
+                onClick={() => setViewMode('department')}
+                className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
+                  viewMode === 'department'
+                    ? 'bg-violet-600 text-white'
+                    : 'text-theme-text-secondary hover:text-theme-text-primary'
+                }`}
+                title="Every officer's reports, summed across the department"
+              >
+                <BarChart3 className="h-3.5 w-3.5" aria-hidden="true" /> Department
+              </button>
+            )}
             {config?.report_review_required && (
               <button
                 onClick={() => setViewMode('pending-review')}
@@ -1521,7 +1698,7 @@ export const ShiftReportsTab: React.FC = () => {
                 <ClipboardCheck className="h-3.5 w-3.5" /> Review Queue
               </button>
             )}
-            {config?.report_review_required && (
+            {showFlaggedView && (
               <button
                 onClick={() => setViewMode('flagged')}
                 className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
@@ -1564,7 +1741,7 @@ export const ShiftReportsTab: React.FC = () => {
 
       {/* Analytics dashboards */}
       {viewMode === 'my-reports' && renderTraineeDashboard()}
-      {viewMode === 'filed-by-me' && renderOfficerDashboard()}
+      {(viewMode === 'filed-by-me' || viewMode === 'department') && renderOfficerDashboard()}
 
       {/* Encryption notice for officers */}
       {canManage && viewMode === 'create' && (
@@ -1617,7 +1794,7 @@ export const ShiftReportsTab: React.FC = () => {
                 </div>
               ) : (
                 <div className="max-h-60 space-y-1 overflow-y-auto">
-                  {shiftList
+                  {offeredShifts
                     .filter((s) => {
                       if (!shiftSearchQuery) return true;
                       const q = shiftSearchQuery.toLowerCase();
@@ -1656,8 +1833,12 @@ export const ShiftReportsTab: React.FC = () => {
                         <ChevronDown className="text-theme-text-muted h-4 w-4 -rotate-90" />
                       </button>
                     ))}
-                  {shiftList.length === 0 && (
-                    <p className="text-theme-text-muted py-6 text-center text-sm">No recent shifts found.</p>
+                  {offeredShifts.length === 0 && (
+                    <p className="text-theme-text-muted py-6 text-center text-sm">
+                      {officerOnly
+                        ? 'No recent shifts where you were the Shift Officer. Your department has each shift’s reports filed by its officer.'
+                        : 'No recent shifts found.'}
+                    </p>
                   )}
                 </div>
               )}
@@ -1718,40 +1899,10 @@ export const ShiftReportsTab: React.FC = () => {
                     className="form-input text-sm focus:ring-violet-500"
                   />
                 </div>
-                <div>
-                  <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Calls Responded</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={form.calls_responded || 0}
-                    onChange={(e) => setForm((prev) => ({ ...prev, calls_responded: parseInt(e.target.value) || 0 }))}
-                    className="form-input text-sm focus:ring-violet-500"
-                  />
-                </div>
+                <p className="text-theme-text-muted self-end text-xs">
+                  Calls are counted per member below — from the shift&apos;s call log or its close-out.
+                </p>
               </div>
-
-              {/* Call Types */}
-              {(config?.form_show_call_types ?? true) && (form.calls_responded || 0) > 0 && (
-                <div>
-                  <label className="text-theme-text-secondary mb-2 block text-sm font-medium">Call Types</label>
-                  <div className="flex flex-wrap gap-2">
-                    {callTypeOptions.map((type) => (
-                      <button
-                        key={type}
-                        type="button"
-                        onClick={() => handleToggleCallType(type)}
-                        className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-                          form.call_types?.includes(type)
-                            ? 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-400'
-                            : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-blue-500/30'
-                        }`}
-                      >
-                        {type}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* Officer Narrative (shift-level) */}
               <div>
@@ -1865,6 +2016,27 @@ export const ShiftReportsTab: React.FC = () => {
                                 )}
                               </div>
                             </div>
+                            {isSelected && (
+                              <label className="flex shrink-0 items-center gap-1.5 text-xs">
+                                <span className="text-theme-text-muted">Calls</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  inputMode="numeric"
+                                  className="form-input w-16 px-2 py-1 text-right text-sm tabular-nums"
+                                  aria-label={`Calls for ${member.user_name}`}
+                                  value={memberCalls[member.user_id] ?? String(member.calls_responded ?? 0)}
+                                  onChange={(e) =>
+                                    setMemberCalls((prev) => ({ ...prev, [member.user_id]: e.target.value }))
+                                  }
+                                />
+                                {memberCalls[member.user_id] === undefined && member.calls_source && (
+                                  <span className="text-theme-text-muted hidden sm:inline">
+                                    {member.calls_source === 'closeout' ? 'from close-out' : 'from call log'}
+                                  </span>
+                                )}
+                              </label>
+                            )}
                             {/* Remarks for non-trainees */}
                             {!isTrainee && isSelected && (
                               <input
@@ -2170,8 +2342,8 @@ export const ShiftReportsTab: React.FC = () => {
         </div>
       )}
 
-      {/* Reports List */}
-      {viewMode !== 'create' && (
+      {/* Reports List — the department view is totals only */}
+      {viewMode !== 'create' && viewMode !== 'department' && (
         <>
           {viewMode === 'drafts' && !loading && reports.length > 0 && (
             <div className="mb-3 flex items-center justify-between">

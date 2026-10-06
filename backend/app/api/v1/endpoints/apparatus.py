@@ -51,6 +51,8 @@ from app.schemas.apparatus import (  # Apparatus Type; Apparatus Status; Main Ap
     ApparatusNFPAComplianceCreate,
     ApparatusNFPAComplianceResponse,
     ApparatusNFPAComplianceUpdate,
+    ApparatusNFPASettingsResponse,
+    ApparatusNFPASummaryResponse,
     ApparatusOperatorCreate,
     ApparatusOperatorResponse,
     ApparatusOperatorUpdate,
@@ -89,6 +91,7 @@ from app.services.apparatus_service import ApparatusService
 from app.services.documents_service import DocumentsService
 from app.services.driver_exception_service import DriverExceptionService
 from app.services.evoc_level_service import EvocLevelService
+from app.utils.apparatus_nfpa import apparatus_nfpa_state, require_apparatus_nfpa
 
 router = APIRouter()
 
@@ -1755,6 +1758,7 @@ async def list_nfpa_compliance(
     **Authentication required**
     **Permissions required:** apparatus.view or apparatus.manage
     """
+    await require_apparatus_nfpa(db, current_user.organization_id)
     service = ApparatusService(db)
     records = await service.list_nfpa_compliance(
         organization_id=current_user.organization_id,
@@ -1782,6 +1786,7 @@ async def get_nfpa_compliance(
     **Authentication required**
     **Permissions required:** apparatus.view or apparatus.manage
     """
+    await require_apparatus_nfpa(db, current_user.organization_id)
     service = ApparatusService(db)
     record = await service.get_nfpa_compliance(
         compliance_id=compliance_id,
@@ -1816,6 +1821,7 @@ async def create_nfpa_compliance(
     **Authentication required**
     **Permissions required:** apparatus.edit or apparatus.manage
     """
+    await require_apparatus_nfpa(db, current_user.organization_id)
     service = ApparatusService(db)
 
     try:
@@ -1851,6 +1857,7 @@ async def update_nfpa_compliance(
     **Authentication required**
     **Permissions required:** apparatus.edit or apparatus.manage
     """
+    await require_apparatus_nfpa(db, current_user.organization_id)
     service = ApparatusService(db)
 
     try:
@@ -1890,6 +1897,7 @@ async def delete_nfpa_compliance(
     **Authentication required**
     **Permissions required:** apparatus.manage
     """
+    await require_apparatus_nfpa(db, current_user.organization_id)
     service = ApparatusService(db)
 
     deleted = await service.delete_nfpa_compliance(
@@ -1902,6 +1910,66 @@ async def delete_nfpa_compliance(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="NFPA compliance record not found",
         )
+
+
+@router.get(
+    "/nfpa-settings",
+    response_model=ApparatusNFPASettingsResponse,
+    tags=["NFPA Compliance"],
+)
+async def get_nfpa_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
+):
+    """
+    Whether this department tracks NFPA apparatus compliance
+
+    Unset follows the organization type: on for fire and combined departments,
+    off for EMS-only. Change it with `PATCH /organization/settings`
+    (`apparatus.nfpa_compliance_enabled`).
+
+    **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
+    """
+    enabled, default, choice = await apparatus_nfpa_state(
+        db, current_user.organization_id
+    )
+    return {
+        "enabled": enabled,
+        "default_for_organization_type": default,
+        "explicit_choice": choice,
+    }
+
+
+@router.get(
+    "/{apparatus_id}/nfpa-summary",
+    response_model=ApparatusNFPASummaryResponse,
+    tags=["NFPA Compliance"],
+)
+async def get_nfpa_summary(
+    apparatus_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
+):
+    """
+    NFPA standing for one apparatus: required tests and compliance items
+
+    **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
+    """
+    await require_apparatus_nfpa(db, current_user.organization_id)
+    summary = await ApparatusService(db).get_nfpa_summary(
+        apparatus_id, str(current_user.organization_id)
+    )
+    if summary is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Apparatus not found"
+        )
+    return summary
 
 
 # ============================================================================
@@ -2933,7 +3001,7 @@ def _exception_to_response(exc) -> DriverExceptionResponse:
         id=exc.id,
         organization_id=exc.organization_id,
         user_id=exc.user_id,
-        user_name=exc.user.full_name if exc.user else None,
+        user_name=exc.user.display_name if exc.user else None,
         apparatus_id=exc.apparatus_id,
         apparatus_unit_number=(exc.apparatus.unit_number if exc.apparatus else None),
         reason=(exc.reason.value if hasattr(exc.reason, "value") else str(exc.reason)),
@@ -2943,10 +3011,10 @@ def _exception_to_response(exc) -> DriverExceptionResponse:
         valid_until=exc.valid_until,
         status=(exc.status.value if hasattr(exc.status, "value") else str(exc.status)),
         requested_by=exc.requested_by,
-        requested_by_name=(exc.requester.full_name if exc.requester else None),
+        requested_by_name=(exc.requester.display_name if exc.requester else None),
         requested_at=exc.requested_at,
         reviewed_by=exc.reviewed_by,
-        reviewed_by_name=(exc.reviewer.full_name if exc.reviewer else None),
+        reviewed_by_name=(exc.reviewer.display_name if exc.reviewer else None),
         reviewed_at=exc.reviewed_at,
         review_notes=exc.review_notes,
     )

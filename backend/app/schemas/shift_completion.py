@@ -5,7 +5,7 @@ Pydantic models for shift officer reports on trainee experiences.
 """
 
 from datetime import date, datetime
-from typing import Dict, List, Optional
+from typing import Annotated, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -170,6 +170,12 @@ class BatchShiftReportCreate(BaseModel):
     officer_narrative: Optional[str] = None
     crew_member_ids: List[str] = Field(..., min_length=1, max_length=200)
     trainee_evaluations: Optional[List[CrewMemberEvaluation]] = None
+    # user_id -> calls, for members whose derived count the officer corrected.
+    # Read only when shift_id is set; a member left out keeps the derived
+    # figure, which is why this is a map of exceptions rather than a full list.
+    member_call_counts: Optional[Dict[str, Annotated[int, Field(ge=0, le=500)]]] = (
+        Field(None, max_length=200)
+    )
     save_as_draft: bool = False
 
     @field_validator("shift_date")

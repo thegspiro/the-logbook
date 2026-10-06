@@ -94,6 +94,12 @@ export interface ResourceTypeDefaults {
  * keeps two screens in two modules from reverting each other.
  */
 export interface ShiftReportSettings {
+  /**
+   * Who files a shift's completion reports. `shift_officer` restricts it to
+   * the shift's assigned Shift Officer; absent or `any_officer` keeps the
+   * original rule, anyone with training.manage.
+   */
+  authorship: 'any_officer' | 'shift_officer';
   post_shift_validation: {
     enabled: boolean;
     require_officer_report: boolean;

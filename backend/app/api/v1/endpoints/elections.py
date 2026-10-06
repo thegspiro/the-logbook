@@ -8,7 +8,7 @@ import copy
 import hashlib
 import unicodedata
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
@@ -107,6 +107,7 @@ from app.schemas.election import (
 from app.services.election_service import (
     ElectionService,
     ballot_item_candidate_positions,
+    office_ineligible_message,
 )
 from app.utils.org_scoping import assert_in_org
 
@@ -2122,6 +2123,31 @@ async def _active_vote_count(db: AsyncSession, candidate_id: UUID) -> int:
     return votes_result.scalar() or 0
 
 
+async def _assert_can_hold_office(
+    service: ElectionService, user_id: Any, current_user: User
+) -> None:
+    """Refuse a member whose membership tier cannot hold office (TIER-OFFICE).
+
+    A write-in (no member id) is not checked: there is no tier to read.
+    """
+    if not user_id:
+        return
+    member = (
+        await service.db.execute(
+            select(User)
+            .where(User.id == str(user_id))
+            .where(User.organization_id == str(current_user.organization_id))
+        )
+    ).scalar_one_or_none()
+    if member is not None and not await service.member_can_hold_office(
+        member, current_user.organization_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=office_ineligible_message(member.full_name),
+        )
+
+
 @router.post(
     "/{election_id}/candidates",
     response_model=CandidateResponse,
@@ -2186,6 +2212,7 @@ async def create_candidate(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
+    await _assert_can_hold_office(service, candidate.user_id, current_user)
 
     new_candidate = Candidate(
         id=uuid4(),
@@ -2266,6 +2293,8 @@ async def update_candidate(
     # null is validated too (exclude_unset keeps "omitted" distinct from
     # "cleared", per CLAUDE.md pitfall 1).
     update_data = candidate_update.model_dump(exclude_unset=True)
+    if update_data.get("accepted") is True and not candidate.accepted:
+        await _assert_can_hold_office(service, candidate.user_id, current_user)
     if "position" in update_data and election.positions:
         if update_data["position"] not in election.positions:
             raise HTTPException(

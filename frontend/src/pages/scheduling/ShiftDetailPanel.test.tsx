@@ -136,6 +136,19 @@ describe('ShiftDetailPanel close-out equipment checks', () => {
     expect(screen.getByText(/1 end-of-shift checklist still pending/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Close out shift' })).toBeDisabled();
   });
+
+  it('says when no end-of-shift checklist applies, rather than leaving the row out', async () => {
+    // A ladder shift in a department with only an engine checklist: before
+    // this the equipment row vanished and the section looked complete.
+    vi.mocked(equipmentCheckService.getShiftChecklists).mockResolvedValueOnce([]);
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftDetailPanel shift={shift as never} onClose={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Close out shift' }));
+
+    expect(screen.getByText('No end-of-shift equipment checklist applies to this shift')).toBeInTheDocument();
+    expect(screen.queryByText(/checklist still pending/)).not.toBeInTheDocument();
+  });
 });
 
 /**
@@ -1001,5 +1014,30 @@ describe('ShiftDetailPanel apparatus NFC tag writer', () => {
     grantedPermissions.current = ['scheduling.manage', 'apparatus.manage_nfc_tags'];
     await openQr();
     expect(screen.getByRole('button', { name: /Set up an NFC tag/ })).toBeInTheDocument();
+  });
+});
+
+describe('ShiftDetailPanel File Shift Report button', () => {
+  // The officer on the rig files the shift's reports. Offered to everyone with
+  // scheduling rights, it read as something a regular member could do.
+  afterEach(() => {
+    grantedPermissions.current = null;
+  });
+
+  it('is offered to the shift officer once the shift has ended', async () => {
+    grantedPermissions.current = [];
+    renderWithRouter(<ShiftDetailPanel shift={shift as never} onClose={vi.fn()} />);
+    expect(await screen.findByRole('button', { name: /File Shift Report/ })).toBeInTheDocument();
+  });
+
+  it('is not offered to anyone else, scheduling managers included', async () => {
+    grantedPermissions.current = ['scheduling.manage', 'training.manage'];
+    renderWithRouter(
+      <ShiftDetailPanel shift={{ ...shift, shift_officer_id: 'someone-else' } as never} onClose={vi.fn()} />
+    );
+    // Wait on something the ended-shift block renders for every viewer, so the
+    // absence below is a decision rather than a frame not yet painted.
+    await screen.findByRole('button', { name: 'Close out shift' });
+    expect(screen.queryByRole('button', { name: /File Shift Report/ })).not.toBeInTheDocument();
   });
 });

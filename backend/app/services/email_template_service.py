@@ -43,6 +43,7 @@ from app.services.email_theme import (  # noqa: F401  (re-exported: many service
     TD_STYLE,
     TFOOT_STYLE,
     TH_STYLE,
+    WRAP_STYLE,
     action,
     build_email_document,
     build_logo_block,
@@ -58,6 +59,7 @@ from app.services.email_theme import (  # noqa: F401  (re-exported: many service
     summary_facts,
     title_and_message,
     with_message,
+    with_subline,
 )
 from app.utils.model_updates import apply_updates
 from app.utils.org_timezone import ZONED_DATE_TIME_FORMAT
@@ -241,19 +243,31 @@ def get_variables_for_type(
 # Variable definitions per template type
 TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
     "welcome": [
-        {"name": "first_name", "description": "Recipient's first name"},
+        {
+            "name": "first_name",
+            "description": "Recipient's first name (preferred name if set)",
+        },
         {"name": "last_name", "description": "Recipient's last name"},
-        {"name": "full_name", "description": "Recipient's full name"},
+        {
+            "name": "full_name",
+            "description": "Recipient's full name (preferred name if set)",
+        },
         {"name": "username", "description": "Login username"},
         {"name": "temp_password", "description": "Temporary password"},
     ],
     "password_reset": [
-        {"name": "first_name", "description": "Recipient's first name"},
+        {
+            "name": "first_name",
+            "description": "Recipient's first name (preferred name if set)",
+        },
         {"name": "reset_url", "description": "Password reset link"},
         {"name": "expiry_minutes", "description": "Minutes until link expires"},
     ],
     "inventory_change": [
-        {"name": "first_name", "description": "Member's first name"},
+        {
+            "name": "first_name",
+            "description": "Member's first name (preferred name if set)",
+        },
         {"name": "change_date", "description": "Date the changes occurred"},
         {
             "name": "items_issued_html",
@@ -866,47 +880,28 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "items_list_html": (
                 f'<table style="{TABLE_STYLE}">'
                 "<thead><tr>"
-                f'<th style="{TH_STYLE}text-align:left;">#</th>'
                 f'<th style="{TH_STYLE}text-align:left;">Item</th>'
-                f'<th style="{TH_STYLE}text-align:left;">Serial #</th>'
-                f'<th style="{TH_STYLE}text-align:left;">Asset Tag</th>'
-                f'<th style="{TH_STYLE}text-align:left;">Condition</th>'
-                f'<th style="{TH_STYLE}text-align:right;">Value</th>'
+                f'<th style="{TH_STYLE}text-align:right;width:1%;white-space:nowrap;">Value</th>'
                 "</tr></thead><tbody>"
-                f'<tr><td style="{TD_STYLE}">1</td>'
-                f'<td style="{TD_STYLE}">Turnout Coat (Size L)</td>'
-                f'<td style="{TD_STYLE}">TC-2024-0456</td>'
-                f'<td style="{TD_STYLE}">TCOAT-012</td>'
-                f'<td style="{TD_STYLE}">Good</td>'
-                f'<td style="{TD_STYLE}text-align:right;">$850.00</td></tr>'
-                f'<tr><td style="{TD_STYLE}">2</td>'
-                f'<td style="{TD_STYLE}">Turnout Pants (Size L)</td>'
-                f'<td style="{TD_STYLE}">TP-2024-0789</td>'
-                f'<td style="{TD_STYLE}">TPANT-012</td>'
-                f'<td style="{TD_STYLE}">Good</td>'
-                f'<td style="{TD_STYLE}text-align:right;">$650.00</td></tr>'
-                f'<tr><td style="{TD_STYLE}">3</td>'
-                f'<td style="{TD_STYLE}">Helmet (Black)</td>'
-                f'<td style="{TD_STYLE}">HLM-2024-0089</td>'
-                f'<td style="{TD_STYLE}">HLM-089</td>'
-                f'<td style="{TD_STYLE}">Excellent</td>'
-                f'<td style="{TD_STYLE}text-align:right;">$450.00</td></tr>'
-                f'<tr><td style="{TD_STYLE}">4</td>'
-                f'<td style="{TD_STYLE}">SCBA Mask</td>'
-                f'<td style="{TD_STYLE}">SCBA-2023-0234</td>'
-                f'<td style="{TD_STYLE}">SCBA-234</td>'
-                f'<td style="{TD_STYLE}">Fair</td>'
-                f'<td style="{TD_STYLE}text-align:right;">$350.00</td></tr>'
-                f'<tr><td style="{TD_STYLE}">5</td>'
-                f'<td style="{TD_STYLE}">Radio (Portable)</td>'
-                f'<td style="{TD_STYLE}">RAD-2024-0567</td>'
-                f'<td style="{TD_STYLE}">RAD-567</td>'
-                f'<td style="{TD_STYLE}">Good</td>'
-                f'<td style="{TD_STYLE}text-align:right;">$150.00</td></tr>'
+                f'<tr><td style="{TD_STYLE}{WRAP_STYLE}">'
+                f'{with_subline("Turnout Coat (Size L)", "Condition: Good<br>S/N TC-2024-0456<br>Tag TCOAT-012")}</td>'
+                f'<td style="{TD_STYLE}text-align:right;white-space:nowrap;">$850.00</td></tr>'
+                f'<tr><td style="{TD_STYLE}{WRAP_STYLE}">'
+                f'{with_subline("Turnout Pants (Size L)", "Condition: Good<br>S/N TP-2024-0789<br>Tag TPANT-012")}</td>'
+                f'<td style="{TD_STYLE}text-align:right;white-space:nowrap;">$650.00</td></tr>'
+                f'<tr><td style="{TD_STYLE}{WRAP_STYLE}">'
+                f'{with_subline("Helmet (Black)", "Condition: Excellent<br>S/N HLM-2024-0089<br>Tag HLM-089")}</td>'
+                f'<td style="{TD_STYLE}text-align:right;white-space:nowrap;">$450.00</td></tr>'
+                f'<tr><td style="{TD_STYLE}{WRAP_STYLE}">'
+                f'{with_subline("SCBA Mask", "Condition: Fair<br>S/N SCBA-2023-0234<br>Tag SCBA-234")}</td>'
+                f'<td style="{TD_STYLE}text-align:right;white-space:nowrap;">$350.00</td></tr>'
+                f'<tr><td style="{TD_STYLE}{WRAP_STYLE}">'
+                f'{with_subline("Radio (Portable)", "Condition: Good<br>S/N RAD-2024-0567<br>Tag RAD-567")}</td>'
+                f'<td style="{TD_STYLE}text-align:right;white-space:nowrap;">$150.00</td></tr>'
                 "</tbody>"
                 "<tfoot><tr>"
-                f'<td colspan="5" style="{TFOOT_STYLE}text-align:right;">Total Outstanding Value:</td>'
-                f'<td style="{TFOOT_STYLE}text-align:right;">$2,450.00</td>'
+                f'<td colspan="1" style="{TFOOT_STYLE}text-align:right;">Total Outstanding Value:</td>'
+                f'<td style="{TFOOT_STYLE}text-align:right;white-space:nowrap;">$2,450.00</td>'
                 "</tr></tfoot></table>"
             ),
             "items_list_text": (
@@ -991,31 +986,22 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "items_list_html": (
                 f'<table style="{TABLE_STYLE}">'
                 "<thead><tr>"
-                f'<th style="{TH_STYLE}text-align:left;">#</th>'
                 f'<th style="{TH_STYLE}text-align:left;">Item</th>'
-                f'<th style="{TH_STYLE}text-align:left;">Serial #</th>'
-                f'<th style="{TH_STYLE}text-align:left;">Asset Tag</th>'
-                f'<th style="{TH_STYLE}text-align:right;">Value</th>'
+                f'<th style="{TH_STYLE}text-align:right;width:1%;white-space:nowrap;">Value</th>'
                 "</tr></thead><tbody>"
-                f'<tr><td style="{TD_STYLE}">1</td>'
-                f'<td style="{TD_STYLE}">Turnout Coat (Size L)</td>'
-                f'<td style="{TD_STYLE}">TC-2024-0456</td>'
-                f'<td style="{TD_STYLE}">TCOAT-012</td>'
-                f'<td style="{TD_STYLE}text-align:right;">$500.00</td></tr>'
-                f'<tr><td style="{TD_STYLE}">2</td>'
-                f'<td style="{TD_STYLE}">Helmet (Black)</td>'
-                f'<td style="{TD_STYLE}">HLM-2024-0089</td>'
-                f'<td style="{TD_STYLE}">HLM-089</td>'
-                f'<td style="{TD_STYLE}text-align:right;">$450.00</td></tr>'
-                f'<tr><td style="{TD_STYLE}">3</td>'
-                f'<td style="{TD_STYLE}">Radio (Portable)</td>'
-                f'<td style="{TD_STYLE}">RAD-2024-0567</td>'
-                f'<td style="{TD_STYLE}">RAD-567</td>'
-                f'<td style="{TD_STYLE}text-align:right;">$250.00</td></tr>'
+                f'<tr><td style="{TD_STYLE}{WRAP_STYLE}">'
+                f'{with_subline("Turnout Coat (Size L)", "S/N TC-2024-0456<br>Tag TCOAT-012")}</td>'
+                f'<td style="{TD_STYLE}text-align:right;white-space:nowrap;">$500.00</td></tr>'
+                f'<tr><td style="{TD_STYLE}{WRAP_STYLE}">'
+                f'{with_subline("Helmet (Black)", "S/N HLM-2024-0089<br>Tag HLM-089")}</td>'
+                f'<td style="{TD_STYLE}text-align:right;white-space:nowrap;">$450.00</td></tr>'
+                f'<tr><td style="{TD_STYLE}{WRAP_STYLE}">'
+                f'{with_subline("Radio (Portable)", "S/N RAD-2024-0567<br>Tag RAD-567")}</td>'
+                f'<td style="{TD_STYLE}text-align:right;white-space:nowrap;">$250.00</td></tr>'
                 "</tbody>"
                 "<tfoot><tr>"
-                f'<td colspan="4" style="{TFOOT_STYLE}text-align:right;">Total Outstanding Value:</td>'
-                f'<td style="{TFOOT_STYLE}text-align:right;">$1,200.00</td>'
+                f'<td colspan="1" style="{TFOOT_STYLE}text-align:right;">Total Outstanding Value:</td>'
+                f'<td style="{TFOOT_STYLE}text-align:right;white-space:nowrap;">$1,200.00</td>'
                 "</tr></tfoot></table>"
             ),
             "items_list_text": (
@@ -1085,20 +1071,18 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "quorum_detail": "Quorum requires 50% turnout. Actual: 84.4% (38/45).",
             "results_html": (
                 f'<table style="{TABLE_STYLE}">'
-                f'<tr><th style="{TH_STYLE}text-align:left;">Position</th>'
-                f'<th style="{TH_STYLE}text-align:left;">Candidate</th>'
+                f'<tr><th style="{TH_STYLE}text-align:left;">Candidate</th>'
                 f'<th style="{TH_STYLE}text-align:center;">Votes</th>'
-                f'<th style="{TH_STYLE}text-align:center;">%</th>'
                 f'<th style="{TH_STYLE}text-align:center;">Result</th></tr>'
-                f'<tr><td style="{TD_STYLE}">Captain</td>'
-                f'<td style="{TD_STYLE}">John Smith</td>'
-                f'<td style="{TD_STYLE}text-align:center;">22</td>'
-                f'<td style="{TD_STYLE}text-align:center;">57.9%</td>'
+                f'<tr><td colspan="3" style="{TD_STYLE}{WRAP_STYLE}'
+                f'background-color:#f8fafc;font-weight:600;">Captain</td></tr>'
+                f'<tr><td style="{TD_STYLE}{WRAP_STYLE}">John Smith</td>'
+                f'<td style="{TD_STYLE}text-align:center;white-space:nowrap;">'
+                f'{with_subline("22", "57.9%")}</td>'
                 f'<td style="{TD_STYLE}text-align:center;">\u2705 Elected</td></tr>'
-                f'<tr><td style="{TD_STYLE}">Captain</td>'
-                f'<td style="{TD_STYLE}">Jane Doe</td>'
-                f'<td style="{TD_STYLE}text-align:center;">16</td>'
-                f'<td style="{TD_STYLE}text-align:center;">42.1%</td>'
+                f'<tr><td style="{TD_STYLE}{WRAP_STYLE}">Jane Doe</td>'
+                f'<td style="{TD_STYLE}text-align:center;white-space:nowrap;">'
+                f'{with_subline("16", "42.1%")}</td>'
                 f'<td style="{TD_STYLE}text-align:center;">&mdash;</td></tr>'
                 "</table>"
             ),
@@ -1334,6 +1318,9 @@ _SAMPLE_LINK_HOST = re.compile(r"^https://example\.(?:com|org)(?=/|$)")
 # cannot exist. Each entry follows the variable the default template greets,
 # and the form (first / last / full / username) follows what the real sender
 # passes: shift reminders and election alerts greet by first name.
+# "first" and "full" use the name the member goes by (preferred name), as the
+# everyday senders do; election notices and the storefront's billing name
+# carry the legal name, so they map to "legal_first" / "legal_full".
 # test_email_live_sample_context asserts every greeting variable is listed.
 TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     "welcome": {
@@ -1346,9 +1333,9 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     "event_cancellation": {"recipient_name": "full"},
     "event_reminder": {"recipient_name": "full"},
     "series_end_reminder": {"recipient_name": "full"},
-    "ballot_notification": {"recipient_name": "full"},
-    "election_report": {"recipient_name": "full"},
-    "ballot_eligibility_summary": {"recipient_name": "full"},
+    "ballot_notification": {"recipient_name": "legal_full"},
+    "election_report": {"recipient_name": "legal_full"},
+    "ballot_eligibility_summary": {"recipient_name": "legal_full"},
     "member_dropped": {"member_name": "full"},
     "inventory_change": {"first_name": "first"},
     "cert_expiration": {"recipient_name": "full"},
@@ -1356,8 +1343,8 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     "post_shift_validation": {"recipient_name": "full"},
     "property_return_reminder": {"member_name": "full"},
     "inactivity_warning": {"coordinator_name": "full"},
-    "election_rollback": {"recipient_name": "first"},
-    "election_deleted": {"recipient_name": "first"},
+    "election_rollback": {"recipient_name": "legal_first"},
+    "election_deleted": {"recipient_name": "legal_first"},
     "event_request_status": {"contact_name": "full"},
     "duplicate_application": {"applicant_name": "full"},
     "application_withdrawn": {"applicant_name": "full"},
@@ -1365,7 +1352,10 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     "equipment_request_update": {"member_name": "full"},
     "shift_assignment": {"recipient_name": "full"},
     "shift_reminder": {"recipient_name": "first"},
-    "storefront_order_confirmation": {"first_name": "first", "customer_name": "full"},
+    "storefront_order_confirmation": {
+        "first_name": "legal_first",
+        "customer_name": "legal_full",
+    },
 }
 
 _DATE_TIME = "%B %d, %Y at %I:%M %p"
@@ -1474,12 +1464,16 @@ _PROSE_DATE = re.compile(
 def _recipient_forms(recipient: Any) -> Dict[str, str]:
     first = str(getattr(recipient, "first_name", None) or "").strip()
     last = str(getattr(recipient, "last_name", None) or "").strip()
+    preferred = str(getattr(recipient, "preferred_name", None) or "").strip()
+    given = preferred or first
     return {
-        "first": first,
+        "first": given,
         "last": last,
-        # Built here rather than from User.full_name, which renders a missing
-        # half as the word "None".
-        "full": " ".join(part for part in (first, last) if part),
+        # Built here rather than from User.full_name / display_name, which
+        # render a missing half as the word "None".
+        "full": " ".join(part for part in (given, last) if part),
+        "legal_first": first,
+        "legal_full": " ".join(part for part in (first, last) if part),
         "username": str(getattr(recipient, "username", None) or "").strip(),
     }
 
@@ -2823,37 +2817,49 @@ def build_items_list_html(
         items: List of item dicts with keys: name, serial_number, asset_tag,
                value, and optionally condition.
         total_value: Pre-computed total value of all items.
-        include_condition: Whether to include a Condition column.
+        include_condition: Whether to show each item's condition.
 
     Returns:
         An HTML ``<table>`` string ready for insertion into email templates.
     """
     import html as _h
 
-    cols = ["#", "Item", "Serial #", "Asset Tag"]
-    if include_condition:
-        cols.append("Condition")
-    cols.append("Value")
-
-    header_cells = "".join(
-        f'<th style="{TH_STYLE}text-align:{"right" if c == "Value" else "left"};">{c}</th>'
-        for c in cols
+    # Two columns, Item and Value. Everything else about an item — its
+    # condition, serial number and asset tag — is a grey line under the name:
+    # as columns of their own they ran the table past a phone-width card, and
+    # even a Condition column alone took so much width for its header that the
+    # item name broke mid-word on a small phone.
+    cols = ["Item", "Value"]
+    header_cells = (
+        f'<th style="{TH_STYLE}text-align:left;">Item</th>'
+        f'<th style="{TH_STYLE}text-align:right;width:1%;white-space:nowrap;">'
+        "Value</th>"
     )
     rows = ""
-    for idx, item in enumerate(items, 1):
-        cells = (
-            f'<td style="{TD_STYLE}">{idx}</td>'
-            f'<td style="{TD_STYLE}">{_h.escape(str(item.get("name", "")))}</td>'
-            f'<td style="{TD_STYLE}">{_h.escape(str(item.get("serial_number", "-")))}</td>'
-            f'<td style="{TD_STYLE}">{_h.escape(str(item.get("asset_tag", "-")))}</td>'
-        )
+    for item in items:
+        details = []
         if include_condition:
             cond = item.get("condition", "unknown")
-            cells += f'<td style="{TD_STYLE}">{_h.escape(str(cond).title())}</td>'
-        cells += (
-            f'<td style="{TD_STYLE}text-align:right;">${item.get("value", 0):,.2f}</td>'
+            details.append(f"Condition: {_h.escape(str(cond).title())}")
+        # One identifier per line: joined on one line they wrapped at every
+        # hyphen of a serial number, and a serial is read as one value.
+        details.extend(
+            f"{label} {_h.escape(str(value))}"
+            for label, value in (
+                ("S/N", item.get("serial_number")),
+                ("Tag", item.get("asset_tag")),
+            )
+            # Callers pass "-" or None for a missing identifier; neither is
+            # worth a line under the name.
+            if value and str(value).strip() not in ("", "-")
         )
-        rows += f"<tr>{cells}</tr>"
+        rows += (
+            f'<tr><td style="{TD_STYLE}{WRAP_STYLE}">'
+            f'{with_subline(_h.escape(str(item.get("name", ""))), "<br>".join(details))}'
+            "</td>"
+            f'<td style="{TD_STYLE}text-align:right;white-space:nowrap;">'
+            f'${item.get("value", 0):,.2f}</td></tr>'
+        )
 
     col_count = len(cols)
     return (
@@ -2861,7 +2867,7 @@ def build_items_list_html(
         f"<thead><tr>{header_cells}</tr></thead>"
         f"<tbody>{rows}</tbody>"
         f'<tfoot><tr><td colspan="{col_count - 1}" style="{TFOOT_STYLE}text-align:right;">Total Outstanding Value:</td>'
-        f'<td style="{TFOOT_STYLE}text-align:right;">${total_value:,.2f}</td>'
+        f'<td style="{TFOOT_STYLE}text-align:right;white-space:nowrap;">${total_value:,.2f}</td>'
         "</tr></tfoot></table>"
     )
 

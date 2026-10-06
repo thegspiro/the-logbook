@@ -53,6 +53,7 @@ const pipeline = (overrides: Partial<Pipeline> = {}): Pipeline => ({
   },
   public_status_enabled: true,
   public_show_future_stages: true,
+  auto_transfer_on_approval: false,
   stages: [],
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
@@ -120,5 +121,38 @@ describe('PipelineSettingsPage show upcoming stages', () => {
     renderPage();
 
     expect(screen.getByRole('checkbox', { name: /Show upcoming stages/i })).toBeDisabled();
+  });
+});
+
+describe('PipelineSettingsPage automatic transfer', () => {
+  beforeEach(() => {
+    mockUpdatePipeline.mockReset();
+    mockSetCurrentPipeline.mockReset();
+    mockCurrentPipeline = pipeline();
+  });
+
+  it('shows which way the pipeline is set', () => {
+    mockCurrentPipeline = pipeline({ auto_transfer_on_approval: true });
+    renderPage();
+
+    expect(screen.getByRole('checkbox', { name: /members automatically/i })).toBeChecked();
+  });
+
+  it('turns automatic transfer on for the pipeline', async () => {
+    mockUpdatePipeline.mockResolvedValue(pipeline({ auto_transfer_on_approval: true }));
+    renderPage();
+
+    const toggle = screen.getByRole('checkbox', { name: /members automatically/i });
+    expect(toggle).not.toBeChecked();
+    await userEvent.click(toggle);
+
+    expect(mockUpdatePipeline).toHaveBeenCalledWith('pipe-1', { auto_transfer_on_approval: true });
+    expect(mockSetCurrentPipeline).toHaveBeenCalledWith(expect.objectContaining({ auto_transfer_on_approval: true }));
+  });
+
+  it('says what the switch does, not only its name', () => {
+    renderPage();
+
+    expect(screen.getByText(/Skipping the final stage never converts anyone/)).toBeInTheDocument();
   });
 });

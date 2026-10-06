@@ -6,6 +6,7 @@ Endpoints for user authentication, registration, and session management.
 
 import copy
 import secrets
+from typing import Annotated
 from urllib.parse import urlencode
 
 from fastapi import (
@@ -13,6 +14,7 @@ from fastapi import (
     BackgroundTasks,
     Cookie,
     Depends,
+    Header,
     HTTPException,
     Request,
     status,
@@ -32,8 +34,18 @@ from app.api.dependencies import (
 from app.core.audit import log_audit_event
 from app.core.captcha import require_captcha
 from app.core.config import settings
+from app.core.constants import (
+    AUDIT_CATEGORY_AUTHENTICATION,
+    AUDIT_EVENT_ACCOUNT_LOCKED,
+    AUDIT_EVENT_LOGIN,
+    AUDIT_EVENT_LOGIN_FAILED,
+    AUDIT_EVENT_LOGOUT,
+)
 from app.core.database import database_manager, get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
+from app.core.issued_secrets import recall as recall_issued_secret
+from app.core.issued_secrets import remember as remember_issued_secret
+from app.core.issued_secrets import validate_idempotency_key
 from app.core.permissions import (
     expand_legacy_permissions,
     get_rank_default_permissions,
@@ -44,6 +56,7 @@ from app.core.security_middleware import (
     rate_limit_login,
     rate_limit_password_change,
     rate_limit_password_reset,
+    rate_limit_password_reset_token,
     rate_limit_register,
     rate_limit_token_refresh,
 )
@@ -69,9 +82,16 @@ from app.schemas.auth import (
 from app.schemas.organization import AppearanceSettings, AuthSettings
 from app.schemas.user import normalize_bottom_nav_slots
 from app.services import mfa_service
-from app.services.auth_service import RESET_TOKEN_EXPIRY_MINUTES, AuthService
+from app.services.auth_service import (
+    AUTH_FAILURE_ACCOUNT_LOCKED,
+    RESET_TOKEN_EXPIRY_MINUTES,
+    AuthFailure,
+    AuthService,
+    RefreshTokenSuperseded,
+)
 from app.services.branding_service import get_primary_branding
 from app.services.security_monitoring import security_monitor
+from app.utils.password_expiry import is_password_expired
 from app.utils.security_notifications import notify_security_event
 
 router = APIRouter()
@@ -154,8 +174,6 @@ async def _build_current_user_dict(user: User, db: AsyncSession) -> dict:
     Shared by the login endpoint (inline in response) and GET /auth/me.
     Eagerly loads positions if not already loaded.
     """
-    from datetime import datetime, timezone
-
     # Eager-load positions if the relationship wasn't already loaded
     user_result = await db.execute(
         select(User).where(User.id == user.id).options(selectinload(User.positions))
@@ -177,16 +195,7 @@ async def _build_current_user_dict(user: User, db: AsyncSession) -> dict:
     all_permissions = expand_legacy_permissions(all_permissions)
 
     # HIPAA password age check
-    password_expired = False
-    max_age_days = settings.HIPAA_MAXIMUM_PASSWORD_AGE_DAYS
-    if max_age_days > 0 and user.password_changed_at:
-        pwd_changed = (
-            user.password_changed_at.replace(tzinfo=timezone.utc)
-            if user.password_changed_at.tzinfo is None
-            else user.password_changed_at
-        )
-        age = (datetime.now(timezone.utc) - pwd_changed).days
-        password_expired = age >= max_age_days
+    password_expired = is_password_expired(user)
 
     # Organization timezone
     org_result = await db.execute(
@@ -210,7 +219,9 @@ async def _build_current_user_dict(user: User, db: AsyncSession) -> dict:
         email=user.email,
         first_name=user.first_name,
         last_name=user.last_name,
+        preferred_name=user.preferred_name,
         full_name=user.full_name,
+        display_name=user.display_name,
         organization_id=user.organization_id,
         timezone=org_timezone,
         roles=position_names,
@@ -300,6 +311,41 @@ async def get_captcha_config():
     }
 
 
+_NO_OAUTH = {
+    "googleEnabled": False,
+    "microsoftEnabled": False,
+    "authentikEnabled": False,
+}
+
+
+def sso_provider_is_live(provider: str) -> bool:
+    """Whether the server can actually sign people in through *provider*.
+
+    A department choosing a provider in Settings is not enough: the client
+    credentials live in the server's environment. Both the sign-in buttons and
+    the forgot-password refusal key off this, so a provider chosen but never
+    configured neither shows a dead button nor takes password reset away.
+    """
+    from app.services.oauth_service import (
+        AuthentikOAuthService,
+        GoogleOAuthService,
+        MicrosoftOAuthService,
+    )
+
+    services: dict[
+        str,
+        type[GoogleOAuthService]
+        | type[MicrosoftOAuthService]
+        | type[AuthentikOAuthService],
+    ] = {
+        "google": GoogleOAuthService,
+        "microsoft": MicrosoftOAuthService,
+        "authentik": AuthentikOAuthService,
+    }
+    service = services.get(provider)
+    return bool(service and service.is_configured())
+
+
 @router.get("/oauth-config")
 async def get_oauth_config(
     db: AsyncSession = Depends(get_db),
@@ -320,25 +366,24 @@ async def get_oauth_config(
         row = result.first()
 
         if not row or not row.settings:
-            return {"googleEnabled": False, "microsoftEnabled": False}
+            return dict(_NO_OAUTH)
 
         auth_settings = (
             row.settings.get("auth", {}) if isinstance(row.settings, dict) else {}
         )
         provider = auth_settings.get("provider", "local")
 
-        from app.services.oauth_service import GoogleOAuthService, MicrosoftOAuthService
-
         return {
             # Only advertise a provider when the org selected it AND the server
             # is fully configured for it, so the button never 404s on click.
-            "googleEnabled": provider == "google"
-            and GoogleOAuthService.is_configured(),
+            "googleEnabled": provider == "google" and sso_provider_is_live("google"),
             "microsoftEnabled": provider == "microsoft"
-            and MicrosoftOAuthService.is_configured(),
+            and sso_provider_is_live("microsoft"),
+            "authentikEnabled": provider == "authentik"
+            and sso_provider_is_live("authentik"),
         }
     except Exception:
-        return {"googleEnabled": False, "microsoftEnabled": False}
+        return dict(_NO_OAUTH)
 
 
 # OAuth state cookie: a short-lived, httpOnly token compared against the `state`
@@ -570,6 +615,73 @@ async def oauth_microsoft_callback(
     return await _finish_oauth_login(db, user, request, "microsoft")
 
 
+@router.get("/oauth/authentik")
+async def oauth_authentik_initiate(db: AsyncSession = Depends(get_db)):
+    """
+    Begin the Authentik (OpenID Connect) OAuth flow.
+
+    Sets a CSRF state cookie and redirects to the Authentik consent screen.
+    Returns 404 when Authentik login is not configured.
+    """
+    from app.services.oauth_service import AuthentikOAuthError, AuthentikOAuthService
+
+    if not AuthentikOAuthService.is_configured():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    try:
+        discovery = await AuthentikOAuthService.discovery()
+    except AuthentikOAuthError as exc:
+        return _oauth_fail_redirect(str(exc))
+    return _start_oauth(
+        lambda state: AuthentikOAuthService.build_authorization_url(discovery, state)
+    )
+
+
+@router.get("/oauth/authentik/callback")
+async def oauth_authentik_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    oauth_state_cookie: str | None = Cookie(None, alias=_OAUTH_STATE_COOKIE),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Handle Authentik's redirect back: verify state, exchange the code, map the
+    Authentik identity to an existing local user, and establish the session.
+    """
+    from app.services.oauth_service import AuthentikOAuthError, AuthentikOAuthService
+
+    if not AuthentikOAuthService.is_configured():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    if error:
+        logger.info(f"Authentik OAuth returned error: {error}")
+        return _oauth_fail_redirect("access_denied")
+
+    if (
+        not code
+        or not state
+        or not oauth_state_cookie
+        or not secrets.compare_digest(state, oauth_state_cookie)
+    ):
+        return _oauth_fail_redirect("invalid_state")
+
+    service = AuthentikOAuthService(db)
+    try:
+        claims = await service.exchange_code_for_idinfo(code)
+        user, reason = await service.resolve_user(claims)
+    except AuthentikOAuthError as exc:
+        return _oauth_fail_redirect(str(exc))
+    except Exception as exc:  # noqa: BLE001 - never surface internals to the UA
+        logger.error(f"Unexpected error during Authentik OAuth callback: {exc}")
+        return _oauth_fail_redirect("server_error")
+
+    if not user:
+        return _oauth_fail_redirect(reason or "login_failed")
+
+    return await _finish_oauth_login(db, user, request, "authentik")
+
+
 @router.post(
     "/register",
     status_code=status.HTTP_201_CREATED,
@@ -586,9 +698,8 @@ async def register(
     Creates a new user with the provided information and returns
     authentication tokens.
 
-    Registration is disabled by default (REGISTRATION_ENABLED=false).
-    When enabled, new accounts require admin approval if
-    REGISTRATION_REQUIRES_APPROVAL is true.
+    Registration is disabled by default (REGISTRATION_ENABLED=false). When
+    enabled, a new account is active immediately; there is no approval queue.
 
     Rate limited to 5 requests per minute per IP address to prevent abuse.
 
@@ -656,6 +767,74 @@ async def register(
     return response
 
 
+async def _audit_sign_in(
+    db: AsyncSession,
+    request: Request,
+    event_type: str,
+    severity: str,
+    event_data: dict,
+    *,
+    user_id: str | None,
+    organization_id: str | None,
+    username: str | None = None,
+) -> None:
+    """Write one sign-in event to the audit trail (W02-3).
+
+    HIPAA §164.312(b) audit controls cover sign-in, and the security
+    dashboard's failed-login figure counts these rows. A failure against an
+    identifier that matches no account has no member and no organization,
+    so it is written platform-level (both NULL) rather than guessed into a
+    tenant. ``create_log_entry`` uses a savepoint and swallows its own
+    errors, so a failed audit write never changes the sign-in outcome.
+    """
+    await log_audit_event(
+        db=db,
+        event_type=event_type,
+        event_category=AUDIT_CATEGORY_AUTHENTICATION,
+        severity=severity,
+        event_data=event_data,
+        user_id=user_id,
+        username=username,
+        organization_id=organization_id,
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+
+
+async def _audit_refused_sign_in(
+    db: AsyncSession, request: Request, failure: AuthFailure, *, stage: str
+) -> None:
+    """Audit a refused sign-in, and the lockout it caused, then commit.
+
+    The caller raises next, and ``get_db`` rolls back on an exception, so
+    the rows are committed here or they are lost.
+    """
+    await _audit_sign_in(
+        db,
+        request,
+        AUDIT_EVENT_LOGIN_FAILED,
+        "warning",
+        {"reason": failure.reason, "stage": stage},
+        user_id=failure.user_id,
+        organization_id=failure.organization_id,
+    )
+    if failure.locked_now:
+        await _audit_sign_in(
+            db,
+            request,
+            AUDIT_EVENT_ACCOUNT_LOCKED,
+            "warning",
+            {
+                "stage": stage,
+                "max_attempts": settings.MAX_LOGIN_ATTEMPTS,
+                "lockout_minutes": settings.ACCOUNT_LOCKOUT_DURATION_MINUTES,
+            },
+            user_id=failure.user_id,
+            organization_id=failure.organization_id,
+        )
+    await db.commit()
+
+
 @router.post(
     "/login",
     dependencies=[rate_limit_login(), Depends(enforce_suspicious_ip)],
@@ -712,6 +891,12 @@ async def login(
             await record_auth_failure(login_ip)
         except Exception:
             logger.debug("suspicious-IP counter update failed on login failure")
+        await _audit_refused_sign_in(
+            db,
+            request,
+            auth_service.last_auth_failure or AuthFailure("unknown"),
+            stage="password",
+        )
         raise CodedHTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=auth_error or "Incorrect username or password",
@@ -721,6 +906,16 @@ async def login(
 
     # Check if user is active
     if not user.is_active:
+        await _audit_refused_sign_in(
+            db,
+            request,
+            AuthFailure(
+                "account_inactive",
+                user_id=str(user.id),
+                organization_id=str(user.organization_id),
+            ),
+            stage="password",
+        )
         raise CodedHTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is inactive. Please contact an administrator.",
@@ -778,6 +973,17 @@ async def login(
             detail="Service temporarily unavailable. Please try again in a few moments.",
             error_code=ErrorCode.SYS_DB_UNAVAILABLE,
         )
+
+    await _audit_sign_in(
+        db,
+        request,
+        AUDIT_EVENT_LOGIN,
+        "info",
+        {"method": "password"},
+        user_id=str(user.id),
+        organization_id=str(user.organization_id),
+        username=user.username,
+    )
 
     # SEC: Tokens are transported exclusively via httpOnly cookies.
     # Do not include tokens in the JSON body to prevent XSS exfiltration.
@@ -951,19 +1157,33 @@ async def mfa_login(
     if locked_until and locked_until.tzinfo is None:
         locked_until = locked_until.replace(tzinfo=timezone.utc)
     if locked_until and locked_until > now:
+        await _audit_refused_sign_in(
+            db,
+            request,
+            AuthFailure(
+                AUTH_FAILURE_ACCOUNT_LOCKED,
+                user_id=str(user.id),
+                organization_id=str(user.organization_id),
+            ),
+            stage="second_factor",
+        )
         raise invalid
 
     verified = False
+    method = None
     if data.code:
         verified = await _verify_and_consume_totp(db, user, data.code)
+        method = "password+totp" if verified else None
     if not verified and data.recovery_code:
         verified = await _verify_and_consume_recovery_code(db, user, data.recovery_code)
+        method = "password+recovery_code" if verified else None
 
     if not verified:
         # Count the failed second factor toward the account lockout, mirroring
         # the password-step logic in AuthService.authenticate_user.
         user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
-        if user.failed_login_attempts >= settings.MAX_LOGIN_ATTEMPTS:
+        locked_now = user.failed_login_attempts >= settings.MAX_LOGIN_ATTEMPTS
+        if locked_now:
             user.locked_until = now + timedelta(
                 minutes=settings.ACCOUNT_LOCKOUT_DURATION_MINUTES
             )
@@ -983,7 +1203,18 @@ async def mfa_login(
             )
         except Exception:
             logger.debug("brute-force detection failed on MFA failure")
-        await db.commit()
+        # Commits the counter above along with the audit rows.
+        await _audit_refused_sign_in(
+            db,
+            request,
+            AuthFailure(
+                "invalid_second_factor",
+                user_id=str(user.id),
+                organization_id=str(user.organization_id),
+                locked_now=locked_now,
+            ),
+            stage="second_factor",
+        )
         try:
             await record_auth_failure(get_client_ip(request))
         except Exception:
@@ -1020,6 +1251,16 @@ async def mfa_login(
         user=user,
         ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
+    )
+    await _audit_sign_in(
+        db,
+        request,
+        AUDIT_EVENT_LOGIN,
+        "info",
+        {"method": method},
+        user_id=str(user.id),
+        organization_id=str(user.organization_id),
+        username=user.username,
     )
 
     body: dict = {
@@ -1068,14 +1309,42 @@ async def mfa_setup(
     return {"secret": secret, "qr_code_url": uri}
 
 
+def _replay_is_current(user: User, replayed: dict) -> bool:
+    """Whether a remembered recovery-code set is still the member's live set.
+
+    A replay must never hand back codes that no longer work: if the set was
+    replaced since (another regeneration) or MFA was turned off, the stored
+    response is stale and the request is handled as if it carried no key.
+    Codes the member has since spent are absent from the stored hashes, so the
+    test is that every live hash belongs to the replayed set.
+    """
+    live = set(user.mfa_backup_codes or [])
+    codes = replayed.get("recovery_codes")
+    if not user.mfa_enabled or not live or not isinstance(codes, list):
+        return False
+    return live <= {mfa_service.hash_recovery_code(str(c)) for c in codes}
+
+
 @router.post("/mfa/verify-setup", dependencies=[rate_limit_login()])
 async def mfa_verify_setup(
     data: MFAVerify,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ):
-    """Confirm enrollment: verify a code, enable MFA, return recovery codes."""
+    """Confirm enrollment: verify a code, enable MFA, return recovery codes.
+
+    A retry carrying the same ``Idempotency-Key`` and code gets the same codes
+    back for a short window (AUTH-7). It is answered before the checks below
+    because by then MFA is enabled and the authenticator code is spent.
+    """
+    key = validate_idempotency_key(idempotency_key)
+    replayed = await recall_issued_secret(
+        user_id=str(current_user.id), scope="mfa_verify_setup", key=key, body=data.code
+    )
+    if replayed is not None and _replay_is_current(current_user, replayed):
+        return replayed
     if current_user.mfa_enabled:
         raise HTTPException(status_code=400, detail="MFA is already enabled")
     if not current_user.mfa_secret:
@@ -1094,6 +1363,17 @@ async def mfa_verify_setup(
         mfa_service.hash_recovery_code(c) for c in recovery_codes
     ]
     await db.commit()
+    # Kept as soon as the set is committed, so a response lost to anything
+    # after this point (the audit write, the notice, the network) can still
+    # be recovered by a retry. Shown once otherwise.
+    response = {"recovery_codes": recovery_codes}
+    await remember_issued_secret(
+        user_id=str(current_user.id),
+        scope="mfa_verify_setup",
+        key=key,
+        body=data.code,
+        response=response,
+    )
 
     await log_audit_event(
         db=db,
@@ -1115,8 +1395,7 @@ async def mfa_verify_setup(
         ),
         background_tasks=background_tasks,
     )
-    # Recovery codes are shown exactly once.
-    return {"recovery_codes": recovery_codes}
+    return response
 
 
 @router.post("/mfa/disable", dependencies=[rate_limit_login()])
@@ -1185,13 +1464,25 @@ async def mfa_regenerate_recovery_codes(
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ):
     """Regenerate the member's MFA recovery codes after verifying a code.
 
     The new set replaces the old one (any previously issued codes stop
-    working) and is returned exactly once. Requires a current authenticator
-    code to confirm the member still controls the device.
+    working) and is returned once. Requires a current authenticator code to
+    confirm the member still controls the device. A retry carrying the same
+    ``Idempotency-Key`` and code gets the same set back for a short window
+    rather than failing on the spent code (AUTH-7).
     """
+    key = validate_idempotency_key(idempotency_key)
+    replayed = await recall_issued_secret(
+        user_id=str(current_user.id),
+        scope="mfa_recovery_codes",
+        key=key,
+        body=data.code,
+    )
+    if replayed is not None and _replay_is_current(current_user, replayed):
+        return replayed
     if not current_user.mfa_enabled:
         raise HTTPException(status_code=400, detail="MFA is not enabled")
     if not await _verify_and_consume_totp(db, current_user, data.code):
@@ -1207,6 +1498,17 @@ async def mfa_regenerate_recovery_codes(
         mfa_service.hash_recovery_code(c) for c in recovery_codes
     ]
     await db.commit()
+    # Kept as soon as the set is committed, so a response lost to anything
+    # after this point (the audit write, the notice, the network) can still
+    # be recovered by a retry. Shown once otherwise.
+    response = {"recovery_codes": recovery_codes}
+    await remember_issued_secret(
+        user_id=str(current_user.id),
+        scope="mfa_recovery_codes",
+        key=key,
+        body=data.code,
+        response=response,
+    )
 
     await log_audit_event(
         db=db,
@@ -1229,8 +1531,7 @@ async def mfa_regenerate_recovery_codes(
         ),
         background_tasks=background_tasks,
     )
-    # New recovery codes are shown exactly once.
-    return {"recovery_codes": recovery_codes}
+    return response
 
 
 @router.get("/mfa/policy", response_model=MFAPolicy)
@@ -1322,6 +1623,15 @@ async def refresh_token(
         new_access_token, new_refresh_token = await auth_service.refresh_access_token(
             rt
         )
+    except RefreshTokenSuperseded:
+        # 409, not 401: the session is alive and the shared cookie jar already
+        # holds the tokens the parallel request was issued. A 401 here would
+        # send this tab to the login page for no reason.
+        raise CodedHTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This session was just refreshed by another request.",
+            error_code=ErrorCode.AUTH_REFRESH_SUPERSEDED,
+        )
     except OperationalError as exc:
         logger.error(f"Database connection error during token refresh: {exc}")
         raise CodedHTTPException(
@@ -1385,6 +1695,17 @@ async def logout(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Unable to end your session. Please close your browser and log in again.",
         )
+
+    await _audit_sign_in(
+        db,
+        request,
+        AUDIT_EVENT_LOGOUT,
+        "info",
+        {},
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+        username=current_user.username,
+    )
 
     response = JSONResponse(content={"message": "Successfully logged out"})
     _clear_auth_cookies(response)
@@ -1508,17 +1829,48 @@ async def forgot_password(
     org_settings = organization.settings or {}
     auth_config = AuthSettings(**org_settings.get("auth", {}))
 
-    if not auth_config.is_local_auth():
+    # A provider the department chose but the server cannot sign anyone in
+    # through leaves members with only their passwords, so they keep reset
+    # (W01-11): refusing it there locked every member out of recovery.
+    if not auth_config.is_local_auth() and sso_provider_is_live(auth_config.provider):
         provider_names = {
             "google": "Google",
             "microsoft": "Microsoft",
-            "authentik": "your SSO provider",
+            "authentik": "Authentik",
         }
         provider_label = provider_names.get(auth_config.provider, auth_config.provider)
         return {
             "message": f"This organization uses {provider_label} for authentication. "
             f"Please reset your password through {provider_label}.",
             "auth_provider": auth_config.provider,
+        }
+
+    # Email off is a fact about the department, not the account, so saying so
+    # reveals nothing about which addresses exist. Issue no token: one nobody
+    # can receive only starts the cooldown, and the member's way back is an
+    # administrator's Reset Password (W03-6). Same test the send path and Add
+    # Member's welcome email apply.
+    from app.services.email_service import EmailService
+
+    if not EmailService(organization).can_send:
+        await log_audit_event(
+            db=db,
+            event_type="auth.password_reset_requested",
+            event_category="auth",
+            severity="INFO",
+            event_data={
+                "email": reset_request.email,
+                "token_issued": False,
+                "reason": "email_disabled",
+                "organization_id": str(organization.id),
+            },
+            ip_address=ip_address,
+            user_agent=request.headers.get("user-agent"),
+        )
+        return {
+            "message": "Password reset emails are turned off for this department. "
+            "Ask an administrator to reset your password.",
+            "email_disabled": True,
         }
 
     # Generate reset token
@@ -1550,8 +1902,6 @@ async def forgot_password(
     # here, never the request `db` or detached ORM objects (`user`,
     # `organization`).
     if user and raw_token:
-        from app.services.email_service import EmailService
-
         # Use URL fragment (#) instead of query param so the token is
         # never sent to the server in Referer headers or logged in access logs.
         reset_url = f"{settings.FRONTEND_URL}/reset-password#token={raw_token}"
@@ -1559,10 +1909,8 @@ async def forgot_password(
         org_name = organization.name
         expiry_minutes = RESET_TOKEN_EXPIRY_MINUTES
         recipient_email = user.email
-        recipient_first_name = user.first_name or user.username
-        recipient_full_name = (
-            f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username
-        )
+        recipient_first_name = user.preferred_name or user.first_name or user.username
+        recipient_full_name = user.display_name or user.username
         it_team = org_settings.get("it_team", {})
         it_emails = [m["email"] for m in it_team.get("members", []) if m.get("email")]
 
@@ -1625,7 +1973,7 @@ async def forgot_password(
     }
 
 
-@router.post("/reset-password", dependencies=[rate_limit_password_reset()])
+@router.post("/reset-password", dependencies=[rate_limit_password_reset_token()])
 async def reset_password(
     reset_data: PasswordReset,
     request: Request,
@@ -1672,7 +2020,7 @@ async def reset_password(
     }
 
 
-@router.post("/validate-reset-token", dependencies=[rate_limit_password_reset()])
+@router.post("/validate-reset-token", dependencies=[rate_limit_password_reset_token()])
 async def validate_reset_token(
     token_data: ValidateResetToken,
     db: AsyncSession = Depends(get_db),

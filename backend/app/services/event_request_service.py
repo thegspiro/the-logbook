@@ -28,6 +28,7 @@ from app.services.email_policy import (
     department_required_kinds,
     member_receives_email,
 )
+from app.utils.member_names import format_display_name
 from app.utils.outreach_roles import (
     MAX_TOTAL_SEATS,
     normalize_staffing_roles,
@@ -417,11 +418,13 @@ def lead_time_error(
 async def get_user_name(db: AsyncSession, user_id: str) -> Optional[str]:
     """Look up a user's display name."""
     result = await db.execute(
-        select(User.first_name, User.last_name).where(User.id == user_id)
+        select(User.first_name, User.last_name, User.preferred_name).where(
+            User.id == user_id
+        )
     )
     row = result.first()
     if row:
-        return f"{row[0]} {row[1]}".strip()
+        return format_display_name(row[0], row[1], row[2])
     return None
 
 
@@ -681,7 +684,9 @@ async def send_request_notification(
                 from app.services.email_service import build_email_logo_html
 
                 outreach_label = event_request.outreach_type.replace("_", " ").title()
-                e_assignee = _html.escape(assignee.first_name or "")
+                e_assignee = _html.escape(
+                    assignee.preferred_name or assignee.first_name or ""
+                )
                 e_contact = _html.escape(event_request.contact_name or "")
                 e_outreach = _html.escape(outreach_label)
                 e_org_name = _html.escape(event_request.organization_name or "N/A")
@@ -979,7 +984,7 @@ async def get_staffing_state(
         volunteers.append(
             {
                 "user_id": assignment.user_id,
-                "member_name": f"{member.first_name} {member.last_name}".strip(),
+                "member_name": member.display_name,
                 "position": getattr(position, "value", str(position)),
                 "outreach_role": role,
                 "outreach_role_label": role_label(configured, role),

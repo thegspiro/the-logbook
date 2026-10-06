@@ -503,6 +503,13 @@ export type RequestStatus = (typeof RequestStatus)[keyof typeof RequestStatus];
  */
 export const DRIVER_NOT_QUALIFIED_CODE = 'LB-SCHED-001';
 
+/**
+ * Support code for a two-way shift exchange whose members are not both
+ * qualified for the seat they would take. The approve flow keys its
+ * "approve anyway" offer off this, not the message text.
+ */
+export const EXCHANGE_NOT_QUALIFIED_CODE = 'LB-SCHED-002';
+
 // The qualification a course certifies its holder in. Values must match
 // QUALIFICATIONS in backend/app/services/qualification_service.py — a course
 // that names a code the backend does not know grants nothing, so a test parses
@@ -887,6 +894,12 @@ export const Standing = {
   COMPLIANT: 'compliant',
   AT_RISK: 'at_risk',
   NON_COMPLIANT: 'non_compliant',
+  /**
+   * Nothing grades this member: no requirement applies, or every one that does
+   * is still in its catch-up period. Not a pass — the member is left out of
+   * every compliance percentage and shown muted, with no percentage of their own.
+   */
+  NOT_APPLICABLE: 'not_applicable',
 } as const;
 export type Standing = (typeof Standing)[keyof typeof Standing];
 
@@ -982,3 +995,17 @@ export const FiscalYearLabel = {
   START: 'start',
 } as const;
 export type FiscalYearLabel = (typeof FiscalYearLabel)[keyof typeof FiscalYearLabel];
+
+/** Which way a printed CR80 ID card is laid out. */
+export const IdCardOrientation = {
+  LANDSCAPE: 'landscape',
+  PORTRAIT: 'portrait',
+} as const;
+export type IdCardOrientation = (typeof IdCardOrientation)[keyof typeof IdCardOrientation];
+
+/** Whether a printed ID card has a back (the code and a return address). */
+export const IdCardSides = {
+  FRONT: 'front',
+  BOTH: 'both',
+} as const;
+export type IdCardSides = (typeof IdCardSides)[keyof typeof IdCardSides];

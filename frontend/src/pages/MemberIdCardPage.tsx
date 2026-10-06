@@ -4,8 +4,10 @@
  * Displays a mobile-friendly digital ID card for a member, including:
  * - Photo, name, rank, station, membership number
  * - Organization name and logo
- * - QR code encoding the member's ID for scanning (e.g., gear assignment)
- * - Code128 barcode of the membership number (for USB barcode scanners)
+ * - QR code and Code128 barcode of the member's badge code, which the server
+ *   issues at random (GET /member-badges/:id). It used to be the membership
+ *   number and the member's id, which every member can read off the
+ *   directory, so anyone could make a working copy of a colleague's badge.
  * - Member status badge
  *
  * Accessible at /members/:userId/id-card. Any authenticated user can view
@@ -20,9 +22,12 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router';
 import { QRCodeSVG } from 'qrcode.react';
 import JsBarcode from 'jsbarcode';
-import { CreditCard, Printer, ArrowLeft } from 'lucide-react';
+import { CreditCard, Printer, ArrowLeft, RefreshCw } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { userService, organizationService } from '../services/api';
 import type { OrganizationProfile } from '../services/api';
+import { memberBadgeService } from '../services/memberBadgeService';
+import { useConfirm } from '../contexts/ConfirmContext';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
 import { formatDate } from '../utils/dateFormatting';
@@ -30,7 +35,8 @@ import { useTimezone } from '../hooks/useTimezone';
 import { useRanks } from '../hooks/useRanks';
 import type { UserWithRoles } from '../types/role';
 import { isAdministrativeMember } from '../utils/membership';
-import { canViewMemberIdCard } from '../utils/memberIdCardAccess';
+import { VIEW_OTHER_MEMBER_ID_CARD_PERMISSIONS, canViewMemberIdCard } from '../utils/memberIdCardAccess';
+import { displayNameOf, givenName } from '../utils/memberName';
 
 const STATUS_COLORS: Record<string, string> = {
   active: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
@@ -49,12 +55,18 @@ export const MemberIdCardPage: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
   const { user: currentUser, checkPermission } = useAuthStore();
   const allowed = canViewMemberIdCard(currentUser?.id, userId, checkPermission);
+  // Reissuing cancels every badge printed before, so it is the badge
+  // officers' decision — never the member's own.
+  const canReissue = VIEW_OTHER_MEMBER_ID_CARD_PERMISSIONS.some((permission) => checkPermission(permission));
+  const { confirm } = useConfirm();
   const { formatRank } = useRanks();
   const tz = useTimezone();
   const barcodeRef = useRef<SVGSVGElement>(null);
   const [barcodeReady, setBarcodeReady] = useState(false);
 
   const [member, setMember] = useState<UserWithRoles | null>(null);
+  const [badgeCode, setBadgeCode] = useState<string | null>(null);
+  const [reissuing, setReissuing] = useState(false);
   const [org, setOrg] = useState<OrganizationProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,12 +80,14 @@ export const MemberIdCardPage: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const [userData, orgData] = await Promise.all([
+      const [userData, orgData, badge] = await Promise.all([
         userService.getUserWithRoles(userId),
         organizationService.getProfile(),
+        memberBadgeService.getBadge(userId),
       ]);
       setMember(userData);
       setOrg(orgData);
+      setBadgeCode(badge.badge_code);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Unable to load the ID card.'));
     } finally {
@@ -85,36 +99,42 @@ export const MemberIdCardPage: React.FC = () => {
     void fetchData();
   }, [fetchData]);
 
-  // Render the Code128 barcode when the member data loads
+  // Render the Code128 barcode once the badge code loads
   useEffect(() => {
-    if (barcodeRef.current && member?.membership_number) {
-      try {
-        JsBarcode(barcodeRef.current, member.membership_number, {
-          format: 'CODE128',
-          width: 2,
-          height: 50,
-          displayValue: false,
-          margin: 0,
-        });
-      } catch {
-        // If the membership number contains invalid characters, skip the barcode
-      }
+    if (barcodeRef.current && badgeCode) {
+      JsBarcode(barcodeRef.current, badgeCode, {
+        format: 'CODE128',
+        width: 2,
+        height: 50,
+        displayValue: false,
+        margin: 0,
+      });
     }
-    // Mark barcode as ready once the effect has run (even if no barcode was needed)
     if (member) {
       setBarcodeReady(true);
     }
-  }, [member?.membership_number, member]);
+  }, [badgeCode, member]);
 
-  /** Build the QR payload — a JSON string with the member's ID and membership number. */
-  const getQRValue = (): string => {
-    if (!member || !currentUser) return '';
-    return JSON.stringify({
-      type: 'member_id',
-      id: member.id,
-      membership_number: member.membership_number ?? '',
-      org: currentUser.organization_id,
+  const handleReissue = async () => {
+    if (!userId) return;
+    const ok = await confirm({
+      title: 'Reissue this badge?',
+      message:
+        'Every badge printed for this member so far, and their phone card until it reloads, stops scanning. Print them a new card afterwards.',
+      confirmLabel: 'Reissue badge',
+      cancelLabel: 'Keep current badge',
     });
+    if (!ok) return;
+    setReissuing(true);
+    try {
+      const badge = await memberBadgeService.reissue(userId);
+      setBadgeCode(badge.badge_code);
+      toast.success('New badge code issued. Print a new card.');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not reissue the badge. Try again.'));
+    } finally {
+      setReissuing(false);
+    }
   };
 
   if (!allowed) {
@@ -173,10 +193,11 @@ export const MemberIdCardPage: React.FC = () => {
     );
   }
 
-  const displayName =
-    member.full_name || `${member.first_name ?? ''} ${member.last_name ?? ''}`.trim() || member.username;
-  const initials = (member.first_name?.[0] ?? member.username?.[0] ?? '?').toUpperCase();
-  const qrValue = getQRValue();
+  // The card carries the name the member goes by — it is what colleagues
+  // know them as at a scene; the legal name is on their profile.
+  const displayName = displayNameOf(member) || member.username;
+  const initials = (givenName(member)[0] ?? member.username?.[0] ?? '?').toUpperCase();
+  const qrValue = badgeCode ?? '';
   const isAdministrative = isAdministrativeMember(undefined, member.membership_type);
 
   return (
@@ -269,22 +290,26 @@ export const MemberIdCardPage: React.FC = () => {
               </div>
             )}
 
-            {/* Membership Number + Barcode */}
-            {member.membership_number && (
+            {/* Membership number (text) + badge code barcode */}
+            {badgeCode && (
               <div
                 className="bg-theme-surface-hover mb-4 rounded-lg px-4 py-2 text-center print:border print:border-gray-200 print:bg-gray-50"
                 data-testid="barcode-container"
               >
-                <p className="text-theme-text-muted text-xs tracking-wider uppercase print:text-gray-500">
-                  Membership #
-                </p>
-                <p className="text-theme-text-primary font-mono text-lg font-bold tracking-wide print:text-black">
-                  {member.membership_number}
-                </p>
+                {member.membership_number && (
+                  <>
+                    <p className="text-theme-text-muted text-xs tracking-wider uppercase print:text-gray-500">
+                      Membership #
+                    </p>
+                    <p className="text-theme-text-primary font-mono text-lg font-bold tracking-wide print:text-black">
+                      {member.membership_number}
+                    </p>
+                  </>
+                )}
                 <div className="mt-1">
-                  {/* Constrain the intrinsic SVG width so long membership
-                      numbers scale down to fit the card on narrow phones
-                      instead of overflowing horizontally. */}
+                  {/* Constrain the intrinsic SVG width so the barcode scales
+                      down to fit the card on narrow phones instead of
+                      overflowing horizontally. */}
                   <svg
                     ref={barcodeRef}
                     data-testid="barcode"
@@ -292,6 +317,12 @@ export const MemberIdCardPage: React.FC = () => {
                     style={{ maxWidth: '100%', height: 'auto' }}
                   />
                 </div>
+                <p
+                  className="text-theme-text-muted font-mono text-xs tracking-widest print:text-gray-500"
+                  data-testid="badge-code"
+                >
+                  {badgeCode}
+                </p>
               </div>
             )}
 
@@ -331,6 +362,17 @@ export const MemberIdCardPage: React.FC = () => {
           <Printer className="h-4 w-4" />
           Print ID Card
         </button>
+        {canReissue && (
+          <button
+            type="button"
+            onClick={() => void handleReissue()}
+            disabled={reissuing || !badgeCode}
+            className="btn-secondary ml-2 inline-flex items-center gap-2 px-5 text-sm font-medium transition disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${reissuing ? 'animate-spin' : ''}`} />
+            Reissue badge
+          </button>
+        )}
       </div>
     </div>
   );

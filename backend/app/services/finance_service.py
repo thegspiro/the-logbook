@@ -80,9 +80,10 @@ from app.services.separation_of_duties import (
     assert_different_person,
 )
 from app.utils.csv_export import SafeCsvWriter
+from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
-from app.utils.org_timezone import resolve_scheduling_timezone
+from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
 from app.utils.sql_search import LIKE_ESCAPE_CHAR
 
 # The statuses that genuinely resolve a step, so a later step may become
@@ -1331,6 +1332,7 @@ class FinanceService:
                 ApprovalChainStep.approver_value,
                 User.first_name,
                 User.last_name,
+                User.preferred_name,
                 User.username,
             )
             .join(
@@ -1386,8 +1388,10 @@ class FinanceService:
             can_act, assignee_label = verdicts[key]
             if not can_act and not admin:
                 continue
-            requester_name = " ".join(filter(None, (row.first_name, row.last_name)))
-            requester_name = requester_name.strip() or row.username or "Unknown"
+            requester_name = format_display_name(
+                row.first_name, row.last_name, row.preferred_name
+            )
+            requester_name = requester_name or row.username or "Unknown"
             approvals.append(
                 {
                     "step_record_id": row.step_record_id,
@@ -1747,6 +1751,7 @@ class FinanceService:
                 entities.c.submitted_at,
                 User.first_name,
                 User.last_name,
+                User.preferred_name,
                 User.username,
             )
             .outerjoin(
@@ -1768,8 +1773,10 @@ class FinanceService:
 
         rows = []
         for row in result:
-            requester_name = " ".join(filter(None, (row.first_name, row.last_name)))
-            requester_name = requester_name.strip() or row.username or "Unknown"
+            requester_name = format_display_name(
+                row.first_name, row.last_name, row.preferred_name
+            )
+            requester_name = requester_name or row.username or "Unknown"
             rows.append(
                 {
                     "entity_type": row.entity_type,
@@ -2107,11 +2114,12 @@ class FinanceService:
         offset would regenerate the same colliding number.
         """
         fy = await self.get_fiscal_year(fiscal_year_id, org_id)
-        year = ""
         if fy and fy.start_date:
             year = str(fy.start_date.year)
         else:
-            year = str(datetime.now(timezone.utc).year)
+            # The department's year, not the server's: UTC is already next
+            # year on a US department's New Year's Eve.
+            year = str((await resolve_org_today(self.db, org_id)).year)
 
         table_map = {
             "PR": PurchaseRequest,
@@ -2203,14 +2211,22 @@ class FinanceService:
         return list(result.scalars().all())
 
     async def get_purchase_request(
-        self, pr_id: str, org_id: str
+        self, pr_id: str, org_id: str, for_update: bool = False
     ) -> Optional[PurchaseRequest]:
-        result = await self.db.execute(
-            select(PurchaseRequest).where(
-                PurchaseRequest.id == pr_id,
-                PurchaseRequest.organization_id == org_id,
-            )
+        """A purchase request by id, org-scoped.
+
+        ``for_update`` locks the row for the caller's transaction and refreshes
+        an instance already in the session (``populate_existing``): a status
+        check made off a stale identity-map copy would pass for a request a
+        concurrent transaction has just moved on (CLAUDE.md Pitfall #27).
+        """
+        query = select(PurchaseRequest).where(
+            PurchaseRequest.id == pr_id,
+            PurchaseRequest.organization_id == org_id,
         )
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def create_purchase_request(
@@ -2233,7 +2249,7 @@ class FinanceService:
     async def update_purchase_request(
         self, pr_id: str, org_id: str, **kwargs
     ) -> PurchaseRequest:
-        pr = await self.get_purchase_request(pr_id, org_id)
+        pr = await self.get_purchase_request(pr_id, org_id, for_update=True)
         if not pr:
             raise ValueError("Purchase request not found")
         if pr.status not in (
@@ -2248,7 +2264,7 @@ class FinanceService:
         return pr
 
     async def submit_purchase_request(self, pr_id: str, org_id: str) -> PurchaseRequest:
-        pr = await self.get_purchase_request(pr_id, org_id)
+        pr = await self.get_purchase_request(pr_id, org_id, for_update=True)
         if not pr:
             raise ValueError("Purchase request not found")
         if pr.status != PurchaseRequestStatus.DRAFT:
@@ -2297,7 +2313,7 @@ class FinanceService:
         return pr
 
     async def mark_pr_ordered(self, pr_id: str, org_id: str) -> PurchaseRequest:
-        pr = await self.get_purchase_request(pr_id, org_id)
+        pr = await self.get_purchase_request(pr_id, org_id, for_update=True)
         if not pr:
             raise ValueError("Purchase request not found")
         if pr.status != PurchaseRequestStatus.APPROVED:
@@ -2309,7 +2325,7 @@ class FinanceService:
         return pr
 
     async def mark_pr_received(self, pr_id: str, org_id: str) -> PurchaseRequest:
-        pr = await self.get_purchase_request(pr_id, org_id)
+        pr = await self.get_purchase_request(pr_id, org_id, for_update=True)
         if not pr:
             raise ValueError("Purchase request not found")
         if pr.status != PurchaseRequestStatus.ORDERED:
@@ -2446,8 +2462,19 @@ class FinanceService:
         return list(result.scalars().unique().all())
 
     async def get_expense_report(
-        self, er_id: str, org_id: str, restrict_to_user: Optional[str] = None
+        self,
+        er_id: str,
+        org_id: str,
+        restrict_to_user: Optional[str] = None,
+        for_update: bool = False,
     ) -> Optional[ExpenseReport]:
+        """An expense report by id, org-scoped.
+
+        ``for_update`` locks the row for the caller's transaction and refreshes
+        an instance already in the session (``populate_existing``): a status
+        check made off a stale identity-map copy would pass for a request a
+        concurrent transaction has just moved on (CLAUDE.md Pitfall #27).
+        """
         query = (
             select(ExpenseReport)
             .options(selectinload(ExpenseReport.line_items))
@@ -2458,6 +2485,8 @@ class FinanceService:
         )
         if restrict_to_user is not None:
             query = query.where(ExpenseReport.submitted_by == restrict_to_user)
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
@@ -2501,7 +2530,7 @@ class FinanceService:
     async def update_expense_report(
         self, er_id: str, org_id: str, **kwargs
     ) -> ExpenseReport:
-        er = await self.get_expense_report(er_id, org_id)
+        er = await self.get_expense_report(er_id, org_id, for_update=True)
         if not er:
             raise ValueError("Expense report not found")
         if er.status not in (
@@ -2544,7 +2573,7 @@ class FinanceService:
         return item
 
     async def submit_expense_report(self, er_id: str, org_id: str) -> ExpenseReport:
-        er = await self.get_expense_report(er_id, org_id)
+        er = await self.get_expense_report(er_id, org_id, for_update=True)
         if not er:
             raise ValueError("Expense report not found")
         if er.status != ExpenseReportStatus.DRAFT:
@@ -2647,14 +2676,22 @@ class FinanceService:
         return list(result.scalars().all())
 
     async def get_check_request(
-        self, cr_id: str, org_id: str
+        self, cr_id: str, org_id: str, for_update: bool = False
     ) -> Optional[CheckRequest]:
-        result = await self.db.execute(
-            select(CheckRequest).where(
-                CheckRequest.id == cr_id,
-                CheckRequest.organization_id == org_id,
-            )
+        """A check request by id, org-scoped.
+
+        ``for_update`` locks the row for the caller's transaction and refreshes
+        an instance already in the session (``populate_existing``): a status
+        check made off a stale identity-map copy would pass for a request a
+        concurrent transaction has just moved on (CLAUDE.md Pitfall #27).
+        """
+        query = select(CheckRequest).where(
+            CheckRequest.id == cr_id,
+            CheckRequest.organization_id == org_id,
         )
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def create_check_request(
@@ -2676,7 +2713,7 @@ class FinanceService:
     async def update_check_request(
         self, cr_id: str, org_id: str, **kwargs
     ) -> CheckRequest:
-        cr = await self.get_check_request(cr_id, org_id)
+        cr = await self.get_check_request(cr_id, org_id, for_update=True)
         if not cr:
             raise ValueError("Check request not found")
         if cr.status not in (
@@ -2691,7 +2728,7 @@ class FinanceService:
         return cr
 
     async def submit_check_request(self, cr_id: str, org_id: str) -> CheckRequest:
-        cr = await self.get_check_request(cr_id, org_id)
+        cr = await self.get_check_request(cr_id, org_id, for_update=True)
         if not cr:
             raise ValueError("Check request not found")
         if cr.status != CheckRequestStatus.DRAFT:
@@ -2937,6 +2974,15 @@ class FinanceService:
         meeting — cannot be deduplicated and is always appended, which is why
         the reference is the thing worth capturing.
         """
+        # Locked: amount_paid/status are recomputed from dues.payments below
+        # (_apply_payment_totals), not accumulated. Two concurrent payments
+        # against the same dues row would otherwise both read the ledger
+        # before either commits, both append their own row, and the second to
+        # flush would overwrite amount_paid with a total that excludes the
+        # first payment -- the ledger row itself would still exist, but the
+        # cached total silently drops it (CLAUDE.md Pitfall #27, same shape
+        # FIN-31 fixed for Budget). The lock serializes this exactly like
+        # approve_step/_mutate_budget already do.
         result = await self.db.execute(
             select(MemberDues)
             .where(
@@ -2944,6 +2990,7 @@ class FinanceService:
                 MemberDues.organization_id == org_id,
             )
             .options(selectinload(MemberDues.payments))
+            .with_for_update()
         )
         dues = result.scalar_one_or_none()
         if not dues:

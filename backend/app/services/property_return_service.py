@@ -73,8 +73,19 @@ class PropertyReturnService:
         Returns:
             Tuple of (report_data dict, html_content string).
         """
-        # Load member
-        result = await self.db.execute(select(User).where(User.id == str(user_id)))
+        # Load member, scoped to the organization the caller named. The one
+        # caller (the drop path in `member_status`) resolves the member in-org
+        # before getting here, so this is defence in depth rather than a live
+        # leak — but it is the kind worth having: the letter this builds names
+        # the member and states a chargeable liability, so an unscoped fetch is
+        # one upstream mistake away from addressing another department's member
+        # (CLAUDE.md pitfall #14a).
+        result = await self.db.execute(
+            select(User).where(
+                User.id == str(user_id),
+                User.organization_id == str(organization_id),
+            )
+        )
         member = result.scalar_one_or_none()
         if not member:
             raise ValueError(f"Member {user_id} not found")

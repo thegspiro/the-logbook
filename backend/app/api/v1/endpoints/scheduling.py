@@ -49,6 +49,7 @@ from app.schemas.scheduling import (
     CloseoutCallsRequest,
     CloseoutStateResponse,
     EligiblePositionsResponse,
+    ExchangeCandidateResponse,
     GenerateShiftsRequest,
     LateSignupOpenRequest,
     MemberHoursHistoryResponse,
@@ -2109,6 +2110,37 @@ async def list_shift_assignments(
 
 
 @router.get(
+    "/shifts/{shift_id}/exchange-candidates",
+    response_model=list[ExchangeCandidateResponse],
+)
+async def list_exchange_candidates(
+    shift_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Seats the caller could exchange their seat on this shift for.
+
+    Member self-service, scoped by the caller's own seat like the trade
+    candidates below. Only pairs where both members are cleared for the seat
+    they would take are listed — the same rule that refuses an unqualified
+    exchange when it is submitted. Holding no seat is a 409, for the same
+    reason as there: an empty list would read as "nobody can exchange".
+    """
+    service = SchedulingService(db)
+    shift = await service.get_shift_by_id(shift_id, current_user.organization_id)
+    ensure_found(shift, "Shift")
+    candidates = await service.get_exchange_candidates(
+        current_user.organization_id, shift_id, current_user.id
+    )
+    if candidates is None:
+        raise HTTPException(
+            status_code=409,
+            detail="You are not on this shift, so there is no seat to exchange.",
+        )
+    return candidates
+
+
+@router.get(
     "/shifts/{shift_id}/trade-candidates",
     response_model=list[TradeCandidateResponse],
 )
@@ -2505,13 +2537,30 @@ async def review_swap_request(
             current_user.id,
             review.status,
             review.reviewer_notes,
+            override_qualification=review.override_qualification,
         )
     except CodedValueError as exc:
+        # Keeps the curated code: LB-SCHED-001 (EVOC) and LB-SCHED-002
+        # (exchange qualification) are what the screen keys its offers off.
         raise _driver_block(exc)
     if error:
         raise HTTPException(
             status_code=400,
             detail=_safe_detail("Unable to review swap request.", error),
+        )
+    if service.last_review_overrode_qualification:
+        await log_audit_event(
+            db=db,
+            event_type="shift_exchange_qualification_override",
+            event_category="scheduling",
+            severity="WARNING",
+            event_data={
+                "organization_id": str(current_user.organization_id),
+                "swap_request_id": str(request_id),
+                "reason": (review.reviewer_notes or "").strip() or None,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
         )
     enriched = await service.enrich_swap_requests([result])
     return enriched[0]
@@ -3797,6 +3846,19 @@ async def _reject_deleting_a_used_call_type(
             + ". Turn it off instead to stop offering it."
         )
 
+    # Requirements are read after the history check and without a lock of
+    # their own: a requirement saved concurrently with this deletion is the
+    # one race left open, and it degrades rather than corrupts — the
+    # requirement keeps the slug, which still matches every report that stored
+    # it.
+    required = await service.slugs_named_by_requirements(organization_id, removed)
+    if required:
+        raise ValueError(
+            "Cannot delete a call type a training requirement counts: "
+            + ", ".join(sorted(required))
+            + ". Turn it off instead, or remove it from the requirement first."
+        )
+
 
 async def _call_type_usage_for(db: AsyncSession, user: User) -> dict[str, int]:
     """Per-type call counts, for callers allowed to see call volume.
@@ -3840,10 +3902,10 @@ async def _call_type_locked_for(db: AsyncSession, user: User) -> list[str]:
     candidates = eligibility.effective_call_type_slugs(org)
     if not candidates:
         return []
+    service = CallTrackingService(db)
     return sorted(
-        await CallTrackingService(db).slugs_locked_by_history(
-            user.organization_id, candidates
-        )
+        await service.slugs_locked_by_history(user.organization_id, candidates)
+        | await service.slugs_named_by_requirements(user.organization_id, candidates)
     )
 
 

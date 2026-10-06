@@ -43,7 +43,7 @@ vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 vi.mock('../../../hooks/useOnlineStatus', () => ({ useOnlineStatus: () => true }));
 vi.mock('../../../utils/offlineQueue', () => ({
   enqueueCheck: (...a: unknown[]) => mockEnqueueCheck(...a) as unknown,
-  listPendingChecks: (...a: unknown[]) => mockListPendingChecks(...a) as unknown,
+  listOwnPendingChecks: (...a: unknown[]) => mockListPendingChecks(...a) as unknown,
   dequeueCheck: (...a: unknown[]) => mockDequeueCheck(...a) as unknown,
   markCheckSubmitted: (...a: unknown[]) => mockMarkCheckSubmitted(...a) as unknown,
   markPhotosUploaded: (...a: unknown[]) => mockMarkPhotosUploaded(...a) as unknown,
@@ -52,6 +52,11 @@ vi.mock('../../../utils/offlineQueue', () => ({
 }));
 
 const mockCheckPermission = vi.fn(() => true);
+// The drain asks each entry's owner against the signed-in member before
+// sending it. Every entry these tests queue is the member's own; who may send
+// what is covered against a real queue in offlineQueueOwnership.test.ts.
+vi.mock('../../../utils/offlineQueueOwner', () => ({ isOwnedByCurrentMember: () => true }));
+
 vi.mock('../../../stores/authStore', () => ({
   useAuthStore: () => ({
     checkPermission: (...a: unknown[]) => mockCheckPermission(...a) as unknown,

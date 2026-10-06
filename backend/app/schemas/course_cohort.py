@@ -374,10 +374,15 @@ class CourseCohortMemberResponse(UTCResponseBase):
     withdrawn_at: Optional[datetime] = None
     added_at: Optional[datetime] = None
 
-    # Resolved so the roster renders names, not UUIDs
+    # Resolved so the roster renders names, not UUIDs. full_name is the legal
+    # name; display_name is the name the member goes by (preferred name).
     full_name: Optional[str] = None
+    display_name: Optional[str] = None
     email: Optional[str] = None
     progress_percentage: Optional[float] = None
+    # Classes held before this member joined that still need an officer's
+    # decision (credit, or a make-up session). Zero for everyone else.
+    missed_classes_pending: int = 0
 
 
 class CourseCohortResponse(UTCResponseBase):
@@ -479,7 +484,12 @@ class CohortShiftRequest(BaseModel):
 
     days: int = Field(..., description="Positive to delay, negative to pull forward")
     from_sequence: Optional[int] = Field(
-        None, ge=1, description="Only shift classes at or after this position"
+        None,
+        ge=1,
+        description=(
+            "Only shift future classes at or after this position; a class whose "
+            "date has passed never moves"
+        ),
     )
 
     @field_validator("days")
@@ -498,6 +508,56 @@ class CohortMemberAdd(BaseModel):
     user_ids: List[UUID] = Field(..., min_length=1, max_length=200)
     enroll_in_program: bool = True
     invite_to_events: bool = True
+
+
+class CohortMakeupCreate(BaseModel):
+    """Schedule a make-up session for one member who joined late (W27-3).
+
+    Course, credit hours and pipeline linkage are copied from the missed class;
+    only when and where it runs are chosen here. Instructor and location fall
+    back to the missed class's own when not given.
+    """
+
+    scheduled_start: datetime
+    scheduled_end: datetime
+    instructor_id: Optional[UUID] = None
+    instructor: Optional[str] = Field(None, max_length=255)
+    location_id: Optional[UUID] = None
+    location: Optional[str] = Field(None, max_length=300)
+
+    @model_validator(mode="after")
+    def _check_range(self) -> "CohortMakeupCreate":
+        if self.scheduled_end <= self.scheduled_start:
+            raise ValueError("scheduled_end must be after scheduled_start")
+        return self
+
+
+class CohortMissedClassResponse(UTCResponseBase):
+    """A class held before a member joined, and what was decided for it"""
+
+    model_config = _response_config
+
+    cohort_class_id: UUID
+    sequence: int
+    title: str
+    scheduled_start: datetime
+    scheduled_end: datetime
+    credit_hours: Optional[float] = None
+    # None until an officer decides; "credited" or "makeup_scheduled" after.
+    resolution: Optional[str] = None
+    pending: bool
+    training_record_id: Optional[UUID] = None
+    makeup_class_id: Optional[UUID] = None
+    makeup_scheduled_start: Optional[datetime] = None
+    makeup_status: Optional[str] = None
+    recorded_at: Optional[datetime] = None
+
+
+class CohortMissedClassDecisionResult(BaseModel):
+    """The outcome of crediting a missed class or scheduling its make-up"""
+
+    missed_class: CohortMissedClassResponse
+    warnings: List[str] = Field(default_factory=list)
 
 
 class CohortOperationResult(BaseModel):

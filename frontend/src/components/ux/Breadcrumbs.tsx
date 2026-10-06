@@ -348,7 +348,7 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
         <li className="flex items-center">
           <Link
             to="/dashboard"
-            className="text-theme-text-muted hover:text-theme-text-primary inline-flex items-center justify-center transition-all duration-150 hover:scale-110 max-md:min-h-[44px] max-md:min-w-[44px]"
+            className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-[44px] touch:min-w-[44px] inline-flex items-center justify-center transition-all duration-150 hover:scale-110"
             aria-label="Home"
           >
             <Home className="h-4 w-4" />
@@ -362,7 +362,7 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
                 type="button"
                 onClick={crumb.onClick}
                 aria-label={crumb.ariaLabel}
-                className="text-theme-text-muted hover:text-theme-text-primary inline-flex items-center justify-center underline-offset-2 transition-colors duration-150 hover:underline max-md:min-h-[44px] max-md:min-w-[44px]"
+                className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-[44px] touch:min-w-[44px] inline-flex items-center justify-center underline-offset-2 transition-colors duration-150 hover:underline"
               >
                 {crumb.label}
               </button>
@@ -382,12 +382,12 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
             ) : crumb.path ? (
               <Link
                 to={crumb.path}
-                className="text-theme-text-muted hover:text-theme-text-primary inline-flex items-center justify-center underline-offset-2 transition-colors duration-150 hover:underline max-md:min-h-[44px] max-md:min-w-[44px]"
+                className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-[44px] touch:min-w-[44px] inline-flex items-center justify-center underline-offset-2 transition-colors duration-150 hover:underline"
               >
                 {crumb.label}
               </Link>
             ) : (
-              <span className="text-theme-text-muted inline-flex items-center justify-center max-md:min-h-[44px]">
+              <span className="text-theme-text-muted touch:min-h-[44px] inline-flex items-center justify-center">
                 {crumb.label}
               </span>
             )}

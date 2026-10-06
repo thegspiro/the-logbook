@@ -17,7 +17,7 @@
 
 ### HOOK (0:00 – 0:30)
 
-**[SCREEN: The Training Programs page with a "Create Pipeline" button and a
+**[SCREEN: The Training Programs page with a "New Pipeline" button and a
 Templates tab.]**
 
 > "In the next fifteen minutes we're going to build a complete training pipeline
@@ -50,14 +50,16 @@ Firefighter Recruit School, EMT Recruit School, New Member Orientation.]**
 
 ### THE CREATE-PIPELINE WIZARD (1:30 – 2:15)
 
-**[SCREEN: Click "Create Pipeline" → the wizard opens on the program-details
+**[SCREEN: Click "New Pipeline" → the wizard opens on the Program Info
 step.]**
 
-> "Click **Create Pipeline**. This wizard builds the whole thing in one shot — so
+> "Click **New Pipeline**. This wizard builds the whole thing in one shot — so
 > if anything goes wrong partway, you don't get a half-built mess left behind.
 > First, the basics: a **name** — 'Firefighter Recruit School' — a description, a
-> **code** and **version** if your department tracks those, and an overall **time
-> limit** if the program has a hard deadline."
+> **program code** if your department uses one, an overall **Time Limit
+> (days)** if the program has a hard deadline, and a **Target Position** if the
+> program leads to one — Driver Candidate, say. The Review step at the end names
+> it back to you."
 
 ### CHOOSING A STRUCTURE (2:15 – 3:00)
 
@@ -130,6 +132,17 @@ all eight types.]**
 > requirements count toward advancing a phase and toward the overall percentage.
 > Optional ones are there for enrichment without blocking progress."
 
+**[SCREEN: Add a requirement to a program that already has enrollments; the
+"Members already enrolled" choice]**
+
+> "Adding a requirement to a program people are already in? You'll be asked
+> about **Members already enrolled**: hold them to it too, or apply it only to
+> members who enroll from now on — in which case it's recorded as waived for
+> everyone already there."
+
+**[PRODUCTION NOTE — 2026-10-04. New beat (2026-10-03), about 12 seconds;
+re-time Chapter 4. Needs a program with at least one enrollment.]**
+
 ### WRITING OUT A CHECKLIST (6:30 – 7:00) _(added 2026-08-09)_
 
 **[SCREEN: Add a checklist requirement; type the individual steps into the
@@ -161,8 +174,8 @@ steps editor; toggle the eye icon closed on one of them.]**
 
 > "This next part is what makes a pipeline feel magic instead of manual: **link
 > your requirements** so the feeds can fill them in. Tie an hours requirement to
-> a **training category**, and any approved session or shift in that category
-> credits it automatically. Tie a skills requirement to a **skills evaluation**,
+> a **training category**, and any finalized training event or shift in that
+> category credits it automatically. Tie a skills requirement to a **skills evaluation**,
 > and passing the test completes it."
 
 **[CALLOUT: "Link requirements → progress fills in automatically"]**
@@ -294,8 +307,9 @@ the 'only warn if below N%' field.]**
 **[SCREEN: Click through the final wizard step; the program is created and its
 detail page opens.]**
 
-> "Finish the wizard and it builds everything — phases, requirements, milestones
-> — in a single step, and drops you on the program's detail page. Nothing's
+> "Click **Create Pipeline** on the Review step and it builds everything —
+> phases, requirements, milestones — in a single step, and drops you on the
+> program's detail page. Nothing's
 > half-done. If you ever need to change something later, this whole page is
 > editable — add a phase, move a requirement, adjust a target — and it re-computes
 > enrolled members' progress for you."
@@ -336,8 +350,9 @@ quickly through Course → Schedule → Preview → Roster → Generate.]**
 **[SCREEN: The Enrollments tab now populated with recruits at 0%, ready to
 climb.]**
 
-> "That's it — you're live. From here, the feeds take over: approve their
-> sessions and skills tests, file their shift reports, and watch the bars climb
+> "That's it — you're live. From here, the feeds take over: finalize their
+> training events, validate their skills tests, file their shift reports, and
+> watch the bars climb
 > on their own. To run the pipeline day to day — advancing members, fixing
 > mistakes, reading the alerts — watch the officer's pipeline guide next."
 

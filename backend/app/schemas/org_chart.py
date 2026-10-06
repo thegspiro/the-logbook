@@ -5,6 +5,7 @@ Request/response shapes for Governance -> Organizational Chart, the screen that
 answers "who is in charge of this?" for the general membership.
 """
 
+import re
 from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -36,6 +37,19 @@ def _blank_to_none(value: Optional[str]) -> Optional[str]:
     if value is None:
         return None
     return value.strip() or None
+
+
+# Deliberately loose: the point is to catch a typo like a missing "@", which
+# the chart would otherwise publish to every member as a dead mailto: link,
+# not to out-guess what a mail server will accept.
+_EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+
+def _contact_email(value: Optional[str]) -> Optional[str]:
+    email = _blank_to_none(value)
+    if email is not None and not _EMAIL_PATTERN.match(email):
+        raise ValueError("Enter a contact email like training@department.org")
+    return email
 
 
 class OrgChartHolderInput(BaseModel):
@@ -95,12 +109,16 @@ class OrgChartNodeCreate(BaseModel):
         "position_id",
         "rank_code",
         "responsibility",
-        "contact_email",
         "contact_phone",
     )
     @classmethod
     def _optional_blank_to_none(cls, v: Optional[str]) -> Optional[str]:
         return _blank_to_none(v)
+
+    @field_validator("contact_email")
+    @classmethod
+    def _valid_contact_email(cls, v: Optional[str]) -> Optional[str]:
+        return _contact_email(v)
 
     @model_validator(mode="after")
     def _one_link_at_most(self) -> "OrgChartNodeCreate":
@@ -151,12 +169,16 @@ class OrgChartNodeUpdate(BaseModel):
         "responsibility",
         "position_id",
         "rank_code",
-        "contact_email",
         "contact_phone",
     )
     @classmethod
     def _optional_blank_to_none(cls, v: Optional[str]) -> Optional[str]:
         return _blank_to_none(v)
+
+    @field_validator("contact_email")
+    @classmethod
+    def _valid_contact_email(cls, v: Optional[str]) -> Optional[str]:
+        return _contact_email(v)
 
     @model_validator(mode="after")
     def _one_link_at_most(self) -> "OrgChartNodeUpdate":

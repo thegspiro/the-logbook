@@ -47,7 +47,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { useOnlineStatus } from '../../../hooks/useOnlineStatus';
 import {
   enqueueCheck,
-  listPendingChecks,
+  listOwnPendingChecks,
   dequeueCheck,
   markCheckSubmitted,
   markPhotosUploaded,
@@ -56,6 +56,7 @@ import {
   CHECK_QUEUE_MAX_RETRIES,
   type SyncStatus,
 } from '../../../utils/offlineQueue';
+import { isOwnedByCurrentMember } from '../../../utils/offlineQueueOwner';
 import type {
   EquipmentCheckTemplate,
   CheckTemplateCompartment,
@@ -116,6 +117,7 @@ import {
   saveEquipmentCheckDraft,
   type EquipmentCheckDraftIdentity,
 } from '../../../utils/equipmentCheckDrafts';
+import { displayNameOf } from '../../../utils/memberName';
 // ============================================================================
 // Types
 // ============================================================================
@@ -458,11 +460,18 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     setSyncStatus('syncing');
 
     try {
-      const pending = await listPendingChecks();
+      // The signed-in member's own checks only: another member's, or one queued
+      // before owners were recorded, must not go out under this session
+      // (FE3-34-5).
+      const pending = await listOwnPendingChecks();
       let failed = 0;
       let discarded = 0;
 
       for (const entry of pending) {
+        // Asked again per entry: a sign-out and someone else's sign-in can
+        // land while an earlier entry's photos are still uploading, and this
+        // request would go out with their cookies.
+        if (!isOwnedByCurrentMember(entry)) continue;
         try {
           let checkId = entry.submittedCheckId;
           let submittedItemIds = entry.submittedItemIds;
@@ -2544,7 +2553,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                     <button
                       type="button"
                       onClick={() => removePhoto(item.id, idx)}
-                      className="absolute -top-2 -right-2 flex h-7 w-7 items-center justify-center rounded-full bg-red-800 text-sm text-white opacity-100 transition-opacity focus:opacity-100 focus:ring-2 focus:ring-red-800 focus:ring-offset-1 focus:outline-none sm:h-6 sm:w-6 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
+                      className="absolute -top-2 -right-2 flex h-7 w-7 items-center justify-center rounded-full bg-red-800 text-sm text-white opacity-100 transition-opacity focus:opacity-100 focus:ring-2 focus:ring-red-800 focus:ring-offset-1 focus:outline-none sm:h-6 sm:w-6 pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100"
                       aria-label={`Remove photo ${idx + 1}`}
                     >
                       &times;
@@ -3017,7 +3026,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 // against a shift that does not exist.
                 onSubmit={previewMode ? () => undefined : () => void handleSubmit()}
                 onBack={() => setSweepScreen('walk')}
-                submittingAs={user?.first_name ? `${user.first_name} ${user.last_name ?? ''}`.trim() : 'you'}
+                submittingAs={(user && displayNameOf(user)) || 'you'}
                 submitting={submitting || alreadyFiled}
                 overallNotes={overallNotes}
                 onOverallNotesChange={setOverallNotes}

@@ -35,6 +35,7 @@ import {
   Pin,
   PinOff,
   GripVertical,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { inventoryService, locationsService } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
@@ -987,6 +988,13 @@ const InventoryItemsPage: React.FC = () => {
   const [fStyle, setFStyle] = useState('');
   // '' = either; 'needed' / 'printed' map to label_printed=false / true.
   const [fLabel, setFLabel] = useState<'' | 'needed' | 'printed'>('');
+  // Phones only: nine stacked dropdowns put the list ~500px below the fold,
+  // so they sit behind a toggle there. Wider screens always show them.
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  // Counted so a collapsed bar still says the list is narrowed, e.g. after a
+  // deep link arrives with a type or label filter already set.
+  const activeFilterCount = [fCat, fStatus, fCond, fType, fLoc, fSize, fColor, fStyle, fLabel].filter(Boolean).length;
+  const filterVisibility = filtersOpen ? '' : 'max-sm:hidden';
   const [sortBy, setSortBy] = useState<SortKey>('name');
   const [sortOrd, setSortOrd] = useState<'asc' | 'desc'>('asc');
   const [groupBy, setGroupBy] = useState<GroupKey>('');
@@ -1696,7 +1704,7 @@ const InventoryItemsPage: React.FC = () => {
 
       <Link
         to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-secondary mb-6 flex items-center gap-1 text-sm max-md:min-h-[44px]"
+        className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-[44px] mb-6 flex items-center gap-1 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Admin
@@ -1706,24 +1714,29 @@ const InventoryItemsPage: React.FC = () => {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-theme-text-primary text-2xl font-bold">Inventory Items</h1>
-          {summary && (
-            <div className="text-theme-text-muted mt-2 flex flex-wrap gap-4 text-sm">
-              <span className="flex items-center gap-1.5">
-                {/* non_medical_items, not total_items: the latter sums
+          {/* The counts, not just the object: a malformed summary rendered
+              "items · overdue · maint. due" with every figure blank. */}
+          {summary &&
+            typeof summary.non_medical_items === 'number' &&
+            typeof summary.overdue_checkouts === 'number' &&
+            typeof summary.maintenance_due_count === 'number' && (
+              <div className="text-theme-text-muted mt-2 flex flex-wrap gap-4 text-sm">
+                <span className="flex items-center gap-1.5">
+                  {/* non_medical_items, not total_items: the latter sums
                     quantities across every domain including medical, while
                     the list below counts rows and excludes it. A header of 82
                     over a list of 6 reads as a bug in the list. */}
-                <Package className="h-4 w-4" /> {summary.non_medical_items} items
-              </span>
-              <span className="flex items-center gap-1.5">
-                <AlertTriangle className="h-4 w-4" /> {summary.overdue_checkouts} overdue
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Wrench className="h-4 w-4" /> {summary.maintenance_due_count} maint. due
-              </span>
-              {summary.total_value > 0 && <span>${formatNumber(summary.total_value)}</span>}
-            </div>
-          )}
+                  <Package className="h-4 w-4" /> {summary.non_medical_items} items
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <AlertTriangle className="h-4 w-4" /> {summary.overdue_checkouts} overdue
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Wrench className="h-4 w-4" /> {summary.maintenance_due_count} maint. due
+                </span>
+                {summary.total_value > 0 && <span>${formatNumber(summary.total_value)}</span>}
+              </div>
+            )}
         </div>
         <div className="flex items-center gap-2">
           <button onClick={refresh} className="btn-secondary btn-icon-sm" title="Refresh">
@@ -1852,9 +1865,19 @@ const InventoryItemsPage: React.FC = () => {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((open) => !open)}
+            aria-expanded={filtersOpen}
+            className="btn-secondary btn-md flex w-full items-center justify-center gap-2 sm:hidden"
+          >
+            <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+            {filtersOpen ? 'Hide filters' : 'Filters'}
+            {activeFilterCount > 0 && ` (${activeFilterCount} active)`}
+          </button>
           <select
             aria-label="Filter by category"
-            className="form-input"
+            className={`form-input ${filterVisibility}`}
             value={fCat}
             onChange={(e) => setFCat(e.target.value)}
           >
@@ -1867,7 +1890,7 @@ const InventoryItemsPage: React.FC = () => {
           </select>
           <select
             aria-label="Filter by status"
-            className="form-input"
+            className={`form-input ${filterVisibility}`}
             value={fStatus}
             onChange={(e) => setFStatus(e.target.value)}
           >
@@ -1880,7 +1903,7 @@ const InventoryItemsPage: React.FC = () => {
           </select>
           <select
             aria-label="Filter by condition"
-            className="form-input"
+            className={`form-input ${filterVisibility}`}
             value={fCond}
             onChange={(e) => setFCond(e.target.value)}
           >
@@ -1893,7 +1916,7 @@ const InventoryItemsPage: React.FC = () => {
           </select>
           <select
             aria-label="Filter by type"
-            className="form-input"
+            className={`form-input ${filterVisibility}`}
             value={fType}
             onChange={(e) => setFType(e.target.value)}
           >
@@ -1906,7 +1929,7 @@ const InventoryItemsPage: React.FC = () => {
           </select>
           <select
             aria-label="Filter by location"
-            className="form-input"
+            className={`form-input ${filterVisibility}`}
             value={fLoc}
             onChange={(e) => setFLoc(e.target.value)}
           >
@@ -1919,7 +1942,9 @@ const InventoryItemsPage: React.FC = () => {
             ))}
           </select>
         </div>
-        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div
+          className={`grid grid-cols-1 gap-3 sm:mt-3 sm:grid-cols-2 lg:grid-cols-4 ${filtersOpen ? 'mt-3' : 'max-sm:hidden'}`}
+        >
           <select
             aria-label="Filter by size"
             className="form-input"

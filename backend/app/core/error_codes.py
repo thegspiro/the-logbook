@@ -47,6 +47,7 @@ class ErrorCode(str, Enum):
     AUTH_CSRF_INVALID = "LB-AUTH-009"
     AUTH_REGISTRATION_DISABLED = "LB-AUTH-010"
     AUTH_MFA_CHALLENGE_EXPIRED = "LB-AUTH-011"
+    AUTH_REFRESH_SUPERSEDED = "LB-AUTH-012"
 
     # --- Permissions ---------------------------------------------------
     PERM_INSUFFICIENT = "LB-PERM-001"
@@ -87,6 +88,7 @@ class ErrorCode(str, Enum):
 
     # --- Scheduling ------------------------------------------------------
     SCHED_DRIVER_NOT_QUALIFIED = "LB-SCHED-001"
+    SCHED_EXCHANGE_NOT_QUALIFIED = "LB-SCHED-002"
 
 
 @dataclass(frozen=True)
@@ -228,6 +230,19 @@ ERROR_CODE_CATALOG: dict[ErrorCode, ErrorCodeInfo] = {
         ),
         resolution=(
             "Have the member start the login again and enter the MFA code " "promptly.",
+        ),
+    ),
+    ErrorCode.AUTH_REFRESH_SUPERSEDED: ErrorCodeInfo(
+        title="Session refreshed by another tab",
+        description=(
+            "Two requests refreshed the same session at once, usually two "
+            "open tabs. One rotated the session's tokens first; the other "
+            "is answered with this code instead of being treated as token "
+            "theft. The browser already holds the new tokens."
+        ),
+        resolution=(
+            "Nothing to do: the app retries with the new session cookies.",
+            "If a member sees it as an error, a reload picks up the new " "session.",
         ),
     ),
     ErrorCode.PERM_INSUFFICIENT: ErrorCodeInfo(
@@ -497,6 +512,24 @@ ERROR_CODE_CATALOG: dict[ErrorCode, ErrorCodeInfo] = {
             "To make the check advisory rather than blocking for the whole "
             "department, turn off 'Enforce EVOC for drivers' in Scheduling "
             "→ Settings → General.",
+        ),
+    ),
+    ErrorCode.SCHED_EXCHANGE_NOT_QUALIFIED: ErrorCodeInfo(
+        title="Shift exchange partner not qualified for the seat",
+        description=(
+            "In a two-way shift exchange each member takes the other's seat, "
+            "so each must be cleared for that seat's position — the same rule "
+            "as signing up for it. One of the two is not, so the exchange "
+            "would put an unqualified member in the seat."
+        ),
+        resolution=(
+            "Exchange with a member who is cleared for the seat: the exchange "
+            "picker on My Shifts lists only qualifying pairs.",
+            "If the member should be cleared, record the rank, qualification "
+            "or completed training that grants the position.",
+            "For a deliberate one-off, a duty officer can approve the request "
+            "with the qualification override; the override is recorded on the "
+            "request and in the audit log.",
         ),
     ),
 }

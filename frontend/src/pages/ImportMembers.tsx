@@ -6,6 +6,7 @@ import { CSVMemberRow } from '../types/member';
 import { userService, roleService } from '../services/api';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { buildCsv, downloadCsv } from '../utils/csv';
+import { displayNameOf } from '../utils/memberName';
 
 /**
  * One rejected row: why it was rejected, and the cells it was rejected from.
@@ -479,10 +480,12 @@ interface ExistingMembers {
 
 const describeMember = (member: {
   full_name?: string | undefined;
+  display_name?: string | undefined;
   first_name?: string | undefined;
   last_name?: string | undefined;
+  preferred_name?: string | null | undefined;
   username: string;
-}): string => member.full_name || [member.first_name, member.last_name].filter(Boolean).join(' ') || member.username;
+}): string => displayNameOf(member) || member.username;
 
 /**
  * Indexes the roster so a row that collides with an existing member is caught
@@ -501,8 +504,10 @@ const indexExistingMembers = (
     username: string;
     membership_number?: string | undefined;
     full_name?: string | undefined;
+    display_name?: string | undefined;
     first_name?: string | undefined;
     last_name?: string | undefined;
+    preferred_name?: string | null | undefined;
   }>
 ): ExistingMembers => {
   const index: ExistingMembers = {
@@ -991,7 +996,7 @@ const ImportMembers: React.FC = () => {
         </div>
       </header>
 
-      <div data-page-main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
+      <div data-page-main className="mx-auto max-w-4xl py-6 sm:py-8">
         {/* Instructions */}
         <div className="bg-theme-alert-info-bg border-theme-alert-info-border mb-8 rounded-lg border p-6">
           <h2 className="text-theme-text-primary mb-3 flex items-center space-x-2 font-bold">

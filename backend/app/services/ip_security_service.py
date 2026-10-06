@@ -499,6 +499,31 @@ class IPSecurityService:
         result = await db.execute(query)
         return set(result.scalars().all())
 
+    async def ip_has_active_allowlist_exception(
+        self, db: AsyncSession, ip_address: str
+    ) -> bool:
+        """Whether this exact IP holds an approved, in-date allowlist exception.
+
+        For the pre-auth geo-blocking middleware, which has no tenant context
+        (owner decision INT2-28). Keyed on the single address only: an
+        exception can never widen to a range, and nothing here is unioned into
+        a list another request could match. The cost is the one the owner
+        accepted: an exception approved in one department lets that address
+        past the shared country block for any request, not only that
+        department's.
+        """
+        now = datetime.now(timezone.utc)
+        result = await db.execute(
+            select(IPException.id)
+            .where(IPException.ip_address == ip_address)
+            .where(IPException.exception_type == IPExceptionType.ALLOWLIST)
+            .where(IPException.approval_status == IPExceptionApprovalStatus.APPROVED)
+            .where(IPException.valid_from <= now)
+            .where(IPException.valid_until > now)
+            .limit(1)
+        )
+        return result.first() is not None
+
     # ============================================
     # Maintenance: Expire Old Exceptions
     # ============================================

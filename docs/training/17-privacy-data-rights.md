@@ -149,8 +149,32 @@ neither picture contains a block to compare. What the pair does show is the
 difference the paragraph above is really about: the officer gets the compliance
 summary, the training and certification history and the emergency contacts, and
 the member gets none of the three. The member's Contact Information panel
-renders empty rather than absent, which is worth pointing out in training —
-the panel is there, the values are withheld.
+renders rather than disappearing, which is worth pointing out in training —
+the panel is there, the values are withheld. Since 2026-09-30 it says so in
+words: "No contact details shared. This member has not added any, or your
+department keeps them private."
+
+**[SCREENSHOT — REPLACE `17-04-profile-as-member.png`.** Two things in this frame
+changed on 2026-09-30: the **ID Card** button at the top right is gone (an
+ordinary member no longer gets a colleague's ID card), and the Contact
+Information panel now reads "No contact details shared. This member has not
+added any, or your department keeps them private." Re-shoot the same profile as
+the same ordinary member.**]**
+
+- **A colleague's ID card is for the officers who issue them** _(2026-09-30)_.
+  The ID Card page — your badge, with its QR code and barcode — is a
+  credential. You can always open your own. Opening a colleague's needs
+  `members.manage` or `members.manage_id_cards`; it used to be open to every
+  member, so anyone could pull up a colleague's scannable badge on their phone.
+  Checking someone in does not need it: the badge scanner and the check-in
+  station look a member up without displaying their card.
+- **Saving a profile returns no more than reading it** _(2026-09-30)_. A custom
+  role holding `users.edit` without `members.manage` could save a colleague's
+  profile and read back the date of birth, emergency contacts and home address
+  that the same role is refused when it simply opens the profile. Saves now pass
+  through the same redaction as reads. That role also no longer gets edit forms
+  on a redacted profile: they were seeded from what was on screen, so saving one
+  would have erased every field it could not see.
 
 - **Date of birth and emergency contacts are restricted to leadership**
   _(2026-08-02)_ — the chiefs, captains, president, vice-president,
@@ -318,6 +342,23 @@ nothing in it is ever deleted automatically.
 > out by a person who understands the legal consequences. The system will not
 > do it for you.
 
+### Applicant records _(2026-09-30)_
+
+Applications from people who never joined are not on this schedule, and the
+prospective-members pipeline's **Auto-Purge** setting does **not** delete
+anything yet — no scheduled task reads it. To remove stale applications, a
+coordinator purges them by hand: **Prospective Members → Inactive Applications**,
+select them, **Purge Selected**. That permanently deletes the applications that
+are still inactive, **with their uploaded documents removed from disk**, and
+records the purge (a count and the ids, no applicant details) in the audit log.
+Before 2026-09-30 the button deleted nothing while reporting success, so a
+department that purged earlier should check the tab again. See
+[Prospective Members → Purging inactive applications](./15-prospective-members.md#purging-inactive-applications-fixed-2026-09-30).
+
+An applicant can also close their own application from their status-page link
+(**Withdraw Application**, since 2026-09-24). Withdrawing stops the process; it
+does not delete the record, which stays on the **Withdrawn** tab.
+
 > **Hint:** The floors exist to prevent an expensive typo. Entering `3` when
 > you meant `30` cannot silently erase last month's records — the setting is
 > rejected, and even if the value were changed directly in the database, the
@@ -369,6 +410,9 @@ prove the member was compliant at the time.
 > items are resolved first.
 
 ---
+
+> **Screenshot needed:**
+> _[As an administrator (members.manage) at /members/:userId for a Dropped (Voluntary) demo member: the Membership card showing Rank, Member type, Member since, then Status reading "Dropped Voluntary" with the red "Anonymize member" link beneath it. Clip to the card. Do not open the dialog.]_
 
 ## Audit Records and Retention (Admin)
 

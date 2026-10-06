@@ -105,9 +105,9 @@ build on each other's data, so run them in order unless a row says otherwise.
 | --- | --------------------------------------------------------------------- | ------------------ | -------------------------------------------------- | ------ |
 | W50 | An election: create, nominate, vote by ballot link, close, results    | secretary → member | `/elections`, `/ballot`                            | ✅     |
 | W51 | Meeting minutes: draft, approve, publish                              | secretary          | `/minutes`                                         | ✅     |
-| W52 | Action items: assign, work, close                                     | secretary → member | `/action-items`                                    | ⬜     |
-| W53 | Documents: folders, upload, who can see what                          | secretary, member  | `/documents`                                       | ⬜     |
-| W54 | Org chart and legal documents                                         | admin, member      | `/governance/org-chart`, `/governance/legal`       | ⬜     |
+| W52 | Action items: assign, work, close                                     | secretary → member | `/action-items`                                    | ✅     |
+| W53 | Documents: folders, upload, who can see what                          | secretary, member  | `/documents`                                       | ✅     |
+| W54 | Org chart and legal documents                                         | admin, member      | `/governance/org-chart`, `/governance/legal`       | ✅     |
 | W55 | Messages: send to a group, the member's inbox, message administration | admin → member     | `/communications/messages`, `/messages`            | ⬜     |
 | W56 | Notification rules and logs, the in-app bell                          | admin, member      | `/notifications`                                   | ⬜     |
 | W57 | Email templates: edit, preview, restore                               | admin              | `/communications/email-templates`                  | ⬜     |
@@ -176,6 +176,8 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   Positions and Apparatus steps at 390px wide (W01-13), and the sign-in
   screen's "Forgot your password?", Privacy and Terms links (W02-5), and
   "Back to Login" on the forgot-password page (36px, W03).
+- **W79** — on the Legal Documents page at 390px, "Open /privacy" and each
+  "Read this version" summary are 20px tall (W54-6).
 - **W79** — the checklist builder's header and chip controls are 30–40px tall
   at 390×844, and its drag handles 20px (W46-18).
 - **W33 / W34** — the shift-assignment notice names the equipment checklists
@@ -199,14 +201,121 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   it: "W51 October Business Meeting (event)", 1 Oct 7:00 PM, linked to the
   second set of October minutes. The "link survives a clear" half of W50-60 is
   still read from code only.
-- **W52** — the Action Items page may show a minutes action item's due date a
-  day early, the same UTC-midnight shift W51-5 fixed on the minutes page.
-  The Minutes page's "Open action items" tile counts meeting action items only
-  (the meetings summary), not minutes action items: a minutes item left it at 0.
+- **Documents, a later pass** — a document's type shows as a raw MIME type
+  ("TEXT/PLAIN") in the list (W53-6).
 - **Minutes, a later pass** — the meetings list badges every meeting "Draft"
   forever (W51-9).
 
 ## Log
+
+### W54 — Org chart and legal documents — 2026-10-04
+
+Driven as:
+
+- `admin` building a chart on an empty install: linked and unlinked seats, a
+  typed person with no account, a hidden seat, a re-parent, a removal with
+  reports, and a nudge;
+- `member` reading and searching the chart, and trying to change it;
+- `secretary` proposing and editing a privacy-policy draft, and trying to
+  publish, revert, and touch the admin's draft;
+- `admin` publishing and reverting, with `/privacy` read signed out after
+  each;
+- both pages repeated at 390×844.
+
+Database continued from W53.
+
+Held:
+
+- every permission line, on the screen and the API;
+- double-clicks acted once;
+- cleared fields stayed cleared;
+- hidden seats stayed hidden from members;
+- publish and revert reached the public page;
+- the audit log recorded every change with its actor.
+
+Fixed:
+
+- W54-1 (MED — a malformed contact email was saved and published as a
+  `mailto:` link; refused now by the editor and the server);
+- W54-2 (LOW — the legal tabs controlled no tab panel).
+
+Flagged (in KNOWN_LIMITATIONS):
+
+- W54-3 (MED — a revert leaves no trace in the published history);
+- W54-4 (LOW — a publisher's edit to a proposal is not attributed);
+- W54-5 (LOW — department text loses the built-in text's headings and lists).
+
+Lead: W54-6 (two 20px tap targets) → W79.
+
+Gate: typecheck and lint are clean; flake8 and black are clean on the changed
+Python files. 60 governance frontend tests and 123 org-chart and legal backend
+tests pass.
+
+Next: W55.
+
+### W53 — Documents: folders, upload, who can see what — 2026-10-04
+
+Driven as: `secretary` creating a folder and uploading files (one into a
+leadership-only folder); `member` browsing, downloading, and trying to read,
+download, search for and delete what they should not; repeated at 390×844.
+Database continued from W52.
+
+Held:
+
+- every access rule: the member saw no leadership folder, and got 404 on the
+  confidential file's read and download, nothing from search, and 403 on
+  delete;
+- double-clicks acted once;
+- delete asks first.
+
+Fixed:
+
+- W53-1 (MED — the file picker could not be reached by keyboard, so a
+  keyboard user could not upload);
+- W53-2 (LOW — the upload and delete dialogs were not announced as dialogs);
+- W53-3 (MED — nothing said which folders members cannot see);
+- W53-5 (NIT — a stale "disable by editing App.tsx" comment).
+
+Flagged: W53-4 (MED — folders cannot be restricted, renamed, moved or deleted
+from the screen, though the API supports it; in KNOWN_LIMITATIONS).
+
+Open: W53-6 (LOW — raw MIME types).
+
+Gate: typecheck and lint are clean, and 27 Documents tests pass, as does the full frontend suite (721
+files, 9086 tests). No backend change.
+
+Next: W54.
+
+### W52 — Action items: assign, work, close — 2026-10-04
+
+Driven as: `secretary` adding and working items on minutes and reading Action
+Items; `member` reading, filtering and trying to close one; repeated at
+390×844. Database continued from W51.
+
+Held:
+
+- a status change made on the minutes page showed on Action Items after a
+  reload;
+- the member saw only items on approved minutes;
+- no sideways overflow on a phone.
+
+Fixed:
+
+- W52-1 (MED — due dates read a day early);
+- W52-2 (MED — an item counted overdue the evening before its due day);
+- W52-3 (MED — "Open" filtered to nothing beside an Open tile of 3);
+- W52-4 (MED — rows unreachable by keyboard);
+- W52-5 (LOW — the Minutes page's open-items tile left out minutes items, the
+  W51 lead).
+
+Flagged: W52-6 (MED — nothing can be assigned to a member, so "Assigned to me"
+never matches) and W52-7 (MED — an assignee cannot close their own item). Both
+are in KNOWN_LIMITATIONS.
+
+Gate: typecheck and lint are clean, and 44 touched frontend tests pass, as does
+the full frontend suite (715 files, 9051 tests). No backend change.
+
+Next: W53.
 
 ### W51 — Meeting minutes: draft, approve, publish — 2026-10-03
 
@@ -287,10 +396,10 @@ S01 proxy-ballot attributability (HIGH), the pre-fix audit rows (MED), the
 pre-deploy double-vote window (MED, in `docs/UPGRADING.md`), pooled
 `overall_results` on multi-item ballots (MED) and two data residuals (LOW).
 
-In progress: frontend round 2 for W50-24, 26, 29, 30, 36, 43, 46, 50, 51, 52,
-53, 56, 57, 58, 59, 61, 62, 63, 64, 73 and the frontend halves of fourteen
-backend fixes (marked `<!-- FE2 -->` in the findings file). Open: W50-74 to
-W50-82 (NIT). The manual (`docs/training/14-elections.md`) corrected on five
+Frontend round 2 (a follow-up PR after #2856 merged) fixed W50-24, 26, 29,
+30, 36, 43, 46, 50, 51, 52, 53, 56, 57, 58, 59, 61, 62, 63, 64, 73 and the
+frontend halves of fourteen backend fixes, each with a Vitest; gated clean,
+not re-driven on screen (usage limit). Open: W50-74 to W50-82 (NIT). The manual (`docs/training/14-elections.md`) corrected on five
 lines the drive contradicted.
 
 Gate: backend — the election suite 622 passed and the CI unit selection

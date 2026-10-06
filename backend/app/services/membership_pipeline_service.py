@@ -1598,6 +1598,8 @@ class MembershipPipelineService:
         return [
             {
                 "user_id": str(m.id),
+                # Legal name: the match was made on legal first/last name, and
+                # staff compare it against the applicant's legal name.
                 "name": m.full_name,
                 "email": m.email,
                 "status": (
@@ -3287,8 +3289,12 @@ class MembershipPipelineService:
         notes: Optional[str] = None,
         *,
         unobserved: bool = False,
+        completed_items: Optional[List[str]] = None,
     ) -> Optional[ProspectiveMember]:
         """Complete the current step and advance a prospect.
+
+        ``completed_items`` carries the ticks of a checklist stage, which is
+        graded on the same call that completes it.
 
         Advancement used to move ``current_step_id`` directly.  That bypassed
         every stage gate enforced by :meth:`complete_step` (interviews,
@@ -3331,6 +3337,11 @@ class MembershipPipelineService:
             step_id=str(sorted_steps[current_idx].id),
             completed_by=advanced_by,
             notes=notes,
+            action_result=(
+                {"completed_items": list(completed_items)}
+                if completed_items is not None
+                else None
+            ),
             automated=unobserved,
             additional_activity=_ActivityEvent(
                 action="prospect_advanced",
@@ -8082,7 +8093,7 @@ class MembershipPipelineService:
             if link.linked_by:
                 linker = linkers_by_id.get(link.linked_by)
                 if linker:
-                    linker_name = f"{linker.first_name} {linker.last_name}".strip()
+                    linker_name = linker.display_name
 
             enriched.append(
                 {
@@ -8174,9 +8185,7 @@ class MembershipPipelineService:
         # Return enriched response
         linker_result = await self.db.execute(select(User).where(User.id == linked_by))
         linker = linker_result.scalar_one_or_none()
-        linker_name = (
-            f"{linker.first_name} {linker.last_name}".strip() if linker else None
-        )
+        linker_name = linker.display_name if linker else None
 
         return {
             "id": link.id,

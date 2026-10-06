@@ -35,7 +35,7 @@ from app.api.dependencies import (
 )
 from app.core.audit import log_audit_event
 from app.core.config import settings
-from app.core.constants import ROLE_MEMBER
+from app.core.constants import AUDIT_EVENT_ACCOUNT_UNLOCKED, ROLE_MEMBER
 from app.core.database import database_manager, get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.permissions import get_rank_default_permissions
@@ -262,11 +262,11 @@ async def create_member(
                 detail={
                     "message": (
                         f"An archived member with this email already exists: "
-                        f"{existing_user.full_name}. Use the reactivation endpoint "
+                        f"{existing_user.display_name}. Use the reactivation endpoint "
                         f"to restore their account instead of creating a duplicate."
                     ),
                     "existing_user_id": str(existing_user.id),
-                    "existing_member_name": existing_user.full_name,
+                    "existing_member_name": existing_user.display_name,
                     "existing_status": existing_user.status.value,
                     "reactivate_url": f"/api/v1/users/{existing_user.id}/reactivate",
                 },
@@ -378,6 +378,7 @@ async def create_member(
         first_name=user_data.first_name,
         middle_name=user_data.middle_name,
         last_name=user_data.last_name,
+        preferred_name=user_data.preferred_name,
         membership_number=membership_number,
         phone=user_data.phone,
         mobile=user_data.mobile,
@@ -516,7 +517,8 @@ async def create_member(
         # it must open its own session and reload the org rather than reuse the
         # request `db` or the detached `organization` ORM object.
         welcome_email = new_user.email
-        welcome_first = new_user.first_name
+        # Greet the member by the name they go by.
+        welcome_first = new_user.preferred_name or new_user.first_name
         welcome_last = new_user.last_name
         welcome_username = new_user.username
         welcome_org_id = str(current_user.organization_id)
@@ -811,8 +813,15 @@ def _redact_contact_fields(
     """
     payload = UserWithRolesResponse.model_validate(user)
     if is_admin:
+        # Only a lock still in force is news; an expired timestamp is history.
+        if payload.locked_until is not None and payload.locked_until <= datetime.now(
+            timezone.utc
+        ):
+            payload.locked_until = None
         return payload
 
+    # Lock state is for the people who can lift it (W02-4).
+    payload.locked_until = None
     _clear_hidden_contact_fields(payload, visibility, resolve_profile_visibility(user))
     _clear_leadership_only_fields(payload)
     return payload
@@ -890,6 +899,7 @@ async def get_user_roles(
         "user_id": user.id,
         "username": user.username,
         "full_name": user.full_name,
+        "display_name": user.display_name,
         "roles": user.roles,
     }
 
@@ -1191,6 +1201,7 @@ async def assign_user_roles(
         "user_id": user.id,
         "username": user.username,
         "full_name": user.full_name,
+        "display_name": user.display_name,
         "roles": user.roles,
     }
 
@@ -1299,6 +1310,7 @@ async def add_role_to_user(
         "user_id": user.id,
         "username": user.username,
         "full_name": user.full_name,
+        "display_name": user.display_name,
         "roles": user.roles,
     }
 
@@ -1409,6 +1421,7 @@ async def remove_role_from_user(
         "user_id": user.id,
         "username": user.username,
         "full_name": user.full_name,
+        "display_name": user.display_name,
         "roles": user.roles,
     }
 
@@ -1886,6 +1899,15 @@ async def update_user_profile(
     # named the field, and a permission-bearing change nobody requested is
     # exactly the kind the trail has to show.
     audited_fields = list(update_data.keys())
+    # The preferred name is what colleagues see on shift boards, so a change
+    # records both values: "who renamed this member, and to what" has to be
+    # answerable from the trail alone.
+    preferred_name_change = (
+        {"from": user.preferred_name, "to": update_data["preferred_name"]}
+        if "preferred_name" in update_data
+        and update_data["preferred_name"] != user.preferred_name
+        else None
+    )
 
     # Handle emergency_contacts separately (needs serialization)
     if "emergency_contacts" in update_data:
@@ -1901,6 +1923,7 @@ async def update_user_profile(
         "first_name",
         "middle_name",
         "last_name",
+        "preferred_name",
         "membership_number",
         "phone",
         "mobile",
@@ -1957,6 +1980,11 @@ async def update_user_profile(
             "updated_by": str(current_user.id),
             "is_self_update": is_self,
             "fields_updated": audited_fields,
+            **(
+                {"preferred_name_change": preferred_name_change}
+                if preferred_name_change
+                else {}
+            ),
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -2182,6 +2210,7 @@ async def admin_reset_password(
     # otherwise the HIPAA minimum password age check would block their required change.
     if not reset_data.force_change:
         user.password_changed_at = datetime.now(timezone.utc)
+        user.password_expiry_notified_at = None
 
     # Revoke all existing sessions to force re-login with the new password
     sessions_result = await db.execute(
@@ -2311,6 +2340,74 @@ async def admin_reset_mfa(
     return {"message": f"MFA has been reset for {target_username}"}
 
 
+@router.post(
+    "/{user_id}/unlock",
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(_rate_limit_admin_reset)],
+)
+async def admin_unlock_account(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Lift a sign-in lockout before it expires (workflow review W02-4).
+
+    After ``MAX_LOGIN_ATTEMPTS`` failures an account is locked, and the
+    sign-in screen deliberately cannot say so. The member calls an
+    administrator, who sees the lock on the Members page and can lift it
+    here without resetting the password. Clears the failure count with the
+    lock, so the member gets the full allowance back.
+
+    **Permissions required:** members.manage
+    """
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
+        .where(User.deleted_at.is_(None))
+        .options(selectinload(User.positions))
+        .with_for_update()
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    await _enforce_account_reset_ceiling(current_user, user, db)
+
+    locked_until = user.locked_until
+    if locked_until and locked_until.tzinfo is None:
+        locked_until = locked_until.replace(tzinfo=timezone.utc)
+    if not locked_until or locked_until <= datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account is not locked",
+        )
+
+    user.locked_until = None
+    user.failed_login_attempts = 0
+
+    await log_audit_event(
+        db=db,
+        event_type=AUDIT_EVENT_ACCOUNT_UNLOCKED,
+        event_category="user_management",
+        severity="info",
+        event_data={
+            "target_user_id": str(user_id),
+            "target_username": user.username,
+            "locked_until": locked_until.isoformat(),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    await db.commit()
+
+    return {"message": f"{user.username} can sign in again"}
+
+
 @router.get("/{user_id}/deletion-impact", response_model=DeletionImpactResponse)
 async def get_deletion_impact(
     user_id: UUID,
@@ -2385,6 +2482,7 @@ async def get_deletion_impact(
     return DeletionImpactResponse(
         user_id=str(user_id),
         full_name=user.full_name,
+        display_name=user.display_name,
         status=user.status.value if hasattr(user.status, "value") else str(user.status),
         training_records=training_count,
         inventory_items=inventory_count,

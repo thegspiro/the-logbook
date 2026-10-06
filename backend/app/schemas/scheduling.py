@@ -1069,6 +1069,10 @@ class ShiftSwapReview(BaseModel):
 
     status: SwapRequestStatus
     reviewer_notes: Optional[str] = None
+    # Approve a two-way exchange even though a member is not qualified for the
+    # seat they would take. Waives only that check; the override is noted on
+    # the request and audited.
+    override_qualification: bool = False
 
 
 class ShiftSwapOfferResponseRequest(BaseModel):
@@ -1127,6 +1131,19 @@ class TradeCandidateResponse(BaseModel):
     position: str
     shifts_this_month: int = 0
     owes_trade: bool = False
+
+    model_config = _response_config
+
+
+class ExchangeCandidateResponse(BaseModel):
+    """A seat the caller could exchange theirs for, with both sides qualified."""
+
+    shift_id: str
+    shift_date: date
+    start_time: Optional[datetime] = None
+    user_id: str
+    user_name: Optional[str] = None
+    position: Optional[str] = None
 
     model_config = _response_config
 

@@ -60,8 +60,11 @@ test.describe('mobile dialogs', () => {
   // flake, and a re-run costs the shared `frontend-e2e` budget twice over.
   test.describe.configure({ retries: 0 });
 
-  test('every dialog is named, labelled and fits a phone', async ({ page }) => {
-    test.setTimeout(1_800_000);
+  test('every dialog is named, labelled and fits a phone @sweep', async ({ page }) => {
+    // Measured at 7.5 min on a dedicated CI runner (2026-10-04); 2x that, the
+    // multiple every @sweep test uses. The previous 30 min was 4x and predated
+    // the matrix split, when this shared a runner with the whole suite.
+    test.setTimeout(900_000);
 
     let granted: SignInState | null = null;
 

@@ -84,7 +84,7 @@ const EquipmentCheckReportsPage: React.FC = () => {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 aria-current={activeTab === tab.id ? 'page' : undefined}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                className={`touch:min-h-11 flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                   activeTab === tab.id
                     ? 'bg-violet-600 text-white'
                     : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
@@ -211,13 +211,20 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
               <div key={a.apparatusId} className="card p-4">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-theme-text-primary text-sm font-semibold">{a.apparatusName}</span>
+                  {/* Zero checks on a truck nothing applies to is not the same
+                  as zero checks on one somebody skipped. */}
+                  {a.hasChecklist === false && (
+                    <span className="bg-theme-surface text-theme-text-secondary rounded-full px-1.5 py-0.5 text-xs">
+                      No checklist applies
+                    </span>
+                  )}
                   {a.hasDeficiency && (
                     <span className="rounded-full bg-red-500/10 px-1.5 py-0.5 text-xs text-red-700 dark:text-red-400">
                       Deficiency
                     </span>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
                   <span className="text-theme-text-muted">Checks:</span>
                   <span className="text-theme-text-secondary">{a.checksCompleted}</span>
                   <span className="text-theme-text-muted">Pass / Fail:</span>

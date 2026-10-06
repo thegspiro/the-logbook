@@ -1,6 +1,301 @@
 # Security Review — Medical Screening
 
-**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), [#2409](https://github.com/thegspiro/the-logbook/pull/2409) (pass 4), [#2557](https://github.com/thegspiro/the-logbook/pull/2557) (pass 5), (this PR) (pass 6)
+**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), [#2409](https://github.com/thegspiro/the-logbook/pull/2409) (pass 4), [#2557](https://github.com/thegspiro/the-logbook/pull/2557) (pass 5), [#2608](https://github.com/thegspiro/the-logbook/pull/2608) (pass 6) — corrected here from "(this PR)", which pass 6's own section never filled in after merge, (this PR) (pass 7)
+
+---
+
+## Pass 7 (2026-10-06)
+
+**Watchdog pickup.** Step 0 was re-verified fresh per this rotation's own
+instructions: `git fetch origin main` clean, `mcp__github__list_pull_requests`
+(state=open) returned no `claude/security-review-*` head branch (only #2953
+and #2954, both unrelated feature PRs), confirming no security-review PR to
+tend. Proceeded to Step 1: Feature 09 (Medical screening) was the next `⬜`
+row in `PROGRESS.md`.
+
+**Backend:** `endpoints/medical_screening.py` (430 L, 14 routes),
+`services/medical_screening_service.py` (620 L), `models/medical_screening.py`
+(223 L), `schemas/medical_screening.py` (255 L), `mcp/tools/medical.py`
+(204 L, 2 tools) — all read in full.
+**Frontend:** full `modules/medical-screening/` directory read in full (all
+14 files, not just the ones a diff flagged), per this rotation's own
+discipline of not treating "diff is empty/small" as license to skip the
+re-read.
+**Migrations:** none new for this feature; `validate_migrations.py --strict`
+re-run clean (525 revisions, single head).
+
+### A correction before the review itself: the working tree was stale, and pass 6's PR link was never filled in
+
+Two housekeeping notes, neither a security finding:
+
+1. **This session's checked-out branch was 104 commits behind `origin/main`**
+   (a stale leftover from the prior iteration's Feature 08 branch, already
+   merged as PR #2955). Line counts read against it did not match pass 6's
+   documented state for reasons that turned out to be "wrong branch," not
+   "undocumented change" — caught by comparing `wc -l` against pass 6's
+   table before trusting it, and fixed by `git checkout -B
+claude/security-review-medical-screening origin/main` before any further
+   reading. Recorded here because the discrepancy could otherwise read as a
+   finding about drift that was actually just a stale checkout.
+2. **Pass 6's own header line still read `(this PR)` for its PR link.** That
+   pass's PR merged as [#2608](https://github.com/thegspiro/the-logbook/pull/2608)
+   seven hours after it was opened, but nothing ever came back to fill in the
+   number — there is no mechanism in this rotation that revisits a merged
+   pass's own header. Corrected above.
+
+### Scope — git log is unreliable here, confirmed again, so the delta was found by content, not by diffing a resolved baseline
+
+Found PR #2608 (pass 6) via `search_pull_requests` (its title isn't
+`"medical-screening" in:title`-findable by number alone) and its head SHA
+(`e988a4ae1...`) is **not a valid object in this repository's history** —
+`git show` on it fails outright. This is the same "squash/orphan merge"
+unreliability pass 1 and pass 4 already hit and documented (MP-08's note);
+it is confirmed again here, on a fresh example, rather than assumed from the
+prior write-up. Consequently the baseline for "what changed since pass 6"
+could not be established as `git log <sha>..origin/main`.
+
+What worked instead, and is the actual method this pass used: per-path
+`git log -- <file>` on each of the five declared backend files and the full
+frontend directory, which (unlike the orphaned merge commits) correctly
+surfaces the real authoring commits that touched each path, confirmed by
+reading every one in full rather than trusting its title. That turned up
+**four backend commits and three frontend commits** since the content pass 6
+documented:
+
+| Commit      | Date       | File(s)                                                                                        | Reviewed by                                                                                                                                                            |
+| ----------- | ---------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `2f18127c7` | 2026-09-26 | `mcp/tools/medical.py`                                                                         | app-review pass 5 did **not** mention this one (its own sweep was scoped to the service/endpoint files); reviewed fresh here                                           |
+| `25cf5c01a` | 2026-09-26 | `services/medical_screening_service.py`                                                        | app-review pass 5 (named directly)                                                                                                                                     |
+| `78f52e4ae` | 2026-09-29 | `models/medical_screening.py`                                                                  | app-review pass 5 (named directly)                                                                                                                                     |
+| `dd438dd88` | 2026-10-04 | `services/medical_screening_service.py`                                                        | **not reviewed by any prior pass** — landed the day before app-review pass 5's own write-up commit, but that pass's delta description names only the two commits above |
+| `84262b4b1` | 2026-09-29 | `ComplianceDashboard.tsx`, `MedicalScreeningPage.tsx`                                          | not previously reviewed (copy-only)                                                                                                                                    |
+| `92617c5af` | 2026-09-29 | `ScreeningRecordForm.tsx`, `ScreeningRequirementForm.tsx`, `ScreeningFormClearGuards.test.tsx` | not previously reviewed (copy-only)                                                                                                                                    |
+| `bd49adf76` | 2026-09-29 | `MedicalScreeningPage.tsx`                                                                     | not previously reviewed (copy-only)                                                                                                                                    |
+
+Each read in full via `git show <sha> -- <path>`, not summarized from its
+commit message:
+
+- **`2f18127c7`** ("Judge equipment checks and stock expiry on the
+  department's date") swaps `date.today()` for
+  `await resolve_org_today(db, principal.organization_id)` in
+  `list_expiring_screenings`. Org-scoped, same fix shape SEC-00/app-review
+  already verified for the two service-layer call sites — no new surface.
+- **`25cf5c01a`** and **`78f52e4ae`** — re-read directly rather than taken on
+  app-review's word, both exactly as that pass described: the former is the
+  `resolve_org_today` swap in `get_compliance_status`/`get_expiring_soon`;
+  the latter drops `cascade="all, delete-orphan"` for `passive_deletes=True`
+  on `ScreeningRequirement.records`, with `requirement_id` already
+  `ondelete="SET NULL"` + `nullable=True` (confirmed directly against the
+  current model, not re-derived from the commit message).
+- **`dd438dd88`** ("Name members on medical screening records by their
+  preferred name") — the one genuinely new-to-security-review commit.
+  `_resolve_names`'s user query gained `User.preferred_name` and now calls
+  the shared `format_display_name(first, last, preferred)` helper
+  (`app/utils/member_names.py`) instead of the inline `f"{first} {last}"`
+  join. Checked directly: the query is still filtered on
+  `User.id.in_(user_ids)` **and** `User.organization_id == organization_id`
+  (unchanged), so the org-scoping that keeps a name from crossing tenants is
+  untouched — only which of two already-org-scoped columns gets used as the
+  given name changed. `format_display_name` itself (read in full) is a
+  documented, repo-wide convention (member-facing screens use the preferred
+  name; legal/exported documents use `format_legal_name`) with no PHI
+  implication — it is a display-name choice, not a new data exposure.
+  Prospects are explicitly unchanged (no `preferred_name` column on
+  `ProspectiveMember`). Clean.
+- **`84262b4b1`, `92617c5af`, `bd49adf76`** — all three are copy-only
+  (button labels, placeholder text, empty-state copy, a delete-confirmation
+  message that was first widened to warn about the cascade-delete bug
+  `78f52e4ae` was about to fix, then correctly narrowed back down once that
+  fix landed). Checked specifically for two things given this feature's
+  history: whether the MS-13 orphaned-record amber notice survived the
+  rewording in `92617c5af` (it did — the notice is shorter but says the
+  same thing, and the dedicated guard test
+  `ScreeningRecordForm.linkageNotice.test.tsx` matches on the substring
+  "not linked to a member or prospect", which is still present verbatim),
+  and whether the MS-9 "Not enforced yet" notices on `grace_period_days`/
+  `applies_to_roles` survived (both do, confirmed against the current file
+  and against `test_medical_screening_requirement_fields_are_unwired.py`'s
+  own substring check, which only requires the fragment `"Not enforced"`
+  inside each field's block — unaffected by the wording trim). One
+  side-effect of `92617c5af` is addressed below (a stale doc citation, not a
+  behavioral issue).
+
+No migration, no model/schema field change, no permission or route change in
+any of the seven commits.
+
+### Route inventory — re-enumerated directly against the current file
+
+All 14 routes walked again (not diffed against the pass 3 table and assumed
+unchanged): identical in path, method, auth dependency, and permission
+string to every prior pass's table. No route added, removed, or
+re-permissioned since pass 1.
+
+### Re-verified good ✅ (re-confirmed against current code, not copied forward)
+
+- No baseline grant for either permission —
+  `app/core/permissions.py:267-276` is still the only reference in the
+  backend; re-checked directly (not grep'd from memory) against
+  `DEFAULT_POSITIONS`, `OPERATIONAL_RANKS`, and every seed migration.
+- Tenant isolation intact throughout: every by-id getter filters
+  `organization_id`; `create_record`'s three client-supplied FKs still
+  route through `assert_in_org(..., allow_none=True)`.
+- PHI encryption at rest intact — `provider_name`/`result_summary`/`notes`
+  (`EncryptedText`), `result_data` (`EncryptedJSON`), re-confirmed against
+  the current model file.
+- `SET NULL` FKs (`requirement_id`, `reviewed_by`) both `nullable=True`.
+- Update schemas still omit every tenancy/subject FK field.
+- No raw exception reaches the client; `create_record`/`update_record`/
+  `update_requirement` still wrap in
+  `except ValueError as exc: raise HTTPException(400, safe_error_detail(exc))`.
+- No CSV/spreadsheet export; no `.like()`/`.ilike()` anywhere in this
+  feature's files.
+- No unbounded in-memory cache/tracker; no JSON-column shallow-copy
+  mutation risk — re-traced both `create_*`/`update_*` write paths on
+  `applies_to_roles`/`result_data` directly.
+- Audit logging present on all six writes, absent on the five PHI-bearing
+  reads (MS-12, still flagged, unchanged).
+- MCP tools' explicit-projection discipline (MS-11) still holds: neither
+  tool's return dict includes `notes`/`result_summary`/`provider_name`/
+  `result_data`, or the record's raw `status`. `require_member` and
+  `member_names` (`app/mcp/tools/_common.py`, read directly) are both
+  org-scoped and fail closed (`ValueError` on a missing/foreign member).
+- Cache exclusion (`/medical-screening/`, `/admin-hub/` in
+  `UNCACHEABLE_PREFIXES`) and the route/module gate
+  (`requiredPermission="medical_screening.view"` +
+  `requiredModule="medical_screening"` on the one frontend route,
+  `require_permission(...)` independently on all 14 backend routes) both
+  re-confirmed against the current files.
+- The dialog overlays in both `ScreeningRecordForm.tsx` and
+  `ScreeningRequirementForm.tsx` carry no click handler on the
+  `modal-overlay` div — Pitfall #31 (no dialog closes on an outside click)
+  holds; Escape and the header close button are the only ways out.
+
+### New this pass
+
+### MS-14 — LOW (authorization proportionality, PHI "minimum necessary") — `medical_screening.view` grants full narrative PHI with no finer-grained read tier — 🚩 FLAGGED
+
+**What:** this pass was asked to specifically re-examine whether a `.view`
+permission on a PHI feature is proportionate, per Checklist §2's framing
+that a `.view` gate on data warranting `.manage`-level sensitivity is the
+XC-2 pattern. Re-checked directly rather than carried forward from six prior
+passes all saying "access control: present" without separately asking this
+question.
+
+Five routes are gated on `medical_screening.view`: `GET /requirements`
+(configuration, not PHI), `GET /requirements/{id}` (same), `GET /records`,
+`GET /records/{id}` (both return the full `ScreeningRecordResponse`,
+including the three `EncryptedText` columns and the one `EncryptedJSON`
+column — `provider_name`, `result_summary`, `notes`, `result_data` — decrypted
+transparently before serialization), `GET /compliance/{user_id}`,
+`GET /compliance/prospect/{prospect_id}`, `GET /expiring` (these three return
+`ComplianceSummary`/`ExpiringScreening`, which carry a requirement name,
+screening type, dates and a `passed`/`failed`/`waived`-shaped status, but
+**not** the narrative fields — confirmed directly against
+`schemas/medical_screening.py`).
+
+**Why this is a real, if narrow, consideration and not a false alarm:**
+anyone an administrator grants `medical_screening.view` to — without also
+granting `.manage` — can read a member's examining provider's name, a
+free-text result summary, and reviewer notes for every screening in the
+organization, with no separate tier between "can see who is compliant" and
+"can see the clinical narrative." HIPAA's minimum-necessary principle would
+be better served by a finer split (e.g., a role that can see compliance
+status for scheduling purposes without seeing `provider_name`/
+`result_summary`/`notes`/`result_data`), which does not exist today.
+
+**Why this is not escalated to "the permission model is wrong" or fixed
+outright:**
+
+- The `view`/`manage` split here is the **same pattern used uniformly
+  across every other resource in this codebase** (finance, apparatus,
+  elections, inventory, …) — view reads, manage writes. Singling out this
+  one feature for a three-tier model would be an inconsistent special case,
+  not a drop-in fix, and is a product decision about the permission schema,
+  not a same-day code change.
+- **Neither permission is baseline-granted** (re-confirmed this pass — see
+  above), so the exposure requires an administrator to deliberately assign
+  `.view` to a role. This is a materially different posture than, say,
+  MS-4's historical bug (a PHI route reachable by every member by default)
+  or a genuinely mismatched permission string copy-pasted from a
+  lower-sensitivity resource.
+- Splitting `GET /records`/`GET /records/{id}` onto a new, narrower
+  permission (or trimming their response shape for `.view`-only callers)
+  would change who can read what for any organization that has already
+  assigned `.view` without `.manage` — a behavior change on a PHI read path,
+  which this feature's own established disposition (MS-7, MS-9, MS-13) is to
+  flag rather than guess at.
+
+**Disposition:** flagged for the application owner. If an organization wants
+a "can see compliance, cannot see clinical detail" role, the fix is a new
+permission (e.g. `medical_screening.view_detail`) gating only the narrative
+fields, with `.view` alone continuing to carry the five derived-status
+routes. Not implemented here — it is a new permission string, a schema
+split, and a decision about which existing `.view`-only grants (if any, per
+organization) should be left as-is versus upgraded, which only the owner can
+make. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+### Minor doc correction (not a security finding)
+
+`backend/tests/test_medical_screening_requirement_fields_are_unwired.py`'s
+own docstring cited the `applies_to_roles` field as sitting under literal
+copy reading "Leave blank to apply to all members" — true when MS-9 wrote
+it, no longer true since `92617c5af` (pass 7's own delta, above) trimmed
+that caption as redundant with the "Not enforced yet" notice beside it. The
+test's actual assertion only checks for the substring `"Not enforced"` in
+each field's block, so this was a comment-accuracy gap, not a test
+correctness one — fixed by rewording the docstring to describe the original
+motivation in the past tense rather than asserting current copy. No test
+behavior changed.
+
+### Re-verified open, not re-flagged (unchanged from pass 3/4/5/6)
+
+- **MS-6 — LOW (scale).** `list_requirements`/`list_records` still run bare
+  `.all()`. Unchanged; already in `KNOWN_LIMITATIONS.md`.
+- **MS-7 — MED.** `create_record`/`update_record` still place no constraint
+  between `current_user` and `data.user_id`; `get_compliance_status` still
+  never reads `reviewed_by`. Unchanged; still needs a product decision;
+  already in `KNOWN_LIMITATIONS.md`.
+- **MS-12 — LOW (audit completeness).** The five PHI-bearing `GET` routes
+  still call no `log_audit_event`. Unchanged; already in
+  `KNOWN_LIMITATIONS.md`.
+- **MS-13 — MED.** The "Add Record" dialog still has no `user_id`/
+  `prospect_id` control; every UI-created record is still orphaned. The
+  interim honesty notice (on the create dialog, and now also on the Records
+  tab's list rows per `84262b4b1`, this pass's own delta) is unchanged in
+  substance. Unchanged; already in `KNOWN_LIMITATIONS.md`.
+- **`create_record` still doesn't enforce exactly-one-of `user_id`/
+  `prospect_id`.** Both ids are still plain `Optional[str] = None` on
+  `ScreeningRecordCreate`; no `@model_validator` added. Unchanged — and
+  still moot for every UI-originated record per MS-13.
+- **`get_compliance_status` still doesn't 404 an unknown subject.**
+  Re-confirmed not an enumeration channel.
+- **`grace_period_days`/`applies_to_roles` (MS-9) and `frequency_months`
+  still unenforced.** The "Not enforced" notices are unchanged in substance
+  (reworded, not removed — see the doc correction above).
+
+## Schema & migration notes
+
+No migration this pass; no model/schema change. `validate_migrations.py
+--strict` re-run clean: 525 revisions, single head.
+
+## Guard tests added
+
+None new — MS-14 is a flagged consideration with no safe same-day fix to
+pin, and the doc correction above is a comment-only edit to an existing
+test's docstring with no assertion change.
+
+## Completion gate
+
+| Check                                                                                         | Result                                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                 | 0 violations                                                                                                                                                                                                                                            |
+| `black --check app/ tests/ alembic/`                                                          | clean, 1944 files unchanged                                                                                                                                                                                                                             |
+| `isort --check-only app/ tests/ alembic/`                                                     | clean                                                                                                                                                                                                                                                   |
+| `python3 scripts/validate_migrations.py --strict`                                             | pass — 525 revisions, single head                                                                                                                                                                                                                       |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                             | pass — 245 routes checked, 0 errors, 0 warnings                                                                                                                                                                                                         |
+| `pytest tests/ -q -k "medical_screening or medical-screening or grace_period"`                | **58 passed, 1 skipped** (pre-existing — optional `py_vapid` dep), 0 failed                                                                                                                                                                             |
+| `pytest tests/ -m "not integration and not slow and not docker" -q` (full backend unit suite) | **12930 passed, 1 skipped** (pre-existing/environmental), 0 failed                                                                                                                                                                                      |
+| `npm run typecheck` / `npm run lint`                                                          | not run — no frontend file was changed by this pass (only a backend test docstring); per CLAUDE.md "Match the Verification to the Change," and consistent with pass 4/5's own precedent of skipping frontend gates when nothing frontend-facing changed |
 
 ---
 

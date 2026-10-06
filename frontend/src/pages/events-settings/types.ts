@@ -38,6 +38,8 @@ export interface OrgMember {
   id: string;
   first_name: string;
   last_name: string;
+  preferred_name?: string | null | undefined;
+  display_name?: string | undefined;
   rank?: string;
 }
 

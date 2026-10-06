@@ -88,9 +88,9 @@ Pipeline tasks are the checklist steps your coordinator follows for each request
 
 ### Step 3: Assign a Default Coordinator
 
-Navigate to **Events Admin > Settings > Request Pipeline > Default Coordinator**.
+Navigate to **Events Admin > Settings > Pipeline > Default Coordinator**.
 
-Select the member who should be auto-assigned all incoming requests. This is typically:
+Select the member who should be auto-assigned all incoming requests. Members are listed as name and rank (for example "Jordan Avery — Firefighter"). This is typically:
 
 - The **Public Education Officer** or **Community Outreach Coordinator**
 - A **Lieutenant** or **Captain** responsible for public programs
@@ -100,7 +100,7 @@ The coordinator receives an email notification whenever a new request arrives.
 
 ### Step 4: Configure Email Triggers
 
-Navigate to **Events Admin > Settings > Email Triggers**.
+Navigate to **Events Admin > Settings > Email**, under **Notification Triggers**.
 
 Each status change can automatically send an email. Configure:
 
@@ -117,12 +117,24 @@ Each status change can automatically send an email. Configure:
 
 ### Step 5: Create the Public Form
 
-Navigate to **Forms** and create a new form:
+The easiest route is **Events Admin > Settings > Public Form > Generate Event
+Request Form**. It creates a ready-made form that already accepts submissions
+without an account, in Draft status — open it in **Forms**, adjust the fields
+if you like, and press **Publish Form**.
 
-1. Set a **public slug** (e.g., `request-event`)
-2. Enable **Public Access**
-3. Add an **EVENT_REQUEST** integration
-4. Share the URL: `https://your-domain.com/f/request-event`
+To build one yourself in **Forms** instead:
+
+1. Create the form and add its fields
+2. Press **Share**, switch on **Public Access**, and tick **Allow submissions
+   without signing in** — without it, a member of the public can open the form
+   but is refused when they press Submit ("Authentication is required to submit
+   this form.")
+3. Add the **Event Request** integration (**Integrations**)
+4. Press **Publish Form**
+
+The public address is `https://your-domain.com/f/<code>`, where the code is a
+12-character code the form is given when it is created; **Share** shows the
+full link.
 
 > **Tip**: Add the form link to your department website's "Community Programs" or "Request an Event" page. You can also generate a QR code for print materials.
 
@@ -330,7 +342,21 @@ Navigate to **Forms** and create a new form:
 
 ## Email Template Library
 
-Below are ready-to-use email templates. Copy these into **Events > Settings > Email Templates** and customize for your department.
+Below are ready-to-use email templates. Copy these into **Events Admin > Settings > Email**, under **Email Templates**, and customize for your department.
+
+> **Available variables:** `{{contact_name}}`, `{{outreach_type}}`,
+> `{{organization_name}}` and `{{event_date}}` (in the department's timezone,
+> or "TBD"). `{{organization_name}}` is the **requester's** organization — the
+> school or group typed on the request, blank if none — not your department, so
+> the templates below sign off with a literal `[Your Department]` for you to
+> replace. `{{organization_logo_img}}` is also accepted but renders nothing,
+> because the email header already carries the logo. Variables are filled in
+> the subject and the HTML body only; a template's plain-text body is sent as
+> written. Nothing else is filled in — an unknown variable reaches the
+> requester literally. In particular there is **no status-link variable**, and
+> no email sends the requester their status page. To give them one, press
+> **Copy Link** on the request (Events Admin > Requests) and paste the address
+> into your message yourself.
 
 ### Template: Request Received Confirmation
 
@@ -343,19 +369,18 @@ Below are ready-to-use email templates. Copy these into **Events > Settings > Em
 ```
 Dear {{contact_name}},
 
-Thank you for reaching out to {{organization_name}}! We've received your request
+Thank you for reaching out to [Your Department]! We've received your request
 for a {{outreach_type}} and a coordinator has been assigned.
 
 Here's what happens next:
 1. Our coordinator will review your request within [X] business days
 2. We'll reach out to confirm date, time, and logistics
-3. You can check your request status anytime at: {{status_link}}
 
-If you need to make changes or cancel, use the status link above.
+If you need to make changes or cancel, reply to this email.
 
 Thank you for thinking of us!
 
-{{organization_name}}
+[Your Department]
 ```
 
 ### Template: Event Scheduled Confirmation
@@ -376,18 +401,16 @@ Great news! Your {{outreach_type}} has been confirmed:
 
 We'll send a reminder [X] days before the event with final details.
 
-You can always check your request status at: {{status_link}}
-
 We're looking forward to it!
 
-{{organization_name}}
+[Your Department]
 ```
 
 ### Template: How to Find Our Building (Directions)
 
 **Trigger**: Manual send (or `days_before_event`, 7 days)
 
-**Subject**: Directions to {{organization_name}} — Your Visit on {{event_date}}
+**Subject**: Directions to [Your Department] — Your Visit on {{event_date}}
 
 **Body**:
 
@@ -420,7 +443,7 @@ Questions? Reply to this email or call [phone number].
 
 See you on {{event_date}}!
 
-{{organization_name}}
+[Your Department]
 ```
 
 ### Template: Day-Before Reminder
@@ -444,7 +467,7 @@ Please remember:
 
 We look forward to seeing you!
 
-{{organization_name}}
+[Your Department]
 ```
 
 ### Template: Event Postponed Notification
@@ -469,9 +492,9 @@ We are working on scheduling a new date and will be in touch as soon
 as one is available.
 
 We apologize for any inconvenience. If you have questions or need to
-cancel, visit your status page: {{status_link}}
+cancel, reply to this email.
 
-{{organization_name}}
+[Your Department]
 ```
 
 ### Template: Thank You / Post-Event Follow-Up
@@ -485,7 +508,7 @@ cancel, visit your status page: {{status_link}}
 ```
 Dear {{contact_name}},
 
-Thank you for hosting {{organization_name}} for your {{outreach_type}}!
+Thank you for hosting [Your Department] for your {{outreach_type}}!
 We hope the program was valuable for your group.
 
 Here are some follow-up resources:
@@ -501,7 +524,7 @@ We'd also appreciate any feedback! Reply to this email with your thoughts
 
 Thank you for your commitment to safety!
 
-{{organization_name}}
+[Your Department]
 ```
 
 ---
@@ -514,7 +537,7 @@ Thank you for your commitment to safety!
 - **Use comments for coordination** — Keep internal notes in the comment thread so anyone who takes over can see the full context.
 - **Front-load approvals** — Put "Chief Approval" early in the pipeline so you don't do prep work that gets blocked later.
 - **Batch similar requests** — If you get multiple school visit requests, try to schedule them in the same week to reduce setup time.
-- **Copy the status link** — Share the status link in any external emails so the requester can self-service.
+- **Copy the status link** — No email sends the requester their status page. Press **Copy Link** on the request and paste it into a message to them so they can self-serve.
 
 ### For Department Administrators
 

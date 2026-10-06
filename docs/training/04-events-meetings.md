@@ -38,13 +38,24 @@ Events are categorized by type:
 - **Community** - Community outreach
 - **Work Detail** - Work parties and maintenance
 - **Other** - Miscellaneous events
-- **Custom Categories** - Your department can define additional custom event categories with color-coded badges in **Events Settings > Custom Event Categories**
+- **Custom Categories** - Your department can define additional custom event categories with color-coded badges in **Event settings > Custom Event Categories** (the tab and its link were labelled "Events settings" / "Event Module Settings" before 2026-09-29)
 
 You can filter events by type and date range using the controls at the top of the page. A **search bar** lets you filter by event title and location. If custom categories have been configured and enabled, they appear as additional filter tabs alongside the built-in types. Event cards show your **RSVP status badge** (Going/Maybe/Not Going) so you can see at a glance which events you've responded to.
 
 **Past Events:** All users can toggle between **Upcoming** and **Past** events using the toggle at the top of the page. Results are paginated for easy browsing.
 
+**An empty list explains itself** _(2026-09-29)_. A member on a department with
+nothing scheduled used to see the tabs and filters over a blank page. They now
+see **No upcoming events yet**, a sentence saying what appears there and what
+they can do with it (RSVP, add it to a calendar, check in on arrival), and a
+link, **Take the short walkthrough in the Learning Center**. An officer's empty
+list reads **No upcoming events yet** too; **No events found** is kept for a
+list that a search, a filter, **Past** or **My Events** has narrowed to nothing.
+
 ![Events listing page with upcoming events and type badges](./images/04-01-events-list.png)
+
+> **Screenshot needed:**
+> _[Events page as a regular member on a department with no upcoming events → the "No upcoming events yet" empty state with its explanation and the "Take the short walkthrough in the Learning Center" link.]_
 
 ---
 
@@ -76,11 +87,96 @@ Click on any event to view its detail page. The detail page shows:
 > **When RSVP is available.** You can only RSVP to a **published** event that
 > hasn't ended yet. A **draft** event (one an officer is still preparing and
 > hasn't published) does not accept RSVPs, and neither does an event that has
-> already **ended** or whose **RSVP deadline** has passed — the buttons return an
-> error in those cases. If you missed the window, use **check-in** at the event
-> or ask an officer to record your attendance.
+> already **ended** or whose **RSVP deadline** has passed. If you missed the
+> window, use **check-in** at the event, or — once check-in has closed — send
+> an attendance request with **I was there** (below).
+>
+> **The RSVP buttons are no longer offered once RSVPs close** _(2026-09-29)_.
+> The event page already withheld them, but a card on the events list and a row
+> on the dashboard's upcoming-events timeline kept offering **Going**, **Not
+> Going**, **Change RSVP** and **Leave Waitlist** on an event that had ended or
+> whose deadline had passed, and every press came back as an error. Both now
+> check the end time and the deadline the way the server does, and leave the
+> buttons out. The officer's attendance tools on the event page are unchanged.
+
+**RSVP choices and the activity feed** _(2026-09-28)_. The **Going / Not Going
+/ Maybe** choices in the RSVP dialog are full 44px touch targets on a phone
+(they were 20px tall). The officer's **RSVP Activity** feed now uses the same
+words as the rest of the page — "changed from Not Going to Maybe" — instead of
+the stored values ("not_going", "waitlisted"), and a one-seat event refusing a
+party says "1 person", not "1 people".
 
 ![Event detail page with the header, description, and RSVP controls](./images/04-02-event-detail.png)
+
+**[SCREENSHOT — REPLACE `04-02-event-detail.png`.** Taken as an administrator, the page changed twice: the details card gained an **Organized by** row with a **Transfer event** link (2026-10-03), and every card on the page now carries the shared bordered `card` treatment instead of the borderless surface (2026-10-04). Re-shoot an upcoming event with RSVP open so the RSVP controls, the Organized by row and the bordered cards are in frame.**]**
+
+### After an event has ended _(2026-09-30)_
+
+The event page drops the actions that can no longer do anything:
+
+- **Add to Calendar** is hidden once the event has ended — its scheduled end
+  has passed, or an officer recorded an actual end.
+- **View QR Code** is hidden once self check-in can no longer succeed: the
+  check-in window has closed, the event is cancelled, or attendance is
+  finalized. The close is the server's check-in window, not the scheduled end —
+  a **Window** event keeps taking check-ins for its "minutes after end".
+
+### "I was there" — asking to be marked present _(2026-09-30)_
+
+A dead phone, no signal, a QR code nobody put up: a member who was at an event
+but has no check-in can ask its organizer to mark them present.
+
+**Who sees it.** Once the event's check-in window has closed, a member who is
+not recorded as present sees _"Were you at this event but never checked in?
+Ask the organizer to mark you present."_ with an **I was there** button. It is
+offered for **30 days after the event**, once per member per event, and not on
+a draft or cancelled event. Whether you may ask is the server's decision, so
+the button appears only when a request would be accepted.
+
+**Sending it.** **I was there** opens **Ask to be marked present**:
+
+1. **Why is there no check-in?** — required (up to 1,000 characters).
+2. **When did you arrive?** and **When did you leave?** — both optional; if you
+   give both, the second must be later, and neither can be in the future.
+3. **Send request**. The toast reads _"Request sent to the event organizer"_.
+
+The page then shows where the request stands: waiting, **"Your attendance was
+confirmed by …"**, or **"Your request to be marked present was not approved by
+…"** with the organizer's reason. A declined member cannot ask again for that
+event.
+
+**Deciding it (organizers).** The event's organizer, its alternate and anyone
+holding `events.manage` see an **Attendance Requests** card on the event page —
+_"Members with no check-in who say they were here. Approving records the times
+you confirm, credited when attendance is finalized."_ Each request shows the
+member, when they asked, their reason and the times they gave, with
+**Approve** and **Decline**:
+
+- **Approve** opens **Confirm attendance**: a **Check-in** and **Check-out**
+  (both required — _"These times decide the hours credited"_) and an optional
+  **Note to the member**. Approving writes the same times **Edit Times** writes,
+  so the member is credited through the normal path when attendance is
+  finalized.
+- **Decline** asks for a **Reason**, which the member is shown.
+
+Nobody decides their own request. **Approving is refused while attendance is
+finalized** — the card says _"Attendance is finalized. Reopen attendance to
+approve a request; declining still works."_ — because approving would change
+what finalizing already credited.
+
+**Who is told.** A new request goes to the event's organizer and alternate,
+in the app and by email (**Event officer duties** in the member email
+switches). If neither can be reached — both have left, or the only one set is
+the member asking — it goes to the position chosen for that event type in
+**Event settings → Attendance**, then to the **Secretary**, and only as a last
+resort to every holder of `events.manage`. The member hears the decision in
+the app and by email (**Event reminders**).
+
+> **Screenshot needed:**
+> _[Event detail as a member, for an event whose check-in window closed today and with no check-in recorded → the "Were you at this event but never checked in?" card with its "I was there" button.]_
+
+> **Screenshot needed:**
+> _[Event detail as the event's organizer → the Attendance Requests card listing one pending request (name, "Asked …", the reason, "Says they were there from … until …") with Approve and Decline.]_
 
 ---
 
@@ -91,17 +187,41 @@ Events support QR code-based check-in for tracking attendance:
 ### For Officers (Setting Up Check-In)
 
 1. Open the event detail page.
-2. Click **QR Code** to display or print the check-in QR code.
+2. Click **View QR Code** to display or print the check-in QR code. The button
+   is not offered once check-in can no longer succeed — see
+   [After an event has ended](#after-an-event-has-ended-2026-09-30).
 3. Display the QR code on a screen or print it for the venue entrance.
 
 ![Event QR code display page for member self check-in, its check-in window open](./images/04-04-event-qr-code.png)
+
+**[SCREENSHOT — REPLACE `04-04-event-qr-code.png`.** The page's copy was rewritten on 2026-09-29: the line under the title now reads "Members scan this code to check themselves in", and the steps read "Members sign in if they aren't already" and "Members tap Check In to record their attendance". Re-shoot the same open-window state so those lines are in frame.**]**
+
+A member who opens the QR page **before** the window opens (it is linked from
+the event page) is told what the code is for — _"This code is put on display
+at the event. When you arrive, scan it with your phone camera to check
+yourself in."_ — instead of being left to guess whether to show it or scan it
+_(2026-09-29)_.
 
 ### For Members (Checking In)
 
 1. Scan the QR code with your phone's camera.
 2. You will be taken to the self check-in page.
-3. Confirm your check-in.
-4. When leaving, scan again to check out.
+3. Tap **Check In to This Event**. The confirmation reads **You're Checked In**
+   (it read "Successfully Checked In!" before 2026-09-29).
+4. When leaving, scan again and tap **Check Out of This Event** (**You're
+   Checked Out**).
+
+**The confirmation mentions a training record only when one will be written**
+_(2026-09-28)_. It used to say **Training Record Created** on every Training
+event. A record is written only when the event is linked to a training session
+that creates records, so a member of any other training event was told a
+record existed and went looking for it. The **Training Record** notice now
+appears only for an event that will actually record one, and no longer says
+"Created" before the record exists. Training credit from finalizing is
+described in [Training Credit from Events](#training-credit-from-events-2026-09-29).
+
+> **Screenshot needed:**
+> _[Member at /events/:id/check-in on a Training-type demo event inside its check-in window, after tapping Check In to This Event: the "You're Checked In" heading, the event name, and the green Training Record panel reading "Your attendance will be added to your training record when the event's attendance is finalized." Creates a check-in (mutates seed data). Do not capture the member's email or the URL bar.]_
 
 ### NFC Tags — a second way in _(2026-08-18)_
 
@@ -157,11 +277,74 @@ has. What happens is worth stating precisely even without the picture: the scan
 navigate, it does not close, and it does not ask you whether to trust the link.
 Hold a valid tag to the phone and the same armed scan picks it up.
 
-> **Room kiosk display codes cannot be written to a tag, and that is
+> **Room kiosk display codes are still never written to a tag, and that is
 > deliberate.** A kiosk code is a check-in credential for an unauthenticated
 > screen; putting it on a sticker in a public hallway hands it to whoever walks
-> past. You will see **Write NFC tag** on apparatus cards and not on room cards
-> in the same directory, for this reason.
+> past. **Since 2026-10-02 a room card does offer Write NFC tag** — but what it
+> writes is the room's own sign-in link, described next, not its kiosk code.
+
+### Room NFC tags _(2026-10-02)_
+
+A tag by a room's door checks a member in to **whatever event is open in that
+room right now**, so one sticker serves every meeting and class held there.
+
+**Writing one.** On **Check-In QR Codes** (`/locations/qr-codes`), each room
+card offers **Write NFC tag**. The tag carries `/locations/<room>/check-in` —
+a link to a signed-in page, not the kiosk code; the card's QR code still opens
+the public kiosk. Writing room tags needs `locations.manage_nfc_tags`, granted
+on upgrade to the President, Vice President, Chief, Deputy Chief, Assistant
+Chief and the Facilities Manager (apparatus tags need the matching
+`apparatus.manage_nfc_tags`, granted to the same leadership and the Apparatus
+Officer). An officer who may write room tags but is not shown kiosk codes gets
+a tag-only **Room NFC Tags** list instead of the kiosk cards.
+
+**Tapping one.** The member signs in if they are not already, and the page
+asks the server what is in its check-in window in that room:
+
+| What is open in the room | What the member sees                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------------------- |
+| One event                | Forwarded straight to that event's check-in page                                                        |
+| Several                  | **Which event are you here for?** — they pick; the page does not guess                                  |
+| None                     | **Nothing to check in to**, with **Check again** and **Go to Events**                                   |
+| The room no longer exists | **Room unavailable** — "This tag points at a room that no longer exists. Let an officer know so it can be rewritten." |
+
+Attendance is still recorded by the event's own self check-in, so its window
+and rules apply unchanged. Tapping needs Chrome on Android over HTTPS, as
+above.
+
+### ID-card check-in at a room kiosk _(2026-10-02)_
+
+A room's public kiosk display (`/display/<code>`) can also accept **member ID
+card taps**, through Web NFC on an Android tablet or a USB card reader beside
+the screen, with **nobody signed in at the kiosk**. When the room's switch is on, the
+display adds **Or tap your ID card here**. A tap checks the member in to the one
+event in its check-in window in that room, or **out** if they are already
+checked in. The screen shows only the member's first name and last initial.
+
+- **Off for every room until switched on**, room by room, with the **Badge
+  check-in** switch on that room's card on **Check-In QR Codes**. Switching it
+  on asks first (**Turn on badge check-in** — _"Turn it on only where a card
+  reader is mounted beside the display"_ — **Turn on** / **Leave it off**). It
+  needs `locations.manage_nfc_tags`, is audited, and is refused while the **NFC
+  ID Cards** integration is off.
+- **Both switches are re-checked on every tap.** Turning the integration or the
+  room off stops the next tap.
+- **Two events open in the room at once** is refused ("More than one event is
+  running in this room…") unless the member is checked in to exactly one of
+  them, which can only mean a check-out. **No event open** is refused too.
+- **60 taps a minute** per kiosk address and per room; every tap that moves
+  attendance is audited with the room and the caller's address.
+
+> **⚠️ This is an unattended reader.** A copied or borrowed card checks its
+> owner in with nobody watching. The department chose that trade on
+> 2026-10-02; it is recorded in `docs/KNOWN_LIMITATIONS.md`. Turn badge
+> check-in on only for rooms where that is acceptable.
+
+> **Screenshot needed:**
+> _[Check-In QR Codes (`/locations/qr-codes`) as an administrator with the NFC ID Cards integration on → a room card showing its QR code, **Write NFC tag** and the **Badge check-in** switch.]_
+
+> **Screenshot needed:**
+> _[A phone after tapping a room tag while two events are in their check-in window in that room → "Which event are you here for?" with both events listed.]_
 
 ### Monitoring Check-Ins
 
@@ -201,6 +384,21 @@ while saving the real minute, so a member who tapped in at 9:07 showed as 9:00
 and "9:00 to 1:00" saved 233 minutes. A time that is not on a quarter hour now
 shows as it is — pick the quarter you mean and the duration beneath the
 pickers will read what gets credited.
+
+**The roster's controls are sized for a phone at the door** _(2026-10-04)_.
+**Check In**, **Edit Times**, **Remove** and the **Yes / No** of the remove
+confirmation on the attendance list were about 16px tall — the control an
+officer taps while checking members in, with a destructive **Yes** two thumb
+widths away. On a phone they are now 44px; desktop density is unchanged. In the
+manual check-in dialog each row's button is named for its member ("Check in
+Alex Brooks") and the search field is announced as **Search Members**
+_(2026-09-28)_, and the monitoring view's **Status** column reads "Going"
+rather than "going".
+
+For a member who tapped in early, Edit Times opens on the **scheduled start**,
+which is what they are credited from, rather than on the tap. Saving it
+unchanged therefore changes nothing; to credit time before the start, set the
+earlier time yourself.
 
 ---
 
@@ -305,9 +503,18 @@ events page.
 > guide says "Events Admin", follow the **Manage Events** entry.
 
 1. Set the **event type**, **title**, **date**, **start time**, and **end time**.
+   Moving the start after the end is set now carries the end with it, keeping
+   the event's length _(2026-09-29)_ — it used to leave the end behind, so a
+   template's start moved to next week produced an event that ended before it
+   began.
 2. Add a **location** and **description**.
-3. Configure **check-in settings** (QR code, manual, or both).
-4. In **RSVP Settings**, choose **Who can see who's going**. The options are
+3. Choose the **Organizer** and an optional **Alternate** _(2026-10-03)_. The
+   organizer defaults to **Me (default)**. Attendance requests for the event go
+   to these two (see [Organizer, alternate and transferring an event](#organizer-alternate-and-transferring-an-event-2026-10-03)).
+   These pickers are on **Create Event** only; afterwards the pair is changed
+   with **Transfer event**.
+4. Configure **check-in settings** (QR code, manual, or both).
+5. In **RSVP Settings**, choose **Who can see who's going**. The options are
    **Use organization default**, **Everyone in the department** or **Only
    event managers**.
    - Members only ever see names, never contact details, notes or
@@ -316,9 +523,18 @@ events page.
      Attendance**, and starts out as **Only event managers**.
    - See
      [Who's going, RSVP and the waitlist](#whos-going-rsvp-and-the-waitlist-2026-09-01).
-5. Set **reminder schedule** — choose one or more reminder times (e.g., 24 hours before, 1 hour before). Members who RSVP'd will receive notifications at these times.
-6. Optionally attach files (agendas, maps, etc.).
+   - With **Require RSVP** ticked on a single (not recurring) event, the
+     **RSVP Deadline** is required and marked with an asterisk; the form says
+     _"Set an RSVP deadline, or turn off Require RSVP"_ rather than sending a
+     request the server refuses _(2026-09-27)_. A recurring series does not
+     need one — a single fixed deadline has no meaning across a series.
+6. Set **reminder schedule** — choose one or more reminder times (e.g., 24 hours before, 1 hour before). Members who RSVP'd will receive notifications at these times.
 7. Click **Create Event**.
+
+> **Attachments cannot be added from the app.** The form's attachments area
+> says _"Files can't be attached from the app yet."_ — earlier versions of this
+> guide, and of the form, said to upload them from the event page after saving,
+> which the app does not offer either _(corrected 2026-09-29)_.
 
 **Mandatory attendance.** Ticking **Mandatory attendance** opens **Mandatory
 for**, a checklist of your department's configured membership tiers; the form
@@ -328,6 +544,8 @@ on approved leave that day, or with no membership type recorded is not counted
 as having been required to attend.
 
 ![Create Event form with type, title, date, location, and reminder fields](./images/04-05-create-event.png)
+
+**[SCREENSHOT — REPLACE `04-05-create-event.png`.** The form gained the **Organizer** (showing "Me (default)") and **Alternate (optional)** pickers with the line "Attendance requests for this event go to the organizer and the alternate." (2026-10-03); the template hint now reads "Pick a template to pre-fill common settings, or start blank."; the check-in window options read "Flexible - Opens before the start, closes when the event ends" etc.; and the attachments note reads "Files can't be attached from the app yet." Re-shoot the full blank create form.**]**
 
 ### Event Reminders
 
@@ -348,6 +566,24 @@ that the organizer who closed an event cannot quietly reopen it and change
 numbers already fed into admin hours, training records and compliance. It is
 held by the three chief ranks and the president.
 
+**A change refused because attendance is finalized now says so** _(2026-09-29)_.
+Every write that would change what finalizing credited is refused with one
+sentence — _"Attendance for this event has been finalized, so … is no longer
+available. A department leader can reopen attendance to make corrections."_ —
+naming what was refused. Several screens used to show something else instead:
+saving the edit form with more than a few changed fields, editing **This and
+all future events**, cancelling or deleting a series, moving a course cohort's
+classes, and scheduling or postponing an event request showed either a raw
+internal code or _"An unexpected error occurred"_. All of them now show the
+sentence. (For integrators: the refusal is an HTTP **409**, where some routes
+answered 400 or 404.)
+
+A closed event can still be edited for housekeeping — the title, the
+description, the location — from the ordinary edit form. Only a change to its
+times, its check-in rules or its type is refused, because the credited hours
+were worked out from those. The form re-sends every field each time; a field
+saved unchanged is not counted as a change.
+
 **On a Training event, finalizing writes each member's training record**
 _(2026-09-29)_. Every checked-in member gets a **Completed** record for the
 time they are credited with:
@@ -365,6 +601,9 @@ If the event's training session requires a training officer's confirmation,
 finalizing sends the attendance to training officers instead: members see the
 class as **In Progress** until an officer approves it on the approval page
 (linked from their email and from the event's Requirements & Programs card).
+
+> **Screenshot needed:**
+> _[Event organizer (events.manage) at /events/:eventId on an ended Training event with attendance still open: the "Finalize attendance?" confirmation, listing how each member's time is decided, that members with no credited time get no record, and that earlier admin-hours entries are removed, with Finalize and close / Keep it open. Press Keep it open; never confirm.]_
 
 **Training events do not credit Admin Hours.** Their attendance goes to the
 training records, and crediting admin hours as well counted the same hours
@@ -400,6 +639,38 @@ for the coordinator's side.
 > record already restated under the old behaviour, so re-check anyone you
 > corrected that way.
 
+### Organizer, alternate and transferring an event _(2026-10-03)_
+
+Every event names an **organizer** and, optionally, an **alternate**. They are
+the people who vouch for a member who missed check-in (see
+["I was there"](#i-was-there--asking-to-be-marked-present-2026-09-30)), and
+they receive a recurring series' series-end reminder. They need not hold
+`events.manage` to decide their own event's attendance requests or hand it
+over.
+
+- **Existing events kept their routing.** The upgrade set each event's
+  organizer to the member who created it.
+- **Where they show.** The event page's details card shows **Organized by**,
+  the alternate beneath it, and a **Transfer event** link — but only to the
+  organizer, the alternate and holders of `events.manage`.
+- **Transferring.** **Transfer event** opens **Transfer Event**: pick the new
+  organizer and alternate, and on a recurring event choose **Apply to** —
+  **This and all future events in the series** (the default; _"Past events
+  keep the organizer who ran them."_) or **This event only**. Press
+  **Transfer**, or **Keep as is** to leave it. Requests still waiting go to the
+  new pair, the new organizer and alternate are told, so is anyone relieved of
+  the role, and the transfer is audit-logged.
+- **When neither can be reached**, requests fall back per event type to the
+  position chosen in **Event settings → Attendance → Attendance requests**
+  (each type defaults to **Default (Secretary)**), then to the Secretary, then
+  to every event manager.
+
+> **Screenshot needed:**
+> _[Event detail as an administrator → the details card's "Organized by" row with the alternate's name and the "Transfer event" link; then the Transfer Event dialog on a recurring event with "This and all future events in the series" selected.]_
+
+> **Screenshot needed:**
+> _[Manage Events → Event settings → Attendance → the "Attendance requests" block with one select per event type, each on "Default (Secretary)".]_
+
 ### Training Credit from Events _(2026-09-29)_
 
 Any event with type **Training** credits its attendees' training records when
@@ -418,6 +689,9 @@ its attendance is finalized — however the event was created.
    **Finalize Attendance** after the event ends.
 4. To correct a finalized event, somebody who can reopen attendance (a chief)
    reopens it; change the details or times; finalize again.
+
+> **Screenshot needed:**
+> _[Admin with events.manage and training.manage at /events/admin?tab=create: Create Event with Event Type set to Training, scrolled to the "Training details (optional)" group, a course picked (so Training Type and Category fill), and the Create Training Session link line visible. Do not submit.]_
 
 **The reverse also works, in bulk.** If the training is a multi-class course — a recruit school, a five-night refresher — generate a **course cohort** instead and the platform creates the events _and_ their linked training sessions for you, one per class, with the roster already RSVP'd to each. See [Multi-Class Courses & Cohorts](02-training.md#multi-class-courses--cohorts) in the training guide.
 
@@ -455,30 +729,72 @@ Create a series of repeating events:
 4. Set the series end date under **Duration**, or tick **Rolling 12-month cycle**
    to keep it running.
 5. Add any **Exception Dates** to skip — a date picker and an **Add** button.
-6. Each occurrence is created as an individual event that can be modified independently.
+6. Each occurrence is created as its own event, which you can edit or cancel on its own.
 
 ![The event form with recurrence switched on, showing the pattern and series end date](./images/04-35-recurring-event-form.png)
 
+**[SCREENSHOT — REPLACE `04-35-recurring-event-form.png`.** The note under the recurrence controls now reads "Each occurrence is created as its own event, which you can edit or cancel on its own." (2026-09-29), and the series end date, date-to-skip field and reminder control are now labelled. Re-shoot the same weekly pattern with a series end date.**]**
+
 ### Managing Recurring Event Series
 
-Once a recurring series is created, each occurrence appears as an individual event with a **recurring event badge** on the events list. From any event in the series:
+Once a recurring series is created, each occurrence appears as an individual event with a **recurring event badge** on the events list. On any occurrence's page:
 
-- **View All in Series** — See all events in the series on a single page
-- **Edit All Future** — Modify all future occurrences at once (past events are unchanged)
-- **Delete Series** — Remove all events in the series
-- **Edit Single** — Modify just this one occurrence without affecting others
+- The series line reads **Occurrence 3 of 7**, with **Previous** / **Next**
+  links and **View All (7)**, which lists every occurrence. A cancelled
+  occurrence, which is no longer counted in the active series, reads **Series
+  of 6** _(2026-09-28; it read "Occurrence of 6")_.
+- **Edit** on a recurring event asks which events to change: **This event
+  only** or **This and all future events**. "Future" means this occurrence and
+  every later one in the series — not "everything after today".
+- **More → Cancel Entire Series** cancels the series (**Only cancel future
+  events (keep past events)** is offered), and **More → Delete Event** offers
+  **Delete only this event** or **Delete all events in this series** (see
+  [Delete Series](#delete-series)).
 
 > **Hint:** Deleting a single occurrence from a series does not affect other occurrences. The system warns you when an edit will affect multiple events.
 
+> **Screenshot needed:**
+> _[Event organizer (events.manage) at /events/:id/edit on an occurrence of a weekly recurring demo event: the indigo "This event is part of a recurring series." panel above the form with "This and all future events" selected. Do not save.]_
+
+### Series keep their dates and times _(2026-09-28)_
+
+Two defects moved existing occurrences, and both are fixed for new series and
+for edits made from now on:
+
+- **A series is laid out in the department's own time.** It used to be stepped
+  in UTC, so a weekly 7:00 PM drill read **6:00 PM** from the first Sunday in
+  November, when daylight saving ended. Custom weekdays, "the 2nd Monday"
+  patterns and **dates to skip** were matched against the UTC calendar day —
+  the _next_ day for any evening event — so an evening series could land on the
+  wrong weekday and a skip date could miss. The rolling 12-month extension
+  follows the same rule.
+- **This and all future events no longer collapses the series onto one
+  date.** The edit form always sends the start and end, and the old code copied
+  them onto every later occurrence — a description-only edit put five
+  occurrences on the same night. Now a change to the time **moves** each later
+  occurrence by the same amount in the department's wall-clock time and gives
+  it the new length; an RSVP deadline keeps the same lead ahead of each
+  occurrence's own start; and leaving the time alone leaves every date where it
+  was, including occurrences you had moved individually.
+
+> **⚠️ Check series created before 28 September 2026.** Nothing already stored
+> was repaired. A series spanning a daylight-saving change may be an hour off
+> after it; an evening series with custom weekdays, an Nth-weekday pattern or
+> skip dates may sit on the wrong day; and any series edited with **This and
+> all future events** may have its later occurrences collapsed onto one date,
+> which cannot be recovered from the stored rows. Fix or recreate any that look
+> wrong — see `docs/UPGRADING.md` and `docs/KNOWN_LIMITATIONS.md`.
+
 ### Recurring Event Edge Cases
 
-| Scenario                               | What Happens                                                                                               |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Monthly-by-weekday "5th Tuesday"       | Falls back to the last Tuesday when the month has fewer than 5 weeks                                       |
-| Annual event on Feb 29                 | Shifts to Feb 28 in non-leap years                                                                         |
-| Conflicting times/locations            | The system checks for scheduling conflicts before creating each occurrence and warns you                   |
-| Past events in "Edit All Future"       | Only events after today are modified — historical records remain intact                                    |
-| Series spanning timezone changes (DST) | Event times are stored in UTC and displayed in local time; times may shift by 1 hour across DST boundaries |
+| Scenario                               | What Happens                                                                                                                                                           |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Monthly-by-weekday "5th Tuesday"       | Falls back to the last Tuesday when the month has fewer than 5 weeks                                                                                                   |
+| Annual event on Feb 29                 | Shifts to Feb 28 in non-leap years                                                                                                                                     |
+| Conflicting times/locations            | The system checks for scheduling conflicts before creating each occurrence and warns you                                                                               |
+| Earlier occurrences in "This and all future events" | Only the occurrence you edited and the later ones change; earlier occurrences remain intact                                                               |
+| Series spanning a daylight-saving change | Each occurrence keeps its local time — a 7:00 PM drill stays at 7:00 PM _(since 2026-09-28; series created earlier may be an hour off after the change, see above)_ |
+| Editing a series with finalized attendance | Refused only when the edit actually changes times — a description-only edit goes through                                                                          |
 
 ---
 
@@ -508,7 +824,17 @@ Navigate to **Events > Analytics** to view department-wide event metrics:
 - **Top Events**: Table of highest-attendance events
 - **Date Range Filter**: Filter all analytics by custom date range
 
+> **Read the attendance rate with care.** It divides every check-in in the
+> period by every **Going** RSVP in the period, pooled across events, and it
+> includes events that have not happened yet — so the figure falls whenever
+> members RSVP to something upcoming, and an upcoming event shows in **Top
+> Events** at 0%. Despite its label it is a pooled ratio, not an average per
+> event. Which events it should cover is an open owner decision (found
+> 2026-09-29; `docs/KNOWN_LIMITATIONS.md`).
+
 ![Event analytics page with summary cards and attendance charts](./images/04-08-event-analytics.png)
+
+**[SCREENSHOT — REPLACE `04-08-event-analytics.png`.** The subtitle under the page title now reads "Attendance and check-in rates across your events" (2026-09-29). Re-shoot the same date range.**]**
 
 ### Event Templates Management
 
@@ -521,9 +847,26 @@ Navigate to **Events > Templates** to manage reusable event configurations:
 3. Toggle templates **active/inactive** — inactive templates won't appear in the template picker
 4. Edit or delete existing templates
 
-When creating a new event, the **Template Picker** lets you quick-select from active templates to pre-fill the event form.
+When creating a new event, the **Template Picker** lets you quick-select from active templates to pre-fill the event form. Its hint reads _"Pick a template to pre-fill common settings, or start blank."_
+
+**Template fixes** _(2026-09-29)_:
+
+- **Clearing a field on a template now saves.** Emptying **Default Duration**,
+  **Default Location** or any other optional default and saving used to leave
+  the old value in place, behind a success toast. A cleared field is now
+  cleared.
+- **A template's default start is the next hour on the department's clock**,
+  not the browser's — in a browser set to a half-hour timezone it landed on the
+  half hour.
+- **Delete does not delete.** The dialog reads _"Delete "…"? You can't undo
+  this."_ with **Delete Template**, but the template is kept and listed as
+  **Inactive**, exactly as **Deactivate** would leave it. Whether templates
+  should be removable is an open owner decision (`docs/KNOWN_LIMITATIONS.md`);
+  until then, treat Delete as Deactivate.
 
 ![Event Templates page listing templates with type and active state](./images/04-09-event-templates.png)
+
+**[SCREENSHOT — REPLACE `04-09-event-templates.png`.** The page's description now reads "Save common event settings to reuse when you create an event." (2026-09-29). Re-shoot the same list.**]**
 
 ### Quick-Create Events
 
@@ -570,7 +913,7 @@ This information is visible to event coordinators in the attendee list.
 
 ### RSVP History
 
-The event detail page now includes a collapsible **RSVP Activity History** feed showing all RSVP changes with timestamps (e.g., "John Smith changed from Maybe to Going at 2:15 PM").
+The event detail page now includes a collapsible **RSVP Activity** feed showing all RSVP changes with timestamps (e.g., "John Smith changed from Maybe to Going at 2:15 PM"). Statuses read as labels — "Not Going", "Waitlisted" — since 2026-09-28; before that the feed printed the stored values ("not_going").
 
 ### Inline RSVP
 
@@ -586,7 +929,12 @@ When an event reaches its capacity limit:
 
 1. New RSVPs are automatically added to the **waitlist**
 2. If a spot opens (someone changes to "Not Going"), the first waitlisted person is promoted
-3. Waitlisted members are notified when promoted to "Going"
+3. Waitlisted members are notified when promoted to "Going" — **in the app
+   only**. No email goes out, so a member who reads only their inbox does not
+   learn their seat is confirmed; tell them yourself if it matters (recorded as
+   an open item in `docs/KNOWN_LIMITATIONS.md`, 2026-09-28). An automatic
+   promotion also does not appear in **RSVP Activity**: the feed still shows the
+   member's "RSVP'd as Waitlisted" while the list above shows them Going
 4. The waitlist position is visible on the event detail page
 
 > **Edge case:** Waitlisted attendees are promoted in the order they RSVP'd. If multiple spots open simultaneously, multiple waitlisted members are promoted in order.
@@ -652,6 +1000,19 @@ Click **Duplicate** from an event's "More" menu to create a copy with the same s
 ### Bulk Actions
 
 Select multiple events from the events list to perform bulk operations (delete, change type, etc.).
+Bulk **cancel** says plainly what it does — _"The selected events will be
+cancelled without notifying members. You can't undo this."_ — with **Cancel
+Events** and **Keep Events** (they read **Confirm Cancel** / **Go Back** before
+2026-09-29).
+
+### Cancelling an event or a series
+
+**More → Cancel Event** asks for a reason (at least 10 characters) and offers
+**Notify members who RSVP'd Going or Maybe**; **Keep Event** backs out. On a
+recurring event, **More → Cancel Entire Series** does the same for the series,
+with **Only cancel future events (keep past events)**; its buttons are **Cancel
+Series** / **Keep Series**. A cancelled event stays on the calendar with its
+attendance intact and reads "This event has been cancelled. Reason: …".
 
 ### CSV Import
 
@@ -694,22 +1055,43 @@ Events can be saved as **drafts** before publishing:
 
 ## Meeting Minutes
 
-Navigate to **Minutes** in the sidebar to access meeting minutes management.
+Navigate to **Minutes** in the sidebar. The page — **Meeting Minutes**, _"Record
+meetings, write up their minutes, and track action items"_ — lists **meetings**,
+and under each meeting card the **minutes** written from it, as links that
+carry their state: **Draft**, **Awaiting approval**, **Approved** or
+**Returned for changes**.
+
+> **The Minutes page leads to minutes now** _(2026-10-03)_. It used to list
+> meetings only, with no link to any minutes on it, so an approver could not
+> find the minutes they had been asked to approve, and **Pending Approval**
+> read 0 while minutes waited. The links are there for everyone allowed to read
+> them — members see only approved minutes, which the server decides — and
+> **Pending Approval** counts minutes awaiting approval.
 
 ### Creating Minutes
 
-1. Click **Create Minutes**.
-2. Select the **meeting type**: Business, Special, Committee, Board, Trustee, Executive, or Annual.
-3. Add **attendees** from the member roster.
-4. Record the **minutes content** including:
-   - Call to order
-   - Roll call
-   - Agenda items
-   - Motions (with mover, seconder, vote results)
-   - Discussions
-   - Adjournment
+1. Click **Record Minutes** (**Record First Minutes** on an empty page).
+2. Fill in **Meeting Title** and **Meeting Date** (both required — **Start
+   Recording** stays disabled until there is a date), and optionally **Meeting
+   Type**, **Called By**, **Meeting Time**, **Location** and **Initial Notes**.
+3. Click **Start Recording**. This creates the meeting; the book icon on its
+   card then writes the minutes (below).
+4. On the minutes, record the **content** — call to order, roll call, agenda
+   items, motions (with mover, seconder, vote results), discussions,
+   adjournment — and any **action items**.
+
+**Meeting Type offers Business, Special, Committee, Board and Other**
+_(2026-10-03)_. The dialog used to offer Trustee, Executive and Annual as well,
+and a meeting of any of those three was refused every time with _"Make sure it
+has a title and a date"_ although it had both — a meeting record accepts only
+the five types. Minutes themselves still know all eight; recording an
+executive (closed) session as its own meeting type needs a database change the
+owner has not yet decided (`docs/KNOWN_LIMITATIONS.md`). A refused create now
+shows the server's own reason.
 
 ![Meeting minutes page with the meeting type selector and attendee list](./images/04-14-meeting-minutes.png)
+
+**[SCREENSHOT — REPLACE `04-14-meeting-minutes.png`.** The `/minutes` page changed on 2026-09-29 and 2026-10-03: the subtitle reads "Record meetings, write up their minutes, and track action items", the first tile is **Total Meetings**, the search box reads "Search by title, agenda, or notes...", dates read "Thu, Oct 1, 2026 at 7:00 PM", and each meeting card lists its minutes as links with their state. Re-shoot with at least one meeting that has approved minutes and one awaiting approval.**]**
 
 ### Motions
 
@@ -720,13 +1102,28 @@ Record formal motions with:
 - Seconder
 - Vote result (Passed, Failed, Tabled)
 
-### Creating Minutes from Events
+### Creating Minutes from a Meeting or an Event
 
-Business meeting events can be converted to minutes:
+- **From a meeting:** the book icon on a meeting card reads **Create minutes
+  from this meeting** when it has none, and copies the meeting's title, date,
+  meeting type, location and attendees into a new set of minutes. When the
+  meeting **already has minutes**, the same icon reads **Open the minutes of
+  this meeting** and opens the newest set _(2026-10-03)_ — it used to write a
+  second draft every time it was pressed.
+- **From an event:** on a business meeting's event page, **More → Create
+  Meeting** creates the meeting record, with attendees taken from the event's
+  **check-ins** (not RSVPs), and opens the Minutes page; write the minutes from
+  its card as above.
 
-1. After the event, navigate to the event detail page.
-2. Click **Create Minutes from Event**.
-3. The attendee list is automatically imported from the event check-in records.
+> **⚠️ Minutes created from a meeting before 3 October 2026 may be dated
+> wrong.** The meeting's date and start time were read as UTC rather than as
+> the department's clock, so for a US department the minutes header showed the
+> previous evening (a meeting with no start time) or a time 4–6 hours early (a
+> 7:00 PM meeting read 2:00 PM). New minutes are dated correctly. Existing ones
+> were not changed, because a secretary may already have corrected the date by
+> hand — check any you rely on and correct the date. Meetings created from an
+> event before the 26 September 2026 update had the same kind of shift (a 7 PM
+> Eastern meeting read 11 PM, and one after 8 PM landed on the next day).
 
 ### Submitting and Approving Minutes
 
@@ -739,6 +1136,12 @@ server answers _"You cannot approve your own meeting minutes. Separation of
 duties requires a second person, so this must go to another authorized
 approver."_ A secretary who writes and submits the minutes therefore needs a
 second officer holding `minutes.manage` to approve them.
+
+Since 2026-10-03 the submitter is not offered **Approve Minutes** at all; they
+read _"Waiting for another officer to approve. You submitted these minutes, so
+you cannot approve them."_ **Reject Minutes** stays available to them as a way
+to withdraw the submission. An action item's **Due** date now reads the
+calendar day it was set for — it showed a day early for a US department.
 
 ---
 
@@ -778,7 +1181,20 @@ The attendance percentage is calculated as:
 attendance_pct = meetings_attended / eligible_meetings × 100
 ```
 
-Where `eligible_meetings = total_meetings − per_meeting_waivers − meetings_during_leave`.
+Where `eligible_meetings = total_meetings − per_meeting_waivers − meetings_during_leave`,
+counted over the member's **attendance window**.
+
+**The window starts when the member's current service began and ends today**
+_(2026-09-29)_. It runs from the later of the look-back cutoff (the tier's
+attendance period, in calendar months) and the start of the member's current
+stint — their latest service period, otherwise their hire date — to the
+department's today. Before this, voting eligibility counted every meeting back
+to the cutoff with no regard for when the member joined and with no upper
+bound: a member hired two months ago was charged with ten meetings held before
+they existed, a reinstated member with every meeting held while they were
+away, and everyone with meetings scheduled for next week. A meeting that is
+both waived and inside a leave is now excluded once, not twice. The dashboard
+and the ballot check share one calculation, so they cannot disagree.
 
 **Not yet built:** there is no Attendance Dashboard screen. The calculation
 above is real and the data is served by `GET /meetings/attendance/dashboard`,
@@ -931,6 +1347,16 @@ Once requests start coming in, manage them from the **Event Requests** tab:
 6. **Postpone** — If the event needs to be pushed back, click **Postpone**. You can set a new date or leave it open.
 7. **Send emails** — Use the template dropdown to send a pre-written email to the requester (e.g., directions, parking, what to expect).
 8. **Copy status link** — Click the link icon to copy the requester's status page URL to share.
+
+> **Send the requester their status link yourself.** Neither the confirmation
+> screen nor the default acknowledgement email gives the requester the status
+> page — copying it from here is the only way they get it (an open owner
+> decision recorded 2026-09-29 in `docs/KNOWN_LIMITATIONS.md`). Also from that
+> review: the coordinator lists (**Default Coordinator** in settings and a
+> request's assignee) now show rank names ("Jordan Avery — Firefighter")
+> instead of codes like "fire_chief"; each pipeline task tells a screen reader
+> whether it is done; and every field on the public request form is announced
+> by its label.
 
 ### Public Request Form
 
@@ -1246,9 +1672,9 @@ Events support three check-in window modes that control when QR and manual check
 
 | Scenario                                    | Behavior                                                                                                                                                                                                         |
 | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Tier requires meeting attendance for voting | System queries actual meeting attendance over `voting_attendance_period_months` and compares against `voting_min_attendance_pct`. Members below the threshold are denied voting rights.                          |
+| Tier requires meeting attendance for voting | System counts meeting attendance in the member's window — from the later of `voting_attendance_period_months` ago and the start of their current service stint, up to the department's today — and compares it with `voting_min_attendance_pct`. Members below the threshold are denied voting rights _(window corrected 2026-09-29)_. |
 | Per-ballot-item restrictions                | `eligible_voter_types` and `require_attendance` are enforced **when the vote is submitted**, not just when ballots are emailed — a voter cannot vote on a restricted item even by crafting the request manually. |
-| Secretary voter override                    | Overrides bypass ALL eligibility checks — tier, attendance, role restrictions. Only the secretary can add overrides. Override members also count in quorum/turnout denominators.                                 |
+| Secretary voter override                    | Overrides bypass tier, attendance and role restrictions. Holders of `elections.manage` add them on the **Overrides** tab, choosing the member by name. **Exception:** on an election restricted to a specific voter list, an override does not let a member who is not on the list vote, although it still raises the eligible count (open owner decision, 2026-09-30). |
 | Non-voting tiers and quorum                 | Turnout and quorum denominators count only voting-eligible members — tiers marked not voting-eligible are excluded, so a percentage quorum can't fail because of members who were never allowed to vote.         |
 | Ballot-item-only elections (no candidates)  | Can be opened and voted on. `open_election` no longer requires candidates.                                                                                                                                       |
 
@@ -1266,7 +1692,7 @@ Events support three check-in window modes that control when QR and manual check
 | Corrected hours, but compliance still shows the old figure  | Before 25 Aug 2026, re-finalizing a reopened event refreshed the training record without restating the certification and phase totals behind it. Fixed going forward; records already restated under the old behaviour are not repaired retroactively, so re-check the member                                                              |
 | Minutes not showing attendees                              | If creating minutes from an event, attendees are imported from check-in records, not RSVPs. Ensure members checked in.                                                                                                                                                                                                                    |
 | "Already voted" error                                      | Each member can only vote once per candidate/position (approval and ranked-choice elections allow additional votes for _different_ candidates or ranks). This is by design — votes are never overwritten.                                                                                                                                 |
-| Election results not visible                               | Results are gated until the election is closed **and** its scheduled end date has passed (or `results_visible_immediately` is on). If the election was closed early, flip "results visible immediately" on the closed election to show them now.                                                                                          |
+| Election results not visible                               | Results are gated until the election is closed **and** its scheduled end date has passed, unless they are published. If the election was closed early, press **Publish Results** on the closed election's **Results & Publishing** panel; until then the Results tab says when they will be available. |
 | Candidates not showing in ballot preview                   | Fixed in March 2026 — ballot items from templates were missing the `position` field for candidate matching. Pull latest and rebuild.                                                                                                                                                                                                      |
 | Ballot builder only shows one candidate per position       | As of 2026-03-06, one ballot item per position is enforced. Use separate positions for multiple candidate races.                                                                                                                                                                                                                          |
 | Election settings not saving or loading                    | Fixed in March 2026 — GET/PATCH endpoints returned wrong structure. Pull latest and restart.                                                                                                                                                                                                                                              |
@@ -1286,13 +1712,13 @@ Events support three check-in window modes that control when QR and manual check
 | Facility rooms not in event location picker                | As of 2026-03-06, facility rooms auto-create linked Location records. Existing rooms get locations on next update.                                                                                                                                                                                                                        |
 | QR check-in window shows "N/A"                             | Fixed 2026-03-12 — backend was returning bare date/time strings instead of ISO 8601 format. Pull latest and restart.                                                                                                                                                                                                                      |
 | QR check-in times showing in wrong timezone                | Fixed 2026-03-12 — QR data now includes `organizationTimezone` for local time display. Self check-in falls back to browser timezone if missing.                                                                                                                                                                                           |
-| Recurring event dates seem wrong                           | Monthly-by-weekday events with "5th week" fall back to last occurrence. Annual Feb 29 events shift to Feb 28 in non-leap years. These are expected behaviors.                                                                                                                                                                             |
+| Recurring event dates seem wrong                           | Monthly-by-weekday events with "5th week" fall back to last occurrence. Annual Feb 29 events shift to Feb 28 in non-leap years. These are expected behaviors. An evening series created before 28 Sep 2026 that is an hour off after a daylight-saving change, on the wrong weekday, or collapsed onto one date by "This and all future events" is not expected — see [Series keep their dates and times](#series-keep-their-dates-and-times-2026-09-28). |
 | Custom categories sent as strings cause 422                | Fixed 2026-03-12 — schema now accepts objects (`{id, label, color}`). Existing string-format categories auto-migrate on next save.                                                                                                                                                                                                        |
 | Settings changes not persisting                            | Fixed 2026-03-12 — SQLAlchemy JSON column shallow copy issue. Pull latest to get `deepcopy()` fix.                                                                                                                                                                                                                                        |
 | Event form sending empty strings causes 422                | Fixed 2026-03-12 — `??` replaced with `\|\|` for all optional form fields, to coerce empty strings to `undefined`.                                                                                                                                                                                                                        |
 | Calendar view not showing events                           | Ensure events exist for the displayed month. Use the navigation arrows to check other months. Events are filtered by the currently selected event type filter.                                                                                                                                                                            |
 | Analytics page shows no data                               | Verify `analytics.view` permission is assigned to your role. Analytics require at least one event to have been created. Use the date range filter to widen the search window.                                                                                                                                                             |
-| Template picker shows no templates                         | No active templates exist. Create a template from **Events > Templates** or save an existing event as a template. Deactivated templates are hidden.                                                                                                                                                                                       |
+| Template picker shows no templates                         | No active templates exist. Create a template from **Events > Templates** or save an existing event as a template. Deactivated templates are hidden — and so are "deleted" ones, which are only deactivated. |
 | Waitlist not promoting attendees                           | Promotion occurs automatically when a "Going" member changes to "Not Going". Check that the event has a capacity limit set.                                                                                                                                                                                                               |
 | CSV import skipping rows                                   | Rows missing required fields (title, date) are skipped. Check the error details in the import preview for specific validation failures.                                                                                                                                                                                                   |
 | Draft event visible to regular members                     | Verify the event was saved as a draft, not published. Only users with `events.manage` permission can see drafts.                                                                                                                                                                                                                          |
@@ -1310,7 +1736,7 @@ Events support three check-in window modes that control when QR and manual check
 | Event times display incorrectly across timezones           | Fixed 2026-03-16 — all event response schemas now stamp naive datetimes with UTC timezone markers via `UTCResponseBase`.                                                                                                                                                                                                                  |
 | Election ballot emails sent but 0 recipients               | Fixed 2026-03-19 — `User.is_active` converted to `hybrid_property` for SQLAlchemy query compatibility. Added per-recipient exception handling.                                                                                                                                                                                            |
 | Election error messages unhelpful                          | Fixed 2026-03-19 — error messages now include actionable details (e.g., "Election has no candidates").                                                                                                                                                                                                                                    |
-| Election results not arriving by email                     | Use the new **Send Report Email** button on the election detail page to email formatted results. Added 2026-03-19.                                                                                                                                                                                                                        |
+| Election results not arriving by email                     | The report is emailed to the election secretary when the election closes. To send it again, use **Send Report** under **Email Results Report** on the closed election's **Results & Publishing** panel. It is refused while the election is open (since 2026-09-30). |
 | Ballot sending skips voters without explanation            | The secretary now receives an eligibility summary email after ballot dispatch listing all skipped voters with reasons. Added 2026-03-19.                                                                                                                                                                                                  |
 
 ---
@@ -1392,10 +1818,13 @@ To enable rolling recurrence:
 2. Under **Duration**, tick **Rolling 12-month cycle**. It is a checkbox rather
    than an option in a list, and ticking it replaces the series end-date field —
    the two are alternatives, not settings you combine
-3. The note beneath confirms what will happen: "New occurrences are created
-   automatically to maintain a 12-month horizon"
+3. The note beneath confirms what will happen: "New occurrences are added
+   automatically so the series always runs 12 months ahead" _(reworded
+   2026-09-29)_
 
 ![The recurrence controls with the rolling 12-month cycle ticked](./images/04-38-rolling-recurrence.png)
+
+**[SCREENSHOT — REPLACE `04-38-rolling-recurrence.png`.** The note under **Rolling 12-month cycle** now reads "New occurrences are added automatically so the series always runs 12 months ahead." (2026-09-29). Re-shoot the same clipped recurrence block.**]**
 
 > **Edge case:** Rolling recurrence with a monthly-by-weekday pattern (e.g., "2nd Tuesday") generates all occurrences correctly, including months where the weekday pattern falls on the last week.
 
@@ -1408,8 +1837,10 @@ Officers can now delete an entire recurring event series at once:
 3. Because the event recurs, the confirmation dialog offers a choice:
    **Delete only this event** or **Delete all events in this series**. Pick the
    second
-4. The confirm button changes to **Delete Entire Series**; click it. **Go Back**
-   leaves everything alone
+4. The confirm button changes to **Delete Entire Series**; click it. **Keep
+   Event** leaves everything alone (the button read **Go Back** before
+   2026-09-29). The dialog reads "Permanently delete "…"? Its RSVPs and
+   attendance records are deleted too. You can't undo this."
 
 > **Corrected 2026-08-10.** There is no "Delete Series" menu item — the choice
 > lives inside the Delete Event dialog, and only appears on a recurring event.
@@ -1423,6 +1854,8 @@ Officers can now delete an entire recurring event series at once:
 > attendance intact.
 
 ![The Delete Event dialog on a recurring event, with the single/series choice](./images/04-39-delete-event-series.png)
+
+**[SCREENSHOT — REPLACE `04-39-delete-event-series.png`.** The dialog's cancel button now reads **Keep Event** (was **Go Back**) and its warning reads "Permanently delete "…"? Its RSVPs and attendance records are deleted too. You can't undo this." (2026-09-29). Re-shoot with **Delete all events in this series** selected.**]**
 
 ### "End Event" — Bulk Checkout
 
@@ -2004,3 +2437,39 @@ reporting whether the window is open *right now*, so it now skips the cache.
 - An election's linked meeting was a link to nowhere — there is no meeting
   detail screen, so naming the meeting cost the reader their place. It is text
   now; the "(change)" control is unaffected.
+
+## Event settings on a phone, and other changes _(2026-09-24 → 10-04)_
+
+**Event settings works at phone width** _(2026-10-02)_. The **Manage Events**
+administration page was hard to use on a phone: the page header's buttons
+overlapped its title, a long category or outreach-type ID pushed the remove
+button off the card, and the icon-only controls — the visibility eyes, remove
+buttons, the pipeline's reorder arrows, the colour swatches and **View all
+forms** — were 16–20px. The header now wraps, IDs wrap, and those controls are
+44px on a phone (desktop is unchanged); the reorder arrows gained names for
+screen readers. Opening a link straight to the **Settings** tab scrolls the tab
+strip so the tab is visible. A hidden event type's badge is no longer dimmed,
+which failed contrast. The header fix applies to every administration hub, not
+only Events. In the sidebar, **Attendance** is now described as _"Who sees
+who's going; who takes requests"_, and **Pipeline** as _"How requests are
+handled"_.
+
+**Copy changes worth knowing when you follow an older screenshot or video**
+_(2026-09-29)_:
+
+| Where                                  | Now reads                                                                                                    | Used to read                                                    |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| Manage Events tab, and its link        | **Event settings** / **Event Settings**                                                                      | "Events settings" / "Event Module Settings"                     |
+| Check-in window options                | "Flexible - Opens before the start, closes when the event ends", "Strict - Only while the event is running", "Window - Opens before the start, closes after the end" | "…Configured start through event end", "…Only during actual event time", "…Custom before/after start" |
+| Window type's second field             | **Minutes after end** (event form), **Minutes After End** (template form)                                     | "Minutes after" / "Minutes After Start" — the value has always counted from the end |
+| Attendee list, an officer-edited time  | "(times edited)"                                                                                             | "(times overridden)"                                            |
+| End Event dialog, cancel button        | **Keep It Running**                                                                                          | "Go Back"                                                       |
+| An event ended early                   | "This event was ended early."                                                                                | "Note: Event was ended early by event officer"                  |
+| Scheduling conflict warning            | **Schedule Conflict**                                                                                        | "Schedule Conflict Detected"                                    |
+| Public request status page, cancel     | **Keep Request**                                                                                             | "Never mind"                                                    |
+| Past Events, nothing to show           | "Events appear here after they end."                                                                         | "There are no past events to display."                          |
+
+**Event request emails print the event's date and time in the department's
+timezone** _(2026-09-25)_. `{{event_date}}` in a request template or status
+email was formatted from the stored UTC value, so a 7:00 PM Eastern event
+arrived as 11:00 PM.

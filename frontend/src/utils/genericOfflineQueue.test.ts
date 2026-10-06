@@ -14,6 +14,12 @@ import {
   type GenericQueuedItem,
 } from './genericOfflineQueue';
 
+// Every entry is stamped with the signed-in member (FE3-34-5). The real store
+// pulls in the API client; only who is signed in matters here.
+vi.mock('../stores/authStore', () => ({
+  useAuthStore: { getState: () => ({ isAuthenticated: true, user: { id: 'member-1' } }) },
+}));
+
 /**
  * Against fake-indexeddb, a real IndexedDB, for the reason offlineQueue.test.ts
  * gives: the queue is a thin layer over it, and a mock would only test itself.

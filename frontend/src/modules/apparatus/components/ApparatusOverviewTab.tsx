@@ -16,12 +16,17 @@ interface ApparatusOverviewTabProps {
   currentApparatus: Apparatus;
   apparatusType: ApparatusType | undefined;
   timezone: string;
+  /** Whether the department tracks NFPA apparatus compliance. */
+  nfpaEnabled: boolean;
+  onOpenNfpa?: (() => void) | undefined;
 }
 
 export const ApparatusOverviewTab: React.FC<ApparatusOverviewTabProps> = ({
   currentApparatus,
   apparatusType,
   timezone,
+  nfpaEnabled,
+  onOpenNfpa,
 }) => {
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -238,13 +243,20 @@ export const ApparatusOverviewTab: React.FC<ApparatusOverviewTabProps> = ({
         </div>
 
         {/* NFPA Compliance */}
-        {currentApparatus.nfpaTrackingEnabled && (
+        {nfpaEnabled && currentApparatus.nfpaTrackingEnabled && (
           <div className="card p-6">
             <h2 className="text-theme-text-primary mb-4 flex items-center gap-2 font-bold">
               <Shield className="h-5 w-5" />
               NFPA Compliance
             </h2>
-            <p className="text-sm text-green-700 dark:text-green-400">Tracking Enabled</p>
+            <p className="text-theme-text-secondary mb-3 text-sm">
+              Required tests and compliance items are tracked for this apparatus.
+            </p>
+            {onOpenNfpa && (
+              <button type="button" onClick={onOpenNfpa} className="btn-secondary text-sm">
+                Open NFPA compliance
+              </button>
+            )}
           </div>
         )}
 

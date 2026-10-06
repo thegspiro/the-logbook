@@ -188,6 +188,65 @@ describe('ComplianceOfficerDashboard', () => {
     expect(mockGetAttestations).toHaveBeenCalledWith();
   });
 
+  describe('attestation form (CS-8)', () => {
+    const attestation = {
+      attestation_id: 'att-1',
+      period_type: 'quarterly',
+      period_year: 2026,
+      period_quarter: 3,
+      compliance_percentage: 81.3,
+      compliance_as_of: '2026-09-30',
+      notes: '',
+      areas_reviewed: [],
+      exceptions: [],
+      attested_at: '2026-10-05T12:00:00Z',
+      attested_by: 'user-1',
+      created_at: '2026-10-05T12:00:00Z',
+    };
+
+    beforeEach(() => {
+      mockCreateAttestation.mockReset();
+      mockCreateAttestation.mockResolvedValue(attestation);
+    });
+
+    it('asks for no percentage and sends the quarter of a quarterly attestation', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<ComplianceOfficerDashboard activeTab="attestations" />);
+
+      await user.click(await screen.findByRole('button', { name: 'New Attestation' }));
+      expect(screen.queryByLabelText('Compliance %')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Quarter')).not.toBeInTheDocument();
+
+      await user.selectOptions(screen.getByLabelText('Period Type'), 'quarterly');
+      await user.selectOptions(screen.getByLabelText('Quarter'), '3');
+      await user.click(screen.getByRole('button', { name: 'Submit Attestation' }));
+
+      expect(mockCreateAttestation).toHaveBeenCalledTimes(1);
+      const sent = mockCreateAttestation.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(sent).toMatchObject({ period_type: 'quarterly', period_quarter: 3 });
+      expect(sent).not.toHaveProperty('compliance_percentage');
+      expect(await screen.findByText('81.3%')).toBeInTheDocument();
+      expect(screen.getByText('as of Sep 30, 2026')).toBeInTheDocument();
+    });
+
+    it('sends no quarter for an annual attestation', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<ComplianceOfficerDashboard activeTab="attestations" />);
+
+      await user.click(await screen.findByRole('button', { name: 'New Attestation' }));
+      await user.click(screen.getByRole('button', { name: 'Submit Attestation' }));
+
+      expect(mockCreateAttestation.mock.calls[0]?.[0]).not.toHaveProperty('period_quarter');
+    });
+
+    it('shows N/A for an attestation with no graded member', async () => {
+      mockGetAttestations.mockResolvedValue([{ ...attestation, compliance_percentage: null }]);
+      renderWithRouter(<ComplianceOfficerDashboard activeTab="attestations" />);
+
+      expect(await screen.findByText('N/A')).toBeInTheDocument();
+    });
+  });
+
   it('displays admin hours and total contributed hours in annual report', async () => {
     renderWithRouter(<ComplianceOfficerDashboard activeTab="annual-report" />);
 
@@ -262,5 +321,37 @@ describe('ComplianceOfficerDashboard', () => {
     });
 
     expect(mockGetComplianceForecast).toHaveBeenCalledWith();
+  });
+  // Every section reports a figure an officer acts on, so a 200 whose body is
+  // not its declared shape (a captive portal's HTML page) must reach the
+  // section's own error message — not crash the hub through the ErrorBoundary,
+  // and not render as zeros or an empty list.
+  describe('a response that is not its declared shape', () => {
+    const PORTAL_PAGE = '<html>Sign in to Wi-Fi</html>';
+
+    it.each([
+      ['annual-report', 'Failed to load annual compliance report', () => mockGetAnnualReport.mockResolvedValue({})],
+      ['iso-readiness', 'Failed to load ISO readiness data', () => mockGetISOReadiness.mockResolvedValue({})],
+      [
+        'record-completeness',
+        'Failed to load record completeness data',
+        () => mockGetRecordCompleteness.mockResolvedValue(PORTAL_PAGE),
+      ],
+      ['attestations', 'Failed to load attestation history', () => mockGetAttestations.mockResolvedValue({})],
+      ['forecast', 'Failed to load compliance forecast', () => mockGetComplianceForecast.mockResolvedValue({})],
+    ])('shows the %s error message', async (tab, message, malform) => {
+      malform();
+      renderWithRouter(<ComplianceOfficerDashboard activeTab={tab} />);
+
+      expect(await screen.findByText(message)).toBeInTheDocument();
+    });
+
+    it('rejects an annual report missing one of the sections it renders', async () => {
+      const { recertification_summary: _omitted, ...partial } = mockAnnualReport;
+      mockGetAnnualReport.mockResolvedValue(partial);
+      renderWithRouter(<ComplianceOfficerDashboard activeTab="annual-report" />);
+
+      expect(await screen.findByText('Failed to load annual compliance report')).toBeInTheDocument();
+    });
   });
 });

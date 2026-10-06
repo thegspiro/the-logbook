@@ -34,6 +34,7 @@ from app.api.v1.endpoints.event_requests import (
 )
 from app.api.v1.endpoints.events import EVENT_SETTINGS_DEFAULTS
 from app.models.event_request import EventRequestStatus
+from app.models.user import User
 from app.schemas.event_request import (
     EventRequestAssign,
     EventRequestCreate,
@@ -304,7 +305,7 @@ class TestEmailTriggers:
     async def test_reassignment_does_not_re_announce_submission(self):
         org = _org()
         event_request = _request_row()
-        assignee = SimpleNamespace(
+        assignee = User(
             id=USER_ID,
             first_name="Sam",
             last_name="Ortiz",

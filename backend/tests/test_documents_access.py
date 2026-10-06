@@ -11,6 +11,7 @@ collection helpers. Pure logic; no DB.
 import inspect
 import io
 import json
+import uuid
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -308,89 +309,207 @@ class TestCanAccessDocument:
         assert await svc.can_access_document(doc, "org-1", user) is False
 
 
+@pytest.mark.integration
 class TestAccessibleFolderIds:
     """A folder-less document listing must be restricted to folders the caller
-    can access, or it leaks documents from restricted/owner-only folders."""
+    can access, or it leaks documents from restricted/owner-only folders.
 
-    async def test_leadership_receives_explicit_accessible_ids(self):
-        svc = _svc()
-        result = MagicMock()
-        result.scalars.return_value.all.return_value = [
-            _folder(FolderVisibility.ORGANIZATION, fid="f-org"),
-            _folder(FolderVisibility.LEADERSHIP, fid="f-lead"),
-        ]
-        svc.db.execute = AsyncMock(return_value=result)
+    Against the database: the tree walk runs in SQL (DOC-9), so a mocked
+    session cannot answer it.
+    """
+
+    @staticmethod
+    async def _org(db):
+        org = Organization(name="ACL VFD", slug=f"acl-{uuid.uuid4().hex[:8]}")
+        db.add(org)
+        await db.flush()
+        return str(org.id)
+
+    @staticmethod
+    async def _owner(db, org_id):
+        uid = str(uuid.uuid4())
+        db.add(
+            User(
+                id=uid,
+                organization_id=org_id,
+                username=f"owner-{uid[:8]}",
+                email=f"owner-{uid[:8]}@example.com",
+            )
+        )
+        await db.flush()
+        return uid
+
+    @staticmethod
+    async def _add(db, org_id, name, parent=None, **fields):
+        folder = DocumentFolder(
+            id=str(uuid.uuid4()),
+            organization_id=org_id,
+            name=name,
+            parent_id=parent,
+            **fields,
+        )
+        db.add(folder)
+        await db.flush()
+        return str(folder.id)
+
+    async def test_leadership_receives_explicit_accessible_ids(self, db_session):
+        org = await self._org(db_session)
+        open_id = await self._add(db_session, org, "Open")
+        lead_id = await self._add(
+            db_session, org, "Lead", visibility=FolderVisibility.LEADERSHIP
+        )
 
         chief = _user(roles=[(["documents.manage"], "chief")])
-        assert await svc.accessible_folder_ids("org-1", chief) == {
-            "f-org",
-            "f-lead",
+        assert await DocumentsService(db_session).accessible_folder_ids(org, chief) == {
+            open_id,
+            lead_id,
         }
 
-    async def test_leadership_is_still_filtered_by_required_permissions(self):
+    async def test_leadership_is_still_filtered_by_required_permissions(
+        self, db_session
+    ):
         """ "No restriction" would hand a documents administrator the facility
         files that facilities.view_sensitive exists to withhold, which is the
         leak the field was added to close."""
-        svc = _svc()
-        result = MagicMock()
-        result.scalars.return_value.all.return_value = [
-            _folder(FolderVisibility.ORGANIZATION, fid="f-org"),
-            _folder(
-                FolderVisibility.ORGANIZATION,
-                fid="f-facility",
-                required_permissions=["facilities.view_sensitive"],
-            ),
-        ]
-        svc.db.execute = AsyncMock(return_value=result)
+        org = await self._org(db_session)
+        open_id = await self._add(db_session, org, "Open")
+        facility_id = await self._add(
+            db_session,
+            org,
+            "Facility",
+            required_permissions=["facilities.view_sensitive"],
+        )
+        service = DocumentsService(db_session)
 
         chief = _user(roles=[(["documents.manage"], "chief")])
-        assert await svc.accessible_folder_ids("org-1", chief) == {"f-org"}
+        assert await service.accessible_folder_ids(org, chief) == {open_id}
 
         holder = _user(
             roles=[(["documents.manage", "facilities.view_sensitive"], "facilities")]
         )
-        assert await svc.accessible_folder_ids("org-1", holder) == {
-            "f-org",
-            "f-facility",
+        assert await service.accessible_folder_ids(org, holder) == {
+            open_id,
+            facility_id,
         }
 
-    async def test_non_leadership_filtered_to_accessible(self):
-        svc = _svc()
-        folders = [
-            _folder(FolderVisibility.ORGANIZATION, fid="f-org"),
-            _folder(FolderVisibility.LEADERSHIP, fid="f-lead"),
-            _folder(FolderVisibility.OWNER, owner_user_id="u1", fid="f-mine"),
-            _folder(FolderVisibility.OWNER, owner_user_id="u2", fid="f-theirs"),
-            _folder(
-                FolderVisibility.ORGANIZATION, allowed_roles=["officer"], fid="f-off"
-            ),
-        ]
-        result = MagicMock()
-        result.scalars.return_value.all.return_value = folders
-        svc.db.execute = AsyncMock(return_value=result)
+    async def test_non_leadership_filtered_to_accessible(self, db_session):
+        org = await self._org(db_session)
+        me = await self._owner(db_session, org)
+        them = await self._owner(db_session, org)
+        open_id = await self._add(db_session, org, "Open")
+        await self._add(db_session, org, "Lead", visibility=FolderVisibility.LEADERSHIP)
+        mine = await self._add(
+            db_session,
+            org,
+            "Mine",
+            visibility=FolderVisibility.OWNER,
+            owner_user_id=me,
+        )
+        await self._add(
+            db_session,
+            org,
+            "Theirs",
+            visibility=FolderVisibility.OWNER,
+            owner_user_id=them,
+        )
+        await self._add(db_session, org, "Officers", allowed_roles=["officer"])
 
-        member = _user(uid="u1", roles=[([], "ff")])
-        ids = await svc.accessible_folder_ids("org-1", member)
+        member = _user(uid=me, roles=[([], "ff")])
         # Open org folder + own owner folder only; not leadership, others', or
         # the officer-restricted folder.
-        assert ids == {"f-org", "f-mine"}
+        assert await DocumentsService(db_session).accessible_folder_ids(
+            org, member
+        ) == {open_id, mine}
 
-    async def test_accessible_child_is_hidden_beneath_inaccessible_ancestor(self):
-        svc = _svc()
-        folders = [
-            _folder(FolderVisibility.LEADERSHIP, fid="parent"),
-            _folder(
-                FolderVisibility.ORGANIZATION,
-                fid="child",
-                parent_id="parent",
-            ),
-        ]
-        result = MagicMock()
-        result.scalars.return_value.all.return_value = folders
-        svc.db.execute = AsyncMock(return_value=result)
+    async def test_accessible_child_is_hidden_beneath_inaccessible_ancestor(
+        self, db_session
+    ):
+        org = await self._org(db_session)
+        parent = await self._add(
+            db_session, org, "Parent", visibility=FolderVisibility.LEADERSHIP
+        )
+        await self._add(db_session, org, "Child", parent=parent)
 
         member = _user(roles=[([], "member")])
-        assert await svc.accessible_folder_ids("org-1", member) == set()
+        assert (
+            await DocumentsService(db_session).accessible_folder_ids(org, member)
+            == set()
+        )
+
+    async def test_matches_the_per_folder_ancestry_walk(self, db_session):
+        """DOC-9: the SQL walk answers exactly what can_access_folder does.
+
+        A tree mixing every restriction, several levels deep, plus the
+        fail-closed shapes: a child parented under another organization's
+        folder, and a two-folder cycle. The oracle is the per-folder walk the
+        listing used before, over a snapshot of every folder.
+        """
+        org = await self._org(db_session)
+        other_org = await self._org(db_session)
+        me = await self._owner(db_session, org)
+        add = self._add
+        root = await add(db_session, org, "Root")
+        officers = await add(
+            db_session, org, "Officers", root, allowed_roles=["officer"]
+        )
+        await add(db_session, org, "Officer notes", officers)
+        lead = await add(
+            db_session, org, "Lead", root, visibility=FolderVisibility.LEADERSHIP
+        )
+        await add(db_session, org, "Lead child", lead)
+        mine = await add(
+            db_session,
+            org,
+            "Mine",
+            visibility=FolderVisibility.OWNER,
+            owner_user_id=me,
+        )
+        await add(db_session, org, "Mine child", mine, allowed_roles=[])
+        facility = await add(
+            db_session, org, "Facility", required_permissions=["facilities.view"]
+        )
+        await add(db_session, org, "Facility child", facility)
+        deep = root
+        for depth in range(4):
+            deep = await add(db_session, org, f"Level {depth}", deep)
+        foreign = await add(db_session, other_org, "Foreign")
+        await add(db_session, org, "Under foreign", foreign)
+        loop_a = await add(db_session, org, "Loop A")
+        loop_b = await add(db_session, org, "Loop B", loop_a)
+        await db_session.execute(
+            DocumentFolder.__table__.update()
+            .where(DocumentFolder.id == loop_a)
+            .values(parent_id=loop_b)
+        )
+        await db_session.flush()
+
+        service = DocumentsService(db_session)
+        snapshot = (
+            (
+                await db_session.execute(
+                    select(DocumentFolder).where(DocumentFolder.organization_id == org)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for folder in snapshot:
+            await db_session.refresh(folder)
+        by_id = {str(f.id): f for f in snapshot}
+        callers = [
+            _user(uid=me, roles=[([], "ff")]),
+            _user(uid=me, roles=[([], "officer")]),
+            _user(roles=[(["documents.manage"], "chief")]),
+            _user(roles=[(["facilities.view"], "facilities")]),
+            _user(roles=[(["*"], "admin")]),
+        ]
+        for caller in callers:
+            expected = {
+                str(f.id)
+                for f in snapshot
+                if await service.can_access_folder(f, org, caller, by_id)
+            }
+            assert await service.accessible_folder_ids(org, caller) == expected
 
 
 @pytest.mark.integration
@@ -516,26 +635,24 @@ class TestDocumentsSummaryAccess:
 
 
 class TestFolderListing:
-    """Folder pagination is applied after ACL filtering and stays constant-query."""
+    """Folder pagination is applied after ACL filtering and stays constant-query.
+
+    The access scope is stubbed here: it has its own tests
+    (``TestAccessibleFolderIds``), and these pin the listing's own queries.
+    """
 
     async def test_total_counts_the_level_and_the_page_is_one_query(self):
         svc = _svc()
         member = _user(uid="u1", roles=[([], "ff")])
         # Four folders exist; the leadership-only one is not admitted, so the
         # level holds three and the caller asks for the second of them.
-        acl_result = MagicMock()
-        acl_result.scalars.return_value.all.return_value = [
-            _folder(FolderVisibility.ORGANIZATION, fid="f1"),
-            _folder(FolderVisibility.LEADERSHIP, fid="hidden"),
-            _folder(FolderVisibility.ORGANIZATION, fid="f2"),
-            _folder(FolderVisibility.ORGANIZATION, fid="f3"),
-        ]
+        svc.accessible_folder_ids = AsyncMock(return_value={"f1", "f2", "f3"})
         count_result = MagicMock()
         count_result.scalar_one.return_value = 3
         folder = SimpleNamespace(id="f2")
         page_result = MagicMock()
         page_result.all.return_value = [(folder, 0)]
-        svc.db.execute = AsyncMock(side_effect=[acl_result, count_result, page_result])
+        svc.db.execute = AsyncMock(side_effect=[count_result, page_result])
 
         folders, total = await svc.get_folders(
             "org-1", current_user=member, skip=1, limit=1
@@ -546,36 +663,31 @@ class TestFolderListing:
         assert folders[0].document_count == 0
         # One ACL pass, one COUNT, one grouped-count page. Never a count query
         # per folder, whatever the level holds or the page returns.
-        assert svc.db.execute.await_count == 3
+        svc.accessible_folder_ids.assert_awaited_once()
+        assert svc.db.execute.await_count == 2
 
     async def test_ordering_breaks_ties_on_id(self):
         """Two folders sharing sort_order and name must still order stably, or
         a row can appear on two pages or on neither as the caller walks them."""
         svc = _svc()
-        acl_result = MagicMock()
-        acl_result.scalars.return_value.all.return_value = [
-            _folder(FolderVisibility.ORGANIZATION, fid="f1")
-        ]
+        svc.accessible_folder_ids = AsyncMock(return_value={"f1"})
         count_result = MagicMock()
         count_result.scalar_one.return_value = 1
         page_result = MagicMock()
         page_result.all.return_value = [(SimpleNamespace(id="f1"), 0)]
-        svc.db.execute = AsyncMock(side_effect=[acl_result, count_result, page_result])
+        svc.db.execute = AsyncMock(side_effect=[count_result, page_result])
 
         await svc.get_folders("org-1", current_user=_user(), skip=0, limit=10)
 
-        page_statement = str(svc.db.execute.await_args_list[2].args[0])
+        page_statement = str(svc.db.execute.await_args_list[1].args[0])
         assert "document_folders.id" in page_statement.split("ORDER BY", 1)[1]
 
     async def test_page_past_total_skips_the_page_query(self):
         svc = _svc()
-        acl_result = MagicMock()
-        acl_result.scalars.return_value.all.return_value = [
-            _folder(FolderVisibility.ORGANIZATION, fid="f1")
-        ]
+        svc.accessible_folder_ids = AsyncMock(return_value={"f1"})
         count_result = MagicMock()
         count_result.scalar_one.return_value = 1
-        svc.db.execute = AsyncMock(side_effect=[acl_result, count_result])
+        svc.db.execute = AsyncMock(side_effect=[count_result])
 
         folders, total = await svc.get_folders(
             "org-1", current_user=_user(), skip=1, limit=10
@@ -583,41 +695,31 @@ class TestFolderListing:
 
         assert folders == []
         assert total == 1
-        assert svc.db.execute.await_count == 2
+        assert svc.db.execute.await_count == 1
 
     async def test_no_accessible_folder_skips_count_and_page(self):
         svc = _svc()
-        acl_result = MagicMock()
-        acl_result.scalars.return_value.all.return_value = [
-            _folder(FolderVisibility.LEADERSHIP, fid="hidden")
-        ]
-        svc.db.execute = AsyncMock(side_effect=[acl_result])
+        svc.accessible_folder_ids = AsyncMock(return_value=set())
+        svc.db.execute = AsyncMock(side_effect=[])
 
         folders, total = await svc.get_folders(
             "org-1", current_user=_user(uid="u1", roles=[([], "ff")])
         )
 
         assert (folders, total) == ([], 0)
-        assert svc.db.execute.await_count == 1
+        assert svc.db.execute.await_count == 0
 
     async def test_level_is_filtered_to_the_ancestor_aware_set(self):
         """The restriction that hides a folder can live on its parent, and a
         query filtered to one parent level cannot see it. So the level query
         must carry the accessible-id filter, not just a per-row check."""
         svc = _svc()
-        acl_result = MagicMock()
-        acl_result.scalars.return_value.all.return_value = [
-            _folder(FolderVisibility.ORGANIZATION, fid="root"),
-            _folder(
-                FolderVisibility.ORGANIZATION,
-                fid="child",
-                parent_id="locked",
-            ),
-            _folder(FolderVisibility.LEADERSHIP, fid="locked"),
-        ]
+        # "child" sits under the leadership-only "locked", so neither is in
+        # the caller's scope.
+        svc.accessible_folder_ids = AsyncMock(return_value={"root"})
         count_result = MagicMock()
         count_result.scalar_one.return_value = 0
-        svc.db.execute = AsyncMock(side_effect=[acl_result, count_result])
+        svc.db.execute = AsyncMock(side_effect=[count_result])
 
         folders, total = await svc.get_folders(
             "org-1",
@@ -626,7 +728,7 @@ class TestFolderListing:
         )
 
         assert (folders, total) == ([], 0)
-        level_statement = str(svc.db.execute.await_args_list[1].args[0])
+        level_statement = str(svc.db.execute.await_args_list[0].args[0])
         assert "document_folders.id IN" in level_statement
 
 
@@ -654,7 +756,9 @@ class TestAttachDocumentNames:
         doc = self._doc(uploaded_by="u1", folder_id="f1")
         # One execute per non-empty id set: users, then folders.
         db.execute.side_effect = [
-            self._rows([("u1", "Dana", "Reyes")]),
+            # (id, first_name, last_name, preferred_name): the uploader is
+            # named by the name she goes by.
+            self._rows([("u1", "Danielle", "Reyes", "Dana")]),
             self._rows([("f1", "Engine Bay")]),
         ]
         await svc.attach_document_names("org-1", [doc])

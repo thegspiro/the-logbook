@@ -32,6 +32,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useDeepLinkedRecord } from '../../../hooks/useDeepLinkedRecord';
 import { formatDate } from '../../../utils/dateFormatting';
+import { displayNameOf } from '../../../utils/memberName';
 import { useInventoryWebSocket } from '../../../hooks/useInventoryWebSocket';
 import { InventoryScanModal } from '../../../components/InventoryScanModal';
 import { VariantCapsules } from '../components/VariantCapsules';
@@ -174,7 +175,7 @@ const InventoryMembersPage: React.FC = () => {
       isOpen: true,
       mode: 'distribute',
       userId: m.user_id,
-      memberName: m.full_name || m.username,
+      memberName: displayNameOf(m) || m.username,
     });
   };
 
@@ -192,7 +193,7 @@ const InventoryMembersPage: React.FC = () => {
     setReturnModal({
       isOpen: true,
       userId: m.user_id,
-      memberName: m.full_name || m.username,
+      memberName: displayNameOf(m) || m.username,
     });
   };
 
@@ -214,7 +215,7 @@ const InventoryMembersPage: React.FC = () => {
     const s = [...members];
     switch (sortBy) {
       case 'name':
-        s.sort((a, b) => (a.full_name || a.username).localeCompare(b.full_name || b.username));
+        s.sort((a, b) => (displayNameOf(a) || a.username).localeCompare(displayNameOf(b) || b.username));
         break;
       case 'total_items':
         s.sort((a, b) => b.total_items - a.total_items);
@@ -240,7 +241,7 @@ const InventoryMembersPage: React.FC = () => {
 
       <Link
         to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-secondary mb-4 flex items-center gap-1 text-sm"
+        className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 mb-4 flex items-center gap-1 text-sm"
         title="Back to Inventory Administration"
       >
         <ArrowLeft className="h-4 w-4" /> Back to Admin
@@ -342,7 +343,7 @@ const InventoryMembersPage: React.FC = () => {
             onClick={() => {
               void loadMembers();
             }}
-            className="flex items-center gap-1 text-sm text-red-700 hover:text-red-500 dark:text-red-400"
+            className="touch:min-h-11 flex items-center gap-1 text-sm text-red-700 hover:text-red-500 dark:text-red-400"
           >
             <RefreshCw className="h-4 w-4" /> Retry
           </button>
@@ -355,10 +356,12 @@ const InventoryMembersPage: React.FC = () => {
           <Loader2 className="text-theme-text-muted mx-auto mb-3 h-8 w-8 animate-spin" />
           <p className="text-theme-text-secondary text-sm">Loading members...</p>
         </div>
-      ) : members.length === 0 ? (
+      ) : error ? null : members.length === 0 ? (
+        // Not after a failed load: "no members with inventory assignments"
+        // beneath the error would state as fact what the page could not read.
         <div className="card-secondary p-12 text-center">
           <Users className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
-          <h3 className="text-theme-text-primary mb-1 text-lg font-semibold">No Members Found</h3>
+          <h2 className="text-theme-text-primary mb-1 text-lg font-semibold">No Members Found</h2>
           <p className="text-theme-text-secondary text-sm">
             {searchQuery ? 'Try adjusting your search.' : 'No members with inventory assignments.'}
           </p>
@@ -367,7 +370,7 @@ const InventoryMembersPage: React.FC = () => {
         <div className="space-y-3">
           {sortedMembers.map((member) => {
             const isExpanded = expandedUserId === member.user_id;
-            const name = member.full_name || member.username;
+            const name = displayNameOf(member) || member.username;
             return (
               <div key={member.user_id} className="card-secondary overflow-hidden">
                 {/* Row — a clickable region (not a <button>) so the nested
@@ -461,7 +464,10 @@ const InventoryMembersPage: React.FC = () => {
                         type="button"
                         className="btn-secondary btn-sm flex items-center justify-center gap-1 active:opacity-80"
                         onClick={() =>
-                          setSizesTarget({ userId: member.user_id, memberName: member.full_name || member.username })
+                          setSizesTarget({
+                            userId: member.user_id,
+                            memberName: displayNameOf(member) || member.username,
+                          })
                         }
                         title="Edit this member's sizes"
                         aria-label={`Edit sizes for ${name}`}

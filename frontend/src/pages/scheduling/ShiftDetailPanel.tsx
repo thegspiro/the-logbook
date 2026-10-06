@@ -46,6 +46,7 @@ import {
   ClipboardCheck,
   CheckCircle2,
   AlertTriangle,
+  Info,
   LogIn,
   LogOut,
   QrCode,
@@ -88,6 +89,7 @@ import { PositionEditor } from './PositionEditor';
 import { CrewBoardSlot } from './CrewBoardSlot';
 import { ShiftCallsSection } from './ShiftCallsSection';
 import { ShiftCloseoutWizard } from './ShiftCloseoutWizard';
+import { displayNameOf } from '../../utils/memberName';
 
 interface ShiftDetailPanelProps {
   shift: ShiftRecord;
@@ -566,7 +568,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
         err,
         'Failed to sign up for shift',
         String(user?.id ?? ''),
-        user?.first_name ? `${user.first_name} ${user.last_name ?? ''}`.trim() : 'You'
+        (user && displayNameOf(user)) || 'You'
       );
     } finally {
       setPendingFlag('signingUp', false);
@@ -1628,6 +1630,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   tz={tz}
                   outstandingChecks={endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length}
                   requireChecks={requireEndOfShiftChecks}
+                  shiftStart={shift.start_time}
+                  shiftEnd={shift.end_time}
                   onCancel={() => setShowFinalizeChecklist(false)}
                   onFinalized={() => {
                     setShowFinalizeChecklist(false);
@@ -1714,7 +1718,17 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                           {completedEquipmentChecks.length === 1 ? '' : 's'} completed
                         </span>
                       </div>
-                    ) : null}
+                    ) : (
+                      // Said rather than omitted: with no row at all the section
+                      // looked complete, and an officer could not tell "nothing
+                      // to check" from "checks not reported".
+                      <div className="border-theme-surface-border bg-theme-surface flex items-center gap-2 rounded-md border p-2">
+                        <Info className="text-theme-text-muted h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span className="text-theme-text-secondary">
+                          No end-of-shift equipment checklist applies to this shift
+                        </span>
+                      </div>
+                    )}
 
                     {/* Attendance check-in/out summary */}
                     {(() => {
@@ -2946,8 +2960,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               {/* Quick Actions — checklists and shift report */}
               {(() => {
                 const shiftEnded = shift.end_time && new Date(shift.end_time).getTime() <= Date.now();
-                const isOfficer = user?.id === shift.shift_officer_id;
-                const showReportBtn = shiftEnded && (isOfficer || canManage);
+                // The officer on the rig files the shift's reports, so only they
+                // are offered the button. Shown to everyone with scheduling
+                // rights it read as something a regular member could do, and
+                // most of them cannot; leadership still files from the Shift
+                // Reports tab.
+                const showReportBtn = shiftEnded && isShiftOfficer;
                 const showChecklistLink = equipmentCheckSummaries.some((s) => !isShiftCheckCompleted(s));
 
                 if (!showReportBtn && !showChecklistLink) return null;

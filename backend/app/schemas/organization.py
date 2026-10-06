@@ -1267,6 +1267,21 @@ class InventorySettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class ApparatusSettingsUpdate(BaseModel):
+    """Apparatus module settings. Extra keys are kept, as for inventory."""
+
+    nfpa_compliance_enabled: Optional[bool] = Field(
+        None,
+        description=(
+            "Track NFPA apparatus compliance. Unset follows the organization "
+            "type (on for fire and combined departments, off for EMS-only); "
+            "read by app/utils/apparatus_nfpa.py."
+        ),
+    )
+
+    model_config = ConfigDict(extra="allow")
+
+
 class OrganizationSettingsUpdate(BaseModel):
     """Schema for updating organization settings"""
 
@@ -1285,6 +1300,7 @@ class OrganizationSettingsUpdate(BaseModel):
     setup: Optional[SetupProgressSettings] = None
     appearance: Optional[AppearanceSettings] = None
     inventory: Optional[InventorySettingsUpdate] = None
+    apparatus: Optional[ApparatusSettingsUpdate] = None
 
     # Allow additional settings
     model_config = ConfigDict(extra="allow")

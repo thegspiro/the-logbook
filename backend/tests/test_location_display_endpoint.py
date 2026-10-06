@@ -22,7 +22,7 @@ LocationService is mocked; no DB.
 from datetime import datetime, timedelta
 from datetime import timezone as tz
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -72,10 +72,18 @@ def _user():
     return SimpleNamespace(id=uuid4(), organization_id="org-1")
 
 
-async def _call(monkeypatch, events):
+def _db(org_timezone="America/New_York"):
+    db = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = org_timezone
+    db.execute.return_value = result
+    return db
+
+
+async def _call(monkeypatch, events, db=None):
     _patch_location_service(monkeypatch, events)
     return await locations.get_location_display_info(
-        location_id=LOC_ID, db=AsyncMock(), current_user=_user()
+        location_id=LOC_ID, db=db or _db(), current_user=_user()
     )
 
 
@@ -119,3 +127,13 @@ class TestLocationDisplayInfo:
         result = await _call(monkeypatch, [_event()])
 
         assert result.current_events[0]["event_description"] is None
+
+    async def test_ships_the_department_timezone(self, monkeypatch):
+        # The public kiosk sends it; a caller of this endpoint with no
+        # timezone of its own would otherwise render UTC in the device's zone.
+        info = await _call(monkeypatch, [_event()])
+        assert info.timezone == "America/New_York"
+
+    async def test_a_department_with_no_timezone_sends_none(self, monkeypatch):
+        info = await _call(monkeypatch, [], db=_db(None))
+        assert info.timezone is None

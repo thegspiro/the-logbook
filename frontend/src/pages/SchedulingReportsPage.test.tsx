@@ -81,4 +81,30 @@ describe('SchedulingReportsPage shift compliance', () => {
     const held = screen.getByRole('button', { name: /Annual Hazmat Hours/ });
     expect(held).toHaveTextContent('1/27 compliant');
   });
+
+  it('labels the summary totals as requirement checks, not members', async () => {
+    // Each requirement grades its own cohort, so the totals sum
+    // member-requirement pairs; a member under two requirements counts twice.
+    mockGetComplianceReport.mockResolvedValue({
+      requirements: [
+        requirement({ requirement_id: 'a', total_members: 3, compliant_count: 2, non_compliant_count: 1 }),
+        requirement({ requirement_id: 'b', total_members: 3, compliant_count: 3, non_compliant_count: 0 }),
+      ],
+      reference_date: '2026-09-29',
+      total_requirements: 2,
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<SchedulingReportsPage />);
+
+    await user.click(screen.getByRole('tab', { name: /Shift Compliance/ }));
+    await user.click(await screen.findByRole('button', { name: 'Check Compliance' }));
+
+    expect(await screen.findByText('Requirement Checks')).toBeInTheDocument();
+    expect(screen.getByText('Checks Met')).toBeInTheDocument();
+    expect(screen.getByText('Checks Not Met')).toBeInTheDocument();
+    // 3 + 3 checks across two requirements: the pair count, labelled as such.
+    expect(screen.getByText('6')).toBeInTheDocument();
+    expect(screen.queryByText('Total Members')).not.toBeInTheDocument();
+    expect(screen.queryByText('Non-Compliant')).not.toBeInTheDocument();
+  });
 });

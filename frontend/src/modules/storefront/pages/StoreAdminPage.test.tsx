@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import toast from 'react-hot-toast';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 
@@ -206,6 +207,17 @@ describe('StoreAdminPage overview', () => {
     await screen.findByText('Department Store');
 
     expect(screen.queryByRole('link', { name: /Inventory/ })).not.toBeInTheDocument();
+  });
+
+  // Order counts and money collected are figures an officer acts on, so a 200
+  // whose body is not a dashboard (a captive portal's HTML page) must take the
+  // error toast — it used to crash the page on `statusCounts.submitted`.
+  it('reports a dashboard response that is not a dashboard instead of crashing', async () => {
+    mockGetDashboard.mockResolvedValue({});
+    render(<StoreAdminPage />, { wrapper: MemoryRouter });
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Could not load the store dashboard'));
+    expect(screen.queryByText('Something went wrong')).not.toBeInTheDocument();
   });
 });
 
