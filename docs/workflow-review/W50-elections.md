@@ -796,7 +796,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `election_service.py` results gate (`can_view` needs `now > end_date` even when CLOSED, S:2517-2522).
 **Why flagged:** the owner decides whether CLOSED alone unlocks results for managers; the report mail, the PDF and the runoff logic already bypass the gate, which is Pitfall #29 in miniature. S10 records the gate and the 403-vs-404 shape, and held live (CONFIRM-16: a member's `GET /results` on a closed, published election → 200 with the manager's numbers; signed out → 401). Then `test_w50_results_gate_closed.py`.
 
-### W50-23 — MED — The proxy holder is Cc'd a ballot that says "This link is yours alone … Don't forward this email", with no mention of the proxy — FLAGGED
+### W50-23 — MED — The proxy holder is Cc'd a ballot that says "This link is yours alone … Don't forward this email", with no mention of the proxy — ✅ DECIDED & FIXED (2026-10-05)
+
+**Owner decision (2026-10-05):** keep the Cc, fix the wording. The link card under the ballot is now `{{ballot_link_notice_html}}`/`_text`, filled with "<holder> holds <member>'s proxy" on a proxied send; migration `24f56e4fc320` moves untouched stored bodies onto it, and an edited template gets the sentence at the head of the message. Test: `backend/tests/test_w50_proxy_ballot_mail.py`.
 
 **Did:** as `secretary`, A4 step 5 (authorisation Alex for Cameron; the sink unchanged 5 s later) and A5 step 6 (Send Ballot Emails); the reminder (A7 step 8).
 **Saw:** Cameron's mail `Cc: review_member2` with a body that says nothing about Alex or a proxy; Alex's own mail says nothing either; the manual (`14-elections.md:672`) promises a proxy-holder mail. Read from code: no proxy ballot UI exists (`castProxyVote` has no caller).

@@ -42,6 +42,13 @@ finding below that says FLAGGED or OPEN is superseded by its line here.
   votes stay `is_test`, test-namespaced in the dedup hash and excluded from
   every tally and from the candidate-edit guard. Guard:
   `tests/test_w50_test_token_draft.py`.
+- **W50-23** (proxy holder Cc'd a ballot saying the link is the voter's
+  alone) — **fixed, Cc kept:** the ballot email's link card is a variable
+  the sender fills, naming the holder and whose ballot it is on a proxied
+  send; names are HTML-escaped. Migration `24f56e4fc320` carries untouched
+  stored bodies (guarded on the table, idempotent, real downgrade); an
+  edited template gets the notice at the head of the message. The Cc itself
+  is unchanged. Guard: `tests/test_w50_proxy_ballot_mail.py`.
 - **ELEC-16** (`list_manual_ballot_batches` unbounded) — **accepted as is.**
   Paper-tally sessions per election are naturally few; no cap and no
   pagination. Revisit if an election ever carries more than a few dozen

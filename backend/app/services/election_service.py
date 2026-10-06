@@ -6973,10 +6973,10 @@ class ElectionService:
                 f"using default | election={election_id} error={e}"
             )
 
-        # Build a lookup of delegating_user_id -> proxy user email
-        # so we can CC the proxy holder on ballot notifications.
-        # Batch-fetch all proxy users in a single query instead of N+1.
-        proxy_cc_map: Dict[str, str] = {}
+        # Build a lookup of delegating_user_id -> (proxy email, proxy name)
+        # so we can CC the proxy holder on ballot notifications, and name
+        # them in it (W50-23). Batch-fetch all proxy users in one query.
+        proxy_cc_map: Dict[str, Tuple[str, str]] = {}
         proxy_user_ids: set = set()
         proxy_mappings: List[Tuple[str, str]] = []
         for auth in election.proxy_authorizations or []:
@@ -6993,7 +6993,8 @@ class ElectionService:
                 .where(User.organization_id == str(organization_id))
             )
             proxy_users_by_id = {
-                str(u.id): u.email for u in proxy_result.scalars().all()
+                str(u.id): (u.email, u.full_name or u.username)
+                for u in proxy_result.scalars().all()
             }
             for delegating_uid, proxy_uid in proxy_mappings:
                 if proxy_uid in proxy_users_by_id:
@@ -7245,7 +7246,8 @@ class ElectionService:
             )
 
             # If this voter has a proxy, CC the proxy holder
-            cc_email = proxy_cc_map.get(str(recipient.id))
+            proxy_holder = proxy_cc_map.get(str(recipient.id))
+            cc_email = proxy_holder[0] if proxy_holder else None
 
             pending_emails.append(
                 {
@@ -7257,6 +7259,7 @@ class ElectionService:
                     "meeting_date": election.meeting_date,
                     "custom_message": message,
                     "cc_emails": [cc_email] if cc_email else None,
+                    "proxy_holder_name": proxy_holder[1] if proxy_holder else None,
                     "start_date": election.start_date,
                     "end_date": election.end_date,
                     "positions": election.positions,
@@ -7279,6 +7282,7 @@ class ElectionService:
         for params in pending_emails:
             rid = params.pop("recipient_id")
             cc_emails = params.pop("cc_emails", None)
+            proxy_holder_name = params.pop("proxy_holder_name", None)
             try:
                 subj, html_body, text_body = (
                     await email_service.render_ballot_notification(
@@ -7295,6 +7299,7 @@ class ElectionService:
                         admin_contact_name=params["admin_contact_name"],
                         admin_contact_email=params["admin_contact_email"],
                         template=ballot_template,
+                        proxy_holder_name=proxy_holder_name,
                     )
                 )
                 # A caller's subject wins over the template's: a reminder

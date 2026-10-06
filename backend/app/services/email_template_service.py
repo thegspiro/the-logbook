@@ -412,6 +412,18 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             "name": "admin_contact_email",
             "description": "Election administrator's email address",
         },
+        {
+            "name": "ballot_link_notice_html",
+            "description": (
+                "The card under the ballot saying whose ballot the link opens: "
+                "the voter's own, or the delegating member's when their proxy "
+                "holder is copied, naming both"
+            ),
+        },
+        {
+            "name": "ballot_link_notice_text",
+            "description": "The same notice as one plain-text line",
+        },
     ],
     "cert_expiration": [
         {"name": "recipient_name", "description": "Recipient's display name"},
@@ -866,6 +878,14 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             ),
             "admin_contact_name": "FCVFD Secretary",
             "admin_contact_email": "secretary@samplefd.org",
+            "ballot_link_notice_html": (
+                '    <div class="callout-info"><p class="callout-title-info">'
+                "This link is yours alone</p>"
+                '<p class="callout-text-info">It opens your ballot. Don\'t '
+                "forward this email: anyone with the link can vote as you."
+                "</p></div>"
+            ),
+            "ballot_link_notice_text": "(This link opens your ballot.)",
         }
     ),
     "member_dropped": _sample(
@@ -2350,15 +2370,22 @@ DEFAULT_BALLOT_NOTIFICATION_HTML = build_shell(
     chip="Ballot open",
     subtitle="Voting closes {{voting_closes}}",
     tab_note="Closes {{voting_closes}}",
-    # The link opens a ballot page keyed by its token; it never creates a
-    # session, so it must not be described as signing anyone in (W50-68).
-    after=callout(
-        "info",
-        "This link is yours alone",
-        "It opens your ballot. Don't forward this email: "
-        "anyone with the link can vote as you.",
-    ),
+    # The card under the body is filled by the sender: the voter's own
+    # "This link is yours alone", or, when the ballot is Cc'd to a proxy
+    # holder, a notice naming both members, because the holder's copy must
+    # not tell them the link is someone else's alone (W50-23).
+    after="{{ballot_link_notice_html}}",
 )
+
+# The link opens a ballot page keyed by its token; it never creates a
+# session, so it must not be described as signing anyone in (W50-68).
+BALLOT_LINK_OWN_NOTICE_HTML = callout(
+    "info",
+    "This link is yours alone",
+    "It opens your ballot. Don't forward this email: "
+    "anyone with the link can vote as you.",
+)
+BALLOT_LINK_OWN_NOTICE_TEXT = "(This link opens your ballot.)"
 
 DEFAULT_BALLOT_NOTIFICATION_TEXT = """Ballot Available: {{election_title}}
 
@@ -2376,7 +2403,7 @@ Your Ballot Items:
 {{custom_message}}
 
 Vote here: {{ballot_url}}
-(This link opens your ballot.)
+{{ballot_link_notice_text}}
 
 If you have any questions, please contact your election administrator:
 {{admin_contact_name}} ({{admin_contact_email}})
@@ -3642,6 +3669,7 @@ class EmailTemplateService:
         "skipped_voters_html",
         "custom_message_html",
         "meeting_date_html",
+        "ballot_link_notice_html",
         "footer_html",
         "details_html",
         "message_html",

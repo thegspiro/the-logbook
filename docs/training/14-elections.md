@@ -753,6 +753,12 @@ When enabled for the organization, proxy voting allows one member to vote on beh
 4. Select the **delegating member** (who can't attend)
 5. Select the **proxy holder** (who will vote for them)
 6. Save — nothing is sent at this point. When ballots go out, the proxy holder is **Cc'd on the delegating member's ballot email** (their own ballot email is separate)
+   _(2026-10-05)_ That copied email says so: its card under the ballot reads
+   _"<holder> holds <member>'s proxy"_ and explains that the link opens the
+   delegating member's ballot and works once, whichever of the two submits
+   it — where it used to tell the holder the link was theirs alone. A
+   department that edited its ballot email template before this change gets
+   the same sentence at the top of the message instead.
 
 ### Casting a Proxy Vote
 
@@ -1190,8 +1196,6 @@ Drive"):
 - A paper ballot cannot record a vote on a motion or membership item.
 - Merge Write-Ins, Void a Vote and a paper-batch void still change the results
   after close and after publishing, with no revision mark.
-- A proxy holder is Cc'd on the delegating member's ballot email, whose text
-  says the link is the recipient's alone.
 - Scheduled opening (**Open Automatically at Start Time**) sends no ballots.
 - Several screen fixes found in the same review — the delete and close dialog
   wording, a close stamp on the election cards, a test-ballot banner on the
