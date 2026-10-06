@@ -43,13 +43,21 @@ const renderStep = () =>
     </ThemeProvider>
   );
 
+// Pasted rather than typed: each keystroke re-renders the form and re-runs
+// the password rules, so typing six fields took ~2s unloaded and crossed the
+// 5s timeout when the pre-commit hook ran every related suite at once. The
+// tests assert what the finished values are refused or accepted for.
 const fillAccount = async (user: ReturnType<typeof userEvent.setup>, password: string) => {
-  await user.type(screen.getByLabelText(/^first name/i), 'Riley');
-  await user.type(screen.getByLabelText(/^last name/i), 'Owner');
-  await user.type(screen.getByLabelText(/^username/i), 'riley_owner');
-  await user.type(screen.getByLabelText(/^email address/i), 'riley@example.org');
-  await user.type(screen.getByLabelText(/^password \*/i), password);
-  await user.type(screen.getByLabelText(/^confirm password/i), password);
+  const fill = async (label: RegExp, value: string) => {
+    await user.click(screen.getByLabelText(label));
+    await user.paste(value);
+  };
+  await fill(/^first name/i, 'Riley');
+  await fill(/^last name/i, 'Owner');
+  await fill(/^username/i, 'riley_owner');
+  await fill(/^email address/i, 'riley@example.org');
+  await fill(/^password \*/i, password);
+  await fill(/^confirm password/i, password);
 };
 
 const createButton = () => screen.getByRole('button', { name: /create system owner/i });
