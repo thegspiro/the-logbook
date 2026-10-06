@@ -688,12 +688,21 @@ behind a success response. A tab left open across a mode switch is the
 realistic way either was reached; no shipped client sends these fields outside
 the count-only wizard.
 
-> **`attachable_calls` is deliberately empty.** Claiming another unit's call has
-> no UI yet, so nothing can send `attach_call_ids` from the browser, and
-> `list_calls_in_window` would cost two queries on every close-out GET for a
-> list nothing reads. The field stays on the response so the contract does not
-> change when the picker lands. See **SCHED-10** in
-> [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md#scheduling-module).
+> **The shared-call picker (SCHED-10).** In count-only mode, for a shift not yet
+> finalized, `GET .../closeout` serves `attachable_calls` from
+> `CallTrackingService.list_attachable_calls`: calls with a response from
+> another shift whose time **overlaps** this one (matched by the responding
+> shifts' times, not by call date, so a 24-hour tour's 0300 call dated the
+> previous day is still offered), each with `unit_labels` and `attached`. A call
+> only this shift is on is its own tally and is not listed; a call this
+> apparatus already ran on another tour is not listed either, because
+> `attach_response` deduplicates by apparatus. `PATCH .../closeout/calls` takes
+> `attach_call_ids` (tick) and `detach_call_ids` (untick); detaches run first,
+> then attaches, then the count is reconciled. `detach_response` removes only
+> this shift's response, and refuses a call no other unit is on — that is
+> corrected through the count. The typed breakdown covers only the calls the
+> shift logged itself: `record_shift_calls` refuses a breakdown larger than the
+> total minus the shared calls (it used to truncate it silently).
 
 ### Basic Apparatus
 
@@ -1141,11 +1150,12 @@ whole department over one hand-edited entry.
 
 `GET /scheduling/reports/call-volume` reads **one** source and never mixes them;
 reading both and adding them would count every call twice for an org that has
-used each mode in turn. The count-only branch sets `counts_unit_responses`, and
-the renderer relabels **Total Calls → Unit Responses**, **Avg Calls/Day → Avg
-Responses/Day**, **Peak Calls → Peak Responses**, with a footnote — because
-until the attach picker lands, two units on one incident are counted twice, and
-calling that "calls" overstates the department's volume.
+used each mode in turn. The count-only branch serves `counts_unit_responses:
+false` since the close-out wizard's shared-call picker shipped (SCHED-10): a
+second unit on an incident ticks the call the first unit logged rather than
+logging its own, so distinct `OrgCall` rows are incidents. Before the picker it
+was `true` and the renderer relabelled **Total Calls → Unit Responses** (and the
+average and peak cards) with a footnote; the renderer still honours the flag.
 
 ### ApparatusBasicPage
 

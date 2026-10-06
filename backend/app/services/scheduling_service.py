@@ -9019,12 +9019,18 @@ class SchedulingService:
             )
         members.sort(key=lambda m: m["user_name"])
 
-        # Deliberately empty. `list_calls_in_window` costs two queries on every
-        # close-out GET, and nothing consumes the result: claiming another
-        # unit's call has no UI yet, so no client can send `attach_call_ids`.
-        # The field stays on the response so the contract does not change when
-        # the picker lands — it is served empty until something can use it.
+        # The close-out picker's list: calls another unit logged while this
+        # shift was on, so one incident two units rolled on is claimed rather
+        # than logged twice. Only count-only tracking reads it, and a finalized
+        # shift has no wizard to show it in, so neither pays for the queries.
         attachable: List[Dict[str, Any]] = []
+        if (
+            tracking.get("mode") == CallTrackingMode.COUNT_ONLY
+            and not shift.is_finalized
+        ):
+            attachable = await call_service.list_attachable_calls(
+                shift, str(organization_id)
+            )
 
         # What the wizard offers as rows. Retired types are dropped so no new
         # count can be filed under one — except where this shift already has
@@ -9157,8 +9163,15 @@ class SchedulingService:
         attach_call_ids: Optional[List[str]] = None,
         recorded_by: Optional[str] = None,
         count_provided: bool = False,
+        detach_call_ids: Optional[List[str]] = None,
     ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Step 2 — record how many calls the apparatus ran.
+
+        ``attach_call_ids`` claims calls another unit logged and
+        ``detach_call_ids`` withdraws from ones claimed earlier — the picker's
+        tick and untick. Detaches run first so a call moved from one claim to
+        another in a single save is never counted twice in between, and both
+        run before the count is reconciled because the count includes them.
 
         The rows written here are the department's real call record before the
         shift is finalized, which is correct: the calls happened, and
@@ -9205,8 +9218,15 @@ class SchedulingService:
         will_lock_types = count_provided and any(
             int(v) > 0 for v in (reported_call_types or {}).values()
         )
-        if attach_call_ids and will_lock_types:
+        if (attach_call_ids or detach_call_ids) and will_lock_types:
             await call_service.get_settings(str(organization_id), for_update=True)
+
+        for call_id in detach_call_ids or []:
+            ok, err = await call_service.detach_response(
+                str(call_id), shift, str(organization_id)
+            )
+            if not ok:
+                return None, err
 
         for call_id in attach_call_ids or []:
             ok, err = await call_service.attach_response(

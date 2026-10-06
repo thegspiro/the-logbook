@@ -397,9 +397,16 @@ class CloseoutCallsRequest(BaseModel):
     )
     reported_call_types: Optional[dict[str, int]] = None
     attach_call_ids: Optional[List[UUID]] = None
+    # Calls this shift claimed earlier and the officer has unticked. Only this
+    # shift's own response is removed, and only from a call another unit is
+    # also on — a call this shift alone logged is corrected through the count.
+    detach_call_ids: Optional[List[UUID]] = None
 
     @model_validator(mode="after")
     def _validate(self) -> "CloseoutCallsRequest":
+        overlap = set(self.attach_call_ids or []) & set(self.detach_call_ids or [])
+        if overlap:
+            raise ValueError("A call cannot be attached and detached in one save")
         if self.reported_call_types:
             if self.reported_call_count is None:
                 raise ValueError(
@@ -433,7 +440,12 @@ class CloseoutAttachableCall(UTCResponseBase):
     call_date: date
     call_type: Optional[str] = None
     source: str
+    # The other units on the call — never this shift's own apparatus.
     apparatus_ids: List[str] = Field(default_factory=list)
+    # What an officer recognises the call by ("Engine 5 logged an MVA").
+    unit_labels: List[str] = Field(default_factory=list)
+    # This shift already claims the call; unticking it in the picker detaches.
+    attached: bool = False
 
 
 class CloseoutStateResponse(UTCResponseBase):

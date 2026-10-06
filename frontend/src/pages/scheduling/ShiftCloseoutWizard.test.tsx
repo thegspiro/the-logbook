@@ -614,3 +614,113 @@ describe('ShiftCloseoutWizard', () => {
     });
   });
 });
+
+describe('the shared-call picker (SCHED-10)', () => {
+  // An MVA Medic 1 logged that Engine 5 also ran. Ticking it claims the call
+  // instead of logging a second one, so the department counts it once.
+  const mva = {
+    id: 'call-mva',
+    call_date: '2026-08-19',
+    call_type: 'ems',
+    source: 'manual',
+    apparatus_ids: ['medic-1'],
+    unit_labels: ['Medic 1'],
+    attached: false,
+  };
+
+  beforeEach(() => {
+    mockGetState.mockReset();
+    mockSaveAttendance.mockReset();
+    mockSaveCalls.mockReset();
+    mockFinalize.mockReset();
+    mockGetState.mockResolvedValue(baseState({ closeout_step: 1, attachable_calls: [mva] }));
+    mockSaveCalls.mockResolvedValue(baseState({ closeout_step: 2, attachable_calls: [mva] }));
+    mockFinalize.mockResolvedValue({ id: 'sh1' });
+  });
+
+  it('lists the other unit’s call by unit, type and date', async () => {
+    renderWizard();
+    expect(await screen.findByRole('checkbox', { name: 'Medic 1 · EMS · Aug 19' })).not.toBeChecked();
+  });
+
+  it('counts a ticked call in the total and sends it as an attachment, not a typed call', async () => {
+    const user = userEvent.setup();
+    renderWizard();
+    await user.click(await screen.findByRole('checkbox', { name: 'Medic 1 · EMS · Aug 19' }));
+    await user.type(screen.getByLabelText('Fire calls'), '2');
+    expect(total()).toBe('3');
+
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+
+    await waitFor(() => {
+      expect(mockSaveCalls).toHaveBeenCalledWith('sh1', {
+        reported_call_count: 3,
+        reported_call_types: { fire: 2 },
+        attach_call_ids: ['call-mva'],
+        detach_call_ids: undefined,
+      });
+    });
+  });
+
+  it('a tick alone answers the question — the total is not left blank', async () => {
+    const user = userEvent.setup();
+    renderWizard();
+    const box = await screen.findByRole('checkbox', { name: 'Medic 1 · EMS · Aug 19' });
+    expect(total()).toBe('—');
+    await user.click(box);
+    expect(total()).toBe('1');
+  });
+
+  it('shows a claimed call ticked and keeps its type out of the typed rows', async () => {
+    // The server's tally includes the claimed EMS call. Seeding it into the
+    // EMS row as well would show it twice and save it as two calls.
+    mockGetState.mockResolvedValue(
+      baseState({
+        closeout_step: 1,
+        reported_call_count: 3,
+        reported_call_types: { ems: 2, fire: 1 },
+        attachable_calls: [{ ...mva, attached: true }],
+      })
+    );
+    renderWizard();
+    expect(await screen.findByRole('checkbox', { name: 'Medic 1 · EMS · Aug 19' })).toBeChecked();
+    expect(screen.getByLabelText('EMS calls')).toHaveValue(1);
+    expect(screen.getByLabelText('Fire calls')).toHaveValue(1);
+    expect(total()).toBe('3');
+  });
+
+  it('unticking a claimed call detaches it', async () => {
+    const user = userEvent.setup();
+    mockGetState.mockResolvedValue(
+      baseState({
+        closeout_step: 1,
+        reported_call_count: 1,
+        reported_call_types: { ems: 1 },
+        attachable_calls: [{ ...mva, attached: true }],
+      })
+    );
+    renderWizard();
+    await user.click(await screen.findByRole('checkbox', { name: 'Medic 1 · EMS · Aug 19' }));
+    // Nothing typed and nothing ticked reads as unanswered, the same as a
+    // fresh close-out; the server records it as no calls.
+    expect(total()).toBe('—');
+
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+
+    await waitFor(() => {
+      expect(mockSaveCalls).toHaveBeenCalledWith('sh1', {
+        reported_call_count: null,
+        reported_call_types: undefined,
+        attach_call_ids: undefined,
+        detach_call_ids: ['call-mva'],
+      });
+    });
+  });
+
+  it('shows no picker when no other unit logged a call', async () => {
+    mockGetState.mockResolvedValue(baseState({ closeout_step: 1 }));
+    renderWizard();
+    await screen.findByLabelText('EMS calls');
+    expect(screen.queryByText('Already logged by another unit')).not.toBeInTheDocument();
+  });
+});

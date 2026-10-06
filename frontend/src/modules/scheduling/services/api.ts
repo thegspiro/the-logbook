@@ -779,6 +779,8 @@ export const schedulingService = {
       body.reported_call_count = payload.reported_call_count;
     }
     if (payload.reported_call_types) body.reported_call_types = payload.reported_call_types;
+    if (payload.attach_call_ids?.length) body.attach_call_ids = payload.attach_call_ids;
+    if (payload.detach_call_ids?.length) body.detach_call_ids = payload.detach_call_ids;
     const response = await api.patch<CloseoutState>(`/scheduling/shifts/${shiftId}/closeout/calls`, body);
     return response.data;
   },

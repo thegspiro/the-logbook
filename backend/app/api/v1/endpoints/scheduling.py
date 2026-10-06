@@ -1036,7 +1036,7 @@ async def save_shift_closeout_calls(
 
     ``attach_call_ids`` claims calls another unit already logged, so a single
     incident two units rolled on counts once for the department and as a run
-    for each of them.
+    for each of them. ``detach_call_ids`` withdraws an earlier claim.
 
     **Permissions required:** scheduling.manage, or being the shift's officer.
     """
@@ -1056,6 +1056,9 @@ async def save_shift_closeout_calls(
         # Distinguishes "not sent" from an explicit null, so a client that
         # only attaches calls does not wipe a count it never mentioned.
         count_provided="reported_call_count" in body.model_fields_set,
+        detach_call_ids=(
+            [str(c) for c in body.detach_call_ids] if body.detach_call_ids else None
+        ),
     )
     if state is None:
         raise HTTPException(

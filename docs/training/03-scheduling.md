@@ -591,7 +591,7 @@ getting straight before anyone quotes a figure.
 | Number                     | What it counts                                        | Where you see it                           |
 | -------------------------- | ----------------------------------------------------- | ------------------------------------------ |
 | **Department call volume** | One call is one call, however many units rolled on it | Reports → Call Volume                      |
-| **Apparatus runs**         | One per unit, per call                                | **Not on any screen yet** — API only       |
+| **Apparatus runs**         | One per unit, per call                                | Reports → Call Volume, **Runs by Unit**    |
 | **Member credit**          | Calls an individual was actually on                   | The member's own hours and training credit |
 
 A 400-call department can legitimately show **380 engine runs and 240 medic
@@ -602,34 +602,31 @@ them.
 Member credit is a third thing again, and is never the shift's number restated.
 A member who came on at 0300 was not on the 2200 call.
 
+**[SCREENSHOT — REPLACE `03-82-call-volume-count-only.png`.** Since the close-out picker shipped (SCHED-10) the count-only report reads **Total Calls**, **Avg Calls/Day** and **Peak Calls** with no per-unit footnote. Re-shoot it.**]**
+
 ![Call Volume for a count-only department: Unit Responses, Avg Responses/Day and Peak Responses, over the footnote saying an incident two units attended is counted once for each](./images/03-82-call-volume-count-only.png)
 
 ![The same department and period in detailed mode: the identical cards read Total Calls, Avg Calls/Day and Peak Calls, and the per-unit footnote is gone](./images/03-83-call-volume-detailed.png)
 
-_One department, one period, two modes. **52** against **18** — and neither
-number is wrong. The first counts what the trucks did and the second counts
-what happened, which is why the labels change with the mode rather than
-staying put. Read the label before you quote the figure; a grant application
-that says "52 calls" when the department ran 18 incidents is a real problem
-that starts as a screenshot._
+_The first image predates the shared-call picker: before it, an incident two
+units closed out independently was counted once per unit, and the report said
+**Unit Responses** to stop that being quoted as a call count._
 
-### Read the report label before you quote the number
+### The count is only as good as the ticks
 
-In count-only mode the report says **Unit Responses**, not **Total Calls**.
+In count-only mode the report says **Total Calls**: one call per incident,
+because the second unit on an incident claims the first unit's call at
+close-out instead of logging its own (see
+[Claiming a call another unit logged](#claiming-a-call-another-unit-logged)).
 
-That wording is doing real work. Two units that closed out independently each
-reported their own call, and nothing has yet linked them to one incident — so
-the figure counts an incident once per responding unit. **Do not put it in a
-grant application as a department call count.** Reconcile mutual responses by
-hand, or wait for the cross-unit feature described below.
+That depends on the closing officer ticking it. A second unit that types the
+MVA into its own count instead of ticking the one Medic 1 already logged
+records a second call, and the department figure counts the incident twice.
+Nothing can detect that afterwards — the two calls carry no detail to match
+on, by design. If a figure is going into a grant application, ask the officers
+whether mutual responses were ticked.
 
-Three further things about this report that are easy to be caught out by:
-
-> **The CSV export still says "Total Calls" — in both modes.** The wording on
-> screen changes with the mode; the export does not. So a CSV pulled for a grant
-> or an audit presents unit responses under the word "calls", which is the exact
-> confusion the on-screen label exists to prevent, in the file most likely to
-> leave the building. **Relabel the column by hand before sending one.**
+Two further things about this report that are easy to be caught out by:
 
 > **A date range spanning a mode change is incomplete.** The report picks its
 > source from your department's **current** setting and applies it to the whole
@@ -645,13 +642,27 @@ Three further things about this report that are easy to be caught out by:
 > produces a figure you can hand to a funder without explaining how it was
 > derived.
 
-### What is not built yet
+### Claiming a call another unit logged
 
-Claiming a call another unit already logged — the thing that makes two units on
-one MVA count as one call for the department — **has no screen yet**. The
-capability exists in the API, and the close-out screen already reserves the
-place it will appear. Until it ships, the honest label on the report is the
-mitigation.
+Step 2 of the close-out wizard — **How many calls did Engine 5 run?** — opens
+with **Already logged by another unit** whenever another unit recorded a call
+while your shift was on. Each line names the unit, the call type and the date:
+**Medic 1 · EMS · Aug 19**.
+
+- **Tick any your unit was also on.** The department counts the incident once,
+  and your unit gets the run. The tick counts toward your total straight away.
+- **Don't type it into the rows below as well.** The rows are for the calls
+  your unit logged itself; a ticked call keeps the type the other unit gave it.
+- **Untick to take it back.** Saving withdraws your unit from the call and
+  leaves it on the other unit's record. A call only your unit was on is not in
+  the list — lower the count instead.
+
+The list is matched on when the shifts ran, not on the date written against the
+call, so a medic who came on at midnight still sees the 0300 call that a
+24-hour engine tour dated the previous day. The list is not shown once a shift
+is closed out; reopen the shift to change what it claims.
+
+**[SCREENSHOT — NEW `03-84-closeout-shared-call-picker.png`.** Close-out wizard step 2 on a phone, with **Already logged by another unit** listing one ticked call (**Medic 1 · EMS · Aug 19**) above the typed rows, and the total reading the tick plus the typed calls.**]**
 
 ---
 
