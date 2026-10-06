@@ -130,6 +130,18 @@ one never folds.]**
 > up, and been told the position was just filled, which wasn't true. Your board
 > is shorter now, and what's gone is what you'd have been refused."
 
+**[SCREEN: Dashboard → Next 30 Days: an open shift you can't take, labelled
+"Not eligible" where the others offer Sign Up]**
+
+> "The same goes for the **Next 30 Days** list. An open shift you aren't cleared
+> for now says **Not eligible** up front, instead of offering Sign Up and
+> refusing you one tap later."
+
+**[PRODUCTION NOTE — 2026-10-06. New beat, about 15 seconds; film it with a
+member who lacks the qualification for one open shift (65422ea6). If the
+eligibility lookup fails the label doesn't appear and Sign Up is offered, with
+the same refusal on the tap — don't film that state.]**
+
 **[SCREEN: Point to the "and N more" line under Open Shifts]**
 
 > "Open Shifts shows five. If there are more, you'll see a line telling you how
@@ -140,8 +152,14 @@ one never folds.]**
 
 > "**Upcoming Events** with your RSVP status. **Recent Activity** — what's been
 > happening in the department. And **My ID Card**, which is the one to know
-> about on your phone: it's your department ID with a scannable code, and it
-> works without signal once the app's installed."
+> about on your phone: it's your department ID with a scannable code."
+
+**[PRODUCTION NOTE — 2026-10-06. "Works without signal" removed. The card's QR
+and barcode are now a server-issued badge code fetched when the card loads
+(GET /member-badges/{id}); service-worker rules never cache API responses, so
+the code is not expected to appear offline. Check on a device before saying
+otherwise. The code is random (e.g. MB-7KQ2W9HXRT) and is not the membership
+number.]**
 
 **[SCREEN: Scroll to My Training Progress, then My Issued Gear]**
 
@@ -352,6 +370,20 @@ Chapter 4.]**
 
 > "Click on any certification to see the details — when you completed it, who
 > recorded it, and any attached documentation like scanned certificates."
+
+**[SCREEN: My Training history with a record badged as awaiting approval at the
+top, above dated records]**
+
+> "Something you submitted that's still waiting on an officer shows here too —
+> at the top, even though it has no completion date yet. It used to drop out of
+> the list once you had a long history; now it stays put until it's decided."
+
+**[PRODUCTION NOTE — 2026-10-06. New beat, about 12 seconds (58760756): a
+record with no completion date always passes the date-range filter and sorts
+first. Needs a member with one pending self-reported record. Also: an officer
+may delete approved certificate files after a department-set number of days
+(Script 05); the record stays, the attached file goes — don't promise a member
+their scan lasts forever.]**
 
 **[SCREEN: Scroll down the same page to the Skills Tests section.]**
 
@@ -600,6 +632,22 @@ add a Reason, click "Submit Request".]**
 > rosters, so it starts from **My Shifts** — the **Swap** button on an upcoming
 > shift — and goes to an officer, and it has to be an officer who isn't in the
 > swap. Not you, not them."
+
+**[SCREEN: In the same dialog, choose "Exchange With a Member" ("Trade seats:
+you take theirs, they take yours"); open the Exchange With list]**
+
+> "And there's a third choice: **Exchange With a Member**. You pick from a list
+> of dated seats and the people working them — and the list only has pairs where
+> you're both cleared for the other's seat. A driver can trade with another
+> driver, but not into an officer seat they aren't cleared for. If nobody
+> qualifies, the dialog says so instead of letting you send a request that was
+> going to be refused."
+
+**[PRODUCTION NOTE — 2026-10-06. New beat, about 25 seconds; new footage of the
+Exchange With a Member option (37721521). Exchanges are checked again when the
+officer approves; a pair that stopped qualifying while pending is refused unless
+the officer chooses Approve anyway. Needs two members qualified for each
+other's seats.]**
 
 **[SCREEN: Point to the "Open Swap" card: "An officer finds cover; it stays
 yours until then"]**
@@ -978,6 +1026,29 @@ My Account > Notifications, showing the Push notifications toggle.]**
 > "You'll also notice there's a bar across the bottom on a phone now — four
 > destinations plus More. Everything used to live behind that menu button in the
 > top-left corner, which is the hardest place on a big phone to reach one-handed."
+
+**[SCREEN: A shared station computer after Sign Out fails: the full-screen
+"Sign-out could not be confirmed" notice with "Try signing out again"]**
+
+> "On a shared station computer, signing out matters. If the connection drops
+> and The Logbook can't confirm your sign-out, it tries three times — then it
+> covers the screen and tells you to close every browser window and try again.
+> Don't walk away from that screen: until the server confirms, your session may
+> still be usable from that browser."
+
+**[SCREEN: The app banner "N offline items are on hold" with Send as me and
+Discard]**
+
+> "One more for shared devices. If you saved an equipment check or a report
+> offline and it hasn't gone through, it's tagged to **you**, and only you can
+> send it. Older ones saved before that tagging existed are held, with a notice
+> offering **Send as me** or **Discard**. If they're not yours, discard them —
+> that deletes them from the device for good."
+
+**[PRODUCTION NOTE — 2026-10-06. Two new beats, about 40 seconds total; both
+need new footage (9a8af58c, b574c324). The held-items notice only appears when
+the device has untagged queue entries left from before the upgrade, so it has
+to be staged. Never film a real member's queued report.]**
 
 **[CALLOUT: "Add to Home Screen = full app experience on your phone"]**
 

@@ -153,7 +153,20 @@ official test.]**
 (SkillsTestingTestRecordsTab)]**
 
 > "The Test Records tab gives you a complete history of all skills testing
-> conducted. Filter by member, by template, by date range, or by result."
+> conducted. Search by template, candidate or examiner name, filter by date
+> range or by result, and page through the list."
+
+**[SCREEN: Point to the date range (opens on the last twelve months) and the
+Export button]**
+
+> "Export gives you a CSV of exactly the rows you're looking at — and it needs a
+> date range of no more than a year. Outside that, the button is disabled and
+> tells you why."
+
+**[PRODUCTION NOTE — 2026-10-06. New beat, about 15 seconds; re-record the
+Test Records screen (SKT3-2): paged list, server-side search, date range
+defaulting to twelve months, Export disabled with a reason when the range is
+missing or over 366 days.]**
 
 **[SCREEN: Show filtering and browsing test records]**
 
@@ -250,6 +263,25 @@ official test.]**
 
 > "The report lists every member with their certification status for every
 > requirement. Export it as PDF for inspectors or as CSV for your records."
+
+**[PRODUCTION NOTE — 2026-10-06. The annual and monthly compliance reports now
+grade each member through their compliance profile, the same as the dashboard
+and the matrix (CMP4-3), and members nothing grades are shown as N/A and left
+out of the overall percentage (TR4-4). A department that uses profiles will
+see the report's figures change; reports already generated keep the figures
+they were made with. Do not film an old report next to a new one. No narration
+change needed unless the take mentions a percentage.]**
+
+**[SCREEN: Compliance → Attestations: the create form with the quarter picker]**
+
+> "And when an officer attests to the numbers for a period, the attestation
+> records the department's compliance figure **as the system worked it out** for
+> the last day of that period — you don't type a percentage in. Choose the year
+> and, for a quarterly attestation, the quarter."
+
+**[PRODUCTION NOTE — 2026-10-06. New beat, about 15 seconds, only if the
+attestation screen is already in the take (CS-8): the Compliance % box is gone
+and a quarter picker was added. Needs fresh footage of the form.]**
 
 **[SCREEN: Generate and show the report, then demonstrate the export]**
 
@@ -367,6 +399,25 @@ amber warning and the suggested holiday chips]**
 
 > "You can move any individual class, or skip one entirely. Then pick your
 > recruits, and generate."
+
+**[SCREEN: Cohort Detail → Roster tab: the "Add member" button; a member row
+reading "N classes held before they joined — decide"]**
+
+> "A recruit shows up a week late? Open the cohort's Roster tab and add them.
+> For every class already held, you decide: credit it as completed, or schedule
+> a make-up session for just that member. The decision panel opens on its own
+> when somebody added late missed any."
+
+**[CALLOUT: "Shift or cancel a cohort — all or nothing"]**
+
+> "And if you shift or cancel the rest of a cohort and one class can't move — a
+> finalized class, a room that's taken that day — nothing moves. You get the
+> reason and the cohort is exactly as it was."
+
+**[PRODUCTION NOTE — 2026-10-06. Two new beats, about 40 seconds total; re-time
+this chapter and film the Roster tab (W27-3). Make-up credit is applied the
+usual way when its attendance is finalized; "Credit as completed" writes the
+training record straight away.]**
 
 **[SCREEN: Roster step selecting members, then the Generate button; cut to the
 Cohort Detail page with the full class timeline]**
