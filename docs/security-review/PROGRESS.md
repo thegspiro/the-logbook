@@ -16,6 +16,42 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#PENDING](https://github.com/thegspiro/the-logbook/pull/PENDING)**:
+branch `claude/security-review-training-core`, Feature 17 (Training core),
+pass 7 (watchdog pickup — the dedicated `/loop 30m /security-review` session
+had no open PR/branch for this feature). Real delta, not a zero-delta pass:
+3,371 insertions / 1,023 deletions across all nine declared files since
+pass 6's merge (36 commits of ordinary feature work landed in the interim).
+0 code fixes; 1 new finding flagged (TR7-1, MEDIUM): `POST /training/
+enrollments` (`training.py`) duplicates, by hand, the enrollment logic that
+`TrainingProgramService.enroll_member` was just fixed to run under an
+organization lock, and was not updated alongside it — the same duplicate-
+active-enrollment race reproduces there, and the route also never creates
+the enrollment's `RequirementProgress` rows. Every prior standing finding
+(TR2-2, TR2-4, TR3-2, TR4-1 through TR4-4, TR-11/12/13, the bulk/historical-
+import enum-validation gap) re-verified at its current citation; most were
+already marked FIXED in-place by the feature commits that closed them
+between passes. Two substantial new features reviewed fresh — requirement
+grandfathering/"new members only" edits, and the training-session attach/
+approval endpoints on Training events — both verified good (row-locked
+splits, org-scoped credit reversal, a tightened `training.manage`
+permission on `submit_training_approval`). Completion gate green
+(flake8/black/isort, migrations, route-permission check — 245 routes,
+1475 scoped backend tests, frontend typecheck/lint); one environment-only
+DB-schema-drift issue found and resolved (not a code defect — see the
+findings file's completion-gate section). See the Log entry below for
+detail.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 17, Training core, pass 7, watchdog-pickup placeholder, never itself a PR), preserved for history</summary>
+
+**None.** Feature 17 (Training core) review in progress (watchdog pickup).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 16, Events &amp; requests, pass 7, PR #2972, merged docs-only — not independently recorded), preserved for history</summary>
+
 **PR [#2972](https://github.com/thegspiro/the-logbook/pull/2972)**: branch
 `claude/security-review-events-requests`, Feature 16 (Events & requests),
 pass 7 — 0 code fixes needed. EV-26 confirmed genuinely fixed (not
@@ -30,6 +66,8 @@ non-merge commits. Route count in `events.py` grew to 58 (+2). Gate
 green (flake8/black/isort, migrations, route-permission check — 245
 routes, 1224 scoped backend tests, frontend typecheck/lint). See the
 Log entry below for detail.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 7, PR #2971, merged docs-only — not independently recorded), preserved for history</summary>
@@ -17949,7 +17987,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
@@ -27834,3 +27872,85 @@ section. No `KNOWN_LIMITATIONS.md` change needed — every open item's
 entry there was re-verified accurate, none needed amending. Rotation row
 30 → ✅ (pending PR merge). Next: **Feature 31 (Scheduled tasks —
 `scheduled.py`, `services/scheduled_tasks.py`)**.
+
+### 2026-10-06 — Feature 17 (Training core, pass 7) — 0 fixed, 1 flagged (MEDIUM); real delta, not a zero-delta pass
+
+Watchdog pickup: the dedicated `/loop 30m /security-review` session had no
+open PR or branch for this feature. Step 0: confirmed via `list_pull_requests`
+(state=open) and `search_pull_requests` (`head:claude/security-review-`) that
+no security-review PR was open before starting. The working tree already
+carried this run's own setup edit (`PROGRESS.md`'s Open PR row cleared for
+Feature 16's merged PR #2972, rotation row 17 marked `🔄`); it rides along in
+this pass's own commit rather than being recorded separately.
+
+**Not a zero-delta pass** — the first real one for this feature since pass 2.
+Pass 6's baseline `df0c1dc1` (PR #2635's merge) to current `main`: **3,371
+insertions / 1,023 deletions across all nine declared files**, 36 commits.
+Most of it is ordinary feature work that happened to land between rotation
+passes, not drift since the last review went unnoticed — 21 of the 36 commits
+fall inside SEC-00 pass 7's already-swept window (baseline `1bf12e3d`, head
+`532340e3`, 2026-10-04), whose 13 cross-cutting classes (CSV export, LIKE
+escaping, `BaseHTTPMiddleware`, JSON shallow-copy, org-scoping ratchet,
+capacity locking, route auth coverage, raw exception text, …) are confirmed
+clean through that point. The remaining 15 post-dated it and were read
+directly.
+
+Nearly every standing TR finding (TR2-2, TR2-4, TR3-2, TR4-1 through TR4-4,
+TR-11/12/13, the bulk/historical-import enum-validation gap) is already
+recorded FIXED in-place at its original citation — the feature commits that
+closed each one edited this pass's own findings file as they landed, rather
+than waiting for a numbered pass. This pass re-read the actual code for every
+one (not the prose) and confirms each still holds at its current line
+numbers, including two cross-feature fixes to shared code in
+`training_compliance.py` owned by the Compliance rotation (CMP4-2, CMP4-5 —
+`docs/security-review/CMP-20-compliance.md`).
+
+Two substantial new features landed with no prior review record and were
+reviewed fresh against all seven checklist dimensions: requirement
+grandfathering / "new members only" edits (row-locked split prevents a
+double-split race; the copy is built with `copy.deepcopy` on the mapper's
+column attributes, the correct pattern for its JSON-bearing fields per
+CLAUDE.md Pitfall #12) and the training-session attach/approval endpoints on
+Training events (org-scoped and lock-ordered throughout; the approval token
+is returned only to a caller holding `training.manage`; that same permission
+replaced `events.manage` on `submit_training_approval`, a narrowing). Both
+verified good. One new external caller recorded: `event_service.py` (Events
+feature) now calls `TrainingSessionService` directly from seven sites as
+part of "Finalize Attendance completes training credit" — by design, and the
+callee side is reviewed above.
+
+One new finding, flagged not fixed: **TR7-1 (MEDIUM, abuse resistance / data
+integrity, Pitfall #27)** — `POST /training/enrollments`
+(`training.py:2107`, a _different_ route from the one the frontend actually
+calls) duplicates by hand the enrollment logic that
+`TrainingProgramService.enroll_member` was just fixed (commit `012f3da49`)
+to run under an organization lock, and was never updated alongside it: the
+identical duplicate-active-enrollment race reproduces on this route, which
+also never creates the enrollment's `RequirementProgress` rows, determines a
+starting phase, schedules a recert deadline, or sends the notification the
+fixed path does. No frontend caller reaches it today
+(`frontend/src/services/trainingServices.ts:894` uses the fixed route), so
+exposure is limited to a direct API client holding `training.manage`.
+Closing the race alone would still leave the route structurally incomplete;
+the fuller fix (delegate to the service method, or remove the apparently-
+unused duplicate) is a product decision. Mirrored into
+`KNOWN_LIMITATIONS.md`.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+`app/ tests/ alembic/`; `validate_migrations.py --strict` passed (527
+revisions, single head `15802f3df5c4`); `check_route_permissions.py
+--strict` passed (245 routes, 0 errors/warnings); scoped backend tests
+(`-k "training or compliance"`) 1475 passed, 1 skipped (environment-only —
+`pywebpush`); frontend `npm run typecheck` 0 errors, `npm run lint` 0
+errors/0 warnings. One environment-only issue found and resolved along the
+way, not a code defect: the sandbox's dev database had never been booted
+through the actual app (only migrated), so it was missing twelve columns
+that `main.py`'s `_add_missing_model_columns` startup repair — not Alembic —
+is designed to backfill for columns added to a model without their own
+migration; running that existing function once fixed it. Recorded in the
+findings file's completion-gate section rather than silently worked around.
+
+Findings doc: [`TR-17-training-core.md`](./TR-17-training-core.md)'s **Pass
+7** section. `KNOWN_LIMITATIONS.md` gained one new entry (TR7-1) and needed
+no amendment to any existing one. Rotation row 17 → ✅ (pending PR merge).
+Next: Feature 18 (Training extended).
