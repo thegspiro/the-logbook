@@ -2,9 +2,11 @@
  * Add or edit one step of an approval chain.
  *
  * The help text describes what the backend actually does with each field
- * (finance_service.py), not what the data model suggests: any finance.approve
- * holder can act on any approval step, the named approver is only contacted
- * when the type is Email, and notification steps send no email yet.
+ * (finance_service.py, finance_approver_matching.py), not what the data model
+ * suggests: only the named approver — or any finance.approve holder when none
+ * is named — can act on an approval step in The Logbook, an approvals admin can
+ * override with a reason, the named approver is only contacted when the type
+ * is Email, and notification steps send no email yet.
  */
 
 import React, { useState } from 'react';
@@ -163,9 +165,10 @@ export const ApprovalStepDialog: React.FC<ApprovalStepDialogProps> = ({
                 ))}
               </select>
               <p className="text-theme-text-secondary mt-1 text-xs">
-                Anyone with the finance.approve permission can approve or deny this step in The Logbook, whatever you
-                choose here. Only the Email type contacts the approver: when the request reaches this step, that address
-                is sent a link to approve or deny it (if email sending is set up).
+                Only the approver chosen here can approve or deny this step in The Logbook. With None, anyone with the
+                finance.approve permission can. An approvals administrator can also act on it by giving a reason, which
+                is recorded in the audit log. The Email type also sends that address a link to approve or deny the
+                request when it reaches this step (if email sending is set up).
               </p>
             </div>
 

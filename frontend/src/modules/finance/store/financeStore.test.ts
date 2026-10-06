@@ -574,7 +574,7 @@ describe('financeStore', () => {
 
       await getState().approveStep('step1', 'Looks good');
 
-      expect(mockApprovalApprove).toHaveBeenCalledWith('step1', 'Looks good');
+      expect(mockApprovalApprove).toHaveBeenCalledWith('step1', 'Looks good', undefined);
       expect(mockApprovalGetPending).toHaveBeenCalledWith();
       expect(getState().pendingApprovals).toEqual([]);
       expect(getState().isLoading).toBe(false);
@@ -586,7 +586,16 @@ describe('financeStore', () => {
 
       await getState().approveStep('step1');
 
-      expect(mockApprovalApprove).toHaveBeenCalledWith('step1', undefined);
+      expect(mockApprovalApprove).toHaveBeenCalledWith('step1', undefined, undefined);
+    });
+
+    it('passes an override reason through', async () => {
+      mockApprovalApprove.mockResolvedValue(undefined);
+      mockApprovalGetPending.mockResolvedValue([]);
+
+      await getState().approveStep('step1', 'Looks good', 'Treasurer on leave');
+
+      expect(mockApprovalApprove).toHaveBeenCalledWith('step1', 'Looks good', 'Treasurer on leave');
     });
 
     it('rejects to the caller when the approval fails', async () => {
@@ -621,7 +630,7 @@ describe('financeStore', () => {
 
       await getState().denyStep('step1', 'Over budget');
 
-      expect(mockApprovalDeny).toHaveBeenCalledWith('step1', 'Over budget');
+      expect(mockApprovalDeny).toHaveBeenCalledWith('step1', 'Over budget', undefined);
       expect(mockApprovalGetPending).toHaveBeenCalledWith();
       expect(getState().pendingApprovals).toEqual([]);
       expect(getState().isLoading).toBe(false);
@@ -633,7 +642,16 @@ describe('financeStore', () => {
 
       await getState().denyStep('step1');
 
-      expect(mockApprovalDeny).toHaveBeenCalledWith('step1', undefined);
+      expect(mockApprovalDeny).toHaveBeenCalledWith('step1', undefined, undefined);
+    });
+
+    it('passes an override reason through', async () => {
+      mockApprovalDeny.mockResolvedValue(undefined);
+      mockApprovalGetPending.mockResolvedValue([]);
+
+      await getState().denyStep('step1', 'Over budget', 'Position vacant');
+
+      expect(mockApprovalDeny).toHaveBeenCalledWith('step1', 'Over budget', 'Position vacant');
     });
 
     it('rejects to the caller when the denial fails', async () => {

@@ -1,17 +1,19 @@
 /**
  * Approvals Page
  *
- * Every finance request currently waiting on an approval step, one row per
- * request, with Approve and Deny for that step.
+ * The finance requests waiting on an approval step the viewer is the named
+ * approver of, one row per request, with Approve and Deny for that step.
  *
- * The list is organization-wide, not "assigned to me": the backend lets any
- * holder of `finance.approve` act on any step, whoever the chain names as the
- * approver, so the copy here must not suggest otherwise.
+ * Which rows appear, and whether each is the viewer's own or one an approvals
+ * admin can act on only with an override reason, is the backend's decision
+ * (`canAct` / `requiresOverride`, from finance_approver_matching.py). This page
+ * shows those flags and does not re-derive who matches a step.
  */
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { AlertTriangle, CheckCircle, ClipboardCheck, XCircle } from 'lucide-react';
+import { useAuthStore } from '@/stores/authStore';
 import { useFinanceStore } from '../store/financeStore';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { SkeletonPage } from '@/components/ux/Skeleton';
@@ -26,14 +28,80 @@ import { APPROVAL_ENTITY_LABELS, approvalEntityPath } from '../components/approv
 
 const HEADER_CELL = 'text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase';
 
-const PageHeader: React.FC = () => (
-  <div>
-    <h1 className="text-theme-text-primary text-2xl font-bold">Approvals</h1>
-    <p className="text-theme-text-secondary mt-1 text-sm">
-      Requests waiting on an approval step. Anyone with finance approval permission can approve or deny them.
-    </p>
-  </div>
-);
+const PageHeader: React.FC = () => {
+  // Only the copy depends on this: the rows, and whether each needs an
+  // override, come from the API.
+  const isApprovalsAdmin = useAuthStore((s) => s.checkPermission('finance.configure_approvals'));
+  return (
+    <div>
+      <h1 className="text-theme-text-primary text-2xl font-bold">Approvals</h1>
+      <p className="text-theme-text-secondary mt-1 text-sm">Requests waiting on you.</p>
+      {isApprovalsAdmin && (
+        <p className="text-theme-text-secondary mt-1 text-sm">
+          As an approvals administrator you also see steps assigned to other people. To approve or deny one of those,
+          you must give a reason, which is recorded in the audit log.
+        </p>
+      )}
+    </div>
+  );
+};
+
+interface RowActionsProps {
+  row: PendingApproval;
+  onOpen: (row: PendingApproval, action: ApprovalDecision['action']) => void;
+}
+
+const RowActions: React.FC<RowActionsProps> = ({ row, onOpen }) => {
+  if (row.canAct) {
+    return (
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => onOpen(row, 'approve')}
+          aria-label={`Approve ${row.entityTitle}`}
+          className="btn-success inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium"
+        >
+          <CheckCircle className="h-4 w-4" />
+          Approve
+        </button>
+        <button
+          type="button"
+          onClick={() => onOpen(row, 'deny')}
+          aria-label={`Deny ${row.entityTitle}`}
+          className="btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-400"
+        >
+          <XCircle className="h-4 w-4" />
+          Deny
+        </button>
+      </div>
+    );
+  }
+  if (!row.requiresOverride) return null;
+  // Secondary style for both: acting on someone else's step is the exception
+  // to the chain, and should not look like the normal path.
+  return (
+    <div className="flex flex-wrap justify-end gap-2">
+      <button
+        type="button"
+        onClick={() => onOpen(row, 'approve')}
+        aria-label={`Approve ${row.entityTitle} as approvals admin`}
+        className="btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium"
+      >
+        <CheckCircle className="h-4 w-4" />
+        Approve as admin
+      </button>
+      <button
+        type="button"
+        onClick={() => onOpen(row, 'deny')}
+        aria-label={`Deny ${row.entityTitle} as approvals admin`}
+        className="btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-400"
+      >
+        <XCircle className="h-4 w-4" />
+        Deny as admin
+      </button>
+    </div>
+  );
+};
 
 const ApprovalsPage: React.FC = () => {
   const tz = useTimezone();
@@ -52,6 +120,7 @@ const ApprovalsPage: React.FC = () => {
       action,
       subject: `${row.entityTitle} (${APPROVAL_ENTITY_LABELS[row.entityType].toLowerCase()})`,
       stepName: row.stepName,
+      override: !row.canAct && row.requiresOverride ? { assigneeLabel: row.assigneeLabel } : undefined,
     });
 
   if (!loaded) {
@@ -82,8 +151,8 @@ const ApprovalsPage: React.FC = () => {
         !error && (
           <EmptyState
             icon={ClipboardCheck}
-            title="Nothing waiting for approval"
-            description="Purchase requests, expense reports and check requests show up here when they reach an approval step."
+            title="Nothing is waiting on you."
+            description="Purchase requests, expense reports and check requests show up here when they reach an approval step assigned to you."
           />
         )
       ) : (
@@ -106,6 +175,9 @@ const ApprovalsPage: React.FC = () => {
                   </th>
                   <th scope="col" className={HEADER_CELL}>
                     Step
+                  </th>
+                  <th scope="col" className={HEADER_CELL}>
+                    Waiting on
                   </th>
                   <th scope="col" className={HEADER_CELL}>
                     Submitted
@@ -141,6 +213,16 @@ const ApprovalsPage: React.FC = () => {
                     <td data-label="Step" className="text-theme-text-primary px-4 py-3 text-sm">
                       {row.stepName}
                     </td>
+                    <td data-label="Waiting on" className="text-theme-text-primary px-4 py-3 text-sm">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span>{row.assigneeLabel}</span>
+                        {!row.canAct && row.requiresOverride && (
+                          <span className="badge bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+                            Not assigned to you
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td
                       data-label="Submitted"
                       className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap"
@@ -148,26 +230,7 @@ const ApprovalsPage: React.FC = () => {
                       {formatDate(row.submittedAt, tz)}
                     </td>
                     <td data-label="Decision" className="px-4 py-3">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => open(row, 'approve')}
-                          aria-label={`Approve ${row.entityTitle}`}
-                          className="btn-success inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium"
-                        >
-                          <CheckCircle className="h-4 w-4" />
-                          Approve
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => open(row, 'deny')}
-                          aria-label={`Deny ${row.entityTitle}`}
-                          className="btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-400"
-                        >
-                          <XCircle className="h-4 w-4" />
-                          Deny
-                        </button>
-                      </div>
+                      <RowActions row={row} onOpen={open} />
                     </td>
                   </tr>
                 ))}

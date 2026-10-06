@@ -339,6 +339,17 @@ export interface ApprovalStepRecord {
   stepName?: string;
   stepOrder?: number;
   createdAt: string;
+  /** Who the step waits on, as a person would name it (e.g. "Treasurer position"). */
+  assigneeLabel?: string | null;
+  /**
+   * For the viewer, decided by the backend's approver matching: true only on
+   * the step the request is waiting on, when the viewer is its named approver.
+   * Separation of duties is not folded in — the approve call still refuses a
+   * requester with its own message.
+   */
+  canAct?: boolean;
+  /** True only for an approvals admin who is not the named approver: they may act by giving an override reason. */
+  requiresOverride?: boolean;
 }
 
 export interface PendingApproval {
@@ -351,6 +362,39 @@ export interface PendingApproval {
   stepName: string;
   stepOrder: number;
   submittedAt: string;
+  approverType?: ApproverType | null;
+  approverValue?: string | null;
+  /** Who the step waits on, as a person would name it. */
+  assigneeLabel: string;
+  /** The viewer is the step's named approver. */
+  canAct: boolean;
+  /** The viewer is an approvals admin who is not the named approver, and must give an override reason to act. */
+  requiresOverride: boolean;
+}
+
+/** Why nobody can act on an approval step, from the approver-coverage report. */
+export const ApproverCoverageProblem = {
+  NO_VALUE: 'no_value',
+  NOT_FOUND: 'not_found',
+  NO_ACTIVE_MEMBERS: 'no_active_members',
+  INVALID_EMAIL: 'invalid_email',
+} as const;
+export type ApproverCoverageProblem = (typeof ApproverCoverageProblem)[keyof typeof ApproverCoverageProblem];
+
+/** One approval step, and whether anybody can act on it (`GET /finance/approval-chains/approver-coverage`). */
+export interface ApproverCoverageRow {
+  chainId: string;
+  chainName: string;
+  chainIsActive: boolean;
+  stepId: string;
+  stepName: string;
+  stepOrder: number;
+  approverType: ApproverType | null;
+  approverValue: string | null;
+  assigneeLabel: string;
+  eligibleActiveCount: number;
+  problem: ApproverCoverageProblem | null;
+  pendingRequestCount: number;
 }
 
 /** A request waiting for approval that no approval chain applies to, so it has no steps. */

@@ -17,9 +17,6 @@ vi.mock('../store/financeStore', () => ({
 vi.mock('@/hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 vi.mock('../services/api', () => ({
   approvalService: { manualApprove: vi.fn(), manualDeny: vi.fn() },
-  // The step-based ApprovalStepActions on the same pages loads the chain to
-  // tell approval steps from notification steps.
-  approvalChainService: { get: vi.fn(() => Promise.resolve({ id: 'chain-1', steps: [] })) },
   purchaseRequestService: {},
   expenseReportService: {},
   checkRequestService: {},
