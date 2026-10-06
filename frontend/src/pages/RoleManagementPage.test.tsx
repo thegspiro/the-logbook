@@ -118,6 +118,21 @@ describe('RoleManagementPage', () => {
     expect(screen.getByText(/only the description and permissions/i)).toBeInTheDocument();
   });
 
+  // W05-5: a new name may not repeat another position's, but pairs that already
+  // did are left and marked so an administrator can tell them apart.
+  it('marks positions that share a name, and only those', async () => {
+    vi.mocked(roleService.getRoles).mockResolvedValue([
+      { ...role, id: 'a', name: 'Report Reader', slug: 'report_reader' },
+      { ...role, id: 'b', name: 'report reader ', slug: 'report_reader_2' },
+      { ...role, id: 'c', name: 'Driver', slug: 'driver' },
+    ]);
+    renderWithRouter(<RoleManagementPage />);
+
+    expect(await screen.findAllByText('Same name as another position')).toHaveLength(2);
+    expect(screen.getByText('report_reader_2')).toBeInTheDocument();
+    expect(screen.queryByText('driver')).not.toBeInTheDocument();
+  });
+
   // ORU-7c: the member position is held by everyone, so changing its grants
   // asks first and names how many members it reaches.
   describe('changing the baseline member position', () => {

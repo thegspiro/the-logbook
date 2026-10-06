@@ -4,7 +4,7 @@
  * Administrative page for creating and managing custom roles and their permissions.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSubmitGuard } from '../hooks/useSubmitGuard';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import { roleService } from '../services/api';
@@ -23,6 +23,19 @@ export const RoleManagementPage: React.FC = () => {
   const { busy, run } = useSubmitGuard();
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const roleModalRef = useFocusTrap<HTMLDivElement>(showCreateModal);
+
+  // W05-5: the server refuses a new or renamed position that reuses a name,
+  // but positions that already shared one were left as they are. Mark them, so
+  // an administrator can see which pair is which and rename one apart. Same
+  // comparison as the server: trimmed, case-insensitive.
+  const sharedNameKeys = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of roles) {
+      const key = r.name.trim().toLowerCase();
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return new Set([...counts].filter(([, n]) => n > 1).map(([key]) => key));
+  }, [roles]);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -242,8 +255,19 @@ export const RoleManagementPage: React.FC = () => {
                           System Role
                         </span>
                       )}
+                      {sharedNameKeys.has(role.name.trim().toLowerCase()) && (
+                        <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-500/20 dark:text-amber-300">
+                          Same name as another position
+                        </span>
+                      )}
                       <span className="text-theme-text-muted text-sm">Priority: {role.priority}</span>
                     </div>
+                    {sharedNameKeys.has(role.name.trim().toLowerCase()) && (
+                      <p className="text-theme-text-muted mt-1 text-xs">
+                        Internal name <code>{role.slug}</code>. Rename one of these so they can be told apart where
+                        positions are assigned.
+                      </p>
+                    )}
                     {role.description && <p className="text-theme-text-muted mt-1 text-sm">{role.description}</p>}
                     <div className="mt-2 flex flex-wrap gap-1">
                       {role.permissions.slice(0, 5).map((perm) => (

@@ -23,7 +23,7 @@ from app.core.permissions import (
     permission_matches,
     permission_matches_any,
 )
-from app.models.user import Role, User, user_roles
+from app.models.user import Organization, Role, User, user_roles
 from app.services.admin_continuity_service import (
     assert_positions_retain_administrator,
     assert_role_change_retains_administrator,
@@ -42,6 +42,17 @@ def slugify(name: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "_", slug)
     slug = slug.strip("_")
     return slug
+
+
+class DuplicatePositionNameError(ValueError):
+    """A position name another position in the organization already uses.
+
+    W05-5: two positions named alike are indistinguishable wherever one is
+    picked to grant — Role Management, Manage Roles — so a new or renamed one
+    may not reuse a name (compared trimmed and case-insensitively). Positions
+    that already share a name are left alone; the Role Management screen marks
+    them so an administrator can rename one.
+    """
 
 
 class RoleManagementService:
@@ -175,6 +186,8 @@ class RoleManagementService:
         Raises:
             ValueError: If slug already exists or permissions are invalid
         """
+        await self._assert_position_name_free(db, organization_id, name)
+
         # Auto-generate slug from name when not provided
         if not slug:
             slug = slugify(name)
@@ -235,6 +248,41 @@ class RoleManagementService:
 
         return role
 
+    async def _assert_position_name_free(
+        self,
+        db: AsyncSession,
+        organization_id: str,
+        name: str,
+        exclude_role_id: Optional[str] = None,
+    ) -> None:
+        """Raise DuplicatePositionNameError if another position uses ``name``.
+
+        A read-then-write (Pitfall #27): the organization row is locked first so
+        two concurrent creates of the same name serialize, and the lookup is a
+        locking read so the second sees the first's committed row rather than
+        its own transaction's snapshot.
+        """
+        await db.execute(
+            select(Organization.id)
+            .where(Organization.id == str(organization_id))
+            .with_for_update()
+        )
+        query = (
+            select(Role.id)
+            .where(
+                Role.organization_id == str(organization_id),
+                func.lower(func.trim(Role.name)) == name.strip().lower(),
+            )
+            .with_for_update()
+        )
+        if exclude_role_id is not None:
+            query = query.where(Role.id != str(exclude_role_id))
+        if (await db.execute(query.limit(1))).first() is not None:
+            raise DuplicatePositionNameError(
+                f'A position named "{name.strip()}" already exists. '
+                "Choose a name no other position uses."
+            )
+
     async def update_role(
         self,
         db: AsyncSession,
@@ -275,6 +323,15 @@ class RoleManagementService:
         role = await self.get_role(db, role_id, organization_id)
         if not role:
             raise ValueError("Role not found")
+
+        # Only a real rename is checked, so saving one of a pair that already
+        # shares a name (without renaming it) still works. A system position
+        # that cannot be renamed at all is refused below, with that reason.
+        renamable = not role.is_system or role.slug == "member"
+        if name is not None and renamable and name.strip() != (role.name or "").strip():
+            await self._assert_position_name_free(
+                db, organization_id, name, exclude_role_id=role_id
+            )
 
         changes = {}
 

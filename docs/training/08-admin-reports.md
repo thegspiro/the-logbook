@@ -465,6 +465,13 @@ The Logbook uses a **position-based** permission system:
 >   can never lock itself out of member administration. If you see this error,
 >   grant another position the member-management permission first, then retry.
 
+> **Position names are unique** _(2026-10-05)_. A new or renamed position
+> cannot reuse a name another position already has (capital letters and
+> surrounding spaces do not make a name different), because two identical
+> names cannot be told apart when assigning one. Positions that already shared
+> a name are marked **Same name as another position**, with the internal name
+> shown underneath; rename one of them.
+
 > **Changing the Member position asks first** _(2026-10-05)_. Every member
 > holds the **Member** position, so adding or removing one of its permissions
 > changes what the whole department can do at once. Saving such a change opens
