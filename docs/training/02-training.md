@@ -251,6 +251,7 @@ There are two pieces:
    - **Day** — how many days after the course start this class happens. Day 1 is the first day.
    - **Start time** and **Duration**.
    - **Credit hours** _(optional)_ — defaults to the catalog course's value.
+   - **Room** _(optional)_ — only for a class that always meets somewhere else, such as live fire at the burn tower. Every cohort of the course books this room for this class instead of the cohort's own room. Leave it on **The cohort's room** otherwise.
    - **Counts toward certification requirements** — leave on for classes delivered the way a certifying body accepts. Turn it off for an informal in-house drill: attendance still earns hours, but the class won't advance a certificate.
 5. Repeat for each class. Use the up/down arrows to reorder.
 
@@ -271,8 +272,12 @@ Each class shows the gap since the one before it — **"Next day"**, **"2 days l
    - _Keep the computed date_ — leave it where it falls.
    - _Move weekends to the next weekday_.
    - _Move to the next meeting day_ — uses the meeting days you selected.
+
+   **Room** _(optional)_ — the room the cohort meets in. It is booked for every class that has no room of its own on the syllabus.
+
 5. **Preview** — this is the important step. Every class is listed with the date it will actually get. Anything that had to move (a weekend, a holiday) is flagged, along with archived courses and rooms already booked. You can:
    - Change any individual date and time.
+   - Pick a different **room** for one class. The preview re-checks straight away, so you see at once whether the new room is free. Each class shows the room it will book and why: _chosen for this class_, _from the syllabus_, or _the cohort's room_ — in that order of precedence.
    - Tick **Skip this class** to leave one out of this intake.
    - Tick any of the suggested holidays to skip them, then **Recalculate**.
 6. **Roster** — select the members taking the course. They're enrolled in the pipeline and added to every class on their calendar.

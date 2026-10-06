@@ -57,6 +57,7 @@ from app.models.training import (
 from app.models.user import Organization, User
 from app.schemas.course_cohort import (
     CohortAdHocClassCreate,
+    CohortClassOverride,
     CohortClassReschedule,
     CohortMakeupCreate,
     CohortMemberAdd,
@@ -202,6 +203,56 @@ class CourseCohortService:
         )
         return [(row[0], row[1]) for row in result.all()]
 
+    @staticmethod
+    def _class_location(
+        course_class: CourseClass,
+        cohort_location_id: Optional[UUID],
+        override: Optional[CohortClassOverride],
+    ) -> Tuple[Optional[str], Optional[str]]:
+        """The room a generated class books, and where that choice came from.
+
+        An officer's per-class pick in the wizard wins; then the syllabus row's
+        own room (a live-fire class that always runs at the burn building);
+        then the cohort's room. One definition, shared by the preview and by
+        generation, so the room the preview conflict-checks is the room the
+        generated class books.
+        """
+        if override is not None and override.location_id:
+            return str(override.location_id), "class"
+        if course_class.location_id:
+            return str(course_class.location_id), "syllabus"
+        if cohort_location_id:
+            return str(cohort_location_id), "cohort"
+        return None, None
+
+    async def _assert_locations_in_org(
+        self,
+        cohort_location_id: Optional[UUID],
+        overrides: Sequence[CohortClassOverride],
+        organization_id: UUID,
+    ) -> None:
+        if cohort_location_id:
+            await assert_in_org(
+                self.db, Location, cohort_location_id, organization_id, label="location"
+            )
+        for override in overrides:
+            if override.location_id:
+                await assert_in_org(
+                    self.db,
+                    Location,
+                    override.location_id,
+                    organization_id,
+                    label="location",
+                )
+
+    async def _location_names(self, organization_id: UUID) -> Dict[str, str]:
+        result = await self.db.execute(
+            select(Location.id, Location.name).where(
+                Location.organization_id == str(organization_id)
+            )
+        )
+        return {str(location_id): name for location_id, name in result.all()}
+
     # ── preview ──────────────────────────────────────────────────────
 
     async def preview_schedule(
@@ -221,9 +272,15 @@ class CourseCohortService:
         if not syllabus:
             raise ValueError("This course has no classes on its syllabus yet")
 
+        overrides = {str(o.course_class_id): o for o in (request.classes or [])}
+        await self._assert_locations_in_org(
+            request.location_id, list(overrides.values()), organization_id
+        )
+
         tz_name = await self._get_org_timezone(organization_id)
         org_tz = await resolve_scheduling_timezone(self.db, organization_id)
         location_service = LocationService(self.db)
+        location_names = await self._location_names(organization_id)
 
         classes: List[Dict[str, Any]] = []
         warnings: List[str] = []
@@ -243,6 +300,13 @@ class CourseCohortService:
                 default_duration_minutes=request.default_duration_minutes,
             )
 
+            override = overrides.get(str(course_class.id))
+            if override and override.scheduled_start:
+                start_utc = override.scheduled_start
+                end_utc = override.scheduled_end or (
+                    start_utc + timedelta(minutes=course_class.duration_minutes or 60)
+                )
+
             class_warnings: List[str] = []
             if roll_warning:
                 class_warnings.append(roll_warning)
@@ -252,13 +316,12 @@ class CourseCohortService:
                     "reactivate it or pick another course."
                 )
 
-            # Only classes with a room of their own can be conflict-checked
-            # here — the preview request carries no cohort-level location. A
-            # clash on a cohort-wide room surfaces at generation, where
-            # create_training_session runs the same check and reports it as a
-            # per-class warning.
-            location_id = course_class.location_id
-            if location_id:
+            # Resolved exactly as generation resolves it, so a clash reported
+            # here is a clash on the room the class will actually book.
+            location_id, location_source = self._class_location(
+                course_class, request.location_id, override
+            )
+            if location_id and not (override and override.skip):
                 # A preview books nothing, so it neither needs nor should hold
                 # the department's booking lock while it walks every class.
                 overlapping = await location_service.check_overlapping_events(
@@ -284,6 +347,11 @@ class CourseCohortService:
                     "scheduled_end": end_utc,
                     "credit_hours": course_class.credit_hours,
                     "instructor": course_class.instructor,
+                    "location_id": location_id,
+                    "location_name": (
+                        location_names.get(location_id) if location_id else None
+                    ),
+                    "location_source": location_source,
                     "warnings": class_warnings,
                 }
             )
@@ -337,10 +405,9 @@ class CourseCohortService:
                 f"A cohort cannot generate more than {MAX_GENERATED_CLASSES} classes"
             )
 
-        if data.location_id:
-            await assert_in_org(
-                self.db, Location, data.location_id, organization_id, label="location"
-            )
+        await self._assert_locations_in_org(
+            data.location_id, list(data.classes or []), organization_id
+        )
         if data.program_id:
             await assert_in_org(
                 self.db,
@@ -434,18 +501,9 @@ class CourseCohortService:
                     label="instructor",
                 )
                 instructor_id = str(override.instructor_id)
-            location_id = course_class.location_id or (
-                str(data.location_id) if data.location_id else None
+            location_id, _ = self._class_location(
+                course_class, data.location_id, override
             )
-            if override and override.location_id:
-                await assert_in_org(
-                    self.db,
-                    Location,
-                    override.location_id,
-                    organization_id,
-                    label="location",
-                )
-                location_id = str(override.location_id)
 
             requirement_id = course_class.requirement_id or requirement_by_class.get(
                 str(course_class.id)

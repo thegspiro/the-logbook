@@ -268,7 +268,12 @@ export interface CourseClassCreate {
   counts_toward_certification?: boolean | undefined;
 }
 
-export type CourseClassUpdate = Partial<CourseClassCreate> & { active?: boolean };
+/** Fields an edit can empty: sent as null so the clear persists (pitfall #1). */
+type ClearableCourseClassField = 'section_name' | 'title' | 'start_time' | 'credit_hours' | 'location_id';
+
+export type CourseClassUpdate = Omit<Partial<CourseClassCreate>, ClearableCourseClassField> & {
+  [K in ClearableCourseClassField]?: CourseClassCreate[K] | null;
+} & { active?: boolean };
 
 export interface CourseClassAutofill {
   meeting_days: number[]; // Weekday numbers, 0 = Monday
@@ -288,6 +293,10 @@ export interface CohortScheduleConfig {
 export interface CohortSchedulePreviewRequest extends CohortScheduleConfig {
   course_id: string;
   start_date: string;
+  /** The cohort's room: every class without one of its own books it. */
+  location_id?: string | undefined;
+  /** Per-class edits so far, so the preview checks the room each class will book. */
+  classes?: CohortClassOverride[] | undefined;
 }
 
 /** One computed class in a schedule preview — nothing is created yet. */
@@ -301,6 +310,11 @@ export interface PreviewClass {
   scheduled_end: string;
   credit_hours?: number;
   instructor?: string;
+  /** The room this class would book, already resolved by the backend. */
+  location_id?: string | null;
+  location_name?: string | null;
+  /** Where the room came from: a per-class pick, the syllabus row, or the cohort. */
+  location_source?: 'class' | 'syllabus' | 'cohort' | null;
   warnings: string[];
 }
 

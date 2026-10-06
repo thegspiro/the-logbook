@@ -10,6 +10,12 @@
  * roster to each; the officer sees exactly what will happen — including dates
  * that had to move around a weekend or holiday, and any room double-booking —
  * before anything is created.
+ *
+ * Rooms are chosen per cohort, with a per-class override on the preview step:
+ * recruit schools move rooms (the burn tower for live fire, the hall for
+ * lectures). The backend resolves each class's room — the officer's pick, else
+ * the syllabus row's own room, else the cohort's — and conflict-checks that
+ * room, so the preview shows the room and clash the generated class will have.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -18,7 +24,8 @@ import { AlertTriangle, CalendarPlus, ChevronLeft, ChevronRight, Search, Users }
 import { ProgressSteps } from '../ux/ProgressSteps';
 import { Skeleton } from '../ux/Skeleton';
 import DateTimeQuarterHour from '../ux/DateTimeQuarterHour';
-import { courseCohortService, trainingService, userService } from '../../services/api';
+import { courseCohortService, locationsService, trainingService, userService } from '../../services/api';
+import type { Location } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import {
   formatCalendarDate,
@@ -55,8 +62,26 @@ const STEPS = [
   { label: 'Generate', description: 'Confirm' },
 ];
 
-/** Per-class edits keyed by syllabus class id. */
-type Overrides = Record<string, { start?: string; end?: string; skip?: boolean }>;
+/** Per-class edits keyed by syllabus class id. `location` is a room id; absent means the default. */
+type Overrides = Record<string, { start?: string; end?: string; skip?: boolean; location?: string | undefined }>;
+
+const LOCATION_SOURCE_LABEL: Record<'class' | 'syllabus' | 'cohort', string> = {
+  class: 'chosen for this class',
+  syllabus: 'from the syllabus',
+  cohort: "the cohort's room",
+};
+
+/** The edits the backend needs, for the preview and for generation alike. */
+const toClassOverrides = (overrides: Overrides): CohortClassOverride[] =>
+  Object.entries(overrides)
+    .filter(([, value]) => value.skip || value.start || value.location)
+    .map(([classId, value]) => ({
+      course_class_id: classId,
+      skip: value.skip ?? false,
+      scheduled_start: value.start || undefined,
+      scheduled_end: value.end || undefined,
+      location_id: value.location || undefined,
+    }));
 
 export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel, initialCourseId }) => {
   const tz = useTimezone();
@@ -64,6 +89,7 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
   const [step, setStep] = useState(0);
   const [courses, setCourses] = useState<TrainingCourse[]>([]);
   const [members, setMembers] = useState<User[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [previewing, setPreviewing] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -79,6 +105,7 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
   const [defaultStartTime, setDefaultStartTime] = useState('');
   const [rollPolicy, setRollPolicy] = useState<DateRollPolicy>(DateRollPolicy.NONE);
   const [blackoutDates, setBlackoutDates] = useState<string[]>([]);
+  const [cohortLocationId, setCohortLocationId] = useState('');
 
   // Step 3 — preview
   const [preview, setPreview] = useState<CohortSchedulePreviewResponse | null>(null);
@@ -97,9 +124,16 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
     const load = async () => {
       setLoading(true);
       try {
-        const [courseList, memberList] = await Promise.all([trainingService.getCourses(), userService.getUsers()]);
+        const [courseList, memberList, locationList] = await Promise.all([
+          trainingService.getCourses(),
+          userService.getUsers(),
+          // A room is optional; a failed location list must not stop the
+          // officer generating a cohort without one.
+          locationsService.getLocations({ is_active: true }).catch(() => [] as Location[]),
+        ]);
         setCourses(courseList);
         setMembers(memberList);
+        setLocations(locationList);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to load courses'));
       } finally {
@@ -118,27 +152,49 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId]);
 
-  const runPreview = useCallback(async () => {
-    if (!courseId) return;
-    setPreviewing(true);
-    try {
-      const result = await courseCohortService.previewSchedule({
-        course_id: courseId,
-        start_date: startDate,
-        meeting_days: meetingDays.length > 0 ? meetingDays : undefined,
-        default_start_time: defaultStartTime || undefined,
-        date_roll_policy: rollPolicy,
-        blackout_dates: blackoutDates.length > 0 ? blackoutDates : undefined,
-      });
-      setPreview(result);
-      setOverrides({});
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Could not build the schedule'));
-      setPreview(null);
-    } finally {
-      setPreviewing(false);
-    }
-  }, [courseId, startDate, meetingDays, defaultStartTime, rollPolicy, blackoutDates]);
+  /**
+   * Build the schedule. Leaving the schedule step starts from a clean slate
+   * (`kept` is empty); a recalculation on the preview step keeps the officer's
+   * edits and sends them, so each class is checked in the room and at the
+   * time it will actually have.
+   */
+  const runPreview = useCallback(
+    async (kept: Overrides = {}) => {
+      if (!courseId) return;
+      setPreviewing(true);
+      try {
+        const classOverrides = toClassOverrides(kept);
+        const result = await courseCohortService.previewSchedule({
+          course_id: courseId,
+          start_date: startDate,
+          meeting_days: meetingDays.length > 0 ? meetingDays : undefined,
+          default_start_time: defaultStartTime || undefined,
+          date_roll_policy: rollPolicy,
+          blackout_dates: blackoutDates.length > 0 ? blackoutDates : undefined,
+          location_id: cohortLocationId || undefined,
+          classes: classOverrides.length > 0 ? classOverrides : undefined,
+        });
+        setPreview(result);
+        setOverrides(kept);
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Could not build the schedule'));
+        setPreview(null);
+      } finally {
+        setPreviewing(false);
+      }
+    },
+    [courseId, startDate, meetingDays, defaultStartTime, rollPolicy, blackoutDates, cohortLocationId]
+  );
+
+  const changeClassLocation = (classId: string, locationId: string) => {
+    const next: Overrides = {
+      ...overrides,
+      [classId]: { ...overrides[classId], location: locationId || undefined },
+    };
+    // Re-check straight away: a room picked here is only worth picking if the
+    // officer sees whether it is free.
+    void runPreview(next);
+  };
 
   const suggestedBlackouts = preview?.suggested_blackout_dates ?? [];
 
@@ -188,14 +244,7 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
     if (!preview) return;
     setGenerating(true);
     try {
-      const classOverrides: CohortClassOverride[] = Object.entries(overrides)
-        .filter(([, value]) => value.skip || value.start)
-        .map(([classId, value]) => ({
-          course_class_id: classId,
-          skip: value.skip ?? false,
-          scheduled_start: value.start || undefined,
-          scheduled_end: value.end || undefined,
-        }));
+      const classOverrides = toClassOverrides(overrides);
 
       const cohort = await courseCohortService.createCohort({
         course_id: courseId,
@@ -206,6 +255,7 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
         default_start_time: defaultStartTime || undefined,
         date_roll_policy: rollPolicy,
         blackout_dates: blackoutDates.length > 0 ? blackoutDates : undefined,
+        location_id: cohortLocationId || undefined,
         generate_program: generateProgram && !selectedCourse?.program_id,
         program_id: selectedCourse?.program_id || undefined,
         classes: classOverrides.length > 0 ? classOverrides : undefined,
@@ -379,6 +429,29 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
               <p className="text-theme-text-muted mt-1 text-xs">Only used for classes with no time of their own.</p>
             </div>
           </div>
+
+          <div>
+            <label className="form-label" htmlFor="cohort-location">
+              Room <span className="text-theme-text-muted">(optional)</span>
+            </label>
+            <select
+              id="cohort-location"
+              value={cohortLocationId}
+              onChange={(e) => setCohortLocationId(e.target.value)}
+              className="form-input md:max-w-md"
+            >
+              <option value="">No room booked</option>
+              {locations.map((loc) => (
+                <option key={loc.id} value={loc.id}>
+                  {loc.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-theme-text-muted mt-1 text-xs">
+              Booked for every class that has no room of its own on the syllabus. You can change the room for a single
+              class on the next step.
+            </p>
+          </div>
         </div>
       )}
 
@@ -401,7 +474,7 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
                 </p>
                 <button
                   type="button"
-                  onClick={() => void runPreview()}
+                  onClick={() => void runPreview(overrides)}
                   className="btn-icon border-theme-surface-border border px-3 text-sm"
                 >
                   Recalculate
@@ -457,6 +530,11 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
                           <p className="text-theme-text-secondary mt-1 text-sm">
                             {formatShortDateTime(effectiveStart(item), tz)}
                           </p>
+                          <p className="text-theme-text-muted mt-0.5 text-xs">
+                            {item.location_name
+                              ? `${item.location_name} — ${LOCATION_SOURCE_LABEL[item.location_source ?? 'cohort']}`
+                              : 'No room booked'}
+                          </p>
                           {item.warnings.map((warning) => (
                             <p
                               key={warning}
@@ -485,6 +563,22 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
                               }));
                             }}
                           />
+                          {locations.length > 0 && (
+                            <select
+                              aria-label={`Room for ${item.title}`}
+                              value={override?.location ?? ''}
+                              onChange={(e) => changeClassLocation(item.course_class_id, e.target.value)}
+                              disabled={skipped || previewing}
+                              className="form-input-sm w-48"
+                            >
+                              <option value="">Default room</option>
+                              {locations.map((loc) => (
+                                <option key={loc.id} value={loc.id}>
+                                  {loc.name}
+                                </option>
+                              ))}
+                            </select>
+                          )}
                           <label className="text-theme-text-muted flex items-center gap-2 text-xs">
                             <input
                               type="checkbox"
@@ -586,6 +680,12 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
             <div>
               <dt className="text-theme-text-muted">Members</dt>
               <dd className="text-theme-text-primary">{selectedMembers.length}</dd>
+            </div>
+            <div>
+              <dt className="text-theme-text-muted">Room</dt>
+              <dd className="text-theme-text-primary">
+                {locations.find((loc) => loc.id === cohortLocationId)?.name ?? 'No room booked'}
+              </dd>
             </div>
             <div>
               <dt className="text-theme-text-muted">First class</dt>
