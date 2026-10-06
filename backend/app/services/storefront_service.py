@@ -2614,7 +2614,26 @@ class StorefrontService:
                 event.status = StorePaymentEventStatus.MATCHED
 
         self.db.add(event)
-        await self.db.commit()
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            # The webhook and the reconciliation backfill can record the same
+            # capture at the same moment; the (org, provider, external_id)
+            # unique key lets exactly one of them in. The other is the
+            # redelivery case above, arriving late — answer with the row that
+            # won rather than an error, and never apply it a second time.
+            await self.db.rollback()
+            existing = await self.db.execute(
+                select(StorePaymentEvent).where(
+                    StorePaymentEvent.organization_id == str(organization_id),
+                    StorePaymentEvent.provider == provider,
+                    StorePaymentEvent.external_id == external_id,
+                )
+            )
+            winner = existing.scalar_one_or_none()
+            if winner is None:
+                raise
+            return winner
         await self.db.refresh(event)
 
         if event.status == StorePaymentEventStatus.MATCHED and auto_apply and order:

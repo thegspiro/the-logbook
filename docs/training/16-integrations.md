@@ -361,6 +361,12 @@ Fuzzy matching on payer name or amount alone was considered and rejected: two me
 
 Every inbound payment is recorded whether or not it matched. The unmatchable ones are the case that most needs a human — the money has already left the member's account, so discarding the notification would leave them chasing an order that still reads unpaid.
 
+### Payments the Webhook Missed
+
+If PayPal cannot reach The Logbook, or The Logbook cannot confirm a delivery with PayPal, the notification is refused and PayPal eventually gives up retrying. Once a day The Logbook asks PayPal directly for the payments the account received in the last seven days and records any it does not already have — matched and settled by exactly the rules above. A payment is never recorded twice, whichever way it arrived.
+
+This needs one extra setting on the PayPal side: in your REST app at [developer.paypal.com](https://developer.paypal.com), turn on the **Transaction Search** feature. Without it the daily check cannot see your payments, and the department's error monitor says so. PayPal's search lags by a few hours, so a missed payment shows up the following day rather than immediately.
+
 ### Getting the Order Number onto the Payment
 
 The matcher reads whatever reference the payer or the department attached:

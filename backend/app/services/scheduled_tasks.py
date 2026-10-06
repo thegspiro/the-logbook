@@ -93,6 +93,9 @@ Recommended crontab (add to host or container cron):
 
 # Every 15 minutes — election lifecycle: auto-open flagged drafts, auto-close overdue elections, pre-close non-voter reminders
 */15 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=election_lifecycle
+
+# Daily at 4:45 AM — recover PayPal store payments the webhook never recorded
+45 4 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=paypal_capture_backfill
 -----------------------------------------------------
 """
 
@@ -334,6 +337,12 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "09:00",
         "cron": "0 9 * * *",
+    },
+    "paypal_capture_backfill": {
+        "description": "Recover completed PayPal captures from the last 7 days that the payment webhook never recorded, and match them to store orders",
+        "frequency": "daily",
+        "recommended_time": "04:45",
+        "cron": "45 4 * * *",
     },
     "inventory_low_stock_alerts": {
         "description": "Send email alerts to admins when inventory items fall below their reorder point",
@@ -4313,6 +4322,54 @@ async def run_storefront_payment_reminders(db: AsyncSession) -> Dict[str, Any]:
     return await _for_each_org(db, "storefront_payment_reminders", process)
 
 
+async def run_paypal_capture_backfill(db: AsyncSession) -> Dict[str, Any]:
+    """Recover PayPal captures the store's payment webhook missed. Daily.
+
+    Keyed on the integration rather than run through ``_for_each_org``: only a
+    department with PayPal enabled has anything to reconcile. Each integration
+    is isolated — a refused credential or a missing Transaction Search
+    permission is logged to that department's error monitor and the next
+    integration still runs. See ``app/services/paypal_backfill_service.py``.
+    """
+    from app.models.integration import Integration
+    from app.services.paypal_backfill_service import backfill_paypal_captures
+
+    result = await db.execute(
+        select(Integration)
+        .join(Organization, Organization.id == Integration.organization_id)
+        .where(
+            Integration.integration_type == "paypal",
+            # The webhook accepts deliveries only for an enabled integration;
+            # the backfill recovers exactly what that webhook would have taken.
+            Integration.enabled.is_(True),
+            Organization.active.isnot(False),
+        )
+    )
+    integrations = list(result.scalars().all())
+
+    recorded = 0
+    failed = 0
+    for integration in integrations:
+        org_id = str(integration.organization_id)
+        try:
+            outcome = await backfill_paypal_captures(db, integration)
+            recorded += int(outcome.get("recorded", 0))
+        except Exception as e:
+            await db.rollback()
+            logger.opt(exception=True).warning(
+                "PayPal capture backfill failed for org {}", org_id
+            )
+            await persist_task_error_log(org_id, "PayPal payment backfill", e)
+            failed += 1
+
+    return {
+        "task": "paypal_capture_backfill",
+        "integrations": len(integrations),
+        "recorded": recorded,
+        "failed": failed,
+    }
+
+
 async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
     """
     Send email alerts to admins when inventory items drop below reorder point.
@@ -6672,6 +6729,7 @@ TASK_RUNNERS = {
     "scheduled_emails": run_scheduled_emails,
     "storefront_window_lifecycle": run_storefront_window_lifecycle,
     "storefront_payment_reminders": run_storefront_payment_reminders,
+    "paypal_capture_backfill": run_paypal_capture_backfill,
     "inventory_low_stock_alerts": run_inventory_low_stock_alerts,
     "inventory_overdue_alerts": run_inventory_overdue_alerts,
     "inventory_audit_digest": run_inventory_audit_digest,
@@ -6736,6 +6794,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "inventory_audit_digest": 86400,
     "property_return_reminders": 86400,
     "storefront_payment_reminders": 86400,
+    "paypal_capture_backfill": 86400,
     "compliance_auto_reports": 86400,
     "message_history_cleanup": 86400,
     "series_end_reminders": 86400,

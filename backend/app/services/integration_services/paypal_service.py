@@ -7,8 +7,9 @@ received, and we match those captures against store orders.
 
 Why webhooks rather than polling: a capture notification arrives seconds after
 the member pays, which is what makes "mark paid" disappear from the
-quartermaster's queue on its own. The Transaction Search API would also work
-but lags by up to several hours and needs an extra account permission.
+quartermaster's queue on its own. The Transaction Search API lags by up to
+several hours and needs an extra account permission, so it serves only as the
+backfill for captures the webhook missed (see the end of this module).
 
 Signature verification is delegated to PayPal's own
 ``/v1/notifications/verify-webhook-signature`` endpoint rather than validating
@@ -17,13 +18,16 @@ check on the webhook id the department configured, and it cannot be fooled by a
 forged ``PAYPAL-CERT-URL`` header the way a hand-rolled verifier can.
 """
 
+from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, Dict, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
+from urllib.parse import quote
 
 import httpx
 from loguru import logger
 
 from app.models.integration import Integration
+from app.schemas.integration import PAYPAL_AUTO_APPLY_DEFAULT
 from app.services.integration_services.base import create_integration_client
 
 # PayPal publishes one host per environment; there is no per-tenant endpoint.
@@ -47,6 +51,19 @@ _SIGNATURE_HEADERS = (
 
 class PayPalError(Exception):
     """A PayPal API call failed or the integration is misconfigured."""
+
+
+def paypal_auto_apply(config: Dict[str, Any]) -> bool:
+    """Whether a matched capture settles its order without a human.
+
+    The department's stored choice, or the default when its config was
+    saved without one. Only a literal ``False`` turns it off: the config is
+    validated as a bool on save, and a stray non-bool must not silently
+    disable settlement either. The webhook and the backfill both read it
+    here, so a capture settles the same way whichever path recorded it.
+    """
+    value = config.get("auto_apply_payments", PAYPAL_AUTO_APPLY_DEFAULT)
+    return value is not False
 
 
 def api_base(environment: Optional[str]) -> str:
@@ -238,3 +255,151 @@ def extract_capture(event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         ),
         "created_at": resource.get("create_time"),
     }
+
+
+# ======================================================================
+# Reconciliation backfill (SF-backfill)
+# ======================================================================
+#
+# The webhook is the primary path. When PayPal's verify API is unreachable the
+# webhook answers 401, PayPal eventually stops retrying, and the capture never
+# reaches the ledger. The backfill finds those captures again.
+#
+# Two calls, deliberately. Transaction Search only *discovers* candidate ids —
+# it is the one API that lists what the account received, but it lags by hours
+# and describes a transaction rather than a capture. Each candidate is then
+# re-read from the Payments API's capture endpoint, the same object a
+# PAYMENT.CAPTURE.COMPLETED webhook carries as its ``resource``, and only a
+# capture that endpoint reports COMPLETED is recorded. So the amount, currency
+# and the references an order is matched on come from the same source, in the
+# same shape, as a verified webhook — the backfill cannot settle an order on
+# anything the webhook would not have.
+
+# Transaction Search pages are bounded so one run cannot stall the scheduler
+# on a high-volume account; anything beyond is picked up by the next run while
+# it is still inside the lookback window.
+_SEARCH_PAGE_SIZE = 100
+_SEARCH_MAX_PAGES = 20
+# Transaction status "S" is PayPal's "successful" — pending, denied and
+# reversed transactions have nothing to reconcile.
+_SEARCH_SUCCESS_STATUS = "S"
+
+
+def _paypal_timestamp(moment: datetime) -> str:
+    """The ISO 8601 form Transaction Search accepts (offset, no microseconds)."""
+    return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%z")
+
+
+def _search_entry(detail: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """One Transaction Search row as a candidate, or None if it is not one.
+
+    Outgoing money (a negative amount — a refund the department issued, a
+    payout) is never a payment to reconcile.
+    """
+    info = detail.get("transaction_info") or {}
+    transaction_id = _first_nonempty(info.get("transaction_id"))
+    if not transaction_id:
+        return None
+    try:
+        value = Decimal(str((info.get("transaction_amount") or {}).get("value", "0")))
+    except Exception:
+        return None
+    if value <= 0:
+        return None
+    payer = detail.get("payer_info") or {}
+    payer_name = payer.get("payer_name") or {}
+    return {
+        "transaction_id": transaction_id,
+        "payer_email": _first_nonempty(payer.get("email_address")),
+        "payer_name": _first_nonempty(
+            payer_name.get("alternate_full_name"),
+            " ".join(
+                part
+                for part in (payer_name.get("given_name"), payer_name.get("surname"))
+                if part
+            ),
+        ),
+    }
+
+
+async def search_incoming_transactions(
+    base_url: str,
+    token: str,
+    start: datetime,
+    end: datetime,
+) -> List[Dict[str, Any]]:
+    """List successful incoming transactions between ``start`` and ``end``.
+
+    Returns ``[{"transaction_id", "payer_email", "payer_name"}]``. Raises
+    PayPalError when the account has not granted the Transaction Search
+    permission, so the caller can say so instead of reporting nothing found.
+    """
+    found: List[Dict[str, Any]] = []
+    async with create_integration_client(timeout=_TIMEOUT) as client:
+        for page in range(1, _SEARCH_MAX_PAGES + 1):
+            response = await client.get(
+                f"{base_url}/v1/reporting/transactions",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                },
+                params={
+                    "start_date": _paypal_timestamp(start),
+                    "end_date": _paypal_timestamp(end),
+                    "transaction_status": _SEARCH_SUCCESS_STATUS,
+                    "fields": "transaction_info,payer_info",
+                    "page_size": str(_SEARCH_PAGE_SIZE),
+                    "page": str(page),
+                },
+            )
+            if response.status_code in (401, 403):
+                raise PayPalError(
+                    "PayPal refused Transaction Search for this account. Enable "
+                    "the Transaction Search permission on the PayPal REST app so "
+                    "missed payments can be recovered."
+                )
+            if response.status_code >= 400:
+                raise PayPalError(
+                    f"PayPal returned {response.status_code} searching transactions"
+                )
+            body = response.json() or {}
+            for detail in body.get("transaction_details") or []:
+                entry = _search_entry(detail)
+                if entry is not None:
+                    found.append(entry)
+            if page >= int(body.get("total_pages") or 1):
+                return found
+    logger.warning(
+        "PayPal Transaction Search hit the {}-page bound; the rest is left for "
+        "the next run",
+        _SEARCH_MAX_PAGES,
+    )
+    return found
+
+
+async def fetch_completed_capture(
+    base_url: str, token: str, capture_id: str
+) -> Optional[Dict[str, Any]]:
+    """Re-read one capture from the Payments API; None unless COMPLETED.
+
+    A transaction id that is not a capture (PayPal lists more than captures)
+    answers 404 and is skipped. A refunded or reversed capture is skipped too:
+    the webhook records only PAYMENT.CAPTURE.COMPLETED, and the backfill must
+    not record money the department no longer holds.
+    """
+    async with create_integration_client(timeout=_TIMEOUT) as client:
+        response = await client.get(
+            f"{base_url}/v2/payments/captures/{quote(capture_id, safe='')}",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/json",
+            },
+        )
+    if response.status_code == 404:
+        return None
+    if response.status_code >= 400:
+        raise PayPalError(f"PayPal returned {response.status_code} reading a capture")
+    capture = response.json() or {}
+    if capture.get("status") != "COMPLETED" or capture.get("id") != capture_id:
+        return None
+    return capture

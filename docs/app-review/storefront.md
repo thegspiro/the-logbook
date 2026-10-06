@@ -536,7 +536,11 @@ migration.
    down, the webhook 401s and PayPal eventually stops retrying — the payment is
    then lost to the ledger with no way to re-ingest it. The Transaction Search
    API (noted in the service docstring as rejected for latency) would be the
-   natural backfill source. _Scale/robustness._
+   natural backfill source. _Scale/robustness._ **✅ Built 2026-10-06
+   (SF-backfill):** the daily `paypal_capture_backfill` task discovers
+   candidates through Transaction Search, re-reads each from the Payments API
+   capture endpoint and records only COMPLETED captures through the webhook's
+   own `record_external_payment` — see `app/services/paypal_backfill_service.py`.
 2. **Per-IP webhook rate limiting is per-process.** `public_rate_limit` shares
    the same limitation flagged in PP-6: with more than one worker the effective
    limit is 60/min × workers. Same Redis-backed fix as PP-6 would resolve both.
