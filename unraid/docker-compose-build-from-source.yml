@@ -317,6 +317,10 @@ services:
       AUTHENTIK_CLIENT_SECRET: ${AUTHENTIK_CLIENT_SECRET:-}
       AUTHENTIK_REDIRECT_URI: ${AUTHENTIK_REDIRECT_URI:-}
       AUTHENTIK_ALLOWED_DOMAINS: ${AUTHENTIK_ALLOWED_DOMAINS:-}
+      # Claude (MCP) member sign-in: the OAuth 2.1 authorization server. Off
+      # unless enabled AND the issuer is an https:// origin.
+      MCP_OAUTH_ENABLED: ${MCP_OAUTH_ENABLED:-false}
+      MCP_OAUTH_ISSUER_URL: ${MCP_OAUTH_ISSUER_URL:-}
       OAUTH_SUCCESS_REDIRECT: ${OAUTH_SUCCESS_REDIRECT:-/auth/callback}
       OAUTH_FAILURE_REDIRECT: ${OAUTH_FAILURE_REDIRECT:-/login}
       SALESFORCE_CLIENT_ID: ${SALESFORCE_CLIENT_ID:-}
