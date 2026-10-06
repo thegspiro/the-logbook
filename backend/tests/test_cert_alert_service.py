@@ -322,3 +322,60 @@ class TestExpiredEscalation:
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+class TestExpiryWording:
+    """The expiring query includes a certificate's final day, so the wording
+    must handle 0 and 1 rather than print "in 0 days" / "in 1 days"."""
+
+    @pytest.mark.parametrize(
+        ("days", "when", "subject"),
+        [
+            (0, "today", "Certification Expires Today: Firefighter I"),
+            (1, "tomorrow", "Certification Expires Tomorrow: Firefighter I"),
+            (2, "in 2 days", "Certification Expiring in 2 Days: Firefighter I"),
+            (30, "in 30 days", "Certification Expiring in 30 Days: Firefighter I"),
+        ],
+    )
+    def test_helpers(self, days, when, subject):
+        from app.services.cert_alert_service import _expires_when, _expiry_subject
+
+        assert _expires_when(days) == when
+        assert _expiry_subject(days, "Firefighter I") == subject
+
+    @pytest.mark.parametrize(("days", "when"), [(0, "today"), (1, "tomorrow")])
+    async def test_the_member_email_reads_today_or_tomorrow(
+        self, monkeypatch, days, when
+    ):
+        send_email = AsyncMock(return_value=(1, None))
+        monkeypatch.setattr(
+            "app.services.cert_alert_service.EmailService",
+            lambda org: SimpleNamespace(send_email=send_email),
+        )
+        record = _record(days)
+        scripted = [
+            _one(_org({"enabled": True})),  # config
+            _scalars([]),  # no notification rules -> enabled
+            _one(_org({"enabled": True})),  # process org
+            _scalars([record]),  # expiring
+            _one(_member()),  # member
+        ]
+
+        async def _execute(*_args, **_kwargs):
+            # Officer lookups and the expired query all come back empty.
+            return scripted.pop(0) if scripted else _scalars([])
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=_execute)
+        db.commit = AsyncMock()
+
+        await CertAlertService(db).process_alerts("org-1")
+
+        kwargs = send_email.await_args.kwargs
+        assert kwargs["subject"] == (
+            f"Certification Expires {when.title()}: Firefighter I"
+        )
+        for body in (kwargs["html_body"], kwargs["text_body"]):
+            assert f"({when})" in body
+            assert " days)" not in body
+            assert "0 days" not in body
