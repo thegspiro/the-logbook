@@ -41,6 +41,8 @@ depends_on: Union[str, Sequence[str], None] = None
 _INTEGRATIONS = "integrations"
 _LOGS = "integration_sync_logs"
 _INDEX = "ix_integration_sync_logs_integration_started"
+# Every read of the history is scoped by organization first (pitfall #14).
+_ORG_INDEX = "ix_integration_sync_logs_org_started"
 
 _NEW_COLUMNS = (
     ("last_success_at", lambda: sa.DateTime(timezone=True), {"nullable": True}),
@@ -72,8 +74,16 @@ def upgrade() -> None:
         if name not in existing:
             op.add_column(_INTEGRATIONS, sa.Column(name, type_(), **kwargs))
 
-    if _LOGS in tables:
-        return
+    if _LOGS not in tables:
+        _create_logs_table()
+    indexes = {ix["name"] for ix in sa.inspect(op.get_bind()).get_indexes(_LOGS)}
+    if _INDEX not in indexes:
+        op.create_index(_INDEX, _LOGS, ["integration_id", "started_at"])
+    if _ORG_INDEX not in indexes:
+        op.create_index(_ORG_INDEX, _LOGS, ["organization_id", "started_at"])
+
+
+def _create_logs_table() -> None:
     op.create_table(
         _LOGS,
         sa.Column("id", sa.String(length=36), nullable=False),
@@ -102,7 +112,6 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["triggered_by"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(_INDEX, _LOGS, ["integration_id", "started_at"])
 
 
 def downgrade() -> None:

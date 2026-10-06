@@ -4704,7 +4704,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
-| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `integration_id` | VARCHAR(36) | no | FK, IDX |  | → `integrations.id` ON DELETE CASCADE |
 | `operation` | VARCHAR(50) | no |  |  |  |
 | `trigger_source` | VARCHAR(20) | no |  |  |  |
@@ -4719,6 +4719,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `ix_integration_sync_logs_integration_started` (`integration_id`, `started_at`)
+- `ix_integration_sync_logs_org_started` (`organization_id`, `started_at`)
 
 ### `integrations`
 

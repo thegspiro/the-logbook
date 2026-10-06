@@ -154,4 +154,9 @@ class IntegrationSyncLog(Base):
             "integration_id",
             "started_at",
         ),
+        Index(
+            "ix_integration_sync_logs_org_started",
+            "organization_id",
+            "started_at",
+        ),
     )

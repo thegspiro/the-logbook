@@ -529,6 +529,9 @@ class TestColumnConstraints:
             "attempted_at",
             # inventory_nfc_audits: the row is the audit, written when it ran.
             "audited_at",
+            # integration_sync_logs: the row is the run, server-stamped when
+            # it begins; a separate created_at would always equal it.
+            "started_at",
         }
         missing_timestamp = []
         for table_name, table in _tables.items():
