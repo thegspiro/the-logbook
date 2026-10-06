@@ -16,12 +16,17 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR [#2966](https://github.com/thegspiro/the-logbook/pull/2966)
-(Feature 11, Inventory, pass 7) merged — docs-only (0 application-code
-changes: only `INV-11-inventory.md`, `KNOWN_LIMITATIONS.md`,
-`PROGRESS.md`), so per this file's own rule it is not a recordable event on
-its own; rotation row 11 already stood ✅. This iteration picks up Feature
-12 (Facilities), the state this PR opened from.
+**PR [#2968](https://github.com/thegspiro/the-logbook/pull/2968)**: branch
+`claude/security-review-facilities`, Feature 12 (Facilities), pass 7 — 0
+code fixes, 0 new findings. FAC-13/FAC-30 re-verified unchanged (both
+owner decisions); FAC-41/FAC-44 re-read in full and confirmed fixed and
+intact rather than taken on their own prior "FIXED" annotation. Real delta
+since pass 6 reviewed in full — 28 non-merge commits, with a full-depth-
+clone check run first (confirmed no shallow-clone truncation risk, unlike
+the immediately prior Inventory pass). Route count unchanged at 98. Gate
+green (flake8/black/isort, migrations, route-permission check — 245
+routes, 209 scoped backend tests, frontend typecheck/lint, 110 scoped
+frontend tests). See the Log entry below for detail.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 7, PR #2966, merged docs-only — not independently recorded), preserved for history</summary>
