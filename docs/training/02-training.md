@@ -1713,6 +1713,45 @@ The report form can auto-populate skills and tasks relevant to the specific appa
 
 If no mapping exists for the shift's apparatus type, the system falls back to the org-wide default skills and tasks lists. If neither exists, the skills/tasks sections are empty (but still visible unless toggled off via form section toggles).
 
+### Skill Evaluations _(2026-10-05)_
+
+**Required Permission:** `training.manage` to add, edit, deactivate or delete;
+`training.manage` or `training.configure` to view.
+
+A skill score on a shift report counts toward a trainee's competency history and
+pipeline progress only when the skill is defined here. Open **Training Admin >
+Setup > Skill Evaluations** and click **Add skill**:
+
+| Field                           | What it does                                                                                                                                   |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Name**                        | The join key. A shift report's skill links to this skill when the names match, ignoring capitals — "Pump Operations" matches "pump operations" |
+| **Category**                    | Optional grouping (Driver, EMS, Firefighting…)                                                                                                 |
+| **Description**                 | Optional                                                                                                                                       |
+| **Criteria**                    | Optional, one per line — what the evaluator looks for                                                                                          |
+| **What counts as passing**      | Optional free text                                                                                                                             |
+| **Who can sign this skill off** | Anyone with training management (the default), members holding chosen positions, or named members                                              |
+
+Each skill card shows who can sign it off, how many criteria it has and how many
+sign-offs have been recorded against it.
+
+> **Renaming a skill unlinks it.** The match is by name, so renaming "Pump
+> Operations" turns every apparatus skill tag still spelled the old way amber
+> until it is renamed too. The editor warns when you change a name.
+
+> **Two active skills cannot share a name.** A shift report's skill would match
+> both, and which one received the sign-off would be arbitrary, so the second is
+> refused. Deactivating a skill frees its name.
+
+> **Deactivate rather than delete.** A skill with sign-offs, competency history
+> or instructor qualifications against it cannot be deleted — deleting it would
+> erase that history. **Deactivate** stops new shift-report scores from creating
+> sign-offs and keeps everything already recorded; **Reactivate** brings it back.
+> **Delete** is offered only for a skill nothing has used.
+
+> **Pipeline requirements.** A _Skills Evaluation_ requirement progresses by one
+> for each matching skill signed off on a shift report. A requirement that names
+> specific skills counts only those.
+
 ### Save as Draft _(2026-04-04)_
 
 Officers can save incomplete shift completion reports as drafts:
@@ -1772,8 +1811,8 @@ shift to draw a crew from.
 - **Draft regression guard:** _(2026-04-11)_ The system prevents re-creation of draft reports for shifts that already have submitted or reviewed reports, avoiding duplicate credit.
 - **Non-authorized user accessing a report by ID:** Returns 403 Forbidden. Only the trainee, the filing officer, or users with `training.manage` permission can access a specific report. _(Security fix 2026-04-07)_
 - **Trainee accessing their own report:** Data is filtered by visibility settings (e.g., if `show_performance_rating` is off, the rating is stripped). `reviewer_notes` are always stripped for trainees regardless of settings.
-- **Skill linkage status:** When an apparatus-type skill name exactly matches a `SkillEvaluation.name` in the training module, it shows as "linked" (green) in the settings panel. Unlinked skills (amber) are still observed on reports but don't flow into formal competency tracking.
-- **No SkillEvaluation records in org:** All skills show amber "unlinked" tags in the apparatus settings panel.
+- **Skill linkage status:** When an apparatus-type skill name matches a skill under **Setup > Skill Evaluations** (ignoring capitals), it shows as "linked" (green) in the settings panel. Unlinked skills (amber) are still observed on reports but don't flow into formal competency tracking.
+- **No skills defined:** All skills show amber "unlinked" tags in the apparatus settings panel. Add them under [Skill Evaluations](#skill-evaluations-2026-10-05).
 
 ---
 

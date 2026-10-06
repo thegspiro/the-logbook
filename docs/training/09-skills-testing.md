@@ -1450,7 +1450,7 @@ Competency score history updated
 Competency Matrix reflects new scores
 ```
 
-> **Edge case:** Skill name matching is case-sensitive. "Pump operations" on a shift report will only match a SkillEvaluation named "Pump operations", not "pump operations" or "PUMP OPERATIONS". Ensure skill names are consistent across settings and SkillEvaluation definitions.
+> **Edge case:** Skill name matching ignores capitals but nothing else. "Pump operations" on a shift report matches a skill named "PUMP OPERATIONS", but not one named "Pump ops". Skills are defined under **Training Admin > Setup > Skill Evaluations** _(2026-10-05; corrected — this note used to say the match was case-sensitive)_.
 
 ---
 

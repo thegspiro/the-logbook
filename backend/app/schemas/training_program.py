@@ -5,7 +5,7 @@ Request and response schemas for training program management endpoints.
 """
 
 from datetime import date, datetime
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -568,16 +568,96 @@ class RequirementProgressResponse(RequirementProgressBase, UTCResponseBase):
 
 # Skill Evaluation Schemas
 
+# A skill is matched to a shift report's skill score by name, so the name is
+# the join key rather than a label. Criteria and evaluator lists are bounded so
+# one row cannot carry an unbounded JSON document.
+MAX_SKILL_CRITERIA = 50
+MAX_SKILL_EVALUATOR_ENTRIES = 100
+
+
+class SkillEvaluatorsByPosition(BaseModel):
+    """Holders of any of these positions (by slug) may sign the skill off."""
+
+    type: Literal["roles"]
+    roles: List[str] = Field(..., min_length=1, max_length=MAX_SKILL_EVALUATOR_ENTRIES)
+
+    @field_validator("roles")
+    @classmethod
+    def _strip_roles(cls, v: List[str]) -> List[str]:
+        cleaned = sorted({r.strip() for r in v if r and r.strip()})
+        if not cleaned:
+            raise ValueError("Choose at least one position")
+        return cleaned
+
+
+class SkillEvaluatorsByMember(BaseModel):
+    """Only these named members may sign the skill off."""
+
+    type: Literal["specific_users"]
+    user_ids: List[UUID] = Field(
+        ..., min_length=1, max_length=MAX_SKILL_EVALUATOR_ENTRIES
+    )
+
+
+SkillEvaluators = Annotated[
+    Union[SkillEvaluatorsByPosition, SkillEvaluatorsByMember],
+    Field(discriminator="type"),
+]
+
+
+def _coerce_criteria(value: Any) -> Optional[List[str]]:
+    """Read stored criteria as a list of strings.
+
+    Rows copied in by ``org_template_registry`` predate this schema and may
+    hold a dict or a list of objects; a response must not 500 on them.
+    """
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        value = list(value.values())
+    if not isinstance(value, list):
+        return [str(value)]
+    out: List[str] = []
+    for item in value:
+        if isinstance(item, dict):
+            item = item.get("label") or item.get("name") or item.get("text") or ""
+        text = str(item).strip()
+        if text:
+            out.append(text)
+    return out
+
 
 class SkillEvaluationBase(BaseModel):
     """Base skill evaluation schema"""
 
     name: str = Field(..., min_length=1, max_length=255)
-    description: Optional[str] = None
+    description: Optional[str] = Field(None, max_length=5000)
     category: Optional[str] = Field(None, max_length=100)
-    evaluation_criteria: Optional[Dict[str, Any]] = None
-    passing_requirements: Optional[str] = None
-    required_for_programs: Optional[List[UUID]] = None
+    evaluation_criteria: Optional[List[str]] = Field(
+        None, max_length=MAX_SKILL_CRITERIA
+    )
+    passing_requirements: Optional[str] = Field(None, max_length=5000)
+    # None means "anyone holding training.manage", the default the sign-off
+    # check applies when nothing is configured.
+    allowed_evaluators: Optional[SkillEvaluators] = None
+
+    @field_validator("name")
+    @classmethod
+    def _strip_name(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Name is required")
+        return v
+
+    @field_validator("evaluation_criteria")
+    @classmethod
+    def _check_criteria(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return None
+        cleaned = [c.strip() for c in v if c and c.strip()]
+        if any(len(c) > 500 for c in cleaned):
+            raise ValueError("A criterion may be at most 500 characters")
+        return cleaned
 
 
 class SkillEvaluationCreate(SkillEvaluationBase):
@@ -585,26 +665,81 @@ class SkillEvaluationCreate(SkillEvaluationBase):
 
 
 class SkillEvaluationUpdate(BaseModel):
-    """Schema for updating a skill evaluation"""
+    """Schema for updating a skill evaluation.
+
+    Omitted fields are left alone; an explicit null clears the field.
+    """
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
-    description: Optional[str] = None
+    description: Optional[str] = Field(None, max_length=5000)
     category: Optional[str] = Field(None, max_length=100)
-    evaluation_criteria: Optional[Dict[str, Any]] = None
-    passing_requirements: Optional[str] = None
-    required_for_programs: Optional[List[UUID]] = None
+    evaluation_criteria: Optional[List[str]] = Field(
+        None, max_length=MAX_SKILL_CRITERIA
+    )
+    passing_requirements: Optional[str] = Field(None, max_length=5000)
+    allowed_evaluators: Optional[SkillEvaluators] = None
+    active: Optional[bool] = None
+
+    @field_validator("name")
+    @classmethod
+    def _strip_name(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        v = v.strip()
+        if not v:
+            raise ValueError("Name is required")
+        return v
+
+    @field_validator("evaluation_criteria")
+    @classmethod
+    def _check_criteria(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        return SkillEvaluationBase._check_criteria(v)
 
 
-class SkillEvaluationResponse(SkillEvaluationBase, UTCResponseBase):
+class SkillEvaluatorMember(BaseModel):
+    """A named evaluator, resolved so the editor can show who is on the list."""
+
+    id: UUID
+    name: str
+
+
+class SkillEvaluationResponse(UTCResponseBase):
     """Schema for skill evaluation response"""
 
     id: UUID
     organization_id: UUID
-    created_at: datetime
-    updated_at: datetime
+    name: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    evaluation_criteria: Optional[List[str]] = None
+    passing_requirements: Optional[str] = None
+    allowed_evaluators: Optional[Dict[str, Any]] = None
+    active: bool = True
+    # How many sign-offs reference this skill. A skill with history cannot be
+    # deleted, only deactivated, so the screen needs it to offer the right one.
+    checkoff_count: int = 0
+    # Names for a specific_users rule, in the stored order. A member who has
+    # since left the department is dropped here but stays in the stored rule.
+    evaluator_members: List[SkillEvaluatorMember] = Field(default_factory=list)
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     created_by: Optional[UUID] = None
 
     model_config = _response_config
+
+    @field_validator("evaluation_criteria", mode="before")
+    @classmethod
+    def _read_criteria(cls, v: Any) -> Optional[List[str]]:
+        return _coerce_criteria(v)
+
+
+class SkillEvaluatorCheckResponse(BaseModel):
+    """Whether the caller may sign a skill off, and why."""
+
+    skill_id: UUID
+    skill_name: str
+    is_authorized: bool
+    reason: str
 
 
 # Skill Checkoff Schemas

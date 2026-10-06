@@ -76,6 +76,7 @@ from app.api.v1.endpoints import (
     scheduling_module_config,
     security_monitoring,
     shift_completion,
+    skill_evaluations,
     skills_testing,
     station_documents,
     storefront,
@@ -179,6 +180,15 @@ api_router.include_router(admin_hub.router, prefix="/admin-hub", tags=["admin-hu
 api_router.include_router(
     training.router,
     prefix="/training",
+    tags=["training"],
+    dependencies=module_gate("training", "Training"),
+)
+# The skill-evaluation definitions behind shift-report skill scores. Mounted
+# under /training like the rest of the module; the routes it replaced lived in
+# training.py at the same paths.
+api_router.include_router(
+    skill_evaluations.router,
+    prefix="/training/skill-evaluations",
     tags=["training"],
     dependencies=module_gate("training", "Training"),
 )

@@ -2450,10 +2450,11 @@ The skills section is pictured under
 [Score Labels](#score-labels).
 
 **Where the scores go.** They are stored on the report and shown in every
-read-only view of it. They are _intended_ to flow through to `SkillCheckoff`
-records and the competency score history in the Training module, and the code to
-do it is there — but it matches skill names against `SkillEvaluation` records,
-and nothing in the application creates one. See
+read-only view of it. A score flows on to a `SkillCheckoff`, the
+competency score history and pipeline progress in the Training module when the
+skill's name matches a skill defined under **Training Admin > Setup > Skill
+Evaluations** _(2026-10-05)_. A skill with no match is stored on the report and
+goes no further. See
 [Skill Linkage Status in Settings](#skill-linkage-status-in-settings).
 
 ### Batch Review
@@ -2535,14 +2536,13 @@ The **Shift Reports** settings panel (Scheduling > Settings > Shift Reports) now
 - **Amber tag**: No matching SkillEvaluation — skill is observed on reports but won't flow into formal training tracking
 - A **legend** below the skills explains the two colours. It appears only once the department has at least one SkillEvaluation on file — with none, there is nothing for the colours to mean
 
-> **Every tag reads amber today.** Nothing in the application creates a
-> `SkillEvaluation`: the table is read by this indicator and by the checkoff
-> writer, and written by neither, so the only way a department acquires one is
-> to be provisioned from a department template that already had some. Scores
-> entered on shift reports are therefore recorded on the report and go no
-> further. Tracked in
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md); the screenshot is held back
-> until there is a mixed state to picture rather than a column of amber.
+> **Turning a tag green** _(2026-10-05)_. Define the skill under **Training
+> Admin > Setup > Skill Evaluations**, using the same name (capitals do not
+> matter). Until 2026-10-05 nothing in the application could create one, so
+> every tag read amber; see
+> [Skill Evaluations](./02-training.md#skill-evaluations-2026-10-05) in the
+> training guide. The screenshot of a mixed green/amber state has not been
+> captured yet.
 
 ### Edge Cases
 
@@ -2553,7 +2553,7 @@ The **Shift Reports** settings panel (Scheduling > Settings > Shift Reports) now
 | Batch review with mix of valid/invalid IDs | Valid reports processed; `failed` count returned separately                                                                                     |
 | Flagged report re-approved                 | Triggers deferred pipeline progress if enrollment linked                                                                                        |
 | Skill name matching for linkage            | Case-insensitive exact match against `SkillEvaluation.name` — "Pump Operations" and "pump operations" are the same skill, but "Pump ops" is not |
-| No SkillEvaluation records in org          | All apparatus-type skills show amber "unlinked" tags, and the legend is not rendered                                                            |
+| No SkillEvaluation records in org          | All apparatus-type skills show amber "unlinked" tags, and the legend is not rendered. Add skills under Training Admin > Setup > Skill Evaluations |
 
 ---
 
