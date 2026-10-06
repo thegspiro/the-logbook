@@ -34,6 +34,14 @@ finding below that says FLAGGED or OPEN is superseded by its line here.
   definition read by `check_voter_eligibility`, the ballot mailer, the
   non-voter list and the unfrozen denominator; the frozen-roll denominator
   already added overrides. Guard: `tests/test_w50_override_extends_list.py`.
+- **W50-19** (a draft's test ballot link answered "Election is draft") —
+  **fixed: a test token is admitted on a DRAFT.** `_token_window_error`
+  is the one window rule for lookup and the locked submission: a live
+  token still needs an OPEN election inside its window; a test token may
+  also use a draft, whose future start is not enforced (its end is). Its
+  votes stay `is_test`, test-namespaced in the dedup hash and excluded from
+  every tally and from the candidate-edit guard. Guard:
+  `tests/test_w50_test_token_draft.py`.
 - **ELEC-16** (`list_manual_ballot_batches` unbounded) — **accepted as is.**
   Paper-tally sessions per election are naturally few; no cap and no
   pagination. Revisit if an election ever carries more than a few dozen

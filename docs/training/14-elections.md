@@ -491,7 +491,7 @@ When the election is ready:
 
 > **Hint:** Send a **test ballot** to yourself first (`POST /elections/:id/send-test-ballot`) to verify the email rendering and voting link before sending to all members. Votes cast from a test ballot are flagged as test votes — they are excluded from results, statistics, and rosters, and they never consume your real vote.
 >
-> **Known gap (2026-09-30):** Election Settings offers test ballots for **draft** elections only, and the emailed test link for a draft answers "Election is draft" — the ballot page opens only for an election that is open. You can check the email itself, but not vote through the link, until the election is open. Recorded as an open owner decision in `docs/KNOWN_LIMITATIONS.md`.
+> **Previewing a draft** _(2026-10-05)_: Election Settings offers test ballots for **draft** elections, and the emailed test link now opens the draft's ballot — you can vote through it, see the **TEST BALLOT** banner and get a receipt that says the vote is not counted. A real (non-test) link still opens only once the election is open.
 
 ### Ballot Distribution
 

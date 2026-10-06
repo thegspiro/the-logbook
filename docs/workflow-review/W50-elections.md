@@ -758,7 +758,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `election_service.py:6614-6615` (`email_sent` stamped even when `is_test`); `email_template_service.py:2286-2310`; `elections.py:3880-3895` (`verify-receipt` never filters `is_test`); `BallotVotingPage.tsx:335,616`.
 **Fix:** round 2 — subject, stamp, receipt and the lookup's `is_test` for the page banner. Tests: `backend/tests/test_w50_test_ballot_marking.py`; the banner (`frontend/src/pages/BallotVotingPage.w50-test-banner.test.tsx`) is frontend round 2. **Confirmed live** (CONFIRM-14/15): subject "[TEST] Ballot Available: CONFIRM anon"; `email_sent` stayed false; the lookup answered `is_test: true`; the receipt verified `counted: false` with "This was a test vote…"; and the secretary's real in-app vote afterwards → 201 with the test vote absent from stats (S16, `test_w50_s16.py`). The plain-text body still opens with the old heading — W50-81.
 
-### W50-19 — MED — A draft's test ballot cannot be opened: settings promise a preview, the link says "Election is draft" — FLAGGED
+### W50-19 — MED — A draft's test ballot cannot be opened: settings promise a preview, the link says "Election is draft" — ✅ DECIDED & FIXED (2026-10-05)
+
+**Owner decision (2026-10-05):** admit test tokens on drafts, so officers get the promised preview. `_token_window_error` lets an `is_test` token use a DRAFT (start not enforced, end still is); a live token still needs an open election. Test: `backend/tests/test_w50_test_token_draft.py`.
 
 **Did:** as `secretary`, A4 step 7: Settings → Test Ballot (the select offers drafts only) → the emailed link.
 **Saw:** "Unable to Load Ballot — Election is draft (Error code: LB-API-400) — If you think this is a mistake, contact your organization's secretary."

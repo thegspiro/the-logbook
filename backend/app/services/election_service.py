@@ -8478,19 +8478,12 @@ class ElectionService:
         # token's hash fails the roll check and a member who did vote was
         # told they were never on the roll (W50-44).
         now = datetime.now(timezone.utc)
-        start = self._ensure_utc(election.start_date)
-        end = self._ensure_utc(election.end_date)
         if election.status == ElectionStatus.CLOSED:
             return None, None, "Voting has closed"
 
-        if election.status != ElectionStatus.OPEN:
-            return None, None, f"Election is {election.status.value}"
-
-        if start and now < start:
-            return None, None, "Voting has not started yet"
-
-        if end and now > end:
-            return None, None, "Voting has ended"
+        window_error = self._token_window_error(election, voting_token, now)
+        if window_error:
+            return None, None, window_error
 
         # Defense in depth for tokens issued before the roll was frozen (or
         # by an older application node): a credential cannot bypass the same
@@ -8568,16 +8561,41 @@ class ElectionService:
         now = datetime.now(timezone.utc)
         if now > self._ensure_utc(locked_token.expires_at):
             return None, None, "Voting token has expired"
-        if locked_election.status != ElectionStatus.OPEN:
+        if locked_election.status not in (ElectionStatus.OPEN, ElectionStatus.DRAFT):
             return None, None, "Election is not open for voting"
-        start = self._ensure_utc(locked_election.start_date)
-        end = self._ensure_utc(locked_election.end_date)
-        if start and now < start:
-            return None, None, "Voting has not started yet"
-        if end and now > end:
-            return None, None, "Voting has ended"
+        window_error = self._token_window_error(locked_election, locked_token, now)
+        if window_error:
+            return None, None, window_error
 
         return locked_election, locked_token, None
+
+    def _token_window_error(
+        self, election: Election, voting_token: VotingToken, now: datetime
+    ) -> Optional[str]:
+        """Whether this token may be used on this election right now.
+
+        A live token needs an OPEN election inside its voting window. A test
+        token (``send-test-ballot``) may also be used on a DRAFT — that is
+        the preview Election Settings offers, and drafts are the only
+        elections it offers it for (W50-19, owner decision 2026-10-05). A
+        draft's scheduled start is usually still ahead, so the start is not
+        enforced for it; the end is, since a draft past its end cannot open.
+        Nothing a test token writes counts: its votes are ``is_test``,
+        namespaced in the dedup hash and excluded from every tally, roster
+        and the candidate-edit guard (``_active_vote_count``).
+        """
+        start = self._ensure_utc(election.start_date)
+        end = self._ensure_utc(election.end_date)
+        draft_preview = election.status == ElectionStatus.DRAFT and bool(
+            voting_token.is_test
+        )
+        if election.status != ElectionStatus.OPEN and not draft_preview:
+            return f"Election is {election.status.value}"
+        if start and now < start and not draft_preview:
+            return "Voting has not started yet"
+        if end and now > end:
+            return "Voting has ended"
+        return None
 
     async def cast_vote_with_token(
         self,
