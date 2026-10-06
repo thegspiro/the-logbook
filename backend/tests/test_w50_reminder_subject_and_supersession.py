@@ -244,7 +244,8 @@ class TestReopenedToken(TestElectionSetup):
             reason="re-drive",
         )
         assert err is None, err
-        assert reopened is not None and reopened.status.value == "open"
+        assert reopened is not None
+        assert reopened.status.value == "open"
 
     async def test_link_retired_by_a_rollback_says_reopened_not_expired(
         self, db_session: AsyncSession, setup_election
@@ -276,7 +277,8 @@ class TestReopenedToken(TestElectionSetup):
 
         election, token, error = await svc_lookup(db_session, new_raw)
         assert error is None
-        assert election is not None and token is not None
+        assert election is not None
+        assert token is not None
 
 
 async def svc_lookup(db_session: AsyncSession, raw: str):
