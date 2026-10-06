@@ -16,15 +16,23 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR [#2955](https://github.com/thegspiro/the-logbook/pull/2955)
-(Feature 08, Membership pipeline, pass 8) merged — 1 fix (MP-32, LOW/MEDIUM),
-0 new flagged; confirmed via `list_pull_requests` (state=open) before
-starting this iteration that no `claude/security-review-*` PR remained open.
-Rotation row 08 stays ✅. This iteration picked up Feature 09 (Medical
-screening, PHI) — 0 code fixes, 1 new flagged (MS-14, LOW, permission
-proportionality), 1 comment-accuracy correction; see the Log entry below for
-detail. The PR this iteration opens will replace this placeholder in a
-follow-up commit once its number is known.
+**PR [#2957](https://github.com/thegspiro/the-logbook/pull/2957)**: branch
+`claude/security-review-medical-screening`, Feature 09 (Medical screening,
+PHI), pass 7 — 0 code fixes, 1 new flagged (MS-14, LOW, permission
+proportionality — `medical_screening.view` grants full narrative PHI with no
+finer-grained read tier), 1 comment-accuracy correction (a test docstring
+quoting a frontend caption a copy commit had since trimmed). All 14 routes
+re-enumerated; every standing flagged item (MS-6, MS-7, MS-12, MS-13, the
+exactly-one-of-subject gap, the compliance-404 gap, MS-9's unwired fields)
+re-verified unchanged. Real delta since pass 6 reviewed in full (4 backend +
+3 frontend commits, found via per-path `git log` since pass 6's own PR head
+SHA is not a resolvable object in this repo's history — the same
+squash/orphan-merge issue earlier passes documented). Gate green
+(flake8/black/isort, migrations, route-permission check — 245 routes, 58
+scoped + 12,930 full-suite backend tests). See the Log entry below for
+detail. This PR also carries this iteration's Step 0 bookkeeping: PR #2955
+(Feature 08) merged since the prior iteration, so its note below is now
+superseded and pass 6's own PR link is backfilled to #2608.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 8, PR #2955, merged), preserved for history</summary>
