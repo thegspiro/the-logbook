@@ -1165,11 +1165,16 @@ class EventService:
         # form's re-sent check-in settings do not refuse a description edit.
         # The times are already a computed change (times_change), since each
         # occurrence moves by the anchor's shift rather than taking its value.
+        # The count is of finalized occurrences the save would change, out of
+        # the finalized ones: an unchanged finalized occurrence is not refused,
+        # so counting it among "have finalized attendance" misstated the batch.
         sensitive: Set[str] = set()
         locked = []
+        finalized = 0
         for occurrence in future_events:
             if not attendance_is_finalized(occurrence):
                 continue
+            finalized += 1
             changes = changed_attendance_fields(occurrence, update_data)
             if times_change:
                 changes |= {"start_datetime", "end_datetime"}
@@ -1181,9 +1186,13 @@ class EventService:
                 attendance_locked_error(
                     "changing "
                     + ", ".join(sorted(sensitive))
-                    + f" across this series ({len(locked)} of "
-                    f"{len(future_events)} occurrences have finalized "
-                    "attendance)"
+                    + f" across this series ({len(locked)} of {finalized} "
+                    + (
+                        "finalized occurrence"
+                        if finalized == 1
+                        else "finalized occurrences"
+                    )
+                    + " would change)"
                 )
             )
 

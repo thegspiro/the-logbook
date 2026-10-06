@@ -2371,7 +2371,7 @@ MP-10, `docs/security-review/MP-08-membership-pipeline.md`.)
 ## Membership Pipeline — `/widget-summary` Loads Every Prospect Row to Count Them (2026-09-02)
 
 `GET /prospective-members/widget-summary` (`pipeline_widget_summary`,
-`membership_pipeline.py:118-168`) loads every full `ProspectiveMember` row in
+`membership_pipeline.py:121-178`) loads every full `ProspectiveMember` row in
 the organization — every column, unbounded — into Python just to compute
 `by_status` counts, three aging buckets, and (for a caller holding
 `prospective_members.manage`) a `details` list of every applicant's id/name/
@@ -2421,6 +2421,14 @@ left behind if the restore itself fails) than a rare compound failure — an
 `os.remove` succeeding immediately followed by a DB commit failing —
 justifies as a same-day fix. (Security review MP-08 pass 4, PR #2177,
 `docs/security-review/MP-08-membership-pipeline.md`.)
+
+**Same tradeoff, second site (2026-10-05):** `purge_inactive_prospects`
+(rewritten pass 8 to actually match `INACTIVE` rows) removes every selected
+prospect's uploaded files from disk, then deletes the rows and commits, for
+the same reason and with the same residual gap — a commit failure after the
+last `os.remove` succeeds leaves rows pointing at files already gone.
+Recorded here rather than as a second entry (security review MP-08 pass 8,
+`docs/security-review/MP-08-membership-pipeline.md`).
 
 ## Membership Pipeline — A Pipeline With Multiple `election_vote` Stages Has No Single "Current Stage" Once Neither `current_step` Nor a Supplied `step_id` Identifies One (2026-09-02, narrowed 2026-09-02)
 

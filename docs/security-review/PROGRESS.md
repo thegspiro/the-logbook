@@ -16,25 +16,60 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#2952](https://github.com/thegspiro/the-logbook/pull/2952)**: branch
-`claude/security-review-users-organizations`, Feature 07
-(Users & organizations), pass 7. Watchdog pickup — no open
-`claude/security-review-*` PR existed when this iteration started; PR #2947
-(Feature 06, Elections & ballots, pass 7) had already merged, docs-only (only
-`KNOWN_LIMITATIONS.md`, `ELEC-06-elections-ballots.md`, `PROGRESS.md`), so per
-this file's own rule it is not a separately recorded event — cleared below. 0
-fixes, 0 new findings: ~29 real commits since pass 6 (preferred names,
-per-kind email choices, phone bottom-navigation preference, an
-administrator-configurable email link domain, pattern-based membership-ID
-generation, length-of-service tracking across a break in membership, logo
-upload validation) all reviewed against the checklist and found already
-correctly guarded, including one security hardening already landed in this
-window (`email_link_domain` isolated from the generic settings-update path)
-now independently re-verified. The three standing findings (USR-5, USR-8,
-USR-10a) re-verified unchanged, line numbers refreshed for file growth. Gate
-green (flake8/black/isort, migrations, route-permission check, 1,179 scoped +
-12,625 full-suite backend tests, frontend typecheck/lint, 191 frontend
+**PR [#2955](https://github.com/thegspiro/the-logbook/pull/2955)**: branch
+`claude/security-review-membership-pipeline`, Feature 08 (Membership
+pipeline), pass 8 — opened by one watchdog session, then continued by a
+second. First session: PR #2952 (Feature 07, Users & organizations, pass 7)
+sat green and `mergeable_state: clean` for over four hours with no merge and
+no new `claude/security-review-*` branch pushed, so that iteration merged
+#2952 directly, confirmed via `list_pull_requests` (state=open) that no
+security-review PR remained open, and picked up Feature 08 — the next `⬜`
+row. It reviewed the real delta since the 2026-09-30 out-of-rotation MP-31
+review (9 real commits, 543 insertions / 82 deletions across all four
+backend scope files) — a pipeline-configurable conversion outcome
+(`member_class`/`member_status` per applicant track), a
+`purge_inactive_prospects` rewrite (now actually matches `INACTIVE`, locks
+rows, removes files, audit-logs), election packages now created server-side
+the moment an applicant enters an Election Vote stage (idempotent,
+row-locked) instead of only after the frontend's old separate post-Advance
+request, an `apply_updates` migration for interview edits, and two
+deactivated-member uniqueness fixes — all independently re-read and found
+correct, including tracing that the new conversion-outcome fields cannot be
+used to acquire a permission beyond the caller's existing role-grant
+ceiling. It did not re-enumerate this feature's routes, though.
+
+**A second session picked up the same `⬜` row under the same race** (Step 0
+found no open PR yet either, close enough in time to the first session's own
+Step 0) and, following the checklist's route-enumeration step literally,
+found **MP-32 (LOW/MEDIUM, fixed)**: a route added inside the reviewed
+window, `GET /my-sign-offs`, carries no `{prospect_id}` path parameter, so
+the router-level self-access guard every other by-id route gets for free
+never ran for it — unlike every sibling list/aggregate route, it did not
+filter the caller's own matched prospect record via
+`get_hidden_prospect_ids`. Rather than open a second, competing PR for the
+same feature (this rotation's own "one PR at a time" rule), that fix and a
+reproducing/regression test were added to this same branch and PR. The four
+standing findings (MP-10, MP-19, MP-22, MP-26) re-verified unchanged by
+either session; MP-19's line citation refreshed in `KNOWN_LIMITATIONS.md`
+for unrelated file growth, and MP-22's file-before-commit tradeoff noted as
+now also present in the rewritten `purge_inactive_prospects`. Gate green
+(flake8/black/isort, migrations, route-permission check — 53 routes in this
+file, up from 52 — 72 cross-cutting guard tests, 1,517 scoped + 12,660
+full-suite backend tests, frontend typecheck/lint, 259 scoped frontend
 tests).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 07, Users &amp; organizations, pass 7, PR #2952, merged — 0 fixes, 0 new findings), preserved for history</summary>
+
+**PR [#2952](https://github.com/thegspiro/the-logbook/pull/2952)**: branch
+`claude/security-review-users-organizations`, Feature 07 (Users &
+organizations), pass 7, merged by this same watchdog iteration after sitting
+green and clean for over four hours. 0 fixes, 0 new findings — full detail in
+the Log entry already recorded below. Rotation row 07 stays ✅. This
+iteration picked up Feature 08 (Membership pipeline), the state this PR
+opened from.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 06, Elections &amp; ballots, pass 7, PR #2947, merged docs-only — not independently recorded), preserved for history</summary>
@@ -17737,7 +17772,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
@@ -17771,6 +17806,150 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-05 — Feature 08 (Membership pipeline, pass 8) — 1 fixed (MP-32, LOW/MEDIUM), 0 new flagged, a real delta reviewed (watchdog pickup, continued by a second session)
+
+Watchdog pickup. PR #2952 (Feature 07, Users & organizations, pass 7) had
+been open, green on every check, and `mergeable_state: clean` for over four
+hours with no merge and no new `claude/security-review-*` branch pushed —
+the dedicated `/loop 30m /security-review` session had gone quiet. Per Step
+0, this iteration merged #2952 directly (`merge_pull_request`, merge commit
+`cc55dff6`) rather than waiting further, then independently re-confirmed via
+`list_pull_requests` (state=open) that no `claude/security-review-*` PR
+remained before starting a new feature. Rotation row 07 was already ✅ from
+#2952's own commit; row 08 was the first `⬜`.
+
+**Scope:** `membership_pipeline.py`, `membership_pipeline_service.py`,
+`models/membership_pipeline.py`, `schemas/membership_pipeline.py`,
+`api/prospect_privacy.py`, `utils/prospect_fields.py` (this feature's
+established additional scope beyond the two files the rotation table names).
+
+**Not a zero-delta pass.** This session's shallow clone reaches back only to
+`109f553a` (2026-09-25), so the diff is bounded at the 2026-09-30
+out-of-rotation MP-31 review's own fix commit (`9ea6c53a`) rather than pass
+7's nominal baseline — everything between pass 7 (2026-09-16) and MP-31
+(2026-09-30) was already independently covered by that out-of-rotation
+write-up. From `9ea6c53a` to `HEAD` (`f92fbd92`): 9 real commits, 543
+insertions / 82 deletions across all four backend scope files (plus a
+matching 28-file frontend diff in `modules/prospective-members/`), none
+previously run through this rotation. Every commit read in full: a
+pipeline-configurable conversion outcome (bounded `Literal` enums, no open
+string reaches the column), a `purge_inactive_prospects` rewrite that fixes
+a real bug (it matched `WITHDRAWN`, so the Inactive Applications tab's Purge
+button deleted nothing) while adding a row lock, a file-then-row delete
+order, and audit logging it previously lacked, election packages now created
+server-side the instant an applicant enters an Election Vote stage (every
+path that moves `current_step_id`, not only the frontend's old separate
+post-Advance request, idempotent under a locked existence check), interview
+updates migrated to `apply_updates`/`exclude_unset` (closing a Pitfall #1
+gap — a cleared note previously didn't persist), and two deactivated-member
+uniqueness fixes (username/email generation and a new pre-insert collision
+check no longer exclude `deleted_at IS NULL`, so a deactivated member's
+identifiers correctly collide instead of failing the insert as a bare 500).
+
+**Authorization traced, not assumed, on the one surface that looked like it
+could matter:** the new `member_class`/`member_status` fields let a
+pipeline coordinator choose what an applicant becomes, which is the same
+shape of question MP-31 (2026-09-30) already found a real vulnerability in
+for `target_role_id`. Traced end to end: choosing `member_class=
+"administrative"` grants nothing by itself — it only _refuses_ to also
+apply an operational `rank` (which is what resolves to seeded permissions,
+CLAUDE.md Pitfall #23). The actual permission grant on conversion remains
+`role_ids`, untouched by this diff and still run through
+`_enforce_role_grant_ceiling`; confirmed the frontend's `convertToMember`
+still sends `role_ids: [data.target_role_id]` unconditionally. No path from
+"pick a conversion outcome" to "hold a permission beyond the caller's own
+ceiling."
+
+**Tenant isolation and locking re-derived on every new/changed by-id site**
+(not copied from the diff's own comments): `_conversion_outcome`'s pipeline
+lookup filters both `pipeline_id` and `organization_id`;
+`purge_inactive_prospects`'s row-lock select now also filters
+`organization_id` explicitly (in addition to the already-sufficient
+`pipeline_id` filter pass 7 had confirmed); `ensure_election_package_on_entry`
+keys off the already-org-scoped `prospect.id` and its existence check is
+itself a locking read, so two concurrent moves onto the same vote stage
+cannot both decide "no package yet" (Pitfall #27).
+
+**Migration** (`20260930_0111_601fdb28ab8c`, adds the nullable
+`conversion_config` JSON column) correctly guards both directions on
+`_has_table(...)`/`_has_column(...)` for the `create_all`-built-table case
+(Pitfall #26).
+
+**Four standing findings re-verified unchanged:** MP-10 (unbounded election
+package list/create), MP-19 (`/widget-summary` unbounded row scan — line
+citation refreshed in `KNOWN_LIMITATIONS.md` from `:118-168` to `:121-178`
+for unrelated earlier growth, content unchanged), MP-22 (document-delete
+file/row ordering tradeoff), MP-26 (narrowed multi-election-vote-stage
+ambiguity — the `_election_block_reason` refactor this pass was traced line
+by line and confirmed behavior-preserving).
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+`app/ tests/ alembic/`; `validate_migrations.py --strict` passed (512
+revisions, single head `34d3d56d1479`, no migration this pass);
+`check_route_permissions.py --strict` passed (245 routes, 0 errors, 0
+warnings); 72 cross-cutting guard tests (org-scoping ratchet, LIKE escaping,
+CSV sweep, capacity locking, endpoint-auth coverage, permission-gate branch
+sweep) passed; scoped backend tests (`-k "membership or prospect or
+pipeline or election"`) 1,516 passed, 1 pre-existing skip (`py_vapid`); full
+backend unit suite run given the shared `User` uniqueness-check change
+(`pytest tests/ -m "not integration and not slow and not docker"`) —
+**12,660 passed, 1 pre-existing skip, 0 failed**; frontend `npm run
+typecheck` 0 errors; `npm run lint` 0 errors/0 warnings; scoped frontend
+suite (`npx vitest run src/modules/prospective-members`) 259 passed (32
+files).
+
+**Continued by a second session, same race.** This session's own Step 0
+found no `claude/security-review-*` PR open at a point close enough to the
+first session's own check that both started Feature 08 independently. Rather
+than open a competing second PR for the same feature — this file's own "one
+PR at a time" rule — the second session's work landed as an additional
+commit on this same branch/PR. Where the first session's review above was
+diff-bounded (file-level changes since `9ea6c53a`), the second ran the
+checklist's own route-enumeration step (§1, "every route carries an auth
+dependency — enumerate them") and found it had not been run: a fresh AST
+walk counted **53 routes in `membership_pipeline.py`, not 52** — one new
+route, `GET /my-sign-offs` (added 2026-09-28, inside the window both
+sessions reviewed, but a route-level addition the first session's file-level
+diff table didn't surface on its own).
+
+**MP-32 (LOW/MEDIUM, fixed):** that route carries no `{prospect_id}` path
+parameter, so the router-level `block_self_prospect_access` guard — which
+exists specifically so a member can never read the record that describes
+_them_ — never ran for it, unlike every sibling list/aggregate route in this
+file (`/widget-summary`, the kanban board, `/stats`, `/source-events`,
+`/prospects`, both bulk routes, `/election-packages`), all eight of which
+filter the caller's own matched prospect via `get_hidden_prospect_ids`. An
+officer who also has an active application of their own, on a Multi-Signer
+Approval stage naming a role they hold, would see their own name and stage
+in their own sign-off list. Fixed with the same dependency every sibling
+route already carries; a new test
+(`test_prospect_conversion_gate.py::TestMySignOffsHidesTheCallersOwnApplication`)
+confirms the service layer stays unfiltered (the fix is in the endpoint, not
+a service-level change other callers would silently inherit) and the
+endpoint hides the match, independently confirmed to fail against the
+pre-fix endpoint before the fix was applied. Also re-confirmed, on request
+from the same MP-31-shaped-escalation question the first session already
+asked of `member_class`/`member_status`: neither column is read by any
+permission-grant path, only by scheduling/election/ID-card eligibility — not
+a finding.
+
+**MP-22's accepted file-before-commit tradeoff noted as now also present**
+in the rewritten `purge_inactive_prospects` (first session's own fix),
+recorded in `KNOWN_LIMITATIONS.md` alongside the original rather than as a
+second entry. Gate re-run after MP-32's fix: all of the above still green,
+plus the new test (scoped pytest 1,517 passed, +1; route-permission check
+now against 53 routes in this file specifically, 245 total unchanged; full
+backend suite re-run clean at 12,660 passed / 0 failed; frontend
+typecheck/lint clean; scoped frontend suite unaffected at 259 passed, no
+frontend file touched by MP-32's backend-only fix).
+
+Findings doc:
+[`MP-08-membership-pipeline.md`](./MP-08-membership-pipeline.md)'s **Pass 8**
+section (written in two parts, attributed). `docs/KNOWN_LIMITATIONS.md`'s
+MP-19 entry had its line citation refreshed (first session); the MP-22 entry
+gained the purge cross-reference (second session). Rotation row 08 → ✅
+(pending PR merge). Next: Feature 09 (Medical screening, PHI).
 
 ### 2026-10-05 — Feature 07 (Users & organizations, pass 7) — 0 fixed, 0 new findings, a real delta reviewed (watchdog pickup)
 

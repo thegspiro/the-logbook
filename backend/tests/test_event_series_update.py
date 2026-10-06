@@ -276,7 +276,7 @@ class TestUpdateFutureEventsAttendanceLock:
 
         assert str(excinfo.value) == attendance_locked_error(
             "changing check_in_minutes_before across this series "
-            "(1 of 4 occurrences have finalized attendance)"
+            "(1 of 1 finalized occurrence would change)"
         )
         assert {e.description for e in series} == {None}
         assert series[2].check_in_minutes_before == 30
@@ -296,7 +296,7 @@ class TestUpdateFutureEventsAttendanceLock:
 
         assert str(excinfo.value) == attendance_locked_error(
             "changing require_checkout across this series "
-            "(2 of 4 occurrences have finalized attendance)"
+            "(2 of 3 finalized occurrences would change)"
         )
 
     async def test_moving_the_series_clock_is_refused_when_any_occurrence_is_closed(
@@ -317,7 +317,7 @@ class TestUpdateFutureEventsAttendanceLock:
 
         assert str(excinfo.value) == attendance_locked_error(
             "changing end_datetime, start_datetime across this series "
-            "(1 of 4 occurrences have finalized attendance)"
+            "(1 of 1 finalized occurrence would change)"
         )
         assert series[0].start_datetime == datetime(2026, 9, 1, tzinfo=timezone.utc)
 
@@ -384,3 +384,58 @@ class TestSeriesSaveKeepsEachOccurrencesLifecycleMarkers:
         await _save_series(series, self._form_save(series))
 
         assert len({id(e.custom_fields) for e in series}) == len(series)
+
+
+class TestUpdateFutureEventsLockCount:
+    """The series refusal counts the finalized occurrences the save would
+    change, out of the finalized ones. It read "(2 of 4 occurrences have
+    finalized attendance)" for a series with three finalized occurrences, two
+    of them changed, which misstated both numbers."""
+
+    def _series(self, *, finalized, require_checkout):
+        closed = datetime(2026, 9, 1, tzinfo=timezone.utc)
+        return [
+            SimpleNamespace(
+                id=str(uuid4()),
+                is_cancelled=False,
+                recurrence_parent_id="parent",
+                start_datetime=datetime(2026, 9, 1 + 7 * i, 19, tzinfo=timezone.utc),
+                end_datetime=datetime(2026, 9, 1 + 7 * i, 21, tzinfo=timezone.utc),
+                attendance_finalized_at=closed if is_closed else None,
+                custom_fields=None,
+                require_checkout=checkout,
+            )
+            for i, (is_closed, checkout) in enumerate(zip(finalized, require_checkout))
+        ]
+
+    async def _refusal(self, series):
+        db = AsyncMock()
+        db.execute.side_effect = [_scalar(series[0]), _scalars(series)]
+        with pytest.raises(ValueError, match=ATTENDANCE_LOCKED_PREFIX) as excinfo:
+            await EventService(db).update_future_events(
+                uuid4(), uuid4(), EventUpdate(require_checkout=False)
+            )
+        db.commit.assert_not_awaited()
+        return str(excinfo.value)
+
+    async def test_counts_changed_out_of_finalized(self):
+        message = await self._refusal(
+            self._series(
+                finalized=[True, True, True, False],
+                require_checkout=[False, True, True, True],
+            )
+        )
+        assert (
+            "across this series (2 of 3 finalized occurrences would change)" in message
+        )
+
+    async def test_a_single_finalized_occurrence_reads_in_the_singular(self):
+        message = await self._refusal(
+            self._series(
+                finalized=[False, True, False],
+                require_checkout=[False, True, True],
+            )
+        )
+        assert (
+            "across this series (1 of 1 finalized occurrence would change)" in message
+        )
