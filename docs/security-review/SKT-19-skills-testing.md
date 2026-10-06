@@ -1861,3 +1861,213 @@ check, and what the design relies on:
   evaluations is blocked behind a confirmation; choosing to sign out still
   runs the full purge. The idle timeout and expired-session paths purge without
   asking — deliberately unchanged, recorded as an open owner question.
+
+## Pass 7 (2026-10-06)
+
+**Prefix:** `SKT7` · **PR:** TBD
+
+**Scope check:** `git log 8d80b628..HEAD -- app/api/v1/endpoints/skills_testing.py
+app/services/skills_testing_service.py app/schemas/skills_testing.py
+app/models/skills_testing.py` (8d80b628 = pass 6's merge commit) against the
+now-unshallowed history — six commits touched this feature's declared backend
+surface since pass 6, all real behavior changes, none a merge-commit
+artifact. `app/services/skills_testing_service.py` and
+`app/models/skills_testing.py` are untouched (no commit in the range names
+either path).
+
+### Read in full, each against current code rather than trusted from its commit message
+
+- **`2b00fdbec` — SKT3-2, paging and export bounds.** `GET /tests` now returns
+  `{items, total}`, paged (`limit` 50/200 cap, `offset`), with server-side
+  search (`like_pattern(...)`, `escape=LIKE_ESCAPE_CHAR` — Pitfall #25) and a
+  `date_from`/`date_to` window shared with `GET /tests/export/csv` via one
+  `_apply_test_filters` helper, so the two cannot drift the way EV-16's
+  export once did. `GET /templates` gained the same `limit`/`offset` with its
+  visibility filter moved into SQL (previously filtered in Python after the
+  fetch). For an officer, paging and counting happen in SQL
+  (`select(func.count()).select_from(query.subquery())`, then
+  `.limit().offset()`), each inheriting the same `organization_id` filter as
+  the base query. For a non-officer, the disclosure pass still cannot run in
+  SQL (it depends on per-row viewer grants and org config), so the filtered
+  rows are resolved first — bounded by the same org/practice/date/search
+  predicates, further narrowed to tests the reader is party to or named on
+  (`or_(*grant_clauses)`, unchanged from pass 1), loaded via `load_only(*_TEST_LIST_COLUMNS)`
+  rather than the full row (skips the JSON template-snapshot and section-result
+  columns no list item renders) — then sliced with `visible[offset:offset+limit]`
+  after the disclosure filter, so `total` is the count the reader may actually
+  see, not the pre-filter row count. `export_tests_csv` now 400s without both
+  `date_from`/`date_to` or with a window over 366 days (`EXPORT_MAX_SPAN_DAYS`),
+  closing the unbounded in-memory CSV build. Verified the shared
+  `_apply_test_filters` is used by both routes (not reimplemented in one) by
+  reading both call sites directly. **SKT3-2: FIXED, confirmed.**
+
+- **`5bd06118e` — SKT4-7, a save cannot set a test's outcome.** `update_test`
+  now rejects `result`, `overall_score`, and any `status` other than
+  `in_progress` with a 400 before any field is applied, closing the path
+  where an examiner-holding member could `PUT` a hand-picked `result`/
+  `overall_score`/`status="completed"` and skip `complete_test`'s
+  unresolved/waived-critical-criteria refusal. Read `update_test` in full
+  (`skills_testing.py:1477-1620` region, shifted by the paging diff but same
+  function): the refusal runs ahead of the existing "completed tests only
+  allow notes" branch and ahead of `_authorize_test_write`'s field-level
+  checks, so it cannot be bypassed by an already-completed test's narrower
+  allowlist. `status="in_progress"` is still accepted, matching the examiner
+  screen's save-draft call. **SKT4-7: FIXED, confirmed.**
+
+- **`5f364b3bc` — SKT4-3, summary outcome figures gated to officers.**
+  `get_testing_summary` now computes `pass_rate` and `average_score` only
+  when `_can_manage_tests(current_user)`; every other caller gets `None` for
+  both, same gate the pending-validation count already used. Read the
+  current function: the two aggregate queries (completed+validated count,
+  pass count, average score) are now inside the `if` block, not computed
+  unconditionally and then withheld — so a non-officer's request never runs
+  the query that would have exposed the figure, not merely discarded its
+  result. Closes the small-cohort disclosure gap where one validated test
+  made the org-wide average exactly that member's score. **SKT4-3: FIXED,
+  confirmed.**
+
+- **`2dde9be91` — SKT4-1 / SKT4-2, item caps on sheets and results.** Added
+  `max_length` to `SkillCriterionSchema.checklist_items` (100),
+  `SkillTemplateSectionSchema.criteria` (200),
+  `SkillTemplateCreate`/`Update.sections` (100), `result_viewer_positions` on
+  all four schemas (100), and the mirrored result-side fields
+  (`CriterionResultSchema.checklist_completed`,
+  `SectionResultSchema.criteria_results`, and — confirmed by reading past the
+  diff's visible hunk — `SkillTestUpdate.section_results`) at the same caps
+  the template side uses, so a valid sheet's result always fits. Confirmed by
+  grepping `max_length=` in the current `app/schemas/skills_testing.py`: all
+  eight fields SKT4-1/SKT4-2 named now carry one. **SKT4-1, SKT4-2: FIXED,
+  confirmed.**
+
+- **`58547c170` — client-minted test ids (offline cold start), reviewed fresh
+  rather than accepted from pass 6's addendum.** `create_test` now accepts an
+  optional `id` and `expected_template_version`. The id-replay lookup
+  (`select(SkillTest).where(SkillTest.id == str(test_data.id))`) is a bare
+  by-id query with **no `organization_id` filter at the SQL level** — the
+  shape Pitfall #14a and this file's own checklist flag. Read the branch that
+  follows it before accepting this: if the fetched row's org, examiner,
+  template, candidate and practice-flag don't _all_ match the caller's
+  request, the handler raises a generic 409 ("That test id is already in
+  use") with no field of the existing row in the response — so a cross-org
+  hit returns the same message as a same-org/different-request hit, and
+  leaks nothing beyond "this id is taken," which a random v4 UUID does not
+  make guessable. The design is deliberate, not an oversight: adding an
+  `organization_id` filter to the query would make a cross-org id collision
+  invisible to this check, and the subsequent `INSERT` would then fail on
+  the primary-key collision with a raw `IntegrityError` instead of a clean
+  409 — worse, not safer. The one subsequent read keyed off the existing
+  row (`select(User).where(User.id == existing.candidate_id)`) is the
+  accepted shape (an id read off a row already confirmed in-org by the match
+  check above it), not a second instance of the same pattern. Recorded here
+  as **Verified good**, not fixed or flagged, so a future pass does not
+  re-flag it without this reasoning. `expected_template_version` refusal and
+  the frontend's UUID-minting/replay queue were not re-derived — matches pass
+  6's addendum description exactly on reading the diff directly.
+  `tests/test_skill_test_client_minted_id.py` covers the cross-org-refusal
+  case by name.
+
+- **`f92fbd927` — preferred-name search (incidental touch).** `search_candidates`
+  gained an `or_()` branch matching `preferred_name` the same way as
+  `first_name`, still `.like(..., escape=LIKE_ESCAPE_CHAR)`, still
+  `organization_id`-filtered, still capped at `CANDIDATE_SEARCH_MAX_RESULTS`.
+  The response's `name` field changed from `_format_user_name(u)` (legal name)
+  to `u.display_name or u.username`, but this endpoint is a test-creation
+  candidate picker, not a record of anything — the test itself still files
+  the candidate under `_format_user_name` wherever a result is rendered,
+  confirmed unchanged at every `_format_user_name` call site in this file.
+  No finding.
+
+### Standing flags re-confirmed closed
+
+SKT3-2, SKT4-1, SKT4-2, SKT4-3 and SKT4-7 — every standing flag pass 6 left
+open — are fixed by the five commits above. **No standing flags remain open
+in this feature.**
+
+### Route surface and org-scoping, re-swept
+
+AST walk (written fresh this pass): **29/29 routes**, identical paths,
+methods and `Depends(...)` gates to pass 6's table — no new route. Every
+`select(` call site (87, up from pass 6's 82 — the five new subqueries the
+paging/export fix introduces: `matching_users`, `matching_templates`, the
+count subquery, `_templates_for`, and the client-minted-id lookup) checked
+against the two accepted shapes. 86 of 87 carry an `organization_id` filter
+or resolve through an already-org-scoped row; the one exception
+(the client-minted-id lookup) is the deliberate, data-safe design discussed
+above. `tests/test_org_scoping_ratchet.py`'s AST matcher does not flag it —
+correctly, per the file's own documented scope: the comparison's right side
+is `test_data.id` (an attribute access), not a bare name, which the ratchet's
+docstring excludes by design (id read off another object).
+
+### Frontend
+
+Not re-swept this pass — pass 6 re-did the full `grep -rli "skillsTesting"`
+inventory (22 files) and read the one new file in full; nothing in this
+pass's six commits touches a file outside that inventory (the paging/export
+and preferred-name frontend changes are in already-inventoried files; the
+client-minted-id store change was already read in pass 6's addendum).
+
+### Cross-feature scope note (not reviewed this pass — out of scope for SKT)
+
+`feat(training): online knowledge tests with a question bank and auto-grading`
+(`b310f532`, 2026-10-06) added a new, substantial, unreviewed surface:
+`app/api/v1/endpoints/knowledge_tests.py` (1,147 L, new router mounted at
+`/training/knowledge-tests`), `app/models/knowledge_test.py`,
+`app/schemas/knowledge_test.py`, and migration `7c2e9a41b6d3` (three new
+tables). This is training-adjacent, not skills-testing — it shares no file
+with this feature's declared scope (`skills_testing.py`,
+`skills_testing_service.py`, `app/schemas/skills_testing.py`,
+`app/models/skills_testing.py`) and was not read as part of this pass. It
+also lands outside Feature 17 (Training core) and Feature 18 (Training
+extended)'s own declared file lists (`training.py`/`training_programs.py`/
+`training_sessions.py` and `training_submissions.py`/`training_enhancements.py`/
+`training_waivers.py`/`external_training.py`/`course_cohorts.py`/
+`course_syllabus.py` respectively), and it merged (09:32 UTC) before TRX-18
+pass 7 merged (16:09 UTC) without being added to either feature's scope line
+in this file's sibling findings docs. **Flagged for the rotation, not this
+feature:** `knowledge_tests.py` needs an owning feature (recommend adding it
+to Feature 17's declared scope, since it is a sibling of `training_programs.py`'s
+requirement-credit path) and a first security pass before the rotation can
+call Training core/extended's current ✅ complete. Not reviewed, not fixed,
+not counted in this feature's findings — recorded in `PROGRESS.md`'s log
+entry and `KNOWN_LIMITATIONS.md` for the rotation to pick up explicitly
+rather than silently skip.
+
+### Corrections to prior write-ups
+
+None. Pass 6's "New surface" addendum on client-minted ids is confirmed
+accurate on a fresh read of the diff, not merely re-cited.
+
+## Guard tests added
+
+None by this pass — all behavior changes landed (and were guard-tested) in
+the five commits reviewed above, each already covered by its own test file
+(`test_skill_test_list_paging.py`, `test_skill_test_export_csv.py`,
+`test_skill_test_update_guard.py`, `test_skill_testing_summary_disclosure.py`,
+`test_skill_sheet_item_caps.py`, `test_skill_test_client_minted_id.py`). This
+pass is verification, not new code.
+
+## Completion gate (pass 7)
+
+| Check                                                       | Result                                                                                                   |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                               | ✅ 0 violations (`flake8==7.3.0`)                                                                        |
+| `black --check app/ tests/ alembic/`                        | ✅ 2027 files unchanged (`black==26.5.1`)                                                                |
+| `isort --check-only app/ tests/ alembic/`                   | ✅ clean (`isort==9.0.1`)                                                                                |
+| `python3 scripts/validate_migrations.py --strict`           | ✅ 538 revisions, single head `8c4f2a6e1d93`                                                             |
+| `python3 scripts/check_route_permissions.py --strict`       | ✅ 251 routes, 0 errors/warnings                                                                         |
+| `pytest tests/ -q -k "skill or skill_testing or evaluator"` | ✅ 512 passed, 1 skipped (pre-existing optional-dependency skip), up from pass 6's 464 (new guard tests) |
+| `cd frontend && npm run typecheck`                          | ✅ 0 errors (aliased 7.0.2 compiler via `scripts/tsc-native.mjs`)                                        |
+| `cd frontend && npm run lint`                               | ✅ 0 errors, 0 warnings                                                                                  |
+
+No source file is modified by this pass — every fix landed in the six
+commits reviewed above, already on `main` before this pass started. This
+pass's own diff is documentation only (this findings file, `PROGRESS.md`,
+`KNOWN_LIMITATIONS.md`).
+
+**Final disposition: 0 fixed by this pass (five standing findings — SKT3-2,
+SKT4-1, SKT4-2, SKT4-3, SKT4-7 — were fixed by ordinary feature commits
+between passes and verified fixed here), 0 newly flagged against this
+feature, 1 cross-feature scope gap flagged for the rotation
+(`knowledge_tests.py`, unowned and unreviewed). Every standing flag this
+feature carried into pass 7 is now closed; no open findings remain in
+`SKT-19-skills-testing.md`.**

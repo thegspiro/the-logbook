@@ -16,6 +16,36 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2976](https://github.com/thegspiro/the-logbook/pull/2976)**: branch
+`claude/security-review-skills-testing`, Feature 19 (Skills
+testing), pass 7 (watchdog pickup — the dedicated `/loop 30m
+/security-review` session had no open PR/branch for this feature, and PR
+#2975 had already merged ~2.5 hours earlier with nothing started since).
+Real delta: six non-merge commits touched the declared scope since pass 6's
+merge (`8d80b628`) — all five of pass 6's standing flags (SKT3-2 paging/
+export bounds, SKT4-1/SKT4-2 item caps, SKT4-3 summary disclosure, SKT4-7
+save-cannot-set-outcome) turned out to already be fixed by ordinary feature
+commits landed between passes, each read and verified against current code
+rather than trusted from its commit message, each already guard-tested. The
+client-minted-test-id feature (offline cold start) was also reviewed fresh:
+one new bare by-id query with no SQL-level `organization_id` filter, found
+to be a deliberate and data-safe design (a cross-org id collision returns
+one generic 409, never the other org's row) rather than a finding. Route
+surface re-enumerated (29/29, unchanged) and all 87 `select(` sites
+re-swept for org-scoping. 0 fixes needed this pass (fixed already by
+feature work), 0 newly flagged against this feature — every standing flag
+is now closed. One cross-feature scope gap flagged for the rotation, not
+this feature: `knowledge_tests.py` (new training sub-feature, 1,147 L, three
+new tables) has landed under no feature's declared scope and has not had a
+security pass; mirrored to `KNOWN_LIMITATIONS.md` and recommended for
+Feature 17's scope. Completion gate green (flake8/black/isort, migrations —
+538 revisions, single head; `check_route_permissions.py --strict` — 251
+routes; 512 scoped backend tests, up from pass 6's 464; frontend
+typecheck/lint). See the Log entry below for detail.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 7, PR #2975, merged), preserved for history</summary>
+
 **PR [#2975](https://github.com/thegspiro/the-logbook/pull/2975)**: branch
 `claude/security-review-training-extended`, Feature 18 (Training
 extended), pass 7 (watchdog pickup — the dedicated `/loop 30m
@@ -35,6 +65,8 @@ TRX6's external-sync cluster) re-verified unchanged. Completion gate green
 `check_route_permissions.py --strict` — 245 routes, 91/91 in this feature's
 own six endpoint files carrying an auth dependency; 1558 scoped backend
 tests; frontend typecheck/lint). See the Log entry below for detail.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 7, watchdog-pickup placeholder, never itself a PR), preserved for history</summary>
@@ -18021,7 +18053,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
@@ -18044,6 +18076,77 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-06 — Feature 19 (Skills testing, pass 7) — real delta (6 commits), 0 fixes needed, five standing flags confirmed closed, cross-feature scope gap flagged (watchdog pickup)
+
+Watchdog pickup. PR #2975 (Feature 18, Training extended, pass 7) had
+merged roughly 2.5 hours earlier with no branch or PR started for the
+next feature since — past this rotation's documented ~90-minute stall
+threshold (first observed on Feature 19 itself, PR #2473) — so this
+iteration picked up Feature 19 (Skills testing), the first `⬜` row, from
+outside the dedicated `/loop 30m /security-review` session.
+
+**Real delta since pass 6 (merge `8d80b628`): six non-merge commits**
+touched the declared scope (`skills_testing.py`,
+`app/schemas/skills_testing.py`; `skills_testing_service.py` and
+`app/models/skills_testing.py` untouched). The clone was shallow at the
+start of this iteration and was unshallowed before trusting any diff —
+the shallow state initially made one commit look like a 5,188-file,
+1.7M-line root commit, which a fresh `git fetch --unshallow` corrected.
+
+**All five of pass 6's standing flags — SKT3-2, SKT4-1, SKT4-2, SKT4-3,
+SKT4-7 — are now fixed, each verified against current code rather than
+trusted from its commit message:** SKT3-2 (paging/export bounds, with a
+shared filter helper so the CSV export cannot drift from the list it
+mirrors), SKT4-1/SKT4-2 (item caps on sheets and results), SKT4-3
+(summary pass-rate/average-score gated to officers, closing a
+small-cohort disclosure leak), and SKT4-7 (a `PUT` can no longer set a
+test's outcome directly, closing the path around `complete_test`'s
+scoring refusal). Each was already guard-tested by its own commit. **No
+standing flags remain open in this feature.**
+
+**Client-minted test ids (offline cold start) reviewed fresh**, not
+accepted from pass 6's addendum: one new bare by-id query
+(`SkillTest.id == str(test_data.id)`, no SQL-level `organization_id`
+filter) is a deliberate, data-safe design — a cross-org id collision
+returns one generic 409 with no row data, and filtering by org in the
+query itself would turn a clean conflict response into a raw primary-key
+`IntegrityError` on insert. Recorded as Verified good with the mechanism
+stated, not flagged, so a future pass does not re-raise it without this
+reasoning. The org-scoping ratchet does not (and by its own documented
+scope should not) flag it — `test_data.id` is an attribute access, not a
+bare name.
+
+**Cross-feature scope gap flagged, not reviewed:** `knowledge_tests.py`
+(new training sub-feature merged earlier the same day, 1,147 L, three
+new tables, mounted at `/training/knowledge-tests`) is named in no
+feature's declared scope — not Feature 19, not Feature 17 (Training
+core), not Feature 18 (Training extended) — and merged before Feature
+18's pass 7 without being added to either Training feature's file list.
+Mirrored to `KNOWN_LIMITATIONS.md` with a recommendation to add it to
+Feature 17's scope; not reviewed or fixed as part of this pass, and not
+counted in Feature 19's findings.
+
+Route surface re-enumerated by a fresh AST walk: 29/29, unchanged from
+pass 6. All 87 `select(` sites (up from 82) re-swept for org-scoping —
+86 org-scoped or parent-resolved, the one exception being the
+client-minted-id lookup discussed above.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean
+over `app/ tests/ alembic/`; `validate_migrations.py --strict` passed
+(538 revisions, single head `8c4f2a6e1d93`); `check_route_permissions.py
+--strict` passed (251 routes, 0 errors/warnings); scoped backend tests
+(`-k "skill or skill_testing or evaluator"`) 512 passed, 1 skipped
+(pre-existing optional-dependency skip), up from pass 6's 464; frontend
+`npm run typecheck` 0 errors, `npm run lint` 0 errors/0 warnings. No
+source file is modified by this pass — the five fixes landed in ordinary
+feature commits already on `main` before this pass began; this pass's
+own diff is documentation only.
+
+Findings doc: [`SKT-19-skills-testing.md`](./SKT-19-skills-testing.md)'s
+**Pass 7** section. `KNOWN_LIMITATIONS.md` gains one new entry (the
+`knowledge_tests.py` scope gap); no existing row needed correction.
+Rotation row 19 → ✅ (pending PR merge). Next: Feature 20 (Compliance).
 
 ### 2026-10-06 — Feature 16 (Events & requests, pass 7) — real delta (33 commits), 0 fixes needed, EV-26 confirmed fixed, scope widened by 3 files (watchdog pickup)
 
