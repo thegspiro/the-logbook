@@ -314,6 +314,13 @@ do not have to do anything.
 - **Open the test once with signal** before heading somewhere without it. The
   phone keeps a copy of tests _you_ are examining that are not finished yet;
   a test never opened on the device cannot be opened offline.
+- **You can also start a test with no signal.** Opening **Start Skill Test**
+  with signal keeps the published sheets on the device. With no signal the page
+  offers those sheets and the members you have examined on this device; the
+  test is created when the phone reconnects, before its scoring is sent. If the
+  sheet was edited in the meantime the server refuses it — you are told, and the
+  scoring stays on the device. A test started offline is dated by when it
+  reached the server.
 - **Submitting with no signal** shows **Submitted on this device**. The test is
   scored by the server when it reconnects — there is no result on the phone
   until then, and the pass/fail you see afterwards is the server's.

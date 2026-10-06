@@ -22,14 +22,20 @@ import type {
 } from '../types/skillsTesting';
 import { getErrorMessage, isNetworkError } from '../utils/errorHandling';
 import { useAuthStore } from './authStore';
+import { displayNameOf } from '../utils/memberName';
 import {
   SKILLS_OFFLINE_QUEUED_EVENT,
   applyPending,
+  buildOfflineSkillTest,
   cacheSkillTest,
   enqueueSkillsComplete,
+  enqueueSkillsCreate,
   enqueueSkillsUpdate,
+  getCachedSkillTemplate,
   getCachedSkillTest,
   getOwnSkillsPending,
+  mintTestId,
+  rememberCandidate,
   type SkillsPendingEntry,
 } from '../utils/skillsTestOffline';
 
@@ -80,7 +86,8 @@ interface SkillsTestingState {
   // Test actions
   loadTests: (params?: SkillTestListParams) => Promise<void>;
   loadTest: (id: string) => Promise<void>;
-  createTest: (data: SkillTestCreate) => Promise<SkillTest>;
+  /** `candidateName` lets a test started with no signal be labelled. */
+  createTest: (data: SkillTestCreate, offline?: { candidateName: string }) => Promise<SkillTest>;
   updateTest: (id: string, data: SkillTestUpdate) => Promise<SkillTest>;
   completeTest: (id: string) => Promise<SkillTest>;
   deleteTest: (id: string) => Promise<void>;
@@ -337,12 +344,44 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
     }
   },
 
-  createTest: async (data) => {
+  createTest: async (data, offline) => {
     set({ error: null });
+    // The id is minted here, not by the server (owner decision: cold start).
+    // Online it changes nothing; with no signal it is what lets the test be
+    // scored now and created when the device reconnects, under the same id.
+    const payload = { ...data, id: mintTestId() };
     try {
-      const test = await skillsTestingService.createTest(data);
-      set({ currentTest: test });
+      const test = await skillsTestingService.createTest(payload);
+      set({ currentTest: test, offlineState: null });
+      cacheIfExamining(test);
+      void rememberCandidate({ id: test.candidate_id, name: test.candidate_name });
       return test;
+    } catch (err: unknown) {
+      if (!isNetworkError(err)) {
+        set({ error: getErrorMessage(err, 'Failed to create test') });
+        throw err;
+      }
+    }
+    // Cold start: no signal at all.
+    try {
+      const template = await getCachedSkillTemplate(data.template_id);
+      const user = useAuthStore.getState().user;
+      if (!template || !user) {
+        throw new Error(
+          'This skill sheet is not saved on this device. Open Start a Skill Test once with signal to save the published sheets for offline use.'
+        );
+      }
+      const candidateName = offline?.candidateName ?? '';
+      const local = buildOfflineSkillTest(template, payload, {
+        examinerId: user.id,
+        examinerName: displayNameOf(user),
+        candidateName,
+      });
+      await enqueueSkillsCreate({ ...payload, expected_template_version: template.version }, testLabel(local));
+      await cacheSkillTest(local);
+      set({ currentTest: local, offlineState: offlineStateFor(local.id, await getOwnSkillsPending(local.id)) });
+      announceQueued();
+      return local;
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Failed to create test');
       set({ error: msg });

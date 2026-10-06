@@ -1,7 +1,7 @@
 # Skills Testing — Offline Support Implementation Plan
 
 > Status: **Implemented (2026-10-06).** The owner chose to build it, with a
-> skills-test-specific queue. The sections below are kept as the design
+> skills-test-specific queue and cold start (§4 Option B, client-minted ids). The sections below are kept as the design
 > record; §11 says what was built and what each open question was answered
 > with.
 >
@@ -308,6 +308,15 @@ Two things are cheaper than they would have been before the
 | Phase 5 — purge                 | Registered with `purgeLocalMemberData`; ownership per FE3-34-5                                                                                                                                                                                                                    |
 
 **Answers to §10:**
+
+- **§6 — A + B.** Cold start is supported. Every create carries a
+  client-minted id (`mintTestId`); `create_test` accepts it once and answers a
+  replay by the same examiner with the existing test. The squatting guard the
+  plan asked for is that any other holder of the id — another examiner, a
+  different candidate, another department — gets the same 409. A create queued
+  offline also sends `expected_template_version`, so a sheet edited before the
+  device reconnects is refused rather than snapshotted out of step with the
+  scorecard.
 
 - **§10.3 — no provisional score.** A submission queued offline shows
   "Submitted on this device" and no result; the server's scoring is the only

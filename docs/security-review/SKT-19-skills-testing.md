@@ -1849,3 +1849,11 @@ check, and what the design relies on:
   entries and re-checks ownership per entry before sending (FE3-34-5).
 - **Refusals are retained.** A refused step keeps its payload for the examiner
   to read or discard; nothing is dropped automatically (offline plan §3.1).
+- **Client-minted test ids (2026-10-06, cold start).** `POST /tests` accepts a
+  caller-supplied UUID. A replay is honoured only for the same examiner,
+  template, candidate and mode in the caller's own department; every other
+  holder of the id gets the same 409, so the endpoint cannot be used to probe
+  for another department's test ids. Template lookup is org-scoped before the
+  id check, separation of duties and the attempt cap run as before, and
+  `expected_template_version` refuses a create scored against a sheet that has
+  since changed. Guarded by `tests/test_skill_test_client_minted_id.py`.
