@@ -17872,7 +17872,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | 🔄     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
@@ -17901,6 +17901,71 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-06 — Feature 13 (Apparatus & NFC, pass 14 / rotation pass 7) — real delta (25 commits), 0 fixes, 0 new findings, route count +2 (NFPA compliance) (watchdog pickup)
+
+Watchdog pickup. PR #2968 (Feature 12, Facilities, pass 7) had merged
+with 0 application-code changes (docs-only per this file's own rule —
+only `FAC-12-facilities.md`, `PROGRESS.md`), so it is not independently
+recordable; cleared above. Rotation row 13 (Apparatus & NFC) was the
+first `⬜`. Every AP-1 through AP-18 finding in this feature's own
+findings doc already carried an ✅ FIXED disposition going into this
+pass — zero open or flagged items — so this pass's job was re-verifying
+that stayed true against the real delta, not re-litigating anything.
+
+**Real delta since pass 13 (PR #2623, merged 2026-09-17): 25 non-merge
+commits** out of 775 total non-merge commits on `main` in that window.
+Confirmed the clone was already full-depth before trusting the count
+(`git fetch --unshallow` → "already a complete repository"). Of the 25:
+4 pure layout/copy/test-only changes; 1 (`bb0bda095`, the workflow-review
+rotation's own W48 pass) carries a `docs(workflow-review)` label but is
+not doc-only — it also drops an ORM default on `fuel_type` and touches
+three apparatus frontend files (read in full, benign); the remaining 20
+are real application-logic commits, each read via `git show` against all
+seven checklist dimensions.
+
+**AP-17 and AP-18 re-confirmed intact**, not assumed from zero diff on
+their own lines (both shifted by intervening unrelated insertions, not
+touched themselves): AP-17 now `apparatus_service.py:1724-1730` (was
+1680-1684), AP-18's two call sites now `:469-477` and `:675-683` (were
+419-425 / 625-631). A related app-review commit (`667cbd10d`) extended
+the same `assert_in_org` FK-validation pattern to four more integrity-only
+fields, consistent with AP-17/AP-18's own precedent rather than drifting
+from it.
+
+**Route count: `apparatus.py` 90 (+2), `nfc_tags.py` 5 (unchanged)** —
+verified by `grep -c "^@router\."`, not trusted from a commit message.
+The two new routes are a read-only NFPA-compliance settings/summary pair
+(`d566001eb`), both permission-gated and org-scoped.
+
+**20 real commits reviewed, all clean** — highlights: a new NFPA
+compliance CRUD feature with every by-id query org-scoped and its
+client-supplied apparatus id resolved through the already org-scoped
+`get_apparatus` (XC-1); a public kiosk NFC badge-tap endpoint that
+resolves location only by `display_code`, re-checks feature flags every
+tap, rate-limits by IP+room, strips the response to first-name+initial,
+and answers an unknown card identically to an ineligible one to avoid a
+membership oracle; NFC card-reissue tombstoning with an org-scoped
+existing-card lookup and an `assert_in_org`-validated `user_id`; and an
+`ondelete` audit confirming all ~35 `SET NULL` FKs in `models/apparatus.py`
+still pair with `nullable=True`. No commit in this window touches
+`EquipmentCheckTemplateBuilder.tsx`/`equipmentCheckHierarchy.ts` — on
+inspection those files live under `modules/inventory/`, not
+`modules/apparatus/`, so passes 6-10's save/delete-race invariant was
+never in this feature's own scope.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+the full scope; `validate_migrations.py --strict` passed (527 revisions,
+single head, no migration this module this pass); `check_route_permissions.py
+--strict` 245 routes, 0 errors/warnings; scoped backend tests (`-k
+"apparatus or nfc or evoc or driver_exception"`) 876 passed, 1
+pre-existing skip (`pywebpush`); frontend `npm run typecheck` 0 errors;
+`npm run lint` 0 errors/warnings; scoped frontend suite (`npx vitest run
+src/modules/apparatus`) 67 passed (8 files). Findings doc:
+[`AP-13-apparatus-nfc.md`](./AP-13-apparatus-nfc.md)'s **Pass 14**
+section. No `KNOWN_LIMITATIONS.md` change needed — this feature carries
+no open items there. Rotation row 13 → ✅ (pending PR merge). Next:
+Feature 14 (Equipment check & shifts).
 
 ### 2026-10-06 — Feature 12 (Facilities, pass 7) — real delta (28 commits), 0 fixes, 0 new findings, FAC-41/FAC-44 confirmed fixed and intact (watchdog pickup)
 
