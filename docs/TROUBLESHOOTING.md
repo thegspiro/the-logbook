@@ -4130,7 +4130,8 @@ docker-compose logs backend | grep "duration=" | awk -F'duration=' '{if ($2+0 > 
 
 - Increase screen brightness to maximum
 - Zoom in on the QR code or use the print feature (`Ctrl+P`) to produce a physical card at standard ID card dimensions
-- The QR code encodes the member's UUID — ensure your scanner application supports URL or text QR codes
+- The QR code encodes the member's **badge code** (for example `MB-7KQ2W9HXRT`; before 2026-10-05 it encoded the member id) — ensure your scanner application supports plain text QR codes
+- A badge printed or reissued under an old code stops scanning after **Reissue badge** on the member's ID card page; print a new card
 
 ### Problem: Barcode Scanner Not Finding Member
 
@@ -4143,7 +4144,9 @@ docker-compose logs backend | grep "duration=" | awk -F'duration=' '{if ($2+0 > 
 
 - Navigate to the barcode scanner page from the Member ID Card page
 - Verify the member's account is active and belongs to your organization
-- The barcode uses Code128 encoding of the member's UUID
+- The barcode is Code 128 of the member's server-issued badge code (`MB-` plus ten characters). Scans are resolved by the server (`POST /member-badges/resolve`), so the scanner needs a network connection
+- "No member found" for an **old** badge (membership number, short id, old phone-card QR) means an officer turned **Accept old badges** off (Members → select → Print ID Cards, bottom of the page). Reprint the card, or turn the setting back on while cards are reissued
+- Lookups are limited to 120 a minute per address; a long queue behind one scanner can briefly be refused
 
 ### Problem: Print Layout Not Matching ID Card Dimensions
 
@@ -4152,6 +4155,10 @@ docker-compose logs backend | grep "duration=" | awk -F'duration=' '{if ($2+0 > 
 - Paper size: auto or custom (3.375" × 2.125")
 - Margins: None or Minimum
 - Background graphics: Enabled (for department branding colors)
+
+### Problem: Printing CR80 cards for a plastic card printer
+
+Members → select → **Print ID Cards** produces a PDF with one page per card side. In the printer driver choose the CR80 / ID-1 card size and print at 100% or "Actual size" — "Fit to page" shrinks the barcode below what scanners read. For **Front and back**, turn on two-sided printing, or print and flip by hand. Cards are black-only, so they print the same on monochrome and colour ribbons. Use **Test card** to check alignment before a run.
 
 ---
 
@@ -4206,6 +4213,12 @@ docker-compose logs backend | grep "duration=" | awk -F'duration=' '{if ($2+0 > 
 **Fix**: Wait for the countdown timer to reach zero. The default cooldown is 30 seconds after 5 rapid attempts. The timer is displayed on the login form.
 
 **If the issue persists**: The backend also enforces IP-based and per-user rate limiting. If your IP has been temporarily locked out (30-minute lockout after exceeding the threshold), wait for the lockout period to expire or contact your administrator.
+
+---
+
+### Problem: Pages load slowly or show 503 from one station address _(2026-10-05)_
+
+The bundled proxies bound each address at `limit_conn 400` and the API zone at 50 requests a second with `burst=600 delay=100`: the first 100 requests of a burst pass at once and the rest queue at 50 a second instead of being refused. (Before 2026-10-05 the limits were 10 concurrent and 10 a second, burst 20, so one member's dashboard load could lose most of its requests to 503.) A proxy configuration you copied before that still carries the old numbers. The sign-in limits (nginx `login_limit`, the backend's `rate_limit_login`: 5 a minute) are unchanged brute-force controls, so the sixth member to sign in at a station within a minute is asked to wait; see KNOWN_LIMITATIONS.
 
 ---
 
@@ -4388,6 +4401,18 @@ docker-compose restart backend
 **Cause:** Transient database connection failures (e.g., MySQL container restart, network blip) caused the login endpoint to throw an unhandled exception.
 
 **Status (Fixed 2026-03-01):** The login endpoint now catches transient connection errors and returns a user-friendly error message with HTTP 503 (Service Unavailable) instead of 500.
+
+### Problem: A request is answered 409 `LB-AUTH-012` _(2026-10-05)_
+
+Two tabs refreshed the same session at once; one rotated the tokens first and the other got this code instead of being treated as token theft. The app retries with the new cookies. Nothing is revoked and nobody needs to sign in again. If a member sees it as an error, a reload picks it up.
+
+### Problem: A "sign-out not confirmed" screen covers the app _(2026-10-05)_
+
+Signing out asks the server three times to end the session. If none is confirmed (server or network down), the screen is blocked, because the session cookies are still live. Close every browser window on that computer and choose **Try signing out again** once the connection is back. The block survives a reload by design.
+
+### Problem: "Items held offline" notice with Send as me / Discard _(2026-10-05)_
+
+Equipment checks, shift reports or submissions queued before 2026-10-05 carry no owner, so they are held rather than sent under whoever is signed in now. Only the member who queued them should choose **Send as me**; **Discard** deletes them. Entries queued after the upgrade are tagged with their member and sent only when that member is signed in.
 
 ### Problem: Login lockout resets on page refresh
 
@@ -10012,6 +10037,40 @@ fix, use **Reset Password** in Member Management.
 properly wherever the Host allowlist is active (production, staging, or any
 environment with `TRUSTED_HOSTS` set). Make health checks and proxies send the real hostname. See
 [Configuration → Security](../wiki/Configuration-Security.md#host-header-allowlist-2026-07).
+
+### Problem: A finance request is waiting and nobody can approve it _(2026-10-05)_
+
+**Cause:** Approval steps now go to the approver they name. A step that names a
+position nobody active holds, a member who has left, a permission nobody has, or
+a mistyped email leaves its requests waiting with nobody able to act.
+
+**Fix:** Open **Finance → Settings → Approval Chains**: a step nobody can act on
+carries a warning chip ("No active member can act on this step", "That position
+no longer exists", …) with "N requests waiting", and the page banner counts them.
+Rename the step's approver. In the meantime a holder of
+`finance.configure_approvals` can approve or deny from **Approvals** ("Not
+assigned to you" rows) by giving an override reason, which is audited at warning
+severity; nobody can approve their own request. The same list is
+`GET /api/v1/finance/approval-chains/approver-coverage`.
+
+### Problem: A scheduled task failed and nobody was told _(2026-10-05)_
+
+Failures of per-organization scheduled tasks (event, shift and series reminders,
+post-event and post-shift validation, end-of-shift summary, trainee escalation,
+compliance auto-report, event request reminders, officer directory sync,
+prospect attendance advance, Salesforce sync, and the others run through the
+per-organization loop) are written to **Admin → Error Monitoring**, labelled
+**Scheduled task**, with the task name and traceback. Before this they reached
+only the backend log and Sentry. A task that fails for one organization does not
+stop the others.
+
+### Problem: Skills-testing CSV export is refused with 400 _(2026-10-05)_
+
+The Test Records export needs a date range of at most 366 days
+(`date_from` and `date_to`). Set the tab's date range (it defaults to the last
+twelve months); the Export button is disabled with the reason when the range is
+missing or longer than a year. The **Needs Validation** deep link opens undated,
+so set a range before exporting.
 
 ## Still Stuck?
 

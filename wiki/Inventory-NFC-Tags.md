@@ -420,6 +420,11 @@ holders on an Android phone. Hold the member's card to the phone. A card
 marked lost, an unregistered card, or an inactive member is refused with the
 reason. Card taps are not written to the equipment tap log.
 
+The camera path of the same window reads a member's **printed badge**. Since
+2026-10-05 a badge encodes a server-issued badge code and the scanner resolves it
+through `POST /member-badges/resolve`; see
+[Member ID Cards](Member-ID-Cards#badge-codes-and-printing-cr80-id-cards-2026-10-05).
+
 ### Items not seen
 
 **Inventory → Administration → Items Not Seen** (`/inventory/admin/not-seen`)

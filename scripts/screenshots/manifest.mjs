@@ -7058,9 +7058,9 @@ export const SHOTS = [
     anchor: "The Summary dashboard viewed by a training officer",
     alt: "Skills testing summary with a non-zero Pending Validation count",
     // The stat cards live on the Templates tab, not Test Records — and the card
-    // is labelled "Needs Validation", which it earns by *replacing* the pass
-    // rate while the queue is non-empty. Clipped to the card row so the swap is
-    // legible; a full-page shot of this tab is already 09-01.
+    // is labelled "Needs Validation". Since 2026-10-05 an officer always sees
+    // it, zero included, beside Pass Rate (it no longer replaces it). Clipped
+    // to the card row; a full-page shot of this tab is already 09-01.
     route: "/training/admin?tab=templates",
     selector: "div.grid:has(p:text-is('Needs Validation'))",
     prepare: async (page) => {

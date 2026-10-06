@@ -329,7 +329,10 @@ selector]**
 > cards, a check-in station or a room's kiosk reads those. And a member can
 > open their own card any time, but another member's needs **members.manage**
 > or **members.manage_id_cards** — it's a scannable badge, so it isn't handed
-> to everyone."
+> to everyone. The code on it is a random one the server issues — not the
+> membership number — and a lost badge is cancelled with **Reissue badge**.
+> Printing badge labels or plastic ID cards for other members takes the same
+> two permissions."
 
 **[PRODUCTION NOTE — 2026-10-04. The previous take said the card's QR code was
 "scanned for check-in"; nothing checks a member in from it (pre-existing). The
@@ -366,6 +369,31 @@ if the pipeline exceeds 200.]**
 > "Click on any applicant to see their progress, notes, documents, and next
 > steps. You can advance them to the next stage, add notes from their interview,
 > or mark them as rejected with a reason."
+
+**[SCREEN: An applicant on a checklist stage — the drawer lists the stage's
+items as checkboxes and reads "2 of 5 items done"; tick the rest and press
+Advance]**
+
+> "If a stage is a checklist — fingerprints taken, physical scheduled — the
+> drawer shows each item as a checkbox, with a count of how many are done. Tick
+> them and advance from the drawer; that's what lets the stage pass. Dragging
+> the card across the board doesn't send the ticks, so a checklist stage with
+> items is advanced from the drawer."
+
+**[SCREEN: Pipeline Settings → the "Automatic Transfer to Membership" card]**
+
+> "And in the pipeline's settings, **Automatic Transfer to Membership** decides
+> whether completing the final stage makes the applicant a member on the spot.
+> A recorded vote or sign-off on that last stage creates the member; skipping
+> it never does; and every required stage has to be complete first. Until now
+> the setting existed but the screen couldn't show or change it."
+
+**[PRODUCTION NOTE — 2026-10-06. Two new beats, about 40 seconds total; re-time
+this chapter and film the drawer's checklist and the settings card (backend
+fac8959a, a61a6ad6). An upgrade also resets old stage rows left "in progress"
+ahead of an applicant's current stage (migration 99b16109d44c), so an applicant
+no longer shows chips for stages they haven't reached — retake any older
+drawer [SCREEN] that does.]**
 
 **[SCREEN: Select twelve applicants; run a bulk advance; the itemized result
 appears — ten advanced, two named and skipped with reasons.]**
@@ -623,6 +651,16 @@ who's swapping, which shifts, and the impact on coverage.]**
 > reason."
 
 **[SCREEN: Show approving a swap request]**
+
+> "For a two-way exchange, the Requests card names the other member, and The
+> Logbook checks that **both** are cleared for the seat they'd be taking —
+> when it's submitted, and again when you approve. If one of them stopped
+> qualifying while it sat there, Approve is refused with the reason, and you get
+> **Approve anyway**. That waives only the position check; it's recorded on the
+> request and in the audit log."
+
+**[PRODUCTION NOTE — 2026-10-06. New beat, about 25 seconds; re-time Chapter 6
+and film the Approve-anyway confirmation (37721521). The code is LB-SCHED-002.]**
 
 **[SCREEN: Scheduling → Requests. Point to one row reading "→ Open swap" and
 one reading "→ Offered to <name>"]**
@@ -941,9 +979,12 @@ on.]**
 
 > "**After Events:** Review attendance, then **finalize** it. That locks the
 > roster, credits the hours — and, if any applicants were in the room, it's what
-> moves them to their next pipeline stage. After that, a change to the event is
-> refused with a sentence saying attendance is finalized. Reopening it is a
-> department leader's permission — correct it, then finalize again."
+> moves them to their next pipeline stage. After that, you can still fix a
+> typo in the title or the description from the edit form — but a change to
+> what the credited hours were worked out from, the times, the type or the
+> check-in rules, is refused with a sentence saying attendance is finalized.
+> Reopening it is a department leader's permission — correct it, then finalize
+> again."
 
 > "**Weekly:** Review analytics for trends. Check prospective member pipeline
 > progress. Review any pending actions from the previous meeting minutes."

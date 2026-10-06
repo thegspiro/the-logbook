@@ -107,6 +107,36 @@ Profiles allow different compliance standards for different groups within the or
 | `is_active`                    | `boolean` | Whether this profile is currently enforced                      |
 | `priority`                     | `integer` | Resolution order for members matching multiple profiles         |
 
+### How profiles are applied _(2026-10-05)_
+
+One resolution decides what grades a member, and every screen that shows a
+standing reads it (`ComplianceGrading` in `app/services/training_compliance.py`):
+the matching profile's `required_requirement_ids` narrow the requirements, its
+threshold overrides replace the org's, and then each remaining requirement is
+checked with `requirement_applies_to_user` (join date, rank, membership type).
+It is the same for the dashboard percentage, the compliance matrix, the
+**Department Compliance** card (TR4-3), and the annual and monthly compliance
+reports (CMP4-3). Before 2026-10-05 the card graded every member against every
+applicable requirement at 100%, and the reports used the fixed 100% / 75%
+thresholds, so a department using profiles read different figures in each place.
+Stored reports keep the figures they were generated with; departments without a
+profile see no change.
+
+- **`role_ids` are position ids** and are matched against the member's
+  positions. A requirement's own `required_roles` are **rank slugs** and are
+  matched against the member's rank (CMP4-5) — two different fields; do not put
+  one in the other.
+- **A member nothing grades is "not applicable", not compliant** (TR4-4): none
+  applies, a profile selects none, or every one is still in its catch-up period.
+  They are out of every percentage and show N/A. The percentage is `null` when
+  nobody is graded; with no members and no requirements the documented defaults
+  stand.
+- **The attestation records the server's figure** (CS-8): the department's
+  percentage as of the period's last day, not a typed one.
+- See [Training compliance calculations](./training-compliance-calculations.md)
+  for the per-requirement rules, including certification name matching, which
+  after 2026-10-05 applies only to legacy records (`name_match_until`).
+
 ---
 
 ## Automated Reports

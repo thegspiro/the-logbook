@@ -221,26 +221,52 @@ all move.]**
 > "Two things it gets right for you. A seven o'clock class stays at seven
 > o'clock, even if the clocks change in between. And if any class it would move
 > already has its attendance finalized, it moves **nothing** and tells you why
-> — you never end up with half a schedule shifted."
+> — you never end up with half a schedule shifted. Cancelling the whole cohort
+> works the same way: all of it, or none of it."
 
 **[PRODUCTION NOTE — 2026-10-04. New line (fixed 2026-10-04: the shift used to
 move a class an hour across a daylight-saving change, and a finalized class
 partway through left the earlier ones moved). About 10 seconds; re-time
-Chapter 4.]**
+Chapter 4. 2026-10-06: that all-or-nothing behaviour was only true of the
+finalized-class pre-check until ff78de73; a refusal for any other reason — a
+room already taken on the new date — used to leave earlier classes moved or
+cancelled. Shift and cancel are now both one transaction, and cancel skips a
+class already cancelled from the calendar.]**
 
 **[SCREEN: Click Add class; fill in a make-up session.]**
 
 > "Need a make-up night that was never on the syllabus? Add class. The roster
 > gets invited automatically."
 
-**[SCREEN: Open the Roster tab; show a member's progress bar; click Remove on
-one member.]**
+**[SCREEN: Open the Roster tab; show a member's progress bar; click Add member,
+pick someone, confirm. The row now reads "N classes held before they joined —
+decide" and the decision panel opens.]**
 
 > "And on the roster: add somebody late and they're put on the classes still to
 > come — not the ones they already missed, because putting a finished class on
-> their calendar would just be confusing. Remove somebody and the upcoming
-> classes come off their calendar, but their records and anything they already
-> attended stay exactly where they are."
+> their calendar would just be confusing. Instead the Roster tab tells you how
+> many classes were held before they joined, and you decide each one."
+
+**[SCREEN: In the decision panel, choose "Credit as completed" for one class and
+schedule a make-up for another]**
+
+> "Credit it as completed and the member gets a completed training record for
+> that class — and, if the class feeds a pipeline requirement, the progress too.
+> Or schedule a make-up: it copies the class to the time you pick, invites that
+> member alone, and credits them the usual way once its attendance is
+> finalized. Cancel the make-up and the decision comes back to you."
+
+**[SCREEN: Click Remove on one member.]**
+
+> "Remove somebody and the upcoming classes come off their calendar, but their
+> records and anything they already attended stay exactly where they are."
+
+**[PRODUCTION NOTE — 2026-10-06. New beat, about 45 seconds; re-time Chapter 4
+and film the Add member button and the decision panel (W27-3). A "missed class"
+is one that started before the member was added, isn't cancelled and isn't a
+make-up; classes the member already holds an RSVP for don't count. The old
+narration said a late member simply isn't on the earlier classes and offered no
+way to credit them.]**
 
 **[TRANSITION: The gotchas]**
 

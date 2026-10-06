@@ -515,6 +515,72 @@ watching the department can share a dashboard without sharing a lens.
 
 ---
 
+## Member Badges and ID Card Printing _(2026-10-05)_
+
+```
+GET    /api/v1/member-badges/settings               # { accept_legacy } (members.manage or members.manage_id_cards)
+PUT    /api/v1/member-badges/settings               # { accept_legacy: bool }  (audit: member_badge_settings_updated)
+POST   /api/v1/member-badges/resolve                # { code } -> the member a scan identifies (rate limited, 120/min per address)
+GET    /api/v1/member-badges/{user_id}              # { user_id, badge_code } - the member themselves, or a badge officer; else 404
+POST   /api/v1/member-badges/{user_id}/reissue      # Cancel a lost badge, issue a new code (badge officers; audit: member_badge_reissued)
+GET    /api/v1/member-id-cards/layout               # Saved CR80 layout, or the default
+PUT    /api/v1/member-id-cards/layout               # { orientation, sides, symbology } (audit: id_card_layout_updated)
+POST   /api/v1/member-id-cards/pdf                  # { user_ids (1-500), orientation?, sides?, symbology? } -> application/pdf (audit: id_cards_printed)
+```
+
+Badge officers are holders of `members.manage` or `members.manage_id_cards`.
+`resolve` also accepts `users.view` and `inventory.manage` holders, the two
+scanners' own gates, and answers only within the caller's organization with
+`{ user_id, name, membership_number, is_active, matched }` where `matched` is
+`badge_code` or `legacy`. The badge code (`users.badge_code`, `MB-` plus ten
+characters) is **never** in a roster, profile, export or anonymized record. Old
+badges (membership number, short id, old digital-card QR) resolve while
+`accept_legacy` is not `false`; absent means accepted. See
+[Member ID cards](Member-ID-Cards#badge-codes-and-printing-cr80-id-cards-2026-10-05).
+
+## Finance, Scheduling, Training and Prospects — Additions _(2026-10-05)_
+
+```
+GET    /api/v1/finance/approval-chains/approver-coverage   # Every approval step, who can act, any problem, requests waiting (finance.configure_approvals)
+POST   /api/v1/finance/approvals/{step_record_id}/approve  # body { notes?, overrideReason? }; 403 unless the caller is the step's named approver
+POST   /api/v1/finance/approvals/{step_record_id}/deny     # same; an approvals admin overrides with overrideReason (<= 2000 chars)
+GET    /api/v1/scheduling/shifts/{id}/exchange-candidates  # Seats the caller could exchange for; only pairs where both members qualify (409 if the caller holds no seat)
+PATCH  /api/v1/scheduling/swap-requests/{id}/review        # body gains override_qualification (waives the position check only); a lapsed pair is refused 400 with LB-SCHED-002
+GET    /api/v1/training/records?skip=&limit=               # Paged: limit 1-500 (default 500); X-Total-Count carries the matching total; still a bare list
+GET    /api/v1/training/skills-testing/tests               # NOW { items, total }; limit (default 50, max 200), offset, search, date_from, date_to
+GET    /api/v1/training/skills-testing/templates           # Still a bare list; limit (default and cap 500), offset, ordered by name
+GET    /api/v1/training/skills-testing/tests/export/csv    # 400 without BOTH date_from and date_to, or a window over 366 days
+GET    /api/v1/training/submissions/config                 # now carries attachment_retention_days
+PUT    /api/v1/training/submissions/config                 # attachment_retention_days: null (keep, the default) or 90-36500 (audit: self_report_attachment_retention_updated)
+POST   /api/v1/training/cohorts/{id}/members               # add late joiners; classes already held come back as missed classes to decide
+GET    /api/v1/training/cohorts/{id}/members/{user_id}/missed-classes
+POST   /api/v1/training/cohorts/{id}/members/{user_id}/missed-classes/{cohort_class_id}/credit    # write a completed record (audit: course_cohort_missed_class_credited)
+POST   /api/v1/training/cohorts/{id}/members/{user_id}/missed-classes/{cohort_class_id}/makeup    # copy the class to a new time for this member alone
+POST   /api/v1/prospective-members/prospects/{id}/advance  # body gains completed_items (<= 200 items, each <= 255 chars) for a checklist stage
+POST   /api/v1/compliance/attestations                     # no compliance_percentage: the server records its own figure and compliance_as_of
+```
+
+- **Skills-testing list shape changed.** `GET /tests` used to return a bare list;
+  it now returns `{ items, total }`, newest first (`created_at DESC, id DESC`).
+  `total` is what the caller may see. The CSV export and the list share one
+  filter and one date, `COALESCE(completed_at, created_at)`, so the file is the
+  rows the Test Records tab shows.
+- **Training records are paged, not truncated.** `trainingService.getRecords`
+  walks the pages until a short one; a script reading `/training/records` must
+  do the same or read `X-Total-Count`.
+- **Attestation** records `compute_org_compliance_pct` for the department as of
+  the period's last day (or today for a running period), refuses a period that
+  has not started, and records no figure (N/A) when nobody is graded.
+- **Compliance figures.** A member nothing grades is `not_applicable` and out of
+  every percentage; `compliance_percentage` is `null` when nobody is graded.
+  Compliance matrix rows carry `standing: "not_applicable"` and
+  `completion_pct: null`; the dashboard summary adds `graded_members` and
+  `not_applicable_members`.
+- **Event RSVPs** (`GET /events/{id}/rsvps`) now carry `credited_check_in_at`,
+  the check-in the credit is actually computed from; other RSVP responses leave
+  it null.
+- **Elections.** The election list now carries `closed_at`.
+
 ## NFC ID Cards & Station Check-In _(2026-08-23)_
 
 ```

@@ -90,6 +90,47 @@ ID** nor the in-app badge scanner recognised it — the department's own badge
 read "No member found". Both resolve it now. The check-in station and room
 kiosks identify by NFC card, not by the printed QR code.
 
+## Badge codes and printing CR80 ID cards _(2026-10-05)_
+
+**Badges carry a server-issued code.** A member's printed badge, label and
+digital card used to encode the membership number, or a short form of their
+member id. Every member can read both in the directory, so anyone could make a
+badge that scans as a colleague. Each member now has a random **badge code**
+(`users.badge_code`, for example `MB-7KQ2W9HXRT`), unique per organization,
+issued by the upgrade for every existing member and by default for new ones.
+
+- It is shown only to the member (on their own ID card page) and to officers
+  holding `members.manage` or `members.manage_id_cards`
+  (`GET /member-badges/{id}`; anyone else gets 404). It is never in the roster,
+  profile responses, export files or anonymized records.
+- **Reissue badge** on a member's ID card page cancels a lost badge: every card
+  printed so far, and the phone card until it reloads, stops scanning. Print a
+  new card afterwards. Audited as `member_badge_reissued`.
+- Both scanners (**Scan Member ID** and inventory's issue-by-badge) send what
+  they read to `POST /member-badges/resolve`, which answers only within the
+  caller's organization and is rate limited (120 lookups a minute per address).
+  A QR's member id is no longer taken on trust.
+- **Accept old badges** (switch on the Print ID Cards page, officers only) keeps
+  the membership-number, short-id and old-QR badges scanning. It is **on** until
+  an officer turns it off, so nothing stops working on upgrade; turning it off
+  asks for confirmation and stops every pre-badge-code card at every station.
+  Turn it off once every member has a reprinted card. Audited as
+  `member_badge_settings_updated`.
+
+**Print ID Cards.** On the Members list, select members and choose **Print ID
+Cards** (`/members/print-id-cards`, `members.manage` or
+`members.manage_id_cards`). The server renders a PDF whose every page is one
+CR80 card side (3.375 x 2.125 in); any plastic card printer (Zebra, HID Fargo,
+Evolis, Magicard, Entrust Datacard) prints it through its ordinary OS driver at
+the CR80 / ID-1 size, at 100% (not "Fit to page"). Choose **Landscape** or
+**Portrait**, **Front only** or **Front and back** (alternating pages, for a
+duplex printer or flipping by hand), and **Barcode** (Code 128) or **QR code**.
+**Save as department layout** keeps the choice for the next job, **Test card**
+prints one card, and up to 500 cards go in one job. Cards are black-only, so
+they print the same on monochrome and colour ribbons. Printing is audited as
+`id_cards_printed`. This is the printed-card path; the NFC card flow above is
+separate.
+
 ## The check-in station
 
 `/members/check-in-station`, requires **`members.check_in`**.
@@ -172,7 +213,7 @@ shown how early it was rather than having to compare timestamps by eye. See
 
 ## API
 
-See [API Reference → NFC ID Cards & Station Check-In](API-Reference#nfc-id-cards--station-check-in-2026-08-23).
+See [API Reference → NFC ID Cards & Station Check-In](API-Reference#nfc-id-cards--station-check-in-2026-08-23) and, for badge codes and CR80 printing, [API Reference → Member badges and ID card printing](API-Reference#member-badges-and-id-card-printing-2026-10-05).
 
 ## Data
 

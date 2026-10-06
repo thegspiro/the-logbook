@@ -167,6 +167,14 @@ The Logbook supports multiple authentication methods:
 | Public forms (view)   | 60/minute | Per IP                 |
 | Public forms (submit) | 10/minute | Per IP                 |
 
+The bundled nginx proxies add a per-address ceiling in front of these _(2026-10-05)_:
+`limit_conn 400` concurrent requests and the API zone at 50 requests a second with
+`burst=600 delay=100` (the first 100 requests of a burst pass at once, the rest
+queue rather than being refused). The values are sized for a station of about a
+hundred members sharing one public address; sign-in stays at 5 a minute (burst 3).
+A proxy you run yourself needs its own limits sized the same way. See
+[Deployment guide](../docs/DEPLOYMENT.md#docker-compose-production-profile).
+
 ---
 
 ## Brute-Force Controls _(2026-08-17)_
