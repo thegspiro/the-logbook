@@ -1,7 +1,269 @@
 # Application Review — Apparatus (Tier B)
 
 **Prefix:** `AP2` · **Iteration:** B2 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-10-05 (pass 5)
+
+---
+
+## Pass 5 (2026-10-05) — the deferred depth read, and the test three passes could not run
+
+**Backend:** `endpoints/apparatus.py` (3,308 L, **88** endpoints — was 2,980 L /
+83), `services/apparatus_service.py` (2,667 L — was 2,395),
+`evoc_level_service.py` (475 L — was 329), `schemas/apparatus.py` (1,967 L),
+`driver_exception_service.py`
+**Frontend:** none changed this pass
+**Docs:** no `docs/APPARATUS.md`; `wiki/API-Reference.md` covers the module at
+the nav/permission level
+
+### Scope
+
+Passes 1–4 reviewed this module at the **invariant** level (auth, tenancy, FK
+scoping) and each one recorded the same two deferrals: a real-database
+integration test, and "a future depth read of the maintenance-scheduling and
+EVOC business logic, as its own focused iteration". Pass 5 is that iteration,
+and it closes the test.
+
+Read in full: the maintenance lifecycle (`create_` / `update_maintenance_record`,
+`get_maintenance_due`), `get_apparatus_stats`, the EVOC eligibility gate
+(`check_driver_evoc_eligibility`) and its two callers, `list_approvers`, and the
+delta since pass 4 (five commits — the org-timezone dating of apparatus work,
+the EVOC certificate date move, security-review pass 5, and `preferred_name`).
+**Not** read line-by-line: the fuel-log, equipment, photo/document and custom-field
+sub-resources, whose invariants passes 1–4 verified and which this pass did not
+re-derive.
+
+### Verified good ✅
+
+- **All 88 endpoints carry an auth dependency** — enumerated mechanically
+  (parse each `@router.*`, walk to its `def`, scan the whole signature block),
+  not spot-checked. 87 carry a permission gate; the distribution is
+  `apparatus.view|manage` ×32, `apparatus.manage` ×32, `apparatus.edit|manage`
+  ×12, `apparatus.maintenance|edit|manage` ×5, and seven singletons.
+- **The one authentication-only route is deliberate and its claim is true.**
+  `GET /driver-exceptions/approvers` is readable by any member — a member
+  refused the driver seat needs to know who to ask. Its docstring promises
+  "only names and ranks, not contact details"; verified against
+  `DriverExceptionApprover` (`user_id`, `user_name`, `rank` — nothing else) and
+  against `list_approvers`, which is org-scoped, excludes deleted and inactive
+  members, and resolves names through `display_name` — the right choice for a
+  "who to call" surface per `utils/member_names.py`.
+- **The org-timezone sweep is complete, not partial.** `date.today()` appears
+  **nowhere** in `apparatus_service.py`, `evoc_level_service.py` or
+  `endpoints/apparatus.py`. Every calendar-day decision (disposal date, overdue
+  comparison, completion date, the 30-day expiry windows, the 12-month service
+  cutoff, EVOC `as_of`) routes through `resolve_org_today`; every _timestamp_
+  stays `datetime.now(timezone.utc)`. That is the correct split and there is no
+  surface left on the viewer's clock — the partial-sweep failure this pass went
+  looking for is not present.
+- **`is_overdue` staleness is already closed, and the closing task is really
+  wired.** The flag is stored at write time and `get_maintenance_due` reports
+  the stored value, so a record entered with a future due date would read
+  "not overdue" after the date passed — understating the dashboard's overdue
+  count. `run_mark_overdue_maintenance` (`scheduled_tasks.py:5835`) fixes this
+  daily, per-organization, in that org's own timezone. Its docstring claims it
+  "runs daily"; verified rather than inherited — metadata at `:433`, runner in
+  the dispatch map at `:6421`, `86400` interval at `:6474`, plus its own
+  `tests/test_mark_overdue_maintenance.py` and an org-local-today test. Not
+  re-reported as a finding.
+- **Injection-free.** No `text()`, f-string or `.format()` query building. Every
+  `ilike` builds its pattern with `like_pattern()` and passes
+  `escape=LIKE_ESCAPE_CHAR` — on the continuation line, which a line-based grep
+  reports as a false positive; `tests/test_like_escaping.py` (3 passed) is the
+  authority and it is green.
+- **E712-free** — 0 `# noqa: E712` in `apparatus_service.py`, as pass 3 left it.
+
+### AP2-4 — MED — The EVOC gate fails open when the apparatus cannot be resolved — 🚩 FLAGGED
+
+**What:** `check_driver_evoc_eligibility` returns `eligible: True` both when the
+apparatus has no EVOC requirement **and** when the apparatus cannot be found at
+all — one condition covered both:
+`if not apparatus or not apparatus.required_evoc_level_id`.
+
+**Where:** `backend/app/services/evoc_level_service.py:311` (pre-fix line).
+
+**Impact:** reachable without an attacker, through ordinary data loss.
+`Shift.apparatus_id` is `Column(String(36))  # Link to apparatus (future)` —
+**no foreign key** (`models/training.py:2954`) — and `delete_apparatus` is a
+hard delete (`apparatus_service.py:870`, docstring: "hard delete - use archive
+for soft delete"). So retiring an engine leaves every shift that referenced it
+pointing at a row that no longer exists. `shift_eligibility_service.py:1292`
+passes that id straight in, gets `eligible: True`, and seats any member in the
+driver's seat with **no warning** — the EVOC requirement silently stops being
+enforced on exactly the shifts of a decommissioned truck. CLAUDE.md pitfall #14
+names this shape directly: "fail closed in access-control helpers — if a
+referenced folder/parent can't be resolved, deny, don't grant."
+
+**Fix:** the verdict is **not** changed here, and that is deliberate. Flipping an
+unresolvable apparatus to ineligible is a behavior change in a safety gate:
+depending on the org's enforcement setting it would start warning — or blocking —
+on every shift carrying a dangling reference, and a department with that data
+would feel it immediately. That is an owner call, mirrored into
+`KNOWN_LIMITATIONS.md`.
+
+What _was_ changed is the silence, which needed no decision: the two cases are
+now separate code paths and the unresolvable one logs a warning naming the
+apparatus, the org and the member. The gate's answer is identical; the failure is
+now diagnosable instead of invisible.
+`tests/test_evoc_level_service.py::test_unresolvable_apparatus_is_logged` pins
+that, and says in its own docstring that the verdict it asserts is the flagged
+one — so whoever decides AP2-4 has to update the test deliberately rather than
+discovering it.
+
+Two options for the decision:
+
+1. **Fail closed** — return `eligible: False` with a warning that the apparatus
+   could not be found. Correct per pitfall #14; surfaces broken data loudly.
+2. **Fix the data path instead** — give `shifts.apparatus_id` a real FK with
+   `ondelete="SET NULL"` (pitfall #2: then `nullable=True`), so a deleted
+   apparatus clears the reference and the shift legitimately has no EVOC
+   requirement. Needs a migration and a decision about the other polymorphic
+   `apparatus_id` columns that deliberately match it.
+
+### AP2-5 — LOW — Four no-op attachment "conversion" blocks — ✅ FIXED
+
+**What:** four copies of a block whose two branches are identical:
+
+```python
+dump["attachments"] = [a if isinstance(a, dict) else a for a in dump["attachments"]]
+```
+
+`a if isinstance(a, dict) else a` is `a`. The comment above each — "Convert
+attachment models to dicts for JSON storage" — describes work the block does not
+do: `model_dump()` has already recursed into the nested `FileAttachment` /
+`NoteAttachment` models and produced dicts. Verified rather than assumed, by
+dumping a real `ApparatusMaintenanceCreate` carrying one attachment and checking
+the element types (`['dict']`).
+
+**Where:** `apparatus_service.py` lines 1205, 1339, 2494, 2542 (pre-fix) —
+`create_`/`update_maintenance_record` and `create_`/`update_component_note`.
+
+**Impact:** none at runtime; this is dead code that misdescribes itself, which is
+the maintenance liability CLAUDE.md's comment policy is about — the next reader
+either trusts the comment and believes a conversion happens, or works out that it
+doesn't and wonders what broke.
+
+**Fix:** all four removed; the two create paths keep one honest comment saying
+`model_dump()` has already done it. Behavior-identical — the only difference is
+list identity, and the value goes straight into a JSON column. flake8 0, black
+clean, 13 existing `test_apparatus_service.py` tests unchanged and passing.
+
+### AP2-6 — LOW — The deferred real-database FK test, written — ✅ FIXED
+
+**What:** passes 2, 3 and 4 each recorded "no apparatus-service integration test
+against a real DB" as open, attributing it to the sandbox. That attribution was
+stale: `.claude/hooks/session-start.sh` starts MariaDB and builds the schema, so
+`db_session` tests run in a web session. The checklist's own "Known sandbox
+limitations" said they could not, which is what kept the item deferred — that
+entry is corrected (see Documentation gaps).
+
+**Where:** new `backend/tests/test_apparatus_service_fk_scoping_integration.py`
+(7 tests, `pytest.mark.integration`).
+
+**Impact:** the FK org-scoping that three passes signed off rested on mocked
+sessions, and **a mocked session cannot distinguish a working
+`WHERE organization_id = :org` from a missing one** — it returns whatever the stub
+was handed. The count of `assert_in_org` call sites was being used as the
+evidence instead, and that count has now been wrong in the docs twice (17 → 16 →
+actually 19). A test is the right evidence.
+
+**Fix:** cross-org and same-org cases on each FK — `required_evoc_level_id` on
+create and update, `component_id` and `service_provider_id` on maintenance
+create — plus an XC-3 by-id read check. Each cross-org case asserts the guard's
+own message (`match="Invalid EVOC level"`, `"Invalid component"`,
+`"Invalid service provider"`) so a different `ValueError` cannot satisfy it, and
+each is paired with a positive case, because a guard that rejected _everything_
+would otherwise pass the file.
+
+Mutation-tested: removing the `assert_in_org` call from `create_apparatus` fails
+`test_foreign_evoc_level_is_refused` and **only** that test; restored with the
+same mechanism that applied it. Marker routing verified by collection, per
+pitfall #30b — 0 tests collected under the unit job's
+`-m "not integration and not slow and not docker"`, 7 under `-m integration`.
+
+Two constraints the mocked tests had never exercised turned up while writing it,
+which is the argument for real SQL in one line: `create_apparatus` stamps
+`status_changed_by`, which carries a foreign key to `users.id` (a bare uuid fails
+at flush), and `ApparatusMaintenanceType.code` is `NOT NULL`.
+
+### Duplication
+
+- **`is_overdue` is maintained twice, by design.** `ApparatusMaintenance` and
+  `FacilityMaintenance` each stamp it on their own create/update paths, and
+  `run_mark_overdue_maintenance` refreshes **both** in one loop. That is the
+  right shape — one owner for the time-passing case — and worth recording as
+  checked rather than flagged, because two services writing the same derived
+  flag looks like drift until you find the shared task.
+- No duplication introduced or found within the maintenance/EVOC code this pass.
+
+### Dead code
+
+- The four no-op attachment blocks — deleted (AP2-5).
+- `grep -rn "check_driver_evoc_eligibility"` confirms two live callers
+  (`shift_eligibility_service.py:1292`, `endpoints/apparatus.py:2896`); not dead.
+
+### Documentation gaps
+
+Four corrected this pass, all of them claims that had rotted:
+
+1. **`docs/app-review/CHECKLIST.md` told reviewers to update `CHANGELOG.md`** —
+   which CLAUDE.md closed to new entries on 2026-09-08. Following the checklist
+   would have violated the rule, and the pre-commit checklist item that catches
+   it. Replaced with PROGRESS.md, and the `docs/UPGRADING.md` carve-out noted.
+2. **The same file's "DB-backed pytest cannot run here"** — the claim that
+   deferred AP2-6 across three passes. Corrected to "check before assuming",
+   naming the session-start hook, and keeping the genuine no-DB signature for
+   environments that lack one.
+3. **Pass 4's `assert_in_org` count (16)** — actually 19; the module grew. Noted
+   in place, with the observation that the number is what keeps rotting, which
+   is why pass 5 put a test behind the coverage instead of restating a count.
+4. **`docs/module-audit/apparatus.md` AP-1 contradicted itself** — heading
+   `✅ FIXED`, body "Status: flagged … Not auto-fixed". The heading was updated
+   when the fix landed and the body never was. Body rewritten to record both the
+   fix and the original reasoning, which is what produced `assert_in_org`.
+
+Still missing, not created here: there is **no `docs/APPARATUS.md`**. 88
+endpoints, two permission strings of its own plus six it shares, the EVOC
+ladder, the maintenance lifecycle and the driver-exception workflow are
+documented only in docstrings and `wiki/API-Reference.md`'s nav table. Writing
+it is a pass of its own, not a side-effect of this one.
+
+### Future development
+
+1. **AP2-4's decision** (above) — fail closed, or give `shifts.apparatus_id` a
+   real FK. The second option is the better fix and the more invasive one.
+2. **`docs/APPARATUS.md` does not exist.** The largest module in the repo by
+   endpoint count has no feature doc.
+3. **The maintenance interval fields are declared but unscheduled.**
+   `ApparatusMaintenanceType` carries `default_interval_value`,
+   `default_interval_unit`, `default_interval_miles`,
+   `default_interval_hours` — nothing in `apparatus_service.py` reads them to
+   generate the next record when one is completed. Completing an annual pump
+   test does not schedule next year's. That is CLAUDE.md pitfall #19's shape
+   (stored configuration with no reader), and it is a feature decision rather
+   than a defect: a department may be scheduling manually on purpose.
+   Not fixed, not flagged as a bug — recorded here because the columns imply a
+   promise the code does not keep.
+4. **The sub-resources still have no depth read** — fuel logs, equipment,
+   photos/documents, custom fields. Their invariants are verified; their business
+   logic is not.
+5. **No integration test for the EVOC gate itself.** AP2-6 covers FK scoping
+   against real SQL; `check_driver_evoc_eligibility`'s cumulative-level algebra
+   is covered only by mocked tests. Its correctness decides who may drive, which
+   makes it the next best candidate for a real-database test.
+
+### Completion gate (pass 5)
+
+| Check                | Result                                                                                                                                               |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run typecheck`  | ✅ 0 errors (run repo-wide; no frontend file changed this pass)                                                                                      |
+| `flake8 app/ tests/` | ✅ 0                                                                                                                                                 |
+| `black --check`      | ✅ 1,370 files unchanged (the new test file was reformatted once, then re-run)                                                                       |
+| `isort --check-only` | ✅ clean                                                                                                                                             |
+| `npm run lint`       | ✅ 0 (full run, `--max-warnings 10`)                                                                                                                 |
+| docs link check      | ✅ 433 Markdown files, 0 broken links                                                                                                                |
+| route permissions    | ✅ 245 routes, 0 errors, 0 warnings (`check_route_permissions.py --strict`)                                                                          |
+| backend tests        | ✅ **57 passed** — apparatus FK integration (7, new) · apparatus service (13) · EVOC (32, +1 new) · LIKE escaping (3) · mark-overdue-maintenance (2) |
 
 ---
 
@@ -18,6 +280,9 @@ state holds and found nothing to change:
   recounted via `grep -c` on the file; the coverage claim was always
   correct, only the count was off. The
   create-path (AP-1) and update-path (AP2-1/AP2-2) FK classes remain closed.
+  _(Pass 5, 2026-10-05: now **19** — the module has grown since. The number is
+  the thing that keeps rotting here, which is why pass 5 stopped restating it
+  and put the coverage under a test instead; see AP2-5.)_
 - **E712-free** — 0 `# noqa: E712` in `apparatus_service.py`.
 - **Latent-500 lens clean** — `fuel_type` is `Optional[FuelTypeEnum]` on both
   `ApparatusCreate`/`Update` and enum-typed on the response; the component-note

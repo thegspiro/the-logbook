@@ -40,7 +40,7 @@ from its open list.
 | #   | Feature                    | Prefix | Status |
 | --- | -------------------------- | ------ | ------ |
 | B1  | medical-screening          | MS2    | ✅     |
-| B2  | apparatus                  | AP2    | ⬜     |
+| B2  | apparatus                  | AP2    | ✅     |
 | B3  | inventory                  | INV2   | ⬜     |
 | B4  | facilities                 | FAC2   | ⬜     |
 | B5  | elections                  | ELEC2  | ⬜     |
@@ -2799,3 +2799,63 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   Gate: tsc 0 · flake8 0 · black 1351 unchanged · eslint 0 (full run) ·
   `routeIntegrity` 7 passed (was 5) · backend dashboard suite 97 passed, 1
   skipped. See dashboard.md → Pass 3. Next: A8 locations & kiosk.
+- **B2 apparatus ✅ (pass 5) — the depth read passes 1–4 deferred, and the test
+  they could not run. 2 fixes, 1 flagged, 4 doc corrections.** Passes 1–4
+  reviewed this module at the invariant level and each recorded the same two
+  deferrals; this pass is both of them. **The integration test was deferred on a
+  stale premise:** `CHECKLIST.md`'s "DB-backed pytest cannot run here" is no
+  longer true — `.claude/hooks/session-start.sh` starts MariaDB and builds the
+  schema — so three passes left the FK scoping resting on mocked sessions, and
+  **a mocked session cannot distinguish a working `WHERE organization_id = :org`
+  from a missing one.** The count of `assert_in_org` call sites was standing in
+  as the evidence, and that count has now been wrong in the docs twice
+  (17 → 16 → actually 19). **AP2-6** replaces it with
+  `test_apparatus_service_fk_scoping_integration.py` (7 tests, `integration`):
+  cross-org _and_ same-org cases on each FK, each cross-org case matching the
+  guard's own message so a different `ValueError` cannot satisfy it, each paired
+  with a positive case so a guard that rejected everything would still fail.
+  Mutation-tested — removing `create_apparatus`'s `assert_in_org` fails exactly
+  one test — and marker routing confirmed by collection (0 under the unit job's
+  `-m`, 7 under `-m integration`), per pitfall #30b. Writing it against real SQL
+  immediately surfaced two constraints the mocked tests never touched:
+  `create_apparatus` stamps `status_changed_by`, which has a real FK to
+  `users.id`, and `ApparatusMaintenanceType.code` is `NOT NULL`. **AP2-4 (MED,
+  flagged)** is the depth read's finding: `check_driver_evoc_eligibility` returns
+  _eligible_ both when an apparatus has no EVOC requirement and when it cannot be
+  found, and the second case is reachable with no attacker — `shifts.apparatus_id`
+  carries **no foreign key** and `delete_apparatus` is a hard delete, so retiring
+  an engine leaves its shifts pointing at a missing row and the driver gate
+  silently stops enforcing. The verdict was **deliberately not changed** (a
+  safety-gate behavior change, and an org with that data would start blocking
+  seatings on deploy); the silence was — the two cases are now separate paths and
+  the unresolvable one logs the apparatus, org and member, with a test whose
+  docstring says the verdict it asserts is the flagged one. Owner decision in
+  `KNOWN_LIMITATIONS.md`: fail closed, or give `shifts.apparatus_id` a real
+  `SET NULL` FK. **AP2-5 (fixed)** removed four copies of
+  `[a if isinstance(a, dict) else a for a in ...]` — both branches identical,
+  under a comment describing a conversion `model_dump()` had already done
+  (verified by dumping a real payload, not assumed). **Verified rather than
+  inherited:** all **88** endpoints (was 83) carry an auth dependency, enumerated
+  mechanically rather than spot-checked, 87 of them permission-gated — the one
+  authentication-only route is documented as member-readable and its "names and
+  ranks only" claim checks out against both the schema and `list_approvers`,
+  which also resolves `display_name`, correct for a "who to call" surface. The
+  org-timezone sweep is **complete**: `date.today()` appears nowhere in the three
+  files, with calendar-day decisions on `resolve_org_today` and timestamps on
+  `datetime.now(timezone.utc)`. The stale-`is_overdue` defect I went looking for
+  is **already closed** by `run_mark_overdue_maintenance`, whose "runs daily"
+  docstring I verified against the registry, dispatch map and 86400s interval
+  rather than taking it on trust — so it is recorded as checked, not re-reported.
+  A line-grep "finding" of unescaped `ilike` was a false positive: the `escape`
+  kwarg sits on the continuation line and `test_like_escaping.py` is green.
+  **Doc corrections:** CHECKLIST.md told reviewers to update the frozen
+  `CHANGELOG.md`; CHECKLIST.md's no-DB claim (the one that caused the deferral);
+  pass 4's stale `assert_in_org` count; and `module-audit/apparatus.md`'s AP-1,
+  whose heading said FIXED while its body still said "not auto-fixed".
+  Flagged for later: no `docs/APPARATUS.md` exists for the repo's largest module
+  by endpoint count, and `ApparatusMaintenanceType`'s four `default_interval_*`
+  columns have no reader — completing an annual pump test schedules nothing
+  (pitfall #19's shape, but plausibly deliberate, so recorded rather than
+  called a bug). Gate: flake8 0 · black 1,370 unchanged · tsc 0 · eslint (no
+  frontend change this pass) · backend **57 passed**. See apparatus.md → Pass 5.
+  Next: B3 inventory.

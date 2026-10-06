@@ -9,6 +9,7 @@ shift scheduling.
 from datetime import date
 from typing import List, Optional
 
+from loguru import logger
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -308,13 +309,29 @@ class EvocLevelService:
             )
         )
         apparatus = apparatus_result.scalar_one_or_none()
-        if not apparatus or not apparatus.required_evoc_level_id:
-            return {
-                "eligible": True,
-                "warning": None,
-                "required_level": None,
-                "user_level": None,
-            }
+        no_requirement = {
+            "eligible": True,
+            "warning": None,
+            "required_level": None,
+            "user_level": None,
+        }
+        if apparatus is None:
+            # `shifts.apparatus_id` carries no foreign key and `delete_apparatus`
+            # is a hard delete, so a retired engine leaves its shifts pointing at
+            # a row that no longer exists. Those shifts then reach here and the
+            # requirement stops being enforced with nothing said — log it, so the
+            # silence is at least diagnosable. Whether an unresolvable apparatus
+            # should instead fail closed is AP2-4, an owner decision.
+            logger.warning(
+                "EVOC eligibility: apparatus {} not found in org {}; "
+                "no requirement enforced for user {}",
+                apparatus_id,
+                organization_id,
+                user_id,
+            )
+            return no_requirement
+        if not apparatus.required_evoc_level_id:
+            return no_requirement
 
         required_level = apparatus.required_evoc_level
 

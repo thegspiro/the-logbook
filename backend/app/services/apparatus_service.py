@@ -1247,12 +1247,9 @@ class ApparatusService:
         if maintenance_data.is_historic and not maintenance_data.occurred_date:
             raise ValueError("occurred_date is required for historic entries")
 
+        # `model_dump()` has already converted the nested FileAttachment models
+        # to dicts, which is what the JSON column needs.
         dump = maintenance_data.model_dump()
-        # Convert attachment models to dicts for JSON storage
-        if dump.get("attachments"):
-            dump["attachments"] = [
-                a if isinstance(a, dict) else a for a in dump["attachments"]
-            ]
 
         maintenance = ApparatusMaintenance(
             organization_id=organization_id,
@@ -1381,12 +1378,6 @@ class ApparatusService:
         )
 
         update_data = maintenance_data.model_dump(exclude_unset=True)
-
-        # Convert attachment models to dicts for JSON storage
-        if "attachments" in update_data and update_data["attachments"]:
-            update_data["attachments"] = [
-                a if isinstance(a, dict) else a for a in update_data["attachments"]
-            ]
 
         # Handle completion
         if (
@@ -2647,12 +2638,9 @@ class ApparatusService:
             label="service provider",
         )
 
+        # As in `create_maintenance_record`: `model_dump()` has already turned
+        # the nested NoteAttachment models into the dicts the JSON column needs.
         dump = note_data.model_dump()
-        # Convert attachment models to dicts for JSON storage
-        if dump.get("attachments"):
-            dump["attachments"] = [
-                a if isinstance(a, dict) else a for a in dump["attachments"]
-            ]
 
         note = ApparatusComponentNote(
             organization_id=organization_id,
@@ -2695,12 +2683,6 @@ class ApparatusService:
         if update_data.get("status") == "resolved" and note.status != "resolved":
             note.resolved_by = resolved_by
             note.resolved_at = datetime.now(timezone.utc)
-
-        # Convert attachment models to dicts for JSON storage
-        if update_data.get("attachments"):
-            update_data["attachments"] = [
-                a if isinstance(a, dict) else a for a in update_data["attachments"]
-            ]
 
         for field, value in update_data.items():
             setattr(note, field, value)

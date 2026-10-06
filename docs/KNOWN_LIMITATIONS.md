@@ -4496,6 +4496,47 @@ below the card is the viewer's own. Either scope the endpoint to the officer or
 retitle the card; until then an officer in a department with several report
 writers reads the department's numbers as their own.
 
+## AP2-4 — The EVOC Driver Gate Stops Enforcing On A Deleted Apparatus (2026-10-05)
+
+`EvocLevelService.check_driver_evoc_eligibility` answers "may this member drive
+this apparatus?" and returns **eligible** both when the apparatus carries no EVOC
+requirement and when the apparatus cannot be found at all — one condition covered
+both cases.
+
+That second case is reachable through ordinary use, with no attacker.
+`shifts.apparatus_id` is declared `Column(String(36))  # Link to apparatus
+(future)` with **no foreign key** (`backend/app/models/training.py:2954`), and
+`ApparatusService.delete_apparatus` is a hard delete. Retiring an engine
+therefore leaves every shift that referenced it pointing at a row that no longer
+exists; `shift_eligibility_service.py:1292` passes that id to the gate, the
+lookup returns nothing, and any member can be seated in the driver's seat of
+those shifts with the EVOC requirement silently unenforced and no warning shown.
+
+**What was done (app-review B2 pass 5):** the two cases are now distinct code
+paths and the unresolvable one logs a warning naming the apparatus, the
+organization and the member, so the failure is diagnosable. **The gate's answer
+was deliberately left unchanged**, because changing it is a safety-gate behavior
+change: a department holding dangling references would begin seeing EVOC
+warnings — or hard blocks, depending on its enforcement setting — on every
+affected shift the moment it deployed.
+
+**The decision:**
+
+1. **Fail closed** — return ineligible with a "could not resolve this apparatus"
+   warning. Correct per CLAUDE.md pitfall #14 ("fail closed in access-control
+   helpers"), and surfaces broken scheduling data loudly rather than quietly
+   passing everyone.
+2. **Fix the data path instead** — give `shifts.apparatus_id` a real foreign key
+   with `ondelete="SET NULL"` (and therefore `nullable=True`, pitfall #2), so
+   deleting an apparatus clears the reference and the shift genuinely has no EVOC
+   requirement. This is the better fix and the more invasive one: it needs a
+   migration, and a decision about the other `apparatus_id` columns that
+   deliberately match the unconstrained shape
+   (`call_tracking.py:221`, `training.py:4618`).
+
+Either way the gate stops depending on a reference nothing maintains. Until one
+is chosen, the log line is the only signal.
+
 ## Process
 
 ## OPS-7 — Audit Shipping Can Deliver A Batch Twice (2026-10-04)
