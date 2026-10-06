@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this PR)**: branch `claude/security-review-documents-legal`,
+**PR [#2962](https://github.com/thegspiro/the-logbook/pull/2962)**: branch
+`claude/security-review-documents-legal`,
 Feature 10 (Documents & legal), pass 7 — 0 code fixes (DOC-9's remaining
 half and DOC-30 were already fixed by an unrelated perf PR, #2954, before
 this pass began — independently re-traced against `can_access_folder`'s
