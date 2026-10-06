@@ -2539,6 +2539,14 @@ restricting which fields PATCH may touch once receiving has started (a
 product decision about what "editing an order in flight" means). (Security
 review INV-16, `docs/security-review/INV-11-inventory.md`.)
 
+**Narrowed (security review INV-16 pass 7, 2026-10-06):** the MSUP-25 fix
+(`57e81e4d2`) added a guard rejecting `quantity_received` and `status`
+changes through this plain-PATCH path, forcing those two fields through the
+row-locked `transition_reorder_request` instead. The remaining gap is now
+scoped to the other fields this PATCH still writes without a lock or version
+check (`notes`, `quantity_requested`, vendor/line details) — the underlying
+design choice above is unchanged, just smaller in surface.
+
 ## Inventory — "Complete Work" Always Creates a New Maintenance Record (2026-08-28)
 
 `InventoryMaintenancePage.tsx`'s maintenance-completion flow always calls
