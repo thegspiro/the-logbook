@@ -877,28 +877,29 @@ def _load_migration():
     return module
 
 
+# CI's database user owns only the suite's database and may not CREATE
+# DATABASE, so the migration runs against throwaway copies of its two tables
+# under a prefix, in the suite's own database: _run points the migration's
+# _TABLES at them, and the suite's real tables are never altered.
+_PREFIX = "seatmig_"
+_TABLE_NAMES = ("shift_assignments", "standing_shift_claims")
+
+
+def _drop_scratch_tables(engine):
+    with engine.begin() as conn:
+        for table in _TABLE_NAMES:
+            conn.execute(text(f"DROP TABLE IF EXISTS {_PREFIX}{table}"))
+
+
 @pytest.fixture
 def scratch_engine():
-    """A database of its own, so ALTERs never touch the suite's tables."""
     from app.core.config import settings
 
-    name = f"{settings.DB_NAME}_seatmig"
-    server_url = settings.SYNC_DATABASE_URL.rsplit("/", 1)[0] + "/"
-    server = sa.create_engine(server_url, isolation_level="AUTOCOMMIT")
-    with server.connect() as conn:
-        conn.execute(text(f"DROP DATABASE IF EXISTS `{name}`"))
-        conn.execute(
-            text(
-                f"CREATE DATABASE `{name}` "
-                "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
-            )
-        )
-    engine = sa.create_engine(server_url + name)
+    engine = sa.create_engine(settings.SYNC_DATABASE_URL)
+    _drop_scratch_tables(engine)
     yield engine
+    _drop_scratch_tables(engine)
     engine.dispose()
-    with server.connect() as conn:
-        conn.execute(text(f"DROP DATABASE IF EXISTS `{name}`"))
-    server.dispose()
 
 
 _LOWER = (
@@ -913,7 +914,8 @@ _UPPER = (
 
 def _make_tables(engine, labels: str, rows):
     with engine.begin() as conn:
-        for table in ("shift_assignments", "standing_shift_claims"):
+        for name in _TABLE_NAMES:
+            table = _PREFIX + name
             default = "'firefighter'" if labels == _LOWER else "'FIREFIGHTER'"
             conn.execute(
                 text(
@@ -933,6 +935,7 @@ def _run(engine, step: str):
     from alembic.runtime.migration import MigrationContext
 
     module = _load_migration()
+    module._TABLES = tuple(_PREFIX + name for name in module._TABLES)
     with engine.begin() as conn:
         with Operations.context(MigrationContext.configure(conn)):
             getattr(module, step)()
@@ -946,13 +949,15 @@ def _column(engine, table):
                 "FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
                 "AND TABLE_NAME = :t AND COLUMN_NAME = 'position'"
             ),
-            {"t": table},
+            {"t": _PREFIX + table},
         ).one()
 
 
 def _values(engine, table):
     with engine.connect() as conn:
-        return dict(conn.execute(text(f"SELECT id, position FROM {table}")).all())
+        return dict(
+            conn.execute(text(f"SELECT id, position FROM {_PREFIX}{table}")).all()
+        )
 
 
 @pytest.mark.integration
@@ -973,7 +978,8 @@ class TestMigration:
             }
         with scratch_engine.begin() as conn:
             conn.execute(
-                text("INSERT INTO shift_assignments VALUES ('c', :v)"), {"v": CUSTOM}
+                text("INSERT INTO seatmig_shift_assignments VALUES ('c', :v)"),
+                {"v": CUSTOM},
             )
         assert _values(scratch_engine, "shift_assignments")["c"] == CUSTOM
 
@@ -994,7 +1000,9 @@ class TestMigration:
         _run(scratch_engine, "upgrade")
         with scratch_engine.begin() as conn:
             conn.execute(
-                text("INSERT INTO shift_assignments VALUES ('c', 'Rescue_Tech')")
+                text(
+                    "INSERT INTO seatmig_shift_assignments VALUES ('c', 'Rescue_Tech')"
+                )
             )
 
         _run(scratch_engine, "upgrade")
@@ -1014,7 +1022,7 @@ class TestMigration:
         _run(scratch_engine, "upgrade")
         with scratch_engine.begin() as conn:
             conn.execute(
-                text("INSERT INTO standing_shift_claims VALUES ('c', :v)"),
+                text("INSERT INTO seatmig_standing_shift_claims VALUES ('c', :v)"),
                 {"v": CUSTOM},
             )
 
