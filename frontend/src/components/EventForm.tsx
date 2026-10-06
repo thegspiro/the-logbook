@@ -6,7 +6,7 @@
  * check-in window configuration, and reminder settings.
  */
 
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useId, useState, useMemo, useRef } from 'react';
 import {
   FileText,
   Clock,
@@ -23,6 +23,7 @@ import {
   Italic,
   List,
   Link,
+  Lock,
 } from 'lucide-react';
 import type {
   EventCreate,
@@ -95,6 +96,13 @@ interface EventFormProps {
    * members involved and can carry the change across a recurring series.
    */
   showOrganizerPickers?: boolean | undefined;
+  /**
+   * The event's attendance is finalized. Its type, category, schedule and
+   * check-in rules are shown but cannot be changed: members' credited hours
+   * were calculated from them, and the API refuses a change until attendance is
+   * reopened. The edit page leaves them out of the save.
+   */
+  attendanceLocked?: boolean | undefined;
 }
 
 const EVENT_TYPES: EventType[] = [
@@ -213,6 +221,7 @@ export const EventForm: React.FC<EventFormProps> = ({
   userEvents,
   editingEventId,
   showOrganizerPickers = false,
+  attendanceLocked = false,
 }) => {
   const tz = useTimezone();
   const currentUserId = useAuthStore((state) => state.user?.id);
@@ -257,6 +266,9 @@ export const EventForm: React.FC<EventFormProps> = ({
   const [customCategories, setCustomCategories] = useState<EventCategoryConfig[]>([]);
   const [visibleCustomCategories, setVisibleCustomCategories] = useState<string[]>([]);
   const [membershipTypes, setMembershipTypes] = useState(DEFAULT_MEMBERSHIP_TYPES);
+  // Whether membershipTypes is the department's own list rather than the
+  // built-in fallback, which does not match every department's tiers.
+  const [membershipTypesLoaded, setMembershipTypesLoaded] = useState(false);
   const [isRecurring, setIsRecurring] = useState(initialRecurrence?.is_recurring || false);
   const [recurrencePattern, setRecurrencePattern] = useState<RecurrencePattern>(
     initialRecurrence?.recurrence_pattern || 'weekly'
@@ -275,6 +287,9 @@ export const EventForm: React.FC<EventFormProps> = ({
   const [newExceptionDate, setNewExceptionDate] = useState('');
   const [trainingDetails, setTrainingDetails] = useState<TrainingDetailsValue>(EMPTY_TRAINING_DETAILS);
   const checkInLeadTimeEdited = useRef(initialData?.check_in_minutes_before !== undefined);
+  const lockNoticeId = useId();
+  const scheduleLockHintId = useId();
+  const checkInLockHintId = useId();
   const reminderAudienceEdited = useRef(initialData?.reminder_target !== undefined);
 
   // Existing attachments from initialData (shown when editing)
@@ -365,6 +380,7 @@ export const EventForm: React.FC<EventFormProps> = ({
         setVisibleCustomCategories(asArray(data?.visible_custom_categories ?? []));
         if (Array.isArray(data?.membership_types) && data.membership_types.length) {
           setMembershipTypes(data.membership_types);
+          setMembershipTypesLoaded(true);
         }
       })
       .catch(() => {
@@ -494,6 +510,27 @@ export const EventForm: React.FC<EventFormProps> = ({
     }
   };
 
+  // The backend reads a mandatory event with no member types as mandatory for
+  // every member. Course-cohort classes, among others, are stored that way, so
+  // an event loaded like that keeps meaning everyone rather than refusing every
+  // save until somebody narrows it. Creating an event still asks for a choice.
+  const storedMandatoryForEveryone =
+    Boolean(editingEventId) && Boolean(initialData?.is_mandatory) && !initialData?.mandatory_membership_types?.length;
+  // A saved type the department has since removed or renamed would otherwise
+  // be required by the server while no box shows it, with no way to untick it.
+  // Drawn from what was saved as well as what is ticked, so unticking one keeps
+  // its box (and keyboard focus) and it can be ticked again.
+  const unlistedMandatoryTypes = [
+    ...new Set([...(initialData?.mandatory_membership_types ?? []), ...(formData.mandatory_membership_types ?? [])]),
+  ].filter((saved) => !membershipTypes.some((listed) => listed.value === saved));
+  // The same for a category the department no longer lists: it would read as
+  // None, or with no categories listed at all, show no control while the save
+  // still carries it. Drawn from what was saved too, so choosing None keeps
+  // the option there to choose again.
+  const unlistedCategories = [...new Set([initialData?.custom_category, formData.custom_category])].filter(
+    (saved): saved is string => Boolean(saved) && !customCategories.some((listed) => listed.value === saved)
+  );
+
   const toggleMandatoryMembershipType = (membershipType: string, checked: boolean) => {
     const selected = formData.mandatory_membership_types || [];
     update({
@@ -565,8 +602,11 @@ export const EventForm: React.FC<EventFormProps> = ({
     e.preventDefault();
     setError(null);
 
-    // Validate dates
-    if (new Date(formData.end_datetime) <= new Date(formData.start_datetime)) {
+    // Not on a finalized event: its times are locked, left out of the save and
+    // validated by the server as stored, and the minute-precision pair the
+    // pickers show can read as zero length across the hour clocks fall back —
+    // an error the user would have no enabled control left to clear.
+    if (!attendanceLocked && new Date(formData.end_datetime) <= new Date(formData.start_datetime)) {
       setError('End date must be after start date');
       return;
     }
@@ -583,7 +623,7 @@ export const EventForm: React.FC<EventFormProps> = ({
       }
     }
 
-    if (formData.is_mandatory && !formData.mandatory_membership_types?.length) {
+    if (formData.is_mandatory && !formData.mandatory_membership_types?.length && !storedMandatoryForEveryone) {
       setError('Select at least one member type for mandatory attendance');
       return;
     }
@@ -681,6 +721,29 @@ export const EventForm: React.FC<EventFormProps> = ({
         </div>
       )}
 
+      {/* Disabled controls leave the tab order, so the reason they are locked
+          comes first in reading order rather than beside them. */}
+      {attendanceLocked && (
+        <div className="alert-warning flex items-start gap-3">
+          <Lock className="text-theme-alert-warning-icon mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+          <div className="space-y-1">
+            <p className="text-theme-alert-warning-title text-sm font-semibold">
+              Attendance for this event is finalized
+            </p>
+            <p id={lockNoticeId} className="text-theme-alert-warning-text text-sm">
+              Its type, category, schedule and check-in rules are locked because members&apos; credited hours were
+              calculated from them. Everything else can still be edited. To change a locked setting, someone who can
+              reopen attendance reopens it from the event page first.
+            </p>
+            {initialRecurrence?.is_recurring && (
+              <p className="text-theme-alert-warning-text text-sm">
+                To change these for later events in the series, edit one whose attendance is still open.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* === Event Details === */}
       <section className="space-y-6">
         <h2 className="text-theme-text-primary flex items-center space-x-2 text-xl font-bold">
@@ -773,7 +836,9 @@ export const EventForm: React.FC<EventFormProps> = ({
             required
             value={formData.event_type}
             onChange={(e) => handleEventTypeChange(e.target.value as EventType)}
-            className={selectClass}
+            disabled={attendanceLocked}
+            aria-describedby={attendanceLocked ? lockNoticeId : undefined}
+            className={`${selectClass} disabled:cursor-not-allowed disabled:opacity-60`}
           >
             {EVENT_TYPES.filter((t) => visibleTypes.includes(t)).map((type) => (
               <option key={type} value={type}>
@@ -875,7 +940,7 @@ export const EventForm: React.FC<EventFormProps> = ({
         )}
 
         {/* Custom Category (optional) */}
-        {customCategories.length > 0 && (
+        {(customCategories.length > 0 || unlistedCategories.length > 0) && (
           <div>
             <label htmlFor="custom-category" className={labelClass}>
               Category
@@ -886,9 +951,16 @@ export const EventForm: React.FC<EventFormProps> = ({
               onChange={(e) =>
                 update(e.target.value ? { custom_category: e.target.value } : { custom_category: undefined })
               }
-              className={selectClass}
+              disabled={attendanceLocked}
+              aria-describedby={attendanceLocked ? lockNoticeId : undefined}
+              className={`${selectClass} disabled:cursor-not-allowed disabled:opacity-60`}
             >
               <option value="">None</option>
+              {unlistedCategories.map((saved) => (
+                <option key={saved} value={saved}>
+                  {saved}
+                </option>
+              ))}
               {customCategories
                 .filter((c) => visibleCustomCategories.includes(c.value))
                 .map((cat) => (
@@ -943,77 +1015,98 @@ export const EventForm: React.FC<EventFormProps> = ({
           <Clock className="h-5 w-5 text-red-700" />
           <span>Schedule</span>
         </h2>
-
-        {/* Side by side only from lg: a date and three time selects need about
-            380px, and a tablet's half-width column is under 200. */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div>
-            <label htmlFor="start-datetime" className={labelClass}>
-              Start Date & Time <span className="text-red-700 dark:text-red-500">*</span>
-            </label>
-            <DateTimeQuarterHour
-              id="start-datetime"
-              timeLabel="Start time"
-              required
-              value={formData.start_datetime}
-              onChange={(val) => handleStartDateChange(val)}
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label htmlFor="end-datetime" className={labelClass}>
-              End Date & Time <span className="text-red-700 dark:text-red-500">*</span>
-            </label>
-            <DateTimeQuarterHour
-              id="end-datetime"
-              timeLabel="End time"
-              required
-              value={formData.end_datetime}
-              onChange={(val) => update({ end_datetime: val })}
-              className={inputClass}
-            />
-          </div>
-        </div>
-
-        {/* Conflict Warning */}
-        {conflicts.length > 0 && (
-          <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4" role="status" aria-live="polite">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-600 dark:text-yellow-400" />
-              <div>
-                <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">Schedule Conflict</p>
-                <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
-                  This time overlaps with {conflicts.length === 1 ? 'an event' : 'events'} you have RSVP&apos;d to:
-                </p>
-                <ul className="mt-2 space-y-1">
-                  {conflicts.map((evt) => (
-                    <li key={evt.id} className="text-sm text-yellow-700 dark:text-yellow-300">
-                      &bull; {evt.title} ({formatForDateTimeInput(evt.start_datetime, tz)} &ndash;{' '}
-                      {formatForDateTimeInput(evt.end_datetime, tz)})
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
+        {attendanceLocked && (
+          <p id={scheduleLockHintId} className="text-theme-text-muted flex items-center gap-1.5 text-sm">
+            <Lock className="h-4 w-4 shrink-0" aria-hidden="true" />
+            Locked while attendance is finalized.
+          </p>
         )}
 
-        {/* Quick Duration */}
-        <div>
-          <span className={labelClass}>Quick Duration</span>
-          <div className="flex flex-wrap gap-2">
-            {[1, 2, 4, 8].map((h) => (
-              <button
-                key={h}
-                type="button"
-                onClick={() => setDuration(h)}
-                className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary focus:ring-theme-focus-ring touch-target-phone rounded-lg border px-4 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
-              >
-                {h} {h === 1 ? 'hour' : 'hours'}
-              </button>
-            ))}
+        {/* A disabled fieldset disables every control inside it, including the
+            date and time pickers, which have no disabled prop of their own. */}
+        <fieldset
+          disabled={attendanceLocked}
+          aria-describedby={attendanceLocked ? scheduleLockHintId : undefined}
+          className="min-w-0 space-y-6 disabled:opacity-60"
+        >
+          {/* Every control inside is disabled and out of the tab order, so
+              the group's name is what a screen reader announces on reaching it. */}
+          {attendanceLocked && <legend className="sr-only">Schedule, locked while attendance is finalized</legend>}
+          {/* Side by side only from lg: a date and three time selects need about
+              380px, and a tablet's half-width column is under 200. */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div>
+              <label htmlFor="start-datetime" className={labelClass}>
+                Start Date & Time <span className="text-red-700 dark:text-red-500">*</span>
+              </label>
+              <DateTimeQuarterHour
+                id="start-datetime"
+                timeLabel="Start time"
+                required
+                value={formData.start_datetime}
+                onChange={(val) => handleStartDateChange(val)}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="end-datetime" className={labelClass}>
+                End Date & Time <span className="text-red-700 dark:text-red-500">*</span>
+              </label>
+              <DateTimeQuarterHour
+                id="end-datetime"
+                timeLabel="End time"
+                required
+                value={formData.end_datetime}
+                onChange={(val) => update({ end_datetime: val })}
+                className={inputClass}
+              />
+            </div>
           </div>
-        </div>
+
+          {/* Conflict Warning */}
+          {conflicts.length > 0 && (
+            <div
+              className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4"
+              role="status"
+              aria-live="polite"
+            >
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-600 dark:text-yellow-400" />
+                <div>
+                  <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">Schedule Conflict</p>
+                  <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
+                    This time overlaps with {conflicts.length === 1 ? 'an event' : 'events'} you have RSVP&apos;d to:
+                  </p>
+                  <ul className="mt-2 space-y-1">
+                    {conflicts.map((evt) => (
+                      <li key={evt.id} className="text-sm text-yellow-700 dark:text-yellow-300">
+                        &bull; {evt.title} ({formatForDateTimeInput(evt.start_datetime, tz)} &ndash;{' '}
+                        {formatForDateTimeInput(evt.end_datetime, tz)})
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Quick Duration */}
+          <div>
+            <span className={labelClass}>Quick Duration</span>
+            <div className="flex flex-wrap gap-2">
+              {[1, 2, 4, 8].map((h) => (
+                <button
+                  key={h}
+                  type="button"
+                  onClick={() => setDuration(h)}
+                  className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary focus:ring-theme-focus-ring touch-target-phone rounded-lg border px-4 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
+                >
+                  {h} {h === 1 ? 'hour' : 'hours'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </fieldset>
 
         {/* Recurrence */}
         {showRecurrence && (
@@ -1370,7 +1463,11 @@ export const EventForm: React.FC<EventFormProps> = ({
           {formData.is_mandatory && (
             <fieldset className="space-y-2 border-l-2 border-red-500/30 pl-4">
               <legend className={labelClass}>Mandatory for</legend>
-              <p className="text-theme-text-muted text-xs">Select one or more member types required to attend.</p>
+              <p className="text-theme-text-muted text-xs">
+                {storedMandatoryForEveryone && !formData.mandatory_membership_types?.length
+                  ? 'Mandatory for every member. Tick member types to narrow it.'
+                  : 'Select one or more member types required to attend.'}
+              </p>
               {membershipTypes.map((membershipType) => (
                 <label
                   key={membershipType.value}
@@ -1384,6 +1481,22 @@ export const EventForm: React.FC<EventFormProps> = ({
                     className={checkboxClass}
                   />
                   <span className="text-theme-text-secondary text-sm">{membershipType.label}</span>
+                </label>
+              ))}
+              {unlistedMandatoryTypes.map((saved) => (
+                <label key={saved} className="mobile-touch-target flex items-center justify-start space-x-3">
+                  <input
+                    type="checkbox"
+                    id={`mandatory-${saved}`}
+                    checked={(formData.mandatory_membership_types || []).includes(saved)}
+                    onChange={(e) => toggleMandatoryMembershipType(saved, e.target.checked)}
+                    className={checkboxClass}
+                  />
+                  <span className="text-theme-text-secondary text-sm">
+                    {/* Only once the department's own list has loaded: the
+                        built-in fallback lacks real tiers such as senior. */}
+                    {membershipTypesLoaded ? `${saved} (not a current member type)` : saved}
+                  </span>
                 </label>
               ))}
             </fieldset>
@@ -1523,76 +1636,91 @@ export const EventForm: React.FC<EventFormProps> = ({
             <QrCode className="h-5 w-5 text-red-700" />
             <span>Check-In Settings</span>
           </h2>
+          {attendanceLocked && (
+            <p id={checkInLockHintId} className="text-theme-text-muted flex items-center gap-1.5 text-sm">
+              <Lock className="h-4 w-4 shrink-0" aria-hidden="true" />
+              The check-in rules are locked while attendance is finalized. Guest sign-in can still be changed.
+            </p>
+          )}
 
-          <div>
-            <label htmlFor="checkin-window" className={labelClass}>
-              Check-In Window
-            </label>
-            <select
-              id="checkin-window"
-              value={formData.check_in_window_type || 'flexible'}
-              onChange={(e) => update({ check_in_window_type: e.target.value as 'flexible' | 'strict' | 'window' })}
-              className={selectClass}
-            >
-              <option value="flexible">Flexible - Opens before the start, closes when the event ends</option>
-              <option value="strict">Strict - Only while the event is running</option>
-              <option value="window">Window - Opens before the start, closes after the end</option>
-            </select>
-          </div>
+          <fieldset
+            disabled={attendanceLocked}
+            aria-describedby={attendanceLocked ? checkInLockHintId : undefined}
+            className="min-w-0 space-y-4 disabled:opacity-60"
+          >
+            {attendanceLocked && (
+              <legend className="sr-only">Check-in rules, locked while attendance is finalized</legend>
+            )}
+            <div>
+              <label htmlFor="checkin-window" className={labelClass}>
+                Check-In Window
+              </label>
+              <select
+                id="checkin-window"
+                value={formData.check_in_window_type || 'flexible'}
+                onChange={(e) => update({ check_in_window_type: e.target.value as 'flexible' | 'strict' | 'window' })}
+                className={selectClass}
+              >
+                <option value="flexible">Flexible - Opens before the start, closes when the event ends</option>
+                <option value="strict">Strict - Only while the event is running</option>
+                <option value="window">Window - Opens before the start, closes after the end</option>
+              </select>
+            </div>
 
-          {(formData.check_in_window_type === CheckInWindowType.FLEXIBLE ||
-            formData.check_in_window_type === CheckInWindowType.WINDOW) && (
-            <div
-              className={`grid gap-3 border-l-2 border-red-500/30 pl-4 ${
-                formData.check_in_window_type === CheckInWindowType.WINDOW ? 'grid-cols-2' : 'grid-cols-1'
-              }`}
-            >
-              <div>
-                <label htmlFor="checkin-before" className={labelClass}>
-                  Minutes before start
-                </label>
-                <input
-                  type="number"
-                  id="checkin-before"
-                  min="0"
-                  max="120"
-                  value={formData.check_in_minutes_before ?? 60}
-                  onChange={(e) => {
-                    checkInLeadTimeEdited.current = true;
-                    update({ check_in_minutes_before: parseInt(e.target.value) || 0 });
-                  }}
-                  className={inputClass}
-                />
-              </div>
-              {formData.check_in_window_type === CheckInWindowType.WINDOW && (
+            {(formData.check_in_window_type === CheckInWindowType.FLEXIBLE ||
+              formData.check_in_window_type === CheckInWindowType.WINDOW) && (
+              <div
+                className={`grid gap-3 border-l-2 border-red-500/30 pl-4 ${
+                  formData.check_in_window_type === CheckInWindowType.WINDOW ? 'grid-cols-2' : 'grid-cols-1'
+                }`}
+              >
                 <div>
-                  <label htmlFor="checkin-after" className={labelClass}>
-                    Minutes after end
+                  <label htmlFor="checkin-before" className={labelClass}>
+                    Minutes before start
                   </label>
                   <input
                     type="number"
-                    id="checkin-after"
+                    id="checkin-before"
                     min="0"
                     max="120"
-                    value={formData.check_in_minutes_after || 15}
-                    onChange={(e) => update({ check_in_minutes_after: parseInt(e.target.value) || 15 })}
+                    value={formData.check_in_minutes_before ?? 60}
+                    onChange={(e) => {
+                      checkInLeadTimeEdited.current = true;
+                      update({ check_in_minutes_before: parseInt(e.target.value) || 0 });
+                    }}
                     className={inputClass}
                   />
                 </div>
-              )}
-            </div>
-          )}
+                {formData.check_in_window_type === CheckInWindowType.WINDOW && (
+                  <div>
+                    <label htmlFor="checkin-after" className={labelClass}>
+                      Minutes after end
+                    </label>
+                    <input
+                      type="number"
+                      id="checkin-after"
+                      min="0"
+                      max="120"
+                      value={formData.check_in_minutes_after || 15}
+                      onChange={(e) => update({ check_in_minutes_after: parseInt(e.target.value) || 15 })}
+                      className={inputClass}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
 
-          <label className="mobile-touch-target flex items-center justify-start space-x-3">
-            <input
-              type="checkbox"
-              id="require-checkout"
-              checked={formData.require_checkout}
-              onChange={(e) => update({ require_checkout: e.target.checked })}
-              className={checkboxClass}
-            />
-            <span className="text-theme-text-secondary text-sm">Require manual check-out</span>
-          </label>
+            <label className="mobile-touch-target flex items-center justify-start space-x-3">
+              <input
+                type="checkbox"
+                id="require-checkout"
+                checked={formData.require_checkout}
+                onChange={(e) => update({ require_checkout: e.target.checked })}
+                className={checkboxClass}
+              />
+              <span className="text-theme-text-secondary text-sm">Require manual check-out</span>
+            </label>
+          </fieldset>
 
           <label className="mobile-touch-target flex items-center justify-start space-x-3">
             <input

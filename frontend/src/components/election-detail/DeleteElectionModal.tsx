@@ -80,7 +80,7 @@ const DeleteElectionModal: React.FC<DeleteElectionModalProps> = ({
                       <li>
                         Record a <strong>critical-severity</strong> entry in the audit trail
                       </li>
-                      {election.total_votes && election.total_votes > 0 && (
+                      {(election.total_votes ?? 0) > 0 && (
                         <li>
                           Delete the <strong>{election.total_votes} votes</strong> already cast
                         </li>

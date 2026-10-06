@@ -236,7 +236,13 @@ export const ElectionDetailPage: React.FC = () => {
     if (!electionId) return;
 
     try {
-      setLoading(true);
+      // The skeleton replaces the whole page, which unmounts every tab panel
+      // and the state it holds — including the vote receipt ElectionBallot has
+      // just shown (W50-53). Show it only until this election has loaded
+      // once; a refetch after a vote, a close or a publish updates in place.
+      if (!election || election.id !== electionId) {
+        setLoading(true);
+      }
       setError(null);
       const data = await electionService.getElection(electionId);
       setElection(data);

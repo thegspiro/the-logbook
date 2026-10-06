@@ -472,12 +472,14 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
                       <div className="space-y-3">
                         <input
                           type="text"
+                          aria-label="Candidate name"
                           value={formData.name}
                           onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                           className="form-input shadow-xs"
                         />
                         {positions.length > 0 && (
                           <select
+                            aria-label="Position"
                             value={formData.position}
                             onChange={(e) => setFormData((prev) => ({ ...prev, position: e.target.value }))}
                             className="form-input shadow-xs"
@@ -491,6 +493,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
                           </select>
                         )}
                         <textarea
+                          aria-label="Statement"
                           value={formData.statement}
                           onChange={(e) => setFormData((prev) => ({ ...prev, statement: e.target.value }))}
                           rows={2}
