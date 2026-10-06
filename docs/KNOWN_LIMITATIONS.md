@@ -2130,9 +2130,23 @@ change — e.g. an explicit `ballot_item_id` column on `Candidate` and/or
 resolvable — which is a data-model decision for an owner, not something to
 guess at during a security-review pass. In practice this requires an
 admin to deliberately configure two ballot items whose alias sets collide
-in the same election; nothing else in the ballot-authoring UI encourages
-or warns against it today. (Security review ELEC-38,
+in the same election. (Security review ELEC-38,
 `docs/security-review/ELEC-06-elections-ballots.md`.)
+
+**Owner decision applied (2026-10-05):** the colliding state is now refused
+when a ballot is written. `_validate_ballot_item_identities` in
+`schemas/election.py` rejects, on election create, election update and saved
+template alike, a ballot item whose `title` or `position` equals a
+**different** item's id (an item titled with its own id stays legal). So a
+new election can no longer reach the ambiguity above, and neither the
+ELEC-40 legacy-hash gap nor the ownership ambiguity can arise for it. The
+owner did not take the schema change or the re-hash migration. **What
+remains:** an election stored before 2026-10-05 that already carries such a
+collision keeps it (and keeps the ELEC-40 gap for any pre-ELEC-34 legacy
+vote on it) until its ballot is next saved, which the validator will then
+refuse until the collision is renamed away. Finding one needs a read of
+`elections.ballot_items`; none is expected outside a deliberately crafted
+API call. (`tests/test_ballot_item_alias_collision.py`.)
 
 ## Users: Roster/Archive/Leave Lists Are Unbounded, Not Just Un-Paginated (2026-08-25)
 

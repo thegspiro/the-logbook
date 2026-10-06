@@ -15,6 +15,13 @@ finding below that says FLAGGED or OPEN is superseded by its line here.
   `elections.py`), enforced under a lock on the organization row with a
   locking count (pitfall #27); the 201st save is a 409. The list response is
   unchanged. Guard: `tests/test_saved_ballot_template_cap.py`.
+- **ELEC-40** (alias collision / pre-ELEC-34 legacy-hash gap) — **made
+  unreachable for new ballots:** `_validate_ballot_item_identities`
+  refuses an item whose title or position equals another item's id on
+  create, update and saved template. Not taken: the `ballot_item_id` schema
+  change and the re-hash migration. Residual (a ballot stored with a
+  collision before the fix) stays in `docs/KNOWN_LIMITATIONS.md`. Guard:
+  `tests/test_ballot_item_alias_collision.py`.
 - **ELEC-16** (`list_manual_ballot_batches` unbounded) — **accepted as is.**
   Paper-tally sessions per election are naturally few; no cap and no
   pagination. Revisit if an election ever carries more than a few dozen

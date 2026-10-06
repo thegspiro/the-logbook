@@ -67,6 +67,34 @@ def _empty_roster_means_everyone(
     return values
 
 
+def _validate_ballot_item_identities(items):
+    """Ids are unique, and no item's alias names a different item (ELEC-40).
+
+    A stored ``Candidate`` or ``Vote`` records only a position string. A
+    legacy item is matched by its title *or* its id and an explicit one by
+    its ``position``, so an item whose title or position equals another
+    item's id makes every row stored under that string ambiguous — the
+    schema has no ``ballot_item_id`` to settle which item it belongs to.
+    The owner chose (2026-10-05) to make that state unreachable when a
+    ballot is written rather than migrate the tables, so both are refused
+    here, on every write path (create, update, saved template).
+    """
+    if items is None:
+        return items
+    ids = [item.id for item in items]
+    if len(set(ids)) != len(ids):
+        raise ValueError("Ballot item IDs must be unique")
+    for item in items:
+        for label, alias in (("title", item.title), ("position", item.position)):
+            if alias and alias != item.id and alias in ids:
+                raise ValueError(
+                    f"Ballot item '{item.id}' has a {label} '{alias}' that is "
+                    "another ballot item's id; votes stored under it could "
+                    "not be told apart. Rename the item or change its id."
+                )
+    return items
+
+
 # Ballot Item Schemas
 
 
@@ -410,11 +438,7 @@ class ElectionBase(BaseModel):
     def validate_unique_ballot_item_ids(
         cls, values: Optional[List[BallotItemInput]]
     ) -> Optional[List[BallotItemInput]]:
-        if values is not None:
-            ids = [item.id for item in values]
-            if len(set(ids)) != len(ids):
-                raise ValueError("Ballot item IDs must be unique")
-        return values
+        return _validate_ballot_item_identities(values)
 
     @model_validator(mode="after")
     def validate_election_configuration(self):
@@ -530,11 +554,7 @@ class ElectionUpdate(BaseModel):
     def validate_unique_ballot_item_ids(
         cls, values: Optional[List[BallotItemInput]]
     ) -> Optional[List[BallotItemInput]]:
-        if values is not None:
-            ids = [item.id for item in values]
-            if len(set(ids)) != len(ids):
-                raise ValueError("Ballot item IDs must be unique")
-        return values
+        return _validate_ballot_item_identities(values)
 
 
 class ElectionResponse(UTCResponseBase):
@@ -1271,10 +1291,7 @@ class SavedBallotTemplateCreate(BaseModel):
     def unique_item_ids(
         cls, values: List[SavedBallotTemplateItemInput]
     ) -> List[SavedBallotTemplateItemInput]:
-        ids = [item.id for item in values]
-        if len(set(ids)) != len(ids):
-            raise ValueError("Ballot item IDs must be unique")
-        return values
+        return _validate_ballot_item_identities(values)
 
 
 class SavedBallotTemplateResponse(UTCResponseBase):
