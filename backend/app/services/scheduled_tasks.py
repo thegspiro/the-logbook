@@ -4480,10 +4480,12 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             )
             success_count, _ = await email_svc.send_email(
                 to_emails=emails,
-                subject=f"Low Stock Alert — {len(rows)} item(s) below reorder point",
+                subject=(
+                    f"Low Stock Alert — {len(rows)} item(s) at or below reorder point"
+                ),
                 html_body=html_body,
                 text_body=(
-                    f"{len(rows)} inventory items are below their "
+                    f"{len(rows)} inventory items are at or below their "
                     f"reorder point. Please check the inventory dashboard."
                 ),
             )
@@ -4803,8 +4805,15 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
                 subject=(f"NFPA Retirement Alert" f" — {len(items_due)} PPE item(s)"),
                 html_body=html_body,
                 text_body=(
-                    f"{len(items_due)} PPE items are approaching NFPA"
-                    f" retirement. Please check the inventory dashboard."
+                    f"{len(items_due)} PPE item(s) are approaching or past NFPA"
+                    f" retirement"
+                    + (
+                        f", {len(past_due)} of them past due and to be retired"
+                        " immediately"
+                        if past_due
+                        else ""
+                    )
+                    + ". Please check the inventory dashboard."
                 ),
             )
             if success_count > 0:

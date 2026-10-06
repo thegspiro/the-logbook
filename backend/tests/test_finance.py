@@ -22,14 +22,59 @@ from app.models.finance import (
     FiscalYearStatus,
     PurchaseRequestStatus,
 )
-from app.models.user import User
+from app.models.user import Position, User
 from app.services.finance_service import BudgetLimitExceededError, FinanceService
 
 pytestmark = [pytest.mark.integration]
 
-pytestmark = [pytest.mark.integration]
 
-pytestmark = [pytest.mark.integration]
+async def _finance_approver(db_session: AsyncSession, org_id: str) -> User:
+    """A member holding finance.approve through a real position row.
+
+    Approve / deny now check the actor against the step's named approver, so
+    the chain-walking tests below need an actor the step's
+    ``permission: finance.approve`` approver actually matches. Built through
+    the ORM so ``user.positions`` is populated in memory for the permission
+    helper. A second person, too: the requester cannot approve their own
+    request.
+    """
+    tag = uuid.uuid4().hex[:8]
+    user = User(
+        id=str(uuid.uuid4()),
+        organization_id=org_id,
+        username=f"fin-approver-{tag}",
+        email=f"fin-approver-{tag}@example.com",
+        first_name="Fin",
+        last_name="Approver",
+        password_hash="x",
+    )
+    user.positions.append(
+        Position(
+            id=str(uuid.uuid4()),
+            organization_id=org_id,
+            name=f"Finance Approver {tag}",
+            slug=f"finance-approver-{tag}",
+            permissions=["finance.approve"],
+        )
+    )
+    db_session.add(user)
+    await db_session.flush()
+    return user
+
+
+async def _position(db_session: AsyncSession, org_id: str, slug: str) -> None:
+    """A position a chain step may name -- steps naming a missing slug are
+    refused at write time, since nobody could ever approve them."""
+    db_session.add(
+        Position(
+            id=str(uuid.uuid4()),
+            organization_id=org_id,
+            name=slug.replace("_", " ").title(),
+            slug=slug,
+            permissions=[],
+        )
+    )
+    await db_session.flush()
 
 
 @pytest.fixture
@@ -425,6 +470,8 @@ class TestApprovalChainService:
         service = FinanceService(db_session)
         org_id = sample_org_data["id"]
         user_id = sample_org_data.get("admin_id", "test-user-id")
+        await _position(db_session, org_id, "training_officer")
+        await _position(db_session, org_id, "trustee")
 
         chain = await service.create_approval_chain(
             org_id=org_id,
@@ -470,6 +517,7 @@ class TestApprovalChainService:
         service = FinanceService(db_session)
         org_id = sample_org_data["id"]
         user_id = sample_org_data.get("admin_id", "test-user-id")
+        await _position(db_session, org_id, "treasurer")
 
         # Create small purchase chain
         await service.create_approval_chain(
@@ -536,6 +584,7 @@ class TestApprovalChainService:
         service = FinanceService(db_session)
         org_id = sample_org_data["id"]
         user_id = sample_org_data.get("admin_id", "test-user-id")
+        approver = await _finance_approver(db_session, org_id)
 
         chain = await service.create_approval_chain(
             org_id=org_id,
@@ -600,7 +649,7 @@ class TestApprovalChainService:
         assert current is not None
         assert current.id == records[0].id
 
-        await service.approve_step(records[0].id, user_id, "Looks good", org_id=org_id)
+        await service.approve_step(records[0].id, approver, "Looks good", org_id=org_id)
 
         # Check step 2 is now current
         current2 = await service.get_current_pending_step(
@@ -616,6 +665,7 @@ class TestApprovalChainService:
         service = FinanceService(db_session)
         org_id = sample_org_data["id"]
         user_id = sample_org_data.get("admin_id", "test-user-id")
+        approver = await _finance_approver(db_session, org_id)
 
         chain = await service.create_approval_chain(
             org_id=org_id,
@@ -650,7 +700,7 @@ class TestApprovalChainService:
         )
 
         # Approve step 1 → notification step should auto-advance
-        await service.approve_step(records[0].id, user_id, org_id=org_id)
+        await service.approve_step(records[0].id, approver, org_id=org_id)
 
         updated_records = await service.get_approval_records(
             ApprovalEntityType.PURCHASE_REQUEST, "test-notify-entity", org_id
@@ -675,6 +725,7 @@ class TestApprovalChainService:
         service = FinanceService(db_session)
         org_id = sample_org_data["id"]
         user_id = sample_org_data.get("admin_id", "test-user-id")
+        approver = await _finance_approver(db_session, org_id)
 
         chain = await service.create_approval_chain(
             org_id=org_id,
@@ -718,7 +769,7 @@ class TestApprovalChainService:
         assert current.id == approve_step_record.id
 
         approved = await service.approve_step(
-            approve_step_record.id, user_id, org_id=org_id
+            approve_step_record.id, approver, org_id=org_id
         )
         assert approved.status == ApprovalStepStatus.APPROVED
 
@@ -827,6 +878,7 @@ class TestApprovalChainService:
         service = FinanceService(db_session)
         org_id = sample_org_data["id"]
         user_id = sample_org_data.get("admin_id", "test-user-id")
+        approver = await _finance_approver(db_session, org_id)
 
         chain = await service.create_approval_chain(
             org_id=org_id,
@@ -854,7 +906,7 @@ class TestApprovalChainService:
         )
 
         denied = await service.deny_step(
-            records[0].id, user_id, "Budget exceeded", org_id=org_id
+            records[0].id, approver, "Budget exceeded", org_id=org_id
         )
         assert denied.status == ApprovalStepStatus.DENIED
         assert denied.notes == "Budget exceeded"
@@ -871,6 +923,7 @@ class TestApprovalChainService:
         service = FinanceService(db_session)
         org_id = sample_org_data["id"]
         user_id = sample_org_data.get("admin_id", "test-user-id")
+        approver = await _finance_approver(db_session, org_id)
 
         chain = await service.create_approval_chain(
             org_id=org_id,
@@ -898,14 +951,14 @@ class TestApprovalChainService:
 
         # A caller from a different org cannot see (or act on) the record.
         with pytest.raises(ValueError, match="not found"):
-            await service.approve_step(records[0].id, user_id, org_id="some-other-org")
+            await service.approve_step(records[0].id, approver, org_id="some-other-org")
         with pytest.raises(ValueError, match="not found"):
             await service.deny_step(
-                records[0].id, user_id, "no", org_id="some-other-org"
+                records[0].id, approver, "no", org_id="some-other-org"
             )
 
         # The owning org still works.
-        approved = await service.approve_step(records[0].id, user_id, org_id=org_id)
+        approved = await service.approve_step(records[0].id, approver, org_id=org_id)
         assert approved.status == ApprovalStepStatus.APPROVED
 
     async def test_a_later_step_cannot_be_acted_on_before_an_earlier_one(
@@ -920,6 +973,7 @@ class TestApprovalChainService:
         service = FinanceService(db_session)
         org_id = sample_org_data["id"]
         user_id = sample_org_data.get("admin_id", "test-user-id")
+        approver = await _finance_approver(db_session, org_id)
 
         chain = await service.create_approval_chain(
             org_id=org_id,
@@ -954,13 +1008,13 @@ class TestApprovalChainService:
         step1, step2 = records[0], records[1]
 
         with pytest.raises(ValueError, match="earlier approval step"):
-            await service.approve_step(step2.id, user_id, org_id=org_id)
+            await service.approve_step(step2.id, approver, org_id=org_id)
         with pytest.raises(ValueError, match="earlier approval step"):
-            await service.deny_step(step2.id, user_id, "no", org_id=org_id)
+            await service.deny_step(step2.id, approver, "no", org_id=org_id)
 
         # Once step 1 is resolved, step 2 becomes the current step.
-        await service.approve_step(step1.id, user_id, org_id=org_id)
-        approved = await service.approve_step(step2.id, user_id, org_id=org_id)
+        await service.approve_step(step1.id, approver, org_id=org_id)
+        approved = await service.approve_step(step2.id, approver, org_id=org_id)
         assert approved.status == ApprovalStepStatus.APPROVED
 
     async def _two_step_chain(self, service, org_id, user_id, entity_id):
@@ -1005,11 +1059,12 @@ class TestApprovalChainService:
         service = FinanceService(db_session)
         org_id = sample_org_data["id"]
         user_id = sample_org_data.get("admin_id", "test-user-id")
+        approver = await _finance_approver(db_session, org_id)
         step1, step2 = await self._two_step_chain(
             service, org_id, user_id, "deny-terminates"
         )
 
-        await service.deny_step(step1.id, user_id, "no", org_id=org_id)
+        await service.deny_step(step1.id, approver, "no", org_id=org_id)
 
         assert step1.status == ApprovalStepStatus.DENIED
         assert step2.status == ApprovalStepStatus.SKIPPED
@@ -1027,14 +1082,15 @@ class TestApprovalChainService:
         service = FinanceService(db_session)
         org_id = sample_org_data["id"]
         user_id = sample_org_data.get("admin_id", "test-user-id")
+        approver = await _finance_approver(db_session, org_id)
         step1, step2 = await self._two_step_chain(
             service, org_id, user_id, "deny-walkable"
         )
 
-        await service.deny_step(step1.id, user_id, "no", org_id=org_id)
+        await service.deny_step(step1.id, approver, "no", org_id=org_id)
 
         with pytest.raises(ValueError, match="not pending"):
-            await service.approve_step(step2.id, user_id, org_id=org_id)
+            await service.approve_step(step2.id, approver, org_id=org_id)
 
     async def test_denial_issues_no_token_for_a_later_email_step(
         self, db_session: AsyncSession, sample_org_data
@@ -1044,6 +1100,7 @@ class TestApprovalChainService:
         service = FinanceService(db_session)
         org_id = sample_org_data["id"]
         user_id = sample_org_data.get("admin_id", "test-user-id")
+        approver = await _finance_approver(db_session, org_id)
         chain = await service.create_approval_chain(
             org_id=org_id,
             created_by=user_id,
@@ -1075,7 +1132,7 @@ class TestApprovalChainService:
             user_id,
         )
 
-        await service.deny_step(step1.id, user_id, "no", org_id=org_id)
+        await service.deny_step(step1.id, approver, "no", org_id=org_id)
 
         assert step2.status == ApprovalStepStatus.SKIPPED
         assert step2.approval_token is None
@@ -1095,6 +1152,7 @@ class TestApprovalChainService:
         service = FinanceService(db_session)
         org_id = sample_org_data["id"]
         user_id = sample_org_data.get("admin_id", "test-user-id")
+        approver = await _finance_approver(db_session, org_id)
 
         chain = await service.create_approval_chain(
             org_id=org_id,
@@ -1141,7 +1199,7 @@ class TestApprovalChainService:
 
         # And it's exactly the step the actionable-list query would present.
         approved = await service.approve_step(
-            lower_id_record.id, user_id, org_id=org_id
+            lower_id_record.id, approver, org_id=org_id
         )
         assert approved.status == ApprovalStepStatus.APPROVED
 
@@ -1163,6 +1221,7 @@ class TestApprovalChainService:
         service = FinanceService(db_session)
         org_id = sample_org_data["id"]
         user_id = sample_org_data.get("admin_id", "test-user-id")
+        approver = await _finance_approver(db_session, org_id)
 
         other_org_id = str(uuid.uuid4())
         other_admin_id = str(uuid.uuid4())
@@ -1250,7 +1309,7 @@ class TestApprovalChainService:
             db_session.bind.sync_engine, "before_cursor_execute", count_queries
         )
         try:
-            pending = await service.get_pending_approvals(user_id, org_id)
+            pending = await service.get_pending_approvals(approver, org_id)
         finally:
             event.remove(
                 db_session.bind.sync_engine, "before_cursor_execute", count_queries
@@ -1282,19 +1341,9 @@ class TestApprovalChainService:
         # Separation of duties: the requester cannot approve their own PR, so
         # this test needs a second person to walk the chains. The subject here
         # is encumbrance accounting, not who signs. acted_by is a real foreign
-        # key, so the approver has to be a real row.
-        approver = User(
-            id=str(uuid.uuid4()),
-            organization_id=org_id,
-            username="finance-officer",
-            email="finance-officer@example.com",
-            first_name="Fin",
-            last_name="Officer",
-            password_hash="x",
-        )
-        db_session.add(approver)
-        await db_session.flush()
-        approver_id = approver.id
+        # key, so the approver has to be a real row -- and one the chains'
+        # finance.approve steps name.
+        approver = await _finance_approver(db_session, org_id)
 
         fy = await service.create_fiscal_year(
             org_id=org_id,
@@ -1344,7 +1393,7 @@ class TestApprovalChainService:
             5000.00,
             user_id,
         )
-        await service.approve_step(a_records[0].id, approver_id, org_id=org_id)
+        await service.approve_step(a_records[0].id, approver, org_id=org_id)
 
         budget_after_a = await service.get_budget(budget.id, org_id)
         assert float(budget_after_a.amount_encumbered) == 5000.00
@@ -1389,8 +1438,8 @@ class TestApprovalChainService:
             3000.00,
             user_id,
         )
-        await service.approve_step(b_records[0].id, approver_id, org_id=org_id)
-        await service.deny_step(b_records[1].id, user_id, "Not needed", org_id=org_id)
+        await service.approve_step(b_records[0].id, approver, org_id=org_id)
+        await service.deny_step(b_records[1].id, approver, "Not needed", org_id=org_id)
 
         # PR-A's $5000 encumbrance must be untouched by PR-B's denial.
         budget_final = await service.get_budget(budget.id, org_id)

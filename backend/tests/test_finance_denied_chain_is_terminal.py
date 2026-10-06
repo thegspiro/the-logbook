@@ -22,8 +22,23 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.models.finance import ApprovalStepStatus
+from app.models.finance import ApprovalStepStatus, ApprovalStepType
+from app.models.user import Position, User, UserStatus
 from app.services.finance_service import FinanceService
+
+
+def _actor(user_id: str) -> User:
+    """A finance approver the record's unassigned step matches."""
+    user = User(
+        id=user_id,
+        organization_id="org-1",
+        email=f"{user_id}@dept.org",
+        status=UserStatus.ACTIVE,
+    )
+    user.positions = [
+        Position(organization_id="org-1", slug="fa", permissions=["finance.approve"])
+    ]
+    return user
 
 
 def _record(status=ApprovalStepStatus.PENDING):
@@ -34,6 +49,9 @@ def _record(status=ApprovalStepStatus.PENDING):
     record.token_expires_at = None
     record.approval_token = "tok"
     record.chain.organization_id = "org-1"
+    record.step.step_type = ApprovalStepType.APPROVAL
+    record.step.approver_type = None
+    record.step.approver_value = None
     return record
 
 
@@ -60,7 +78,7 @@ class TestApprovingAfterADenialIsRefused:
         service = _service(record, denied=True)
 
         with pytest.raises(ValueError, match="already been denied"):
-            await service.approve_step("rec-1", "approver-1", org_id="org-1")
+            await service.approve_step("rec-1", _actor("approver-1"), org_id="org-1")
 
         assert record.status == ApprovalStepStatus.PENDING
         service._check_all_steps_complete.assert_not_awaited()
@@ -71,7 +89,7 @@ class TestApprovingAfterADenialIsRefused:
         service = _service(record, denied=True)
 
         with pytest.raises(ValueError, match="already been denied"):
-            await service.deny_step("rec-1", "denier-1", org_id="org-1")
+            await service.deny_step("rec-1", _actor("denier-1"), org_id="org-1")
 
         service._finalize_denial.assert_not_awaited()
 
@@ -79,7 +97,7 @@ class TestApprovingAfterADenialIsRefused:
         record = _record()
         service = _service(record, denied=False)
 
-        await service.approve_step("rec-1", "approver-1", org_id="org-1")
+        await service.approve_step("rec-1", _actor("approver-1"), org_id="org-1")
 
         assert record.status == ApprovalStepStatus.APPROVED
 

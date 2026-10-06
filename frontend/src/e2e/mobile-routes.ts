@@ -157,6 +157,54 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/events', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members/admin', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.manage'] },
+  // The hub's other three tabs. Add and Import stand on `users.create` as well,
+  // so without it the hub falls back to the roster and measures that instead.
+  {
+    path: '/members/admin?tab=add',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['members.manage', 'users.create'],
+    expectText: 'Add New Member',
+  },
+  {
+    path: '/members/admin?tab=import',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['members.manage', 'users.create'],
+    expectText: 'Import Members from CSV',
+  },
+  {
+    path: '/members/admin?tab=settings',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['members.manage'],
+    expectText: 'Roster settings',
+  },
+  {
+    path: '/members/admin/waivers',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['members.manage'],
+    expectText: 'Waiver Management',
+  },
+  // Both read the member through `/users/:id/with-roles`; the catch-all `{}` has
+  // no id, so without the record these measure their load-error states.
+  {
+    path: '/members/admin/edit/1',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['members.manage'],
+    fixture: { memberRecord: true },
+    expectText: 'Edit Member: Alex Tester',
+  },
+  {
+    path: '/members/admin/history/1',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['members.manage'],
+    fixture: { memberRecord: true },
+    expectText: 'Audit History',
+  },
   // All five sections of this settings screen, each listed rather than left to
   // a representative, because each renders a different body under one shell.
   //

@@ -403,7 +403,7 @@ export const MemberAdminEditPage: React.FC = () => {
             <p className="text-sm text-red-700 dark:text-red-400">{error || 'Member not found.'}</p>
             <Link
               to="/members/admin"
-              className="mt-2 inline-block text-sm text-blue-700 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+              className="mt-2 inline-block text-sm text-blue-800 underline hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
             >
               Back to Members Administration
             </Link>
@@ -747,7 +747,7 @@ export const MemberAdminEditPage: React.FC = () => {
                   type="email"
                   value={form.email}
                   readOnly
-                  className="form-input text-theme-text-muted bg-theme-surface-secondary cursor-not-allowed px-3 text-sm opacity-75"
+                  className="form-input text-theme-text-muted bg-theme-surface-secondary cursor-not-allowed px-3 text-sm"
                   title="Change this email from Contact Information on the member's profile."
                 />
                 <p className="text-theme-text-muted mt-1 text-xs">
@@ -1001,7 +1001,7 @@ export const MemberAdminEditPage: React.FC = () => {
               <div>
                 <Link
                   to={`/members/admin/history/${userId}`}
-                  className="touch-target-phone inline-flex items-center text-sm text-blue-700 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                  className="touch-target-phone inline-flex items-center text-sm text-blue-800 underline hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                 >
                   View History
                 </Link>

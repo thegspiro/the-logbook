@@ -13,12 +13,6 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import type { ApprovalStepRecord } from '../types';
 
-const mockGetChain = vi.fn();
-vi.mock('../services/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../services/api')>()),
-  approvalChainService: { get: (...args: unknown[]) => mockGetChain(...args) as unknown },
-}));
-
 let storeState: Record<string, unknown> = {};
 vi.mock('../store/financeStore', () => ({
   useFinanceStore: (selector?: (s: Record<string, unknown>) => unknown) =>
@@ -60,6 +54,11 @@ const approvalSteps: ApprovalStepRecord[] = [
     stepName: 'Treasurer review',
     stepOrder: 2,
     createdAt: '2026-09-20T15:00:00Z',
+    // The viewer flags come from the backend's approver matching; the page
+    // only reads them.
+    assigneeLabel: 'Treasurer position',
+    canAct: true,
+    requiresOverride: false,
   },
 ];
 
@@ -128,11 +127,11 @@ const cases: PageCase[] = [
   },
 ];
 
-const renderCase = (c: PageCase, status: string) => {
+const renderCase = (c: PageCase, status: string, steps: ApprovalStepRecord[] = approvalSteps) => {
   const fetch = vi.fn();
   const approveStep = vi.fn().mockResolvedValue(undefined);
   storeState = {
-    [c.selectedKey]: { ...c.entity, status },
+    [c.selectedKey]: { ...c.entity, status, approvalSteps: steps },
     isLoading: false,
     error: null,
     [c.fetchKey]: fetch,
@@ -152,15 +151,7 @@ const renderCase = (c: PageCase, status: string) => {
 describe.each(cases)('$name detail page approval actions', (c) => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetChain.mockReset();
     mockCheckPermission.mockReset();
-    mockGetChain.mockResolvedValue({
-      id: 'chain-1',
-      steps: [
-        { id: 'step-1', stepType: 'approval' },
-        { id: 'step-2', stepType: 'approval' },
-      ],
-    });
     mockCheckPermission.mockImplementation((p: string) => p === 'finance.approve');
   });
 
@@ -174,7 +165,7 @@ describe.each(cases)('$name detail page approval actions', (c) => {
     await user.click(await screen.findByRole('button', { name: 'Approve' }));
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Approve' }));
 
-    await waitFor(() => expect(approveStep).toHaveBeenCalledWith('sr-2', undefined));
+    await waitFor(() => expect(approveStep).toHaveBeenCalledWith('sr-2', undefined, undefined));
     await waitFor(() => expect(fetch).toHaveBeenCalledWith('e-1'));
   });
 
@@ -183,15 +174,16 @@ describe.each(cases)('$name detail page approval actions', (c) => {
 
     await screen.findByText('Approval Timeline');
     expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
-    expect(mockGetChain).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Waiting on/)).not.toBeInTheDocument();
   });
 
-  it('offers nothing to a viewer without finance.approve', async () => {
+  it('only says who the step is waiting on when the viewer cannot act on it', async () => {
     mockCheckPermission.mockReturnValue(false);
-    renderCase(c, 'pending_approval');
+    const steps = approvalSteps.map((s) => (s.id === 'sr-2' ? { ...s, canAct: false } : s));
+    renderCase(c, 'pending_approval', steps);
 
     await screen.findByText('Approval Timeline');
+    expect(screen.getByText(/Waiting on/)).toHaveTextContent('Waiting on Treasurer position.');
     expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
-    expect(mockGetChain).not.toHaveBeenCalled();
   });
 });

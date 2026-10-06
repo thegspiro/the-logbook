@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from loguru import logger
 
 from app.schemas.apparatus import EvocLevelCreate, EvocLevelUpdate
 from app.services.evoc_level_service import EvocLevelService
@@ -124,6 +125,32 @@ class TestDriverEligibility:
         out = await EvocLevelService(db).check_driver_evoc_eligibility("u", "ap1", "o")
         assert out["eligible"] is True
         assert out["required_level"] is None
+
+    async def test_unresolvable_apparatus_is_logged(self):
+        """A dangling `shifts.apparatus_id` must not disable the gate silently.
+
+        `shifts.apparatus_id` carries no foreign key and `delete_apparatus` is a
+        hard delete, so a retired engine leaves its shifts pointing at a missing
+        row. The verdict below is deliberately the current one — passing the
+        member — and changing it is the open AP2-4 decision; what this test
+        pins is that the case is distinguishable from "this apparatus has no
+        EVOC requirement" rather than vanishing into the same silent `True`.
+        """
+        db = _db([_one(None)])
+        messages: list[str] = []
+        sink_id = logger.add(messages.append, level="WARNING")
+        try:
+            out = await EvocLevelService(db).check_driver_evoc_eligibility(
+                "u", "ap-gone", "o"
+            )
+        finally:
+            logger.remove(sink_id)
+
+        assert out["eligible"] is True
+        assert out["required_level"] is None
+        logged = "".join(messages)
+        assert "ap-gone" in logged
+        assert "not found" in logged
 
     async def test_no_certification_not_eligible(self):
         required = _level(2, name="EVOC II")

@@ -30,8 +30,14 @@ invariants, not line-by-line of all 5.7k lines).
 the caller's org, and `list_*` filters by both `apparatus_id` and org, so a
 child pointing at a foreign `apparatus_id` is an orphan, not a leak — but it's a
 data-integrity / mis-attribution gap.
-**Status:** flagged (see cross-cutting note below). Not auto-fixed — adding FK
-org-validation is a behavior change that needs a shared helper + tests.
+**Status:** fixed by app-review B2 pass 1 (2026-08-06), which is what the
+heading records. The original text below is kept because it states the reason
+the audit itself did not fix it, and that reasoning is what produced the shared
+helper: "flagged — not auto-fixed; adding FK org-validation is a behavior change
+that needs a shared helper + tests." The helper is
+`assert_in_org` (`app/utils/org_scoping.py`), the tests are
+`tests/test_apparatus_service.py` and — since pass 5 — the real-database
+`tests/test_apparatus_service_fk_scoping_integration.py`.
 
 ## Cross-cutting note (spans modules)
 

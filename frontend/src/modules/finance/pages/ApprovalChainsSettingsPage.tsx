@@ -4,9 +4,14 @@
  * Create approval chains, edit a chain's name, description and active flag,
  * and add, edit, reorder and delete its steps.
  * Protected by finance.configure_approvals permission.
+ *
+ * Also flags approval steps nobody can act on (a position that no longer
+ * exists, a departed member, nobody active), from the backend's
+ * approver-coverage report — the same matching rule approve / deny enforce,
+ * so this page does not re-derive it.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import {
   ArrowLeft,
@@ -27,8 +32,9 @@ import { useFinanceStore } from '../store/financeStore';
 import { SkeletonPage } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { EmptyState } from '@/components/ux/EmptyState';
-import { ApprovalEntityType, ApprovalStepType, ApproverType } from '../types';
-import type { ApprovalChain, ApprovalChainStep, ApprovalChainUpdatePayload } from '../types';
+import { ApprovalEntityType, ApprovalStepType, ApproverCoverageProblem, ApproverType } from '../types';
+import type { ApprovalChain, ApprovalChainStep, ApprovalChainUpdatePayload, ApproverCoverageRow } from '../types';
+import { approvalChainService } from '../services/api';
 import { ApprovalStepDialog } from '../components/ApprovalStepDialog';
 import { ApprovalChainEditDialog } from '../components/ApprovalChainEditDialog';
 import { useApproverOptions } from '../hooks/useApproverOptions';
@@ -78,6 +84,53 @@ function approverLabel(step: ApprovalChainStep, options: ApproverOptions): strin
   return list?.find((o) => o.value === value)?.label || value;
 }
 
+const NO_VALUE_TEXT: Partial<Record<ApproverType, string>> = {
+  [ApproverType.POSITION]: 'No position chosen',
+  [ApproverType.SPECIFIC_USER]: 'No member chosen',
+  [ApproverType.PERMISSION]: 'No permission chosen',
+  [ApproverType.EMAIL]: 'No email address entered',
+};
+
+const NOT_FOUND_TEXT: Partial<Record<ApproverType, string>> = {
+  [ApproverType.POSITION]: 'That position no longer exists',
+  [ApproverType.SPECIFIC_USER]: 'That member no longer exists',
+  [ApproverType.PERMISSION]: 'That permission no longer exists',
+};
+
+/** Plain words for a coverage problem code. */
+function coverageProblemText(row: ApproverCoverageRow): string {
+  const type = row.approverType ?? undefined;
+  switch (row.problem) {
+    case ApproverCoverageProblem.NO_VALUE:
+      return (type && NO_VALUE_TEXT[type]) || 'No position or member chosen';
+    case ApproverCoverageProblem.NOT_FOUND:
+      return (type && NOT_FOUND_TEXT[type]) || 'That position, member or permission no longer exists';
+    case ApproverCoverageProblem.INVALID_EMAIL:
+      return 'Not a valid email address';
+    case ApproverCoverageProblem.NO_ACTIVE_MEMBERS:
+    default:
+      return 'No active member can act on this step';
+  }
+}
+
+const requestsWaiting = (count: number) => `${String(count)} request${count === 1 ? '' : 's'} waiting`;
+
+/** Nothing for a step with no coverage problem. */
+const CoverageWarning: React.FC<{ row: ApproverCoverageRow | undefined }> = ({ row }) =>
+  row ? (
+    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+      <span className="badge gap-1 bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+        <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+        {coverageProblemText(row)}
+      </span>
+      {row.pendingRequestCount > 0 && (
+        <span className="font-medium text-amber-800 dark:text-amber-300">
+          {requestsWaiting(row.pendingRequestCount)}
+        </span>
+      )}
+    </div>
+  ) : null;
+
 // =============================================================================
 // Chain Card Component
 // =============================================================================
@@ -86,6 +139,8 @@ interface ChainCardProps {
   chain: ApprovalChain;
   busy: boolean;
   approverOptions: ApproverOptions;
+  /** Coverage rows with a problem, by step id. */
+  coverageProblems: Map<string, ApproverCoverageRow>;
   onDelete: (id: string) => void;
   onEdit: (chain: ApprovalChain) => void;
   onAddStep: (chain: ApprovalChain) => void;
@@ -98,6 +153,7 @@ const ChainCard: React.FC<ChainCardProps> = ({
   chain,
   busy,
   approverOptions,
+  coverageProblems,
   onDelete,
   onEdit,
   onAddStep,
@@ -110,6 +166,7 @@ const ChainCard: React.FC<ChainCardProps> = ({
   const sortedSteps = [...chain.steps].sort(
     (a, b) => a.stepOrder - b.stepOrder || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)
   );
+  const problemCount = chain.steps.filter((s) => coverageProblems.has(s.id)).length;
 
   return (
     <div className="card">
@@ -150,6 +207,11 @@ const ChainCard: React.FC<ChainCardProps> = ({
               {!chain.isActive && (
                 <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-500/20 dark:text-gray-400">
                   Inactive
+                </span>
+              )}
+              {problemCount > 0 && (
+                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+                  {problemCount === 1 ? '1 step needs an approver' : `${String(problemCount)} steps need an approver`}
                 </span>
               )}
             </div>
@@ -217,6 +279,7 @@ const ChainCard: React.FC<ChainCardProps> = ({
                         </span>
                       )}
                     </div>
+                    <CoverageWarning row={coverageProblems.get(step.id)} />
                     {step.autoApproveUnder != null && (
                       <p className="text-theme-text-secondary mt-0.5 text-xs">
                         Auto-approves under {formatCurrencyWhole(step.autoApproveUnder)}
@@ -328,10 +391,30 @@ const ApprovalChainsSettingsPage: React.FC = () => {
     isDefault: false,
   });
 
+  // `null` until loaded; `'failed'` when the report could not be read, which
+  // is said rather than shown as "every step is covered".
+  const [coverage, setCoverage] = useState<ApproverCoverageRow[] | 'failed' | null>(null);
+  const coverageRequest = useRef(0);
+  const refreshCoverage = useCallback(async () => {
+    // Mutations can overlap a slower earlier read; only the latest answers.
+    const request = ++coverageRequest.current;
+    try {
+      const rows = await approvalChainService.getApproverCoverage();
+      if (request === coverageRequest.current) setCoverage(rows);
+    } catch {
+      if (request === coverageRequest.current) setCoverage('failed');
+    }
+  }, []);
+
   useEffect(() => {
     void fetchApprovalChains();
     void fetchBudgetCategories();
-  }, [fetchApprovalChains, fetchBudgetCategories]);
+    void refreshCoverage();
+  }, [fetchApprovalChains, fetchBudgetCategories, refreshCoverage]);
+
+  const coverageProblems = new Map<string, ApproverCoverageRow>(
+    Array.isArray(coverage) ? coverage.filter((row) => row.problem !== null).map((row) => [row.stepId, row]) : []
+  );
 
   const handleCreate = () =>
     run(async () => {
@@ -363,6 +446,8 @@ const ApprovalChainsSettingsPage: React.FC = () => {
         });
       } catch {
         // Error handled by store
+      } finally {
+        void refreshCoverage();
       }
     });
 
@@ -384,6 +469,8 @@ const ApprovalChainsSettingsPage: React.FC = () => {
       toast.success('Approval chain deleted');
     } catch {
       // Error handled by store
+    } finally {
+      void refreshCoverage();
     }
   };
 
@@ -396,6 +483,8 @@ const ApprovalChainsSettingsPage: React.FC = () => {
         setEditingChain(null);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Could not save the chain.'));
+      } finally {
+        void refreshCoverage();
       }
     });
 
@@ -414,7 +503,11 @@ const ApprovalChainsSettingsPage: React.FC = () => {
         }
         setStepDialog(null);
       } catch (err: unknown) {
+        // A refused approver value ("Approver value …") is the API's own
+        // message, shown as is; the dialog stays open to correct it.
         toast.error(getErrorMessage(err, 'Could not save the step.'));
+      } finally {
+        void refreshCoverage();
       }
     });
 
@@ -452,6 +545,8 @@ const ApprovalChainsSettingsPage: React.FC = () => {
         toast.success('Step deleted');
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Could not delete the step.'));
+      } finally {
+        void refreshCoverage();
       }
     });
   };
@@ -462,6 +557,8 @@ const ApprovalChainsSettingsPage: React.FC = () => {
         await moveChainStep(chain.id, step.id, direction);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Could not reorder the steps.'));
+      } finally {
+        void refreshCoverage();
       }
     });
 
@@ -525,6 +622,25 @@ const ApprovalChainsSettingsPage: React.FC = () => {
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <p>{error}</p>
         </div>
+      )}
+
+      {coverageProblems.size > 0 && (
+        <div
+          role="status"
+          className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>
+            {coverageProblems.size === 1
+              ? '1 approval step has no one who can act on it. Requests waiting on it need an approvals admin to override, or fix the step.'
+              : `${String(coverageProblems.size)} approval steps have no one who can act on them. Requests waiting on them need an approvals admin to override, or fix the step.`}
+          </p>
+        </div>
+      )}
+      {coverage === 'failed' && (
+        <p className="text-theme-text-secondary text-sm">
+          Could not check whether every approval step has someone who can act on it.
+        </p>
       )}
 
       {/* Create Form */}
@@ -659,6 +775,7 @@ const ApprovalChainsSettingsPage: React.FC = () => {
               chain={chain}
               busy={busy}
               approverOptions={approverOptions}
+              coverageProblems={coverageProblems}
               onDelete={(id) => void handleDelete(id)}
               onEdit={setEditingChain}
               onAddStep={(c) => setStepDialog({ chain: c, step: null })}

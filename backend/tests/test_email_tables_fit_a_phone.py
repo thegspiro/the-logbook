@@ -242,3 +242,7 @@ class TestNfpaRetirementTable:
         # An item with no identifier gets no sub-line, and no "N/A".
         assert "N/A" not in html
         assert "Helmet</td>" in html
+        # The plain-text body must not call a past-due item "approaching".
+        text = _CaptureEmail.sent[0]["text_body"]
+        assert "approaching or past" in text
+        assert "1 of them past due" in text

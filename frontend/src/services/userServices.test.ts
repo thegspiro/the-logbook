@@ -952,3 +952,25 @@ describe('roleService', () => {
     });
   });
 });
+
+// "No history" is a statement about a member's record, so a body that is not
+// the list (a captive portal's 200) must reach the page's load error rather
+// than render as an empty timeline or crash it.
+describe('userService.getMemberAuditHistory — malformed responses', () => {
+  beforeEach(() => {
+    mockGet.mockReset();
+  });
+
+  it.each([
+    ['an HTML page', '<html>Sign in to Wi-Fi</html>'],
+    ['an object', {}],
+  ])('rejects %s', async (_label, body) => {
+    mockGet.mockResolvedValue({ data: body });
+    await expect(userService.getMemberAuditHistory('user-1')).rejects.toThrow('audit history');
+  });
+
+  it('passes a well-formed list through', async () => {
+    mockGet.mockResolvedValue({ data: [{ id: 1 }] });
+    await expect(userService.getMemberAuditHistory('user-1')).resolves.toEqual([{ id: 1 }]);
+  });
+});
