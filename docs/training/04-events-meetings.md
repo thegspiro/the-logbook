@@ -2110,8 +2110,13 @@ The election forensics endpoint response (`ForensicsResponse`) was using untyped
 A new public endpoint allows voters to verify their vote receipt:
 
 ```
-GET /api/v1/elections/{id}/verify-receipt?receipt=<receipt_code>
+POST /api/v1/elections/{id}/verify-receipt
+{"receipt": "<receipt_code>"}
 ```
+
+_(2026-10-05)_ The receipt travels in the body. The original
+`GET …/verify-receipt?receipt=<receipt_code>` still answers, but is deprecated
+because a query string lands in access logs.
 
 This endpoint is **rate-limited** to prevent brute-force attacks. It returns verification status without revealing vote content.
 

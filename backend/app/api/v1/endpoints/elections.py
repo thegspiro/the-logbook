@@ -11,7 +11,16 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    status,
+)
 from fastapi.responses import StreamingResponse
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -4331,21 +4340,16 @@ async def preview_ballot_for_user(
 # ============================================
 
 
-@router.get("/{election_id}/verify-receipt", response_model=VoteReceiptResponse)
-async def verify_vote_receipt(
-    election_id: UUID,
-    receipt: str,
-    db: AsyncSession = Depends(get_db),
-    _rate: None = Depends(_ballot_read_rate_limit),
-):
-    """
-    Verify a vote receipt hash.
+class VoteReceiptVerifyRequest(BaseModel):
+    """Receipt carried in the request body, so it never lands in an access
+    log, a proxy log or browser history the way a query string does (R-D3,
+    ELEC-14)."""
 
-    This is a public endpoint — voters can check that their vote was recorded
-    without revealing the vote content.
+    receipt: str = Field(..., min_length=1, max_length=128)
+    model_config = ConfigDict(extra="forbid")
 
-    **No authentication required**
-    """
+
+async def _verify_receipt(db: AsyncSession, election_id: UUID, receipt: str) -> dict:
     # Voided rows are fetched too: a voter whose ballot an officer voided
     # was otherwise told no such vote existed, which reads as a bogus
     # receipt rather than the sanctioned action it was (W50-54).
@@ -4395,3 +4399,52 @@ async def verify_vote_receipt(
         "voted_at": vote.voted_at.isoformat(),
         "position": vote.position,
     }
+
+
+@router.post("/{election_id}/verify-receipt", response_model=VoteReceiptResponse)
+async def verify_vote_receipt_post(
+    election_id: UUID,
+    payload: VoteReceiptVerifyRequest,
+    db: AsyncSession = Depends(get_db),
+    _rate: None = Depends(_ballot_read_rate_limit),
+):
+    """
+    Verify a vote receipt hash, with the receipt in the request body.
+
+    This is a public endpoint — voters can check that their vote was recorded
+    without revealing the vote content. Preferred over the deprecated GET,
+    which carries the receipt in the URL.
+
+    **No authentication required**
+    """
+    return await _verify_receipt(db, election_id, payload.receipt)
+
+
+@router.get(
+    "/{election_id}/verify-receipt",
+    response_model=VoteReceiptResponse,
+    deprecated=True,
+)
+async def verify_vote_receipt(
+    election_id: UUID,
+    receipt: str,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+    _rate: None = Depends(_ballot_read_rate_limit),
+):
+    """
+    Verify a vote receipt hash (deprecated — use the POST form).
+
+    Kept so external callers written against the documented GET keep working
+    through the transition (owner decision 2026-10-05, ELEC-14). The receipt
+    travels in the query string here, so it can land in server and proxy
+    logs; the response says so with a ``Deprecation`` header and a ``Link``
+    to the POST form.
+
+    **No authentication required**
+    """
+    response.headers["Deprecation"] = "true"
+    response.headers["Link"] = (
+        f'</api/v1/elections/{election_id}/verify-receipt>; rel="successor-version"'
+    )
+    return await _verify_receipt(db, election_id, receipt)

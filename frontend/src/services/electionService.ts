@@ -712,12 +712,12 @@ export const electionService = {
   },
 
   /**
-   * Verify a vote receipt hash (public — no auth required)
+   * Verify a vote receipt hash (public — no auth required). The receipt goes
+   * in the POST body so it never lands in an access log or browser history;
+   * the GET form with `?receipt=` is deprecated (ELEC-14).
    */
   async verifyReceipt(electionId: string, receipt: string): Promise<VoteReceiptResponse> {
-    const response = await api.get<VoteReceiptResponse>(`/elections/${electionId}/verify-receipt`, {
-      params: { receipt },
-    });
+    const response = await api.post<VoteReceiptResponse>(`/elections/${electionId}/verify-receipt`, { receipt });
     return response.data;
   },
 };

@@ -13,16 +13,16 @@ This guide explains how to investigate a disputed election using The Logbook's b
 
 ## Quick Reference: Available Tools
 
-| Tool                     | Endpoint                                      | What It Does                                                                                                 |
-| ------------------------ | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| **Forensics Report**     | `GET /elections/{id}/forensics`               | Full aggregated report (start here)                                                                          |
-| **Integrity Check**      | `GET /elections/{id}/integrity`               | Verify all vote signatures                                                                                   |
-| **Election Stats**       | `GET /elections/{id}/stats`                   | Ballot counts and turnout                                                                                    |
-| **Election Results**     | `GET /elections/{id}/results`                 | Candidate vote counts                                                                                        |
-| **Soft-Delete Vote**     | `DELETE /elections/{id}/votes/{vote_id}`      | Remove vote with reason                                                                                      |
-| **Receipt Verification** | `GET /elections/{id}/verify-receipt?receipt=` | Confirm a voter's receipt maps to a recorded vote                                                            |
-| **Paper Batches**        | `GET /elections/{id}/manual-ballots`          | Paper-tally batches with recorder, status, and attestation trail                                             |
-| **Certified Results**    | `GET /elections/{id}/certified-results`       | Formal results PDF: tallies, quorum, attestation trail, integrity result, signature lines (closed elections) |
+| Tool                     | Endpoint                                 | What It Does                                                                                                 |
+| ------------------------ | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| **Forensics Report**     | `GET /elections/{id}/forensics`          | Full aggregated report (start here)                                                                          |
+| **Integrity Check**      | `GET /elections/{id}/integrity`          | Verify all vote signatures                                                                                   |
+| **Election Stats**       | `GET /elections/{id}/stats`              | Ballot counts and turnout                                                                                    |
+| **Election Results**     | `GET /elections/{id}/results`            | Candidate vote counts                                                                                        |
+| **Soft-Delete Vote**     | `DELETE /elections/{id}/votes/{vote_id}` | Remove vote with reason                                                                                      |
+| **Receipt Verification** | `POST /elections/{id}/verify-receipt`    | Confirm a voter's receipt maps to a recorded vote                                                            |
+| **Paper Batches**        | `GET /elections/{id}/manual-ballots`     | Paper-tally batches with recorder, status, and attestation trail                                             |
+| **Certified Results**    | `GET /elections/{id}/certified-results`  | Formal results PDF: tallies, quorum, attestation trail, integrity result, signature lines (closed elections) |
 
 All endpoints require `elections.manage` permission, except receipt verification,
 which is public (rate-limited) so voters can check their own receipts.
@@ -476,12 +476,20 @@ route ignored the path's election and accepted an empty reason.
 }
 ```
 
-### `GET /elections/{id}/verify-receipt?receipt=...`
+### `POST /elections/{id}/verify-receipt`
 
 **Permission:** Public (rate-limited)
 
 Voters receive their receipt hash(es) when they submit a ballot. This endpoint
-confirms a receipt maps to a recorded vote without revealing its content:
+confirms a receipt maps to a recorded vote without revealing its content. The
+receipt goes in the body, `{"receipt": "<hash>"}`, so it never lands in a
+server or proxy access log.
+
+> **The GET form is deprecated (2026-10-05).**
+> `GET /elections/{id}/verify-receipt?receipt=...` still answers identically
+> so existing callers keep working, but it carries the receipt in the URL and
+> marks its response `Deprecation: true` with a `Link` to the POST. Move
+> callers to the POST; the GET will be removed in a later release (ELEC-14).
 
 ```json
 {

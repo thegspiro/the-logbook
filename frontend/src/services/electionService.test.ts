@@ -644,13 +644,14 @@ describe('electionService', () => {
 
   // --- verifyReceipt ---
   describe('verifyReceipt', () => {
-    it('should GET /elections/:id/verify-receipt with receipt param', async () => {
+    it('should POST the receipt in the body, never the query string', async () => {
       const response = { verified: true, message: 'Vote recorded', voted_at: '2026-01-01T00:00:00', position: 'Chief' };
-      mockGet.mockResolvedValueOnce({ data: response });
+      mockPost.mockResolvedValueOnce({ data: response });
 
       const result = await electionService.verifyReceipt('el1', 'abc123hash');
 
-      expect(mockGet).toHaveBeenCalledWith('/elections/el1/verify-receipt', { params: { receipt: 'abc123hash' } });
+      expect(mockPost).toHaveBeenCalledWith('/elections/el1/verify-receipt', { receipt: 'abc123hash' });
+      expect(mockGet).not.toHaveBeenCalled();
       expect(result).toEqual(response);
     });
   });

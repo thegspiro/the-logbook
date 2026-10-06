@@ -15,6 +15,13 @@ finding below that says FLAGGED or OPEN is superseded by its line here.
   `elections.py`), enforced under a lock on the organization row with a
   locking count (pitfall #27); the 201st save is a 409. The list response is
   unchanged. Guard: `tests/test_saved_ballot_template_cap.py`.
+- **ELEC-14** (receipt as a GET query parameter) — **fixed: `POST
+/{election_id}/verify-receipt`** takes `{"receipt"}` in a body that forbids
+  extra keys; the frontend uses it. The GET stays for external callers,
+  marked `deprecated` in OpenAPI and answering `Deprecation: true` with a
+  `Link` to the POST; both share `_verify_receipt` and the read rate limit.
+  Guards: `TestReceiptVerificationRoutes` in
+  `tests/test_w50_test_ballot_marking.py`, `electionService.test.ts`.
 - **ELEC-40** (alias collision / pre-ELEC-34 legacy-hash gap) — **made
   unreachable for new ballots:** `_validate_ballot_item_identities`
   refuses an item whose title or position equals another item's id on

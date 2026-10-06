@@ -14,13 +14,17 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import Response
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.elections import (
     BallotLookupRequest,
+    VoteReceiptVerifyRequest,
     lookup_ballot_by_token,
     verify_vote_receipt,
+    verify_vote_receipt_post,
 )
 from app.models.election import Election
 from app.services.election_service import ElectionService
@@ -146,9 +150,9 @@ class TestTestBallotMarking(TestElectionSetup):
         assert err is None, err
         assert vote.is_test is True
 
-        receipt = await verify_vote_receipt(
+        receipt = await verify_vote_receipt_post(
             election_id=uuid.UUID(data["election_id"]),
-            receipt=vote.receipt_hash,
+            payload=VoteReceiptVerifyRequest(receipt=vote.receipt_hash),
             db=db_session,
             _rate=None,
         )
@@ -172,9 +176,9 @@ class TestTestBallotMarking(TestElectionSetup):
         )
         assert err is None, err
 
-        receipt = await verify_vote_receipt(
+        receipt = await verify_vote_receipt_post(
             election_id=uuid.UUID(data["election_id"]),
-            receipt=vote.receipt_hash,
+            payload=VoteReceiptVerifyRequest(receipt=vote.receipt_hash),
             db=db_session,
             _rate=None,
         )
@@ -182,8 +186,63 @@ class TestTestBallotMarking(TestElectionSetup):
         assert receipt["counted"] is True
 
     async def test_unknown_receipt_is_neither(self, db_session: AsyncSession):
-        receipt = await verify_vote_receipt(
-            election_id=uuid.uuid4(), receipt="nope", db=db_session, _rate=None
+        receipt = await verify_vote_receipt_post(
+            election_id=uuid.uuid4(),
+            payload=VoteReceiptVerifyRequest(receipt="nope"),
+            db=db_session,
+            _rate=None,
         )
         assert receipt["verified"] is False
         assert receipt["counted"] is False
+
+
+class TestReceiptVerificationRoutes(TestElectionSetup):
+    """ELEC-14: the receipt moves to a POST body; the GET stays, deprecated,
+    for external callers written against the documented query-string form."""
+
+    async def test_deprecated_get_answers_the_same_and_says_deprecated(
+        self, db_session: AsyncSession, setup_election
+    ):
+        data = setup_election
+        raw = await _mint_token(db_session, data, is_test=False)
+        vote, err = await ElectionService(db_session).cast_vote_with_token(
+            token=raw,
+            candidate_id=uuid.UUID(data["candidate_b_id"]),
+            position="Chief",
+        )
+        assert err is None, err
+        election_id = uuid.UUID(data["election_id"])
+
+        response = Response()
+        via_get = await verify_vote_receipt(
+            election_id=election_id,
+            receipt=vote.receipt_hash,
+            response=response,
+            db=db_session,
+            _rate=None,
+        )
+        via_post = await verify_vote_receipt_post(
+            election_id=election_id,
+            payload=VoteReceiptVerifyRequest(receipt=vote.receipt_hash),
+            db=db_session,
+            _rate=None,
+        )
+
+        assert via_get == via_post
+        assert via_post["counted"] is True
+        assert response.headers["Deprecation"] == "true"
+        assert "successor-version" in response.headers["Link"]
+
+    def test_post_body_rejects_unknown_keys(self):
+        with pytest.raises(ValidationError):
+            VoteReceiptVerifyRequest(receipt="abc", token="leaked")
+
+    def test_get_route_is_marked_deprecated_in_openapi(self):
+        from app.api.v1.endpoints.elections import router
+
+        methods = {
+            (tuple(sorted(route.methods)), route.deprecated)
+            for route in router.routes
+            if getattr(route, "path", "") == "/{election_id}/verify-receipt"
+        }
+        assert methods == {(("GET",), True), (("POST",), None)}, methods

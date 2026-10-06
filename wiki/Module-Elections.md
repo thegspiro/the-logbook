@@ -344,7 +344,8 @@ GET    /api/v1/elections/{id}/package-recipients  # Prefill list for the pre-mee
 GET    /api/v1/elections/{id}/package-pdf    # Download pre-meeting package PDF (manage; variant=member|full)
 POST   /api/v1/elections/{id}/send-package   # Email pre-meeting package to an edited address list (manage)
 GET    /api/v1/elections/{id}/preview-ballot # Preview a member's ballot (manage)
-GET    /api/v1/elections/{id}/verify-receipt # Verify a vote receipt (public, rate-limited)
+POST   /api/v1/elections/{id}/verify-receipt # Verify a vote receipt, {"receipt": …} in the body (public, rate-limited)
+GET    /api/v1/elections/{id}/verify-receipt # Deprecated ?receipt= form — use the POST (2026-10-05)
 GET    /api/v1/elections/{id}/integrity      # Verify vote signatures (manage)
 GET    /api/v1/elections/{id}/forensics      # Full forensic report (manage)
 GET    /api/v1/elections/{id}/attendees      # List meeting check-ins

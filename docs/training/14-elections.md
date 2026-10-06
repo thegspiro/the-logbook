@@ -976,7 +976,7 @@ Each vote generates a cryptographic **receipt hash** that:
 - Is returned to the voter when they submit their ballot (shown on the confirmation screen — voters should save it)
 - Proves the vote was recorded
 - Does NOT reveal which candidate was selected
-- Can be verified by anyone holding the receipt via `GET /elections/{id}/verify-receipt?receipt=...` (public, rate-limited — returns only the vote's timestamp and position)
+- Can be verified by anyone holding the receipt via `POST /elections/{id}/verify-receipt` with `{"receipt": …}` in the body (public, rate-limited; the older `GET …?receipt=` form still works but is deprecated — returns only the vote's timestamp and position)
 
 ### Forensics Report
 

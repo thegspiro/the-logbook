@@ -817,7 +817,8 @@ DELETE /api/v1/inventory/impact-planner/plans/{plan_id}                # Delete 
 
 ```
 POST   /api/v1/elections/{id}/send-report                              # Email election results to voters
-GET    /api/v1/elections/{id}/verify-receipt                            # Public vote receipt verification (rate-limited)
+POST   /api/v1/elections/{id}/verify-receipt                            # Public vote receipt verification, receipt in the body (rate-limited)
+GET    /api/v1/elections/{id}/verify-receipt                            # Deprecated ?receipt= form of the above (2026-10-05)
 ```
 
 ## Election Pre-Meeting Package _(2026-07-28)_
