@@ -4350,13 +4350,22 @@ async def run_paypal_capture_backfill(db: AsyncSession) -> Dict[str, Any]:
 
     recorded = 0
     failed = 0
-    for integration in integrations:
-        org_id = str(integration.organization_id)
+    rolled_back = False
+    # Read every org id while the rows are still loaded: rollback() expires
+    # every instance even with expire_on_commit=False, and after one
+    # department fails, a plain attribute read on the next would lazy-load,
+    # which async SQLAlchemy refuses (MissingGreenlet) — that used to abort
+    # the task for every department after the failing one.
+    targets = [(i, str(i.organization_id)) for i in integrations]
+    for integration, org_id in targets:
         try:
+            if rolled_back:
+                await db.refresh(integration)
             outcome = await backfill_paypal_captures(db, integration)
             recorded += int(outcome.get("recorded", 0))
         except Exception as e:
             await db.rollback()
+            rolled_back = True
             logger.opt(exception=True).warning(
                 "PayPal capture backfill failed for org {}", org_id
             )

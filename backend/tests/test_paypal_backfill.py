@@ -291,6 +291,10 @@ async def _integration(
     if created_at is not None:
         integration.created_at = created_at
         await db.flush()
+    # MySQL has no RETURNING, so the server-default timestamps are left
+    # expired after the flush and the service's read of created_at would be
+    # a lazy load (MariaDB 10.5+ returns them, which is why it passed there).
+    await db.refresh(integration)
     return integration
 
 
@@ -536,17 +540,43 @@ class TestBackfill:
 async def test_one_departments_failure_does_not_stop_the_next():
     from app.services import scheduled_tasks
 
-    good = SimpleNamespace(organization_id="org-good")
-    bad = SimpleNamespace(organization_id="org-bad")
+    class _Row:
+        """Models what a real rollback does to a loaded instance: every
+        attribute is expired, and reading one without an awaited reload is a
+        lazy load, which async SQLAlchemy refuses."""
+
+        def __init__(self, org_id):
+            self._org_id = org_id
+            self.expired = False
+
+        @property
+        def organization_id(self):
+            if self.expired:
+                raise RuntimeError("MissingGreenlet: lazy load after rollback")
+            return self._org_id
+
+    good = _Row("org-good")
+    bad = _Row("org-bad")
     result = MagicMock()
     result.scalars.return_value.all.return_value = [bad, good]
     db = MagicMock()
     db.execute = AsyncMock(return_value=result)
-    db.rollback = AsyncMock()
+
+    async def _rollback():
+        for row in (good, bad):
+            row.expired = True
+
+    async def _refresh(row):
+        row.expired = False
+
+    db.rollback = AsyncMock(side_effect=_rollback)
+    db.refresh = AsyncMock(side_effect=_refresh)
 
     async def _backfill(_db, integration):
         if integration is bad:
             raise PayPalError("PayPal refused Transaction Search")
+        # The service's first act is to read the integration's fields.
+        assert integration.organization_id == "org-good"
         return {"recorded": 2}
 
     with (
@@ -564,6 +594,7 @@ async def test_one_departments_failure_does_not_stop_the_next():
         "failed": 1,
     }
     db.rollback.assert_awaited_once()
+    db.refresh.assert_awaited_once_with(good)
     assert error_log.await_args.args[0] == "org-bad"
 
 
