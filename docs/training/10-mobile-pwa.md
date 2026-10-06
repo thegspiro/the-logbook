@@ -475,6 +475,32 @@ On your own phone this rarely matters, because you stay signed in. It matters
 on the shared terminal in the bay, which is exactly where somebody is most
 likely to sign out mid-shift.
 
+### Queued Work Is Sent Only by the Member Who Saved It _(2026-10-05)_
+
+Every queued equipment check, shift report, training submission, RSVP and NFC
+put-away or shelf audit now records **who saved it**, and the app sends only the
+items belonging to the member who is signed in. Another member's items stay on
+the device and do not hold up yours; the pending count shows only your own.
+Before this, if the browser could not clear a previous member's queue at
+sign-in, the next member's connection sent it under their name.
+
+Items saved **before** this change have no recorded owner. They are held rather
+than sent, and a yellow notice appears across the top of the app:
+_"3 offline items are on hold"_, saying they were saved before the device
+recorded who saved them and have not been sent. Choose one of two buttons, each
+behind a confirmation:
+
+- **Send as me** (_"Send these as yours?"_) sends them under your name. Do this
+  only if you saved them yourself: the device cannot tell, and if another
+  member did, their work is recorded as yours. Equipment checks and shift
+  reports go the next time you open their page with a connection.
+- **Discard** (_"Discard held items?"_) deletes them from the device for good.
+  Whoever saved them is not told.
+- **Keep on hold** in either dialog leaves things as they are.
+
+> **Screenshot needed:**
+> _[Member signed in on a device with two or three held offline items (seed untagged entries in IndexedDB): the yellow "N offline items are on hold" notice at the top of the app with its Send as me and Discard buttons; a second frame with the "Send these as yours?" confirmation open. Do not confirm.]_
+
 ---
 
 ## Push Notifications on Mobile
@@ -1108,7 +1134,7 @@ rows.
   the IP Security tabs now match every other primary action. Blue stays where it
   means something different: the info variant of a confirm dialog, **Start Skill
   Test** in practice mode, and two chart colours.
-- **The weekly expiring-supplies email fits a phone.** Three columns — Item,
+- **The weekly expiring-supplies email fits a phone.** (Retitled **Supplies to Replace** with a **Status** column on 2026-10-05; four more emails fit a phone the same day — see [Inventory](./05-inventory.md#what-the-alert-emails-say-now-2026-10-05).) Three columns — Item,
   Expires, Ready stock / Qty — with the apparatus and compartment (or lot) under
   the item and the days left under the date. It used to run past the edge, and
   an empty cell printed the text "&mdash;" instead of a dash.
