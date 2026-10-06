@@ -319,17 +319,22 @@ async def test_create_integration_client_explicit_proxy_wins_over_env_proxies():
 
 async def test_paypal_service_uses_shared_integration_client():
     """Structural guard (INT-27/Codex follow-up, 2026-09-06): paypal_service.py's
-    two outbound calls must go through create_integration_client(), not a bare
+    outbound calls must go through create_integration_client(), not a bare
     httpx.AsyncClient() — otherwise they silently stop inheriting the
     response-size cap and other hardening centralized there, the exact gap
-    this follow-up closes."""
+    this follow-up closes.
+
+    Four calls as of the SF-backfill job (2026-10-06): get_access_token,
+    verify_webhook_signature, search_incoming_transactions and
+    fetch_completed_capture. The exact count makes a new outbound call a
+    deliberate update here rather than something that slips past."""
     import inspect
 
     from app.services.integration_services import paypal_service
 
     source = inspect.getsource(paypal_service)
     assert "httpx.AsyncClient(" not in source
-    assert source.count("create_integration_client(") == 2
+    assert source.count("create_integration_client(") == 4
 
 
 async def test_paypal_get_access_token_enforces_response_size_cap():
