@@ -16,12 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR [#2968](https://github.com/thegspiro/the-logbook/pull/2968)
-(Feature 12, Facilities, pass 7) merged — docs-only (0 application-code
-changes: only `FAC-12-facilities.md`, `PROGRESS.md`), so per this file's
-own rule it is not a recordable event on its own; rotation row 12 already
-stood ✅. This iteration picks up Feature 13 (Apparatus & NFC), the state
-this PR opened from.
+**PR [#2969](https://github.com/thegspiro/the-logbook/pull/2969)**: branch
+`claude/security-review-apparatus-nfc`, Feature 13 (Apparatus & NFC), pass
+14 (rotation pass 7) — 0 code fixes, 0 new findings. Every AP-1 through
+AP-18 finding already stood ✅ FIXED going into this pass; AP-17/AP-18
+(the two most recent, highest-risk fixes) re-confirmed intact at their
+current (shifted) line numbers rather than assumed from zero diff. Real
+delta since pass 13 reviewed in full — 25 non-merge commits (out of 775
+total on `main` in that window), with a full-depth-clone check run first.
+Route count in `apparatus.py` grew to 90 (+2, a read-only NFPA-compliance
+pair), `nfc_tags.py` unchanged at 5. Gate green (flake8/black/isort,
+migrations, route-permission check — 245 routes, 876 scoped backend
+tests, frontend typecheck/lint, 67 scoped frontend tests). See the Log
+entry below for detail.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 7, PR #2968, merged docs-only — not independently recorded), preserved for history</summary>
