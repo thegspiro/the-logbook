@@ -19,7 +19,7 @@ Backfill, best effort from what was already stored:
 The downgrade drops the column; nothing before this revision read it.
 
 Revision ID: 9c1445489666
-Revises: cdb725bb1d12
+Revises: 15802f3df5c4
 Create Date: 2026-10-05 23:37:48.124330
 
 """
@@ -31,7 +31,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "9c1445489666"
-down_revision: Union[str, None] = "cdb725bb1d12"
+down_revision: Union[str, None] = "15802f3df5c4"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
