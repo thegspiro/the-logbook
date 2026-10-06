@@ -200,6 +200,14 @@ services:
       # Direct printing is disabled unless the operator approves printer
       # addresses/CIDRs (for example 192.168.50.10/32).
       LABEL_PRINTER_ALLOWED_NETWORKS: ${LABEL_PRINTER_ALLOWED_NETWORKS:-}
+      # Malware scanning of uploaded self-report certificates. Off unless set;
+      # turning it on needs a reachable clamd — the `clamav` service below
+      # (profile with-clamav) or one of your own. Enabled + unreachable
+      # refuses uploads rather than storing them unscanned.
+      CLAMAV_ENABLED: ${CLAMAV_ENABLED:-false}
+      CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
+      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+      CLAMAV_TIMEOUT_SECONDS: ${CLAMAV_TIMEOUT_SECONDS:-30}
     ports:
       - "${BACKEND_PORT:-3001}:3001"
     volumes:
@@ -379,6 +387,49 @@ services:
     profiles:
       - with-s3
 
+  # ClamAV (Optional - malware scanning of uploaded certificates)
+  # Start with: docker compose --profile with-clamav up -d
+  # and set CLAMAV_ENABLED=true in .env. The backend does not depend_on this
+  # service (a dependency on a profiled service breaks stacks that leave the
+  # profile off); until clamd reports healthy, scanned uploads are refused
+  # with a retryable 503. First start loads signatures and can take a few
+  # minutes; clamd holds them in memory, so budget roughly 1.5-3 GB of RAM.
+  clamav:
+    image: clamav/clamav:1.4.3
+    container_name: intranet-clamav
+    restart: unless-stopped
+    # SEC: Harden container. The image's init starts as root, prepares its
+    # run/database directories and drops to its own clamav user for clamd and
+    # freshclam, which is what these capabilities cover.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    # SEC: clamd's port is NOT exposed to the host — it accepts any stream
+    # from anyone who can reach it. The backend reaches it on the internal
+    # network as clamav:3310.
+    volumes:
+      # Signature database, kept across restarts so freshclam does not
+      # re-download it every time the container is recreated.
+      - clamav_data:/var/lib/clamav
+    healthcheck:
+      # Ships with the image: sends PING to clamd and expects PONG.
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 300s
+    networks:
+      - intranet-network
+    profiles:
+      - with-clamav
+
   # Mailhog (Email testing in development)
   mailhog:
     image: mailhog/mailhog:latest
@@ -402,6 +453,8 @@ volumes:
   elasticsearch_data:
     driver: local
   minio_data:
+    driver: local
+  clamav_data:
     driver: local
   uploads:
     driver: local

@@ -65,6 +65,12 @@
   <Config Name="SMTP Password" Target="SMTP_PASSWORD" Default="" Mode="" Description="SMTP password" Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
   <Config Name="From Email" Target="SMTP_FROM_EMAIL" Default="noreply@yourdomain.com" Mode="" Description="Email from address" Type="Variable" Display="advanced" Required="false" Mask="false">noreply@yourdomain.com</Config>
 
+  <!-- Malware Scanning (Optional) - needs a separate ClamAV container (clamav/clamav) on the same network -->
+  <Config Name="Malware Scanning" Target="CLAMAV_ENABLED" Default="false" Mode="" Description="Scan uploaded training certificates with ClamAV. When true and ClamAV is unreachable, uploads are refused rather than stored unscanned." Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
+  <Config Name="ClamAV Host" Target="CLAMAV_HOST" Default="clamav" Mode="" Description="Hostname or IP of the ClamAV daemon (clamd)" Type="Variable" Display="advanced" Required="false" Mask="false">clamav</Config>
+  <Config Name="ClamAV Port" Target="CLAMAV_PORT" Default="3310" Mode="" Description="clamd TCP port" Type="Variable" Display="advanced" Required="false" Mask="false">3310</Config>
+  <Config Name="ClamAV Timeout" Target="CLAMAV_TIMEOUT_SECONDS" Default="30" Mode="" Description="Seconds allowed for one scan before the upload is refused" Type="Variable" Display="advanced" Required="false" Mask="false">30</Config>
+
   <!-- Backup Configuration -->
   <Config Name="Backup Enabled" Target="BACKUP_ENABLED" Default="true" Mode="" Description="Enable automated backups" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
   <Config Name="Backup Schedule" Target="BACKUP_SCHEDULE" Default="0 2 * * *" Mode="" Description="Backup schedule (cron format - default: 2 AM daily)" Type="Variable" Display="advanced" Required="false" Mask="false">0 2 * * *</Config>

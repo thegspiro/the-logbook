@@ -3144,10 +3144,16 @@ stepper.
   the record itself, its hours and its dates stay. Leave the box empty to keep
   files indefinitely, which is also what happens until someone sets it. Every
   change to the period, and every file the task deletes, is in the audit log.
-- **Files are not scanned for malware.** They are checked to be genuinely the
-  file type they claim and stored under a name the server chooses, so nothing
-  runs on the server — but a certificate opened by an officer is whatever the
-  member uploaded.
+- **Files can be scanned for malware** _(2026-10-06)_. They are always
+  checked to be genuinely the file type they claim and stored under a name the
+  server chooses, so nothing runs on the server. If your administrator has
+  turned on ClamAV scanning, each certificate is also scanned before it is
+  saved: a file the scanner flags is refused with _"This file was flagged as
+  malicious…"_ and never stored, and the rejection is in the audit log. If the
+  scanner is temporarily unavailable the member sees _"Files cannot be checked
+  for malware right now…"_ and can try again in a few minutes — the file is
+  not saved unscanned. Without scanning turned on, a certificate opened by an
+  officer is whatever the member uploaded.
 - **Voiding a record keeps its file.** A delete marks the record cancelled
   rather than removing it, so the correction stays auditable and its evidence
   stays with it.

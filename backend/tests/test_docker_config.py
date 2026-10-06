@@ -421,6 +421,61 @@ class TestBaseComposeReachesProductionGates:
         )
 
 
+class TestOptionalClamavService:
+    """ClamAV is opt-in: a stack that does not ask for it must not change.
+
+    The backend's CLAMAV_* settings must also be reachable from .env — the
+    environment block is a whitelist, so a flag missing from it would make
+    "I enabled scanning" silently untrue.
+    """
+
+    @pytest.fixture(
+        autouse=True, params=["docker-compose.yml", "unraid/docker-compose-unraid.yml"]
+    )
+    def _setup(self, request):
+        self.compose = yaml.safe_load(_read(ROOT_DIR / request.param))
+        self.clamav = self.compose["services"]["clamav"]
+
+    def test_service_is_behind_an_opt_in_profile(self):
+        assert self.clamav.get("profiles") == ["with-clamav"]
+
+    def test_image_is_the_official_one_with_a_pinned_tag(self):
+        image, _, tag = self.clamav["image"].partition(":")
+        assert image == "clamav/clamav"
+        assert re.fullmatch(r"\d+\.\d+\.\d+", tag), tag
+
+    def test_has_a_healthcheck(self):
+        assert self.clamav["healthcheck"]["test"]
+
+    def test_signatures_live_in_a_named_volume(self):
+        mounts = self.clamav["volumes"]
+        assert "clamav_data:/var/lib/clamav" in mounts
+        assert "clamav_data" in self.compose["volumes"]
+
+    def test_clamd_port_is_not_published(self):
+        assert "ports" not in self.clamav
+
+    def test_backend_does_not_depend_on_it(self):
+        # depends_on a profiled service breaks every stack that leaves the
+        # profile off.
+        assert "clamav" not in (
+            self.compose["services"]["backend"].get("depends_on") or {}
+        )
+
+    @pytest.mark.parametrize(
+        ("setting", "default"),
+        [
+            ("CLAMAV_ENABLED", "false"),
+            ("CLAMAV_HOST", "clamav"),
+            ("CLAMAV_PORT", "3310"),
+            ("CLAMAV_TIMEOUT_SECONDS", "30"),
+        ],
+    )
+    def test_backend_settings_pass_through_from_dot_env(self, setting, default):
+        env = self.compose["services"]["backend"]["environment"]
+        assert env[setting] == f"${{{setting}:-{default}}}"
+
+
 class TestCaCertificateMount:
     """DB_SSL_CA / REDIS_SSL_CA are read inside the container.
 

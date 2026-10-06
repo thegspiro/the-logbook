@@ -110,8 +110,18 @@ VITE_API_URL=/api/v1
 | Elasticsearch | `with-search` | Advanced search        |
 | MinIO         | `with-s3`     | S3-compatible storage  |
 | Mailhog       | `development` | Email testing          |
+| ClamAV        | `with-clamav` | Malware scanning       |
 
 Enable a profile: `docker compose --profile with-search up -d`
+
+> **ClamAV** _(2026-10-06)_ scans uploaded self-report training certificates.
+> Start it with `--profile with-clamav` **and** set `CLAMAV_ENABLED=true` in
+> `.env` — the profile alone starts a daemon nothing calls, and the flag alone
+> refuses every certificate upload because no scanner answers. clamd keeps its
+> signatures in memory (budget 1.5–3 GB of RAM) in the `clamav_data` volume and
+> takes a few minutes to become healthy on first start; until then certificate
+> uploads get a retryable 503. Its port is not published. Details:
+> [Security Configuration → Malware scanning](Configuration-Security#malware-scanning-of-uploads).
 
 > **The `production` profile's nginx** _(2026-09-30)_ reads
 > `infrastructure/nginx/docker.conf` and will not start without

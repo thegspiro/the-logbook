@@ -201,6 +201,16 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-noreply@example.com}
 
+      # Malware scanning of uploaded self-report certificates (Optional).
+      # Start the `clamav` service below with
+      #   docker compose --profile with-clamav up -d
+      # and set CLAMAV_ENABLED=true in .env. Enabled + unreachable refuses
+      # uploads (retryable 503) rather than storing them unscanned.
+      CLAMAV_ENABLED: ${CLAMAV_ENABLED:-false}
+      CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
+      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+      CLAMAV_TIMEOUT_SECONDS: ${CLAMAV_TIMEOUT_SECONDS:-30}
+
       # Modules are enabled per organization at runtime via the organization's
       # settings (enabled_modules) — there are no MODULE_*_ENABLED deployment
       # flags (they gated nothing; all API routers register unconditionally).
@@ -364,6 +374,41 @@ services:
     networks:
       - logbook-internal
 
+  # ============================================
+  # ClamAV - malware scanning (Optional, profile with-clamav)
+  # ============================================
+  # Not started unless the profile is enabled. Loads its signature database
+  # into memory — budget roughly 1.5-3 GB of RAM — and takes a few minutes
+  # to become healthy on first start. Its port stays on the internal network.
+  clamav:
+    image: clamav/clamav:1.4.3
+    container_name: logbook-clamav
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      # Docker-managed rather than an appdata path: the image's own clamav
+      # user must own it, which a share with nobody:users ownership is not.
+      - clamav_data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 300s
+    networks:
+      - logbook-internal
+    profiles:
+      - with-clamav
+
 # ============================================
 # Networks
 # ============================================
@@ -372,10 +417,14 @@ networks:
     driver: bridge
 
 # ============================================
-# Volumes (Alternative to host paths)
+# Volumes
 # ============================================
-# Uncomment if you prefer Docker-managed volumes
-# volumes:
+volumes:
+  # ClamAV signature database (only used by the with-clamav profile).
+  clamav_data:
+    driver: local
+  # Alternative to host paths — uncomment if you prefer Docker-managed
+  # volumes for the database and cache:
 #   mysql_data:
 #     driver: local
 #   redis_data:

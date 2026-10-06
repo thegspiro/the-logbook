@@ -752,10 +752,31 @@ only account of it.
 
 **What is still open:**
 
-| Item                             | Status         | Detail                                                                                                                                                                                                                                                   |
-| -------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **No malware scanning**          | Open (feature) | Uploads are validated by magic bytes and confined to a server-generated name, so a double extension cannot survive the trip and nothing is executed server-side. They are not scanned. A file served back to an officer is whatever the member uploaded. |
-| **Voided records keep the file** | By design      | `DELETE /training/records/{id}` marks a record `cancelled` rather than removing it, so the correction stays auditable — and the evidence behind the corrected entry stays with it.                                                                       |
+| Item                                                      | Status                                   | Detail                                                                                                                                                                                                                                                                          |
+| --------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Malware scanning is opt-in, and covers this path only** | Resolved 2026-10-06 (opt-in) — see below | Uploads are validated by magic bytes and confined to a server-generated name, and with `CLAMAV_ENABLED=true` are also scanned by ClamAV before anything is written. Off by default, so a deployment that has not enabled it still serves officers whatever the member uploaded. |
+| **Voided records keep the file**                          | By design                                | `DELETE /training/records/{id}` marks a record `cancelled` rather than removing it, so the correction stays auditable — and the evidence behind the corrected entry stays with it.                                                                                              |
+
+**Malware scanning (resolved 2026-10-06, owner's choice: add ClamAV).** Both
+certificate upload routes stream the file to a ClamAV daemon
+(`app/services/malware_scan_service.py`, clamd `INSTREAM` over TCP) after the
+magic-byte check and before the write. An infected file is refused
+(`LB-UPLD-004`), nothing is stored, and `upload_malware_detected` is audited
+with the signature name, type, size and SHA-256 — never the content or the
+member's file name. `CLAMAV_ENABLED` defaults to `false`, so an upgrade adds no
+container and changes nothing; the daemon is the `clamav` compose service under
+the `with-clamav` profile. Configuration: `CLAMAV_ENABLED`, `CLAMAV_HOST`,
+`CLAMAV_PORT`, `CLAMAV_TIMEOUT_SECONDS`
+([wiki](../wiki/Configuration-Security.md#malware-scanning-of-uploads)).
+
+What remains for the owner:
+
+| Item                                                   | Status                       | Detail                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------ | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Scanner outage fails closed**                        | Inferred — owner may reverse | With scanning enabled, an unreachable clamd, a timeout, or any reply other than `OK`/`FOUND` refuses the upload with a retryable `503` (`LB-UPLD-005`). Inferred from the CAPTCHA precedent (an outage must not be a bypass), not stated by the owner. Reversing it is a one-line change in `_reject_if_malicious` in `training_submissions.py`.                                                                      |
+| **Other upload paths are not scanned**                 | Open (scope)                 | Each writes files through its own code; there is no shared helper to hook. Candidates: `documents.py` `POST /documents/upload` (also the source of facility photos/documents, which reference `document:<id>`), `training_enhancements.py` record attachments, `events.py` event attachments, `membership_pipeline.py` prospect documents, and `email_templates.py` template attachments.                             |
+| **Files stored before scanning was enabled**           | Open                         | Not rescanned. Enabling scanning covers new uploads only.                                                                                                                                                                                                                                                                                                                                                             |
+| **Re-encoded images are out of scope by construction** | By design                    | Member photos, storefront product images and equipment-check photos are decoded and re-encoded to WebP and stored in the database, and suggestion-box screenshots are re-encoded to WebP before they are written to disk — none is served as the uploaded bytes; logos are validated base64. CSV imports (training, inventory, events) are parsed in memory and not stored. They are not on the candidate list above. |
 
 ## Scheduling Module
 

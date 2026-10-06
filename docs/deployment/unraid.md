@@ -189,6 +189,30 @@ SMTP_PASSWORD=your-app-password
 SMTP_FROM_EMAIL=noreply@yourdomain.com
 ```
 
+### Malware Scanning (Optional)
+
+Uploaded self-report training certificates can be scanned with ClamAV. The
+Unraid compose file includes a `clamav` service under the `with-clamav`
+profile; it is not started otherwise.
+
+```bash
+docker compose --profile with-clamav up -d
+```
+
+and in `.env`:
+
+```bash
+CLAMAV_ENABLED=true
+```
+
+Budget 1.5–3 GB of RAM for clamd. Its signatures live in a Docker-managed
+`clamav_data` volume rather than under `appdata`, because the image's own
+`clamav` user must own them. First start takes a few minutes; until clamd is
+healthy, certificate uploads are refused with a "try again in a few minutes"
+message rather than stored unscanned. If you use the single-container Community
+Apps template instead, run the official `clamav/clamav` image as its own
+container on the same network and set **ClamAV Host** to its name or IP.
+
 ### Data Directories
 
 ```

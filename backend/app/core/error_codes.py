@@ -75,6 +75,8 @@ class ErrorCode(str, Enum):
     UPLD_TOO_LARGE = "LB-UPLD-001"
     UPLD_TYPE_NOT_ALLOWED = "LB-UPLD-002"
     UPLD_VALIDATION_UNAVAILABLE = "LB-UPLD-003"
+    UPLD_MALWARE_DETECTED = "LB-UPLD-004"
+    UPLD_SCAN_UNAVAILABLE = "LB-UPLD-005"
 
     # --- Onboarding ------------------------------------------------------
     ONBD_ALREADY_COMPLETED = "LB-ONBD-001"
@@ -441,6 +443,35 @@ ERROR_CODE_CATALOG: dict[ErrorCode, ErrorCodeInfo] = {
             "Retry in a few minutes.",
             "If it persists, check the backend logs — the file-type "
             "inspection dependency (libmagic) may be missing or failing.",
+        ),
+    ),
+    ErrorCode.UPLD_MALWARE_DETECTED: ErrorCodeInfo(
+        title="File rejected by malware scan",
+        description=(
+            "The department scans uploaded files with ClamAV and the scanner "
+            "identified this one as malicious. Nothing was stored, and the "
+            "rejection was recorded in the audit log with the signature name."
+        ),
+        resolution=(
+            "Do not retry with the same file. Obtain a fresh copy from its "
+            "source (re-download the certificate, or take a new photo).",
+            "If the file is believed clean, an administrator can find the "
+            "signature in the audit log (upload_malware_detected) and report "
+            "a false positive to ClamAV.",
+        ),
+    ),
+    ErrorCode.UPLD_SCAN_UNAVAILABLE: ErrorCodeInfo(
+        title="Malware scan unavailable",
+        description=(
+            "Malware scanning is enabled for this upload but the ClamAV "
+            "daemon could not be reached or did not answer in time, so the "
+            "file was refused rather than stored unscanned."
+        ),
+        resolution=(
+            "Retry in a few minutes.",
+            "If it persists, check the clamav container is running and "
+            "healthy (it can take several minutes to load signatures after "
+            "a restart) and that CLAMAV_HOST / CLAMAV_PORT point at it.",
         ),
     ),
     ErrorCode.ONBD_ALREADY_COMPLETED: ErrorCodeInfo(

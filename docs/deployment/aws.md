@@ -356,6 +356,23 @@ AWS_REGION=us-east-1
 # AWS_SECRET_ACCESS_KEY=
 ```
 
+### Malware Scanning (Optional)
+
+Uploaded self-report training certificates can be scanned with ClamAV by
+starting the bundled `clamav` service and enabling the flag:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile with-clamav up -d
+# .env
+CLAMAV_ENABLED=true
+```
+
+clamd holds its signature database in memory — allow 1.5–3 GB of RAM on top of
+the stack, so a `t3.small` is too small for it; use `t3.medium` or larger, or
+point `CLAMAV_HOST` at a clamd running elsewhere in the VPC (port 3310 open to
+the app instance only). Once enabled, an unreachable scanner refuses uploads
+rather than storing them unscanned.
+
 ### CloudWatch Monitoring (Optional)
 
 Install the CloudWatch agent for detailed monitoring:

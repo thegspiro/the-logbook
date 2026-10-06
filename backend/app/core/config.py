@@ -351,6 +351,19 @@ class Settings(BaseSettings):
     # this are treated as bot traffic. Ignored by Turnstile and hCaptcha.
     CAPTCHA_MIN_SCORE: float = 0.5
 
+    # Malware scanning of uploaded files via a ClamAV daemon (clamd INSTREAM).
+    # Off by default so an upgrade needs no new container and changes nothing.
+    # Once enabled it FAILS CLOSED, like CAPTCHA: if clamd cannot be reached or
+    # does not answer in time the upload is refused, because accepting
+    # unscanned files during an outage is the state an attacker wants. Today
+    # it covers self-reported training certificates only.
+    CLAMAV_ENABLED: bool = False
+    CLAMAV_HOST: str = "clamav"
+    CLAMAV_PORT: int = 3310
+    # Wall-clock budget for connect + stream + verdict, not a per-read timeout,
+    # so a clamd that trickles bytes cannot hold an upload request open.
+    CLAMAV_TIMEOUT_SECONDS: float = 30.0
+
     # Vote signing key — used for HMAC-SHA256 vote integrity signatures.
     # Falls back to SECRET_KEY if not set.  A dedicated key is recommended so
     # that rotating SECRET_KEY does not invalidate existing vote signatures.
