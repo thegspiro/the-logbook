@@ -666,6 +666,15 @@ they count toward results.
 4. Submit — one vote row is stored per paper ballot, flagged as manual and
    attributed to you as the recording officer
 
+**Motions and membership votes on paper** _(2026-10-05)_: opening an election
+now creates an **Approve** and a **Deny** row for every approval item, so
+Record Paper Ballots lists them beside the candidates, labelled with the
+item's title, and the "Approve / Deny" boxes on the printed ballot can be
+keyed in. A Board-style race built in the Ballot Builder (one that is not a
+plain position) is printed on the paper ballot too. An election already open
+before this release gets an item's rows only once someone votes on the item
+electronically.
+
 Because paper votes are ordinary vote rows, a closed election's results carry
 no separate "paper" figure — the paper votes are simply in the counts. What
 stays itemized after the close is the **Paper-Ballot Batches** panel (below):
@@ -1193,7 +1202,6 @@ Drive"):
 - There is no seat count — a "(2 seats)" race declares one winner.
 - The emailed ballot pre-selects **Abstain** on every item; an untouched
   Submit casts no votes and uses up the link.
-- A paper ballot cannot record a vote on a motion or membership item.
 - Merge Write-Ins, Void a Vote and a paper-batch void still change the results
   after close and after publishing, with no revision mark.
 - Scheduled opening (**Open Automatically at Start Time**) sends no ballots.

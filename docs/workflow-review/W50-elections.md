@@ -676,7 +676,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `frontend/src/modules/elections/components/ElectionResults.tsx:238-289`; `election_service.py:2592-2613`; the report template (~S:7227); the certified builder (S:4467-4541).
 **Fix:** S05 returns per-item results with a `label`, and the PDF and report use them (`test_w50_s05.py`). `review-backend-1.md` #4 found the tab still rendering the raw item id; `d6f828c` adds `label` to `PositionResults` and uses `label ?? position` in the heading and tie alert (`ElectionResults.w50-s25.test.tsx`).
 
-### W50-8 — HIGH — "Print Blank Ballots" prints the position races only; the paper path cannot carry a motion or membership vote — ✅ FIXED (round 2, `7aa3405`), PDF half · confirmed live · FLAGGED, recording half
+### W50-8 — HIGH — "Print Blank Ballots" prints the position races only; the paper path cannot carry a motion or membership vote — ✅ FIXED (round 2, `7aa3405`), PDF half · confirmed live · ✅ DECIDED & FIXED (2026-10-05), recording half
+
+**Owner decision (2026-10-05):** pre-create the option rows at open, so paper motions can be entered. `open_election` creates each approval item's Approve/Deny rows (reusing any a vote already made); a rollback to draft drops the unused ones; the printout also carries candidate-selection items outside `election.positions`. Test: `backend/tests/test_w50_paper_motion_options.py`.
 
 **Did:** as `secretary` on E1 (A2 step 20) and `admin` on EB1 (B1 step 12, B2 step 5): Print Blank Ballots.
 **Saw:** `ballot_2027_Officer_Election.pdf` carries Chief only while Preview Ballot showed three items; EB1's carries Chief/Secretary only. Read from code: `POST …/manual-ballots {entries: [{candidate_id, count}]}` targets candidates only, and Approve/Deny rows exist only once a token vote has materialised them (A7 step 1; W50-30).

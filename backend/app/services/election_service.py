@@ -153,6 +153,25 @@ def ballot_item_candidate_positions(item: Dict) -> Set[str]:
     return {value for value in (item.get("title"), item.get("id")) if value}
 
 
+# The two option rows an approval item (a motion, a membership vote) is
+# voted through. The names are what the token ballot, the package sync and
+# every results reader match on.
+APPROVAL_OPTION_NAMES: Tuple[str, str] = ("Approve", "Deny")
+
+
+def approval_option_position(item: Any) -> Optional[str]:
+    """The position an approval item's Approve/Deny rows are stored under,
+    or None for any other item.
+
+    The same canonical key ``submit_ballot_with_token`` stores the item's
+    votes under (its explicit position, else its id), so a row created ahead
+    of time is the row the emailed ballot finds rather than a second one.
+    """
+    if not isinstance(item, dict) or item.get("vote_type") != "approval":
+        return None
+    return item.get("position") or item.get("id")
+
+
 def _dedup_position_key(
     item: Optional[Dict], effective_position: Optional[str]
 ) -> Optional[str]:
@@ -5019,7 +5038,7 @@ class ElectionService:
             and item.get("vote_type") == "approval"
             and item.get("title")
         ]
-        if not election.positions and not approval_items:
+        if not election.positions and not election.ballot_items:
             return (
                 None,
                 "Printable ballots require a positional election",
@@ -5050,6 +5069,23 @@ class ElectionService:
                     "candidates": [
                         c.name for c in candidates if c.position == position
                     ],
+                }
+            )
+        # A candidate-selection item whose race is not a plain position (a
+        # ballot built in the Ballot Builder) is a race on paper too; it was
+        # left off the printout (W50-8). An item colliding with a plain
+        # position is already printed above.
+        plain = set(election.positions or [])
+        for item in election.ballot_items or []:
+            if not isinstance(item, dict) or item.get("vote_type") == "approval":
+                continue
+            aliases = ballot_item_candidate_positions(item)
+            if not aliases or aliases & plain:
+                continue
+            positions.append(
+                {
+                    "name": item.get("title") or item.get("position") or "",
+                    "candidates": [c.name for c in candidates if c.position in aliases],
                 }
             )
 
@@ -5846,6 +5882,91 @@ class ElectionService:
 
         await self.db.commit()
 
+    async def _ensure_approval_option_rows(self, election: Election) -> int:
+        """Create any missing Approve/Deny rows for the election's approval
+        items. Returns how many were created.
+
+        They used to exist only once an electronic vote materialised them,
+        so a motion decided on a paper ballot — printed with "Approve /
+        Deny" boxes — could not be keyed in: Record Paper Ballots takes
+        candidate ids, and there were none (W50-8, owner decision
+        2026-10-05: create them when the election opens). Idempotent: a row
+        a vote already materialised is reused, never duplicated.
+        """
+        keys = list(
+            dict.fromkeys(
+                key
+                for key in (
+                    approval_option_position(item)
+                    for item in (election.ballot_items or [])
+                )
+                if key
+            )
+        )
+        if not keys:
+            return 0
+        existing = await self.db.execute(
+            select(Candidate.position, Candidate.name)
+            .where(Candidate.election_id == str(election.id))
+            .where(Candidate.position.in_(keys))
+            .where(Candidate.name.in_(APPROVAL_OPTION_NAMES))
+            .where(Candidate.is_write_in.is_(False))
+        )
+        have = {(position, name) for position, name in existing.all()}
+        created = 0
+        for key in keys:
+            for order, name in enumerate(APPROVAL_OPTION_NAMES):
+                if (key, name) in have:
+                    continue
+                self.db.add(
+                    Candidate(
+                        election_id=str(election.id),
+                        name=name,
+                        position=key,
+                        is_write_in=False,
+                        accepted=True,
+                        display_order=order,
+                    )
+                )
+                created += 1
+        if created:
+            await self.db.flush()
+        return created
+
+    async def _drop_unused_approval_option_rows(self, election: Election) -> int:
+        """Remove the Approve/Deny rows no vote has ever referenced.
+
+        Run when an election goes back to DRAFT: the ballot may then be
+        edited, and an option row left behind for an item that is removed
+        would read as an orphaned nominee (the positions guard on update
+        refuses to drop a position a candidate still holds). The next open
+        recreates whatever the ballot then needs. A row any vote references
+        — counted, voided or test — stays, because votes keep their
+        candidate for integrity verification.
+        """
+        keys = [
+            key
+            for key in (
+                approval_option_position(item) for item in (election.ballot_items or [])
+            )
+            if key
+        ]
+        if not keys:
+            return 0
+        rows = await self.db.execute(
+            select(Candidate)
+            .where(Candidate.election_id == str(election.id))
+            .where(Candidate.position.in_(keys))
+            .where(Candidate.name.in_(APPROVAL_OPTION_NAMES))
+            .where(Candidate.is_write_in.is_(False))
+            .where(~select(Vote.id).where(Vote.candidate_id == Candidate.id).exists())
+        )
+        dropped = 0
+        for candidate in rows.scalars().all():
+            await self.db.delete(candidate)
+            dropped += 1
+        return dropped
+
     async def open_election(
         self, election_id: UUID, organization_id: UUID
     ) -> Tuple[Optional[Election], Optional[str]]:
@@ -5927,13 +6048,16 @@ class ElectionService:
             election.start_date = now.replace(microsecond=0)
             start_adjusted = True
 
+        option_rows_created = await self._ensure_approval_option_rows(election)
+
         election.status = ElectionStatus.OPEN
         await self.db.commit()
         await self.db.refresh(election)
 
         logger.info(
             f"Election opened | election={election_id} title={election.title!r} "
-            f"start_adjusted={start_adjusted}"
+            f"start_adjusted={start_adjusted} "
+            f"approval_option_rows_created={option_rows_created}"
         )
         await self._audit(
             "election_opened",
@@ -6053,6 +6177,9 @@ class ElectionService:
             # would report members who joined since as off a roll that no
             # longer exists (the next open freezes a fresh one).
             election.eligible_roster_snapshot = None
+            # The draft's ballot may be edited now; the next open recreates
+            # the Approve/Deny rows it needs (W50-8).
+            await self._drop_unused_approval_option_rows(election)
         else:
             return None, 0, f"Cannot rollback election with status {from_status}"
 

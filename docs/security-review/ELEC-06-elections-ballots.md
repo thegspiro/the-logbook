@@ -49,6 +49,14 @@ finding below that says FLAGGED or OPEN is superseded by its line here.
   stored bodies (guarded on the table, idempotent, real downgrade); an
   edited template gets the notice at the head of the message. The Cc itself
   is unchanged. Guard: `tests/test_w50_proxy_ballot_mail.py`.
+- **W50-8** (paper ballots could not record a motion) — **fixed:**
+  `open_election` creates each approval item's Approve/Deny rows under the
+  item's canonical key (`approval_option_position`, the key the token route
+  already stores votes under), reusing a row a vote materialised; a rollback
+  to draft drops only rows no vote references. Paper votes on them are
+  ordinary signed, chained manual votes. The printable ballot also carries a
+  candidate-selection item outside `election.positions`. Guard:
+  `tests/test_w50_paper_motion_options.py`.
 - **ELEC-16** (`list_manual_ballot_batches` unbounded) — **accepted as is.**
   Paper-tally sessions per election are naturally few; no cap and no
   pagination. Revisit if an election ever carries more than a few dozen
