@@ -47,6 +47,8 @@ from app.api.v1.endpoints import (
     legal_documents,
     locations,
     mcp_keys,
+    mcp_oauth,
+    mcp_oauth_admin,
     medical_screening,
     medical_supplies,
     meetings,
@@ -420,6 +422,18 @@ api_router.include_router(
 api_router.include_router(
     mcp_keys.router,
     prefix="/integrations/claude-mcp",
+    tags=["claude-mcp"],
+    dependencies=module_gate("integrations", "Integrations"),
+)
+api_router.include_router(
+    mcp_oauth_admin.router,
+    prefix="/integrations/claude-mcp/oauth",
+    tags=["claude-mcp"],
+    dependencies=module_gate("integrations", "Integrations"),
+)
+api_router.include_router(
+    mcp_oauth.router,
+    prefix="/mcp-oauth",
     tags=["claude-mcp"],
     dependencies=module_gate("integrations", "Integrations"),
 )

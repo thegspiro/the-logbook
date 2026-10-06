@@ -22,6 +22,7 @@ from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import sanitize_connector_error
 from app.mcp.constants import MCP_INTEGRATION_TYPE, MCP_MOUNT_PATH
 from app.mcp.keys import McpKeyService
+from app.mcp.oauth import McpOAuthService
 from app.models.integration import Integration, IntegrationSyncLog
 from app.models.user import User
 from app.schemas.integration import (
@@ -701,6 +702,28 @@ async def disconnect_integration(
         # Same rule as the key endpoints: a revocation nobody can trace is
         # refused, and the whole disconnect rolls back with it.
         await require_audit_entry(db, entry, "revoked on disconnect")
+    if integration.integration_type == MCP_INTEGRATION_TYPE:
+        # Members' OAuth connections end with the integration too, for the
+        # same reason as the keys: reconnecting must not silently revive
+        # them. Registered clients stay, so reconnecting does not mean
+        # re-registering every client.
+        ended = await McpOAuthService(db).revoke_all_for_org(
+            str(current_user.organization_id), revoked_by=str(current_user.id)
+        )
+        if ended:
+            entry = await log_audit_event(
+                db,
+                "mcp.oauth_grant_revoked",
+                "integrations",
+                "warning",
+                {"count": ended, "reason": "integration_disconnected"},
+                user_id=str(current_user.id),
+                organization_id=str(current_user.organization_id),
+                ip_address=get_client_ip(request),
+            )
+            await require_audit_entry(
+                db, entry, "revoked on disconnect", subject="connection"
+            )
     await db.commit()
 
     # Audit log

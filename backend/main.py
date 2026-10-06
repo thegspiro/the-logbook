@@ -31,6 +31,7 @@ from app.api.public.finance_approvals import router as finance_approvals_router
 from app.api.public.forms import router as public_forms_router
 from app.api.public.integrations_webhook import router as integrations_webhook_router
 from app.api.public.legal import router as public_legal_router
+from app.api.public.mcp_oauth import router as mcp_oauth_router
 from app.api.public.paypal_webhook import router as paypal_webhook_router
 from app.api.public.portal import router as public_portal_router
 from app.api.public.salesforce_webhook import router as sf_webhook_router
@@ -2401,6 +2402,14 @@ app.include_router(
 # prefix) because the spec fixes the path at /.well-known/security.txt;
 # nginx routes that exact path to the backend.
 app.include_router(security_txt_router)
+
+# Claude MCP OAuth 2.1 authorization server (authorize, token, revoke and the
+# RFC 8414 / RFC 9728 metadata). No prefix: the router names its own paths,
+# because two of them sit at the root under /.well-known/ where the RFCs put
+# them, beside /api/ copies the shipped proxy rules already reach. Every
+# route answers 404 unless the deployment sets MCP_OAUTH_ENABLED and a valid
+# MCP_OAUTH_ISSUER_URL.
+app.include_router(mcp_oauth_router, responses=public_responses.RATE_LIMITED)
 
 # Claude MCP endpoint (bearer service key, per-organization opt-in). Routed
 # under /api/ so existing reverse-proxy rules reach it; the endpoint itself

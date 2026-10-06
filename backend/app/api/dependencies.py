@@ -82,6 +82,18 @@ def _collect_user_permissions(user: User) -> set:
     return expand_legacy_permissions(perms)
 
 
+def collect_user_permissions(user: User) -> set:
+    """The permissions ``user`` holds, as every HTTP check computes them.
+
+    Public for callers outside the dependency layer that authorize a member
+    without a request — the MCP OAuth resource server rebuilds a connected
+    member's permissions on every tool call through this, so a connection
+    can never hold a permission the member's positions and rank do not.
+    ``user.positions`` must already be loaded.
+    """
+    return _collect_user_permissions(user)
+
+
 # Paths a user with must_change_password=True may still reach, so they can
 # read their state and complete the password change without being locked out.
 _MUST_CHANGE_PW_ALLOWED_SUFFIXES = (

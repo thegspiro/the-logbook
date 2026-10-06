@@ -1,9 +1,11 @@
 """
 The pure-ASGI endpoint routed at ``/api/mcp``.
 
-Per request: read the bearer key, authenticate it (which also checks the
-department has the integration switched on), apply the per-key rate limit,
-bind the principal, and hand the request to the SDK's session manager. It is
+Per request: read the bearer credential — a department service key or a
+member's OAuth access token — authenticate it (which also checks the
+department has the integration switched on), apply the per-key (or
+per-member) rate limit, bind the principal, and hand the request to the
+SDK's session manager. It is
 pure ASGI rather than ``BaseHTTPMiddleware`` for the reason CLAUDE.md pitfall
 4 gives, and it is not a FastAPI route because the SDK owns the request body
 and the response stream.
@@ -95,7 +97,23 @@ class _MemoryRateLimiter:
 async def authenticate_with_database(
     presented: str, client_ip: Optional[str]
 ) -> McpPrincipal:
+    """Route a bearer value to the service that can verify it.
+
+    The two credentials are told apart by prefix, so a service key is
+    verified exactly as it was before OAuth existed. An OAuth access token
+    is refused outright while the deployment has the authorization server
+    off, whatever rows the database holds.
+    """
+    from app.mcp import oauth
+
     async with open_session() as db:
+        if presented.strip().startswith(oauth.ACCESS_TOKEN_PREFIX):
+            base = oauth.origin()
+            if base is None:
+                raise McpAuthError("Invalid service key")
+            return await oauth.McpOAuthService(db).authenticate_access_token(
+                presented.strip(), base=base, client_ip=client_ip
+            )
         return await McpKeyService(db).authenticate(presented, client_ip=client_ip)
 
 
@@ -160,14 +178,16 @@ class McpEndpoint:
             principal = await self._authenticate(presented, client_ip)
         except McpAuthError as exc:
             await self._limited(auth_bucket, self._auth_rate_limit)
-            await _reject(scope, receive, send, exc.status, str(exc))
+            await _reject(
+                scope, receive, send, exc.status, str(exc), invalid_token=True
+            )
             return
         except Exception:
             logger.exception("MCP authentication failed unexpectedly")
             await _reject(scope, receive, send, 503, "Service temporarily unavailable")
             return
 
-        if await self._limited(principal.key_id, self._rate_limit):
+        if await self._limited(principal.rate_limit_bucket, self._rate_limit):
             await _reject(
                 scope,
                 receive,
@@ -236,6 +256,24 @@ async def _redis_bucket_full(
     return int(results[1]) >= limit
 
 
+def _www_authenticate(invalid_token: bool) -> str:
+    """The 401 challenge. With the OAuth server on, it carries the
+    protected-resource metadata URL (RFC 9728 §5.1) — the pointer an MCP
+    client follows to discover where to send the member to sign in."""
+    from app.mcp import oauth
+
+    base = oauth.origin()
+    if base is None:
+        return "Bearer"
+    parts = [
+        f'resource_metadata="{oauth.resource_metadata_url(base)}"',
+        f'scope="{oauth.SCOPE_READ}"',
+    ]
+    if invalid_token:
+        parts.insert(0, 'error="invalid_token"')
+    return "Bearer " + ", ".join(parts)
+
+
 def _bearer_token(authorization: Optional[str]) -> Optional[str]:
     if not authorization:
         return None
@@ -261,10 +299,11 @@ async def _reject(
     status: int,
     message: str,
     headers: Optional[dict[str, str]] = None,
+    invalid_token: bool = False,
 ) -> None:
     extra = dict(headers or {})
     if status == 401:
-        extra["WWW-Authenticate"] = "Bearer"
+        extra["WWW-Authenticate"] = _www_authenticate(invalid_token)
     await JSONResponse({"error": message}, status_code=status, headers=extra)(
         scope, receive, send
     )
