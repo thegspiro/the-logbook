@@ -59,6 +59,12 @@ The directory lists every member on the roster, whatever their status, with thei
 > members should appear to members at all is an open policy question — see
 > [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md) (workflow review W15-4).
 
+> **What the directory hides is not sent either** _(2026-10-05)_. A member
+> without `members.manage` now loads the directory from its own, narrower
+> source, which carries only what the directory shows — no usernames, hire
+> dates, stations or platoons. The page looks the same; the difference is that
+> those fields no longer travel to a member's browser from this screen.
+
 ![Member directory listing members with their status and contact columns](./images/01-01-member-directory.png)
 
 > **Screenshot needed:**

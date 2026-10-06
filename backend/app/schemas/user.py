@@ -491,6 +491,35 @@ class UserListResponse(BaseModel):
     model_config = _response_config
 
 
+class MemberDirectoryEntry(BaseModel):
+    """One row of the member directory (``GET /users/directory``).
+
+    USR-8: what a member *without* ``members.manage`` sees of a colleague —
+    the fields the Members page's directory view shows, and nothing it hides.
+    ``username``, ``hire_date``, ``station``, ``platoon``, ``membership_type``
+    and the classification fields stay on ``UserListResponse`` for the roster's
+    other callers; they are deliberately absent here, not merely unset, so a
+    later change cannot widen the directory by populating them.
+    """
+
+    id: UUID
+    first_name: Optional[str] = None
+    middle_name: Optional[str] = None
+    last_name: Optional[str] = None
+    preferred_name: Optional[str] = None
+    full_name: Optional[str] = None
+    display_name: Optional[str] = None
+    membership_number: Optional[str] = None
+    photo_url: Optional[str] = None
+    status: str
+    rank: Optional[str] = None
+    email: Optional[str] = None  # Conditionally included
+    phone: Optional[str] = None  # Conditionally included
+    mobile: Optional[str] = None  # Conditionally included
+
+    model_config = _response_config
+
+
 class RoleResponse(BaseModel):
     """Schema for role response"""
 

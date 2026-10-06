@@ -54,6 +54,7 @@ from app.schemas.user import (
     ContactInfoUpdate,
     DeletionImpactResponse,
     MemberAuditLogEntry,
+    MemberDirectoryEntry,
     MemberEmailChoice,
     MemberEmailChoicesResponse,
     ProfileVisibility,
@@ -143,28 +144,9 @@ async def list_users(
     **Permissions required:** members.manage, members.view, or users.view
     """
     user_service = UserService(db)
-    org_service = OrganizationService(db)
-
-    # Get organization settings — if this fails, still return users without
-    # contact info rather than returning a 500 that hides the member list.
-    include_contact_info = False
-    contact_settings = None
-    try:
-        org_settings = await org_service.get_organization_settings(
-            current_user.organization_id
-        )
-        include_contact_info = org_settings.contact_info_visibility.enabled
-        contact_settings = {
-            "contact_info_visibility": {
-                "show_email": org_settings.contact_info_visibility.show_email,
-                "show_phone": org_settings.contact_info_visibility.show_phone,
-                "show_mobile": org_settings.contact_info_visibility.show_mobile,
-            }
-        }
-    except Exception as e:
-        logger.warning(
-            f"Failed to load organization settings, returning users without contact info: {e}"
-        )
+    include_contact_info, contact_settings = await _roster_contact_settings(
+        db, current_user.organization_id
+    )
 
     # Get users with conditional contact info. Members-managers are exempt
     # from the subject's own choice, as they are on the profile endpoint: they
@@ -182,6 +164,64 @@ async def list_users(
     )
 
     return users
+
+
+async def _roster_contact_settings(
+    db: AsyncSession, organization_id
+) -> tuple[bool, Optional[dict]]:
+    """The organisation's contact-visibility ceiling for roster lists.
+
+    If the settings cannot be read, the list is still served — without contact
+    info — rather than a 500 that hides the member list.
+    """
+    try:
+        org_settings = await OrganizationService(db).get_organization_settings(
+            organization_id
+        )
+    except Exception as e:
+        logger.warning(
+            f"Failed to load organization settings, returning users without contact info: {e}"
+        )
+        return False, None
+    visibility = org_settings.contact_info_visibility
+    return visibility.enabled, {
+        "contact_info_visibility": {
+            "show_email": visibility.show_email,
+            "show_phone": visibility.show_phone,
+            "show_mobile": visibility.show_mobile,
+        }
+    }
+
+
+@router.get("/directory", response_model=list[MemberDirectoryEntry])
+async def list_member_directory(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("users.view", "members.view", "members.manage")
+    ),
+):
+    """
+    The member directory: who is in the department and how to reach them
+
+    The narrow roster the Members page shows a member without
+    `members.manage` (USR-8). It carries names, membership number, photo,
+    status, rank and the contact fields the department and each member allow —
+    not the username, hire date, station, platoon or membership classification
+    `GET /users` sends, so what the directory hides is not in the response
+    either. Each member's own contact-visibility choice always applies here.
+
+    **Authentication required**
+
+    **Permissions required:** members.manage, members.view, or users.view
+    """
+    include_contact_info, contact_settings = await _roster_contact_settings(
+        db, current_user.organization_id
+    )
+    return await UserService(db).get_directory_for_organization(
+        organization_id=current_user.organization_id,
+        include_contact_info=include_contact_info,
+        contact_settings=contact_settings,
+    )
 
 
 WELCOME_EMAIL_UNAVAILABLE_DETAIL = (

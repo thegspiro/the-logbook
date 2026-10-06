@@ -2227,30 +2227,26 @@ paginating these lists.
 
 ## Users: `GET /users` Sends the Full Admin Roster Record to Every `members.view` Holder (2026-09-02)
 
-`members.view` — held by every default position, per the route's own
-docstring — is enough to receive the same `UserListResponse` shape
-`members.manage` gets: `username`, `hire_date`, `membership_number`, `rank`,
-and `station` for every member in the org
-(`app/services/user_service.py:24-93`, `app/schemas/user.py:462-493`). A
-2026-09-01/02 frontend change (`frontend/src/pages/Members.tsx`) now presents
-a visibly reduced "Member Directory" for callers without `members.manage` —
-no username, no Hire Date column, no export/bulk actions — framed as "a
-member without the grant gets a directory; a coordinator gets the management
-table." That framing implies an access-control boundary that does not exist
-server-side: every field the directory view hides is still in the JSON `GET
-/users` response reaching that caller's own browser, readable via devtools'
-Network tab or a direct authenticated call to the endpoint. Not a
-cross-tenant leak (org-scoped throughout) and not on the leadership-only PII
-list (DOB, emergency contacts) enforced elsewhere in this module — but a real
-mismatch between the UI's implied tiering and the actual wire payload.
+**Narrowed by the owner's decision (2026-10-05); the remainder is accepted.**
+The owner chose to split a narrow directory endpoint for the Members page's
+non-manager view and leave every other caller unchanged.
 
-Not fixed: `GET /users` is consumed by 25+ frontend files beyond the roster
-page (scheduling, messaging, elections, meetings, waivers, shift reports),
-several of which need `rank`/`station`/`platoon` at the `members.view` tier
-for legitimate, non-directory purposes. Trimming the response naively would
-break those callers; the fix needs a decision on whether `GET /users` should
-serve two shapes by permission or a narrower directory endpoint should be
-split out. (Security review USR-8, `docs/security-review/USR-07-users-organizations.md`.)
+- **✅ The Members page's directory is now a real boundary.** A viewer without
+  `members.manage` is served `GET /users/directory` (`MemberDirectoryEntry`):
+  names, membership number, photo, status, rank, and email/phone/mobile under
+  the department's contact-visibility ceiling and each member's own choice.
+  `username`, `hire_date`, `station`, `platoon`, `membership_type` and the
+  classification fields are not in that response, so what the directory view
+  hides no longer reaches that page's network traffic.
+- **Accepted, unchanged:** `GET /users` still returns the full
+  `UserListResponse` to every `members.view` holder, because 25+ other screens
+  (scheduling, messaging, elections, meetings, waivers, shift reports) read it
+  and several need `rank`/`station`/`platoon` at that tier. A member who calls
+  `GET /users` directly can still read those fields for the whole roster. They
+  are org-internal, not leadership-only PII (DOB and emergency contacts stay
+  gated elsewhere), and changing that contract was declined.
+
+(Security review USR-8, `docs/security-review/USR-07-users-organizations.md`.)
 
 ## Users: A Membership-Tier Removal's Occupancy Check Can Still Miss an Unattended Batch Advancement (2026-09-14)
 
