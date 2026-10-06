@@ -63,6 +63,9 @@ _EXCLUDED_COLUMNS = frozenset(
         "password_reset_expires_at",
         "calendar_feed_token",
         "oauth_subject",
+        # A credential like the feed token: a file that leaves the system
+        # must not carry a code that scans as the member at a station.
+        "badge_code",
     }
 )
 

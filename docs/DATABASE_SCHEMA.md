@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**288 tables · 4737 columns · 940 foreign keys**
+**288 tables · 4738 columns · 940 foreign keys**
 
 ---
 
@@ -658,7 +658,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`prospects`](#prospects) | `Prospect` | 17 | Prospective member – someone who has expressed interest in joining |
 | [`sessions`](#sessions) | `Session` | 10 | User session model for tracking active sessions |
 | [`user_positions`](#user_positions) | _(association table)_ | 4 |  |
-| [`users`](#users) | `User` | 61 | User model with comprehensive authentication and profile support. |
+| [`users`](#users) | `User` | 62 | User model with comprehensive authentication and profile support. |
 
 ---
 
@@ -9955,6 +9955,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `last_name` | VARCHAR(100) | yes |  |  |  |
 | `preferred_name` | VARCHAR(100) | yes |  |  |  |
 | `membership_number` | VARCHAR(50) | yes |  |  |  |
+| `badge_code` | VARCHAR(16) | yes |  | `generate_badge_code()` |  |
 | `previous_membership_number` | VARCHAR(50) | yes |  |  |  |
 | `phone` | VARCHAR(20) | yes |  |  |  |
 | `mobile` | VARCHAR(20) | yes |  |  |  |
@@ -10008,6 +10009,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_user_created_at` (`created_at`)
 - `idx_user_last_login_at` (`last_login_at`)
+- UNIQUE `idx_user_org_badge_code` (`organization_id`, `badge_code`)
 - UNIQUE `idx_user_org_email` (`organization_id`, `email`)
 - UNIQUE `idx_user_org_membership_number` (`organization_id`, `membership_number`)
 - `idx_user_org_status_deleted` (`organization_id`, `status`, `deleted_at`)

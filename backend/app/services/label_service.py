@@ -150,16 +150,14 @@ async def _build_facility_specs(db, org_id, ids, extra_lines):
 
 
 def member_badge_value(user) -> str:
-    """What a member's printed badge encodes: the membership number, or a
-    short form of the id for a member without one.
+    """What a member's printed badge encodes: their server-issued badge code.
 
     One definition for the label sheet and the CR80 ID card, so a member's
-    sticker and their plastic card always scan as the same person. The
-    frontend mirror is ``matchesMemberBadgeCode`` in ``utils/memberBadgeCode.ts``.
+    sticker and their plastic card always scan as the same person. Callers
+    run ``MemberBadgeService.ensure_codes`` first; the reader that turns the
+    code back into a member is ``MemberBadgeService.resolve``.
     """
-    return _first_scannable_identifier(
-        user.membership_number, fallback=_short_id(user.id)
-    )
+    return user.badge_code
 
 
 async def _build_member_specs(db, org_id, ids, extra_lines):
@@ -171,8 +169,12 @@ async def _build_member_specs(db, org_id, ids, extra_lines):
             User.id.in_([str(i) for i in ids]),
         )
     )
+    from app.services.member_badge_service import MemberBadgeService
+
+    users = rows.all()
+    await MemberBadgeService(db).ensure_codes(users)
     specs = []
-    for u in rows.all():
+    for u in users:
         name = u.display_name or "Member"
         specs.append(
             LabelSpec(

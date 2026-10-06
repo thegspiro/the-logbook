@@ -127,6 +127,8 @@ class MemberAnonymizationService:
         user.phone = None
         user.mobile = None
         user.photo_url = None  # photos are stored in-row as data URIs
+        # Any badge the member still holds must stop scanning as anyone.
+        user.badge_code = None
         user.date_of_birth = None
         user.address_street = None
         user.address_city = None

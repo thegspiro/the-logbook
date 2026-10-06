@@ -5,9 +5,12 @@
  * quartermaster) can scan a member's digital ID card and instantly navigate
  * to their profile.
  *
- * Supported inputs:
- *   - QR code (JSON payload with `type: "member_id"` and `id`)
- *   - Code128 barcode of a membership number (looks up member by number)
+ * Whatever the scanner reads is sent to POST /member-badges/resolve, which
+ * decides on the server, within the caller's department, who it names: a
+ * badge code (QR or Code128), or — while the department still accepts old
+ * badges — a membership number, short id or old digital-card QR. Matching
+ * in the browser meant downloading the roster and trusting the member id
+ * inside a QR code that anyone could make.
  *
  * Accessible at /members/scan. Requires users.view or members.manage — the
  * quartermaster's position grants users.view, so gear checks can validate a
@@ -19,15 +22,13 @@
 import React, { useRef, useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { ScanLine, ArrowLeft, Camera, CameraOff, AlertCircle, Flashlight, FlashlightOff } from 'lucide-react';
-import { userService } from '../services/api';
+import { memberBadgeService } from '../services/memberBadgeService';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useHtml5Scanner } from '../hooks/useHtml5Scanner';
 import { useScanFeedback } from '../hooks/useScanFeedback';
 import { ScanSuccessFlash } from '../components/ux/ScanSuccessFlash';
-import { isMemberIdPayload } from '../types/scanner';
 import { describeCameraError, QR_SCAN_CONFIG } from '../constants/camera';
 import { Breadcrumbs } from '../components/ux';
-import { matchesMemberBadgeCode } from '../utils/memberBadgeCode';
 
 export const MemberScanPage: React.FC = () => {
   const navigate = useNavigate();
@@ -36,9 +37,6 @@ export const MemberScanPage: React.FC = () => {
   const [lastScan, setLastScan] = useState<string | null>(null);
   const [lookingUp, setLookingUp] = useState(false);
   const handledRef = useRef(false);
-  // Cache the member list so repeated barcode attempts don't refetch the whole
-  // directory each time (costly over a cell connection).
-  const usersRef = useRef<Awaited<ReturnType<typeof userService.getUsers>> | null>(null);
   const { flashing, signalScanSuccess } = useScanFeedback();
 
   /** Try to resolve the scanned value to a member and navigate. */
@@ -53,25 +51,9 @@ export const MemberScanPage: React.FC = () => {
       setError(null);
 
       try {
-        let parsed: unknown = null;
-        try {
-          parsed = JSON.parse(decoded);
-        } catch {
-          // Not JSON — treat as a plain membership number (barcode)
-        }
-
-        if (isMemberIdPayload(parsed)) {
-          void navigate(`/members/${parsed.id}`);
-          return;
-        }
-
-        if (!usersRef.current) {
-          usersRef.current = await userService.getUsers();
-        }
-        const match = usersRef.current.find((u) => matchesMemberBadgeCode(decoded, u));
-
+        const match = await memberBadgeService.resolve(decoded);
         if (match) {
-          void navigate(`/members/${match.id}`);
+          void navigate(`/members/${match.user_id}`);
         } else {
           setError(`No member found for "${decoded}"`);
           handledRef.current = false;

@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.operational_rank import OperationalRank
 from app.models.user import Organization, User
 from app.services.label_service import member_badge_value
+from app.services.member_badge_service import MemberBadgeService
 from app.utils.id_card_renderer import (
     ORIENTATION_LANDSCAPE,
     SIDES_FRONT,
@@ -177,6 +178,7 @@ class MemberIdCardService:
         users = rows.all()
         if not users:
             raise ValueError("No members found to print ID cards for")
+        await MemberBadgeService(self.db).ensure_codes(users)
 
         ranks = await self._rank_names(organization_id)
         cards = []

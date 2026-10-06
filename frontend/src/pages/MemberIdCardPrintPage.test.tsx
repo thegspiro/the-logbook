@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 
@@ -25,6 +25,15 @@ vi.mock('../services/memberIdCardService', () => ({
     getLayout: (...args: unknown[]) => mockGetLayout(...args) as unknown,
     saveLayout: (...args: unknown[]) => mockSaveLayout(...args) as unknown,
     generatePdf: (...args: unknown[]) => mockGeneratePdf(...args) as unknown,
+  },
+}));
+
+const mockGetBadgeSettings = vi.fn();
+const mockSaveBadgeSettings = vi.fn();
+vi.mock('../services/memberBadgeService', () => ({
+  memberBadgeService: {
+    getSettings: (...args: unknown[]) => mockGetBadgeSettings(...args) as unknown,
+    saveSettings: (...args: unknown[]) => mockSaveBadgeSettings(...args) as unknown,
   },
 }));
 
@@ -60,6 +69,10 @@ describe('MemberIdCardPrintPage', () => {
     mockSaveLayout.mockImplementation((layout: unknown) => Promise.resolve(layout));
     mockGeneratePdf.mockReset();
     mockGeneratePdf.mockResolvedValue(new Blob(['%PDF'], { type: 'application/pdf' }));
+    mockGetBadgeSettings.mockReset();
+    mockGetBadgeSettings.mockResolvedValue({ accept_legacy: true });
+    mockSaveBadgeSettings.mockReset();
+    mockSaveBadgeSettings.mockImplementation((v: unknown) => Promise.resolve(v));
     URL.createObjectURL = vi.fn(() => 'blob:cards');
     URL.revokeObjectURL = vi.fn();
   });
@@ -138,5 +151,40 @@ describe('MemberIdCardPrintPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Nothing selected to print');
     expect(mockPreview).not.toHaveBeenCalled();
     expect(mockGetLayout).not.toHaveBeenCalled();
+  });
+  describe('Accept old badges', () => {
+    it('starts on, and asks before old badges stop scanning', async () => {
+      const user = userEvent.setup();
+      renderAt('?ids=u1');
+
+      const toggle = await screen.findByRole('switch', { name: 'Accept old badges' });
+      expect(toggle).toHaveAttribute('aria-checked', 'true');
+
+      await user.click(toggle);
+      await user.click(await screen.findByRole('button', { name: 'Stop accepting them' }));
+
+      expect(mockSaveBadgeSettings).toHaveBeenCalledWith({ accept_legacy: false });
+      await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'false'));
+    });
+
+    it('changes nothing when the officer keeps accepting them', async () => {
+      const user = userEvent.setup();
+      renderAt('?ids=u1');
+
+      await user.click(await screen.findByRole('switch', { name: 'Accept old badges' }));
+      await user.click(await screen.findByRole('button', { name: 'Keep accepting' }));
+
+      expect(mockSaveBadgeSettings).not.toHaveBeenCalled();
+    });
+
+    it('turns them back on without a prompt', async () => {
+      mockGetBadgeSettings.mockResolvedValue({ accept_legacy: false });
+      const user = userEvent.setup();
+      renderAt('?ids=u1');
+
+      await user.click(await screen.findByRole('switch', { name: 'Accept old badges' }));
+
+      expect(mockSaveBadgeSettings).toHaveBeenCalledWith({ accept_legacy: true });
+    });
   });
 });
