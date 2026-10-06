@@ -638,10 +638,8 @@ const routes = ({
   ['**/api/v1/event-requests/forms**', () => ({ forms: [], total: 0, skip: 0, limit: 50 })],
   ['**/api/v1/admin-hub/events/metrics', eventMetricSettings],
   ['**/api/v1/admin-hub/training/metrics', trainingMetricSettings],
-  // Scheduling Notifications fails closed on a rules response that is not a
-  // list — every switch reading "off" would hide an enabled notification — so
-  // the catch-all `{}` left that settings section measuring its load-error
-  // panel instead of its switches. One enabled preset, so a switch renders on.
+  // The notifications page lists rules and needs a list, not the catch-all
+  // `{}`. One enabled rule, so the list renders a row.
   [
     '**/api/v1/notifications/rules**',
     () => ({

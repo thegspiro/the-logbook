@@ -30,7 +30,9 @@ export const ComplianceStatusRenderer: React.FC<Props> = ({ data }) => {
       header: 'Compliance',
       align: 'center' as const,
       render: (v: unknown) => {
-        const pct = Number(v ?? 0);
+        // Null: no requirement grades this member, so there is nothing to score.
+        if (v === null || v === undefined) return <span className="text-theme-text-muted">N/A</span>;
+        const pct = Number(v);
         const color =
           pct >= 100
             ? 'text-green-700 dark:text-green-400'
@@ -71,11 +73,16 @@ export const ComplianceStatusRenderer: React.FC<Props> = ({ data }) => {
         <StatCard label="Fully Compliant" value={data.fully_compliant_count} />
         <StatCard label="Partially Compliant" value={data.partially_compliant_count} />
         <StatCard label="Non-Compliant" value={data.non_compliant_count} />
+        {(data.not_applicable_count ?? 0) > 0 && (
+          <StatCard label="Not Applicable" value={data.not_applicable_count ?? 0} />
+        )}
       </div>
       <div className="mb-4">
         <div className="flex items-center gap-2 text-sm">
           <span className="text-theme-text-muted">Overall Compliance Rate:</span>
-          <span className="text-theme-text-primary font-bold">{data.overall_compliance_rate}%</span>
+          <span className="text-theme-text-primary font-bold">
+            {data.overall_compliance_rate === null ? 'N/A' : `${data.overall_compliance_rate}%`}
+          </span>
         </div>
       </div>
       <ReportTable

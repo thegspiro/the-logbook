@@ -12,7 +12,8 @@ from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
-from typing import Any, Dict, List, Optional, Tuple, Union
+from enum import Enum
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -20,6 +21,7 @@ from loguru import logger
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.core.config import settings
 from app.models.admin_hours import EVENT_TYPES_WITHOUT_ADMIN_HOURS
@@ -151,6 +153,67 @@ ATTENDANCE_SENSITIVE_UPDATE_FIELDS = frozenset(
 )
 
 
+def _comparable_attendance_value(value: Any) -> Any:
+    """A form of ``value`` that compares equal across storage and payload.
+
+    The edit form re-sends every field it shows, so the payload and the stored
+    row say the same thing in different shapes: MySQL DATETIME reads back
+    naive and to the second while the payload is offset-aware, and an enum
+    column reads back as the member while the payload may carry its string.
+    """
+    if isinstance(value, datetime):
+        aware = value if value.tzinfo else value.replace(tzinfo=dt_timezone.utc)
+        return aware.astimezone(dt_timezone.utc).replace(microsecond=0)
+    if isinstance(value, Enum):
+        return value.value
+    return value
+
+
+def _effective_attendance_values(values: Dict[str, Any]) -> Dict[str, Any]:
+    """The attendance-sensitive fields as the check-in rules actually read them.
+
+    A NULL check-in column means its default (``_get_check_in_window``), and
+    the edit form fills a NULL with that default before re-sending it, so the
+    two must compare equal or every older event would read as changed.
+    """
+    window = _comparable_attendance_value(values.get("check_in_window_type"))
+    window = window or CheckInWindowType.FLEXIBLE.value
+    effective = {
+        field: _comparable_attendance_value(values.get(field))
+        for field in ATTENDANCE_SENSITIVE_UPDATE_FIELDS
+    }
+    effective["check_in_window_type"] = window
+    if effective["check_in_minutes_before"] is None:
+        effective["check_in_minutes_before"] = (
+            15 if window == CheckInWindowType.WINDOW.value else 60
+        )
+    if effective["check_in_minutes_after"] is None:
+        effective["check_in_minutes_after"] = 15
+    effective["require_checkout"] = bool(effective["require_checkout"])
+    return effective
+
+
+def changed_attendance_fields(event: Event, update_data: Dict[str, Any]) -> Set[str]:
+    """The attendance-sensitive fields ``update_data`` would actually change.
+
+    Decided by value, not by presence: the edit form always sends the schedule
+    and check-in fields, so a presence test refused a title fix on a finalized
+    event. A field re-sent unchanged leaves the credited durations exactly as
+    they were, which is all the lock protects.
+    """
+    sent = ATTENDANCE_SENSITIVE_UPDATE_FIELDS & set(update_data)
+    if not sent:
+        return set()
+    before = {
+        field: getattr(event, field, None)
+        for field in ATTENDANCE_SENSITIVE_UPDATE_FIELDS
+    }
+    after = {**before, **{field: update_data[field] for field in sent}}
+    old = _effective_attendance_values(before)
+    new = _effective_attendance_values(after)
+    return {field for field in sent if old[field] != new[field]}
+
+
 def attendance_is_finalized(event: Event) -> bool:
     """Whether this event's attendance is closed.
 
@@ -268,6 +331,10 @@ class EventService:
         # caller that reached it through end_event or record_actual_times,
         # whose return shapes predate the training report.
         self.last_finalize_outcome: Optional[FinalizeOutcome] = None
+        # Pipeline reversals owed by writes made with ``defer_commit=True``;
+        # the caller commits its whole batch once and then runs
+        # ``complete_deferred_writes``.
+        self._deferred_reversals: List[Tuple[Any, Tuple[str, Optional[str]]]] = []
 
     async def _organizer_columns(
         self,
@@ -839,8 +906,22 @@ class EventService:
         organization_id: UUID,
         event_data: EventUpdate,
         updated_by: Optional[UUID] = None,
+        *,
+        defer_commit: bool = False,
     ) -> Optional[Event]:
-        """Update an event"""
+        """Update an event.
+
+        ``defer_commit`` flushes instead of committing, for a caller that moves
+        several events as one change (a cohort shift): a refusal partway down
+        its list then rolls back the events before it too. That caller commits
+        and then calls :meth:`complete_deferred_writes`.
+        """
+        # The room booking lock comes before this event's row lock, on every
+        # update: the overlap check below takes it whenever the event has a
+        # room, and taking it there, after the event lock, would invert the
+        # order other bookers use. Two edits of events in the same room would
+        # then each hold an event and wait on the other (EV-26).
+        await LocationService(self.db).lock_room_bookings(str(organization_id))
         result = await self.db.execute(
             select(Event)
             .where(Event.id == str(event_id))
@@ -874,7 +955,7 @@ class EventService:
         # derived from, which would leave the event disagreeing with the hours
         # already in the ledger.
         if attendance_is_finalized(event):
-            locked = ATTENDANCE_SENSITIVE_UPDATE_FIELDS & set(update_data)
+            locked = changed_attendance_fields(event, update_data)
             if locked:
                 raise ValueError(
                     attendance_locked_error("changing " + ", ".join(sorted(locked)))
@@ -943,6 +1024,12 @@ class EventService:
             event.updated_by = str(updated_by)
         event.updated_at = datetime.now(dt_timezone.utc)
 
+        if defer_commit:
+            await self.db.flush()
+            if training_follow_up:
+                self._deferred_reversals.append(training_follow_up)
+            return event
+
         await self.db.commit()
         await self.db.refresh(event)
         if training_follow_up:
@@ -951,6 +1038,16 @@ class EventService:
             )
 
         return event
+
+    async def complete_deferred_writes(self, organization_id: UUID) -> None:
+        """Run what ``defer_commit`` writes owe once their batch has committed.
+
+        The pipeline reversals read committed state, so they cannot run inside
+        the batch; and they must run, or a training class moved or cancelled
+        as part of one keeps the credit it no longer earns.
+        """
+        pending, self._deferred_reversals = self._deferred_reversals, []
+        await self._reverse_pipeline_after_commit(pending, organization_id)
 
     async def publish_event(
         self, event_id: UUID, organization_id: UUID
@@ -1060,9 +1157,6 @@ class EventService:
             )
             if timing.get("rsvp_deadline") is not None:
                 deadline_lead = _wall_time(timing["rsvp_deadline"], tz) - new_start
-        changed_fields = set(update_data)
-        if times_change:
-            changed_fields |= {"start_datetime", "end_datetime"}
 
         # EV-17 / XC-1: this path writes the same client-supplied attachment
         # dictionaries as update_event, across every future occurrence.
@@ -1072,19 +1166,31 @@ class EventService:
         # A series-wide edit reaches finalized occurrences too. Descriptive
         # fields stay allowed here exactly as they do on the single-event path;
         # only the ones the credited durations were derived from are refused.
-        sensitive = ATTENDANCE_SENSITIVE_UPDATE_FIELDS & changed_fields
-        if sensitive:
-            locked = [e for e in future_events if attendance_is_finalized(e)]
-            if locked:
-                raise ValueError(
-                    attendance_locked_error(
-                        "changing "
-                        + ", ".join(sorted(sensitive))
-                        + f" across this series ({len(locked)} of "
-                        f"{len(future_events)} occurrences have finalized "
-                        "attendance)"
-                    )
+        # Each finalized occurrence is compared against its own values, so the
+        # form's re-sent check-in settings do not refuse a description edit.
+        # The times are already a computed change (times_change), since each
+        # occurrence moves by the anchor's shift rather than taking its value.
+        sensitive: Set[str] = set()
+        locked = []
+        for occurrence in future_events:
+            if not attendance_is_finalized(occurrence):
+                continue
+            changes = changed_attendance_fields(occurrence, update_data)
+            if times_change:
+                changes |= {"start_datetime", "end_datetime"}
+            if changes:
+                sensitive |= changes
+                locked.append(occurrence)
+        if locked:
+            raise ValueError(
+                attendance_locked_error(
+                    "changing "
+                    + ", ".join(sorted(sensitive))
+                    + f" across this series ({len(locked)} of "
+                    f"{len(future_events)} occurrences have finalized "
+                    "attendance)"
                 )
+            )
 
         # XC-1 (BXC-1): update_event and create_event validate a newly-set
         # location_id in-org, but this series-wide bulk update did not — and the
@@ -1141,8 +1247,17 @@ class EventService:
         organization_id: UUID,
         reason: str,
         send_notifications: bool = False,
+        *,
+        defer_commit: bool = False,
     ) -> Optional[Event]:
-        """Cancel an event and optionally notify RSVPs"""
+        """Cancel an event and optionally notify RSVPs.
+
+        ``defer_commit`` works as on :meth:`update_event`. It does not combine
+        with ``send_notifications``: the notices describe a cancellation that
+        has happened, which a deferred one has not yet.
+        """
+        if defer_commit and send_notifications:
+            raise ValueError("A deferred cancellation cannot send notifications")
         result = await self.db.execute(
             select(Event)
             .where(Event.id == str(event_id))
@@ -1177,6 +1292,11 @@ class EventService:
 
         # Capture rsvps before commit expires the relationship
         rsvps_to_notify = list(event.rsvps)
+
+        if defer_commit:
+            await self.db.flush()
+            self._deferred_reversals.extend(pending_reversals)
+            return event
 
         await self.db.commit()
         await self.db.refresh(event)
@@ -2163,7 +2283,13 @@ class EventService:
         query = query.order_by(EventRSVP.responded_at.desc()).offset(skip).limit(limit)
 
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        rsvps = list(result.scalars().all())
+        # The org-scoped event above is the one these rows belong to; attaching
+        # it lets the endpoint report each member's credited check-in without
+        # a lazy load, which an async session cannot perform.
+        for rsvp in rsvps:
+            set_committed_value(rsvp, "event", event)
+        return rsvps
 
     async def list_event_attendees_for_member(
         self,
@@ -3691,6 +3817,19 @@ class EventService:
         if override is not None and override > check_in_time:
             return override
         return cls._as_utc(rsvp.checked_out_at) or effective_end
+
+    @classmethod
+    def credited_check_in_time(
+        cls, event: Event, rsvp: EventRSVP
+    ) -> Optional[datetime]:
+        """The check-in this member is credited from, for display.
+
+        Reported on the RSVP so the Edit Times dialog can pre-fill it. Left to
+        re-derive it, the dialog pre-filled the raw tap, and saving it unchanged
+        turned an early check-in into an override, which is never clamped
+        (pitfall #29: the screen reports what the backend decided).
+        """
+        return cls._credited_check_in_time(event, rsvp)
 
     @classmethod
     def _credited_check_in_time(

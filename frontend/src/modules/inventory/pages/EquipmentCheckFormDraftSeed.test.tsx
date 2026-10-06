@@ -37,7 +37,7 @@ vi.mock('../../../services/inventoryService', () => ({ inventoryService: { getIt
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 vi.mock('../../../hooks/useOnlineStatus', () => ({ useOnlineStatus: () => true }));
 vi.mock('../../../utils/offlineQueue', () => ({
-  listPendingChecks: vi.fn().mockResolvedValue([]),
+  listOwnPendingChecks: vi.fn().mockResolvedValue([]),
   pendingCount: vi.fn().mockResolvedValue(0),
   CHECK_QUEUE_MAX_RETRIES: 5,
 }));

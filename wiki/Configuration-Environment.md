@@ -366,26 +366,33 @@ Full descriptions and the failure-direction reasoning are in
 ## OAuth Sign-In
 
 _(2026-05-29)_ "Sign in with Google" and "Sign in with Microsoft" (Azure AD,
-single-tenant). Each provider is fully disabled until its `*_ENABLED` flag is
+single-tenant); _(2026-10-05)_ "Authentik SSO" (self-hosted OpenID Connect).
+Each provider is fully disabled until its `*_ENABLED` flag is
 `true` and all of its required fields are set — otherwise the
 `/api/v1/auth/oauth/{provider}` routes return `404`. See
 [Authentication > OAuth](Security-Authentication#oauth).
 
-| Variable                   | Description                                                     | Default          |
-| -------------------------- | --------------------------------------------------------------- | ---------------- |
-| `GOOGLE_OAUTH_ENABLED`     | Enable "Sign in with Google"                                    | `false`          |
-| `GOOGLE_CLIENT_ID`         | Google OAuth client ID                                          | —                |
-| `GOOGLE_CLIENT_SECRET`     | Google OAuth client secret                                      | —                |
-| `GOOGLE_REDIRECT_URI`      | Callback URL (`.../api/v1/auth/oauth/google/callback`)          | —                |
-| `GOOGLE_ALLOWED_DOMAINS`   | Comma-separated email domain allowlist (empty = no restriction) | `""`             |
-| `AZURE_AD_ENABLED`         | Enable "Sign in with Microsoft" (Azure AD)                      | `false`          |
-| `AZURE_AD_TENANT_ID`       | Azure AD tenant GUID (single-tenant lock)                       | —                |
-| `AZURE_AD_CLIENT_ID`       | Azure AD application (client) ID                                | —                |
-| `AZURE_AD_CLIENT_SECRET`   | Azure AD client secret                                          | —                |
-| `AZURE_AD_REDIRECT_URI`    | Callback URL (`.../api/v1/auth/oauth/microsoft/callback`)       | —                |
-| `AZURE_AD_ALLOWED_DOMAINS` | Comma-separated email domain allowlist (empty = no restriction) | `""`             |
-| `OAUTH_SUCCESS_REDIRECT`   | SPA landing page after successful sign-in                       | `/auth/callback` |
-| `OAUTH_FAILURE_REDIRECT`   | Redirect (with `?error=<code>`) on sign-in failure              | `/login`         |
+| Variable                    | Description                                                     | Default          |
+| --------------------------- | --------------------------------------------------------------- | ---------------- |
+| `GOOGLE_OAUTH_ENABLED`      | Enable "Sign in with Google"                                    | `false`          |
+| `GOOGLE_CLIENT_ID`          | Google OAuth client ID                                          | —                |
+| `GOOGLE_CLIENT_SECRET`      | Google OAuth client secret                                      | —                |
+| `GOOGLE_REDIRECT_URI`       | Callback URL (`.../api/v1/auth/oauth/google/callback`)          | —                |
+| `GOOGLE_ALLOWED_DOMAINS`    | Comma-separated email domain allowlist (empty = no restriction) | `""`             |
+| `AZURE_AD_ENABLED`          | Enable "Sign in with Microsoft" (Azure AD)                      | `false`          |
+| `AZURE_AD_TENANT_ID`        | Azure AD tenant GUID (single-tenant lock)                       | —                |
+| `AZURE_AD_CLIENT_ID`        | Azure AD application (client) ID                                | —                |
+| `AZURE_AD_CLIENT_SECRET`    | Azure AD client secret                                          | —                |
+| `AZURE_AD_REDIRECT_URI`     | Callback URL (`.../api/v1/auth/oauth/microsoft/callback`)       | —                |
+| `AZURE_AD_ALLOWED_DOMAINS`  | Comma-separated email domain allowlist (empty = no restriction) | `""`             |
+| `AUTHENTIK_ENABLED`         | Enable "Authentik SSO"                                          | `false`          |
+| `AUTHENTIK_ISSUER_URL`      | Provider issuer, e.g. `https://auth.x/application/o/<slug>/`    | —                |
+| `AUTHENTIK_CLIENT_ID`       | Authentik provider client ID                                    | —                |
+| `AUTHENTIK_CLIENT_SECRET`   | Authentik provider client secret                                | —                |
+| `AUTHENTIK_REDIRECT_URI`    | Callback URL (`.../api/v1/auth/oauth/authentik/callback`)       | —                |
+| `AUTHENTIK_ALLOWED_DOMAINS` | Comma-separated email domain allowlist (empty = no restriction) | `""`             |
+| `OAUTH_SUCCESS_REDIRECT`    | SPA landing page after successful sign-in                       | `/auth/callback` |
+| `OAUTH_FAILURE_REDIRECT`    | Redirect (with `?error=<code>`) on sign-in failure              | `/login`         |
 
 > **Link-existing-only:** OAuth never creates accounts. The verified IdP email
 > must match an existing, active local user.

@@ -200,6 +200,12 @@ to `Decimal` (belongs with the codebase-wide FIN-7 float→Decimal refactor); mo
 fields accept `0` with no upper cap; full donor PII is exposed to `fundraising.view`
 (policy question, same family as FIN-5). Unchanged.
 
+**Float part resolved 2026-10-05 (owner decision):** `get_grant_report` and
+`get_fundraising_report` sum money as `Decimal` and convert each total to a
+float once, at the response; the average gift rounds half-up to the cent.
+Covered by `TestGrantReportIsExact` and `TestFundraisingReportIsExact`. Zero
+and unbounded amounts, and the donor-PII gate, stand as before.
+
 ## Verified good ✅ (re-confirmed)
 
 - GF-1 (`campaign_id`/`donor_id` validated + both recompute helpers org-scoped),

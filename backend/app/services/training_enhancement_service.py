@@ -77,6 +77,18 @@ def _detail_status(detail: Dict[str, Any]) -> str:
     return TrainingStatus.COMPLETED.value if detail["is_met"] else "not_met"
 
 
+def _forecast_pct(met: int, total: int, expiring_count: int) -> Optional[float]:
+    """A member's compliance percentage with ``expiring_count`` lapsed.
+
+    Simple forecast: each expiring certification costs one requirement. None
+    when nothing grades the member — they are not applicable (TR4-4).
+    """
+    if total <= 0:
+        return None
+    current = met / total * 100
+    return round(max(0, current - (expiring_count / total * 100)), 1)
+
+
 def _requirement_cells(requirements, user, records, today: date) -> List[str]:
     """One export cell per requirement column for ``user``.
 
@@ -1222,41 +1234,23 @@ class ReportExportService:
                         }
                     )
 
-            # Catch-up requirements count neither way, and a member nothing
-            # grades is fully compliant — not 0%, which dividing by a
-            # substituted 1 used to report.
+            # Catch-up requirements count neither way. A member nothing grades
+            # has no percentage at all — not 100%, which counted them as
+            # passing in every department average (TR4-4), and not 0%, which
+            # dividing by a substituted 1 once reported.
             met, total = tally_standing(statuses)
-            current_pct = (met / total * 100) if total > 0 else 100
-
-            # Simple forecast: if certs are expiring, compliance drops
             expiring_30 = sum(1 for e in expiring if e["days_remaining"] <= 30)
             expiring_60 = sum(1 for e in expiring if e["days_remaining"] <= 60)
             expiring_90 = len(expiring)
-
-            forecast_30 = (
-                max(0, current_pct - (expiring_30 / total * 100))
-                if total > 0
-                else current_pct
-            )
-            forecast_60 = (
-                max(0, current_pct - (expiring_60 / total * 100))
-                if total > 0
-                else current_pct
-            )
-            forecast_90 = (
-                max(0, current_pct - (expiring_90 / total * 100))
-                if total > 0
-                else current_pct
-            )
 
             forecasts.append(
                 {
                     "user_id": str(user.id),
                     "user_name": f"{user.first_name} {user.last_name}",
-                    "current_compliance_percentage": round(current_pct, 1),
-                    "forecast_30_days": round(forecast_30, 1),
-                    "forecast_60_days": round(forecast_60, 1),
-                    "forecast_90_days": round(forecast_90, 1),
+                    "current_compliance_percentage": _forecast_pct(met, total, 0),
+                    "forecast_30_days": _forecast_pct(met, total, expiring_30),
+                    "forecast_60_days": _forecast_pct(met, total, expiring_60),
+                    "forecast_90_days": _forecast_pct(met, total, expiring_90),
                     "at_risk_requirements": at_risk,
                     "expiring_certifications": expiring,
                 }

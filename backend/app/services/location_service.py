@@ -17,6 +17,7 @@ from app.models.facilities import Facility, FacilityRoom
 from app.models.location import Location
 from app.models.user import Organization
 from app.schemas.location import LocationCreate, LocationUpdate
+from app.utils.org_locks import ROOM_BOOKING, lock_organization_scope
 from app.utils.org_scoping import assert_in_org
 
 
@@ -299,6 +300,15 @@ class LocationService:
                 current.append(event)
         return current
 
+    async def lock_room_bookings(self, organization_id: str) -> None:
+        """Serialize room booking decisions for this organization (EV-26).
+
+        Held until the caller's transaction ends. A caller that will also
+        lock an event row must take this first; see
+        ``EventService.update_event``.
+        """
+        await lock_organization_scope(self.db, organization_id, ROOM_BOOKING)
+
     async def check_overlapping_events(
         self,
         location_id: UUID,
@@ -306,12 +316,22 @@ class LocationService:
         start_datetime: datetime,
         end_datetime: datetime,
         exclude_event_id: Optional[UUID] = None,
+        for_booking: bool = True,
     ) -> List[Event]:
         """
         Check for events that overlap with the given time range at this location
 
         Returns list of overlapping events
+
+        ``for_booking`` is for a caller about to book the room on the strength
+        of this answer. It takes the organization's booking lock and reads
+        with a locking read: a plain SELECT answers from the snapshot taken at
+        the request's first read, which predates a booking another
+        coordinator committed while this one waited for the lock (pitfall
+        #27). Only a read-only preview may pass False.
         """
+        if for_booking:
+            await self.lock_room_bookings(organization_id)
         query = (
             select(Event)
             .where(Event.location_id == str(location_id))
@@ -340,6 +360,8 @@ class LocationService:
 
         if exclude_event_id:
             query = query.where(Event.id != str(exclude_event_id))
+        if for_booking:
+            query = query.with_for_update()
 
         result = await self.db.execute(query)
         return list(result.scalars().all())

@@ -412,12 +412,12 @@ export interface SkillTestUpdate {
    *  test that already had time on the clock. The server increments its own
    *  counter; the client never sets it. */
   resumed?: boolean | undefined;
-  status?: SkillTestStatus;
+  /** Only 'in_progress', to start a draft. The outcome (completed, result,
+   *  score) is recorded by completing the test, never by a save. */
+  status?: 'in_progress';
   section_results?: SectionResult[];
-  overall_score?: number;
   elapsed_seconds?: number;
   notes?: string;
-  result?: TestResult;
   requirement_id?: string | null;
   /** The version last seen. A stale value is refused with 409 rather than
    *  silently overwriting whoever wrote in between. */
@@ -474,6 +474,30 @@ export interface SkillTestListItem {
    *  candidate's record. Null while a member-run test awaits review. */
   validated_at?: string | undefined;
   pending_validation?: boolean | undefined;
+}
+
+/** One page of `GET /training/skills-testing/tests`. `total` counts every row
+ *  the filters match and the reader may see, not just the rows in `items`. */
+export interface SkillTestListPage {
+  items: SkillTestListItem[];
+  total: number;
+}
+
+/** Query for the tests list. Dates are `YYYY-MM-DD` and match a test's
+ *  completion date, or its opening date while it is unfinished. */
+export interface SkillTestListParams {
+  status?: string;
+  candidate_id?: string;
+  template_id?: string;
+  include_practice?: boolean;
+  /** Officer review queue: official results nobody has signed off yet. */
+  pending_validation?: boolean;
+  /** Template, candidate or examiner name. */
+  search?: string;
+  date_from?: string;
+  date_to?: string;
+  limit?: number;
+  offset?: number;
 }
 
 /** A selectable candidate for the start-test picker. Id and display name only —

@@ -2349,6 +2349,10 @@ tbody tr:last-child {
 .member-training-print__compliance--yellow {
   color: #92400e;
 }
+/* No requirement grades the member: neither a pass nor a warning. */
+.member-training-print__compliance--not_applicable {
+  color: #555;
+}
 .member-training-print__stats,
 .member-training-print__summary {
   display: grid;

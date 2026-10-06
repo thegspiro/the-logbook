@@ -47,6 +47,7 @@ class ErrorCode(str, Enum):
     AUTH_CSRF_INVALID = "LB-AUTH-009"
     AUTH_REGISTRATION_DISABLED = "LB-AUTH-010"
     AUTH_MFA_CHALLENGE_EXPIRED = "LB-AUTH-011"
+    AUTH_REFRESH_SUPERSEDED = "LB-AUTH-012"
 
     # --- Permissions ---------------------------------------------------
     PERM_INSUFFICIENT = "LB-PERM-001"
@@ -229,6 +230,19 @@ ERROR_CODE_CATALOG: dict[ErrorCode, ErrorCodeInfo] = {
         ),
         resolution=(
             "Have the member start the login again and enter the MFA code " "promptly.",
+        ),
+    ),
+    ErrorCode.AUTH_REFRESH_SUPERSEDED: ErrorCodeInfo(
+        title="Session refreshed by another tab",
+        description=(
+            "Two requests refreshed the same session at once, usually two "
+            "open tabs. One rotated the session's tokens first; the other "
+            "is answered with this code instead of being treated as token "
+            "theft. The browser already holds the new tokens."
+        ),
+        resolution=(
+            "Nothing to do: the app retries with the new session cookies.",
+            "If a member sees it as an error, a reload picks up the new " "session.",
         ),
     ),
     ErrorCode.PERM_INSUFFICIENT: ErrorCodeInfo(

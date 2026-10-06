@@ -52,7 +52,8 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({
         <div className="mb-6">
           <div
             className={`rounded-lg border p-4 ${
-              complianceSummary.compliance_status === 'exempt'
+              complianceSummary.compliance_status === 'exempt' ||
+              complianceSummary.compliance_status === 'not_applicable'
                 ? 'border-theme-surface-border bg-theme-surface-secondary'
                 : complianceSummary.compliance_status === 'green'
                   ? 'border-green-500/30 bg-green-500/5'
@@ -67,7 +68,8 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({
               </h3>
               <span
                 className={`rounded-full px-3 py-1 text-xs font-bold ${
-                  complianceSummary.compliance_status === 'exempt'
+                  complianceSummary.compliance_status === 'exempt' ||
+                  complianceSummary.compliance_status === 'not_applicable'
                     ? 'bg-theme-surface-secondary text-theme-text-muted'
                     : complianceSummary.compliance_status === 'green'
                       ? 'bg-green-500/20 text-green-700 dark:text-green-400'

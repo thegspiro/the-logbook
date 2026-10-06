@@ -44,7 +44,7 @@ class CacheManager:
         Uses exponential backoff for retries. If REDIS_REQUIRED is False,
         the application will continue without Redis (graceful degradation).
         """
-        last_exception = None
+        last_exception: Exception | None = None
         retry_delay = 1  # Start with 1 second delay
 
         for attempt in range(1, settings.REDIS_CONNECT_RETRIES + 1):

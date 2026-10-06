@@ -374,6 +374,14 @@ class DocumentFolder(Base):
         Index("idx_doc_folders_org", "organization_id"),
         Index("idx_doc_folders_parent", "parent_id"),
         Index("idx_doc_folders_owner", "owner_user_id"),
+        # FAC-44: every system-root lookup (``organization_id`` + ``slug``)
+        # and every per-record folder lookup (``parent_id`` + ``slug``) in
+        # DocumentsService is a locking read. Without these, ``slug`` is
+        # filtered after the row is fetched, so the read locks each org (or
+        # sibling) folder it walks past in id order -- an unrelated folder
+        # whose random UUID happens to sort first included.
+        Index("idx_doc_folders_org_slug", "organization_id", "slug"),
+        Index("idx_doc_folders_parent_slug", "parent_id", "slug"),
     )
 
     def __repr__(self):

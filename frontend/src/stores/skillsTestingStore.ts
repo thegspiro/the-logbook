@@ -16,6 +16,7 @@ import type {
   SkillTestCreate,
   SkillTestUpdate,
   SkillTestListItem,
+  SkillTestListParams,
   SkillTestingSummary,
   CriterionResult,
 } from '../types/skillsTesting';
@@ -28,8 +29,10 @@ interface SkillsTestingState {
   templatesLoading: boolean;
   templateLoading: boolean;
 
-  // Test state
+  // Test state — `tests` is the page last loaded, `testsTotal` every row the
+  // same filters match, so a screen can page without fetching the rest.
   tests: SkillTestListItem[];
+  testsTotal: number;
   currentTest: SkillTest | null;
   testsLoading: boolean;
   testLoading: boolean;
@@ -56,13 +59,7 @@ interface SkillsTestingState {
   duplicateTemplate: (id: string) => Promise<SkillTemplate>;
 
   // Test actions
-  loadTests: (params?: {
-    status?: string;
-    candidate_id?: string;
-    template_id?: string;
-    include_practice?: boolean;
-    pending_validation?: boolean;
-  }) => Promise<void>;
+  loadTests: (params?: SkillTestListParams) => Promise<void>;
   loadTest: (id: string) => Promise<void>;
   createTest: (data: SkillTestCreate) => Promise<SkillTest>;
   updateTest: (id: string, data: SkillTestUpdate) => Promise<SkillTest>;
@@ -100,6 +97,17 @@ interface SkillsTestingState {
   clearCurrentTest: () => void;
 }
 
+/** Drop a deleted test from the loaded page, and from the count behind it, so
+ *  the pager does not offer a page that no longer has anything on it. */
+const removeListedTest = (state: SkillsTestingState, id: string): Partial<SkillsTestingState> => {
+  const tests = state.tests.filter((t) => t.id !== id);
+  return {
+    tests,
+    testsTotal: Math.max(0, state.testsTotal - (state.tests.length - tests.length)),
+    currentTest: state.currentTest?.id === id ? null : state.currentTest,
+  };
+};
+
 export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
   // Initial state
   templates: [],
@@ -107,6 +115,7 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
   templatesLoading: false,
   templateLoading: false,
   tests: [],
+  testsTotal: 0,
   currentTest: null,
   testsLoading: false,
   testLoading: false,
@@ -218,8 +227,8 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
   loadTests: async (params) => {
     set({ testsLoading: true, error: null });
     try {
-      const tests = await skillsTestingService.getTests(params);
-      set({ tests, testsLoading: false });
+      const page = await skillsTestingService.getTests(params);
+      set({ tests: page.items, testsTotal: page.total, testsLoading: false });
     } catch (err: unknown) {
       set({
         testsLoading: false,
@@ -295,10 +304,7 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
     set({ error: null });
     try {
       await skillsTestingService.deleteTest(id);
-      set((state: SkillsTestingState) => ({
-        tests: state.tests.filter((t: SkillTestListItem) => t.id !== id),
-        currentTest: state.currentTest?.id === id ? null : state.currentTest,
-      }));
+      set((state: SkillsTestingState) => removeListedTest(state, id));
     } catch (err: unknown) {
       set({ error: getErrorMessage(err, 'Failed to delete test') });
       throw err;
@@ -309,10 +315,7 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
     set({ error: null });
     try {
       await skillsTestingService.discardPracticeTest(id);
-      set((state: SkillsTestingState) => ({
-        tests: state.tests.filter((t: SkillTestListItem) => t.id !== id),
-        currentTest: state.currentTest?.id === id ? null : state.currentTest,
-      }));
+      set((state: SkillsTestingState) => removeListedTest(state, id));
     } catch (err: unknown) {
       set({ error: getErrorMessage(err, 'Failed to discard practice test') });
       throw err;

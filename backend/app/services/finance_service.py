@@ -70,7 +70,7 @@ from app.utils.csv_export import SafeCsvWriter
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
-from app.utils.org_timezone import resolve_scheduling_timezone
+from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
 from app.utils.sql_search import LIKE_ESCAPE_CHAR
 
 # The statuses that genuinely resolve a step, so a later step may become
@@ -1760,11 +1760,12 @@ class FinanceService:
         offset would regenerate the same colliding number.
         """
         fy = await self.get_fiscal_year(fiscal_year_id, org_id)
-        year = ""
         if fy and fy.start_date:
             year = str(fy.start_date.year)
         else:
-            year = str(datetime.now(timezone.utc).year)
+            # The department's year, not the server's: UTC is already next
+            # year on a US department's New Year's Eve.
+            year = str((await resolve_org_today(self.db, org_id)).year)
 
         table_map = {
             "PR": PurchaseRequest,
@@ -1856,14 +1857,22 @@ class FinanceService:
         return list(result.scalars().all())
 
     async def get_purchase_request(
-        self, pr_id: str, org_id: str
+        self, pr_id: str, org_id: str, for_update: bool = False
     ) -> Optional[PurchaseRequest]:
-        result = await self.db.execute(
-            select(PurchaseRequest).where(
-                PurchaseRequest.id == pr_id,
-                PurchaseRequest.organization_id == org_id,
-            )
+        """A purchase request by id, org-scoped.
+
+        ``for_update`` locks the row for the caller's transaction and refreshes
+        an instance already in the session (``populate_existing``): a status
+        check made off a stale identity-map copy would pass for a request a
+        concurrent transaction has just moved on (CLAUDE.md Pitfall #27).
+        """
+        query = select(PurchaseRequest).where(
+            PurchaseRequest.id == pr_id,
+            PurchaseRequest.organization_id == org_id,
         )
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def create_purchase_request(
@@ -1886,7 +1895,7 @@ class FinanceService:
     async def update_purchase_request(
         self, pr_id: str, org_id: str, **kwargs
     ) -> PurchaseRequest:
-        pr = await self.get_purchase_request(pr_id, org_id)
+        pr = await self.get_purchase_request(pr_id, org_id, for_update=True)
         if not pr:
             raise ValueError("Purchase request not found")
         if pr.status not in (
@@ -1901,7 +1910,7 @@ class FinanceService:
         return pr
 
     async def submit_purchase_request(self, pr_id: str, org_id: str) -> PurchaseRequest:
-        pr = await self.get_purchase_request(pr_id, org_id)
+        pr = await self.get_purchase_request(pr_id, org_id, for_update=True)
         if not pr:
             raise ValueError("Purchase request not found")
         if pr.status != PurchaseRequestStatus.DRAFT:
@@ -1950,7 +1959,7 @@ class FinanceService:
         return pr
 
     async def mark_pr_ordered(self, pr_id: str, org_id: str) -> PurchaseRequest:
-        pr = await self.get_purchase_request(pr_id, org_id)
+        pr = await self.get_purchase_request(pr_id, org_id, for_update=True)
         if not pr:
             raise ValueError("Purchase request not found")
         if pr.status != PurchaseRequestStatus.APPROVED:
@@ -1962,7 +1971,7 @@ class FinanceService:
         return pr
 
     async def mark_pr_received(self, pr_id: str, org_id: str) -> PurchaseRequest:
-        pr = await self.get_purchase_request(pr_id, org_id)
+        pr = await self.get_purchase_request(pr_id, org_id, for_update=True)
         if not pr:
             raise ValueError("Purchase request not found")
         if pr.status != PurchaseRequestStatus.ORDERED:
@@ -2099,8 +2108,19 @@ class FinanceService:
         return list(result.scalars().unique().all())
 
     async def get_expense_report(
-        self, er_id: str, org_id: str, restrict_to_user: Optional[str] = None
+        self,
+        er_id: str,
+        org_id: str,
+        restrict_to_user: Optional[str] = None,
+        for_update: bool = False,
     ) -> Optional[ExpenseReport]:
+        """An expense report by id, org-scoped.
+
+        ``for_update`` locks the row for the caller's transaction and refreshes
+        an instance already in the session (``populate_existing``): a status
+        check made off a stale identity-map copy would pass for a request a
+        concurrent transaction has just moved on (CLAUDE.md Pitfall #27).
+        """
         query = (
             select(ExpenseReport)
             .options(selectinload(ExpenseReport.line_items))
@@ -2111,6 +2131,8 @@ class FinanceService:
         )
         if restrict_to_user is not None:
             query = query.where(ExpenseReport.submitted_by == restrict_to_user)
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
@@ -2154,7 +2176,7 @@ class FinanceService:
     async def update_expense_report(
         self, er_id: str, org_id: str, **kwargs
     ) -> ExpenseReport:
-        er = await self.get_expense_report(er_id, org_id)
+        er = await self.get_expense_report(er_id, org_id, for_update=True)
         if not er:
             raise ValueError("Expense report not found")
         if er.status not in (
@@ -2197,7 +2219,7 @@ class FinanceService:
         return item
 
     async def submit_expense_report(self, er_id: str, org_id: str) -> ExpenseReport:
-        er = await self.get_expense_report(er_id, org_id)
+        er = await self.get_expense_report(er_id, org_id, for_update=True)
         if not er:
             raise ValueError("Expense report not found")
         if er.status != ExpenseReportStatus.DRAFT:
@@ -2300,14 +2322,22 @@ class FinanceService:
         return list(result.scalars().all())
 
     async def get_check_request(
-        self, cr_id: str, org_id: str
+        self, cr_id: str, org_id: str, for_update: bool = False
     ) -> Optional[CheckRequest]:
-        result = await self.db.execute(
-            select(CheckRequest).where(
-                CheckRequest.id == cr_id,
-                CheckRequest.organization_id == org_id,
-            )
+        """A check request by id, org-scoped.
+
+        ``for_update`` locks the row for the caller's transaction and refreshes
+        an instance already in the session (``populate_existing``): a status
+        check made off a stale identity-map copy would pass for a request a
+        concurrent transaction has just moved on (CLAUDE.md Pitfall #27).
+        """
+        query = select(CheckRequest).where(
+            CheckRequest.id == cr_id,
+            CheckRequest.organization_id == org_id,
         )
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def create_check_request(
@@ -2329,7 +2359,7 @@ class FinanceService:
     async def update_check_request(
         self, cr_id: str, org_id: str, **kwargs
     ) -> CheckRequest:
-        cr = await self.get_check_request(cr_id, org_id)
+        cr = await self.get_check_request(cr_id, org_id, for_update=True)
         if not cr:
             raise ValueError("Check request not found")
         if cr.status not in (
@@ -2344,7 +2374,7 @@ class FinanceService:
         return cr
 
     async def submit_check_request(self, cr_id: str, org_id: str) -> CheckRequest:
-        cr = await self.get_check_request(cr_id, org_id)
+        cr = await self.get_check_request(cr_id, org_id, for_update=True)
         if not cr:
             raise ValueError("Check request not found")
         if cr.status != CheckRequestStatus.DRAFT:

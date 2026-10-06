@@ -58,7 +58,7 @@ vi.mock('../../modules/scheduling/services/api', () => ({
 vi.mock('../../utils/shiftReportOfflineQueue', () => ({
   pendingReportCount: () => Promise.resolve(0),
   enqueueShiftReport: () => Promise.resolve(),
-  listPendingReports: () => Promise.resolve([]),
+  listOwnPendingReports: () => Promise.resolve([]),
   dequeueShiftReport: () => Promise.resolve(),
 }));
 
@@ -576,5 +576,51 @@ describe('ShiftReportsTab — an acting Shift Officer without training.manage', 
     await screen.findByRole('heading', { name: 'Shift reports about you' });
     await waitFor(() => expect(mockGetDraftReports).toHaveBeenCalled());
     expect(screen.queryByRole('button', { name: /Drafts/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('ShiftReportsTab — flagged reports with review switched off', () => {
+  // A flag survives an administrator turning review off, because the review
+  // endpoint does not consult the setting. The Flagged view must follow the
+  // reports, not the setting, or they sit in no list anyone can act from.
+  beforeEach(() => {
+    mockGetConfig.mockReset();
+    mockGetConfig.mockResolvedValue({ report_review_required: false });
+    mockGetFlagged.mockReset();
+    mockGetFlagged.mockResolvedValue([]);
+  });
+
+  it('offers the Flagged view while a flagged report exists', async () => {
+    mockGetFlagged.mockResolvedValue([{ id: 'r-1', review_status: 'flagged' }]);
+    renderWithRouter(<ShiftReportsTab />);
+
+    expect(await screen.findByRole('button', { name: /Flagged/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Review Queue/ })).not.toBeInTheDocument();
+  });
+
+  it('shows nothing new to a department with no flagged reports', async () => {
+    renderWithRouter(<ShiftReportsTab />);
+
+    await waitFor(() => expect(mockGetFlagged).toHaveBeenCalled());
+    await screen.findByText('No reports filed yet');
+    expect(screen.queryByRole('button', { name: /Flagged/ })).not.toBeInTheDocument();
+  });
+
+  it('does not probe when review is on, where the view is always offered', async () => {
+    mockGetConfig.mockResolvedValue({ report_review_required: true });
+    renderWithRouter(<ShiftReportsTab />);
+
+    expect(await screen.findByRole('button', { name: /Flagged/ })).toBeInTheDocument();
+    expect(mockGetFlagged).not.toHaveBeenCalled();
+  });
+
+  it('does not probe for a member who cannot review', async () => {
+    canManage = false;
+    mockGetFlagged.mockResolvedValue([{ id: 'r-1', review_status: 'flagged' }]);
+    renderWithRouter(<ShiftReportsTab />);
+
+    await screen.findByRole('heading', { name: 'No shift reports yet' });
+    expect(mockGetFlagged).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /Flagged/ })).not.toBeInTheDocument();
   });
 });

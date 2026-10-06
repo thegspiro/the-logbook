@@ -990,7 +990,11 @@ export const SchedulingReportsPage: React.FC = () => {
             </div>
           ) : (
             <div>
-              {/* Overall Summary */}
+              {/* Overall Summary. Each requirement grades its own cohort, so
+                  these totals count member-requirement pairs: a member under
+                  three requirements is three checks. The payload carries no
+                  distinct-member count, and the labels say what is summed
+                  rather than claiming people. */}
               <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
                 <StatCard
                   label="Requirements"
@@ -998,17 +1002,17 @@ export const SchedulingReportsPage: React.FC = () => {
                   icon={<Shield className="text-theme-text-muted h-5 w-5" aria-hidden="true" />}
                 />
                 <StatCard
-                  label="Total Members"
+                  label="Requirement Checks"
                   value={complianceData.reduce((sum, r) => sum + r.total_members, 0)}
                   icon={<Users className="text-theme-text-muted h-5 w-5" aria-hidden="true" />}
                 />
                 <StatCard
-                  label="Compliant"
+                  label="Checks Met"
                   value={complianceData.reduce((sum, r) => sum + r.compliant_count, 0)}
                   icon={<CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" aria-hidden="true" />}
                 />
                 <StatCard
-                  label="Non-Compliant"
+                  label="Checks Not Met"
                   value={complianceData.reduce((sum, r) => sum + r.non_compliant_count, 0)}
                   icon={<XCircle className="h-5 w-5 text-red-600 dark:text-red-400" aria-hidden="true" />}
                 />

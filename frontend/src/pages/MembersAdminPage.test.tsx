@@ -9,6 +9,7 @@ vi.mock('../services/api', () => ({
     getUsersWithRoles: vi.fn(),
     assignUserRoles: vi.fn(),
     adminResetPassword: vi.fn(),
+    adminUnlockAccount: vi.fn(),
   },
   roleService: {
     getRoles: vi.fn(),
@@ -32,6 +33,11 @@ vi.mock('react-hot-toast', () => ({
 
 vi.mock('../hooks/useRanks', () => ({
   useRanks: () => ({ rankOptions: [] }),
+}));
+
+// The auth-store mock above ignores selectors, which is what useTimezone reads.
+vi.mock('../hooks/useTimezone', () => ({
+  useTimezone: () => 'UTC',
 }));
 
 import { locationsService } from '../services/api';
@@ -255,5 +261,44 @@ describe('MembersAdminPage — quick-removing a position (workflow review W11)',
 
     expect(await screen.findByText('Cannot remove the only remaining administrator.')).toBeInTheDocument();
     expect(screen.queryByText(/check your connection/)).not.toBeInTheDocument();
+  });
+});
+
+describe('MembersAdminPage — sign-in lockout (workflow review W02-4)', () => {
+  const locked = { ...member, locked_until: '2027-03-01T18:15:00Z' };
+
+  beforeEach(() => {
+    vi.mocked(userService.getUsersWithRoles).mockReset();
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([locked] as never);
+    vi.mocked(roleService.getRoles).mockReset();
+    vi.mocked(roleService.getRoles).mockResolvedValue([memberRole] as never);
+    vi.mocked(locationsService.getLocations).mockReset();
+    vi.mocked(locationsService.getLocations).mockResolvedValue([] as never);
+    vi.mocked(userService.adminUnlockAccount).mockReset();
+    vi.mocked(userService.adminUnlockAccount).mockResolvedValue({ message: 'ok' });
+    mockToastSuccess.mockReset();
+  });
+
+  // A locked account answered the correct password with "Incorrect username
+  // or password", and the administrator the member called saw nothing wrong.
+  it('shows the lock and lifts it', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<MembersAdminPage />);
+
+    expect(await screen.findByText(/Sign-in locked until 6:15/)).toBeInTheDocument();
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([member] as never);
+    await user.click(screen.getByRole('button', { name: 'Unlock' }));
+
+    expect(userService.adminUnlockAccount).toHaveBeenCalledWith('user-1');
+    await vi.waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('Jordan Avery can sign in again'));
+    await vi.waitFor(() => expect(screen.queryByText(/Sign-in locked until/)).not.toBeInTheDocument());
+  });
+
+  it('offers no Unlock for an account that is not locked', async () => {
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([member] as never);
+    renderWithRouter(<MembersAdminPage />);
+
+    expect(await screen.findByRole('button', { name: 'Reset Password' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Unlock' })).not.toBeInTheDocument();
   });
 });

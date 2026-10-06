@@ -33,6 +33,7 @@ import {
   ArrowRight,
   Globe,
   BarChart3,
+  UserCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
@@ -306,6 +307,23 @@ export const PipelineSettingsPage: React.FC = () => {
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Failed to update the status page setting');
       toast.error(msg);
+    }
+  };
+
+  const handleToggleAutoTransfer = async () => {
+    if (!currentPipeline) return;
+    try {
+      const updated = await pipelineService.updatePipeline(currentPipeline.id, {
+        auto_transfer_on_approval: !currentPipeline.auto_transfer_on_approval,
+      });
+      setCurrentPipeline(updated);
+      toast.success(
+        updated.auto_transfer_on_approval
+          ? 'Applicants who finish the final stage will become members automatically'
+          : 'Applicants will wait for a coordinator to transfer them'
+      );
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to update the automatic transfer setting'));
     }
   };
 
@@ -963,6 +981,35 @@ export const PipelineSettingsPage: React.FC = () => {
               </div>
 
               <ConversionOutcomesCard pipeline={currentPipeline} onSaved={setCurrentPipeline} />
+
+              {/* Automatic transfer. Stored on the pipeline and read by the
+                  stage-completion path (will_auto_transfer); this card is the
+                  only place a department can see or change it. */}
+              <div className="card bg-theme-input-bg p-5">
+                <div className="mb-3 flex items-center gap-2">
+                  <UserCheck className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
+                  <h3 className="text-theme-text-primary text-sm font-semibold">Automatic Transfer to Membership</h3>
+                </div>
+                <p className="text-theme-text-muted mb-4 text-xs">
+                  When on, an applicant who completes the pipeline&apos;s final stage becomes a full member at that
+                  moment — their account is created and, where email is set up, a welcome email sent, as if a
+                  coordinator had used Convert to Member. If the final stage is a vote or a sign-off, recording it is
+                  what makes them a member. Skipping the final stage never converts anyone, and every required stage
+                  must be complete first. When off, applicants who finish wait on the pipeline until a coordinator
+                  converts them.
+                </p>
+                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={currentPipeline.auto_transfer_on_approval}
+                    onChange={() => {
+                      void handleToggleAutoTransfer();
+                    }}
+                    className="form-checkbox"
+                  />
+                  Make applicants members automatically when they complete the final stage
+                </label>
+              </div>
 
               {/* Public Status Page Settings */}
               <div className="card bg-theme-input-bg p-5">

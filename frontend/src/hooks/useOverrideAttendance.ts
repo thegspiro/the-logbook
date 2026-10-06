@@ -36,9 +36,13 @@ export const useOverrideAttendance = ({
   const openModal = useCallback(
     (rsvp: RSVP) => {
       setEditingRsvp(rsvp);
+      // The credited check-in, not the raw tap: an override is never clamped
+      // to the scheduled start, so pre-filling an early tap made an unchanged
+      // save credit the minutes before the event began.
+      const creditedCheckIn = rsvp.override_check_in_at || rsvp.credited_check_in_at;
       setOverrideCheckIn(
-        rsvp.override_check_in_at
-          ? formatForDateTimeInput(rsvp.override_check_in_at, timezone)
+        creditedCheckIn
+          ? formatForDateTimeInput(creditedCheckIn, timezone)
           : rsvp.checked_in_at
             ? formatForDateTimeInput(rsvp.checked_in_at, timezone)
             : officialStartTime

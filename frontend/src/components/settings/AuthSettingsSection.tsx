@@ -64,6 +64,27 @@ const AuthSettingsSection: React.FC<AuthSettingsSectionProps> = ({
         </div>
       </div>
 
+      {/* Pitfall 19: these fields are stored but no sign-in reads them. The
+          server's environment holds the credentials it actually uses. */}
+      {authSettings.provider !== 'local' && (
+        <div
+          role="note"
+          className="border-theme-surface-border bg-theme-surface-secondary flex items-start gap-3 rounded-lg border p-4"
+        >
+          <Info className="text-theme-text-secondary mt-0.5 h-5 w-5 shrink-0" />
+          <p className="text-theme-text-secondary text-sm">
+            Set by the server administrator. Single sign-on uses the credentials in the server&apos;s configuration (
+            {authSettings.provider === 'google'
+              ? 'GOOGLE_*'
+              : authSettings.provider === 'microsoft'
+                ? 'AZURE_AD_*'
+                : 'AUTHENTIK_*'}{' '}
+            settings). The fields below are kept for your records and are not used to sign anyone in. Until the server
+            is configured, members keep signing in with their passwords and can reset them.
+          </p>
+        </div>
+      )}
+
       {/* Google OAuth config */}
       {authSettings.provider === 'google' && (
         <div className="border-theme-surface-border space-y-4 border-t pt-4">

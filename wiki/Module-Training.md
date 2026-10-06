@@ -366,14 +366,15 @@ GET    /api/v1/training/module-config/skill-names          # Get active SkillEva
 ### Skills Testing
 
 ```
-GET    /api/v1/training/skills-testing/templates              # List templates
+GET    /api/v1/training/skills-testing/templates              # List templates — limit (max 500)/offset
 POST   /api/v1/training/skills-testing/templates              # Create template
 GET    /api/v1/training/skills-testing/templates/{id}         # Get template detail
 PUT    /api/v1/training/skills-testing/templates/{id}         # Update template
 DELETE /api/v1/training/skills-testing/templates/{id}         # Archive template
 POST   /api/v1/training/skills-testing/templates/{id}/publish # Publish template
 POST   /api/v1/training/skills-testing/templates/{id}/duplicate # Duplicate template
-GET    /api/v1/training/skills-testing/tests                  # List tests
+GET    /api/v1/training/skills-testing/tests                  # List tests — paged {items, total}; limit (50, max 200)/offset, search, date_from/date_to (2026-10-05)
+GET    /api/v1/training/skills-testing/tests/export/csv       # CSV export — date_from + date_to required, at most 366 days apart (2026-10-05)
 POST   /api/v1/training/skills-testing/tests                  # Create test
 GET    /api/v1/training/skills-testing/tests/{id}             # Get test detail
 PUT    /api/v1/training/skills-testing/tests/{id}             # Update test (save progress)

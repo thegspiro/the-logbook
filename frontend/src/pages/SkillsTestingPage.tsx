@@ -15,7 +15,8 @@ import { useAuthStore } from '../stores/authStore';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import type { SkillTemplateListItem, SkillTestListItem } from '../types/skillsTesting';
-import { Breadcrumbs } from '../components/ux';
+import { Breadcrumbs, Pagination } from '../components/ux';
+import { DEFAULT_PAGE_SIZE } from '../constants/config';
 
 // ── Sub-components ─────────────────────────────────────────────
 
@@ -143,27 +144,46 @@ type TabType = 'available' | 'history';
 export const SkillsTestingPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { templates, templatesLoading, loadTemplates, tests, testsLoading, loadTests } = useSkillsTestingStore();
+  const { templates, templatesLoading, loadTemplates, tests, testsTotal, testsLoading, loadTests } =
+    useSkillsTestingStore();
 
   const [activeTab, setActiveTab] = useState<TabType>('available');
   const [searchQuery, setSearchQuery] = useState('');
+  // History is paged by the server, so its search runs there too — a filter in
+  // the browser would only ever search the page on screen.
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyPage, setHistoryPage] = useState(1);
 
   useEffect(() => {
     // Load only published templates for regular users
     void loadTemplates({ status: 'published' });
+  }, [loadTemplates]);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setHistorySearch(activeTab === 'history' ? searchQuery.trim() : '');
+      setHistoryPage(1);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchQuery, activeTab]);
+
+  useEffect(() => {
     // Load the current user's test history
     if (user?.id) {
-      void loadTests({ candidate_id: user.id });
+      void loadTests({
+        candidate_id: user.id,
+        limit: DEFAULT_PAGE_SIZE,
+        offset: (historyPage - 1) * DEFAULT_PAGE_SIZE,
+        ...(historySearch ? { search: historySearch } : {}),
+      });
     }
-  }, [loadTemplates, loadTests, user?.id]);
+  }, [loadTests, user?.id, historyPage, historySearch]);
 
   const filteredTemplates = templates.filter(
     (t) =>
       t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (t.category ?? '').toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  const filteredTests = tests.filter((t) => t.template_name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
     <div className="min-h-screen">
@@ -283,7 +303,7 @@ export const SkillsTestingPage: React.FC = () => {
                 />
                 <span className="sr-only">Loading...</span>
               </div>
-            ) : filteredTests.length === 0 ? (
+            ) : tests.length === 0 ? (
               <div className="card py-12 text-center">
                 <ClipboardCheck className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
                 <p className="text-theme-text-muted">
@@ -294,15 +314,26 @@ export const SkillsTestingPage: React.FC = () => {
                 </p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {filteredTests.map((test) => (
-                  <TestHistoryCard
-                    key={test.id}
-                    test={test}
-                    onClick={() => void navigate(`/training/skills-testing/test/${test.id}`)}
+              <>
+                <div className="space-y-3">
+                  {tests.map((test) => (
+                    <TestHistoryCard
+                      key={test.id}
+                      test={test}
+                      onClick={() => void navigate(`/training/skills-testing/test/${test.id}`)}
+                    />
+                  ))}
+                </div>
+                {testsTotal > DEFAULT_PAGE_SIZE && (
+                  <Pagination
+                    currentPage={historyPage}
+                    totalItems={testsTotal}
+                    pageSize={DEFAULT_PAGE_SIZE}
+                    onPageChange={setHistoryPage}
+                    className="mt-4"
                   />
-                ))}
-              </div>
+                )}
+              </>
             )}
           </>
         )}

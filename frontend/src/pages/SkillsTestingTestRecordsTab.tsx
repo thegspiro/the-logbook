@@ -5,15 +5,16 @@
  * all skill test records across the organization.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Ban, CheckCircle2, CircleSlash, Download, Plus, Search, Send, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
-import { formatDate } from '../utils/dateFormatting';
+import { addCalendarDays, calendarDaysBetween, formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
-import type { SkillTestListItem } from '../types/skillsTesting';
-import { ConfirmDialog, EmptyState } from '../components/ux';
+import type { SkillTestListItem, SkillTestListParams } from '../types/skillsTesting';
+import { ConfirmDialog, DateRangePicker, EmptyState, Pagination } from '../components/ux';
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '../constants/config';
 import { Modal } from '../components/Modal';
 import { getErrorMessage } from '../utils/errorHandling';
 import { MIN_VOID_REASON_LENGTH } from '../components/training/SkillTestOfficerActions';
@@ -23,6 +24,16 @@ import { ClipboardList } from 'lucide-react';
 /** Sentinel for the status dropdown. Not a SkillTestStatus — pending validation
  *  is a property of a *completed* test, so it maps to its own query param. */
 const PENDING_FILTER = 'pending_validation';
+
+/** The widest window the CSV export accepts — `EXPORT_MAX_SPAN_DAYS` in
+ *  `backend/app/api/v1/endpoints/skills_testing.py`, which refuses anything
+ *  longer. Checked here so the button says why rather than downloading an
+ *  error. */
+const EXPORT_MAX_SPAN_DAYS = 366;
+
+/** The window the tab opens on. A year, inside the export's ceiling, so the
+ *  Export button works without the officer touching the range first. */
+const DEFAULT_RANGE_DAYS = 365;
 
 /** Whether a test can still be scored — the only kind of row that offers a way
  *  back into the evaluation.
@@ -223,8 +234,10 @@ const TestCard: React.FC<{
 
 const SkillsTestingTestRecordsTab: React.FC = () => {
   const navigate = useNavigate();
+  const tz = useTimezone();
   const {
     tests,
+    testsTotal,
     testsLoading,
     loadTests,
     deleteTest,
@@ -241,6 +254,21 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('status') ?? '');
+  // The list is paged by the server, so search runs there too: filtering in
+  // the browser would only ever search the page on screen.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [pageAt, setPageAt] = useState<{ key: string; page: number }>({ key: '', page: 1 });
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
+  // The tile's deep link to the review queue opens undated. The queue is
+  // everything awaiting sign-off, whatever its age — the count on the tile —
+  // and a default window would hide the oldest results, which are the ones
+  // most overdue for review.
+  const [rangeStart, setRangeStart] = useState(() =>
+    searchParams.get('status') === PENDING_FILTER ? '' : addCalendarDays(getTodayLocalDate(tz), -DEFAULT_RANGE_DAYS)
+  );
+  const [rangeEnd, setRangeEnd] = useState(() =>
+    searchParams.get('status') === PENDING_FILTER ? '' : getTodayLocalDate(tz)
+  );
   const [voidTarget, setVoidTarget] = useState<SkillTestListItem | null>(null);
   const [voidReason, setVoidReason] = useState('');
   const [voiding, setVoiding] = useState(false);
@@ -263,29 +291,74 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
   const pendingOnly = statusFilter === PENDING_FILTER;
 
   useEffect(() => {
-    if (pendingOnly) {
-      void loadTests({ pending_validation: true });
-    } else {
-      void loadTests(statusFilter ? { status: statusFilter } : undefined);
-    }
-    void loadTemplates({ status: 'published' });
-    // Dropped on every filter change: a tick made against one view means
-    // nothing in another, and carrying it would let an officer validate rows
-    // they can no longer see.
-    setSelectedIds(new Set());
-  }, [loadTests, loadTemplates, statusFilter, pendingOnly]);
+    const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
 
-  const filteredTests = tests.filter(
-    (t) =>
-      t.template_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.candidate_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.examiner_name.toLowerCase().includes(searchQuery.toLowerCase())
+  // The filters both the list and the export read, so the file is the rows the
+  // officer is looking at. A half-entered or backwards range filters nothing
+  // (the server would refuse a backwards one), and the line under the picker
+  // says so.
+  const rangeComplete = !!(rangeStart && rangeEnd);
+  const hasRange = rangeComplete && rangeStart <= rangeEnd;
+  const filters = useMemo<SkillTestListParams>(
+    () => ({
+      ...(pendingOnly ? { pending_validation: true } : statusFilter ? { status: statusFilter } : {}),
+      ...(debouncedSearch ? { search: debouncedSearch } : {}),
+      ...(hasRange ? { date_from: rangeStart, date_to: rangeEnd } : {}),
+    }),
+    [pendingOnly, statusFilter, debouncedSearch, hasRange, rangeStart, rangeEnd]
   );
+
+  // Any filter change returns to the first page, so results are not hidden on
+  // a page that no longer exists. Derived in the same render rather than reset
+  // by an effect, which would first fetch the old page number under the new
+  // filters and then fetch again.
+  const filtersKey = `${JSON.stringify(filters)}|${pageSize}`;
+  const page = pageAt.key === filtersKey ? pageAt.page : 1;
+  const setPage = (next: number) => setPageAt({ key: filtersKey, page: next });
+
+  const reloadTests = useCallback(
+    () => loadTests({ ...filters, limit: pageSize, offset: (page - 1) * pageSize }),
+    [loadTests, filters, page, pageSize]
+  );
+
+  useEffect(() => {
+    void reloadTests();
+  }, [reloadTests]);
+
+  useEffect(() => {
+    void loadTemplates({ status: 'published' });
+  }, [loadTemplates]);
+
+  useEffect(() => {
+    // Dropped on every filter or page change: a tick made against one view
+    // means nothing in another, and carrying it would let an officer validate
+    // rows they can no longer see.
+    setSelectedIds(new Set());
+  }, [filters, page, pageSize]);
+
+  // Whether an empty list may just be the filters talking, rather than a
+  // department with nothing recorded.
+  const narrowed = !!debouncedSearch || hasRange;
+
+  const rangeDays = hasRange ? calendarDaysBetween(rangeEnd, rangeStart) : null;
+  const exportBlockedReason = !rangeComplete
+    ? 'Choose a date range to export'
+    : !hasRange || rangeDays === null
+      ? 'The start date must be on or before the end date'
+      : rangeDays > EXPORT_MAX_SPAN_DAYS
+        ? 'An export can cover at most a year — narrow the date range'
+        : null;
+  const exportHref = `/api/v1/training/skills-testing/tests/export/csv?${new URLSearchParams({
+    detail: 'criteria',
+    ...Object.fromEntries(Object.entries(filters).map(([key, value]) => [key, String(value)])),
+  }).toString()}`;
 
   // Only rows that could actually be validated. Search narrows the queue, so
   // "select all" must mean what is on screen — selecting rows the officer has
   // filtered away is how a bulk action surprises someone.
-  const selectableTests = pendingOnly ? filteredTests.filter((t) => t.pending_validation) : [];
+  const selectableTests = pendingOnly ? tests.filter((t) => t.pending_validation) : [];
   const allSelected = selectableTests.length > 0 && selectableTests.every((t) => selectedIds.has(t.id));
 
   const toggleSelected = (id: string) =>
@@ -314,7 +387,7 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
         toast.success(`Accepted ${result.validated.length} result${result.validated.length === 1 ? '' : 's'}`);
       }
       setSelectedIds(new Set());
-      await loadTests({ pending_validation: true });
+      await reloadTests();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to accept results'));
     } finally {
@@ -427,21 +500,30 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
           </select>
           {/* A direct link rather than a fetch: the response is a file
               download, and routing it through axios would buffer the whole
-              CSV in memory only to hand it back to the browser to save. */}
-          <a
-            href={`/api/v1/training/skills-testing/tests/export/csv?detail=criteria${
-              pendingOnly
-                ? '&pending_validation=true'
-                : statusFilter
-                  ? `&status=${encodeURIComponent(statusFilter)}`
-                  : ''
-            }`}
-            className="btn-icon border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium whitespace-nowrap"
-            title="Export test records as CSV — one row per evaluated step"
-          >
-            <Download className="h-4 w-4" aria-hidden="true" />
-            <span className="hidden sm:inline">Export</span>
-          </a>
+              CSV in memory only to hand it back to the browser to save. The
+              server refuses an export without a bounded date range, so
+              without one this is a disabled button that says why. */}
+          {exportBlockedReason ? (
+            <button
+              type="button"
+              disabled
+              className="btn-icon border-theme-surface-border text-theme-text-primary flex shrink-0 cursor-not-allowed items-center gap-2 rounded-lg border px-3 text-sm font-medium whitespace-nowrap opacity-50"
+              title={exportBlockedReason}
+              aria-label={`Export unavailable: ${exportBlockedReason}`}
+            >
+              <Download className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Export</span>
+            </button>
+          ) : (
+            <a
+              href={exportHref}
+              className="btn-icon border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium whitespace-nowrap"
+              title="Export these test records as CSV — one row per evaluated step"
+            >
+              <Download className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Export</span>
+            </a>
+          )}
           <button
             onClick={() => void navigate('/training/skills-testing/test/new')}
             className="btn-primary flex shrink-0 items-center gap-2 font-medium whitespace-nowrap"
@@ -451,6 +533,20 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
             <span className="sm:hidden">Start</span>
           </button>
         </div>
+      </div>
+
+      {/* Dated by completion, or by when the test was opened if it is still
+          unfinished — the same date the export filters on. */}
+      <div className="mb-6 flex flex-col gap-1">
+        <DateRangePicker
+          startDate={rangeStart}
+          endDate={rangeEnd}
+          onChange={(s, e) => {
+            setRangeStart(s);
+            setRangeEnd(e);
+          }}
+        />
+        {exportBlockedReason && <p className="text-theme-text-muted text-xs">{exportBlockedReason}.</p>}
       </div>
 
       {/* Review-queue controls. Only in the pending view: elsewhere the list
@@ -488,17 +584,19 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
         <div className="flex justify-center py-12" role="status" aria-live="polite">
           <div className="h-8 w-8 animate-spin rounded-full border-t-2 border-b-2 border-red-500" />
         </div>
-      ) : filteredTests.length === 0 ? (
+      ) : tests.length === 0 ? (
         <div className="card">
           <EmptyState
             icon={ClipboardList}
-            title={pendingOnly ? 'Nothing waiting on you' : 'No test records found'}
+            title={pendingOnly && !narrowed ? 'Nothing waiting on you' : 'No test records found'}
             description={
-              pendingOnly
-                ? 'Every official result has been validated. Member-run evaluations show up here when they need your sign-off.'
-                : templates.length > 0
-                  ? 'No skills tests have been recorded yet. Start one to track member progress.'
-                  : 'Add a test template before recording skills tests.'
+              narrowed
+                ? 'Nothing in this date range matches. Widen the range or clear the search to see more.'
+                : pendingOnly
+                  ? 'Every official result has been validated. Member-run evaluations show up here when they need your sign-off.'
+                  : templates.length > 0
+                    ? 'No skills tests have been recorded yet. Start one to track member progress.'
+                    : 'Add a test template before recording skills tests.'
             }
             actions={
               templates.length > 0 && !pendingOnly
@@ -509,7 +607,7 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredTests.map((test) => (
+          {tests.map((test) => (
             <TestCard
               key={test.id}
               test={test}
@@ -535,6 +633,18 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
             />
           ))}
         </div>
+      )}
+
+      {!testsLoading && testsTotal > pageSize && (
+        <Pagination
+          currentPage={page}
+          totalItems={testsTotal}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
+          className="mt-4"
+        />
       )}
 
       <Modal

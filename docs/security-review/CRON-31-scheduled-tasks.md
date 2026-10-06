@@ -424,6 +424,17 @@ whether "in-app succeeded, email failed" should count as delivered for this
 specific task, which is a product call, not a drive-by fix. Mirrored to
 `KNOWN_LIMITATIONS.md`.
 
+**Resolved 2026-10-05 (owner decision: stamp only after the email succeeds).**
+When an email is due — the member has an address, has not opted out of shift
+notices, and the department can send email (`EmailService.can_send`) — the
+member is stamped only if `send_email` reports it sent. A failed or raising
+send is retried on the next run inside the lookback window, which repeats the
+in-app notice; that duplicate is the accepted cost. A member to whom no email
+can go is stamped once the in-app notice is written. Gating on `can_send` keeps
+a department with email off from receiving a fresh in-app summary every run.
+Tests: `TestEndOfShiftSummaryCountsDeliveryByEmail` in
+`tests/test_shift_scheduled_tasks.py`.
+
 ### CRON-31-8 — LOW — `run_event_reminders` stamps a due interval as sent when zero recipients exist yet, by explicit design
 
 **File:** `app/services/scheduled_tasks.py:1062-1068`.

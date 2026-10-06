@@ -614,6 +614,9 @@ class ApparatusComplianceRecord(BaseModel):
     fail_count: int = 0
     has_deficiency: bool = False
     deficiency_since: Optional[datetime] = None
+    # False when no active checklist reaches this apparatus, so its zero
+    # checks are "nothing to check" rather than "nobody checked".
+    has_checklist: bool = True
 
 
 class MemberComplianceReportRecord(BaseModel):

@@ -72,6 +72,7 @@ from app.utils.checklist import (
 )
 from app.utils.json_ids import json_array_contains, normalize_id_list
 from app.utils.model_updates import apply_updates
+from app.utils.org_locks import PROGRAM_ENROLLMENT, lock_organization_scope
 from app.utils.org_scoping import assert_all_in_org
 from app.utils.org_timezone import (
     local_date,
@@ -2164,13 +2165,21 @@ class TrainingProgramService:
         if not user:
             return None, "User not found"
 
-        # Check for existing active enrollment
+        # Check for existing active enrollment. A read-then-insert: two
+        # concurrent enrollments of one member both passed a plain SELECT and
+        # left two ACTIVE rows. The department's enrollment lock serializes
+        # the decision, and the locking read sees an enrollment committed
+        # while this one waited (pitfall #27). Per department rather than per
+        # program for the gap-lock reason OrganizationLock explains.
+        await lock_organization_scope(self.db, organization_id, PROGRAM_ENROLLMENT)
         existing = await self.db.execute(
-            select(ProgramEnrollment).where(
+            select(ProgramEnrollment)
+            .where(
                 ProgramEnrollment.user_id == str(enrollment_data.user_id),
                 ProgramEnrollment.program_id == str(enrollment_data.program_id),
                 ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
             )
+            .with_for_update()
         )
         if existing.scalar_one_or_none():
             return None, "User is already enrolled in this program"

@@ -237,6 +237,11 @@ task.
 - **Documents and meeting minutes are deliberately excluded** from automatic
   deletion. Destroying official records on a timer is a department decision
   belonging in its own retention schedule, executed by a person.
+- **Self-reported training certificates** are kept indefinitely unless the
+  department sets a period in the self-report settings
+  (`self_report_configs.attachment_retention_days`, 90-day floor), enforced
+  daily by the `self_report_attachment_retention` task. It deletes the files
+  only; the submission and training record rows stay.
 - **Audit records** follow their own 7-year rule — see
   [Audit Logging → Retention Policy](Security-Audit-Logging#retention-policy).
 

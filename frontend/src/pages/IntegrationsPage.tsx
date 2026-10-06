@@ -1384,7 +1384,7 @@ const IntegrationsPage: React.FC = () => {
                 type="checkbox"
                 checked={paypalAutoApply}
                 onChange={(e) => setPaypalAutoApply(e.target.checked)}
-                className="mt-0.5"
+                className="form-checkbox mt-0.5"
               />
               <span>
                 Settle orders automatically

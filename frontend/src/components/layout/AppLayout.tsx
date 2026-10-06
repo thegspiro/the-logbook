@@ -17,6 +17,7 @@ import { usePullToRefreshContext } from '../../contexts/PullToRefreshContext';
 import { useScrollToTopOnNavigate } from '../../hooks/useScrollToTopOnNavigate';
 import { PullToRefreshIndicator } from '../PullToRefreshIndicator';
 import { BottomNavigation } from './BottomNavigation';
+import { HeldOfflineItemsNotice } from '../HeldOfflineItemsNotice';
 
 /** SEC: Validate logo URL protocol to prevent javascript: or data:text/html XSS.
  *  Only safe raster image data URIs are allowed — SVG can contain embedded JS. */
@@ -202,6 +203,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         <SideNavigation departmentName={departmentName} logoPreview={logoPreview} onLogout={handleLogoutClick} />
         <div className="mobile-header-offset flex min-h-screen flex-col md:ml-64">
           <main className="flex-1" id="main-content" tabIndex={-1}>
+            <HeldOfflineItemsNotice />
             <PageTransition>{content}</PageTransition>
           </main>
           {/* Reserve room so the fixed bottom bar never covers the footer. */}
@@ -237,6 +239,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       <CommandPalette />
       <TopNavigation departmentName={departmentName} logoPreview={logoPreview} onLogout={handleLogoutClick} />
       <main className="flex-1" id="main-content" tabIndex={-1}>
+        <HeldOfflineItemsNotice />
         <PageTransition>{content}</PageTransition>
       </main>
       {/* Reserve room so the fixed bottom bar never covers the footer. */}

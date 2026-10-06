@@ -413,6 +413,48 @@ class TestFinanceDisbursementLocking:
         ), "void_check must not mutate Budget.amount_spent directly."
 
 
+class TestFinanceWorkflowLocking:
+    """The non-ledger transitions beside FIN-31's five: submit, update and the
+    ordered/received marks. None touches a Budget, but each reads a status and
+    then writes off it, so two concurrent submits of one draft both pass the
+    DRAFT check and build two approval chains. Each now reads its entity
+    through the getter's ``for_update`` path, which locks and refreshes it.
+    ``test_finance_submit_race.py`` drives the submit case on real
+    connections."""
+
+    @pytest.mark.parametrize(
+        "getter",
+        ["get_purchase_request", "get_expense_report", "get_check_request"],
+    )
+    def test_getter_locks_and_refreshes_when_asked(self, getter):
+        source = _source_of(getattr(finance_service.FinanceService, getter))
+        assert "with_for_update()" in source
+        assert "populate_existing=True" in source, (
+            "A locked read that leaves an already-loaded instance stale checks "
+            "the status the endpoint saw, not the one the lock protects."
+        )
+
+    @pytest.mark.parametrize(
+        "method",
+        [
+            "submit_purchase_request",
+            "submit_expense_report",
+            "submit_check_request",
+            "update_purchase_request",
+            "update_expense_report",
+            "update_check_request",
+            "mark_pr_ordered",
+            "mark_pr_received",
+        ],
+    )
+    def test_transition_reads_its_entity_locked(self, method):
+        source = _source_of(getattr(finance_service.FinanceService, method))
+        assert "for_update=True" in source, (
+            f"{method} reads a status and writes off it; without the locked "
+            "read two concurrent calls both pass the status check."
+        )
+
+
 class TestFinanceDuesPaymentLocking:
     """record_dues_payment reads MemberDues, appends a DuesPayment, and
     recomputes amount_paid/status from dues.payments (_apply_payment_totals)
@@ -716,4 +758,46 @@ class TestMembershipTierEligibility:
             "update_membership_tier_config taking an individual member row "
             "lock would reintroduce the AB/BA ordering this test guards "
             "against — see the class docstring."
+        )
+
+
+class TestRoomBookingLocking:
+    """EV-26: a room's overlap check is a read-then-write like a seat cap, over
+    a time range instead of a count. The booking lock is per organization (see
+    OrganizationLock's docstring for why not per room), and update_event must
+    take it before its event-row lock so every path locks in one order.
+    ``test_room_booking_race.py`` drives both on real connections."""
+
+    def test_the_overlap_check_takes_the_lock_and_reads_locked(self):
+        from app.services.location_service import LocationService
+
+        source = _source_of(LocationService.check_overlapping_events)
+        assert "lock_room_bookings(" in source
+        assert "with_for_update()" in source, (
+            "Without a locking read the check answers from the request's "
+            "snapshot and misses a booking committed while it waited."
+        )
+
+    def test_update_event_locks_bookings_before_the_event_row(self):
+        source = _source_of(event_service.EventService.update_event)
+        assert source.index("lock_room_bookings(") < source.index(
+            "with_for_update()"
+        ), (
+            "update_event locks its event row; taking the booking lock after "
+            "it inverts the order every other booker uses."
+        )
+
+
+class TestProgramEnrollmentLocking:
+    """enroll_member's duplicate-ACTIVE check is a read-then-insert. It runs
+    under the department's enrollment lock with a locking read;
+    ``test_program_enrollment_race.py`` drives it on real connections."""
+
+    def test_the_duplicate_check_is_locked_and_reads_locked(self):
+        from app.services.training_program_service import TrainingProgramService
+
+        source = _source_of(TrainingProgramService.enroll_member)
+        assert "PROGRAM_ENROLLMENT" in source
+        assert source.index("lock_organization_scope(") < source.index(
+            "with_for_update()"
         )

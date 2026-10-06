@@ -235,7 +235,7 @@ findings' own citations, because nothing moved.
 still-open findings' own cited lines directly against current code** rather
 than trusting an empty `git diff` alone:
 
-- **SF-9 (app-review, MED, still open)** — `record_payment`
+- **SF-9 (app-review, MED) — resolved 2026-10-05**, see `docs/app-review/storefront.md` → SF-9. As recorded at the time: `record_payment`
   (`storefront_service.py:1918`) is still a plain
   `get_order` read (`:1930`) followed by
   `order.amount_paid = _money(Decimal(order.amount_paid or 0) + applied)`
@@ -252,6 +252,10 @@ than trusting an empty `git diff` alone:
   list (`StoreOrderCreate.items`, `schemas/storefront.py:675`) is still
   `Field(..., min_length=1)` with no `max_length`/`max_items` — confirmed by
   direct read of the current schema file, same line number as pass 5.
+  **Resolved 2026-10-05 (owner decision):** `items` is capped at
+  `STORE_ORDER_MAX_LINES = 200`; a cart of 201 lines gets a 422. Boundary
+  tests in `test_storefront_schemas.py`. A checkout rate limit was not part of
+  the decision and is not added.
 - **Order export unbounded (carried forward since pass 1, LOW/MED, still
   open)** — `export_orders_csv` (`storefront_service.py:3150`) is unchanged;
   still the same `SafeCsvWriter`-based, unbounded-pages shape tracked in

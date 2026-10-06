@@ -13,7 +13,7 @@ The Apparatus module manages department vehicles, equipment assignments, mainten
 - **Maintenance Tracking** — Schedule and track vehicle maintenance, inspections, and repairs
 - **Equipment Assignments** — Track what equipment is assigned to each vehicle
 - **Status Tracking** — In-service, out-of-service, maintenance, reserve statuses
-- **NFPA Compliance** — Track compliance with NFPA standards for apparatus
+- **NFPA Compliance** — A department-wide switch (default on for fire and combined departments, off for EMS-only); when on, each tracked apparatus gets an NFPA tab grading its required NFPA tests from maintenance records, plus a hand-kept list of compliance items (see below)
 - **Equipment Checks** — Structured checklist system for shift-based vehicle and equipment inspections (see below)
 - **Deficiency Tracking** — Automatic deficiency flagging when equipment check items fail, with auto-clear on passing checks
 
@@ -219,8 +219,9 @@ URL / Download PNG / Regenerate in each card's existing action row.
 
 **Prefer an apparatus-keyed tag for anything physically mounted.** The URL is
 `/scheduling/checkin?apparatus=<id>`, which resolves to whichever shift is
-running when the tag is tapped — today's non-finalized shift, else one that
-ended within two hours, else the next upcoming. One tag on the truck therefore
+running when the tag is tapped — the shift whose start and end times span the
+tap, else one that ended within two hours, else the next upcoming. Cancelled and
+finalized shifts are skipped. One tag on the truck therefore
 serves every shift. A shift-keyed tag is dead the moment that shift ends.
 
 The member lands on the shift check-in page, which names the unit, date and
@@ -340,6 +341,37 @@ Submitter-scope swaps are now bounded by what is actually being replaced: the
 disposition path requires the replaced lot to be aboard the item, and the
 quantity is capped at the deployed quantity it replaces. The template-item row
 is selected `FOR UPDATE`, so two concurrent swaps cannot both pass the cap.
+
+## NFPA Compliance per Department _(2026-10-05)_
+
+Until 2026-10-05 the apparatus screen showed a "Tracking Enabled" card and
+nothing else, though the API already stored compliance items. Whether a
+department wants the full page depends on what it is, so it is now a switch:
+
+- **Stored** as `apparatus.nfpa_compliance_enabled` in the organization
+  settings, written with `PATCH /organization/settings` (`settings.manage`).
+  Unset, it follows `organization_type`: on for `fire_department` and
+  `fire_ems_combined`, off otherwise. `app/utils/apparatus_nfpa.py` is the one
+  reader.
+- **Enforced on the server.** Every NFPA endpoint answers 403 while the switch
+  is off. Nothing is deleted; turning it back on restores the records.
+- **Graded on the server.** `GET /apparatus/{id}/nfpa-summary` returns the
+  NFPA-required maintenance types that apply to the vehicle's type, each with
+  its last completed test, next due date and status (`current`, `due_soon`
+  within 30 days, `overdue`, `scheduled`, `never_performed`), and the
+  compliance items with an effective status (a past next due date reads
+  `overdue`).
+
+| Endpoint                                  | Purpose                                |
+| ----------------------------------------- | -------------------------------------- |
+| `GET /api/v1/apparatus/nfpa-settings`     | Effective switch, type default, choice |
+| `GET /api/v1/apparatus/{id}/nfpa-summary` | Required tests and items, graded       |
+
+The NFPA tab appears when the switch is on **and** the apparatus has
+`nfpa_tracking_enabled`; the edit form offers that checkbox only while the
+switch is on.
+
+---
 
 ## The fleet record becomes officer-only _(2026-09-05)_
 

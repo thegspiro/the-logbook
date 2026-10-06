@@ -242,6 +242,8 @@ class ComplianceReportService:
         # email) (CS-9).
         if report_type not in ("monthly", "annual", "yearly"):
             raise ValueError("report_type must be 'monthly', 'annual', or 'yearly'")
+        if report_type == "monthly" and not month:
+            raise ValueError("A monthly report needs a month")
 
         # Build period label
         if report_type == "monthly" and month:
@@ -267,11 +269,15 @@ class ComplianceReportService:
         try:
             # Generate the actual report data using existing service
             annual_service = AnnualComplianceReportService(self.db)
-            report_data = await annual_service.generate_annual_report(
-                organization_id, year=year
-            )
+            if report_type == "monthly" and month:
+                report_data = await annual_service.generate_monthly_report(
+                    organization_id, year=year, month=month
+                )
+            else:
+                report_data = await annual_service.generate_annual_report(
+                    organization_id, year=year
+                )
 
-            # If monthly, filter/annotate the data
             if report_type == "monthly" and month:
                 report_data["report_period"] = {
                     "type": "monthly",
@@ -290,6 +296,9 @@ class ComplianceReportService:
                     "fully_compliant_members", 0
                 ),
                 "total_members": exec_summary.get("total_members", 0),
+                "graded_members": exec_summary.get(
+                    "graded_members", exec_summary.get("total_members", 0)
+                ),
                 "at_risk_members": exec_summary.get("at_risk_members", 0),
                 "non_compliant_members": exec_summary.get("non_compliant_members", 0),
                 "total_training_hours": exec_summary.get("total_training_hours", 0),
@@ -371,8 +380,12 @@ class ComplianceReportService:
         )
 
         summary = report.summary or {}
-        compliance_pct = summary.get("overall_compliance_pct", 0)
-        total_members = summary.get("total_members", 0)
+        compliance_pct = summary.get("overall_compliance_pct")
+        # None when no member is graded against anything (TR4-4).
+        compliance_text = "N/A" if compliance_pct is None else f"{compliance_pct:.1f}%"
+        # The percentage's own denominator: members something grades. A
+        # report stored before that split carries only total_members.
+        total_members = summary.get("graded_members", summary.get("total_members", 0))
         compliant_members = summary.get("fully_compliant_members", 0)
 
         # Escape attacker-influenceable text before interpolating into the email
@@ -394,7 +407,7 @@ class ComplianceReportService:
             + facts(
                 [
                     [
-                        fact("Overall compliance", f"{compliance_pct:.1f}%"),
+                        fact("Overall compliance", compliance_text),
                         fact(
                             "Compliant members",
                             f"{compliant_members} / {total_members}",
@@ -417,7 +430,7 @@ class ComplianceReportService:
 
         text_body = (
             f"Compliance Report — {report.period_label}\n\n"
-            f"Overall Compliance: {compliance_pct:.1f}%\n"
+            f"Overall Compliance: {compliance_text}\n"
             f"Compliant Members: {compliant_members} / {total_members}\n"
             f"At Risk: {summary.get('at_risk_members', 0)}\n"
             f"Non-Compliant: {summary.get('non_compliant_members', 0)}\n\n"

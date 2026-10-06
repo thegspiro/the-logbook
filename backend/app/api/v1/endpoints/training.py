@@ -17,12 +17,13 @@ from fastapi import (
     File,
     HTTPException,
     Query,
+    Response,
     UploadFile,
     status,
 )
 from loguru import logger
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -49,8 +50,10 @@ from app.models.training import (
     TrainingSession,
     TrainingStatus,
     TrainingSubmission,
+    TrainingType,
 )
 from app.models.user import User, UserStatus
+from app.schemas.enum_validation import validate_enum_value
 from app.schemas.training import (
     BulkTrainingRecordCreate,
     BulkTrainingRecordResult,
@@ -82,13 +85,15 @@ from app.services.integration_services.notification_dispatch import (
 from app.services.qualification_service import QualificationService
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
-    _find_matching_profile,
+    STANDING_NOT_APPLICABLE,
+    ComplianceGrading,
     _load_compliance_config,
     classify_standing,
     evaluate_member_requirement,
     evaluate_member_requirement_detail,
     get_org_include_current_month,
     get_requirement_date_window,
+    load_graded_records,
     member_join_date,
     requirement_applies_to_user,
     tally_standing,
@@ -102,6 +107,8 @@ from app.utils.upload_limits import read_upload_limited
 router = APIRouter()
 
 MAX_TRAINING_CSV_BYTES = 10 * 1024 * 1024
+# The largest page GET /training/records serves; see list_records.
+MAX_TRAINING_RECORDS_PAGE = 500
 
 
 @router.get("/dashboard-summary")
@@ -155,45 +162,58 @@ async def get_training_dashboard_summary(
         .scalars()
         .all()
     )
-    records = list(
-        (
-            await db.execute(
-                select(TrainingRecord).where(
-                    TrainingRecord.organization_id == org_id,
-                    (
-                        TrainingRecord.user_id.in_([m.id for m in members])
-                        if members
-                        else False
-                    ),
-                )
-            )
-        )
-        .scalars()
-        .all()
+    # The same resolution the compliance matrix and compute_org_compliance_pct
+    # use: a member's requirement set comes through their compliance profile
+    # and their standing through classify_standing with the profile's
+    # thresholds. This card links into the matrix, and used to grade every
+    # applicable requirement at a fixed 100% instead (TR4-3).
+    grading = ComplianceGrading.from_config(
+        await _load_compliance_config(db, str(org_id))
+    )
+    # Only the records the grader can read, plus the three lists this
+    # response builds from the same rows below — not every record the
+    # department ever logged (TR2-4).
+    completed = TrainingRecord.status == TrainingStatus.COMPLETED
+    records = await load_graded_records(
+        db,
+        str(org_id),
+        [m.id for m in members],
+        requirements,
+        today,
+        grading.include_current_month,
+        also=(
+            and_(completed, TrainingRecord.expiration_date.between(today, cutoff)),
+            and_(
+                completed, TrainingRecord.completion_date.between(recent_start, today)
+            ),
+            and_(completed, TrainingRecord.completion_date.between(year_start, today)),
+        ),
     )
     by_user: dict[str, list[TrainingRecord]] = {}
     for record in records:
         by_user.setdefault(str(record.user_id), []).append(record)
     waivers = await fetch_org_waivers(db, str(org_id))
-    include_current = await get_org_include_current_month(db, str(org_id))
 
     compliant = 0
+    not_applicable = 0
     intervention: list[dict] = []
     risk_counts: dict[str, int] = {str(req.id): 0 for req in requirements}
     applicable_counts: dict[str, int] = {str(req.id): 0 for req in requirements}
     for member in members:
-        applicable = [r for r in requirements if requirement_applies_to_user(r, member)]
+        member_grading = grading.for_member(member, requirements)
         join_date = member_join_date(member)
         unmet: list[str] = []
-        for req in applicable:
+        statuses: list[str] = []
+        for req in member_grading.requirements:
             req_status, _, _ = _evaluate_member_requirement(
                 req,
                 by_user.get(str(member.id), []),
                 today,
                 waivers=waivers.get(str(member.id), []),
-                org_include_current_month=include_current,
+                org_include_current_month=grading.include_current_month,
                 join_date=join_date,
             )
+            statuses.append(req_status)
             # Inside an existing member's catch-up period the requirement is
             # neither unmet nor part of the at-risk denominator.
             if req_status == CATCH_UP_STATUS:
@@ -202,9 +222,18 @@ async def get_training_dashboard_summary(
             if req_status != TrainingStatus.COMPLETED.value:
                 unmet.append(str(req.id))
                 risk_counts[str(req.id)] += 1
-        if not unmet:
+        standing, _ = grading.classify(member_grading, *tally_standing(statuses))
+        if standing == STANDING_NOT_APPLICABLE:
+            # Nothing grades this member: outside the percentage entirely,
+            # not a compliant member (TR4-4).
+            not_applicable += 1
+        elif standing == "compliant":
             compliant += 1
-        else:
+        # The intervention list stays "any open item", not "not compliant":
+        # it backs the matrix's status=noncompliant deep link, which filters
+        # on open items so a member under a sub-100% threshold who still has
+        # one is not hidden from the coordinator sent to find them.
+        if unmet:
             intervention.append(
                 {
                     "member_id": str(member.id),
@@ -319,6 +348,7 @@ async def get_training_dashboard_summary(
         )
 
     tracked = len(members)
+    graded_members = tracked - not_applicable
     return {
         "widget_metadata": {
             key: {"module": "training", "permission": "training.manage"}
@@ -341,9 +371,13 @@ async def get_training_dashboard_summary(
             "active_courses": active_courses,
             "training_sessions": training_sessions,
             "active_programs": active_programs,
+            "graded_members": graded_members,
+            "not_applicable_members": not_applicable,
             "compliant_members": compliant,
+            # None when no member is graded against anything: an empty
+            # population is not applicable, not 100%.
             "compliance_percentage": (
-                round(compliant / tracked * 100) if tracked else 100
+                round(compliant / graded_members * 100) if graded_members else None
             ),
             "expiring_count": len(expiring_records),
             "completions_last_30_days": len(recent),
@@ -586,19 +620,28 @@ async def _sync_qualifications(db: AsyncSession, records) -> None:
 
 @router.get("/records", response_model=list[TrainingRecordResponse])
 async def list_records(
+    response: Response,
     user_id: UUID | None = None,
     status: str | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(MAX_TRAINING_RECORDS_PAGE, ge=1, le=MAX_TRAINING_RECORDS_PAGE),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    List training records.
+    List training records, a page at a time.
 
     Officers (training.manage) may list any member's records; other members
     may only see their own — training records can include certifications and
     scores that aren't roster-public.
+
+    Paged with ``skip``/``limit`` (at most ``MAX_TRAINING_RECORDS_PAGE`` a
+    request) because an officer listing the whole organization read its
+    entire training history in one response (TR2-2). ``X-Total-Count``
+    carries the number of matching records, so a caller can tell a full
+    page from the last one.
 
     **Authentication required**
     """
@@ -624,7 +667,17 @@ async def list_records(
     if end_date:
         query = query.where(TrainingRecord.completion_date <= end_date)
 
-    query = query.order_by(TrainingRecord.completion_date.desc())
+    total = await db.scalar(select(func.count()).select_from(query.subquery()))
+    response.headers["X-Total-Count"] = str(total or 0)
+
+    # The id tiebreak keeps pages disjoint: completion dates repeat, and an
+    # order MySQL may break differently per query can show a record twice
+    # and skip another across consecutive pages.
+    query = (
+        query.order_by(TrainingRecord.completion_date.desc(), TrainingRecord.id)
+        .offset(skip)
+        .limit(limit)
+    )
 
     result = await db.execute(query)
     return result.scalars().all()
@@ -893,6 +946,22 @@ async def create_records_bulk(
 
         record_data = entry.model_dump()
 
+        # TR-17: the enum fields are checked here, per row, rather than by a
+        # schema validator. A validator on a list-carried field rejects the
+        # whole request before any row is looked at, and the import's contract
+        # is to record the good rows and report the bad ones.
+        try:
+            record_data["training_type"] = validate_enum_value(
+                record_data.get("training_type"), TrainingType, "training_type"
+            )
+            record_data["status"] = validate_enum_value(
+                record_data.get("status"), TrainingStatus, "status"
+            )
+        except ValueError as e:
+            errors.append(f"Row {idx + 1}: {e}")
+            failed += 1
+            continue
+
         # Auto-populate rank/station from member
         record_data.setdefault("rank_at_completion", member.rank)
         record_data.setdefault("station_at_completion", member.station)
@@ -928,13 +997,16 @@ async def create_records_bulk(
             record_data["expiration_date"] = date(year, month, day)
 
         try:
-            new_record = TrainingRecord(
-                organization_id=org_id,
-                created_by=current_user.id,
-                **record_data,
-            )
-            db.add(new_record)
-            await db.flush()
+            # A savepoint per row: a failed flush otherwise leaves the session
+            # needing a rollback, and every later row — and the final commit —
+            # fails with it instead of only this one.
+            async with db.begin_nested():
+                new_record = TrainingRecord(
+                    organization_id=org_id,
+                    created_by=current_user.id,
+                    **record_data,
+                )
+                db.add(new_record)
             created_ids.append(str(new_record.id))
             created_records.append(new_record)
             created += 1
@@ -1361,10 +1433,15 @@ async def create_requirement(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
+    requirement_values = requirement.model_dump()
+    # An explicit NULL would bypass the model's type-dependent default and
+    # fail the NOT NULL column; omitted means "let the type decide".
+    if requirement_values.get("shift_credited") is None:
+        requirement_values.pop("shift_credited", None)
     new_requirement = TrainingRequirement(
         organization_id=current_user.organization_id,
         created_by=current_user.id,
-        **requirement.model_dump(),
+        **requirement_values,
     )
     # due_date only means anything for fixed_date -- clear anything else the
     # client sent so a stale value from a form that hasn't cleared its own
@@ -1707,14 +1784,10 @@ async def get_compliance_summary(
         req for req in all_requirements if requirement_applies_to_user(req, target_user)
     ]
 
-    # Pre-fetch all completed records for the user (no date filter —
-    # _evaluate_member_requirement handles windowing internally)
-    records_result = await db.execute(
-        select(TrainingRecord)
-        .where(TrainingRecord.organization_id == org_id)
-        .where(TrainingRecord.user_id == str(user_id))
+    # The member's records the grader can read for these requirements.
+    member_records = await load_graded_records(
+        db, str(org_id), [str(user_id)], requirements, today, org_include_current
     )
-    member_records = list(records_result.scalars().all())
 
     # Fetch waivers
     waivers = await fetch_user_waivers(db, str(org_id), str(user_id))
@@ -1748,6 +1821,11 @@ async def get_compliance_summary(
     ):
         compliance_status = "yellow"
         compliance_label = "At Risk"
+    elif requirements_total == 0:
+        # Nothing grades this member, and no certificate is lapsing: there is
+        # no standing to report, which is not the same as passing (TR4-4).
+        compliance_status = STANDING_NOT_APPLICABLE
+        compliance_label = "Not Applicable"
     else:
         compliance_status = "green"
         compliance_label = "Compliant"
@@ -2507,11 +2585,23 @@ async def confirm_historical_import(
     for mapping in request.course_mappings:
         course_map[mapping.csv_course_name.lower()] = mapping
 
-    # Auto-create courses where action == create_new
+    # Auto-create courses where action == create_new. A mapping with a type
+    # that is not a training type creates nothing, and the rows that use it
+    # fail with that reason (TR-17) instead of the whole confirm failing on
+    # the course's flush.
     created_courses = {}
+    invalid_mappings: dict[str, str] = {}
     for mapping in request.course_mappings:
         if mapping.action == "create_new":
-            t_type = mapping.new_training_type or request.default_training_type
+            try:
+                t_type = validate_enum_value(
+                    mapping.new_training_type or request.default_training_type,
+                    TrainingType,
+                    "training_type",
+                )
+            except ValueError as e:
+                invalid_mappings[mapping.csv_course_name.lower()] = str(e)
+                continue
             new_course = TrainingCourse(
                 organization_id=current_user.organization_id,
                 name=mapping.csv_course_name,
@@ -2583,6 +2673,11 @@ async def confirm_historical_import(
 
         if not row.course_matched:
             mapping = course_map.get(row.course_name.lower())
+            mapping_error = invalid_mappings.get(row.course_name.lower())
+            if mapping_error:
+                failed += 1
+                errors.append(f"Row {row.row_number}: {mapping_error}")
+                continue
             if mapping:
                 if mapping.action == "skip":
                     skipped += 1
@@ -2608,17 +2703,17 @@ async def confirm_historical_import(
                 )
                 continue
 
-        # Validate training type
-        valid_types = {
-            "certification",
-            "continuing_education",
-            "skills_practice",
-            "orientation",
-            "refresher",
-            "specialty",
-        }
-        if training_type not in valid_types:
-            training_type = request.default_training_type
+        # The CSV's type column may be a free-text "category" column (the
+        # parser accepts either name), so a value that is not a training type
+        # falls back to the import's default rather than failing the row.
+        # Case and spacing are forgiven first, so "Certification" is kept as
+        # certification rather than quietly becoming the default.
+        normalized_type = (training_type or "").strip().lower()
+        training_type = (
+            normalized_type
+            if normalized_type in {t.value for t in TrainingType}
+            else request.default_training_type
+        )
 
         try:
             async with db.begin_nested():
@@ -2729,14 +2824,16 @@ class MemberComplianceRow(BaseModel):
     user_id: str
     member_name: str
     requirements: list[RequirementStatusItem]
-    completion_pct: float
+    # None when nothing grades the member (standing "not_applicable").
+    completion_pct: float | None
     membership_type: str | None = None
     # Counts of *applicable* requirements — a requirement restricted to another
     # membership type is not in this member's denominator.
     requirements_met: int = 0
     requirements_total: int = 0
-    # "compliant" | "at_risk" | "non_compliant", using the org's configured
-    # thresholds so the matrix agrees with the dashboard.
+    # "compliant" | "at_risk" | "non_compliant" | "not_applicable", from
+    # classify_standing with the org's configured thresholds so the matrix
+    # agrees with the dashboard.
     standing: str = "compliant"
 
 
@@ -2952,41 +3049,32 @@ async def get_compliance_matrix(
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
 
-    # Get all training records for these members
-    records_result = await db.execute(
-        select(TrainingRecord).where(
-            TrainingRecord.organization_id == org_id,
-            TrainingRecord.user_id.in_([m.id for m in members]),
-        )
-    )
-    all_records = records_result.scalars().all()
-
-    # Build lookup: user_id -> [records]
-    records_by_user = {}
-    for r in all_records:
-        records_by_user.setdefault(r.user_id, []).append(r)
-
-    # Batch-fetch all active waivers / leaves for the org
-    waivers_by_user = await fetch_org_waivers(db, str(org_id))
-
     today = await resolve_org_today(db, org_id)
 
     # One config load for the whole matrix. get_org_include_current_month()
     # would issue this same query — with the same selectinload of profiles —
     # so calling both cost every configured org a duplicate config+profile
     # round trip on each visit.
-    config = await _load_compliance_config(db, str(org_id))
-    org_include_current = True if config is None else bool(config.include_current_month)
-    compliant_threshold = config.compliant_threshold if config else 100.0
-    at_risk_threshold = config.at_risk_threshold if config else 75.0
-    threshold_type = (config.threshold_type if config else None) or "percentage"
-    # Higher priority first, matching compute_org_compliance_pct.
-    profiles = (
-        sorted(config.profiles, key=lambda p: p.priority, reverse=True)
-        if config and config.profiles
-        else []
+    grading = ComplianceGrading.from_config(
+        await _load_compliance_config(db, str(org_id))
     )
-    reqs_by_id = {str(r.id): r for r in requirements}
+
+    # Only the records the grader can read for these requirements, not every
+    # record the department ever logged (TR4-2). Needs `today` and the
+    # config above: the windows it bounds by are resolved from both.
+    records_by_user: dict[str, list[TrainingRecord]] = {}
+    for r in await load_graded_records(
+        db,
+        str(org_id),
+        [m.id for m in members],
+        requirements,
+        today,
+        grading.include_current_month,
+    ):
+        records_by_user.setdefault(r.user_id, []).append(r)
+
+    # Batch-fetch all active waivers / leaves for the org
+    waivers_by_user = await fetch_org_waivers(db, str(org_id))
 
     matrix = []
     # The evaluation cut-off can differ per requirement (each may override
@@ -3001,43 +3089,18 @@ async def get_compliance_matrix(
         req_statuses = []
 
         # A compliance profile narrows which requirements grade this member and
-        # can override the thresholds. compute_org_compliance_pct — which feeds
-        # the dashboard percentage this screen links from — already honours
-        # both, so skipping them here made the matrix label a member
-        # differently from the dashboard for any org using profiles.
-        member_requirements = requirements
-        member_compliant_threshold = compliant_threshold
-        member_at_risk_threshold = at_risk_threshold
-        if profiles:
-            profile = _find_matching_profile(member, profiles)
-            if profile:
-                # `is not None`, not truthy: an explicitly empty list means
-                # "nothing is required of this group" and must not fall back
-                # to grading against every org-wide requirement (CMP2-3).
-                if profile.required_requirement_ids is not None:
-                    member_requirements = [
-                        reqs_by_id[rid]
-                        for rid in profile.required_requirement_ids
-                        if rid in reqs_by_id
-                    ]
-                if profile.compliant_threshold_override is not None:
-                    member_compliant_threshold = profile.compliant_threshold_override
-                if profile.at_risk_threshold_override is not None:
-                    member_at_risk_threshold = profile.at_risk_threshold_override
+        # can override the thresholds; requirements that do not apply are
+        # dropped. The same resolution feeds the dashboard percentage and the
+        # "Department Compliance" card this screen links from.
+        member_grading = grading.for_member(member, list(requirements))
 
-        for req in member_requirements:
-            # Skip requirements not applicable to this member. See
-            # requirement_applies_to_member's docstring for why this is a
-            # shared helper rather than another ad-hoc reimplementation.
-            if not requirement_applies_to_user(req, member):
-                continue
-
+        for req in member_grading.requirements:
             ev = evaluate_member_requirement_detail(
                 req,
                 member_records,
                 today,
                 waivers=member_waivers,
-                org_include_current_month=org_include_current,
+                org_include_current_month=grading.include_current_month,
                 join_date=join_date,
             )
 
@@ -3071,12 +3134,8 @@ async def get_compliance_matrix(
         completed_count, applicable_total = tally_standing(
             item.status for item in req_statuses
         )
-        standing, pct = classify_standing(
-            completed_count,
-            applicable_total,
-            member_compliant_threshold,
-            member_at_risk_threshold,
-            threshold_type,
+        standing, pct = grading.classify(
+            member_grading, completed_count, applicable_total
         )
         member_name = (
             f"{member.last_name}, {member.first_name}"
@@ -3110,7 +3169,7 @@ async def get_compliance_matrix(
             for r in requirements
         ],
         "as_of": as_of or today.isoformat(),
-        "threshold_type": threshold_type,
+        "threshold_type": grading.threshold_type,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -3128,9 +3187,21 @@ class MemberPeriodStatusRow(BaseModel):
     hours_completed: float
     last_activity: str | None = None  # ISO date of latest completion in window
     # Current overall compliance standing (not period-scoped)
-    compliance_status: str  # "green" | "yellow" | "red" | "exempt"
+    # "green" | "yellow" | "red" | "exempt" | "not_applicable"
+    compliance_status: str
     requirements_met: int
     requirements_total: int
+
+
+# The roster's traffic-light vocabulary for each classify_standing() value. A
+# member nothing grades is "not_applicable", not green: the roster must not
+# show a member as passing what nobody measured (TR4-4).
+_PERIOD_STATUS_COLOR = {
+    "compliant": "green",
+    "at_risk": "yellow",
+    "non_compliant": "red",
+    STANDING_NOT_APPLICABLE: STANDING_NOT_APPLICABLE,
+}
 
 
 @router.get("/records/member-status")
@@ -3181,25 +3252,36 @@ async def get_member_period_status(
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
 
-    records_result = await db.execute(
-        select(TrainingRecord).where(
-            TrainingRecord.organization_id == org_id,
-            TrainingRecord.user_id.in_([m.id for m in members]),
-        )
-    )
-    records_by_user: dict = {}
-    for r in records_result.scalars().all():
-        records_by_user.setdefault(r.user_id, []).append(r)
-
-    waivers_by_user = await fetch_org_waivers(db, str(org_id))
     today = await resolve_org_today(db, org_id)
     org_include_current = await get_org_include_current_month(db, str(org_id))
 
-    # Compliance thresholds (fall back to sensible defaults)
+    # The records the standing grades from, plus the selected period's
+    # completions the activity columns count — not every record on file.
+    records_by_user: dict = {}
+    for r in await load_graded_records(
+        db,
+        str(org_id),
+        [m.id for m in members],
+        requirements,
+        today,
+        org_include_current,
+        also=(
+            and_(
+                TrainingRecord.status == TrainingStatus.COMPLETED,
+                TrainingRecord.completion_date.between(start_date, end_date),
+            ),
+        ),
+    ):
+        records_by_user.setdefault(r.user_id, []).append(r)
+
+    waivers_by_user = await fetch_org_waivers(db, str(org_id))
+
+    # Compliance thresholds, read as the matrix reads them. `or` here turned a
+    # configured 0% threshold into the 100% default.
     config = await _load_compliance_config(db, str(org_id))
-    compliant_threshold = getattr(config, "compliant_threshold", None) or 100.0
-    at_risk_threshold = getattr(config, "at_risk_threshold", None) or 75.0
-    threshold_type = getattr(config, "threshold_type", None) or "percentage"
+    compliant_threshold = config.compliant_threshold if config else 100.0
+    at_risk_threshold = config.at_risk_threshold if config else 75.0
+    threshold_type = (config.threshold_type if config else None) or "percentage"
 
     rows: list[MemberPeriodStatusRow] = []
     for member in members:
@@ -3254,21 +3336,10 @@ async def get_member_period_status(
             )[0]
             for req in applicable
         )
-        pct = (met / total * 100) if total else 100.0
-        if total == 0:
-            status_color = "green"
-        elif threshold_type == "all_required":
-            status_color = (
-                "green"
-                if met >= total
-                else ("yellow" if pct >= at_risk_threshold else "red")
-            )
-        else:
-            status_color = (
-                "green"
-                if pct >= compliant_threshold
-                else ("yellow" if pct >= at_risk_threshold else "red")
-            )
+        standing, _ = classify_standing(
+            met, total, compliant_threshold, at_risk_threshold, threshold_type
+        )
+        status_color = _PERIOD_STATUS_COLOR[standing]
 
         rows.append(
             MemberPeriodStatusRow(

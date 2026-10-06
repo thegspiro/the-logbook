@@ -25,9 +25,11 @@ from cryptography.x509.oid import NameOID
 from app.services.integration_services.base import (
     MAX_RESPONSE_SIZE,
     _environment_proxy_mounts,
+    _SizeLimitedTransport,
     _tls_verify,
     create_integration_client,
 )
+from app.utils.ssrf_transport import SSRFSafeAsyncTransport
 
 pytestmark = pytest.mark.unit
 
@@ -76,7 +78,14 @@ def _pool_contexts(client) -> list[ssl.SSLContext]:
     transports = [client._transport] + [
         t for t in client._mounts.values() if t is not None
     ]
-    return [t._transport._pool._ssl_context for t in transports]
+    contexts = []
+    for transport in transports:
+        # The direct transport carries the SCH-10 pinning wrapper inside the
+        # size cap; proxy mounts do not (see create_integration_client).
+        while isinstance(transport, (_SizeLimitedTransport, SSRFSafeAsyncTransport)):
+            transport = transport._transport
+        contexts.append(transport._pool._ssl_context)
+    return contexts
 
 
 class TestNoDeprecationWarning:

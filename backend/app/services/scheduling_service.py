@@ -70,9 +70,10 @@ from app.services.shift_eligibility_service import (
     DEFAULT_SIGNUP_CLOSES_MINUTES_BEFORE,
 )
 from app.services.training_compliance import (
+    biannual_window,
     catch_up_deadline,
     member_join_date,
-    requirement_applies_by_join_date,
+    requirement_applies_to_member,
 )
 from app.utils.apparatus_ref import (
     apparatus_ref_exists,
@@ -1977,58 +1978,67 @@ class SchedulingService:
         apparatus_id: str,
         organization_id: UUID,
     ) -> Optional[Shift]:
-        """Find the current or next upcoming shift for an apparatus.
+        """The shift an apparatus QR code or NFC tag should check a member into.
 
-        Looks for a non-finalized shift whose date is today
-        (or the most recent past shift if none today), then
-        falls back to the next future shift.
+        In order: a shift running now; else one that ended within the last two
+        hours (a late check-in after the tour); else the next one to start.
+        Cancelled and finalized shifts are never chosen (owner decision
+        SCHED-18). This used to take the earliest shift dated today with no
+        time check and no status filter, so on an apparatus with day and night
+        shifts a tap at 2000 landed on the 0600 shift, and a cancelled shift
+        won over the one that ran.
+
+        A shift with no end time counts as running from its start to the end
+        of its own date.
         """
         today = await resolve_org_today(self.db, organization_id)
         now = datetime.now(timezone.utc)
+        usable = (
+            Shift.apparatus_id == apparatus_id,
+            Shift.organization_id == str(organization_id),
+            Shift.is_finalized.is_(False),
+            Shift.status != ShiftStatus.CANCELLED,
+        )
 
-        today_shift = (
+        running = (
             await self.db.execute(
                 select(Shift)
                 .where(
-                    Shift.apparatus_id == apparatus_id,
-                    Shift.organization_id == str(organization_id),
-                    Shift.shift_date == today,
-                    Shift.is_finalized.is_(False),
+                    *usable,
+                    Shift.start_time <= now,
+                    or_(
+                        Shift.end_time > now,
+                        and_(Shift.end_time.is_(None), Shift.shift_date == today),
+                    ),
                 )
-                .order_by(Shift.start_time.asc())
-                .limit(1)
-            )
-        ).scalar_one_or_none()
-
-        if today_shift:
-            return today_shift
-
-        recent_shift = (
-            await self.db.execute(
-                select(Shift)
-                .where(
-                    Shift.apparatus_id == apparatus_id,
-                    Shift.organization_id == str(organization_id),
-                    Shift.is_finalized.is_(False),
-                    Shift.end_time >= now - timedelta(hours=2),
-                )
+                # Overlapping shifts: the one that started last is the one
+                # the member is arriving for.
                 .order_by(Shift.start_time.desc())
                 .limit(1)
             )
         ).scalar_one_or_none()
+        if running:
+            return running
 
-        if recent_shift:
-            return recent_shift
+        just_ended = (
+            await self.db.execute(
+                select(Shift)
+                .where(
+                    *usable,
+                    Shift.end_time <= now,
+                    Shift.end_time >= now - timedelta(hours=2),
+                )
+                .order_by(Shift.end_time.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if just_ended:
+            return just_ended
 
         upcoming = (
             await self.db.execute(
                 select(Shift)
-                .where(
-                    Shift.apparatus_id == apparatus_id,
-                    Shift.organization_id == str(organization_id),
-                    Shift.shift_date > today,
-                    Shift.is_finalized.is_(False),
-                )
+                .where(*usable, Shift.start_time > now)
                 .order_by(Shift.start_time.asc())
                 .limit(1)
             )
@@ -8235,20 +8245,10 @@ class SchedulingService:
             period_end = date(q_end_year, q_end_month, 1) - timedelta(days=1)
 
         elif freq == RequirementFrequency.BIANNUAL:
-            # Two 6-month periods per year starting at start_month
-            relative_month = (reference_date.month - start_month) % 12
-            half_offset = (relative_month // 6) * 6
-            h_start_month = ((start_month - 1 + half_offset) % 12) + 1
-            h_start_year = reference_date.year
-            if h_start_month > reference_date.month:
-                h_start_year -= 1
-            period_start = date(h_start_year, h_start_month, 1)
-            h_end_month = h_start_month + 6
-            h_end_year = h_start_year
-            if h_end_month > 12:
-                h_end_month -= 12
-                h_end_year += 1
-            period_end = date(h_end_year, h_end_month, 1) - timedelta(days=1)
+            # "Every 2 Years", the same window the training side grades
+            # (pitfall 29). This used to be two six-month periods a year,
+            # so the report graded a two-year requirement over half a year.
+            period_start, period_end = biannual_window(requirement, reference_date)
 
         elif freq == RequirementFrequency.ANNUAL:
             # Check for custom period end (supports cross-year windows)
@@ -8310,7 +8310,13 @@ class SchedulingService:
     ) -> List[Dict]:
         """
         Compute shift/hours compliance for all members against active
-        TrainingRequirements of type SHIFTS or HOURS.
+        shift-credited TrainingRequirements of type SHIFTS or HOURS.
+
+        Only requirements marked ``shift_credited`` are graded here. Shift
+        attendance is not training, so an HOURS requirement the department
+        has not opted in stays with the training screens, which grade it from
+        training records — grading it here as well put two answers to one
+        question on two screens (W37-2).
 
         Returns a list of requirement compliance summaries, each containing
         per-member progress data.
@@ -8323,6 +8329,7 @@ class SchedulingService:
             select(TrainingRequirement)
             .where(TrainingRequirement.organization_id == str(organization_id))
             .where(TrainingRequirement.active.is_(True))
+            .where(TrainingRequirement.shift_credited.is_(True))
             .where(
                 TrainingRequirement.requirement_type.in_(
                     [
@@ -8371,29 +8378,24 @@ class SchedulingService:
             else:
                 required_value = req.required_hours or 0
 
-            # Determine which users this requirement applies to
-            applicable_users = []
-            for user in all_users:
-                # Grandfathering first: a member the requirement's cutoff
-                # exempts is not graded here whatever their rank or position.
-                if not requirement_applies_by_join_date(req, member_join_date(user)):
-                    continue
-                if req.applies_to_all:
-                    applicable_users.append(user)
-                    continue
-
-                # Check rank match
-                if req.required_roles and user.rank:
-                    if user.rank in req.required_roles:
-                        applicable_users.append(user)
-                        continue
-
-                # Check position match
-                if req.required_positions:
-                    user_slugs = user_position_slugs.get(user.id, [])
-                    if any(slug in req.required_positions for slug in user_slugs):
-                        applicable_users.append(user)
-                        continue
+            # Who this requirement grades: the shared definition every
+            # training screen uses (CLAUDE.md pitfall 29), with the rank and
+            # position slugs already loaded above. This report matched
+            # required_roles against the rank before the graders did (CMP4-5);
+            # it now also honours required_membership_types, which it alone
+            # ignored, so a requirement scoped by membership type grades the
+            # same members here as on the compliance matrix.
+            applicable_users = [
+                user
+                for user in all_users
+                if requirement_applies_to_member(
+                    req,
+                    user.membership_type or "active",
+                    user.rank,
+                    join_date=member_join_date(user),
+                    position_slugs=user_position_slugs.get(user.id, []),
+                )
+            ]
 
             if not applicable_users:
                 compliance_data.append(
