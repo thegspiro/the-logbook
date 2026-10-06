@@ -64,15 +64,21 @@ const fillRequired = async (
   user: ReturnType<typeof userEvent.setup>,
   { membershipNumber = 'FF-001' }: { membershipNumber?: string | null } = {}
 ) => {
-  const type = async (placeholder: string, value: string) => {
-    await user.type(screen.getByPlaceholderText(placeholder), value);
+  // Pasted rather than typed: every keystroke re-renders the whole form, and
+  // eleven typed fields took 2-3s per test unloaded, so a loaded run (the
+  // pre-commit hook runs every related suite at once) crossed the 5s
+  // timeout. What these tests assert is the saved payload, not keystrokes.
+  const fill = async (field: HTMLElement, value: string) => {
+    await user.click(field);
+    await user.paste(value);
   };
+  const type = (placeholder: string, value: string) => fill(screen.getByPlaceholderText(placeholder), value);
   await type('John', 'Dana');
   await type('Doe', 'Reyes');
   // Null leaves it blank, for a department that auto-assigns numbers. Found by
   // label because its placeholder is the previewed number when there is one.
   if (membershipNumber !== null) {
-    await user.type(screen.getByLabelText(/^membership number/i), membershipNumber);
+    await fill(screen.getByLabelText(/^membership number/i), membershipNumber);
   }
   await type('123 Main Street', '1 Main St');
   await type('Springfield', 'Falls Church');
@@ -84,8 +90,8 @@ const fillRequired = async (
   // The member's primary phone and the emergency contact's share a
   // placeholder; they are the first and second in document order.
   const phones = screen.getAllByPlaceholderText('(555) 123-4567');
-  await user.type(phones[0] as HTMLElement, '5550100');
-  await user.type(phones[1] as HTMLElement, '5550101');
+  await fill(phones[0] as HTMLElement, '5550100');
+  await fill(phones[1] as HTMLElement, '5550101');
 };
 
 // These tests type a whole member record a keystroke at a time, which on a
