@@ -50,7 +50,7 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 - **Overdue Tracking** — Computed at read time; scheduled task for reporting
 - **CSV Export** — Export filtered inventory data to CSV
 - **Sort & Filter** — Members tab supports sort by name, total items, overdue, or most assigned
-- **Mobile Member ID Scanning** — Camera-based member ID scanning for quick member lookup during checkout (scan QR/barcode from member ID card)
+- **Mobile Member ID Scanning** — Camera-based member ID scanning for quick member lookup during checkout (scan QR/barcode from member ID card) _(2026-10-05)_ The scanner sends what it reads to `POST /member-badges/resolve`, which answers only within your organization, so the QR on a card names a member only if it is a badge code the server issued (old membership-number and member-id badges keep working until an officer turns off **Accept old badges**). A hand-made QR can no longer book gear to anyone
 - **Charges & Cost Recovery** — _(2026-03-05)_ Attach damage fees or replacement costs to return/write-off events. Pool items support per-unit replacement cost tracking with automatic cost recovery calculation
 - **Return Requests** — _(2026-03-05)_ Members can submit return requests that require admin approval before processing
 - **Stock Alerts & Quarantine** — _(2026-03-05)_ Configurable low-stock email alerts. Quarantine status for items pending inspection before re-issue
@@ -1462,3 +1462,11 @@ upload box claiming drag-and-drop. The newcomer passes (#2837, #2850) gave My
 Issued Gear, the empty item list, the request form's empty catalog, the item
 form's **Tracking Type**, the hand-out dialog's duration choice and the Setup
 Guide's **Continue** (which now saves ticked categories) their explanations.
+
+### Phones, and the October 5 fixes
+
+- **Eight admin pages** (Vendors, Charges, Allowances, Gear Requests, Return Requests, Reorder Requests, Write-Offs, Impact Planner) padded their own container inside the app's padded page, losing 16px each side on a phone; the extra padding is gone and their maximum widths are kept.
+- **Items** on a phone: the nine filter dropdowns sit behind a **Filters** toggle that reports how many are active (below 640px; search stays visible; wider screens are unchanged), and the header counts line renders only when the counts are numbers.
+- **Hub metric tiles** (shared by every admin hub) wrap their label to two lines instead of truncating "To close out" and "Needs attention" at 320px.
+- **Maintenance cannot be completed as Retired** (condition after maintenance): retire the item with the retire action, which takes the lock, checks the blockers and writes the audit event. The form no longer offers it.
+- The scan-success flash no longer outlives an unmounted field (an intermittent test-suite failure; no user-visible change).

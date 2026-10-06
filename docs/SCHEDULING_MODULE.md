@@ -469,6 +469,45 @@ told. The daily `swap_offer_expiry` task cancels offers still pending the day
 before the shift and notifies the offerer, the member they asked, and the duty
 officer. Email is the channel of record; the in-app entry is an addition to it.
 
+### Shift Compliance report: shift-credited requirements only _(2026-10-05)_
+
+`GET /scheduling/reports/compliance` (`scheduling.report`) grades only the
+requirements whose `training_requirements.shift_credited` is true, because it
+measures shift attendance. A SHIFTS requirement is shift-credited by default
+(existing ones by migration `f16b004db34e`'s backfill; new ones by the model's
+type-dependent default); an HOURS requirement only when an officer ticks the
+**Shift Credit** checkbox on the requirement form. Before, every active HOURS
+requirement was graded from shift attendance, so a training-hours requirement
+such as annual hazmat hours read compliant on ordinary duty shifts while the
+training matrix, My Training and the progress endpoint graded the same member
+from training records. **Upgrade effect: an existing HOURS requirement drops off
+this report until ticked.** The report also uses the shared applicability helper,
+so a requirement scoped by `required_roles` matches the member's **rank**, and
+one scoped by `required_membership_types` now appears for the members it names
+(it alone ignored that criterion before). The summary cards on Scheduling
+Reports are **Requirement Checks**, **Checks Met** and **Checks Not Met**: the
+figures are member-requirement pairs, not head counts, and the payload carries
+no distinct-member count. There is no API change.
+
+### Smaller scheduling changes _(2026-10-05)_
+
+- **Dashboard** — Next 30 Days labels a shift the member cannot take **Not
+  eligible**, from one `GET /scheduling/eligibility/positions/bulk` call for
+  every open shift it shows; a failed lookup leaves the Sign Up button, whose
+  tap-time check still refuses.
+- **Shift reports** — with review switched off, the Flagged view is still offered
+  while any flagged report exists (the review endpoint never consulted the
+  setting), and stays offered while open.
+- **End-of-shift summary** (`run_end_of_shift_summary`) stamps a member in
+  `member_summaries_sent` only once their email was reported sent, or when no
+  email can go (no address, opted out of shift notices, or
+  `EmailService.can_send` false), in which case the in-app notice stamps them.
+  A failed or raising send is retried on the next run inside the lookback window
+  and repeats the in-app notice.
+- **Scheduled-task failures** reach **Error Monitoring** per organization, labelled
+  "Scheduled task" (`persist_task_error_log`, event `SCHEDULED_TASK_FAILED`); see
+  [Troubleshooting](./TROUBLESHOOTING.md).
+
 ### Standing Shifts _(2026-08-23)_
 
 A standing shift is a member's recurring claim on a seat — "every Tuesday night

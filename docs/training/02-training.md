@@ -142,6 +142,9 @@ At the top of the **My Training** overview is a date-range toolbar that scopes y
 
 1. Use the **Training records date range** picker to choose a start and end date. The range defaults to the **last 12 months**.
 2. The Training History list (and any export) updates to show only records completed within the selected range.
+
+   A record **still awaiting approval has no completion date**, so it is always shown whatever range you pick, and listed first; it used to disappear behind the 12-month range, or fall off a long history, until it was approved. _(2026-10-05)_
+
 3. To see and export your **entire** history — for example, for an external audit or a new employer — clear the dates. Omitting a start date exports your lifetime history.
 
 ![The My Training date-range toolbar with its helper text and the two export buttons](./images/02-78-my-training-toolbar.png)
@@ -923,6 +926,21 @@ the printed matrix the cell reads **Due**.
 > **Screenshot needed:**
 > _[Training Admin → Setup → Requirements → edit a requirement → the **Existing Members** section: the three choices **Apply to everyone**, **Exempt existing members** and **Give a catch-up deadline**, with **Give a catch-up deadline** selected and **Existing members joined before** / **Existing members must meet it by** filled in, and the note beneath them.]_
 
+### Shift Credit _(2026-10-05)_
+
+A **Hours** or **Shifts** requirement now has a **Shift attendance satisfies
+this requirement** box (the **Shift Credit** box on the requirement form). It
+decides whether the scheduling module's **Shift Compliance** report grades the
+requirement from shift attendance. **Shifts** requirements are ticked by
+default; **Hours** requirements are not, because training hours such as annual
+hazmat hours are graded from training records here and a member's ordinary duty
+shifts should not count toward them. An existing Hours requirement that should
+stay on Shift Compliance needs ticking once. See
+[Shifts & Scheduling](./03-scheduling.md#compliance-report).
+
+> **Screenshot needed:**
+> _[Training Admin → Setup → Requirements → edit an Hours requirement: the "Shift attendance satisfies this requirement" tickbox below the hours fields, unticked, with its help text. Demo requirement.]_
+
 #### "Who does this change apply to?" — saving a change for new members only
 
 Every save of an **existing** requirement now asks **Who does this change apply
@@ -1254,6 +1272,52 @@ The redesign, and why the grid went, is under
 ![The Compliance Matrix triage rail opened from the dashboard's non-compliant deep link: the Non-compliant + at risk only chip, members grouped by standing worst first, and Bram Hollis's detail with each requirement's figure — 44 of 24 hours, Nothing on file, 1 of 1 shifts](./images/02-66-compliance-matrix.png)
 
 > **Hint:** Use this view for annual reporting and to identify which members need attention before compliance deadlines.
+
+### One definition of "compliant" everywhere _(2026-10-05)_
+
+Several screens used to answer "how compliant is the department?" with slightly
+different rules. They now share one, so a figure on the dashboard, the matrix,
+the compliance reports and the annual report agrees:
+
+- **A member nothing grades is _Not applicable_, not compliant.** If no
+  requirement applies to someone (none matches their rank or membership type, a
+  compliance profile selects none, or every requirement is still inside their
+  catch-up period), they used to count as "compliant at 100%" and pulled every
+  department percentage up. They now sit in their own **Not applicable** group
+  on the matrix rail, show **N/A** in the reports and CSVs, and are left out of
+  the percentage altogether — "X of Y members current" counts only the members
+  who are graded. When nobody at all is graded the percentage reads N/A rather
+  than 100%.
+- **The dashboard's Department Compliance card is graded like the matrix it
+  opens.** It honours compliance profiles (a profile's own list of requirements
+  and thresholds) and your department's own compliant and at-risk thresholds. A
+  department that uses profiles, or a compliant threshold below 100%, will see
+  this card's figure move.
+- **The annual and monthly compliance reports also grade through compliance
+  profiles**, with the same thresholds, so the figure you file for the year
+  matches the dashboard. Departments with no profile see no change, and a report
+  already generated keeps the figures it was generated with.
+- **A requirement scoped to certain ranks now applies to those ranks.**
+  _Required roles_ on a requirement hold **ranks**; the grading used to compare
+  them against positions, so a requirement limited only by rank applied to
+  nobody. It now grades the members of those ranks on My Training, the matrix,
+  the dashboard, the member profile card, the competency matrix and the annual
+  report, and the Shift Compliance report now also honours the requirement's
+  membership types. Standings for those members, and the department percentages
+  that include them, will change.
+- **Certification requirements no longer match by name for new requirements.**
+  Crediting a certification because a course's name merely _contains_ the
+  requirement's name (a "CPR Refresher" event counting for "CPR") is kept only
+  for records completed up to the day each existing requirement was upgraded.
+  Requirements created since then credit a certification through the course
+  picked on the requirement, the training type or the registry code. Link the
+  course on any requirement you rely on.
+
+> **Screenshot needed:**
+> _[Training officer under Training Admin > Compliance Matrix in a demo department with one member no requirement applies to: the rail with the Not applicable group beneath Compliant, and that member's detail panel. Demo data only.]_
+
+> **Screenshot needed:**
+> _[Training officer on the Training dashboard Overview: the Department Compliance card beside the matrix it links to, showing the same percentage.]_
 
 > **Compliance is judged on the department's date** _(2026-09-26)_. The server
 > runs in UTC, so for a US department its date rolls over in the evening — from
@@ -2053,6 +2117,15 @@ Navigate to **Training Admin > Import History** to import historical training re
    and any that did not, with filters for each state.
 5. Confirm the import.
 
+**Bad values fail their own row, with a reason.** Each row's training type and
+status are checked, and a bad one fails only that row with a message such as
+_"Row 12: Invalid training_type 'Certifcation'. Valid values: …"_; every other
+row still imports. Capitalisation and spacing are forgiven (_"Certification"_ is
+kept as a certification instead of quietly becoming the default). A course set to
+be created with an invalid training type creates nothing, and its rows fail with
+that message. A bad **default** training type or status, which would apply to
+every row, fails the whole import before anything is written. _(2026-10-05)_
+
 ![The historical-import wizard on its Preview step: parsed rows, matched members, and the confirm button](./images/02-02-historical-import-preview.png)
 
 ---
@@ -2284,6 +2357,21 @@ Hours are attributed to an ISO category through the training **category** on the
 Officers can submit and track compliance attestations — formal declarations that specific compliance requirements have been verified.
 
 ![Compliance attestations listing period, percentage and attesting officer](./images/02-73-compliance-attestations.png)
+
+**The percentage is the server's, not a typed one** _(2026-10-05)_. **New
+Attestation** no longer has a **Compliance %** box. Choose **Annual** or
+**Quarterly** (a **Quarter** picker — Q1 (Jan–Mar) to Q4 (Oct–Dec) — appears;
+before this a quarterly attestation could not be saved at all), add **Areas
+Reviewed** and **Notes**, and submit. The form says _"The compliance percentage
+is calculated when you submit: the department figure as of the period's last
+day, or today for a period still running. It is the same figure the compliance
+dashboard reports."_ Each entry in the history shows that figure with the date it
+was measured (_"as of …"_). A period that has not started is refused, and when no
+member is graded the entry shows **N/A**. Attestations made earlier keep the
+figures that were typed.
+
+> **Screenshot needed (replace `02-73-compliance-attestations.png`):**
+> _[Compliance Officer at the Attestations section: New Attestation open with Period Type Quarterly and the Quarter picker visible, the "calculated when you submit" sentence, and one history entry showing "as of <date>". Demo data only.]_
 
 ### Annual Compliance Report
 

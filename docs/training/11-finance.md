@@ -438,15 +438,24 @@ buttons beside it to **Move up** or **Move down**, the pencil to **Edit step**
 What the dialog says about approvers is the rule the system actually applies,
 and it differs from what the approver type suggests:
 
-- **Anyone with `finance.approve` can approve or deny any approval step in The
-  Logbook**, whatever approver type and value the step names. The type and
-  value record who the department _expects_ to decide; they do not restrict who
-  can.
+- **Only the approver a step names can approve or deny it** _(2026-10-05)_.
+  A **Position** step takes active members who hold that position; a
+  **Permission** step takes active members granted that permission; a
+  **Specific member** step takes that member; an **Email** step takes the
+  member whose account email it is (or the outside approver, through the
+  emailed link). A step with **None** still takes anyone holding
+  `finance.approve`, as before.
+- **An approvals administrator can override.** Someone holding
+  `finance.configure_approvals` (the Treasurer, by default) can approve or deny
+  a step that is not theirs by giving an **Override reason**, which goes to the
+  audit log. An override never lets anyone approve their own request.
 - **Only the Email type contacts anyone.** When a request reaches an Email
   step, that address is sent a link to approve or deny it (if email sending is
   set up). Position, Permission and Specific member steps send nothing — the
   request simply appears on the [Approvals](#approving-and-denying-requests)
   screen.
+- **An emailed approval link stops working** if its step has since been changed
+  away from an Email approver; the request then goes through the Approvals screen.
 - **Members approving in The Logbook can never approve their own request**,
   whatever **Allow self-approval by email** says; that box governs the emailed
   link only.
@@ -480,6 +489,25 @@ one when requests are in flight.
 
 > **Screenshot needed:**
 > _[Treasurer or admin holding finance.configure_approvals, /finance/settings/approval-chains. The Delete step confirmation over a chain with three steps, showing the history-removal and waiting-request warnings and the Delete step / Keep it buttons. Never confirm.]_
+
+### Steps nobody can act on _(2026-10-05)_
+
+Because only the named approver can act, a step whose approver has gone leaves
+its requests stuck. The Approval Chains page now checks every approval step and
+puts an amber warning on any that nobody can act on, with how many requests are
+waiting on it (_"3 requests waiting"_). The reason reads, for example, _"No
+active member can act on this step"_, _"Not a valid email address"_ or that the
+chosen position, member or permission no longer exists. A banner at the top
+counts the affected steps (_"1 approval step has no one who can act on it.
+Requests waiting on it need an approvals admin to override, or fix the step."_).
+The warnings refresh after every chain or step change. Fix the step, or have an
+approvals administrator act on the waiting requests with an override reason in
+the meantime. Saving a step also checks its approver: a position must exist, a
+member must be active, a permission must be a real permission name, and an Email
+step takes exactly one address.
+
+> **Screenshot needed:**
+> _[Treasurer at /finance/settings/approval-chains with a demo chain whose step names a position nobody holds: the page banner and the amber "No active member can act on this step" chip with "N requests waiting" under that step.]_
 
 ### Previewing Chain Resolution
 
@@ -515,14 +543,14 @@ A typical fire department might configure these chains:
 
 As a request moves through its approval chain, each step has a status:
 
-| Status            | Meaning                                                                           |
-| ----------------- | --------------------------------------------------------------------------------- |
-| **Pending**       | The step is active and awaiting action from the assigned approver                 |
-| **Approved**      | The approver has approved the request at this step                                |
-| **Denied**        | The approver has denied the request at this step (stops the entire chain)         |
-| **Skipped**       | The step was skipped (not required or conditions not met)                         |
-| **Auto-Approved** | The request amount was below the step's `autoApproveUnder` threshold              |
-| **Sent**          | For notification steps, the notification has been sent and the step auto-advanced |
+| Status            | Meaning                                                                                                   |
+| ----------------- | --------------------------------------------------------------------------------------------------------- |
+| **Pending**       | The step is active and awaiting action from its named approver (or an approvals administrator's override) |
+| **Approved**      | The approver has approved the request at this step                                                        |
+| **Denied**        | The approver has denied the request at this step (stops the entire chain)                                 |
+| **Skipped**       | The step was skipped (not required or conditions not met)                                                 |
+| **Auto-Approved** | The request amount was below the step's `autoApproveUnder` threshold                                      |
+| **Sent**          | For notification steps, the notification has been sent and the step auto-advanced                         |
 
 ### Edge Cases
 
@@ -552,13 +580,20 @@ emailed link.
 
 **Finance > Approvals** (`/finance/approvals`), also reached from the
 dashboard's **Pending Approvals** card and its **Approvals** quick link, lists
-every request currently waiting on an approval step — one row per request,
-showing **Request**, **Type**, **Requested by**, **Amount**, **Step** and
-**Submitted**, with **Approve** and **Deny** buttons.
+the requests waiting on an approval step you can act on — one row per request,
+showing **Request**, **Type**, **Requested by**, **Amount**, **Step**,
+**Waiting on** and **Submitted**, with **Approve** and **Deny** buttons.
 
-The list is **department-wide, not "assigned to me"**. As the page says:
-_"Anyone with finance approval permission can approve or deny them."_ A step
-naming the Captain position can be decided by any `finance.approve` holder.
+The page reads _"Requests waiting on you."_ and, since 2026-10-05, lists only
+the steps **you are the named approver for**. A **Waiting on** column says who
+each step is assigned to. If you are an approvals administrator
+(`finance.configure_approvals`) you also see the steps assigned to other people,
+marked **Not assigned to you**, with **Approve as approvals admin** and **Deny
+as approvals admin** buttons: those open a dialog that names who the step is
+assigned to and requires an **Override reason** (up to 2,000 characters,
+_"Recorded in the audit log."_) as well as the usual notes. When nothing is
+waiting on you the page says _"Nothing is waiting on you."_ The dashboard's
+**Pending Approvals** count is unchanged and still counts every waiting request.
 
 - **Approve** opens **Approve request** with an optional **Notes** box (_"Shown
   on the request's approval timeline."_). If more steps follow, the request
@@ -570,17 +605,25 @@ If you raised the request yourself, the approval is refused with the
 separation-of-duties message (see [Separation of Duties](#separation-of-duties-2026-08-01)).
 
 > **Screenshot needed:**
+> _[Finance → Approvals as an approvals administrator (finance.configure_approvals), with one request assigned to them and one assigned to someone else: the "Requests waiting on you." heading, the admin explanation line, the Waiting on column, the "Not assigned to you" badge and the "Approve as approvals admin" / "Deny as approvals admin" buttons on the second row. Demo data only.]_
+
+> **Screenshot needed:**
+> _[Finance → Approvals, a "Approve as approvals admin" dialog open on a step assigned to another member: the "This step is assigned to <name>…" text, Notes, and the Override reason box with its help text "Why you are acting on a step assigned to someone else. Recorded in the audit log." Do not submit.]_
+
+> **Screenshot needed (replace):**
 > _[Finance → Approvals as the Treasurer, with three or four waiting requests of mixed types (purchase request, expense report, check request) showing the Request, Type, Requested by, Amount, Step and Submitted columns and the Approve / Deny buttons on each row.]_
 
 ### On the request's own page
 
 Each purchase request, expense report and check request detail page shows,
-above its approval timeline, a yellow panel — _"Waiting on **(step name)**. You
-can approve or deny this step."_ — with the same **Approve** and **Deny**
-buttons, when three things hold: the request is pending approval, you hold
-`finance.approve`, and the step it is waiting on is an **Approval** step (a
-notification step is never offered). It uses the same dialogs as the Approvals
-screen, and the page reloads the request afterwards.
+above its approval timeline, a panel that always says _"Waiting on **(who the
+step is assigned to)**."_ for a pending approval step. If you are that approver
+it adds _"You can approve or deny this step."_ with **Approve** and **Deny**
+buttons. If you are an approvals administrator and the step is someone else's it
+shows a **Not assigned to you** badge ( _"As an approvals administrator you can
+act on it by giving an override reason."_ ) with **Approve as approvals admin**
+and **Deny as approvals admin**. For anyone else it shows no buttons. A
+notification step is never offered. The page reloads the request afterwards.
 
 ### When No Approval Chain Applies _(2026-09-30)_
 

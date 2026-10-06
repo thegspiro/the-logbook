@@ -95,20 +95,21 @@ export const StoreCatalogTab: React.FC = () => {
         <div className="card-grid gap-3">
           {products.map((product) => (
             <div key={product.id} className="card-secondary p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <h3 className="text-theme-text-primary line-clamp-2 text-sm font-semibold">{product.name}</h3>
-                  <p className="text-theme-text-muted text-xs">
-                    {product.category ?? 'Uncategorized'}
-                    {product.sku ? ` · ${product.sku}` : ''}
-                  </p>
-                </div>
-                <span className="text-theme-text-primary text-sm font-semibold whitespace-nowrap">
-                  {formatCurrency(Number(product.price))}
-                </span>
+              {/* The price sits on the badge row rather than beside the name:
+                  beside it, its nowrap width cut long item names to two lines
+                  on every three-column layout. */}
+              <div className="min-w-0">
+                <h3 className="text-theme-text-primary line-clamp-2 text-sm font-semibold">{product.name}</h3>
+                <p className="text-theme-text-muted text-xs">
+                  {product.category ?? 'Uncategorized'}
+                  {product.sku ? ` · ${product.sku}` : ''}
+                </p>
               </div>
 
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-theme-text-primary order-last ml-auto text-sm font-semibold whitespace-nowrap">
+                  {formatCurrency(Number(product.price))}
+                </span>
                 <span className="badge bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border border">
                   {PRODUCT_STATUS_LABELS[product.status] ?? product.status}
                 </span>

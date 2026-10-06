@@ -84,7 +84,7 @@ officer so **Member #** is present, with at least one member whose rank is set.*
 
 ### Printing Member Badges
 
-Officers with `members.manage` can select members in the directory's desktop (table) view — the row checkboxes — then click **Print Badges** on the selection bar to open the shared label print page for those members. Choose a label size — any sticker/thermal printer (Dymo, Rollo, or a custom size) — and download a PDF or print. The badge barcode encodes the member's **membership number**; a member who has none gets a short id instead, which **Scan Member ID** and the in-app member-badge scanner (the one the member pickers and Inventory's members page open) both recognize _(fixed 2026-09-28 — before then the department's own badge for an unnumbered member scanned as "No member found")_. The chosen printer is remembered for your role, separately from the inventory/apparatus printers.
+Officers with `members.manage` or `members.manage_id_cards` can select members in the directory's desktop (table) view — the row checkboxes — then click **Print Badges** on the selection bar to open the shared label print page for those members. Choose a label size — any sticker/thermal printer (Dymo, Rollo, or a custom size) — and download a PDF or print. The badge barcode encodes the member's server-issued **badge code** (see [Badge codes](#badge-codes-2026-10-05)), which **Scan Member ID** and the in-app member-badge scanner (the one the member pickers and Inventory's members page open) both recognize _(before 2026-10-05 it encoded the membership number, or a short id for a member with none)_. The chosen printer is remembered for your role, separately from the inventory/apparatus printers.
 
 ![The Members directory selection bar with Print Badges, Export Selected and Clear Selection](./images/01-23-print-member-badges.png)
 
@@ -2218,6 +2218,12 @@ is still printed on the card as text; it just no longer scans.
   Cards page) is on, so nothing stopped working on upgrade day. Once every
   member has a reprinted card, turn it off: from then on only badge codes scan.
   Inventory checkout still refuses a member whose account is not active.
+
+> **Screenshot needed:**
+> _[Administrator (members.manage) at /members/print-id-cards with two demo members selected: the Orientation, Sides and Code options, the Save as department layout button, and the "Accept old badges" switch at the bottom. Check the route in the page before capturing.]_
+
+> **Screenshot needed:**
+> _[Administrator at /members/<demo member id>/id-card: the badge with its QR code, showing the membership number as text, and the "Reissue badge" button; a second frame with the "Reissue this badge?" confirmation open. Demo member only; do not confirm.]_
 
 ---
 

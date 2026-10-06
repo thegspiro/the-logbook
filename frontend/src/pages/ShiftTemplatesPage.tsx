@@ -538,7 +538,7 @@ export const ShiftTemplatesPage: React.FC = () => {
             <div className="card-grid gap-4">
               {patterns.map((pattern) => (
                 <div key={pattern.id} className="card-secondary p-5">
-                  <div className="mb-3 flex items-start justify-between">
+                  <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
                     <h3 className="text-theme-text-primary text-lg font-semibold">{pattern.name}</h3>
                     <div className="flex items-center gap-1">
                       <span
