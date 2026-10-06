@@ -16,6 +16,16 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2971](https://github.com/thegspiro/the-logbook/pull/2971)
+(Feature 15, Scheduling, pass 7) merged — docs-only (0 application-code
+changes: only `SCH-15-scheduling.md`, `PROGRESS.md`), so per this file's
+own rule it is not a recordable event on its own; rotation row 15
+already stood ✅. This iteration picks up Feature 16 (Events & requests),
+the state this PR opened from.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 7, PR #2971, merged docs-only — not independently recorded), preserved for history</summary>
+
 **PR [#2971](https://github.com/thegspiro/the-logbook/pull/2971)**: branch
 `claude/security-review-scheduling`, Feature 15 (Scheduling), pass 7 — 0
 code fixes needed. SCH-10 confirmed genuinely fixed (not merely
@@ -34,6 +44,8 @@ commits. Route count in `scheduling.py` grew to 98 (+6). Gate green
 (flake8/black/isort, migrations, route-permission check — 245 routes,
 1517 scoped backend tests, frontend typecheck/lint, 336 scoped frontend
 tests). See the Log entry below for detail.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 14, Equipment check &amp; shifts, pass 7, PR #2970, merged docs-only — not independently recorded), preserved for history</summary>
@@ -17928,7 +17940,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | 🔄     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
