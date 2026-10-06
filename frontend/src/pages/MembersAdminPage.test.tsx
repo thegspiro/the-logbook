@@ -14,6 +14,9 @@ vi.mock('../services/api', () => ({
   roleService: {
     getRoles: vi.fn(),
   },
+  memberStatusService: {
+    getOverduePropertyReturns: () => Promise.resolve({ overdue_count: 0, members: [] }),
+  },
   locationsService: {
     getLocations: vi.fn(),
   },

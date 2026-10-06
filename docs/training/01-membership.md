@@ -1202,18 +1202,21 @@ most one reminder — the latest mark they have passed — so a member first
 picked up at day 100 receives the 90-day reminder only, never a late 30-day
 one. A reminder already sent is never repeated.
 
-> **Hint:** Overdue property returns are tracked by the API
-> (`GET /users/property-return-reminders/overdue`) but **have no screen** as of
-> 2026-09-24. The Inventory module's members page shows an "Overdue Returns"
-> figure, which counts inventory checkouts rather than offboarding property, so
-> it is not a substitute. See
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#member-lifecycle--the-page-that-was-documented-but-never-built-2026-08-08).
+**Who still has property** _(2026-10-05)_. **Former members still holding
+property** lists every dropped member with items still out — when they were
+dropped, how many items and their value, and which reminders have gone — on the
+Inventory **Member Equipment** page and on Members Admin → **Member
+Management**, for holders of `members.manage`. Each name opens the member's
+profile. **Send due reminders** runs the same check the daily task makes, after
+asking; a reminder already sent is never repeated, so running it early sends
+nothing twice. (The **Overdue Returns** figure at the top of Member Equipment is
+a different number: inventory checkouts past their due date.)
 
 ---
 
 ## Leave of Absence
 
-**Required Permission:** `members.manage` to view or deactivate a leave.
+**Required Permission:** `members.manage` to view, edit or deactivate a leave.
 Creating one also requires `scheduling.assign`, because a leave cancels the
 member's shift assignments inside it.
 
@@ -1267,15 +1270,12 @@ For rolling-period requirements (e.g., "12 hours of training over 12 months"):
 
 > **Hint:** Deactivating a leave does not delete it -- it becomes inactive and remains in the history, under **All Waivers → Past/Inactive**.
 
-> **⚠️ You cannot edit a leave from any screen** _(verified 2026-09-24)_. You
-> can cancel one with **Deactivate** on the Active Waivers tab, which also
-> deactivates its linked training waiver. Changing a leave's dates is API only:
-> `PATCH /users/leaves-of-absence/{id}` exists, but no screen calls it.
->
-> **Check the dates before you save.** A leave pro-rates the member's hours,
-> shift and call requirements, so a wrong end date quietly changes their
-> compliance. To correct one, deactivate it and create it again. Tracked in
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#member-lifecycle--the-page-that-was-documented-but-never-built-2026-08-08).
+> **Correcting a leave** _(2026-10-05)_. On the **Active Waivers** tab, a leave
+> of absence has **Edit** beside **Deactivate**. It opens the leave's start date,
+> end date (or **Permanent**) and reason; saving corrects the leave in place and
+> keeps its linked training waiver's dates in step. Check the dates: a leave
+> pro-rates the member's hours, shift and call requirements, so a corrected date
+> changes their compliance from the next check.
 
 ### LOA and Training Waiver Auto-Linking
 
@@ -1499,28 +1499,23 @@ fourth is always the count the queue is about — see
 
 Verified against the code on 2026-09-24:
 
-| Operation                                  | Where it is today                                                                   | State                                                                                                                        |
-| ------------------------------------------ | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **Change a member's status**               | Member profile → status control                                                     | ✅ Full UI (archiving is automatic, not a status choice)                                                                     |
-| **Leave of absence — create**              | [Waiver Management](#waiver-management) (`/members/admin/waivers`)                  | ✅ Works, but it is not where you would look                                                                                 |
-| **Leave of absence — view**                | Member profile (read-only card), and listed on Waiver Management / Training Waivers | ✅ Read-only                                                                                                                 |
-| **Leave of absence — deactivate**          | Waiver Management → Active Waivers → **Deactivate**                                 | ✅ Full UI                                                                                                                   |
-| **Leave of absence — edit**                | —                                                                                   | ❌ API only (`updateLeaveOfAbsence` has no callers)                                                                          |
-| **Archived members — list and reactivate** | Members → status filter **Archived** → **Reactivate**; or the member's profile      | ✅ Full UI (2026-09-24)                                                                                                      |
-| **Overdue property returns**               | —                                                                                   | ❌ API only for _members_. The Inventory module's members page shows an "Overdue Returns" figure, which is a different thing |
-| **Tier configuration**                     | Members Admin → Settings → Membership Tiers                                         | ✅ Full UI (the monthly job advances members; a manual "advance now" is API only)                                            |
+| Operation                                  | Where it is today                                                                   | State                                                                                 |
+| ------------------------------------------ | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **Change a member's status**               | Member profile → status control                                                     | ✅ Full UI (archiving is automatic, not a status choice)                              |
+| **Leave of absence — create**              | [Waiver Management](#waiver-management) (`/members/admin/waivers`)                  | ✅ Works, but it is not where you would look                                          |
+| **Leave of absence — view**                | Member profile (read-only card), and listed on Waiver Management / Training Waivers | ✅ Read-only                                                                          |
+| **Leave of absence — deactivate**          | Waiver Management → Active Waivers → **Deactivate**                                 | ✅ Full UI                                                                            |
+| **Leave of absence — edit**                | Waiver Management → Active Waivers → **Edit** (dates and reason)                    | ✅ Full UI (2026-10-05)                                                               |
+| **Archived members — list and reactivate** | Members → status filter **Archived** → **Reactivate**; or the member's profile      | ✅ Full UI (2026-09-24)                                                               |
+| **Overdue property returns**               | Inventory → Member Equipment, and Members Admin → Member Management                 | ✅ Full UI (2026-10-05): the list, a link to each profile, and **Send due reminders** |
+| **Tier configuration**                     | Members Admin → Settings → Membership Tiers                                         | ✅ Full UI (the monthly job advances members; a manual "advance now" is API only)     |
 
 **What this means in practice.** An archived member can be reactivated from the
-Members list, and tiers are configured under Settings. A leave of absence cannot
-be edited: if it is entered with the wrong dates, deactivate it from Waiver
-Management and create it again.
-
-> **The remaining gaps are editing a leave of absence and listing overdue
-> property returns for departed members.** Both endpoints exist and are tested;
-> what is missing is the screen. Tracked in
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#member-lifecycle--the-page-that-was-documented-but-never-built-2026-08-08)
-> with the exact API surface, so whoever builds the page does not have to
-> rediscover it.
+Members list, tiers are configured under Settings, a leave of absence is
+corrected with **Edit** beside it on Waiver Management, and former members still
+holding property are listed on the Inventory Member Equipment page and on Member
+Management. The department chose to put each operation where people already
+look rather than build the lifecycle page the old guide described.
 
 ---
 

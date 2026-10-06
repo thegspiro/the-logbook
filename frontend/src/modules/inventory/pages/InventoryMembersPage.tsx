@@ -38,6 +38,7 @@ import { InventoryScanModal } from '../../../components/InventoryScanModal';
 import { VariantCapsules } from '../components/VariantCapsules';
 import type { InventoryItem } from '../types';
 import { ReturnItemsModal } from '../../../components/ReturnItemsModal';
+import { OverduePropertyReturnsPanel } from '../../../components/members/OverduePropertyReturnsPanel';
 import { MemberIdScannerModal } from '../../../components/MemberIdScannerModal';
 import { SizePreferencesModal } from '../components/SizePreferencesModal';
 import { Breadcrumbs } from '../../../components/ux';
@@ -63,6 +64,9 @@ const CountBadge: React.FC<{ label: string; count: number; color: string }> = ({
 const InventoryMembersPage: React.FC = () => {
   const tz = useTimezone();
   const canManage = useAuthStore((s) => s.checkPermission)('inventory.manage');
+  // Former members' outstanding property is a members.manage list (its
+  // endpoints are gated so); a quartermaster without it sees the page as before.
+  const canManageMembers = useAuthStore((s) => s.checkPermission)('members.manage');
 
   const [members, setMembers] = useState<MemberInventorySummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -303,6 +307,8 @@ const InventoryMembersPage: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {canManageMembers && <OverduePropertyReturnsPanel tz={tz} />}
 
       {/* Search + Sort */}
       <div className="mb-6 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">

@@ -28,6 +28,7 @@ import { UserStatus } from '../constants/enums';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { ADMINISTRATIVE_RANK_HINT, isAdministrativeMember } from '../utils/membership';
 import { useTimezone } from '../hooks/useTimezone';
+import { OverduePropertyReturnsPanel } from '../components/members/OverduePropertyReturnsPanel';
 import { formatTime } from '../utils/dateFormatting';
 import { displayNameOf, givenName } from '../utils/memberName';
 
@@ -509,6 +510,10 @@ export const MembersAdminPage: React.FC = () => {
             </Link>
           )}
         </div>
+
+        {/* Former members still holding property (member lifecycle): the
+            same panel the Inventory Member Equipment page shows. */}
+        {checkPermission('members.manage') && <OverduePropertyReturnsPanel tz={tz} />}
 
         {/* The position dialogs show their own error; repeating it here only
             put a second copy behind the overlay. */}

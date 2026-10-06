@@ -339,19 +339,23 @@ export interface MemberAnonymizationResponse {
 
 export interface OverdueMember {
   user_id: string;
-  name: string;
   member_name: string;
-  email?: string;
-  membership_number?: string;
-  drop_date: string;
+  email?: string | null | undefined;
+  status: string;
+  /** The drop date, in the department's timezone (YYYY-MM-DD). */
+  dropped_date: string;
   days_since_drop: number;
-  items_outstanding: unknown[];
+  items_outstanding: number;
+  total_value: number;
   items: Array<{
-    item_id: string;
-    item_name: string;
-    due_date: string;
-    days_overdue: number;
+    name: string;
+    serial_number: string;
+    asset_tag: string;
+    value: number;
+    type: 'assigned' | 'checked_out';
   }>;
+  /** Reminder marks already sent, e.g. "30_day". */
+  reminders_sent: string[];
 }
 
 export interface MembershipTierBenefits {

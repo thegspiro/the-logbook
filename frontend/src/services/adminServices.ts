@@ -834,15 +834,20 @@ export const memberStatusService = {
     return response.data;
   },
 
-  async getOverduePropertyReturns(): Promise<{ members: import('../types/user').OverdueMember[] }> {
-    const response = await api.get<{ members: import('../types/user').OverdueMember[] }>(
+  async getOverduePropertyReturns(): Promise<{
+    overdue_count: number;
+    members: import('../types/user').OverdueMember[];
+  }> {
+    const response = await api.get<{ overdue_count: number; members: import('../types/user').OverdueMember[] }>(
       '/users/property-return-reminders/overdue'
     );
-    return response.data;
+    return { ...response.data, members: asArray(response.data?.members) };
   },
 
-  async processPropertyReturnReminders(): Promise<Record<string, unknown>> {
-    const response = await api.post<Record<string, unknown>>('/users/property-return-reminders/process');
+  async processPropertyReturnReminders(): Promise<{ reminders_sent: number; dropped_members_checked: number }> {
+    const response = await api.post<{ reminders_sent: number; dropped_members_checked: number }>(
+      '/users/property-return-reminders/process'
+    );
     return response.data;
   },
 
@@ -902,13 +907,15 @@ export const memberStatusService = {
     return response.data;
   },
 
+  // An update payload: an omitted key is left alone, an explicit null clears
+  // (Pitfall #1) — a permanent leave sends `end_date: null`.
   async updateLeaveOfAbsence(
     leaveId: string,
     data: {
       leave_type?: string;
-      reason?: string;
+      reason?: string | null;
       start_date?: string;
-      end_date?: string;
+      end_date?: string | null;
       active?: boolean;
       exempt_from_training_waiver?: boolean;
     }

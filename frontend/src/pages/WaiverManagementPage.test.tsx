@@ -17,6 +17,7 @@ const mockListWaivers = vi.fn();
 const mockCreateLeave = vi.fn();
 const mockCreateWaiver = vi.fn();
 const mockDeleteLeave = vi.fn();
+const mockUpdateLeave = vi.fn();
 const mockGetUsers = vi.fn();
 
 vi.mock('../services/api', () => ({
@@ -26,6 +27,7 @@ vi.mock('../services/api', () => ({
     createLeaveOfAbsence: (...args: unknown[]) => mockCreateLeave(...args) as unknown,
     createTrainingWaiver: (...args: unknown[]) => mockCreateWaiver(...args) as unknown,
     deleteLeaveOfAbsence: (...args: unknown[]) => mockDeleteLeave(...args) as unknown,
+    updateLeaveOfAbsence: (...args: unknown[]) => mockUpdateLeave(...args) as unknown,
     deleteTrainingWaiver: vi.fn(),
   },
   userService: {
@@ -158,6 +160,31 @@ describe('WaiverManagementPage — deactivating and filtering (workflow review W
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Deactivate' }));
 
     await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Leave already ended.'));
+  });
+
+  // Member lifecycle: a leave's dates could be changed only through the API.
+  it('edits a leave from the active list and reloads it', async () => {
+    const user = userEvent.setup();
+    mockUpdateLeave.mockReset();
+    mockUpdateLeave.mockResolvedValue({});
+    window.history.replaceState({}, '', '/members/admin/waivers?tab=active');
+    renderWithRouter(<WaiverManagementPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Edit the leave for Casey Morgan' }));
+    const dialog = screen.getByRole('dialog', { name: 'Edit leave — Casey Morgan' });
+    expect(within(dialog).getByLabelText('Permanent (no end date)')).toBeChecked();
+    await user.click(within(dialog).getByLabelText('Permanent (no end date)'));
+    await user.type(within(dialog).getByLabelText('End date'), '2026-03-31');
+    await user.click(within(dialog).getByRole('button', { name: 'Save leave' }));
+
+    await waitFor(() =>
+      expect(mockUpdateLeave).toHaveBeenCalledWith('loa-1', {
+        start_date: '2026-01-01',
+        end_date: '2026-03-31',
+        reason: null,
+      })
+    );
+    await waitFor(() => expect(mockListLeaves).toHaveBeenCalledTimes(2));
   });
 
   it('says which history filter is selected', async () => {

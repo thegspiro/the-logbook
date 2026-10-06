@@ -1074,56 +1074,30 @@ allowance cannot outlive the gap.
 `docs/training/01-membership.md` described a **Member Lifecycle Management** page
 under Members Admin with four tabs — Archived Members, Overdue Returns, Leave of
 Absence, Tier Configuration. **No such page exists**, and it appears never to
-have. `/members/admin` (`MembersAdminHub.tsx`) declares exactly three tabs:
-Member Management, Add Member, Import Members.
+have. The guide has been corrected.
 
-The guide has been corrected. This row records the **product** gap, which is
-real: for four lifecycle operations the endpoints, permissions and service
-methods all exist and are exercised by tests, and only the screens are missing.
+**Owner decision (2026-10-05): distribute the operations onto existing screens**
+rather than build the consolidated page — leave editing beside leave creation,
+overdue returns on member and inventory screens. Reactivation and tier
+configuration had already gone this way.
 
-> **Correction to a previous entry.** The 2026-08-07 row this replaces stated
-> that "tiers are actually configured under organization settings." That was
-> wrong — it was taken from a commit message rather than from the code. Tiers are
-> _stored_ in `Organization.settings["membership_tiers"]`, but **no settings
-> screen reads or writes them**. Read the call site, not the commit message.
+| Capability                | Where it lives now                                                                                                                                                                      | State                  |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| Create a leave of absence | Waiver Management (`/members/admin/waivers`)                                                                                                                                            | ✅                     |
+| Edit a leave              | Waiver Management → Active Waivers → **Edit** (`EditLeaveDialog`, `PATCH /users/leaves-of-absence/{id}`)                                                                                | ✅ Resolved 2026-10-05 |
+| Overdue property returns  | `OverduePropertyReturnsPanel` on Inventory → Member Equipment and Members Admin → Member Management (`members.manage`): the list, a profile link per member, and **Send due reminders** | ✅ Resolved 2026-10-05 |
+| Archived members          | Members → **Archived** filter → **Reactivate**, or the member's profile                                                                                                                 | ✅ (2026-09-24)        |
+| Tier configuration        | Members Admin → Settings → Membership Tiers; the monthly task advances members                                                                                                          | ✅                     |
 
-Verified 2026-08-08 by searching for consumers of every `memberStatusService`
-method in `frontend/src/services/adminServices.ts`:
+| Item                                                                 | Status                             | Detail                                                                                                                                                                                                                                                       |
+| -------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Leave of absence is created from Waiver Management**               | Accepted by the owner (2026-10-05) | The owner chose to keep leave work where leaves are already created rather than move it to a lifecycle page, and editing now sits beside creation there. It is still not where a membership coordinator might first look; the membership guide points to it. |
+| **`POST /users/advance-membership-tiers` has no button**             | Open (LOW)                         | The scheduled task `membership_tier_advance` runs it on the first of each month when the department's auto-advance switch is on; an on-demand run is API only. Not part of the 2026-10-05 decision.                                                          |
+| **`GET /users/{id}/property-return-report` (preview) has no screen** | Open (LOW)                         | The preview of what a member would have to return, before a drop, is still API only; the drop itself generates the full report into Documents. Not part of the 2026-10-05 decision.                                                                          |
 
-| Capability                | API                                                                                                    | Service method                                                                            | UI consumer                                                                        | State                |
-| ------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | -------------------- |
-| Create a leave of absence | `POST /users/leaves-of-absence`                                                                        | `createLeaveOfAbsence`                                                                    | `WaiverManagementPage.tsx:275`                                                     | ⚠️ Works, wrong home |
-| List / view leaves        | `GET /users/leaves-of-absence`, `/users/{id}/leaves-of-absence`                                        | `listLeavesOfAbsence`, `getMemberLeaves`                                                  | `WaiverManagementPage`, `TrainingWaiversTab`, `MemberProfilePage` (read-only card) | ⚠️ Read-only         |
-| Edit a leave              | `PATCH /users/leaves-of-absence/{id}`                                                                  | `updateLeaveOfAbsence`                                                                    | **none**                                                                           | ❌ API only          |
-| Overdue property returns  | `GET /users/overdue-property-returns`, `POST .../reminders`, `GET /users/{id}/property-return-preview` | `getOverduePropertyReturns`, `processPropertyReturnReminders`, `getPropertyReturnPreview` | **none**                                                                           | ❌ API only          |
-
-**Why this matters more than a missing screen usually would.** Two of the gaps
-are the _reversal_ of an action that does have a UI: you can archive a member
-from their profile but cannot un-archive one, and you can put somebody on leave
-from Waiver Management but cannot correct the dates afterwards. A one-way door
-with no visible handle on the far side is worse than a feature that is simply
-absent.
-
-**Two decisions this needs, not one:**
-
-1. **Build the page, or distribute the operations?** A consolidated lifecycle
-   page is what the docs assumed. Alternatively archived/reactivate could live on
-   the Members list as a filter, and leave-of-absence editing next to where leaves
-   are already created. The second is less work and arguably where people would
-   look; the first is what four years of documentation has promised.
-2. **Does auto-advancement get a trigger?** _Answered since:_ the scheduled task
-   `membership_tier_advance` runs it on the first of each month when the
-   department's auto-advance switch is on. `POST /users/advance-membership-tiers`
-   still has no button, for an on-demand run.
-
-Until then the guide documents the API surface directly and says plainly that
-there is no screen.
-
-| Item                                                   | Status                       | Detail                                                                                                                                                                                                                                         |
-| ------------------------------------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **No UI to edit a leave of absence**                   | Open (MED — one-way door)    | A leave can be created and deactivated from Waiver Management; changing its dates is API only. Leaves pro-rate training requirements, so a wrong end date quietly changes somebody's compliance until the leave is deactivated and re-created. |
-| **Leave of absence is created from Waiver Management** | Open (LOW — discoverability) | It works, but it is not where a membership coordinator would look for it.                                                                                                                                                                      |
-| **No UI for overdue property returns (members)**       | Open (LOW)                   | Three endpoints, no consumer. The Inventory members page shows an "Overdue Returns" figure, which is a different feature and may be the reason this was assumed to exist.                                                                      |
+The overdue list's response shape was also corrected on the frontend:
+`OverdueMember` had described fields the endpoint never sent (`drop_date`,
+`item_name`, `due_date`), which nothing noticed while nothing read it.
 
 ## Medical Screening — No Per-Member Compliance Screen (2026-08-08)
 
