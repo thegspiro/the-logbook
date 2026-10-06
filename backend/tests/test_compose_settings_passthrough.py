@@ -52,6 +52,7 @@ OVERRIDE_COMPOSE_FILES = [
     "docker-compose.minimal.yml",
     "docker-compose.arm.yml",
     "docker-compose.proxy.yml",
+    "docker-compose.external-services.yml",
 ]
 
 # Settings fields deliberately not passed through. Keep this short: a

@@ -94,7 +94,10 @@ an existing install.
 
 The exceptions are pinned by the compose file: `DB_HOST`, `DB_PORT`,
 `REDIS_HOST` and `REDIS_PORT` point at the bundled `mysql` and `redis`
-services whatever `.env` says, and `VERSION` comes from the image.
+services whatever `.env` says, and `VERSION` comes from the image. To use a
+database and Redis outside the stack instead, layer
+`docker-compose.external-services.yml` — see
+[External database and Redis](#external-database-and-redis) below.
 Variables that are not backend settings (`MYSQL_ROOT_PASSWORD`, `MINIO_*`,
 `ELASTIC_PASSWORD`) go only to their own services.
 
@@ -256,6 +259,53 @@ docker-compose -f docker-compose.yml -f docker-compose.arm.yml up -d
 ```
 
 Uses MariaDB 10.11+ instead of MySQL 8.0 for ARM compatibility.
+
+---
+
+## External Database and Redis
+
+To run against MySQL and Redis that this stack does not start — Amazon RDS and
+ElastiCache, another managed service, or servers elsewhere on your network —
+layer `docker-compose.external-services.yml` last:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  -f docker-compose.external-services.yml up -d
+```
+
+or pin it, so every later command applies it too:
+
+```bash
+COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.external-services.yml
+```
+
+Add `docker-compose.proxy.yml` before it if you use the bundled nginx. The
+override:
+
+- passes `DB_HOST`, `DB_PORT`, `REDIS_HOST` and `REDIS_PORT` from `.env` to the
+  backend. They have no default here: a missing one stops `docker compose` with
+  a message naming it. Set them to the real endpoints — `localhost` (the
+  `.env.example.full` value) or `mysql` / `redis` (the `.env.example` values)
+  name the backend's own container or services that no longer start;
+- drops the backend's dependency on the bundled `mysql` and `redis`;
+- keeps `mysql`, `redis` and the production `backup` sidecar from starting.
+  Back the database up with the provider's own backups, and the `uploads` and
+  `audit_archives` volumes separately — see "Backups" in the
+  [AWS guide](../docs/deployment/aws.md#method-2-rds).
+
+`MYSQL_ROOT_PASSWORD` must still have a value, because compose reads the
+unused `mysql` definition; it is used for nothing. `REDIS_PASSWORD` is sent to
+the external Redis, so the server must require a password (on ElastiCache, an
+AUTH token). Use TLS to both: `DB_SSL=true`, `REDIS_SSL=true` and their CA
+files (`DB_SSL_CA`, `REDIS_SSL_CA`) as container paths under
+`/etc/ssl/logbook`, which mounts `./infrastructure/certs` (or `SSL_CERTS_DIR`).
+The backend applies migrations to the external database on start, with the
+same TLS settings. Check what will start with
+`docker compose config --services` — `backend` and `frontend`, plus `nginx` or
+`clamav` if you enabled them.
+
+Full AWS walkthrough:
+[AWS Deployment Guide, Method 2](../docs/deployment/aws.md#method-2-ec2--rds--elasticache-production).
 
 ---
 

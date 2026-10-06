@@ -177,10 +177,14 @@ def run_migrations_online() -> None:
     logger.info("Connecting to database for migrations...")
 
     try:
+        # The app engine's connect_args, so DB_SSL / DB_SSL_CA also cover
+        # command.upgrade() from run_migrations() in main.py and a hand-run
+        # `alembic upgrade head` against a managed database.
         connectable = engine_from_config(
             configuration,
             prefix="sqlalchemy.",
             poolclass=pool.NullPool,
+            connect_args=settings.get_db_connect_args(),
         )
     except Exception as e:
         logger.error(f"Failed to create database engine: {e}")

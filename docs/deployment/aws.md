@@ -113,6 +113,11 @@ sed -i "s|^FRONTEND_URL=.*|FRONTEND_URL=https://logbook.yourdomain.com|" .env
 sed -i "s|^ENVIRONMENT=.*|ENVIRONMENT=production|" .env
 sed -i "s|^DEBUG=.*|DEBUG=false|" .env
 
+# The bundled MySQL and Redis containers speak plaintext on the stack's private
+# Docker network. Production refuses to start without TLS to both unless this
+# is recorded (see the note below; Method 2 uses TLS instead)
+echo "SECURITY_REQUIRE_TLS=false" >> .env
+
 # Start the application (production override layered on the base file)
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
@@ -125,7 +130,8 @@ docker compose ps
 > configuration (uvicorn `--reload`, backend port published, API docs enabled, no
 > HTTPS enforcement) and skips the startup security gate. The override forces
 > `ENVIRONMENT=production`, disables `--reload` and API docs, enforces HTTPS,
-> enables DB/Redis TLS, and does not publish the backend port. Pin
+> requires DB/Redis TLS unless `SECURITY_REQUIRE_TLS=false` records that the
+> bundled services run without it, and does not publish the backend port. Pin
 > `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so every
 > later `docker compose ...` command stays hardened. In production the app
 > **refuses to start** if required secrets are missing or weak, if `DEBUG` or API
@@ -166,14 +172,9 @@ server {
         proxy_cache_bypass $http_upgrade;
     }
 
-    location /api/ {
-        proxy_pass http://localhost:3001/api/;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
+    # No separate /api/ block: the production override does not publish the
+    # backend's port 3001, and the frontend container already forwards /api to
+    # the backend over the stack's private network.
 }
 EOF
 
@@ -225,18 +226,36 @@ Key networking requirements:
 2. Click **Create database**
 3. Configure:
 
-| Setting                | Value                                                 |
-| ---------------------- | ----------------------------------------------------- |
-| **Engine**             | MySQL 8.0                                             |
-| **Template**           | Free Tier (testing) or Production                     |
-| **Instance**           | `db.t3.micro` (testing) or `db.t3.small` (production) |
-| **Storage**            | 20 GB gp3, enable auto-scaling to 100 GB              |
-| **Master username**    | `admin`                                               |
-| **Master password**    | Generate a strong password                            |
-| **Public access**      | No                                                    |
-| **VPC security group** | Create new — allow port 3306 from EC2 security group  |
-| **Database name**      | `the_logbook`                                         |
-| **Backup retention**   | 7 days (recommended)                                  |
+| Setting                  | Value                                                 |
+| ------------------------ | ----------------------------------------------------- |
+| **Engine**               | MySQL 8.0                                             |
+| **Template**             | Free Tier (testing) or Production                     |
+| **Instance**             | `db.t3.micro` (testing) or `db.t3.small` (production) |
+| **Storage**              | 20 GB gp3, enable auto-scaling to 100 GB              |
+| **Master username**      | `admin`                                               |
+| **Master password**      | Generate a strong password                            |
+| **Public access**        | No                                                    |
+| **VPC security group**   | Create new — allow port 3306 from EC2 security group  |
+| **Database name**        | `the_logbook`                                         |
+| **DB parameter group**   | A custom group with the values below                  |
+| **Backup retention**     | 7 days (recommended)                                  |
+| **Encryption** (storage) | Enabled                                               |
+
+The bundled MySQL container starts with these server settings (see `mysql:`
+in `docker-compose.yml`). Give RDS the same ones through a custom DB parameter
+group. Create the group **first** and choose it in the form above: the
+database named there takes the server's character set and collation when RDS
+creates it, and every table the app creates later takes the database's.
+
+| Parameter              | Value                |
+| ---------------------- | -------------------- |
+| `character_set_server` | `utf8mb4`            |
+| `collation_server`     | `utf8mb4_unicode_ci` |
+| `max_allowed_packet`   | `268435456` (256 MB) |
+
+Set `require_secure_transport` to `1` in the same group if you want RDS itself
+to refuse an unencrypted connection; the app connects over TLS either way once
+Step 5 is done.
 
 > **Important**: Select the same VPC as your EC2 instance. RDS should NOT be publicly accessible.
 
@@ -246,13 +265,21 @@ Key networking requirements:
 2. Click **Create cluster** → **Redis OSS**
 3. Configure:
 
-| Setting            | Value                                   |
-| ------------------ | --------------------------------------- |
-| **Name**           | `logbook-redis`                         |
-| **Node type**      | `cache.t3.micro`                        |
-| **Replicas**       | 0 (testing) or 1 (production)           |
-| **Subnet group**   | Same VPC as EC2/RDS                     |
-| **Security group** | Allow port 6379 from EC2 security group |
+| Setting                   | Value                                         |
+| ------------------------- | --------------------------------------------- |
+| **Name**                  | `logbook-redis`                               |
+| **Cluster mode**          | Disabled                                      |
+| **Node type**             | `cache.t3.micro`                              |
+| **Replicas**              | 0 (testing) or 1 (production)                 |
+| **Subnet group**          | Same VPC as EC2/RDS                           |
+| **Security group**        | Allow port 6379 from EC2 security group       |
+| **Encryption in transit** | Enabled                                       |
+| **Access control**        | Redis AUTH, with a strong AUTH token you keep |
+
+The app talks to a single Redis endpoint, so leave cluster mode disabled and
+use the cluster's **primary endpoint**. The AUTH token becomes `REDIS_PASSWORD`
+in Step 5: the stack refuses to start without one, and ElastiCache accepts an
+AUTH token only with encryption in transit turned on.
 
 ### Step 4: Create Security Groups
 
@@ -280,10 +307,47 @@ You need three security groups in the same VPC:
 
 ### Step 5: Launch EC2 and Deploy
 
-Follow Method 1 Steps 1-3 to launch an EC2 instance and install Docker, then configure `.env` to use managed services:
+Follow Method 1 Steps 1-2 to launch an EC2 instance and install Docker, and
+clone the repository as in Step 3 — but do not start the stack from there.
+Method 2 starts it with one more compose file,
+`docker-compose.external-services.yml`, which:
+
+- points the backend at the `DB_HOST`, `DB_PORT`, `REDIS_HOST` and
+  `REDIS_PORT` you set in `.env`. There is no default: if any of the four is
+  missing, `docker compose` stops with a message naming it;
+- drops the backend's dependency on the bundled `mysql` and `redis`;
+- keeps `mysql`, `redis` and the production `backup` sidecar from starting
+  (see [Backups](#method-2-rds) for what replaces the sidecar).
+
+Everything else — `docker-compose.prod.yml`'s hardening, the TLS settings, the
+optional `--profile with-clamav` — works as it does in Method 1.
+
+**Fetch the CA certificates.** The production stack refuses to start unless
+both connections use TLS with a verified certificate, and both managed
+services offer it. The backend reads CA files from `/etc/ssl/logbook`, which
+is `./infrastructure/certs` on the host (or `SSL_CERTS_DIR`, if you set it):
 
 ```bash
 cd /opt/the-logbook
+
+# RDS: the global bundle covers every region
+curl -fsSL -o infrastructure/certs/rds-global-bundle.pem \
+  https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+
+# ElastiCache: its certificates are issued by Amazon and chain to the Amazon
+# Trust Services roots
+curl -fsSL -o infrastructure/certs/amazon-root-ca-1.pem \
+  https://www.amazontrust.com/repository/AmazonRootCA1.pem
+```
+
+If the Redis connection later fails certificate verification, see which root
+the endpoint presents with
+`openssl s_client -connect <primary-endpoint>:6379 -showcerts </dev/null` and
+put that root's PEM in the same directory instead.
+
+**Configure `.env`:**
+
+```bash
 cp .env.example .env
 
 # Generate application secrets (same as Method 1)
@@ -302,9 +366,14 @@ sed -i "s|^DB_NAME=.*|DB_NAME=the_logbook|" .env
 sed -i "s|^DB_USER=.*|DB_USER=admin|" .env
 sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=your-rds-password|" .env
 
-# Point to ElastiCache (replace with your actual endpoint)
-sed -i "s|^REDIS_HOST=.*|REDIS_HOST=logbook-redis.xxxx.use1.cache.amazonaws.com|" .env
+# Point to ElastiCache (replace with your primary endpoint and AUTH token)
+sed -i "s|^REDIS_HOST=.*|REDIS_HOST=logbook-redis.xxxx.ng.0001.use1.cache.amazonaws.com|" .env
 sed -i "s|^REDIS_PORT=.*|REDIS_PORT=6379|" .env
+sed -i "s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=your-elasticache-auth-token|" .env
+
+# The bundled mysql service never starts with this override, but compose still
+# reads its definition, which requires a value here. It is used for nothing.
+sed -i "s|^MYSQL_ROOT_PASSWORD=.*|MYSQL_ROOT_PASSWORD=$(openssl rand -hex 24)|" .env
 
 # Production settings
 sed -i "s|^ENVIRONMENT=.*|ENVIRONMENT=production|" .env
@@ -312,25 +381,56 @@ sed -i "s|^DEBUG=.*|DEBUG=false|" .env
 sed -i "s|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=https://logbook.yourdomain.com|" .env
 sed -i "s|^FRONTEND_URL=.*|FRONTEND_URL=https://logbook.yourdomain.com|" .env
 
-# Start WITHOUT local database and Redis (only backend + frontend), with the
-# production override layered on the base file (see the hardening note in Method 1)
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d backend frontend
+# TLS to RDS and ElastiCache, verified against the CAs fetched above
+# (container paths, not host paths)
+cat >> .env <<'EOF'
+DB_SSL=true
+DB_SSL_CA=/etc/ssl/logbook/rds-global-bundle.pem
+REDIS_SSL=true
+REDIS_SSL_CA=/etc/ssl/logbook/amazon-root-ca-1.pem
+SECURITY_REQUIRE_TLS=true
+COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.external-services.yml
+EOF
 ```
 
-> **Caution**: the shipped `docker-compose.yml` pins the backend's `DB_HOST`,
-> `DB_PORT`, `REDIS_HOST` and `REDIS_PORT` to the bundled `mysql` and `redis`
-> services, and its backend `depends_on` both of them. The `DB_*` and `REDIS_*`
-> host and port lines above therefore do not reach the backend on their own.
-> Every other backend setting in `.env` does (since 2026-10-06); see
-> "How `.env` reaches the backend" in `wiki/Deployment-Docker.md`. Pointing the
-> stack at RDS and ElastiCache needs a compose override of your own that sets
-> those four values and drops the dependency.
+The `COMPOSE_FILE` line applies all three files to every later
+`docker compose ...` command (`ps`, `logs`, `pull`, `up -d` after an update),
+so none of them can quietly fall back to the bundled database. Its first start
+spelled out:
 
-> **Note**: When using RDS and ElastiCache, you don't start the `mysql` or `redis` containers — the application connects to the managed AWS services directly. As in Method 1, pin `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so the override is applied on every later `docker compose ...` command.
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  -f docker-compose.external-services.yml up -d
+
+# backend and frontend only — no mysql, redis or backup
+docker compose ps
+```
+
+To check which services a set of files will start before starting anything,
+run `docker compose config --services`; with the three files above it prints
+`backend` and `frontend` (and `clamav` with `--profile with-clamav`).
+
+Never run `docker compose up -d mysql` (or `redis`) against this stack: compose
+starts a service you name even when its profile is off, and nothing would use
+it.
+
+**Migrations.** There is no separate migration step. On every start the
+backend applies pending migrations to `DB_HOST` itself — on a new RDS database
+it creates every table in one pass — under the same `DB_SSL` / `DB_SSL_CA`
+settings as the rest of its traffic. Follow the first start with
+`docker compose logs -f backend` until it logs that the database schema is up
+to date. To apply them by hand, run `docker compose exec backend alembic
+upgrade head`; it uses the same settings.
 
 ### Step 6: Set Up Nginx and SSL
 
 Follow Method 1 Steps 4-5 for Nginx and Let's Encrypt setup.
+
+If you would rather terminate TLS in a container than in a host-installed
+nginx, use the bundled proxy instead: add `docker-compose.proxy.yml` before the
+external-services file (in both the `-f` list and `COMPOSE_FILE`), and see
+"Docker Compose production profile" in [DEPLOYMENT.md](../DEPLOYMENT.md) for
+its certificates. It needs no database of its own.
 
 ---
 
@@ -446,18 +546,36 @@ aws ec2 create-snapshot --volume-id vol-YOUR-VOLUME-ID --description "Logbook ba
 
 ### Method 2 (RDS)
 
-RDS handles database backups automatically:
+The `backup` sidecar does not run in Method 2:
+`docker-compose.external-services.yml` keeps it off, because it dumps the
+bundled MySQL and runs its restore drills there. RDS takes over the database
+half of its job:
 
 - **Automated backups**: Configured during RDS setup (7-35 day retention)
 - **Manual snapshots**: Create anytime from the RDS Console
 - **Point-in-time restore**: Restore to any second within the retention period
 
-You still need to back up uploaded files from the EC2 instance:
+The sidecar also archived two Docker volumes on the EC2 instance, and nothing
+else backs them up now:
+
+- `uploads` — documents, photos and attachments, unless `STORAGE_TYPE=s3`
+  already keeps them in S3;
+- `audit_archives` — audit rows exported before a retention purge. They are
+  the **only** remaining copy of that history once the purge has run.
+
+Sync both off the instance, nightly from cron (as root, since the volumes live
+under Docker's data directory):
 
 ```bash
-# Sync uploads to S3
-aws s3 sync /opt/the-logbook/uploads/ s3://your-org-logbook-backups/uploads/
+for volume in uploads audit_archives; do
+  aws s3 sync "$(docker volume inspect "the-logbook_${volume}" -f '{{ .Mountpoint }}')" \
+    "s3://your-org-logbook-backups/${volume}/"
+done
 ```
+
+**EBS snapshots** of the instance's volume (see Method 1) cover both as well.
+Restore drills are yours to run in Method 2: restore an RDS snapshot to a new
+instance from time to time and point a test stack at it.
 
 ---
 
@@ -480,10 +598,11 @@ docker compose up -d
 
 # Run database migrations
 docker compose exec backend alembic upgrade head
-
-# If using RDS (Method 2), start only app containers:
-# docker compose up -d backend frontend
 ```
+
+These commands are the same for Method 2. Its `COMPOSE_FILE` line in `.env`
+applies `docker-compose.external-services.yml` to each of them, so `up -d`
+starts only the app containers and the migrations run against RDS.
 
 ---
 
@@ -492,8 +611,13 @@ docker compose exec backend alembic upgrade head
 ### Cannot Connect to RDS
 
 ```bash
-# Verify the RDS endpoint is reachable from EC2
-mysql -h your-rds-endpoint.rds.amazonaws.com -u admin -p -e "SELECT 1"
+# Verify the RDS endpoint is reachable from EC2, over verified TLS, with the
+# CA file the backend uses (no MySQL client needed on the host)
+cd /opt/the-logbook
+docker run --rm -it -v "$PWD/infrastructure/certs:/certs:ro" mysql:8.0 \
+  mysql -h your-rds-endpoint.rds.amazonaws.com -u admin -p \
+  --ssl-mode=VERIFY_IDENTITY --ssl-ca=/certs/rds-global-bundle.pem \
+  -e "SELECT 1"
 
 # If connection times out, check:
 # 1. RDS and EC2 are in the same VPC
@@ -504,8 +628,13 @@ mysql -h your-rds-endpoint.rds.amazonaws.com -u admin -p -e "SELECT 1"
 ### Cannot Connect to ElastiCache
 
 ```bash
-# Test Redis connectivity from EC2
-redis-cli -h logbook-redis.xxxx.cache.amazonaws.com -p 6379 ping
+# Test Redis connectivity from EC2 the way the backend connects: TLS verified
+# against the CA file, authenticated with the AUTH token (prints PONG)
+cd /opt/the-logbook
+docker run --rm -it -v "$PWD/infrastructure/certs:/certs:ro" redis:7-alpine \
+  redis-cli --tls --cacert /certs/amazon-root-ca-1.pem \
+  -h logbook-redis.xxxx.ng.0001.use1.cache.amazonaws.com -p 6379 \
+  --askpass ping
 
 # If connection fails:
 # 1. Ensure ElastiCache and EC2 are in the same VPC
@@ -610,7 +739,7 @@ sudo nginx -t
 | 3    | Clone repo, configure .env      | Create ElastiCache Redis cluster                          |
 | 4    | `docker compose up -d`          | Launch EC2, install Docker                                |
 | 5    | Set up Nginx reverse proxy      | Clone repo, configure .env with RDS/ElastiCache endpoints |
-| 6    | Enable SSL with Let's Encrypt   | `docker compose up -d backend frontend`                   |
+| 6    | Enable SSL with Let's Encrypt   | `up -d` with `docker-compose.external-services.yml`       |
 | 7    | Access at `https://your-domain` | Set up Nginx + SSL                                        |
 | 8    | Configure backups               | Access at `https://your-domain`                           |
 

@@ -1001,12 +1001,16 @@ def run_migrations():
             return
     # NullPool avoids connection pool overhead during DDL-heavy initialization.
     # Matches Alembic's own env.py strategy (pool is discarded after migrations).
-    # connect_args mirrors the async engine's timeout so a hung MySQL fails
-    # fast instead of blocking the worker indefinitely.
+    # connect_args are the async engine's own: the timeout makes a hung MySQL
+    # fail fast instead of blocking the worker, and DB_SSL / DB_SSL_CA cover the
+    # DDL and seed rows written here exactly as they cover the app's traffic.
+    # Without them PyMySQL negotiates TLS only opportunistically and never
+    # checks the certificate, so a managed database reached across a network
+    # (RDS) would be migrated over a channel the app itself refuses to run on.
     engine = create_engine(
         settings.SYNC_DATABASE_URL,
         poolclass=NullPool,
-        connect_args={"connect_timeout": settings.DB_CONNECT_TIMEOUT},
+        connect_args=settings.get_db_connect_args(),
     )
 
     _wait_for_mysql(engine, startup_status)

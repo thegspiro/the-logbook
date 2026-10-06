@@ -252,11 +252,11 @@ docker compose -f docker-compose.yml -f docker-compose.minimal.yml -f docker-com
 # SSH to your EC2 instance, then:
 curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
 
-# With managed RDS database:
-# Edit .env to point to RDS endpoint
-DB_HOST=your-rds-endpoint.region.rds.amazonaws.com
-DB_PASSWORD=your-secure-password
-docker compose up -d backend frontend
+# With managed RDS and ElastiCache: set DB_HOST, DB_PORT, REDIS_HOST,
+# REDIS_PORT and the TLS settings in .env (AWS Deployment Guide, Method 2),
+# then layer the external-services override so the bundled ones stay off
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  -f docker-compose.external-services.yml up -d
 ```
 
 **Recommended EC2 instances:**

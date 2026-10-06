@@ -206,6 +206,11 @@ docker compose up -d
      sudo ./scripts/setup-ssl.sh yourdomain.com admin@yourdomain.com
      ```
 
+To use Amazon RDS and ElastiCache (or any MySQL and Redis outside the stack)
+instead of the bundled containers, layer `docker-compose.external-services.yml`
+after the production override; see Method 2 of the
+[AWS Deployment Guide](deployment/aws.md#method-2-ec2--rds--elasticache-production).
+
 #### Digital Ocean Deployment
 
 1. **Create Droplet**
