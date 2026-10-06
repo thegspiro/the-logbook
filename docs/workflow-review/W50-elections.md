@@ -179,7 +179,9 @@ Covered by `ElectionDetailPage.loaded.test.tsx` and the new `test_ballot_send_me
 **Where:** `backend/app/services/election_service.py:5142` (the roll is frozen at opening) and `:6203`.
 **Flagged:** whether a late arrival may vote is a question of who is authorized to vote. The Attendance tab now says a check-in after opening does not add a voter, and points to the override. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
 
-### W50-10 — MED — Results of an election closed early stay hidden until its scheduled end — 🚩 FLAGGED
+### W50-10 — MED — Results of an election closed early stay hidden until its scheduled end — ✅ DECIDED (2026-10-05)
+
+**Owner decision (2026-10-05):** an early close releases results per the visibility an election has at its scheduled end. `get_election_results` now unlocks on CLOSED alone (or the pre-open live-tally flag); the scheduled end is no longer a condition, so the officer and the members see the result at the meeting. Test: `TestResultsVisibilityGate` in `backend/tests/test_election_voting_flow.py`.
 
 **Did:** closed the officer election on 9/30, whose scheduled end is 10/7 9:00 PM. Opened Results as `secretary` and as `member`.
 **Saw:**
@@ -775,7 +777,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `PublishResultsPanel.tsx:59-61, 107-139`; `ElectionDetailPage.tsx` gating and the publish handler; `ElectionResults.tsx` fetch keyed on id only.
 **Fix:** S19 shows the toggle only when CLOSED, no panel before OPEN, and reworded the copy (`PublishResultsPanel.w50-s19.test.tsx`). A refetch after Publish/Void in `ElectionDetailPage` is still to be asserted.
 
-### W50-22 — MED — Closed early, unpublished: results are 403 for everyone, including the officer who closed it, until the scheduled end — FLAGGED
+### W50-22 — MED — Closed early, unpublished: results are 403 for everyone, including the officer who closed it, until the scheduled end — ✅ DECIDED (2026-10-05)
+
+**Owner decision (2026-10-05):** CLOSED unlocks results — for managers and, per W50-10 above, for every `elections.view` holder, since the same numbers are already in the report mail and the certified PDF. The Publish/Hide switch on a closed election had nothing left to do and was removed from Results & Publishing; the Results tab no longer promises a date.
 
 **Did:** as `secretary` (A8 step 2, A9 step 10, A10 step 6) and `admin` (B7 C-02): `GET /results` seconds after the close.
 **Saw:** 403 "Results not available yet", while the report mail with the results had reached the same person seconds earlier.

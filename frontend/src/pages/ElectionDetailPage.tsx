@@ -1726,9 +1726,7 @@ export const ElectionDetailPage: React.FC = () => {
         <RunoffChain election={election} />
 
         {/* Publish Results Panel (secretary - open/closed elections) */}
-        {canManage && electionId && (
-          <PublishResultsPanel electionId={electionId} election={election} onUpdate={setElection} />
-        )}
+        {canManage && electionId && <PublishResultsPanel electionId={electionId} election={election} />}
 
         {/* Live turnout dashboard (secretary, meeting night) */}
         {canManage && showTurnout && election.status === ElectionStatus.OPEN && electionId && (

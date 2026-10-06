@@ -185,10 +185,9 @@ def register(server: Any) -> None:
         # never shown here, whatever that flag says.
         if election.status != ElectionStatus.CLOSED:
             raise ValueError("Results are not available until the election closes")
-        # The status check above is the gate. The service's own visibility
-        # rule additionally requires the scheduled end to have passed, which
-        # an election an officer closed early never satisfies; bypass it,
-        # since a closed ballot's tally is final either way.
+        # The status check above is the gate, and it is stricter than the
+        # service's own rule, which also honours the publish flag; the
+        # bypass keeps the two from being read as one decision.
         results = await ElectionService(db).get_election_results(
             parse_uuid(election_id, "election_id"),
             org_uuid(principal),

@@ -45,7 +45,7 @@ describe('PublishResultsPanel (S19)', () => {
   });
 
   it('does not offer an enabled publish toggle while the election is open', () => {
-    renderWithRouter(<PublishResultsPanel electionId="e1" election={baseElection} onUpdate={vi.fn()} />);
+    renderWithRouter(<PublishResultsPanel electionId="e1" election={baseElection} />);
 
     // Either hide the control or disable it: what must not exist is an
     // enabled button whose only possible outcome is a 400.
@@ -57,23 +57,23 @@ describe('PublishResultsPanel (S19)', () => {
   });
 
   it('describes the report as going to the secretary, not to all eligible voters', () => {
-    renderWithRouter(
-      <PublishResultsPanel electionId="e1" election={{ ...baseElection, status: 'closed' }} onUpdate={vi.fn()} />
-    );
+    renderWithRouter(<PublishResultsPanel electionId="e1" election={{ ...baseElection, status: 'closed' }} />);
 
     expect(screen.getByRole('button', { name: /send report/i })).toBeInTheDocument();
     expect(screen.queryByText(/all eligible voters/i)).not.toBeInTheDocument();
   });
 
-  // At phone width the hint ran past the card's clipped edge (REDRIVE-A-2):
-  // the row must be allowed to wrap, and the hint must not refuse to shrink.
-  it('lets the visibility row wrap on a narrow card', () => {
-    renderWithRouter(<PublishResultsPanel electionId="e1" election={baseElection} onUpdate={vi.fn()} />);
+  it('offers no publish switch on a closed election, whose close released the results', () => {
+    renderWithRouter(<PublishResultsPanel electionId="e1" election={{ ...baseElection, status: 'closed' }} />);
 
-    const hint = screen.getByText('Results can be published once voting closes');
-    expect(hint).not.toHaveClass('shrink-0');
-    // The row is a plain layout div with no role; the class is what is under test.
-    // eslint-disable-next-line testing-library/no-node-access -- see above
-    expect(hint.parentElement).toHaveClass('flex-wrap');
+    expect(screen.getByText('Results are visible to members')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /publish results|hide results/i })).not.toBeInTheDocument();
+    expect(mockUpdateElection).not.toHaveBeenCalled();
+  });
+
+  it('says an open election keeps results hidden until voting closes', () => {
+    renderWithRouter(<PublishResultsPanel electionId="e1" election={baseElection} />);
+
+    expect(screen.getByText('Results are hidden while voting is open')).toBeInTheDocument();
   });
 });

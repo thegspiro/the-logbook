@@ -2858,19 +2858,25 @@ class ElectionService:
         """
         Get comprehensive election results
 
-        SECURITY CRITICAL: Results are only visible AFTER election closing time.
+        SECURITY CRITICAL: Results are only visible once voting has ended.
 
         Before the election closes, use get_election_stats() to view:
         - Number of issued ballots (total_eligible_voters)
         - Number of received ballots (total_votes_cast)
 
         Results visibility rules:
-        1. Election end_date must have passed (current time > end_date)
-        2. Election status must be CLOSED
-        3. OR results_visible_immediately flag is True (override for instant results)
+        1. Election status is CLOSED — voting has ended, whether at the
+           scheduled end or early, by an officer
+        2. OR results_visible_immediately flag is True (override for instant results)
 
-        This prevents election manipulation and ensures integrity by not revealing
-        results until voting has officially ended.
+        A CLOSED election accepts no votes on any path, so its tally is final
+        and revealing it cannot steer a vote. The scheduled end date used to
+        be a second condition, which left an election closed early at the
+        meeting refused to everyone — the officer who closed it included —
+        until a date days later, while the report mail, the certified PDF and
+        the runoff check already carried the same numbers (W50-10, W50-22;
+        owner decision 2026-10-05: an early close releases results exactly
+        as the scheduled end would have).
         """
         # Get the election
         result = await self.db.execute(
@@ -2883,14 +2889,10 @@ class ElectionService:
         if not election:
             return None
 
-        # SECURITY: Check if results can be viewed
-        # Results are ONLY visible after the election closing time has passed
-        current_time = datetime.now(timezone.utc)
-        end_date = self._ensure_utc(election.end_date)
-        election_has_closed = end_date is not None and current_time > end_date
-
+        # SECURITY: results are only visible once voting has ended (CLOSED);
+        # see the docstring for why the scheduled end is not also required.
         can_view = (
-            (election.status == ElectionStatus.CLOSED and election_has_closed)
+            election.status == ElectionStatus.CLOSED
             or election.results_visible_immediately
             or _internal_bypass_visibility
         )

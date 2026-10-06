@@ -801,13 +801,15 @@ If results are hidden until close:
    - Write-in tally
    - Turnout statistics (turnout counts only voting-eligible members — tiers marked not voting-eligible are excluded from the denominator)
 
-> **Note on early closes:** results stay gated until the election's scheduled end date has passed — for everyone, including the officer who closed it (an open owner decision, 2026-09-30). The Results tab says when: _"Voting is closed. Results will be available after the scheduled end, …"_. If you close early and want results seen right away, press **Publish Results** on the closed election's **Results & Publishing** panel. Internal processes like runoff creation and the emailed report are not affected by the gate.
+> **Note on early closes** _(2026-10-05)_: closing releases the results. An election closed early at the meeting shows them on the **Results** tab straight away — to the officer who closed it and to every member who can view elections — exactly as it would have at the scheduled end. **Publish Results** is only needed to show results _before_ voting closes, which the app does not allow while voting is open.
 
-**The Results & Publishing panel** _(changed 2026-09-30)_ appears once the
-election is open. **Publish Results** / **Hide Results** is offered only on a
-closed election — while voting is open the panel reads _"Results can be
-published once voting closes"_, where it used to offer a switch the server
-refused. **Email Results Report** (_"Email the results report to the election
+**The Results & Publishing panel** _(changed 2026-10-05)_ appears once the
+election is open. It no longer carries a **Publish Results** / **Hide
+Results** switch: closing the election is what releases the results, so a
+closed election's panel reads _"Results are visible to members"_ and an open
+one _"Results are hidden while voting is open"_. (A live tally while voting is
+open is still possible only if **results visible immediately** was set on the
+election before it opened.) **Email Results Report** (_"Email the results report to the election
 secretary"_, button **Send Report**) appears only once closed; the server now
 refuses the report while the election is open, where it used to mail a
 mid-vote tally headed "has been closed … official report".
@@ -1184,8 +1186,6 @@ Drive"):
 - There is no seat count — a "(2 seats)" race declares one winner.
 - The emailed ballot pre-selects **Abstain** on every item; an untouched
   Submit casts no votes and uses up the link.
-- Results of an election closed early stay hidden until its scheduled end
-  unless published.
 - A paper ballot cannot record a vote on a motion or membership item.
 - Merge Write-Ins, Void a Vote and a paper-batch void still change the results
   after close and after publishing, with no revision mark.
@@ -1267,7 +1267,7 @@ The election report is emailed to Sarah — the election secretary who created i
 | Election closed accidentally                             | Use **Rollback** to reopen (requires `elections.manage`); leadership receives notification. **Exception:** an anonymous election that already has votes cannot be reopened after closing — its anonymity salt was destroyed, so reopening would permit double voting. Create a new election. |
 | Candidate wants to withdraw                              | Remove candidate from ballot (only if no votes cast). If votes exist, mark as "declined" instead.                                                                                                                                                                                            |
 | Proxy holder can't find proxy vote button                | Verify proxy authorization was created. Check that the election is still open.                                                                                                                                                                                                               |
-| Results don't show after closing                         | If the election was closed _before_ its scheduled end date, results stay hidden until that date passes — flip **results visible immediately** on the closed election (Publish Results panel) to show them now.                                                                               |
+| Results don't show after closing                         | Since 2026-10-05 a closed election shows its results whether it closed early or at the scheduled end. If the tab still refuses, reload the page — the election may have been rolled back to open by another officer.                                                                         |
 | Vote count doesn't match attendance                      | Check for proxy votes (counted separately). Check for voter overrides (members not on attendance list).                                                                                                                                                                                      |
 | Forensics shows integrity warning                        | Run full forensics report. Contact system administrator if vote signatures are invalid.                                                                                                                                                                                                      |
 | Runoff not auto-created                                  | Verify **Enable Runoffs** is on in election settings. Check that the victory condition was set correctly.                                                                                                                                                                                    |

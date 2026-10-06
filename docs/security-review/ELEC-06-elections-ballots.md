@@ -22,6 +22,12 @@ finding below that says FLAGGED or OPEN is superseded by its line here.
   change and the re-hash migration. Residual (a ballot stored with a
   collision before the fix) stays in `docs/KNOWN_LIMITATIONS.md`. Guard:
   `tests/test_ballot_item_alias_collision.py`.
+- **W50-22** (results gate needed the scheduled end even when CLOSED; also
+  the first-drive W50-10) — **fixed:** `get_election_results` unlocks on
+  CLOSED alone, or the pre-open live-tally flag. A closed election accepts
+  no vote on any path, so its tally is final; a live tally stays refused.
+  S10's permission shape (`elections.view`, 403 vs 404) is unchanged.
+  Guard: `TestResultsVisibilityGate` in `tests/test_election_voting_flow.py`.
 - **ELEC-16** (`list_manual_ballot_batches` unbounded) — **accepted as is.**
   Paper-tally sessions per election are naturally few; no cap and no
   pagination. Revisit if an election ever carries more than a few dozen
