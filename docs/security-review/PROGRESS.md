@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#PENDING](https://github.com/thegspiro/the-logbook/pull/PENDING)**:
+**PR [#2973](https://github.com/thegspiro/the-logbook/pull/2973)**:
 branch `claude/security-review-training-core`, Feature 17 (Training core),
 pass 7 (watchdog pickup — the dedicated `/loop 30m /security-review` session
 had no open PR/branch for this feature). Real delta, not a zero-delta pass:
