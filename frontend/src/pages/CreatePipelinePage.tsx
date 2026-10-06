@@ -356,8 +356,8 @@ const StepInfo: React.FC<{
           onChange={(e) => onChange('structure_type', e.target.value)}
           className="form-input"
         >
-          <option value="phases">Phases — stages the member moves through in order</option>
-          <option value="flexible">One list — everything in any order</option>
+          <option value="phases">Phases — stages, in order</option>
+          <option value="flexible">One list — any order</option>
         </select>
         <HelpText>
           Pick <strong>Phases</strong> for a recruit school or driver program, where a member finishes one stage before

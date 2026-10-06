@@ -162,6 +162,12 @@ const RECURRENCE_PATTERNS: { value: RecurrencePattern; label: string }[] = [
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+const CHECK_IN_WINDOW_DESCRIPTIONS: Record<'flexible' | 'strict' | 'window', string> = {
+  flexible: 'Opens before the start, closes when the event ends.',
+  strict: 'Only while the event is running.',
+  window: 'Opens before the start, closes after the end.',
+};
+
 const DEFAULT_MEMBERSHIP_TYPES = [
   { value: 'active', label: 'Active' },
   { value: 'probationary', label: 'Probationary' },
@@ -1532,10 +1538,15 @@ export const EventForm: React.FC<EventFormProps> = ({
               onChange={(e) => update({ check_in_window_type: e.target.value as 'flexible' | 'strict' | 'window' })}
               className={selectClass}
             >
-              <option value="flexible">Flexible - Opens before the start, closes when the event ends</option>
-              <option value="strict">Strict - Only while the event is running</option>
-              <option value="window">Window - Opens before the start, closes after the end</option>
+              <option value="flexible">Flexible</option>
+              <option value="strict">Strict</option>
+              <option value="window">Window</option>
             </select>
+            {/* The description sits under the field rather than in the option
+                text, which a phone-width native select cuts off mid-sentence. */}
+            <p className="text-theme-text-muted mt-1 text-xs">
+              {CHECK_IN_WINDOW_DESCRIPTIONS[formData.check_in_window_type || 'flexible']}
+            </p>
           </div>
 
           {(formData.check_in_window_type === CheckInWindowType.FLEXIBLE ||
