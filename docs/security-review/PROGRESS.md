@@ -16,6 +16,27 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (this PR)**: branch `claude/security-review-documents-legal`,
+Feature 10 (Documents & legal), pass 7 — 0 code fixes (DOC-9's remaining
+half and DOC-30 were already fixed by an unrelated perf PR, #2954, before
+this pass began — independently re-traced against `can_access_folder`'s
+three fail-closed cases rather than taken on the commit message), DOC-8
+re-verified still open (owner decision, unchanged), 1
+`KNOWN_LIMITATIONS.md` citation correction (Inventory's INV-22 entry named
+DOC-9 as a currently-open sibling; corrected now that DOC-9 is fixed). All
+20 routes re-enumerated via an AST walk. Real delta since pass 6 reviewed in
+full (4 backend commits + 2 out-of-rotation workflow-review frontend passes,
+found via per-path `git log` since pass 6's own PR head SHA is not a
+resolvable object in this repo's history — the same squash/orphan-merge
+issue every pass since 1/4 has documented). Gate green (flake8/black/isort,
+migrations, route-permission check — 245 routes, 562 scoped + 12,951
+full-suite backend tests, frontend typecheck + lint). See the Log entry
+below for detail. PR #2957 (Feature 09) merged since the prior iteration, so
+its note below is now superseded.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 7, PR #2957, merged), preserved for history</summary>
+
 **PR [#2957](https://github.com/thegspiro/the-logbook/pull/2957)**: branch
 `claude/security-review-medical-screening`, Feature 09 (Medical screening,
 PHI), pass 7 — 0 code fixes, 1 new flagged (MS-14, LOW, permission
@@ -33,6 +54,8 @@ scoped + 12,930 full-suite backend tests). See the Log entry below for
 detail. This PR also carries this iteration's Step 0 bookkeeping: PR #2955
 (Feature 08) merged since the prior iteration, so its note below is now
 superseded and pass 6's own PR link is backfilled to #2608.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 8, PR #2955, merged), preserved for history</summary>
@@ -17797,7 +17820,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
@@ -17829,6 +17852,71 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-06 — Feature 10 (Documents & legal, pass 7) — 0 code fixes (DOC-9/DOC-30 already fixed externally), DOC-8 re-verified open, 1 doc-citation correction (watchdog pickup)
+
+Watchdog pickup — `list_pull_requests` (state=open) returned #2953, #2958,
+#2959 (none a `claude/security-review-*` head branch), confirming no
+security-review PR to tend and that PR #2957 (Feature 09) had already
+merged. Row 09 was already ✅; row 10 (Documents & legal) was the next `⬜`.
+Re-checked again immediately before branching (Step 8): the open set had
+grown to include #2960 and #2961, still none from this rotation.
+
+**Baseline resolution hit the same squash/orphan-merge issue as every pass
+since 1/4** — pass 6's own PR (#2611) merge commit is not resolvable in this
+repo's history. Used per-path `git log --since=2026-09-16` across the full
+declared scope instead, which turned up a merge commit (`a6c24c531`,
+2026-09-25) that `git log -- <path>` reports against every scope file with
+only `+` lines — confirmed as the same history-rewrite artifact rather than
+real content by checking current line counts against pass 5/6's own
+citations (all matched within the four real commits' expected deltas).
+
+**Real delta: four backend commits, none from this rotation** — a
+department-timezone fix to the documents-summary "this month" cutoff, a
+preferred-name display change to uploader attribution and the printed
+roster's names, and two already-reviewed external fixes: `870ea19b4` (PR
+#2954, 2026-10-05) fixes **DOC-9's remaining half** and **DOC-30** together
+— replacing both folder-ACL scans' "load every folder, walk each to its
+root in Python" with "load only the folders carrying a restriction, walk the
+tree in SQL via a recursive CTE" — and `17bdf7797` (2026-10-05, Facilities
+rotation's FAC-41/FAC-44) adds indexes and a `document_id` column this
+feature's own service shares but does not call from its own routes. Neither
+fix was taken on its commit message: the DOC-9/DOC-30 fix was independently
+traced against all three of `can_access_folder`'s fail-closed cases
+(cross-org, missing, and cyclic ancestry) to confirm the new SQL-CTE shape
+reproduces the old Python ancestor-walk exactly, not merely "has tests that
+pass". Two out-of-rotation workflow-review passes (W53, W54) also touched
+this feature's frontend screens in the window — accessibility fixes
+(keyboard-reachable file picker, dialog/tab ARIA roles, a "Leadership only"
+folder label), no auth or data-exposure dimension, already recorded in
+`docs/KNOWN_LIMITATIONS.md` by their own pass.
+
+**All 20 routes re-enumerated** via an `ast.parse` walk of every
+`@router.(get|post|...)` decorator in the three declared files (unchanged
+count from pass 5) — every route carries an explicit auth dependency, no
+OR-gate includes a baseline/rank-default permission, and
+`station_documents.py`'s two routes (a flat `get_current_user` at the
+decorator) carry their own per-document permission check in
+`_authorize_document`, read in full.
+
+**DOC-8** (`legal_service.py::list_revisions` unbounded) re-verified
+unchanged — still an owner decision, already in `KNOWN_LIMITATIONS.md`.
+
+**One doc correction, found while confirming DOC-9's fix didn't leave stale
+cross-references elsewhere:** Inventory's INV-22 entry in
+`docs/KNOWN_LIMITATIONS.md` cited "this rotation's own DOC-9" as a
+currently-open sibling with the identical shape. Added a correction
+paragraph — DOC-9's fix (a tree-reachability CTE) doesn't transfer to
+INV-22's per-item attribute comparison, so INV-22 is now its own open
+question rather than a shared one. INV-22's own disposition is unchanged.
+
+Gate green: flake8/black/isort clean; migrations 527 revisions, single
+head; route-permission check 245 routes, 0 errors/warnings; 562 scoped +
+12,951 full-suite backend tests (1 pre-existing skip, `pywebpush`); frontend
+`tsc --noEmit` and `eslint` both clean. (The first scoped-test run failed on
+a local DB one migration behind — `users.badge_code`, unrelated to this
+feature — fixed with `alembic upgrade head` before the gate run recorded
+above.)
 
 ### 2026-10-06 — Feature 09 (Medical screening, PHI, pass 7) — 0 code fixes, 1 new flagged (MS-14, LOW), 1 comment-accuracy correction, real delta reviewed (watchdog pickup)
 

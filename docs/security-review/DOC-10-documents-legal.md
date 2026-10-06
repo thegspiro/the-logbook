@@ -1,6 +1,301 @@
 # Security Review — Documents & Legal
 
-**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6)
+**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), (this PR) (pass 7)
+
+---
+
+## Pass 7 (2026-10-06)
+
+**Watchdog iteration.** Confirmed via `list_pull_requests` (state=open) that no
+`claude/security-review-*` branch was open (the open set was #2953, #2958,
+#2959, then #2960/#2961 — a feature fix, an app-review PR, and two more
+feature fixes, none of them this rotation), so the rotation's queue was
+clear and Feature 10 (Documents & legal) — the next `⬜` row, since pass 6
+left it reset — was next. Re-checked again immediately before branching
+(Step 8): still clear.
+
+**Baseline and delta.** Pass 6's own PR (#2611) merge commit is not a
+resolvable object in this repository's history — the same squash/orphan-merge
+issue every pass since pass 1/4 has documented, hit again on a fresh example
+(a merge commit touching every file in this feature's scope with only `+`
+lines, dated 2026-09-25, is the artifact — `a6c24c531`, confirmed by its line
+counts matching pass 5/6's own citations exactly and `git show --stat` showing
+zero `-` lines across 60+ files that demonstrably still exist with the content
+those passes described). Per-path `git log --since=2026-09-16` was used
+instead, across every file this feature's scope declares plus its backing
+services, models, schemas and the MCP tool module. Real result: **four
+commits**, none from this rotation:
+
+1. **`6850d691f`** (2026-09-26, "Move the remaining 'today' reads to the
+   department's date") — `documents_service.py`'s `get_summary` now computes
+   "this month" from `today_in(tz).replace(day=1)` /
+   `local_day_start_utc(...)` instead of `date.today()` (UTC), so the
+   documents-module stat tile cuts the month at the department's own
+   midnight rather than UTC's. No ACL or tenant-isolation surface touched.
+2. **`f92fbd927`** (2026-10-04, "Let members go by a preferred name on
+   everyday screens") — `documents_service.py`'s uploader-name attachment and
+   `print_document_service.py`'s `_person_name` both now read
+   `User.preferred_name` through the shared `format_display_name` helper
+   instead of concatenating `first_name`/`last_name` directly. Purely a
+   display-string change; the underlying query (`User.id.in_(user_ids)`,
+   still `organization_id`-scoped) is unchanged.
+3. **`870ea19b4`** (2026-10-05, PR #2954, "perf(documents): stop loading
+   every folder to work out access scope") — fixes **DOC-9's open half**
+   (`accessible_folder_ids`) and **DOC-30** (the MCP surface's
+   `_open_folder_ids`) together. See below — read and independently traced,
+   not merely trusted from the commit message.
+4. **`17bdf7797`** (2026-10-05, "perf(facilities): narrow the facility-
+   reference and folder locking reads (FAC-41, FAC-44)") — Facilities-rotation
+   work that happens to live in this feature's shared file and model, same as
+   the FAC-22–FAC-45 work pass 4/5 already re-confirmed does not regress this
+   feature's own invariants. Adds `(organization_id, slug)` and
+   `(parent_id, slug)` indexes to `document_folders` (migration
+   `c56303befb2c`, guarded/idempotent, read in full) and changes
+   `_match_facility_document_references` to match on a new
+   `facility_documents.document_id` / `facility_photos.document_id` column
+   instead of a `file_path LIKE 'document:%'` scan. Neither touched function
+   is reachable from this feature's own routes — `_match_facility_document_references`
+   is called only from the Facilities module's own delete-guard — and
+   neither changes a folder/document ACL decision. No new migration in the
+   window content-greps to `document_folders`/`documents`/`legal_documents`/
+   `legal_document_revisions` beyond the FAC-41 one's unrelated columns.
+
+**Frontend:** two out-of-rotation workflow-review passes touched this
+feature's screens in the same window — `1ac4ef74e` (W53, Documents: keyboard-
+reachable file picker, dialog ARIA roles, a "Leadership only" label on
+restricted folders, a stale code comment) and `53b896f34` (W54, half of which
+is Legal Documents: a named tab panel). Both are accessibility fixes with no
+auth/data-exposure dimension — read in full
+(`docs/workflow-review/W53-documents.md`, `W54-org-chart-and-legal.md`) rather
+than taken on the commit message's word. W53's one flagged item (folders
+cannot be restricted/renamed/moved/deleted from the UI, though the API
+supports all four) and W54's three (revert not shown in published history,
+publisher edits not attributed, formatting lost on paste) are UI/product gaps
+already recorded in `docs/KNOWN_LIMITATIONS.md` by their own pass — not
+re-flagged here as this rotation's own findings, since they were never missed,
+only out of this rotation's remit.
+
+### DOC-9 (remaining half) and DOC-30 — ✅ now fixed, independently re-traced
+
+Both were flagged (not fixed) as of pass 6. `870ea19b4` fixes both with one
+mechanism: `restricted_folders_query` selects only folders carrying a
+restriction of their own (non-`ORGANIZATION` visibility, an `owner_user_id`,
+or a non-empty `allowed_roles`/`required_permissions` — the new
+`_json_has_value` helper treats SQL `NULL`, JSON `null`, and an empty JSON
+array as "no restriction", matching Python truthiness), those are judged in
+Python by the _same_ per-folder predicate as before
+(`_folder_admits_user`/`_folder_is_open` — unchanged, not reimplemented), and
+`reachable_folder_ids` walks the tree down from the organization's roots with
+a recursive `UNION` (not `UNION ALL` — load-bearing: it is what ends the
+recursion when a cycle hangs below a reachable folder) CTE that can only ever
+add a child whose parent is already in the accumulated set, so a folder
+behind a blocked ancestor, a missing ancestor, or an ancestor in another
+organization can never be reached from a root.
+
+**Independently traced, not merely re-read:** confirmed this reproduces
+`can_access_folder`'s whole-ancestry AND exactly — not merely "looks
+equivalent, has tests" — for all three fail-closed cases `can_access_folder`
+itself documents:
+
+- **Cross-organization ancestry.** The recursive join filters each
+  candidate child by `DocumentFolder.organization_id == org` _on the child_,
+  and the CTE seed (`roots`) is filtered the same way — so a folder whose
+  `parent_id` resolves to another organization's row can never be the target
+  of the join (that row was never inserted into `tree` under _this_ org's
+  walk), regardless of id collision. Unreachable, matching
+  `can_access_folder`'s explicit `organization_id` check at every ancestor.
+- **Missing ancestor.** The join requires `DocumentFolder.parent_id ==
+tree.c.id` — a `parent_id` pointing at a row that does not exist (or was
+  deleted) can never match any `tree.c.id`, so the child is never added.
+  Matches `can_access_folder`'s `current is None` fail-closed branch.
+- **Cycle.** Neither node in a two-folder cycle has `parent_id IS NULL`, so
+  neither can ever enter `tree` from the root seed, and the recursive step
+  requires a parent _already in_ `tree` — a cycle disconnected from any root
+  can never bootstrap itself in. Matches `can_access_folder`'s `seen` guard.
+
+The MCP-surface fix (`_open_folder_ids`) is the identical shape with
+`_folder_is_open` (the no-specific-user "every member can read this"
+predicate) in place of `_folder_admits_user`, and the same
+`restricted_folders_query` — verified the two predicates agree on exactly
+which folders are even eligible to be "blocked" (both test the same four
+columns: `visibility`, `owner_user_id`, `allowed_roles`,
+`required_permissions`).
+
+Test coverage matches the claim: `tests/test_documents_access.py`'s access-set
+tests now run against a real database (not mocked), including
+`test_matches_the_per_folder_ancestry_walk`, which asserts the new function's
+output equals a direct per-folder `can_access_folder` call for five caller
+tiers over a tree built with every restriction type, a foreign parent, and a
+cycle — the strongest form of "equivalent", a cross-check against the old
+predicate rather than a fixed expected set. Ran this pass (see Completion
+gate): 562 scoped tests pass, including this one.
+
+**Not fixed by this rotation** — credited to the PR as written, consistent
+with this rotation's treatment of other external work (FAC-22–45, the
+preferred-name/today's-date commits above): no code change made here.
+
+### Re-verified still open, not re-flagged
+
+- **DOC-8** (`legal_service.py::list_revisions` / `get_legal_documents`
+  unbounded — no `LIMIT`/`OFFSET`, every draft and archived revision's full
+  body returned on every load) — read `list_revisions` and
+  `get_legal_documents` directly this pass: unchanged. Still the same class
+  as this rotation's other unbounded-list findings (now that DOC-9 itself is
+  fixed, FIN-9/ELEC-12/USR-5/MP-10/MS-6 remain the live siblings — see the
+  correction to `docs/KNOWN_LIMITATIONS.md`'s INV-22 entry below, which cited
+  DOC-9 as a currently-open sibling and needed the same update). A
+  response-envelope/frontend-contract change, left for an owner decision,
+  already in `docs/KNOWN_LIMITATIONS.md`.
+
+### Route re-enumeration (AST walk, all 20 routes — up from 0 missed)
+
+Walked every `@router.(get|post|put|patch|delete)` decorator in the three
+declared files via `ast.parse` rather than grepping or trusting pass 5/6's
+route tables, per this rotation's standing post-MP-32/MS-near-miss practice.
+Count unchanged from pass 5 (no route added or removed since):
+
+| Method | Path                                 | Function                   | Auth / permission                                                      |
+| ------ | ------------------------------------ | -------------------------- | ---------------------------------------------------------------------- |
+| GET    | `/folders`                           | `list_folders`             | `documents.view`                                                       |
+| POST   | `/folders`                           | `create_folder`            | `documents.manage` + parent folder `require_write` ACL                 |
+| PATCH  | `/folders/{folder_id}`               | `update_folder`            | `documents.manage` + current/destination folder `require_write` ACL    |
+| DELETE | `/folders/{folder_id}`               | `delete_folder`            | `documents.manage` + current folder `require_write` ACL                |
+| GET    | `` (list)                            | `list_documents`           | `documents.view` + folder ACL / `accessible_folder_ids` scoping        |
+| POST   | `/upload`                            | `upload_document`          | `documents.manage` + destination folder `require_write` ACL            |
+| GET    | `/my-folder`                         | `get_my_member_folder`     | `documents.view` (self-scoped; no id param)                            |
+| GET    | `/{document_id}`                     | `get_document`             | `documents.view` + `can_access_document` folder ACL                    |
+| GET    | `/{document_id}/download`            | `download_document`        | `documents.view` + `can_access_document` + org-subdir path containment |
+| PATCH  | `/{document_id}`                     | `update_document`          | `documents.manage` + current/destination folder `require_write` ACL    |
+| DELETE | `/{document_id}`                     | `delete_document`          | `documents.manage` + `require_write` ACL                               |
+| GET    | `/stats/summary`                     | `get_documents_summary`    | `documents.view`                                                       |
+| POST   | `/station-documents/preview`         | `preview_station_document` | `get_current_user` + per-document permission (`_authorize_document`)   |
+| POST   | `/station-documents/print`           | `print_station_document`   | `get_current_user` + per-document permission (`_authorize_document`)   |
+| GET    | `` (overview)                        | `get_legal_documents`      | `legal.propose` OR `legal.publish` OR `settings.manage`                |
+| POST   | `/revisions`                         | `create_revision`          | `legal.propose` OR `legal.publish` OR `settings.manage`                |
+| PUT    | `/revisions/{revision_id}`           | `update_revision`          | same OR-gate + `_assert_may_modify` (own draft, or a publisher)        |
+| DELETE | `/revisions/{revision_id}`           | `delete_revision`          | same OR-gate + `_assert_may_modify`                                    |
+| POST   | `/revisions/{revision_id}/publish`   | `publish_revision`         | `legal.publish` OR `settings.manage`                                   |
+| POST   | `/{document_type}/revert-to-default` | `revert_to_default`        | `legal.publish` OR `settings.manage`                                   |
+
+All 20 carry an explicit auth dependency — none reachable with no
+`Depends`. No OR-gate includes a baseline/rank-default permission (checked
+`documents.view`/`documents.manage`/`legal.propose`/`legal.publish`/
+`settings.manage` against `DEFAULT_POSITIONS["member"]`/`firefighter` — none
+present, matching pass 1's original finding that these are leadership-tier
+grants). `station_documents.py`'s two routes carry no permission string at
+the decorator — by design, documented in the module's own docstring and
+`_authorize_document` (CLAUDE.md's "intentionally public/under-gated route
+needs its compensating control named" is satisfied by that function, read in
+full this pass: 404 for an unknown document key, 403 unless the caller holds
+one of that document's own registered permissions — never a flat
+`get_current_user`-only route).
+
+### Re-verified good ✅ (spot-checked against current code, not the diff)
+
+- **Upload hardening intact** (`documents.py:394-457`): 50MB cap enforced
+  before the magic-byte check runs; MIME detected from the first 2048 bytes
+  via `magic.from_buffer`, never the client's `Content-Type`; extension
+  derived from the detected MIME via a fixed map (never the uploaded
+  filename), with a `.bin` fallback rather than trusting an unmapped type;
+  on-disk name is `uuid4().hex` + that extension — no user input in the
+  path. `create_document` failure cleans up the just-written file.
+- **Download path containment intact** (`documents.py:596-611`): resolves
+  both `UPLOAD_DIR/<org_id>` and the stored `file_path` with
+  `os.path.realpath` and requires the resolved path to equal or be a
+  subdirectory-prefixed descendant of the org's own directory — not the
+  shared `UPLOAD_DIR` root — logging a warning and returning 403 otherwise
+  (DOC-24).
+- **Delete removes the backing file** (verified in `documents_service.py`'s
+  `delete_document`/`delete_folder`, both still capturing `file_path` before
+  the row delete and removing it best-effort via `asyncio.to_thread`,
+  matching DOC-1).
+- **Every by-id route org-scoped** (Checklist §3, XC-3): every
+  `get_folder_by_id`/`get_document_by_id`/`get_revision` call takes
+  `organization_id` in the same query as the id — traced all 10 call sites
+  across `documents.py`, `legal_documents.py`, and their services.
+- **`require_write` is correctly threaded**, not merely present: re-confirmed
+  this pass that every mutation (`create_folder`'s destination,
+  `update_folder`'s own-folder and destination, `delete_folder`'s own-folder,
+  `upload_document`'s destination, `update_document`'s own-document and
+  destination, `delete_document`'s own-document) passes
+  `require_write=True`, so a folder whose `required_permissions` lists only a
+  read-tier grant (e.g. `facilities.view_sensitive`) cannot be written into,
+  renamed, or have a document moved out of it by a caller holding only that
+  grant plus `documents.manage`.
+- **No CSV/spreadsheet export in this feature** (re-grepped all three
+  endpoint files and every backing service for `csv`/`SafeCsvWriter`: none).
+- **`LIKE`/`ilike` escaping intact** (`Document.name`/`.description`/`.tags`
+  in `get_documents`, `FacilityDocument`/`FacilityPhoto.file_path` matching —
+  now replaced by the `document_id` column match in FAC-41, so this call site
+  no longer uses `LIKE` at all, which is a strict improvement on the
+  escaping question: nothing to escape).
+- **No raw exception detail reaches the client**: every `except
+ValueError`/`except Exception` in the three endpoint files, and
+  `legal_documents.py`'s `_status_for`, routes through `safe_error_detail()`.
+- **Audit payloads carry no document content or PII** (Checklist §5): every
+  `log_audit_event` call in scope (`folder_created/updated/deleted`,
+  `document_uploaded/updated/deleted/downloaded`,
+  `legal.revision_proposed/updated/discarded`,
+  `legal.document_published/reverted_to_default`) logs only ids, names, field
+  lists, visibility/document-type enums, and counts — never a document's
+  `file_path`, a legal revision's `body`, or a folder's `required_permissions`
+  contents.
+- **`/documents` is already in `UNCACHEABLE_PREFIXES`**
+  (`frontend/src/utils/apiCache.ts:123`).
+- **SET NULL FKs are all nullable** (Checklist §7, Pitfall #2):
+  `DocumentFolder.owner_user_id`, `Document.folder_id`,
+  `LegalDocumentRevision.created_by`/`published_by` are each `ondelete="SET
+NULL"` and each declared `nullable=True` — checked every FK in
+  `models/document.py` and `models/legal.py` this pass, not sampled.
+- **The public `/privacy`/`/terms` endpoint** (`api/public/legal.py`) is the
+  one intentionally-unauthenticated route in scope (Checklist §1): rate
+  limited to 30/min/IP before any DB work beyond the single `limit(2)` org
+  count, serves custom text only when the deployment has exactly one
+  organization (never `.first()`, which the code comments explicitly warn
+  against), caps response text length, and renders client-side as plain text
+  never HTML (no admin-authored markup injection onto a public page).
+- **This module's legal documents are published policy text (privacy/terms),
+  not member records** (the task's "legal documents often carry PII" general
+  concern, checked specifically for this module): `legal_document_revisions`
+  stores `body`/`change_note` (department-authored prose about its own
+  policies) and `created_by`/`published_by` (staff attribution), no member
+  PII field. The "Documents & legal" feature's actual PII-adjacent surface is
+  the generic file store (`documents`/`document_folders`), already covered by
+  the folder-ACL findings above and the pre-existing `member-separations`
+  leadership-only folder (XC-4, `SEC-00-cross-cutting-baseline.md`).
+
+## Doc updates
+
+- `docs/KNOWN_LIMITATIONS.md` — Inventory's INV-22 entry ("Fulfillment-Options
+  and Requestable-Categories Catalog Reads Are Unbounded") cited "this
+  rotation's own DOC-9" as a currently-open sibling with the identical shape.
+  That citation went stale the moment `870ea19b4` fixed DOC-9 — not by
+  bounding the materialized set (the comparison INV-22 was drawing), but by
+  recognizing folder access as a tree-reachability question answerable with a
+  SQL CTE, a technique that does not transfer to a per-item attribute
+  comparison. Added a correction paragraph stating this and why INV-22 is now
+  its own open question rather than a shared one. INV-22's own disposition
+  (not fixed, owner decision) is unchanged — this is a citation correction,
+  not a reopening or a reassessment of Inventory's finding.
+
+## Completion gate
+
+| Check                                                                                                                                                                                                                                                                                                                                                                                                            | Result                                                                                                                                                                                             |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Code changes this pass                                                                                                                                                                                                                                                                                                                                                                                           | none — DOC-9/DOC-30 already fixed by an external PR (#2954) before this pass began, independently re-traced above; DOC-8 remains an owner decision; one `KNOWN_LIMITATIONS.md` citation correction |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                                                    | clean                                                                                                                                                                                              |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                                             | clean — 1950 files unchanged                                                                                                                                                                       |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                                        | clean                                                                                                                                                                                              |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                                                                                                                                | 527 revisions, single head `15802f3df5c4`                                                                                                                                                          |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                                                                                                                                                                                                                                | 245 routes checked against `APPLICATION_PAGES.md`, 0 errors, 0 warnings                                                                                                                            |
+| `pytest tests/test_documents_access.py tests/test_legal_documents.py tests/test_print_documents.py tests/test_public_legal.py tests/test_facility_folder_access.py tests/test_facilities_folders.py tests/test_property_return_service.py tests/test_document_service.py tests/test_mcp_tools.py tests/test_mcp_redaction.py tests/test_mcp_keys.py tests/test_mcp_key_endpoints.py tests/test_mcp_transport.py` | 562 passed (first run failed on a stale local DB missing a migration-added `users.badge_code` column, unrelated to this feature — `alembic upgrade head` applied it, then clean)                   |
+| `pytest tests/` (full backend suite, `-m "not integration and not slow and not docker"`)                                                                                                                                                                                                                                                                                                                         | 12951 passed, 1 skipped (pre-existing: `pywebpush` not installed), 0 failed                                                                                                                        |
+| `tsc --noEmit` (frontend, via `npm run typecheck`)                                                                                                                                                                                                                                                                                                                                                               | clean                                                                                                                                                                                              |
+| `npm run lint` (frontend)                                                                                                                                                                                                                                                                                                                                                                                        | clean — 0 errors, 0 warnings (`--max-warnings 10`)                                                                                                                                                 |
+
+## Next
+
+Feature 11 (Inventory).
 
 ---
 
