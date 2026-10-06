@@ -3983,7 +3983,50 @@ to, and the fix above has to be done.
 failure message, so the next person to try the obvious fix is told why it is not
 one rather than discovering the duplicate id in review.
 
-## SCHED-CUSTOM-SEAT — A Department's Own Crew Seat Cannot Be Assigned to Anybody (2026-09-09)
+## SCHED-CUSTOM-SEAT — A Department's Own Crew Seat Cannot Be Assigned to Anybody (2026-09-09, resolved 2026-10-06)
+
+**Resolved by building it (owner decision).** The position columns are
+`VARCHAR(100)` (migration `56c91e7d9e10`), the four request schemas take a
+validated string, and the rank editor and the Open Positions picker offer the
+department's own seats again. A seat is checked against **that shift's** seats
+by one function, `app.utils.positions.resolve_seat`, on every path that seats a
+member; a seat the shift does not have is a 422 with `LB-SCHED-003`.
+`docs/SCHEDULING_MODULE.md` (Shift Signup) states the rule and the eligibility
+answer; `tests/test_custom_crew_seats.py` covers each path, the migration and
+the cross-department case.
+
+**Downgrade.** `56c91e7d9e10`'s downgrade narrows the columns back to the
+built-in ENUM only when no row holds a custom seat. Otherwise it refuses and
+names the rows' seats rather than letting MySQL truncate them — reassign or
+remove those assignments and claims first.
+
+**Still open, recorded rather than decided here:**
+
+- **Eligibility for a custom seat is grant-only.** A seat nothing grants (no
+  rank, not on Open Positions, not an open-to-all shift) is eligible for nobody,
+  which is how every seat is treated; officer assignment enforces eligibility
+  too, so such a seat cannot be filled by anyone until it is granted. Template
+  and apparatus seats carry no rank or certification requirement of their own,
+  so there is nowhere to read a per-seat rule from. Whether an officer should be
+  able to seat a member in an ungranted custom seat is an owner question.
+- **Qualifications and training programs map onto built-in seats only**
+  (`positions_for_qualifications`, `TRAINING_POSITION_MAP`). A certification
+  cannot confer a custom seat.
+- **The crew board offers the apparatus's seats; the server checks the
+  shift's.** `apparatus_positions` on the shift response prefers the apparatus's
+  riding seats over the shift's own, while the seat cap, eligibility and now the
+  seat check read `shift.positions` (which `create_shift` copies from the
+  apparatus when the shift names none). The two diverge only when both carry
+  seats and they differ; a seat offered from the apparatus list that the shift
+  lacks is refused — 400 for a built-in seat, as before, and 422 for a custom
+  one.
+- **Server-rendered seat names use a title-cased token for a custom seat**
+  (`position_label`), not the label chosen under Position Names — notification
+  bodies and printed rosters read "Rescue Tech" for a seat the screens call
+  "Rescue Technician".
+
+<details>
+<summary>The original entry (2026-09-09)</summary>
 
 A department defines its own seats in Scheduling → Position Names, and they
 belong to the vocabulary nearly everywhere: a shift template can carry one,
@@ -4014,6 +4057,8 @@ not rendered. `rankEligibleSeatOptions` in
 **What would fix it.** Widen the four request schemas to a validated string
 checked against the shift's configured seats, migrate the ENUM columns to
 `VARCHAR`, and then restore custom seats to the rank picker in the same change.
+
+</details>
 
 ## EV-26 — Room Booking Serializes Per Department; Two Departments Can Still Collide (2026-10-04)
 

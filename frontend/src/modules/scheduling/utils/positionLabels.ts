@@ -69,22 +69,18 @@ export const positionLabel = (position: string | null | undefined): string => {
 };
 
 /**
- * Seats a rank may be made eligible for.
+ * Seats a rank — or the department's open-positions list — may grant.
  *
- * Derived from the canonical vocabulary rather than typed out again: the rank
- * editor used to carry its own inline list of nine tokens, which could drift
- * from `CANONICAL_POSITIONS` without anything saying so.
+ * The built-in seats, derived from the canonical vocabulary rather than typed
+ * out again, followed by the department's own `customPositions`. A custom seat
+ * is assignable (SCHED-CUSTOM-SEAT): the request schemas take any seat name,
+ * the position columns are VARCHAR, and the backend checks the seat against the
+ * shift's own seats. Granting it is how a department says who may fill it —
+ * with no grant, nobody is eligible for it, which is the same answer as for any
+ * seat nothing grants.
  *
- * **A department's own `customPositions` are deliberately not offered.** They
- * belong to the seat vocabulary in every other sense — a template can carry
- * one, `canonical_position` round-trips it verbatim, and the board renders its
- * label — but nobody can be put in one. `ShiftSignupRequest`,
- * `ShiftAssignmentCreate` and `StandingShiftCreate` all type `position` as the
- * closed `ShiftPosition` enum, and `shift_assignments.position` is a MySQL
- * ENUM behind them, so a custom seat is refused at request validation and
- * again at the flush. Granting a rank eligibility for one would be a promise
- * the app cannot keep — the same reason a module checkbox with no permission
- * behind it is not rendered. See `docs/KNOWN_LIMITATIONS.md` (SCHED-CUSTOM-SEAT).
+ * A custom entry that spells a built-in seat is not offered twice, and does
+ * not smuggle back the one built-in this list withholds.
  *
  * `paramedic` is canonical, fillable and withheld for a different reason. Rank
  * says where a member sits in the chain of command; a medic seat is a
@@ -93,8 +89,16 @@ export const positionLabel = (position: string | null | undefined): string => {
  * so a rank cannot confer it. Offering it here would let an officer rank hand
  * out a seat that lapses with a card nobody checked.
  */
-export const rankEligibleSeatOptions = (): PositionOption[] =>
-  RANK_ELIGIBLE_BUILTIN_SEATS.map((value) => ({
+export const rankEligibleSeatOptions = (): PositionOption[] => {
+  const options: PositionOption[] = RANK_ELIGIBLE_BUILTIN_SEATS.map((value) => ({
     value,
     label: positionLabel(value),
   }));
+  for (const custom of getCachedShiftSettings().customPositions) {
+    const value = custom.value.trim();
+    if (!value || POSITION_LABELS[value.toLowerCase()] !== undefined) continue;
+    if (options.some((option) => option.value === value)) continue;
+    options.push({ value, label: custom.label.trim() || positionLabel(value) });
+  }
+  return options;
+};

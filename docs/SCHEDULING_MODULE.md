@@ -19,7 +19,7 @@ The Scheduling module manages the full shift lifecycle for fire departments and 
 
 - **Shift creation and calendar views** (week/month)
 - **Member self-service signup** for open shift positions
-- **Shift assignments** with 9 position types (officer, driver, firefighter, EMT, captain, lieutenant, probationary, volunteer, other)
+- **Shift assignments** to the 10 built-in seats (officer, driver, firefighter, EMT, paramedic, captain, lieutenant, probationary, volunteer, other) and any seat the department defines itself
 - **Shift conflict detection** preventing duplicate assignments and overlapping time conflicts
 - **Shift officer assignment** from a member dropdown in the create/edit modal
 - **Understaffing indicators** with amber warning badges on calendar when staffing is below minimum
@@ -137,16 +137,16 @@ Core shift record representing a single scheduled shift.
 
 Links a member to a shift with a specific position.
 
-| Field               | Type     | Description                                                                            |
-| ------------------- | -------- | -------------------------------------------------------------------------------------- |
-| `id`                | UUID     | Primary key                                                                            |
-| `shift_id`          | UUID     | FK to shifts                                                                           |
-| `user_id`           | UUID     | FK to users                                                                            |
-| `position`          | String   | officer, driver, firefighter, emt, captain, lieutenant, probationary, volunteer, other |
-| `assignment_status` | String   | assigned, confirmed, declined, no_show, cancelled                                      |
-| `assigned_by`       | UUID     | Who made the assignment                                                                |
-| `confirmed_at`      | DateTime | When member confirmed                                                                  |
-| `notes`             | Text     | Optional notes                                                                         |
+| Field               | Type     | Description                                                                    |
+| ------------------- | -------- | ------------------------------------------------------------------------------ |
+| `id`                | UUID     | Primary key                                                                    |
+| `shift_id`          | UUID     | FK to shifts                                                                   |
+| `user_id`           | UUID     | FK to users                                                                    |
+| `position`          | String   | A seat the shift names: a built-in seat or the department's own (VARCHAR(100)) |
+| `assignment_status` | String   | assigned, confirmed, declined, no_show, cancelled                              |
+| `assigned_by`       | UUID     | Who made the assignment                                                        |
+| `confirmed_at`      | DateTime | When member confirmed                                                          |
+| `notes`             | Text     | Optional notes                                                                 |
 
 ### OrgCall _(2026-08-18)_
 
@@ -316,6 +316,48 @@ DELETE /api/v1/scheduling/shifts/{id}/signup         # Withdraw from a shift
 ```
 
 These endpoints use `get_current_user` (not `require_permission`), allowing any authenticated member to sign up.
+
+**Seats are an open vocabulary** _(2026-10-06, SCHED-CUSTOM-SEAT)_ — `position`
+is a string, not the ten built-in seats. A department's own seat (Scheduling →
+Position Names, or a seat typed onto a template or apparatus) can be signed up
+for, assigned, edited onto an assignment, swapped, offered, picked up and
+claimed as a standing shift. **Breaking:** the request schemas
+(`ShiftSignupRequest`, `ShiftAssignmentCreate`, `ShiftAssignmentUpdate`,
+`StandingShiftCreate`) accept any trimmed string up to 100 characters, and
+`ShiftAssignmentResponse.position` is a plain string rather than an enum.
+`shift_assignments.position` and `standing_shift_claims.position` are
+`VARCHAR(100)` (migration `56c91e7d9e10`).
+
+The rule is one function, `app.utils.positions.resolve_seat`, reached through
+`SchedulingService.resolve_shift_seat` from every path that seats a member
+(`create_assignment`, `update_assignment`, `_validate_assignment_candidate` —
+which swap review, offer acceptance and open-swap pickup all go through — and
+the exchange qualification check):
+
+| Requested seat                                | Result                                                                                  |
+| --------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Named on the shift (case-insensitive)         | Accepted, stored in the shift's own spelling                                            |
+| A built-in seat the shift does not name       | Unchanged: open on a shift with no seats; refused by the seat cap (400) on one that has |
+| Anything else (a custom seat the shift lacks) | **422**, `LB-SCHED-003` — including a seat another department defined                   |
+
+A request seat is settled the way `normalize_stored_positions` settles a stored
+one (`canonical_position`: built-ins case-folded and de-aliased, `EMT` → `ems`;
+a custom seat trimmed and otherwise verbatim). The shift's own `positions` list
+is the authority — the same list the seat cap and the eligibility intersection
+read. A standing shift is checked against the department's vocabulary when it is
+created (built-ins, Position Names, and every seat on the department's templates
+and apparatus), and each date it seats the member on is checked against that
+shift; a date whose shift lacks the seat is reported as skipped.
+
+**Eligibility for a custom seat** comes from where the department already grants
+seats: a rank's `eligible_positions` (the rank editor offers custom seats again),
+the Open Positions list (likewise), an open-to-all shift, or a seat flagged for
+administrative members. Qualifications and training programs map onto built-in
+seats only. With no grant nobody is eligible — the same answer as for any seat
+nothing grants — and officer assignment enforces eligibility too (#1752), so a
+custom seat with no grant cannot be filled until a rank or the open list grants
+it. The intersection with the shift's seats is case-insensitive, so a rank
+granting `rescue_tech` covers a template seat typed `Rescue_Tech`.
 
 A self signup is stored as `assigned` — the same state an officer's assignment
 produces — and the only confirmation is the member's own

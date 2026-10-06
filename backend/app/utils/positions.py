@@ -22,21 +22,24 @@ An ambulance built from the defaults therefore had an EMT seat no EMT could
 sign up for, and no setting could unblock it (see CHANGELOG 2026-08-26).
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterable, List
 
 from pydantic import BaseModel
 
-# The seat vocabulary the rest of the system speaks: ``ShiftPosition`` on the
-# wire and ``operational_ranks.eligible_positions`` in config.
-# ``tests/test_position_slots.py`` asserts this set against ShiftPosition so
-# the two cannot drift apart again.
+from app.core.error_codes import CodedValueError, ErrorCode
+
+# The built-in seat vocabulary: ``ShiftPosition`` names the same set, and
+# ``tests/test_position_slots.py`` asserts the two agree. It is not the whole
+# vocabulary. A department's own seats (Scheduling → Position Names, or typed
+# onto a template or apparatus) are stored and assigned verbatim alongside these
+# — the position columns are VARCHAR, and ``resolve_seat`` below decides
+# whether a requested seat is one the shift actually has.
 #
-# The rank editor's seat picker used to carry its own copy of this list. It now
-# derives from ``POSITION_LABELS`` in ``frontend/src/constants/enums.ts``, which
-# ``test_frontend_labels_agree`` below holds equal to this set, and unions in
-# the department's own ``customPositions`` — so a seat added here reaches that
-# picker without a second edit, and a seat a department invented is grantable at
-# all. ``paramedic`` is the one canonical seat the picker withholds: a medic
+# The rank editor's seat picker derives from ``POSITION_LABELS`` in
+# ``frontend/src/constants/enums.ts``, which ``test_frontend_labels_agree``
+# holds equal to this set, and unions in the department's own
+# ``customPositions`` — so a seat added here reaches that picker without a
+# second edit, and a seat a department invented is grantable at all. ``paramedic`` is the one canonical seat the picker withholds: a medic
 # seat is a credential, granted by ``get_eligible_positions`` step 3b from the
 # member's certifications as of the shift date, and a rank that could confer it
 # would outlive the card.
@@ -187,3 +190,89 @@ def _seat_count(count: Any) -> int:
     if count < 1:
         return 1
     return min(count, _MAX_SEAT_COUNT)
+
+
+# The widest seat name the position columns hold. Matches
+# ``CustomPositionSchema.value`` — the screen a department names its own seats
+# on — so any seat a department can define can also be assigned.
+SEAT_NAME_MAX_LENGTH = 100
+
+
+class UnknownSeatError(CodedValueError):
+    """A member was asked into a seat the shift does not have.
+
+    A ``CodedValueError`` so the paths that already carry a curated refusal up
+    to the endpoint (assignment, signup, swap review) carry this one too; the
+    endpoint answers it with a 422, since the request named something that
+    does not exist rather than something the member is not allowed to do.
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message, error_code=ErrorCode.SCHED_UNKNOWN_SEAT)
+
+
+def _requested_token(requested: Any) -> str:
+    token = canonical_position(str(getattr(requested, "value", requested) or ""))
+    if not token:
+        raise UnknownSeatError("A seat is required.")
+    if len(token) > SEAT_NAME_MAX_LENGTH:
+        raise UnknownSeatError(
+            f"A seat name can be at most {SEAT_NAME_MAX_LENGTH} characters."
+        )
+    return token
+
+
+def resolve_seat(requested: Any, seat_names: Iterable[Any]) -> str:
+    """The seat ``requested`` names on a shift whose seats are ``seat_names``.
+
+    The one rule every path that puts a member in a seat goes through —
+    signup, officer assignment and edit, swap review, offer acceptance,
+    open-swap pickup and a standing shift's per-date seating — so a seat one
+    path accepts is never one another refuses.
+
+    * A seat the shift names is returned in the shift's own spelling, matched
+      case-insensitively, so the assignment lines up with the seat the board
+      renders.
+    * A built-in seat the shift does not name is returned canonical and left to
+      the capacity check, exactly as before custom seats were assignable: on a
+      shift with no named seats any built-in seat is open, and on a shift with
+      named seats it is refused there as no longer available.
+    * Any other seat — a department's own seat the shift does not carry, or a
+      name nobody defined — raises ``UnknownSeatError``. Another department's
+      seat is in this group by construction: the only list consulted is the
+      shift's own.
+    """
+    token = _requested_token(requested)
+    folded = token.casefold()
+    for name in seat_names:
+        stored = canonical_position(str(getattr(name, "value", name) or ""))
+        if stored and stored.casefold() == folded:
+            return stored
+    if folded in CANONICAL_POSITIONS:
+        return folded
+    raise UnknownSeatError(
+        f"'{token}' is not a seat on this shift. Choose one of the seats the "
+        "shift lists, or add the seat to the shift first."
+    )
+
+
+def resolve_department_seat(requested: Any, department_seats: Iterable[Any]) -> str:
+    """The seat ``requested`` names in a department's vocabulary.
+
+    For a claim made before there is a shift to check it against — a standing
+    shift. The vocabulary is the built-in seats plus every seat the department
+    has defined; each date the claim later seats a member on is checked again
+    by ``resolve_seat`` against that shift.
+    """
+    token = _requested_token(requested)
+    folded = token.casefold()
+    if folded in CANONICAL_POSITIONS:
+        return folded
+    for name in department_seats:
+        stored = canonical_position(str(getattr(name, "value", name) or ""))
+        if stored and stored.casefold() == folded:
+            return stored
+    raise UnknownSeatError(
+        f"'{token}' is not a seat this department has defined. Choose a "
+        "built-in seat or one listed under Scheduling → Position Names."
+    )

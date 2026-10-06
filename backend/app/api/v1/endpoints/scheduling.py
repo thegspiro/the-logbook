@@ -137,7 +137,7 @@ from app.services.standing_shift_service import MAX_SERIES_DAYS, StandingShiftSe
 from app.utils.hours import hours_from_minutes
 from app.utils.org_timezone import resolve_org_today
 from app.utils.outreach_roles import normalize_staffing_roles
-from app.utils.positions import normalize_stored_positions
+from app.utils.positions import UnknownSeatError, normalize_stored_positions
 
 router = APIRouter()
 
@@ -2205,16 +2205,20 @@ async def get_unavailable_members(
     return {"unavailable_user_ids": user_ids}
 
 
-def _driver_block(exc: CodedValueError) -> CodedHTTPException:
-    """Turn the driver qualification refusal into a 400 that keeps its code.
+def _curated_refusal(exc: CodedValueError) -> CodedHTTPException:
+    """Turn a curated scheduling refusal into an error response that keeps its code.
 
     The message names what is missing and how to resolve it; the code
     (``LB-SCHED-001``) is what the UI keys its "request an exception" offer
     off, so it must survive the trip rather than being flattened into an
     anonymous 400.
+
+    A seat the shift does not have (``LB-SCHED-003``) is a 422 rather than a
+    400: the request named something that does not exist, which is the same
+    answer request validation gave when the seat vocabulary was a closed enum.
     """
     return CodedHTTPException(
-        status_code=400,
+        status_code=422 if isinstance(exc, UnknownSeatError) else 400,
         detail=str(exc),
         error_code=exc.error_code,
     )
@@ -2273,7 +2277,7 @@ async def create_assignment(
             actor=_signup_actor(shift, current_user),
         )
     except CodedValueError as e:
-        raise _driver_block(e)
+        raise _curated_refusal(e)
     if error:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to create assignment.", error)
@@ -2317,7 +2321,7 @@ async def update_assignment(
             actor=_roster_actor(current_user),
         )
     except CodedValueError as e:
-        raise _driver_block(e)
+        raise _curated_refusal(e)
     if error:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to update assignment.", error)
@@ -2488,9 +2492,12 @@ async def create_swap_request(
     """Create a shift swap request"""
     service = SchedulingService(db)
     request_data = swap_request.model_dump(exclude_none=True)
-    result, error = await service.create_swap_request(
-        current_user.organization_id, current_user.id, request_data
-    )
+    try:
+        result, error = await service.create_swap_request(
+            current_user.organization_id, current_user.id, request_data
+        )
+    except UnknownSeatError as e:
+        raise _curated_refusal(e)
     if error:
         raise HTTPException(
             status_code=400,
@@ -2538,9 +2545,12 @@ async def pick_up_open_swap(
     **Permissions required:** scheduling.swap
     """
     service = SchedulingService(db)
-    result, error = await service.pick_up_open_swap(
-        request_id, current_user.organization_id, current_user.id
-    )
+    try:
+        result, error = await service.pick_up_open_swap(
+            request_id, current_user.organization_id, current_user.id
+        )
+    except UnknownSeatError as e:
+        raise _curated_refusal(e)
     if error or result is None:
         raise HTTPException(
             status_code=400,
@@ -2610,7 +2620,7 @@ async def review_swap_request(
     except CodedValueError as exc:
         # Keeps the curated code: LB-SCHED-001 (EVOC) and LB-SCHED-002
         # (exchange qualification) are what the screen keys its offers off.
-        raise _driver_block(exc)
+        raise _curated_refusal(exc)
     if error:
         raise HTTPException(
             status_code=400,
@@ -2653,13 +2663,16 @@ async def respond_to_swap_offer(
     must be a shift coming back" and rejects an offer that has none.
     """
     service = SchedulingService(db)
-    result, error = await service.respond_to_swap_offer(
-        request_id,
-        current_user.organization_id,
-        current_user.id,
-        accept=answer.accept,
-        note=answer.note,
-    )
+    try:
+        result, error = await service.respond_to_swap_offer(
+            request_id,
+            current_user.organization_id,
+            current_user.id,
+            accept=answer.accept,
+            note=answer.note,
+        )
+    except UnknownSeatError as e:
+        raise _curated_refusal(e)
     if error or result is None:
         raise HTTPException(
             status_code=400,
@@ -3104,8 +3117,15 @@ async def signup_for_shift(
     if not shift:
         raise HTTPException(status_code=404, detail="Shift not found")
 
-    position_value = signup.position.value
+    position_value = signup.position
     outreach_role = None
+    if not shift.is_outreach:
+        # Ahead of eligibility, so a seat the shift does not have is reported
+        # as that rather than as "you are not eligible for it".
+        try:
+            position_value = service.resolve_shift_seat(shift, position_value)
+        except UnknownSeatError as e:
+            raise _curated_refusal(e)
     if shift.is_outreach:
         try:
             outreach_role = await resolve_outreach_signup_role(
@@ -3161,7 +3181,7 @@ async def signup_for_shift(
             self_signup=True,
         )
     except CodedValueError as e:
-        raise _driver_block(e)
+        raise _curated_refusal(e)
     if error:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to sign up for shift.", error)
@@ -3176,7 +3196,7 @@ async def signup_for_shift(
         shift_id,
         current_user.organization_id,
         str(current_user.id),
-        signup.position.value,
+        position_value,
     )
     return response
 
@@ -3336,13 +3356,19 @@ async def create_standing_shift(
     rather than failing the series.
     """
     service = SchedulingService(db)
+    try:
+        position = await service.resolve_department_seat(
+            current_user.organization_id, payload.position
+        )
+    except UnknownSeatError as e:
+        raise _curated_refusal(e)
     claim, summary, error = await StandingShiftService(db).create(
         current_user.organization_id,
         current_user.id,
         pattern=StandingShiftPattern(payload.pattern.value),
         weekday=payload.weekday,
         period=StandingShiftPeriod(payload.period.value),
-        position=payload.position.value,
+        position=position,
         start_date=payload.start_date,
         end_date=payload.end_date,
         apparatus_id=payload.apparatus_id,

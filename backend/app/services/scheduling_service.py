@@ -21,11 +21,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_codes import CodedValueError, ErrorCode
 from app.core.utils import generate_uuid
-from app.models.apparatus import EquipmentCheckTemplate
+from app.models.apparatus import Apparatus, EquipmentCheckTemplate
 from app.models.call_tracking import CallTrackingMode
 from app.models.notification import NotificationLog
+from app.models.scheduling_module_config import SchedulingModuleConfig
 from app.models.training import (
     AssignmentStatus,
+    BasicApparatus,
     DueDateType,
     EnrollmentStatus,
     PatternType,
@@ -84,7 +86,13 @@ from app.utils.hours import hours_from_minutes, sum_hours_to_quarter
 from app.utils.member_names import format_display_name
 from app.utils.membership import is_administrative
 from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
-from app.utils.positions import normalize_stored_positions, position_label
+from app.utils.positions import (
+    UnknownSeatError,
+    normalize_stored_positions,
+    position_label,
+    resolve_department_seat,
+    resolve_seat,
+)
 
 
 def _scheduling_minutes(
@@ -615,6 +623,88 @@ class SchedulingService:
     # ============================================
     # Position Helpers
     # ============================================
+
+    @classmethod
+    def resolve_shift_seat(cls, shift: Shift, position: Any) -> str:
+        """The seat ``position`` names on ``shift``, or ``UnknownSeatError``.
+
+        The shift's own seat list is the authority — the same list the seat
+        cap and the eligibility intersection read — so a seat is accepted
+        exactly where it can also be counted and granted. See
+        ``app.utils.positions.resolve_seat`` for the rule.
+        """
+        return resolve_seat(
+            position,
+            [slot.get("position") for slot in cls.normalize_positions(shift.positions)],
+        )
+
+    async def department_seat_names(self, organization_id: Any) -> List[str]:
+        """Every seat this department has defined beyond the built-ins.
+
+        Its Position Names settings, plus any seat typed onto one of its shift
+        templates or apparatus. Each read is filtered to the department: a seat
+        another department defined is not a seat here.
+        """
+        org = str(organization_id)
+        names: List[str] = []
+        custom = (
+            await self.db.execute(
+                select(SchedulingModuleConfig.custom_positions).where(
+                    SchedulingModuleConfig.organization_id == org
+                )
+            )
+        ).scalar_one_or_none()
+        for entry in custom or []:
+            if isinstance(entry, dict) and entry.get("value"):
+                names.append(str(entry["value"]))
+        seat_lists = [
+            (
+                await self.db.execute(
+                    select(ShiftTemplate.positions).where(
+                        ShiftTemplate.organization_id == org
+                    )
+                )
+            )
+            .scalars()
+            .all(),
+            (
+                await self.db.execute(
+                    select(BasicApparatus.positions).where(
+                        BasicApparatus.organization_id == org
+                    )
+                )
+            )
+            .scalars()
+            .all(),
+            (
+                await self.db.execute(
+                    select(Apparatus.crew_positions).where(
+                        Apparatus.organization_id == org
+                    )
+                )
+            )
+            .scalars()
+            .all(),
+        ]
+        for rows in seat_lists:
+            for positions in rows:
+                names.extend(
+                    str(slot.get("position"))
+                    for slot in self.normalize_positions(positions)
+                    if slot.get("position")
+                )
+        return names
+
+    async def resolve_department_seat(self, organization_id: Any, position: Any) -> str:
+        """The seat a standing shift claims, checked against the department.
+
+        A standing claim names a seat before any shift exists to check it
+        against, so it is held to the department's vocabulary here; each date
+        it later seats the member on is checked by ``resolve_shift_seat``.
+        """
+        return resolve_department_seat(
+            position, await self.department_seat_names(organization_id)
+        )
 
     @staticmethod
     def normalize_positions(
@@ -4193,7 +4283,14 @@ class SchedulingService:
             if time_off.scalar():
                 return "Member has approved time off for this date"
 
-        position_value = getattr(position, "value", position)
+        # Raises UnknownSeatError for a seat the shift does not have, which
+        # every caller carries up as a 422 — one rule for signup, assignment,
+        # swaps, offers and pickups alike.
+        position_value = (
+            self.resolve_shift_seat(shift, position)
+            if getattr(position, "value", position)
+            else None
+        )
         slots = self.normalize_positions(shift.positions)
         candidate = None
         if enforce_position_eligibility:
@@ -4379,6 +4476,13 @@ class SchedulingService:
                     return None, window_error
 
             user_id = assignment_data.get("user_id")
+
+            # Stored in the shift's own spelling, so the assignment lines up
+            # with the seat the board renders.
+            if assignment_data.get("position"):
+                assignment_data["position"] = self.resolve_shift_seat(
+                    shift, assignment_data["position"]
+                )
 
             training_error = await self._validate_training_slot_fields(
                 assignment_data, organization_id
@@ -4679,6 +4783,22 @@ class SchedulingService:
                         None,
                         "Confirmation must be done by the member; "
                         "it cannot be set on their behalf.",
+                    )
+
+            # A seat change is held to the seats the shift has, by the same
+            # rule a new assignment is. A null cannot clear a NOT NULL seat, so
+            # it means "leave the seat alone" rather than a flush error.
+            if "position" in update_data:
+                if not update_data["position"]:
+                    update_data.pop("position")
+                else:
+                    seat_shift = await self.get_shift_by_id(
+                        assignment.shift_id, organization_id
+                    )
+                    if seat_shift is None:
+                        return None, "Shift not found"
+                    update_data["position"] = self.resolve_shift_seat(
+                        seat_shift, update_data["position"]
                     )
 
             # Re-check qualification when an edit moves someone into the
@@ -5491,6 +5611,9 @@ class SchedulingService:
             await self.db.commit()
 
             return swap_request, None
+        except UnknownSeatError:
+            await self.db.rollback()
+            raise
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
@@ -5678,7 +5801,13 @@ class SchedulingService:
         and an officer exchange only if the driver is also cleared as officer.
         ``for_reviewer`` words the refusal for the duty officer rather than
         for the member asking.
+
+        Each seat must also still be one its shift has: a seat removed from
+        the shift since it was filled raises ``UnknownSeatError`` (a 422),
+        which no qualification override can waive.
         """
+        self.resolve_shift_seat(offering_shift, offered_seat.position)
+        self.resolve_shift_seat(requested_shift, target_seat.position)
         if not await self._qualified_for_seat(
             organization_id, target_id, offering_shift, offered_seat.position
         ):
@@ -6326,6 +6455,11 @@ class SchedulingService:
                 exclude_request_id=swap_request.id,
             )
             return swap_request, None
+        except UnknownSeatError:
+            # Not flattened like the other curated refusals: the endpoint
+            # answers a seat the shift does not have with a 422 on every path.
+            await self.db.rollback()
+            raise
         except CodedValueError as exc:
             await self.db.rollback()
             return None, str(exc)
@@ -6666,6 +6800,11 @@ class SchedulingService:
                 exclude_request_id=swap_request.id,
             )
             return swap_request, None
+        except UnknownSeatError:
+            # Not flattened like the other curated refusals: the endpoint
+            # answers a seat the shift does not have with a 422 on every path.
+            await self.db.rollback()
+            raise
         except CodedValueError as exc:
             await self.db.rollback()
             return None, str(exc)
@@ -8419,7 +8558,8 @@ class SchedulingService:
                     {
                         "id": assignment.id,
                         "position": (
-                            assignment.position.value if assignment.position else None
+                            getattr(assignment.position, "value", assignment.position)
+                            or None
                         ),
                         "status": (
                             assignment.assignment_status.value

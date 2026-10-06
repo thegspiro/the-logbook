@@ -91,6 +91,7 @@ class ErrorCode(str, Enum):
     # --- Scheduling ------------------------------------------------------
     SCHED_DRIVER_NOT_QUALIFIED = "LB-SCHED-001"
     SCHED_EXCHANGE_NOT_QUALIFIED = "LB-SCHED-002"
+    SCHED_UNKNOWN_SEAT = "LB-SCHED-003"
 
 
 @dataclass(frozen=True)
@@ -561,6 +562,23 @@ ERROR_CODE_CATALOG: dict[ErrorCode, ErrorCodeInfo] = {
             "For a deliberate one-off, a duty officer can approve the request "
             "with the qualification override; the override is recorded on the "
             "request and in the audit log.",
+        ),
+    ),
+    ErrorCode.SCHED_UNKNOWN_SEAT: ErrorCodeInfo(
+        title="Seat is not on this shift",
+        description=(
+            "A member can only be placed in a seat the shift itself names. A "
+            "department's own seats (Scheduling → Position Names) are accepted "
+            "wherever a shift, template or apparatus carries them; this one is "
+            "not among the shift's seats, so there is nothing to put the member "
+            "in. Built-in seats on a shift that names no seats are unaffected."
+        ),
+        resolution=(
+            "Pick one of the seats the shift lists, or add the seat to the "
+            "shift (or to the template or apparatus it is built from) first.",
+            "For a standing shift, the seat must be a built-in seat or one the "
+            "department has defined under Position Names or on a template or "
+            "apparatus.",
         ),
     ),
 }

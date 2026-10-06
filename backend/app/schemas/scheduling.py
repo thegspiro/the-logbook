@@ -9,7 +9,15 @@ from enum import Enum as PyEnum
 from typing import Annotated, Any, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from app.models.call_tracking import (
     MAX_CALLS_PER_SHIFT,
@@ -17,8 +25,35 @@ from app.models.call_tracking import (
     CallTrackingMode,
 )
 from app.schemas.base import UTCResponseBase
+from app.utils.positions import SEAT_NAME_MAX_LENGTH, canonical_position
 
 _response_config = ConfigDict(from_attributes=True)
+
+
+def _seat_text(value: Any) -> Any:
+    # A ``ShiftPosition`` member from Python callers, a plain string from JSON.
+    return getattr(value, "value", value)
+
+
+def _settled_seat(value: str) -> str:
+    seat = canonical_position(value)
+    if not seat:
+        raise ValueError("A seat is required")
+    return seat
+
+
+# A crew seat named in a request. Open vocabulary (SCHED-CUSTOM-SEAT): a built-in
+# seat is case-folded onto its token, and a department's own seat is trimmed and
+# otherwise kept verbatim — the same settling ``normalize_stored_positions``
+# gives a seat when a template or shift is saved, so the two compare equal.
+# Whether the seat exists on the shift is the service's question
+# (``app.utils.positions.resolve_seat``), answered the same way on every path.
+SeatToken = Annotated[
+    str,
+    BeforeValidator(_seat_text),
+    Field(min_length=1, max_length=SEAT_NAME_MAX_LENGTH),
+    AfterValidator(_settled_seat),
+]
 
 
 # ============================================
@@ -778,7 +813,12 @@ class ShiftCallResponse(UTCResponseBase):
 
 
 class ShiftPosition(str, PyEnum):
-    """Enum for shift positions"""
+    """The built-in crew seats.
+
+    Not the set a request may name: requests carry a ``SeatToken``, which also
+    admits a department's own seats. This names the built-ins for code and for
+    ``CANONICAL_POSITIONS``, which ``tests/test_position_slots.py`` holds equal.
+    """
 
     OFFICER = "officer"
     DRIVER = "driver"
@@ -989,7 +1029,7 @@ class ShiftAssignmentCreate(BaseModel):
     """Schema for creating a shift assignment"""
 
     user_id: UUID
-    position: ShiftPosition = ShiftPosition.FIREFIGHTER
+    position: SeatToken = ShiftPosition.FIREFIGHTER.value
     # Required when the shift is a community-outreach signup sheet, ignored
     # otherwise. See ShiftAssignment.outreach_role.
     outreach_role: Optional[str] = Field(None, max_length=100)
@@ -1004,7 +1044,7 @@ class ShiftAssignmentCreate(BaseModel):
 class ShiftAssignmentUpdate(BaseModel):
     """Schema for updating a shift assignment"""
 
-    position: Optional[ShiftPosition] = None
+    position: Optional[SeatToken] = None
     assignment_status: Optional[AssignmentStatus] = None
     notes: Optional[str] = None
     is_training: Optional[bool] = None
@@ -1038,7 +1078,7 @@ class ShiftAssignmentResponse(UTCResponseBase):
     shift_id: UUID
     user_id: UUID
     user_name: Optional[str] = None
-    position: ShiftPosition
+    position: str
     outreach_role: Optional[str] = None
     outreach_role_label: Optional[str] = None
     assignment_status: AssignmentStatus
@@ -1217,7 +1257,7 @@ class StandingShiftBase(BaseModel):
 class StandingShiftCreate(StandingShiftBase):
     """Schema for creating a standing shift claim."""
 
-    position: ShiftPosition = ShiftPosition.FIREFIGHTER
+    position: SeatToken = ShiftPosition.FIREFIGHTER.value
 
 
 class StandingShiftResponse(UTCResponseBase):
@@ -1336,11 +1376,11 @@ class ShiftTimeOffRequestsPage(BaseModel):
 class ShiftSignupRequest(BaseModel):
     """Schema for a member signing up for an open shift position"""
 
-    position: ShiftPosition = ShiftPosition.FIREFIGHTER
+    position: SeatToken = ShiftPosition.FIREFIGHTER.value
     # Required on a community-outreach signup sheet and ignored everywhere
     # else. Its vocabulary is the department's own (tour guide, educator,
-    # facilitator), which is why it is a plain string rather than a
-    # ShiftPosition — see ShiftAssignment.outreach_role.
+    # facilitator) and it is not a crew seat, which is why it is a separate
+    # field from ``position`` — see ShiftAssignment.outreach_role.
     outreach_role: Optional[str] = Field(None, max_length=100)
 
 

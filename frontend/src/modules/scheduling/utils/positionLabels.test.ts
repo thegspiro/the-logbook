@@ -68,13 +68,9 @@ describe('rankEligibleSeatOptions', () => {
     getCachedShiftSettings.mockReturnValue(DEFAULT_SETTINGS);
   });
 
-  it('does not offer a custom seat nobody can be assigned to', () => {
-    // A custom seat belongs to the vocabulary everywhere else — a template can
-    // carry it, `canonical_position` round-trips it, the board renders its
-    // label — but `ShiftSignupRequest`, `ShiftAssignmentCreate` and
-    // `StandingShiftCreate` all type `position` as the closed `ShiftPosition`
-    // enum, with a MySQL ENUM column behind them. Granting a rank eligibility
-    // for one is a promise the app refuses at request validation.
+  it("offers the department's own seats, under the label the department chose", () => {
+    // SCHED-CUSTOM-SEAT: a custom seat is assignable now, so granting a rank
+    // eligibility for it is how a department says who may fill it.
     getCachedShiftSettings.mockReturnValue({
       ...DEFAULT_SETTINGS,
       customPositions: [{ value: 'rescue_tech', label: 'Rescue Technician' }],
@@ -82,8 +78,17 @@ describe('rankEligibleSeatOptions', () => {
 
     const options = rankEligibleSeatOptions();
 
-    expect(options.map((o) => o.value)).not.toContain('rescue_tech');
+    expect(options).toContainEqual({ value: 'rescue_tech', label: 'Rescue Technician' });
     expect(options.map((o) => o.value)).toContain('firefighter');
+  });
+
+  it('does not let a custom entry bring back the withheld medic seat', () => {
+    getCachedShiftSettings.mockReturnValue({
+      ...DEFAULT_SETTINGS,
+      customPositions: [{ value: 'Paramedic', label: 'Medic' }],
+    });
+
+    expect(rankEligibleSeatOptions().map((o) => o.value.toLowerCase())).not.toContain('paramedic');
   });
 
   it('withholds the medic seat, which a certification confers and a rank must not', () => {

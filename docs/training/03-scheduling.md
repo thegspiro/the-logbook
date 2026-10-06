@@ -1417,6 +1417,26 @@ Operational ranks define which shift positions each rank is eligible for. When m
 
 ![Operational Ranks settings, listing each rank with the shift positions it may fill](./images/03-33-settings-eligibility.png)
 
+**Your department's own seats** _(2026-10-06)_. A seat you add under
+**Scheduling > Settings > Position Names** — "Rescue Technician", say — is a
+real seat: members can sign up for it, officers can assign it, and it can be
+swapped, offered, picked up and claimed as a standing shift like any built-in
+seat. Before this change it could be put on a template but nobody could be put
+in it.
+
+Nobody is eligible for a new seat until you say who is. Grant it the same way
+as any other seat — tick it under **Configure eligible positions** on the ranks
+that should fill it (the rank picker lists your own seats after the built-in
+ones), or open it to everyone under **Scheduling > Settings > Eligibility >
+Open Positions**. An open-to-all shift also opens it. Paramedic stays off both
+pickers: that seat comes from a member's certification, not their rank.
+
+A member can only be put in a seat the shift actually has. Asking for one it
+does not — a seat removed from the shift since, or one only another template
+carries — is refused with "'…' is not a seat on this shift" (support code
+`LB-SCHED-003`). Add the seat to the shift, or to the template or apparatus it
+is built from, first.
+
 **Do not confuse this with Scheduling > Settings > Eligibility**, which is a
 different control: it governs which _membership types_ (Prospective, Retired,
 Honorary, Administrative…) are barred from signing themselves up at all, and
