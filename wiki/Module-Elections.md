@@ -112,7 +112,7 @@ Beyond membership type, a member may also be restricted by:
 
 - **Membership tier rules** — Organization settings can mark certain tiers as not voting-eligible or require minimum meeting attendance percentages. _(2026-09-29)_ The attendance window runs from the later of `voting_attendance_period_months` ago (calendar months) and the start of the member's current stint (latest `MemberServicePeriod`, else `hire_date`) to the department's today — see [below](#voting-attendance-window-2026-09-29)
 - **Attendance requirement** — Individual ballot items can require the voter to be checked in as present at the meeting. The roll is frozen at open, so a member checked in after opening is recorded present but cannot vote without an override
-- **Secretary overrides** — The secretary can grant eligibility overrides for individual members (chosen by name on the **Overrides** tab since 2026-09-30), bypassing tier, attendance and role checks. **Not** a specific `eligible_voters` list: an override for someone off the list is stored and counted in the eligible denominator, yet their vote is still refused — open owner decision (W50-13)
+- **Secretary overrides** — The secretary can grant eligibility overrides for individual members (chosen by name on the **Overrides** tab since 2026-09-30), bypassing tier, attendance and role checks. On an election restricted to a specific `eligible_voters` list, an override **extends** the list: the member votes in the app, is sent a ballot email and counts in the eligible total, as the roster shows (W50-13, 2026-10-05)
 
 ---
 
