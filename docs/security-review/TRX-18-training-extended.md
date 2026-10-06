@@ -1914,3 +1914,493 @@ a change this pass (the only frontend touches among the thirteen commits —
 of the external-sync cluster's own UI form updates, reviewed above for banned
 patterns: clean); `typecheck`/`lint` were still run in full per this pass's
 own completion-gate instructions rather than skipped on that basis.
+
+---
+
+## Pass 7 (2026-10-06) — watchdog pickup, real delta, 1 fixed (MEDIUM), 0 flagged
+
+**Prefix:** `TRX7` · **PR:** (recorded in `PROGRESS.md`'s Open PR section)
+
+**Watchdog note:** the dedicated `/loop 30m /security-review` session had no
+open PR or branch for this feature at pickup time (confirmed via
+`list_pull_requests`/`search_pull_requests` — no `claude/security-review-`
+head existed). The working tree already carried this run's own setup edit
+(`PROGRESS.md`'s Open PR row cleared for Feature 17's merged PR #2973,
+rotation row 18 marked `🔄`); it rides along in this pass's own commit rather
+than being recorded separately.
+
+### Scope check — not a zero-diff pass
+
+Baseline: pass 6's merge `5188bd500` (PR #2862, 2026-10-02 23:45 UTC). Head:
+current `main`. `git diff --stat` against the twelve declared files:
+
+| File                                                                                                                                                                | Changed                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `course_cohorts.py`                                                                                                                                                 | +192/-0 (new routes)                                                                  |
+| `course_cohort_service.py`                                                                                                                                          | +687/-0 (new methods + DST/all-or-nothing fixes)                                      |
+| `external_training.py`                                                                                                                                              | +122/-64 (Map User fix)                                                               |
+| `training_submissions.py`                                                                                                                                           | +26/-2 (retention-period audit log)                                                   |
+| `training_enhancement_service.py`                                                                                                                                   | +131/-88 (TR4-4 re-derivation fix)                                                    |
+| `training_submission_service.py`                                                                                                                                    | +16/-9 (preferred-name display)                                                       |
+| `training_enhancements.py`, `training_waivers.py`, `training_waiver_service.py`, `external_training_service.py`, `course_syllabus.py`, `course_syllabus_service.py` | **0** (confirmed by individual-file diff, not inferred from the stat table's absence) |
+
+Thirteen non-merge commits touch one or more of the six changed files, dated
+2026-10-03 02:34 through 2026-10-05 23:55 UTC:
+
+| Commit      | Date (UTC)  | Touches (in scope)                                                                                                                                         |
+| ----------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ea939c38d` | 10-03 02:34 | `training_enhancement_service.py` (grandfathering plumbing only; reviewed, belongs to TR-17)                                                               |
+| `5b0929492` | 10-04 18:48 | `course_cohort_service.py` (EV-26 room-booking lock; one call site, `for_booking=False` on the preview path)                                               |
+| `6459652d7` | 10-04 22:04 | `external_training.py` (Map User fix — see below)                                                                                                          |
+| `f92fbd927` | 10-04 22:55 | `external_training.py`, `training_submission_service.py`, `course_cohorts.py` (preferred-name display, converged with `6459652d7`'s fix on the same lines) |
+| `0d94354b2` | 10-05 02:35 | `course_cohort_service.py` (CC-7 fix — `from_sequence` now narrows, not replaces, the future-only bound)                                                   |
+| `ff78de73a` | 10-05 04:03 | `course_cohort_service.py` (CC-5/CC-6 — all-or-nothing shift/cancel via `EventService`'s new `defer_commit`)                                               |
+| `a8882f6fa` | 10-05 16:35 | `course_cohorts.py`, `course_cohort_service.py` (W27-3 — late joiners and missed-class decisions, new table)                                               |
+| `21bf76f27` | 10-05 18:10 | `training_enhancement_service.py` (TR4-4 — see below)                                                                                                      |
+| `090d62f99` | 10-05 23:55 | `training_submissions.py`, (+ `self_report_attachment_retention.py`, out of declared scope — see below)                                                    |
+
+**Half of this delta post-dates SEC-00's own last sweep.** SEC-00 pass 7's
+head (`532340e3`, 2026-10-04 20:44 UTC) covers `ea939c38d` and `5b0929492`
+only; the remaining seven commits (`6459652d7` onward) are newer than that
+cross-cutting sweep and were read fresh here, not credited to it.
+
+**`ea939c38d` and `5b0929492` belong to other rotations' own scope** (TR-17's
+grandfathering feature; Events' EV-26 room-booking lock) and are spot-checked
+below only where they touch this feature's own files, matching the boundary
+passes 2-6 already drew for analogous cross-feature glob hits.
+
+### The external-training "Map User" fix (`6459652d7`, converged with `f92fbd927`)
+
+`external_training.py:899-1046` (`list_user_mappings`/`update_user_mapping`,
+current). The Mappings screen's Map User
+control had no handler; wiring it up exposed three pre-existing endpoint
+defects, all fixed in the same commit and re-read against the live file:
+
+- **A 500 on any mapped row, now fixed.** `select(User.full_name, User.email)`
+  selected a Python `@property` as a SQL column — `ArgumentError` on the first
+  linked member, 500ing both `list_user_mappings` and `update_user_mapping`
+  for any provider with one match. The new `_mapped_member_details` helper
+  selects `first_name`/`last_name`/`email` and formats the name
+  (`format_legal_name` — training records of note keep the legal name per
+  the preferred-name feature's own stated scope, not the display name).
+  Still org-scoped: `User.organization_id == organization_id` on the lookup,
+  unchanged from the broken version. Two commits converged on the same lines
+  (`6459652d7` built the helper, `f92fbd927` landed `format_legal_name` in
+  parallel) — read the merged result directly rather than trusting either
+  commit's diff alone, and it is coherent: one helper, one call site each.
+- **An explicit `null` is now "unmap", not "leave alone."** `if
+mapping_update.internal_user_id is not None:` read a cleared field the same
+  as an absent one, so the Mappings screen's own "Not mapped" choice could
+  never take effect. Now `"internal_user_id" in
+mapping_update.model_fields_set` decides, per Pitfall #1's update-path
+  corollary. The XC-1 in-org validation on a non-null id is unchanged
+  (`User.organization_id == current_user.organization_id`, now additionally
+  `User.deleted_at.is_(None)` — a soft-deleted member can no longer be
+  mapped, matching sync's own refusal).
+  `mapping.organization_id` (the row's own, not request-supplied) scopes the
+  new `_apply_user_mapping`'s `UPDATE external_training_imports` that carries
+  a re-mapped user's not-yet-imported records along with it — confirmed by
+  reading the full `update()` statement, not assumed from the helper's name.
+- The `mapping` row itself is fetched with
+  `ExternalUserMapping.organization_id == str(current_user.organization_id)`
+  before any of the above runs (`external_training.py:975-980`, unchanged) —
+  the XC-1/XC-3 boundary this pass checked was never the weak point; the
+  property-as-column bug was.
+
+Guard test: `test_external_training_user_mapping.py` (integration, real DB —
+the commit message records 7 of 8 cases failing against the pre-fix
+endpoint). Ran and passed below.
+
+**No finding.** This closes a real defect with the established pattern
+(`model_fields_set` presence-check, org-scoped lookup, `assert_in_org`-shaped
+validation) and ships its own guard test.
+
+### `training_enhancement_service.py`'s TR4-4 fix (`21bf76f27`) — re-derivation corrected, not introduced
+
+`ReportExportService`'s CSV/PDF compliance exports and the forecast report
+computed "percent compliant" as `met / len(requirements)`, counting every
+requirement against every member regardless of whether a membership-type,
+role, or grandfathering cutoff exempted them — the exact Pitfall #29 shape
+("an empty set is not a passing set", and its mirror, grading someone against
+a standard that was never theirs). `21bf76f27` replaces the per-export ad hoc
+loop with the shared `requirement_applies_to_user`/`member_join_date`/
+`tally_standing` helpers from `training_compliance.py` (TR-17's own module,
+not re-implemented here — confirmed by import, not by independent logic
+matching the same shape). `_requirement_cells`/`_forecast_pct` are new local
+helpers that call into the shared ones; read in full, neither duplicates a
+compliance _decision_, only formats one already made elsewhere.
+`selectinload(User.positions)` is added to every query this touches, needed
+by `requirement_applies_to_user`'s role/position check — N+1-safe, not a new
+org-scoping surface (still `User.organization_id == organization_id` on the
+same queries, unchanged).
+
+**No finding.** This is the correction a security review wants to see: a
+prior re-derivation bug, closed by consuming the authoritative computation
+instead of re-implementing it, exactly per Pitfall #29's rule.
+
+### The cohort-shift hardening (`0d94354b2`, `ff78de73a`) — already reviewed by `app-review`'s A5 rotation; re-confirmed here for tenant isolation only
+
+`docs/app-review/course-cohorts.md`'s CC-5/CC-6/CC-7 entries (pass 3 of A5,
+commit `6494f9dad`) already cover the correctness side of these two commits
+in detail: a DST-unsafe `timedelta` shift (CC-5, fixed by `_shift_local_days`
+in the pass-6-era code, unaffected here), a half-moved batch on a mid-loop
+refusal (CC-6, fixed by `EventService`'s new `defer_commit`/
+`complete_deferred_writes` plus a pre-check `_assert_shiftable`/
+`_class_events`), and `from_sequence` reaching classes that had already
+happened (CC-7, fixed by always intersecting with `scheduled_start > now`
+rather than replacing it — `course_cohort_service.py:1021-1027`). CC-7's own
+`KNOWN_LIMITATIONS.md` entry was added and then removed in the same two
+commits that fixed it (confirmed: `0d94354b2`'s diff removes the 43 lines
+`6494f9dad` had added); nothing for this pass to correct there.
+
+This security review's own interest in the same two commits is narrower —
+tenant isolation on the new `defer_commit` machinery, which app-review's own
+checklist does not cover:
+
+- `_class_events` (`course_cohort_service.py:1065-1078`, new) is the only
+  place either `shift_remaining` or `cancel_cohort` resolves an event by id
+  for the attendance-lock pre-check, and it filters
+  `Event.organization_id == str(organization_id)` — confirmed by direct read,
+  not inferred from the helper's name.
+- `EventService.update_event`/`cancel_event`'s new `defer_commit` keyword
+  (`event_service.py:910`, `:1264`) changes _when_ the write lands (flush now,
+  commit with the caller's batch) but not _which row_ — both still take
+  `organization_id` and `event_id` as before and resolve the event the same
+  org-scoped way `defer_commit=False` always did. Read both signatures and
+  their call-site org-id plumbing end to end to confirm the new keyword
+  introduces no new unscoped path.
+- `complete_deferred_writes(organization_id)` threads the same
+  caller-supplied, already-validated organization id through to
+  `_reverse_pipeline_after_commit` — not a second, independently-derived
+  value that could drift from the batch's own.
+
+**No finding.** `event_service.py` itself is Events'/Feature 16's own file,
+out of this feature's declared scope to claim credit for beyond this
+org-scoping spot-check of how `course_cohort_service.py` (in scope) calls it.
+
+### The cohort late-joiners feature (`a8882f6fa`, W27-3) — new table, new routes, one real finding
+
+A member added to a running cohort is RSVP'd only to classes still to come;
+an officer now decides what happens to each class held before they joined —
+credit it as completed, or schedule a make-up session for that member alone.
+New table `course_cohort_missed_classes`, new column
+`course_cohort_classes.makeup_for_class_id`, three new routes
+(`GET/POST .../missed-classes`, `.../credit`, `.../makeup`), all gated
+`require_permission("training.manage")`.
+
+**Tenant isolation (checklist §3, XC-1/XC-3) — holds.** Every new read/write
+resolves its target through an org-scoped fetch before touching it:
+`_active_roster_member` filters `CourseCohortMember.organization_id ==
+organization_id` (not merely `cohort_id`, so a cross-org `cohort_id`/`user_id`
+pair fails closed with "not on this cohort's roster" rather than a 500 or a
+leak); `get_cohort`/`_get_cohort_class` (pre-existing, re-confirmed still
+org-scoped) resolve the cohort and any referenced make-up class the same way.
+The one client-supplied FK pair in the new surface —
+`CohortMakeupCreate.instructor_id`/`location_id` — flows into the pre-existing
+`_insert_ad_hoc_class`, which already validates every FK it accepts
+(`instructor_id`, `location_id`, `category_id`, `requirement_id`, `phase_id`)
+via `assert_in_org`/a `ProgramPhase`-via-`TrainingProgram` join — confirmed
+this validation block predates this pass (`git log -S`, commit `88ea6c5da`,
+Tier A pass 2) and is unmodified by `a8882f6fa`, so the make-up path inherits
+it rather than needing its own copy. `_pending_missed_counts` (the roster's
+batched pending-count column) is likewise filtered to the caller's org at
+every one of its four queries.
+
+**TRX7-1 — MEDIUM (separation of duties) — `credit_missed_class` let an
+officer credit their own missed class, with no second-officer check — FIXED**
+
+`course_cohort_service.py:1657` (the method's current line; the fix itself
+adds lines inside the method body, after the existing roster lookup, rather
+than shifting the signature). `credit_missed_class` writes a `COMPLETED`
+`TrainingRecord` for a member,
+backdated to the class's own date, on the calling officer's sign-off alone —
+structurally identical to `TrainingSubmissionService.review_submission`'s
+`approve` action, which this very codebase already blocks from being
+self-directed:
+
+```python
+# training_submission_service.py:547-551 (existing, unrelated to this pass)
+if action == "approve":
+    assert_different_person(
+        reviewer_id, submission.submitted_by, action="approve", record="training submission",
+    )
+```
+
+`credit_missed_class` had no equivalent. An officer holding
+`training.manage` who is _also_ a late-joining member of their own cohort —
+plausible: an officer taking a recert course alongside the members they
+supervise — could call `POST .../missed-classes/{class_id}/credit` against
+their own membership and grant themselves a completed training record for a
+class they never attended, with no second person involved at any point.
+`separation_of_duties.py`'s own module docstring lists the four paths this
+exact control already covers (FIN-4, CS-8, AH-4, TR-5) and says "a fifth path
+has an obvious thing to call" — this is that fifth path.
+
+**Fix applied** (clearly correct, matches an established, reviewed pattern
+exactly — not a product decision, so fixed rather than flagged):
+`course_cohort_service.py` now imports `assert_different_person` and calls it
+immediately after resolving the member, before the `TrainingRecord` is built:
+
+```python
+assert_different_person(
+    actor_id, member.user_id, action="credit", record="missed class"
+)
+```
+
+`SeparationOfDutiesError` is a `ValueError` subclass (by design, per the
+module's own docstring), so the endpoint's existing `except ValueError as e:
+HTTPException(400, safe_error_detail(e))` surfaces it unchanged — no endpoint
+change needed. **`schedule_makeup_class` is deliberately left as-is**: it
+grants no credit by itself ("nothing is credited by scheduling it" — the
+feature's own docstring), so an officer scheduling a make-up session for
+their own missed class is the same harmless shape `review_submission` already
+carves out for reject/request-revision — the credit, when it happens, runs
+through the make-up session's own ordinary attendance-finalization path, not
+through this decision.
+
+Guard test added: `test_cohort_late_joiners.py::TestCreditingAMissedClass::
+test_an_officer_cannot_credit_their_own_missed_class` — asserts
+`SeparationOfDutiesError` is raised and that no `TrainingRecord` is written
+for that member at all (refused before the write, not merely before the
+decision row). Ran together with the file's other 9 cases: 10 passed.
+
+**A TOCTOU on the same decision, considered and not treated as a finding.**
+`_missed_class_for_decision`'s "not already decided" check and
+`_record_decision`'s insert are a read-then-write with no row lock, so two
+concurrent `credit_missed_class` calls on the same member/class could both
+pass the check. `course_cohort_missed_classes`'s own
+`UniqueConstraint("cohort_member_id", "cohort_class_id")` is a MySQL-level
+constraint, not snapshot-dependent, so the loser's `commit()` fails with an
+`IntegrityError` and its _entire_ transaction — including its own
+just-flushed `TrainingRecord` — rolls back; at most one record is ever
+persisted. The user-visible effect of losing the race is an unhandled 500
+instead of a friendly 409/400, not a duplicate credit or a data-integrity
+break, and double-submitting the same decision twice in quick succession is
+not an attacker-reachable scenario this feature's permission model changes
+the incentive for. Not filed as a finding; noted here so a future pass does
+not have to re-derive it.
+
+### `training_submissions.py`'s retention-period audit log (`090d62f99`) — reviewed, plus one out-of-scope file read for the file-deletion mechanism it feeds
+
+The only change to a declared-scope file is `update_self_report_config`
+auditing a change to the new `attachment_retention_days` setting
+(`training_submissions.py:80-108`): reads the previous value before the
+update, logs `self_report_attachment_retention_updated` with
+`previous_days`/`days` only when that specific field actually changed value —
+confirmed by reading the `if` guard, not assumed from the event name. Matches
+this file's own established `log_audit_event` call shape at `:406`/`:446`
+(same four kwargs, `user_id`/`username` resolving `organization_id`
+server-side via `audit.py:195-202`'s `user_id` lookup, never client-supplied).
+No finding.
+
+**`self_report_attachment_retention.py` (new service, outside the declared
+12-file scope) read in full because the config field it reads is written
+through a declared-scope endpoint, and because it deletes files by a
+client-writable path.** `_org_confined_path`
+(`self_report_attachment_retention.py:61-77`) resolves `file_path` with
+`os.path.realpath` and refuses anything that does not resolve inside
+`root/<org_id>/` (`startswith(org_root + os.sep)`) — the standard path-
+traversal confinement this codebase uses elsewhere for the same
+client-writable-`file_path` shape (`training_submissions.py:554`,
+`training_enhancements.py:889`). The sweep locks each decided submission row
+`.with_for_update()` before deleting its files (so a concurrent approval
+reversal cannot un-delete-out-from-under the sweep), commits per
+organization with rollback on failure, and the delete-then-strip-reference
+ordering is deliberately file-first (a failed commit leaves a dangling
+reference a later run re-finds and clears, rather than a reference-free
+orphan file nothing can find again). This is new code in a new file, not a
+re-verification of a standing fix, so it is read here rather than claimed
+under any TRX citation — it is sound, but it is Feature 18's scope to credit
+only insofar as the config field lives in this feature's own endpoint; the
+sweep itself is a scheduled task (`scheduled_tasks.py`), which is Feature
+31's (Scheduled tasks) declared file and not reviewed as such here.
+
+Migration `cdb725bb1d12` (adds `self_report_configs.attachment_retention_days`)
+guards against `create_all` pre-emption (Pitfall #26 — `self_report_configs`
+is create-all-only) and is a straightforward nullable `Integer` add; no
+`SET NULL` FK involved, Pitfall #2 n/a.
+
+### Re-verification of all standing fixes and flags (TRX-1 through TRX4-8, TRX6's cluster)
+
+Re-read the current code directly for each, since this is a real-delta pass:
+
+- **TRX-1** — `training_program_service.py`'s `bulk_enroll_members`
+  prerequisite lookup still filters `User.organization_id`; untouched by
+  this pass's nine commits.
+- **TRX-2 / TRX-5 / TRX-5b** — `update_provider`, `update_cohort`,
+  `CourseSyllabusService.update_class` all still route through
+  `apply_updates`; none of this pass's commits touch any of the three.
+- **TRX-3 / TRX2-1** — `get_effectiveness_evaluations` still calls
+  `can_view_officer_training_data`; `/training/effectiveness/evaluations`
+  still in `UNCACHEABLE_PREFIXES`. `training_enhancements.py` (the endpoint
+  file) is untouched by any of this pass's commits — only its service file
+  changed, and only in `ReportExportService` (reviewed above).
+- **TRX-4** — `_get_cohort_class` still takes `cohort_id`, threaded before
+  any write in `reschedule_class`/`cancel_class`; the new `_assert_shiftable`/
+  cancel-lock checks (reviewed above) run the same org-scoped way.
+- **TRX-6** — `training_waivers.py` has zero diff this pass; `assert_all_in_org`
+  on `requirement_ids` unchanged.
+- **TRX-7** — `training_submission_service.py` still calls `assert_in_org` on
+  `category_id`; this pass's touch (`_display_name`, reviewed above) is a
+  different method.
+- **TRX-8 / TRX-9 / TRX-10** — the four `_validate_references` methods and
+  `XAPIService.ingest_statement`'s `_provider_validated` flag are untouched;
+  `training_enhancements.py`'s service module changed only in
+  `ReportExportService`, reviewed above.
+- **TRX3-1 / TRX4-7 / TRX4-8** — `external_training_service.py` has zero
+  diff this pass (confirmed by individual-file diff); the SSRF transport and
+  `additional_headers` redaction are both in that file, untouched.
+- **TRX4-2 / TRX4-6** — the `training.view_all`/`training.manage` OR-gates on
+  the instructor-qualification and multi-agency GET routes are in
+  `training_enhancements.py` (the endpoint file), untouched this pass.
+- **TRX4-4 / TRX4-5** — the two `UNCACHEABLE_PREFIXES` entries are a frontend
+  file this pass does not touch.
+- **TRX6's external-sync cluster** — `external_training_service.py`'s
+  SSRF-pinned transport, credential redaction, and `_match_member_by_email`'s
+  provider-derived (not client-supplied) org scoping are all in a file with
+  zero diff this pass.
+
+**Independent route re-enumeration: 18 + 29 + 5 + 16 + 17 + 6 = 91 routes**
+(up from pass 6's 88 — the three new missed-class routes, all three
+confirmed to carry `require_permission("training.manage")` by direct read).
+`check_route_permissions.py --strict` (repo root): 245 total application
+routes, 0 errors/warnings — unchanged from TR-17 pass 7's count, confirming
+these three are sub-routes of an already-registered page rather than a new
+top-level page (Pitfall #30a n/a).
+
+### CLAUDE.md pitfall sweep (#1, #2, #9, #12, #14, #15, #20, #25, #26, #27, #29, #30a, #30b)
+
+- **#1 (`||` vs `??`, update-path presence/null):** the Map User fix's
+  `"internal_user_id" in mapping_update.model_fields_set` is exactly this
+  corollary, applied correctly (reviewed above).
+- **#2 (`SET NULL` nullable):** `makeup_for_class_id`, `training_record_id`,
+  `makeup_class_id`, `recorded_by` on the new `course_cohort_missed_classes`
+  table are all `nullable=True` with `ondelete="SET NULL"` — confirmed by
+  reading both the model and the migration side by side.
+- **#9 (unbounded trackers):** no new module-level or `self.*` tracking
+  dict/set in any file this pass touched.
+- **#12 (JSON mutation):** no JSON-column nested mutation in any new code
+  this pass (the retention sweep's `attachments` reassignment is a fresh
+  list with `flag_modified`, reviewed above, and is outside this feature's
+  own declared scope regardless).
+- **#14 (org-scoping, 14a/14b/14c):** reviewed in detail above for the
+  late-joiners feature (the only new client-supplied FK surface this pass) —
+  inherits `_insert_ad_hoc_class`'s pre-existing validation, adds none
+  unvalidated.
+- **#15 (CSV exports):** `training_enhancement_service.py`'s CSV paths still
+  construct via `SafeCsvWriter` at all five call sites (`:1042`, `:1115`,
+  `:1531`, `:1701`, `:1795`) — unchanged by this pass's `_requirement_cells`
+  refactor, which only changes what feeds the row, not how the row is
+  written.
+- **#20 (JSON column canonical shape):** no untyped JSON column touched by
+  any new code this pass.
+- **#25 (LIKE patterns):** no `.like()`/`.ilike()` introduced; confirmed by
+  grep of all nine commits' diffs.
+- **#26 (migration vs. `create_all`-only table):** both new migrations
+  (`cdb725bb1d12` on `self_report_configs`, `d4d0a483cdd5` on
+  `course_cohort_classes`/new `course_cohort_missed_classes`) guard with an
+  inspector check before altering or creating, reviewed above.
+- **#27 (capacity locking):** the late-joiners decision race (reviewed
+  above) is read-then-write but is backstopped by a real unique constraint,
+  not merely application logic — considered and not filed as a finding, per
+  the reasoning given there.
+- **#29 (compliance re-derivation):** TR4-4's fix (reviewed above) is this
+  pitfall's corrective case, not a new violation of it.
+- **#30a (route registries):** three new routes, zero new top-level pages
+  (confirmed above); n/a.
+- **#30b (integration marking):** `test_cohort_late_joiners.py` is
+  module-level `pytestmark = [pytest.mark.integration]` and uses
+  `db_session` — correctly marked, confirmed by reading the line directly.
+
+### Verified good ✅ (pass 7 additions)
+
+- **The Map User fix closes a real 500-on-first-use defect with the
+  established org-scoping and presence-check patterns, shipping its own
+  7-of-8-cases-failing-before guard test** — mechanism: direct read of
+  `_mapped_member_details`/`_apply_user_mapping` and the surrounding
+  org-scoped fetch, cross-checked against
+  `test_external_training_user_mapping.py`.
+- **TR4-4's export/forecast fix consumes the shared compliance helpers
+  rather than re-deriving them** — mechanism: import-and-call, confirmed by
+  reading `_requirement_cells`/`_forecast_pct` in full.
+- **The cohort-shift hardening's new `defer_commit` machinery introduces no
+  new unscoped path** — mechanism: `_class_events`, `update_event`, and
+  `cancel_event` all still resolve by `organization_id` exactly as the
+  non-deferred path did; read end to end, not inferred from the keyword's
+  name.
+- **The late-joiners feature's one client-supplied FK pair inherits
+  pre-existing, already-reviewed validation rather than adding an
+  unvalidated copy** — mechanism: `git log -S` confirms the
+  `assert_in_org`/`ProgramPhase` validation block in `_insert_ad_hoc_class`
+  predates this pass (Tier A pass 2, `88ea6c5da`) and is byte-unmodified by
+  `a8882f6fa`.
+- **Both new migrations guard against their tables' `create_all`-only
+  status and get `nullable=True` right on every `SET NULL` FK** — mechanism:
+  direct read of both migration files' inspector-gated `upgrade()`/
+  `downgrade()`.
+- **91/91 routes carry `require_permission`/`get_current_user`, and every
+  standing TRX finding (TRX-1 through TRX6's cluster) holds unchanged** —
+  re-verified by direct code read in every case listed above.
+
+## Flagged, not fixed
+
+Nothing new this pass. The late-joiners decision race (reviewed above) was
+evaluated and deliberately **not** filed — the unique constraint already
+backstops it against a real duplicate, and the residual is an unhandled 500
+on a double-click, not a security or data-integrity gap.
+
+## Findings
+
+**1 new finding, fixed this pass: TRX7-1 (MEDIUM, separation of duties)** —
+`credit_missed_class` let an officer credit their own missed cohort class
+with no second-officer check, the same shape as submission approval, which
+this codebase already blocks. Fixed with the existing `assert_different_person`
+helper (the module's own docstring names this as its intended fifth use),
+with a guard test. No other new finding; every standing TRX fix re-verified
+unchanged, and one real correctness fix (TR4-4) plus one real defect fix (Map
+User) in this pass's own delta were both read in full and confirmed to follow
+this feature's established security patterns on landing.
+
+## Schema & migration notes
+
+Two migrations landed in this feature's scope since pass 6:
+
+- `cdb725bb1d12` (`self_report_configs.attachment_retention_days`) — guards
+  against `create_all` pre-emption, plain nullable `Integer`, no FK.
+- `d4d0a483cdd5` (`course_cohort_classes.makeup_for_class_id`, new table
+  `course_cohort_missed_classes`) — guards against `create_all` pre-emption
+  on both the column add and the table create; every `SET NULL` FK on the
+  new table is `nullable=True`.
+
+`validate_migrations.py --strict`: 527 revisions (up from pass 6's 497),
+single head `15802f3df5c4`, no duplicate ids.
+
+## Guard tests added
+
+- `backend/tests/test_cohort_late_joiners.py::TestCreditingAMissedClass::
+test_an_officer_cannot_credit_their_own_missed_class` (TRX7-1) — asserts
+  `SeparationOfDutiesError` and that no `TrainingRecord` is written.
+
+Every other piece of real feature work in this pass's delta already shipped
+its own guard-test coverage on landing
+(`test_external_training_user_mapping.py`,
+`test_self_report_attachment_retention.py`, the DST/all-or-nothing cases in
+`test_course_cohort.py`, `test_cohort_late_joiners.py`'s other nine cases),
+all read and re-run below.
+
+## Completion gate (pass 7)
+
+| Check                                                                                                             | Result                                                                 |
+| ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                     | ✅ 0 violations                                                        |
+| `black --check app/ tests/ alembic/`                                                                              | ✅ 1954 files unchanged                                                |
+| `isort --check-only app/ tests/ alembic/`                                                                         | ✅ clean                                                               |
+| `python3 scripts/validate_migrations.py --strict`                                                                 | ✅ 527 revisions, single head `15802f3df5c4`                           |
+| `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi"` | ✅ 1558 passed, 1 skipped (pre-existing `pywebpush` optional-dep skip) |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                 | ✅ 245 routes, 0 errors, 0 warnings                                    |
+| `cd frontend && npm run typecheck`                                                                                | ✅ 0 errors                                                            |
+| `cd frontend && npm run lint`                                                                                     | ✅ 0 errors, 0 warnings                                                |
+
+No frontend file in this feature's own scope changed this pass (the fix is
+entirely backend). `typecheck`/`lint` were still run in full per this pass's
+own completion-gate instructions.
