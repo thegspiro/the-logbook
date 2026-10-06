@@ -95,7 +95,8 @@ export interface MemberFormData {
 
   // Department
   joinDate: string;
-  status: 'active' | 'inactive' | 'leave' | 'retired';
+  /** Initial account status (W08-1); the create endpoint accepts these three. */
+  status: 'active' | 'inactive' | 'leave';
   membershipType: 'prospective' | 'probationary' | 'regular' | 'life' | 'administrative';
   rank: string;
   role: string;

@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockCreateMember = vi.fn();
@@ -363,12 +363,46 @@ describe('AddMember', { timeout: 20_000 }, () => {
       }
     });
 
-    it('offers no Status or Preferred Contact control, since neither is saved', async () => {
+    it('offers the starting statuses the server accepts, and no Preferred Contact control', async () => {
       renderWithRouter(<AddMember />);
       await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
 
-      expect(screen.queryByRole('option', { name: 'On Leave' })).not.toBeInTheDocument();
+      const status = screen.getByRole('combobox', { name: /^status$/i });
+      expect(
+        within(status)
+          .getAllByRole('option')
+          .map((o) => o.textContent)
+      ).toEqual(['Active', 'Inactive', 'On Leave']);
       expect(screen.queryByText('Preferred Contact Method')).not.toBeInTheDocument();
+    });
+
+    // W08-1: the status used to be shown and not sent, so "On Leave" created
+    // an active member.
+    it('sends the status the operator picked', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      await fillRequired(user);
+      await user.selectOptions(screen.getByRole('combobox', { name: /^status$/i }), 'leave');
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      await waitFor(() => expect(mockCreateMember).toHaveBeenCalled());
+      const payload = mockCreateMember.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(payload.status).toBe('leave');
+    });
+
+    it('sends Active when the status is left alone', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      await fillRequired(user);
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      await waitFor(() => expect(mockCreateMember).toHaveBeenCalled());
+      const payload = mockCreateMember.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(payload.status).toBe('active');
     });
 
     it('refuses a password the server would, at the field, and lists the rules', async () => {

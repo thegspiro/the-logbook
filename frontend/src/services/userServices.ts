@@ -139,6 +139,8 @@ export const userService = {
     // backend derives `membership_type` back from it.
     member_class?: string | undefined;
     member_status?: string | undefined;
+    /** Initial account status (W08-1): active (default), inactive or leave. */
+    status?: 'active' | 'inactive' | 'leave' | undefined;
     rank?: string | undefined;
     station?: string | undefined;
     platoon?: string | undefined;

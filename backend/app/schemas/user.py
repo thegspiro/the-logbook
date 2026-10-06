@@ -276,6 +276,9 @@ class MembershipClassificationFields(BaseModel):
         return normalised
 
 
+CREATABLE_MEMBER_STATUSES = frozenset({"active", "inactive", "leave"})
+
+
 class AdminUserCreate(MembershipClassificationFields):
     """Schema for admin/secretary creating a new member"""
 
@@ -347,6 +350,30 @@ class AdminUserCreate(MembershipClassificationFields):
     role_ids: List[UUID] = Field(
         default_factory=list, description="Initial roles to assign"
     )
+    status: Optional[str] = Field(
+        None,
+        description=(
+            "Initial account status: active (the default), inactive or leave. "
+            "Statuses that end or suspend membership are reached through the "
+            "status change, which records the separation."
+        ),
+    )
+
+    @field_validator("status")
+    @classmethod
+    def _creatable_status(cls, v: Optional[str]) -> Optional[str]:
+        # W08-1: a member may be added inactive or on leave. Dropped, retired,
+        # archived and suspended are not starting states: each closes or
+        # suspends service, which the status change records (service history,
+        # property return) and a create would silently skip.
+        if v is None:
+            return v
+        v = v.strip().lower()
+        if v not in CREATABLE_MEMBER_STATUSES:
+            allowed = ", ".join(sorted(CREATABLE_MEMBER_STATUSES))
+            raise ValueError(f"A new member's status must be one of: {allowed}")
+        return v
+
     send_welcome_email: bool = Field(
         default=True, description="Send welcome email with password setup link"
     )

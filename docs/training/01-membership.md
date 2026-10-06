@@ -230,8 +230,8 @@ Navigate to **Administration > Members > Member Management**, then click the **A
 **[SCREENSHOT — REPLACE `01-05-add-member-form.png`.** Four visible changes
 since the frame was taken: one **Membership Number** field whose hint reads
 "Leave blank to assign … automatically" (the separate Membership ID override box
-is gone); the **Status** and **Preferred Contact** controls are gone from
-Department Information; **Rank** and **Position** each carry a help line under
+is gone); **Preferred Contact** is gone from Department Information and
+**Status** offers Active, Inactive and On Leave; **Rank** and **Position** each carry a help line under
 the dropdown; and with **Set initial password** ticked, a password-rules
 checklist sits under the two password fields. Shoot on a department with
 auto-numbering on, so the hint shows a real next number.**]**
@@ -254,13 +254,12 @@ default permissions of its own." **Position** is "the job they hold here, such
 as Secretary or Training Officer. Positions decide most of what they can see and
 do in The Logbook."
 
-> **Status and Preferred Contact are no longer on the form** _(2026-09-28)_. Both
-> were offered and neither was ever sent: the create endpoint has no field for
-> either, so a member added as "On Leave" was created Active. A new member is
-> always created Active; change their status afterwards from their profile.
-> Whether a member can be created inactive, and whether a preferred contact
-> method should be recorded at all, is open in
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md) (workflow review W08-1).
+> **Status is back on the form, and it is saved** _(2026-10-05)_. **Status**
+> under Department Information offers **Active** (the default), **Inactive**
+> and **On Leave**, and the member is created with the one you pick. Retired
+> and dropped are not offered: set those from the member's profile once they
+> are added, so their service history is recorded. **Preferred Contact** stays
+> off the form — the department records no such field (workflow review W08-1).
 
 #### The Membership Number on Add Member _(2026-09-29)_
 

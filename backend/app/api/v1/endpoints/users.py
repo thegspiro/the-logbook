@@ -460,7 +460,7 @@ async def create_member(
         # Emergency contacts (stored as JSON)
         emergency_contacts=[ec.model_dump() for ec in user_data.emergency_contacts],
         email_verified=False,
-        status=UserStatus.ACTIVE,
+        status=UserStatus(user_data.status) if user_data.status else UserStatus.ACTIVE,
         must_change_password=True,
         password_changed_at=datetime.now(timezone.utc),
     )
