@@ -1,15 +1,171 @@
 # Security Review 16 — Events & Requests
 
-**Prefix:** `EV` · **Iteration:** 16 · **Reviewed:** 2026-08-26 · **PR:** [#1848](https://github.com/thegspiro/the-logbook/pull/1848)
+**Prefix:** `EV` · **Iteration:** 16 · **Reviewed:** 2026-08-26 (pass 1),
+2026-09-17 (pass 6), 2026-10-06 (pass 7) · **PR:**
+[#1848](https://github.com/thegspiro/the-logbook/pull/1848) (pass 1),
+[#2630](https://github.com/thegspiro/the-logbook/pull/2630) (pass 6),
+pass 7 PR recorded in `PROGRESS.md`'s Open PR row
 
-**Backend:** `api/v1/endpoints/events.py` (3,313 L, 55 routes),
-`api/v1/endpoints/event_requests.py` (1,838 L, 23 routes — includes the
+**Backend:** `api/v1/endpoints/events.py` (58 routes, up from 55),
+`api/v1/endpoints/event_requests.py` (23 routes — includes the
 public outreach event-request intake pipeline),
-`services/event_service.py` (4,019 L),
-`services/event_request_service.py` (1,105 L — new since the last full
-read, extracted from `event_requests.py`)
+`services/event_service.py`,
+`services/event_request_service.py`,
+`api/v1/endpoints/event_attendance_petitions.py`,
+`services/event_attendance_petition_service.py`,
+`services/event_organizer_service.py` (three files added to scope this
+pass — see Pass 7 below)
 **Frontend:** `modules/events`
 **Migrations:** none this iteration (no schema change)
+
+---
+
+## Pass 7 (2026-10-06) — real delta (33 commits), 0 fixes needed, EV-26 confirmed fixed, scope widened by 3 files
+
+**Watchdog pickup.** PR #2971 (Feature 15, Scheduling, pass 7) had merged
+with 0 application-code changes (docs-only), so per `PROGRESS.md`'s own
+rule it was not independently recordable. No `claude/security-review-*`
+PR was open; rotation row 16 (Events & requests) was the first `⬜`.
+
+### Scope
+
+**Confirmed full-depth clone before trusting any commit count** —
+`git fetch --unshallow` reported "already a complete repository"; no
+truncation risk here. Since pass 6's merge (PR #2630, `f39a6c4fd`,
+2026-09-17): **33 non-merge commits** touch the 12 declared scope files
+— a genuinely active window, not a near-zero-delta one like pass 6.
+
+**Scope gap found and closed.** Two new backend files
+(`api/v1/endpoints/event_attendance_petitions.py`,
+`services/event_attendance_petition_service.py`,
+`services/event_organizer_service.py` — three files total) were added in
+this window by real Events-feature commits (`9069e0674`, `e7918349b`)
+but sat outside the declared 12-file scope, so a future pass would not
+have picked up their diff. Reviewed all three in full against all seven
+checklist dimensions this pass (see below) and found clean; **added to
+this feature's declared scope** (header above) so they're diffed going
+forward rather than silently skipped.
+
+### Re-verified standing items
+
+- **EV-26 — confirmed fixed, not merely unchanged.** `5b0929492`
+  ("fix(events): serialize room bookings per department (EV-26)",
+  2026-10-04) adds an `organization_locks`-style upsert lock
+  (scope `room_booking`) taken before `check_overlapping_events` reads
+  with `.with_for_update()`, and makes `update_event` take that lock
+  before its own event-row lock. All three standing call sites
+  (`event_service.py::create_event` ~line 394, `::update_event`
+  ~line 924/1000, `event_requests.py::schedule_request` ~line 1131) now
+  go through the locked path — confirmed by direct read, not the commit
+  message. A same-day follow-up (`012f3da49`) generalizes the lock table
+  for reuse by Training's enrollment lock without weakening this
+  mechanism (same scope string, same upsert-before-event-lock order).
+  `KNOWN_LIMITATIONS.md`'s EV-26 entry already documents the fix and its
+  accepted cross-department residual (two departments racing the same
+  gap-lock boundary fails loudly with a deadlock retry rather than
+  double-booking) — re-read and confirmed accurate, not re-asserted.
+  **Closed as fixed**, carrying forward only the documented residual.
+- **EV-23 — still open, unchanged in substance.** `rsvp_to_series`
+  (now `event_service.py:2181`, shifted from ~1808 by unrelated
+  training-credit additions earlier in the file) still passes
+  `override=True` unconditionally into `create_or_update_rsvp`
+  (now line 2243), with the same comment naming a confirmation step the
+  series UI still never collects. Still a product decision, not a bug;
+  `KNOWN_LIMITATIONS.md`'s entry re-read and still accurate.
+
+### Real commits reviewed, all clean (one is a genuine security-adjacent fix)
+
+- **`f00912e1b`** — fixes 11 routes that either leaked the raw
+  `ATTENDANCE_LOCKED::` internal marker or over-sanitized a legitimate
+  lock message into a generic 500/400 instead of the correct 409.
+  Security-adjacent error-handling correctness fix, well-tested with a
+  new AST guard.
+- **`e7918349b`** — adds `organizer_id`/`alternate_organizer_id` to
+  `Event`, a `POST /events/{id}/transfer` route, and
+  `event_organizer_service.py`. `validate_pair` explicitly validates
+  both ids are active members of the caller's org before storing
+  (XC-1, cited by name in-code); both FKs are `SET NULL` +
+  `nullable=True`.
+- **`9069e0674`** — new attendance-petition feature (model, 5-route
+  endpoint file, service). Every route requires auth; `_assert_may_decide`
+  refuses a reviewer deciding their own petition (separation of duties);
+  every by-id lookup is org-scoped (XC-3); `approve()` locks the event
+  row before the petition row (Pitfall #27); petition text is
+  `html.escape`d before any email; `/attendance-petitions` already in
+  `UNCACHEABLE_SUBSTRINGS` (added by the same commit).
+  `EventAttendancePetition.reviewed_by` is `SET NULL` + `nullable=True`.
+- **`106eed9c0`, `0d17c6e8a`, `cd3bf9339`, `b65142bd4`, `9d4d0d168`,
+  `0f8aaafc5`, `a88005082`** — large training-credit/attendance-finalize
+  rewrite series. Spot-checked every new `select()` for org-scoping (one,
+  in `cd3bf9339`, actually added a missing `EventRSVP.organization_id`
+  filter that wasn't there before — a minor hardening, not previously
+  flagged); every new `.with_for_update()` pairs with
+  `populate_existing=True` per the stated identity-map problem. No new
+  XC-1/XC-3 issue.
+- **`2317a5ca7`** (app-review W18, HIGH) — fixes recurring-series
+  generation stepping in UTC instead of department wall-clock (a real DST
+  bug) and fixes "this and all future" copying absolute times instead of
+  applying a shift. Correctness, no tenancy/auth surface.
+- **`690c9675c`, `ff78de73a`, `163916218`, `44b7b6a75`, `cd8c76135`,
+  `977fc3a7d`** — refusal-message counting, all-or-nothing cohort
+  shift/cancel via `defer_commit`, attendance-lock keyed on changed
+  values rather than present fields, a clamped check-in pre-fill with a
+  new org-scoped roster field, a server-computed `check_in_closes_at`
+  field, and a sanitization wording/test strengthening. All clean.
+- **`68169a1fe`, `63227fbba`** (workflow-review W19/W20) — an additive
+  computed field and a cosmetic label fix. Real but minor, both clean.
+- **`72dfb4f1e`, `b5fe2ca00`, `982a08d0b`, `e3ef10465`, `4c288887e`,
+  `ccef747b2`, `68efcc3b9`, `28c2a3777`, `f92fbd927`** — shared
+  email-policy/template plumbing and department-local-date/preferred-name
+  display fixes, touching this feature's files only incidentally. All
+  clean, no tenancy/auth surface.
+- **`014a4a44a`** — declares explicit `ondelete="RESTRICT"` on previously
+  implicit FKs in `event.py`. Every `SET NULL` FK in the current file
+  (`organizer_id`, `alternate_organizer_id`, `last_modified_by`,
+  `EventAttendancePetition.reviewed_by`, the prospect-link fields) still
+  pairs with `nullable=True` — re-verified by reading every occurrence.
+
+**Out of this feature's scope, correctly excluded:** `dabae068a` (app-review
+Locations pass 3) and `a0307629d` (NFC-kiosk badge-tap) both touch
+`location_service.py`, but only the NFC-kiosk code Locations owns, not
+`check_overlapping_events` — confirmed via diff, and both are already
+reviewed under the Locations feature's own rotation slot.
+
+### Route inventory
+
+**`events.py`: 58 routes, up from 55** — the two additions are
+`GET /settings/position-options` (`events.manage`-gated, org-scoped
+query) and `POST /{event_id}/transfer` (reviewed above), confirmed via
+`git diff <baseline>..HEAD -- events.py | grep '^\+@router'` showing
+exactly these two, and independently via a fresh `@router.*` decorator
+count. **`event_requests.py`: 23 routes, unchanged** — zero diff in
+`@router` decorator lines since baseline.
+
+### Verified good ✅ (pass 7)
+
+- No new unbounded query, no new CSV export, no new `.like()`/`.ilike()`
+  usage, no new JSON-column shallow-copy mutation, no new seeded-grant
+  change without a migration, no new unauthenticated route in this
+  feature's own files (the one new public-facing surface in the window,
+  the NFC-kiosk badge-tap, belongs to the Locations feature and is
+  reviewed there — rate-limited, minimized response, audited).
+- The three newly-in-scope files (petitions + organizer transfer) are
+  clean on every checklist dimension, detailed above.
+
+### Completion gate
+
+| Check                                                 | Result                                            |
+| ----------------------------------------------------- | ------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                         | ✅ 0 violations                                   |
+| `black --check` (scope)                               | ✅ clean                                          |
+| `isort --check-only` (scope)                          | ✅ clean                                          |
+| `python3 scripts/validate_migrations.py --strict`     | ✅ single head `15802f3df5c4`, 527 revisions      |
+| `python3 scripts/check_route_permissions.py --strict` | ✅ 245 routes, 0 errors, 0 warnings               |
+| `pytest tests/ -k "event"`                            | ✅ 1224 passed, 1 pre-existing skip (`pywebpush`) |
+| `npm run typecheck`                                   | ✅ clean                                          |
+| `npm run lint`                                        | ✅ clean                                          |
+
+Rotation row 16 → ✅ (pending PR merge). Next: Feature 17 (Training core).
 
 ---
 
