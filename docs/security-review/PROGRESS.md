@@ -16,12 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR [#2971](https://github.com/thegspiro/the-logbook/pull/2971)
-(Feature 15, Scheduling, pass 7) merged — docs-only (0 application-code
-changes: only `SCH-15-scheduling.md`, `PROGRESS.md`), so per this file's
-own rule it is not a recordable event on its own; rotation row 15
-already stood ✅. This iteration picks up Feature 16 (Events & requests),
-the state this PR opened from.
+**PR [#2972](https://github.com/thegspiro/the-logbook/pull/2972)**: branch
+`claude/security-review-events-requests`, Feature 16 (Events & requests),
+pass 7 — 0 code fixes needed. EV-26 confirmed genuinely fixed (not
+merely unchanged) via a per-department upsert lock serializing
+room-booking overlap checks, matching `KNOWN_LIMITATIONS.md`'s own
+entry; EV-23 re-verified unchanged (accepted product decision). A
+scope-tracking gap found and closed: three new feature files reviewed
+clean and added to the declared scope. One security-adjacent fix
+verified (11 routes leaking/over-sanitizing an internal error marker,
+now correctly 409). Real delta since pass 6 reviewed in full — 33
+non-merge commits. Route count in `events.py` grew to 58 (+2). Gate
+green (flake8/black/isort, migrations, route-permission check — 245
+routes, 1224 scoped backend tests, frontend typecheck/lint). See the
+Log entry below for detail.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 7, PR #2971, merged docs-only — not independently recorded), preserved for history</summary>

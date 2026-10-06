@@ -4,7 +4,8 @@
 2026-09-17 (pass 6), 2026-10-06 (pass 7) · **PR:**
 [#1848](https://github.com/thegspiro/the-logbook/pull/1848) (pass 1),
 [#2630](https://github.com/thegspiro/the-logbook/pull/2630) (pass 6),
-pass 7 PR recorded in `PROGRESS.md`'s Open PR row
+[#2972](https://github.com/thegspiro/the-logbook/pull/2972) (pass 7, 0
+fixed, EV-26 confirmed fixed)
 
 **Backend:** `api/v1/endpoints/events.py` (58 routes, up from 55),
 `api/v1/endpoints/event_requests.py` (23 routes — includes the
