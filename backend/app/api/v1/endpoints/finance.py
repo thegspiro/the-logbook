@@ -31,6 +31,7 @@ from app.schemas.finance import (
     ApprovalChainStepUpdate,
     ApprovalChainUpdate,
     ApprovalStepRecordResponse,
+    ApproverCoverageResponse,
     BudgetCategoryCreate,
     BudgetCategoryResponse,
     BudgetCategoryUpdate,
@@ -71,6 +72,7 @@ from app.schemas.finance import (
     PurchaseRequestUpdate,
     UnroutedApprovalResponse,
 )
+from app.services.finance_approver_matching import ApproverMismatchError
 from app.services.finance_service import (
     BudgetLimitExceededError,
     FinanceEntityNotFoundError,
@@ -481,6 +483,32 @@ async def preview_approval_chain(
     return chain
 
 
+@router.get(
+    "/approval-chains/approver-coverage",
+    response_model=list[ApproverCoverageResponse],
+)
+async def get_approver_coverage(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.configure_approvals")),
+):
+    """
+    Report every approval step and whether anybody can act on it
+
+    Approve and deny are limited to a step's named approver, so a step naming
+    a missing position, a departed member, an unknown permission or nobody
+    active leaves its requests waiting. One row per approval step in the
+    organization's chains, with the number of active members who match it,
+    a ``problem`` code when nobody can, and how many requests are waiting on
+    it now. Registered before ``/approval-chains/{chain_id}`` for the reason
+    given on the preview route.
+
+    **Authentication required**
+    **Requires permission: finance.configure_approvals**
+    """
+    service = FinanceService(db)
+    return await service.get_approver_coverage(str(current_user.organization_id))
+
+
 @router.get("/approval-chains/{chain_id}", response_model=ApprovalChainResponse)
 async def get_approval_chain(
     chain_id: str,
@@ -621,7 +649,7 @@ async def get_pending_approvals(
 ):
     service = FinanceService(db)
     return await service.get_pending_approvals(
-        str(current_user.id),
+        current_user,
         str(current_user.organization_id),
         skip=pagination.skip,
         limit=pagination.limit,
@@ -751,6 +779,32 @@ async def manual_deny(
         raise _manual_decision_error(e)
 
 
+def _approval_audit_data(service: FinanceService, step_record_id: str) -> dict:
+    """Audit fields saying how the caller was allowed to act on the step."""
+    decision = service.last_approver_decision
+    data: dict = {"step_record_id": step_record_id}
+    if decision is None:
+        return data
+    data.update(
+        {
+            "override": decision.override,
+            "approver_type": decision.approver_type,
+            "approver_value": decision.approver_value,
+        }
+    )
+    if decision.override:
+        data["override_reason"] = decision.override_reason
+    return data
+
+
+def _approval_audit_severity(service: FinanceService, default: str) -> str:
+    """An override is raised to warning, as scheduling's check override is."""
+    decision = service.last_approver_decision
+    if decision is not None and decision.override:
+        return "warning"
+    return default
+
+
 @router.post(
     "/approvals/{step_record_id}/approve",
     response_model=ApprovalStepRecordResponse,
@@ -761,24 +815,38 @@ async def approve_step(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.approve")),
 ):
+    """
+    Approve the approval step a request is currently waiting on
+
+    Only the step's named approver may approve it. An approvals administrator
+    (``finance.configure_approvals``) who is not the named approver may do so
+    by giving ``overrideReason``; it is recorded in the audit log. The
+    requester can never approve their own request. Anyone else gets 403.
+
+    **Authentication required**
+    **Requires permission: finance.approve**
+    """
     service = FinanceService(db)
     try:
         record = await service.approve_step(
             step_record_id,
-            str(current_user.id),
+            current_user,
             data.notes,
             org_id=str(current_user.organization_id),
+            override_reason=data.override_reason,
         )
         await log_audit_event(
             db=db,
             event_type="finance.approval_step_approved",
             event_category="finance",
-            severity="info",
-            event_data={"step_record_id": step_record_id},
+            severity=_approval_audit_severity(service, "info"),
+            event_data=_approval_audit_data(service, step_record_id),
             user_id=str(current_user.id),
             username=current_user.username,
         )
         return record
+    except ApproverMismatchError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -797,24 +865,36 @@ async def deny_step(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.approve")),
 ):
+    """
+    Deny the approval step a request is currently waiting on
+
+    The same approver rule as approving, including the override; a
+    requester may deny (withdraw) their own request.
+
+    **Authentication required**
+    **Requires permission: finance.approve**
+    """
     service = FinanceService(db)
     try:
         record = await service.deny_step(
             step_record_id,
-            str(current_user.id),
+            current_user,
             data.notes,
             org_id=str(current_user.organization_id),
+            override_reason=data.override_reason,
         )
         await log_audit_event(
             db=db,
             event_type="finance.approval_step_denied",
             event_category="finance",
-            severity="warning",
-            event_data={"step_record_id": step_record_id},
+            severity=_approval_audit_severity(service, "warning"),
+            event_data=_approval_audit_data(service, step_record_id),
             user_id=str(current_user.id),
             username=current_user.username,
         )
         return record
+    except ApproverMismatchError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -880,7 +960,9 @@ async def create_purchase_request(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
-async def _with_approval_steps(service, payload, entity_type, entity_id, org_id):
+async def _with_approval_steps(
+    service, payload, entity_type, entity_id, org_id, viewer: User
+):
     """Attach the approval records for a finance document.
 
     `ApprovalStepRecord` is polymorphic — it keys on (entity_type, entity_id)
@@ -890,8 +972,14 @@ async def _with_approval_steps(service, payload, entity_type, entity_id, org_id)
     just said "No approval steps configured for this request".
     """
     steps = []
-    for record in await service.get_approval_records(entity_type, entity_id, org_id):
+    records = await service.get_approval_records(entity_type, entity_id, org_id)
+    # Who each step waits on, and whether the viewer can act on it, comes
+    # from the rule approve/deny enforce (CLAUDE.md pitfall #29).
+    flags = await service.step_actor_flags(viewer, records, org_id)
+    for record in records:
         step = ApprovalStepRecordResponse.model_validate(record)
+        for field, value in flags.get(str(record.id), {}).items():
+            setattr(step, field, value)
         # `step_name` and `step_order` describe the chain step, not the record,
         # so they have to be copied across from the eager-loaded relationship —
         # otherwise every entry renders as the fallback "Step 1".
@@ -919,6 +1007,7 @@ async def get_purchase_request(
         ApprovalEntityType.PURCHASE_REQUEST,
         pr.id,
         str(current_user.organization_id),
+        current_user,
     )
 
 
@@ -1159,6 +1248,7 @@ async def get_expense_report(
         ApprovalEntityType.EXPENSE_REPORT,
         er.id,
         str(current_user.organization_id),
+        current_user,
     )
 
 
@@ -1330,6 +1420,7 @@ async def get_check_request(
         ApprovalEntityType.CHECK_REQUEST,
         cr.id,
         str(current_user.organization_id),
+        current_user,
     )
 
 

@@ -114,7 +114,7 @@ An **Approval Chain** is a reusable template that defines _who_ must approve a f
 
 - **`approval_chain_steps`** — id, chain_id (FK approval_chains, ondelete CASCADE), step_order (Integer — 1, 2, 3...), name (e.g., "Training Officer Review", "Board of Trustees Approval"), step_type (enum: APPROVAL, NOTIFICATION — see below), approver_type (enum: POSITION, PERMISSION, SPECIFIC_USER, EMAIL; nullable for NOTIFICATION steps that only use `notification_emails`), approver_value (String — position slug like "training_officer", permission like "finance.approve", user_id, or email address), notification_emails (JSON array, nullable — additional email addresses to notify when this step is reached or completed), email_template_id (FK, nullable — custom email template; uses default approval request/notification template if null), allow_self_approval (bool, default false), auto_approve_under `Numeric(12,2)` (nullable — auto-approve if amount below this), required (bool, default true — skippable steps), created_at
 
-- **`approval_step_records`** — id, chain_id (FK), step_id (FK approval_chain_steps), entity_type (enum: PURCHASE_REQUEST, EXPENSE_REPORT, CHECK_REQUEST), entity_id (String — FK to the actual request), status (enum: PENDING, APPROVED, DENIED, SKIPPED, AUTO_APPROVED), assigned_to (FK users, nullable — resolved from approver_type at submission time), acted_by (FK users, nullable), acted_at (DateTime, nullable), notes (Text, nullable), created_at
+- **`approval_step_records`** — id, chain_id (FK), step_id (FK approval_chain_steps), entity_type (enum: PURCHASE_REQUEST, EXPENSE_REPORT, CHECK_REQUEST), entity_id (String — FK to the actual request), status (enum: PENDING, APPROVED, DENIED, SKIPPED, AUTO_APPROVED), assigned_to (FK users, nullable — reserved and never written: who may act on a step is decided from the step's approver_type/approver_value at the moment someone acts, see **Who may act on a step** below), acted_by (FK users, nullable), acted_at (DateTime, nullable), notes (Text, nullable), created_at
 
 Enums:
 
@@ -128,11 +128,12 @@ Enums:
 - **APPROVAL** — Requires a human to approve or deny. The chain pauses here until someone acts. This is the default.
 - **NOTIFICATION** — Sends an email (and/or in-app notification) and auto-advances to the next step. Does not block the chain. Status goes straight to SENT. Use this for "FYI" steps (e.g., notify the Chief after Trustees approve) or as a final step to email a confirmation/summary.
 
-**EMAIL approver type:** When `approver_type = EMAIL`, the `approver_value` is an email address (or comma-separated list). This supports:
+**EMAIL approver type:** When `approver_type = EMAIL`, the `approver_value` is a single email address (a comma-separated list is refused when the step is saved). This supports:
 
 - External approvers who aren't system users (e.g., a Township Trustee who doesn't have a login)
 - Notification-only steps to external parties (e.g., "email the accountant when approved")
 - For APPROVAL steps with EMAIL type, the system generates a secure token link (like the existing `TrainingApproval.approval_token` pattern) so the external party can approve/deny via a one-click email link without logging in
+- **A token follows the step's current approver** _(2026-10-04)_: approving or denying by token is refused — answered like an unknown token, 404 — once the step is no longer an EMAIL approval step, so a link mailed before an admin reassigned the step to a position or a member stops working
 - **Approval tokens are single-use and consumed atomically** _(2026-08-16)_: the token row is locked (`SELECT … FOR UPDATE`) while the action runs and the token is cleared on approve/deny, so a forwarded or double-clicked link cannot action a step twice — the second attempt sees the step as already actioned
 
 ### How It Works
@@ -184,15 +185,35 @@ Any Trustee approves Step 2 → Step 3 fires automatically
 - **EMAIL approver for APPROVAL steps**: Generates a time-limited secure token (reuses the `TrainingApproval` token pattern). The email contains "Approve" and "Deny" buttons that link to a public endpoint (`/api/public/finance/approvals/{token}/approve` and `/deny`). Token expiry configurable per chain (default 7 days). If expired, the step must be re-sent or manually handled by an admin
 - **`notification_emails` on any step**: Even APPROVAL steps can have `notification_emails` — these addresses get a "heads up" email when the step is reached (not actionable, just informational). Useful for keeping stakeholders in the loop without giving them approval authority
 
+### Who may act on a step _(2026-10-04)_
+
+Approve and deny check the caller against the step's named approver, in addition to `finance.approve` on the endpoint. The rule lives in one place, `app/services/finance_approver_matching.py`, and the pending list, the request detail pages and the coverage report all read it from there:
+
+| `approver_type` | Who matches                                                                                                                                                                    |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| _(none)_        | any active `finance.approve` holder — the behaviour before enforcement                                                                                                         |
+| `position`      | an active member holding a position in the same organization whose slug equals `approver_value` (case-insensitive)                                                             |
+| `permission`    | an active member granted `approver_value` by the normal permission check, so `*`, module wildcards, rank defaults and legacy permission names count as they do everywhere else |
+| `specific_user` | the member whose id is `approver_value`                                                                                                                                        |
+| `email`         | the active member whose account email is `approver_value` (case-insensitive); an outside approver uses the emailed link instead                                                |
+
+- **Override.** A `finance.configure_approvals` holder who does not match may still approve or deny by giving `overrideReason` (up to 2000 characters). Without one the call is refused with 403, naming who the step is assigned to. Anyone else who does not match gets 403 "This step is waiting on …".
+- **Separation of duties is unaffected.** The requester can never approve their own request, override or not; a requester may still deny (withdraw) their own.
+- **Audit.** `finance.approval_step_approved` / `finance.approval_step_denied` record `override`, `approver_type`, `approver_value`, and `override_reason` when overriding; an override is logged at `warning`.
+- **Steps are validated when saved.** Setting an approver on an approval step requires a value that resolves: a position slug that exists in the organization, an active member of the organization, a known permission name (or `*`; a module wildcard such as `finance.*` is refused), or one valid email address. A step saved before this rule keeps working and can still be renamed; changing its approver re-validates it. Notification steps are not checked.
+- **Detail pages.** Each entry in a request's `approvalSteps` carries `assigneeLabel`, and, for the viewer, `canAct` / `requiresOverride` on the step the request is waiting on, so a page does not re-derive the rule.
+- **Finding steps nobody can act on.** `GET /finance/approval-chains/approver-coverage` lists every approval step with the number of active members who match it, a `problem` (`no_value`, `not_found`, `no_active_members`, `invalid_email`) and how many requests are waiting on it now.
+- Requests with no approval chain are unchanged: any `finance.approve` holder other than the requester decides them manually. The dashboard's pending-approvals count is also unchanged and still counts every request waiting on a step.
+
 ### Endpoints
 
 - `GET/POST /finance/approval-chains`
 - `GET/PUT/DELETE /finance/approval-chains/{id}`
 - `GET/POST/PUT/DELETE /finance/approval-chains/{id}/steps` (manage steps within a chain)
 - `GET /finance/approval-chains/preview?entity_type=purchase_request&amount=3000&category_id=X` (preview which chain would be selected — useful for the UI)
-- `GET /finance/approvals/pending` (the step each request is currently waiting on, one row per request, across all entity types — organization-wide, not filtered to the step's named approver; powers the Approvals page)
-- `POST /finance/approvals/{step_record_id}/approve`
-- `POST /finance/approvals/{step_record_id}/deny`
+- `GET /finance/approval-chains/approver-coverage` (every approval step and who can act on it; `finance.configure_approvals`)
+- `GET /finance/approvals/pending` (the step each request is currently waiting on, one row per request, across all entity types, limited to the steps the caller is the named approver of; an approvals admin also sees the rest, flagged `requiresOverride`. Each row carries `approverType`, `approverValue`, `assigneeLabel`, `canAct`, `requiresOverride`; powers the Approvals page)
+- `POST /finance/approvals/{step_record_id}/approve` and `.../deny` (body `{notes?, overrideReason?}`; 403 when the caller is not the step's named approver — see above)
 - `GET /finance/approvals/unrouted` (requests in `pending_approval` that have no approval steps because no chain applied)
 - `POST /finance/approvals/manual/{entity_type}/{entity_id}/approve` (body `{notes?}`; notes go to the audit log) and `.../deny` (body `{reason}`, required) — only for a request with no approval steps; a request with steps returns 409
 
@@ -200,8 +221,8 @@ Any Trustee approves Step 2 → Step 3 fires automatically
 
 Pages:
 
-- **ApprovalChainsSettingsPage** — `/finance/settings/approval-chains` — create and delete chains; edit a chain's name, description and active flag; add, edit, delete and reorder (move up/down) its steps. Protected: `finance.configure_approvals`. As built, the step form offers what the backend reads: step type, approver type and value (positions, permissions and members from their lists when the viewer can load them), auto-approve threshold, and self-approval for Email approvers only. It does not offer `notification_emails`, `email_template_id` or `required`, because nothing reads them yet (CLAUDE.md pitfall #19); a notification step is marked SENT without sending email, and any `finance.approve` holder can act on any approval step whatever its named approver. Deleting a step cascades to every request's record of it, and nothing re-evaluates in-flight requests afterwards — the page's confirmation says so
-- **ApprovalsPage** — `/finance/approvals` — every request waiting on an approval step, with Approve (optional notes) and Deny (reason required) for that step. Protected: `finance.approve`. Linked from the dashboard's Pending Approvals KPI and an Approvals quick link, both shown only to `finance.approve` holders. Any `finance.approve` holder can act on any step; `approver_type` / `approver_value` are not enforced, so the page does not claim a step is assigned to the viewer
+- **ApprovalChainsSettingsPage** — `/finance/settings/approval-chains` — create and delete chains; edit a chain's name, description and active flag; add, edit, delete and reorder (move up/down) its steps. Protected: `finance.configure_approvals`. As built, the step form offers what the backend reads: step type, approver type and value (positions, permissions and members from their lists when the viewer can load them), auto-approve threshold, and self-approval for Email approvers only. It does not offer `notification_emails`, `email_template_id` or `required`, because nothing reads them yet (CLAUDE.md pitfall #19); a notification step is marked SENT without sending email. Only a step's named approver can act on it (see **Who may act on a step**), and a step's approver is checked when it is saved. Deleting a step cascades to every request's record of it, and nothing re-evaluates in-flight requests afterwards — the page's confirmation says so
+- **ApprovalsPage** — `/finance/approvals` — every request waiting on an approval step, with Approve (optional notes) and Deny (reason required) for that step. Protected: `finance.approve`. Linked from the dashboard's Pending Approvals KPI and an Approvals quick link, both shown only to `finance.approve` holders. The list holds only the steps the viewer is the named approver of — plus, for an approvals admin, the others, which they can act on only with an override reason
 
 Components:
 

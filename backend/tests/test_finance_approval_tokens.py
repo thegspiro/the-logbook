@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from sqlalchemy.dialects import mysql
 
-from app.models.finance import ApprovalStepStatus, ApproverType
-from app.services.finance_service import FinanceService
+from app.models.finance import ApprovalStepStatus, ApprovalStepType, ApproverType
+from app.services.finance_service import ApprovalTokenNotValidError, FinanceService
 from app.services.separation_of_duties import SeparationOfDutiesError
 
 
@@ -28,8 +28,9 @@ def _pending_record(step=None):
     return record
 
 
-def _email_step(approver_value, allow_self_approval=False):
+def _email_step(approver_value="cpa@example.com", allow_self_approval=False):
     step = MagicMock()
+    step.step_type = ApprovalStepType.APPROVAL
     step.approver_type = ApproverType.EMAIL
     step.approver_value = approver_value
     step.allow_self_approval = allow_self_approval
@@ -38,7 +39,7 @@ def _email_step(approver_value, allow_self_approval=False):
 
 @pytest.mark.parametrize("action", ["approve_by_token", "deny_by_token"])
 async def test_token_action_locks_and_consumes_token(action):
-    record = _pending_record()
+    record = _pending_record(step=_email_step())
     db = MagicMock()
     db.execute = AsyncMock(return_value=_result(record))
     db.flush = AsyncMock()
@@ -80,7 +81,7 @@ async def test_token_action_rejects_a_later_step_out_of_order(action):
     order check whoever holds a later step's token could act before an
     earlier step resolves -- and a deny finalizes the whole entity right
     away, killing the request before earlier reviewers weighed in."""
-    record = _pending_record()
+    record = _pending_record(step=_email_step())
     earlier_step = _pending_record()  # a different, still-pending record
     db = MagicMock()
     db.execute = AsyncMock(return_value=_result(record))
@@ -158,17 +159,56 @@ class TestApproveByTokenSelfApprovalGuard:
 
         assert record.status == ApprovalStepStatus.APPROVED
 
-    async def test_allows_non_email_approver_types(self):
-        # POSITION/PERMISSION/SPECIFIC_USER steps have no email to compare --
-        # unaffected by this guard, matching the original reasoning for those
-        # types (no Logbook identity resolvable from the token alone).
+
+class TestATokenFollowsTheStepsCurrentApprover:
+    """A token is minted when an EMAIL approval step becomes reachable and
+    lives for 7 days. This used to pin the opposite (``test_allows_non_email_
+    approver_types``): a token on a POSITION / PERMISSION / SPECIFIC_USER step
+    still approved it. Once approvers are enforced, that is a bypass — a step
+    reassigned from an outside address to the Treasurer would still take the
+    outsider's link. The step's CURRENT approver type decides."""
+
+    @staticmethod
+    def _non_email_step(approver_type):
         step = MagicMock()
-        step.approver_type = ApproverType.POSITION
+        step.step_type = ApprovalStepType.APPROVAL
+        step.approver_type = approver_type
         step.approver_value = "treasurer"
         step.allow_self_approval = False
+        return step
+
+    @pytest.mark.parametrize("action", ["approve_by_token", "deny_by_token"])
+    @pytest.mark.parametrize(
+        "approver_type",
+        [
+            ApproverType.POSITION,
+            ApproverType.PERMISSION,
+            ApproverType.SPECIFIC_USER,
+            None,
+        ],
+    )
+    async def test_refuses_a_step_that_is_no_longer_an_email_step(
+        self, action, approver_type
+    ):
+        record = _pending_record(step=self._non_email_step(approver_type))
+        service = TestApproveByTokenSelfApprovalGuard._service_for(
+            record, requester_email="someone@dept.org"
+        )
+
+        with pytest.raises(ApprovalTokenNotValidError):
+            await getattr(service, action)(record.approval_token)
+
+        assert record.status == ApprovalStepStatus.PENDING  # never mutated
+        assert record.approval_token == "approval-token"
+
+    @pytest.mark.parametrize("action", ["approve_by_token", "deny_by_token"])
+    async def test_refuses_a_step_turned_into_a_notification(self, action):
+        step = _email_step()
+        step.step_type = ApprovalStepType.NOTIFICATION
         record = _pending_record(step=step)
-        service = self._service_for(record, requester_email="treasurer@dept.org")
+        service = TestApproveByTokenSelfApprovalGuard._service_for(
+            record, requester_email="someone@dept.org"
+        )
 
-        await service.approve_by_token(record.approval_token)
-
-        assert record.status == ApprovalStepStatus.APPROVED
+        with pytest.raises(ApprovalTokenNotValidError):
+            await getattr(service, action)(record.approval_token)

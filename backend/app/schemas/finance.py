@@ -371,6 +371,12 @@ class ApprovalStepRecordResponse(UTCResponseBase):
     step_name: Optional[str] = None
     step_order: Optional[int] = None
     created_at: datetime
+    # Filled by the request detail endpoints for the viewer, from
+    # finance_approver_matching — the same rule approve/deny enforce — so a
+    # detail page shows who a step waits on without re-deriving it.
+    assignee_label: Optional[str] = None
+    can_act: bool = False
+    requires_override: bool = False
 
 
 class ApprovalActionRequest(BaseModel):
@@ -379,6 +385,16 @@ class ApprovalActionRequest(BaseModel):
     model_config = _REQUEST_CONFIG
 
     notes: Optional[str] = None
+    # Only an approvals admin (finance.configure_approvals) who is not the
+    # step's named approver needs this; it is recorded in the audit log.
+    override_reason: Optional[str] = Field(None, max_length=2000)
+
+    @field_validator("override_reason")
+    @classmethod
+    def _blank_reason_is_none(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        return value.strip() or None
 
 
 class PendingApprovalResponse(UTCResponseBase):
@@ -395,6 +411,34 @@ class PendingApprovalResponse(UTCResponseBase):
     step_name: str
     step_order: int
     submitted_at: datetime
+    approver_type: Optional[str] = None
+    approver_value: Optional[str] = None
+    assignee_label: str = "any finance approver"
+    # True when the caller is the step's named approver. An approvals admin
+    # also sees steps they are not named on, with requires_override=True: they
+    # may act only by giving an override reason.
+    can_act: bool = False
+    requires_override: bool = False
+
+
+class ApproverCoverageResponse(UTCResponseBase):
+    """One approval step, and whether anybody can act on it"""
+
+    model_config = _RESPONSE_CONFIG
+
+    chain_id: str
+    chain_name: str
+    chain_is_active: bool
+    step_id: str
+    step_name: str
+    step_order: int
+    approver_type: Optional[str] = None
+    approver_value: Optional[str] = None
+    assignee_label: str
+    eligible_active_count: int
+    # null | "no_value" | "not_found" | "no_active_members" | "invalid_email"
+    problem: Optional[str] = None
+    pending_request_count: int
 
 
 class UnroutedApprovalResponse(UTCResponseBase):
