@@ -5,8 +5,8 @@
 (pass 5), 2026-09-17 (pass 6), 2026-10-06 (pass 7) · **PR:**
 [#1842](https://github.com/thegspiro/the-logbook/pull/1842) (pass 1),
 [#2625](https://github.com/thegspiro/the-logbook/pull/2625) (pass 6, 0
-fixed, 0 flagged, merged), pass 7 PR recorded in `PROGRESS.md`'s Open PR
-row
+fixed, 0 flagged, merged), [#2970](https://github.com/thegspiro/the-logbook/pull/2970)
+(pass 7, 0 fixed, 0 new findings)
 
 **Backend:** `api/v1/endpoints/equipment_check.py` (50 routes),
 `api/v1/endpoints/shift_completion.py` (21 routes),

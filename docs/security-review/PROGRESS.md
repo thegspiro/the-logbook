@@ -16,12 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR [#2969](https://github.com/thegspiro/the-logbook/pull/2969)
-(Feature 13, Apparatus & NFC, pass 14) merged — docs-only (0
-application-code changes: only `AP-13-apparatus-nfc.md`, `PROGRESS.md`),
-so per this file's own rule it is not a recordable event on its own;
-rotation row 13 already stood ✅. This iteration picks up Feature 14
-(Equipment check & shifts), the state this PR opened from.
+**PR [#2970](https://github.com/thegspiro/the-logbook/pull/2970)**: branch
+`claude/security-review-equipment-check-shifts`, Feature 14 (Equipment
+check & shifts), pass 7 — 0 code fixes, 0 new findings. All five
+load-bearing fixes (EC-16, EC-6, EC-13, the `.ilike()` escaping,
+`SafeCsvWriter`) re-confirmed intact at their current (shifted) lines;
+all four accepted/deferred items (EC-7, EC-8, EC-11, the
+`get_item_deployments` permission gap) re-confirmed unchanged. Two of the
+window's commits turned out to be real, already-shipped security fixes
+(an XC-1 FK-validation gap on `create_template` and an XC-2 over-broad
+`training.manage` gate), both verified correct rather than taken on their
+commit messages. Real delta since pass 6 reviewed in full — 92 non-merge
+commits in scope (20 touching the primary files directly) out of 1,241
+total on `main`, with a full-depth-clone check run first. Route counts
+unchanged at 50/21. Gate green (flake8/black/isort, migrations,
+route-permission check — 245 routes, 1359 scoped backend tests, frontend
+typecheck/lint). See the Log entry below for detail.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 13, Apparatus &amp; NFC, pass 14, PR #2969, merged docs-only — not independently recorded), preserved for history</summary>
