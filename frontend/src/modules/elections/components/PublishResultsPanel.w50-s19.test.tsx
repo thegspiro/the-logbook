@@ -64,4 +64,16 @@ describe('PublishResultsPanel (S19)', () => {
     expect(screen.getByRole('button', { name: /send report/i })).toBeInTheDocument();
     expect(screen.queryByText(/all eligible voters/i)).not.toBeInTheDocument();
   });
+
+  // At phone width the hint ran past the card's clipped edge (REDRIVE-A-2):
+  // the row must be allowed to wrap, and the hint must not refuse to shrink.
+  it('lets the visibility row wrap on a narrow card', () => {
+    renderWithRouter(<PublishResultsPanel electionId="e1" election={baseElection} onUpdate={vi.fn()} />);
+
+    const hint = screen.getByText('Results can be published once voting closes');
+    expect(hint).not.toHaveClass('shrink-0');
+    // The row is a plain layout div with no role; the class is what is under test.
+    // eslint-disable-next-line testing-library/no-node-access -- see above
+    expect(hint.parentElement).toHaveClass('flex-wrap');
+  });
 });

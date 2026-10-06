@@ -18,7 +18,11 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.election import Election, VotingToken
-from app.services.election_service import SUPERSEDED_TOKEN_MESSAGE, ElectionService
+from app.services.election_service import (
+    REOPENED_TOKEN_MESSAGE,
+    SUPERSEDED_TOKEN_MESSAGE,
+    ElectionService,
+)
 from app.utils.org_timezone import ZONED_DATE_TIME_FORMAT, format_in_org_timezone
 from tests.test_election_voting_flow import TestElectionSetup
 
@@ -218,3 +222,62 @@ class TestSupersededToken(TestElectionSetup):
         )
         _e, _t, error = await ElectionService(db_session).get_ballot_by_token(raw)
         assert error == "Voting token has expired"
+
+
+class TestReopenedToken(TestElectionSetup):
+    """A zero-vote rollback of an anonymous election retires every issued link
+    (the salt they were keyed to is replaced). The re-drive found those links
+    read "Voting token has expired" two days before the end (REDRIVE-A-5)."""
+
+    async def _close_and_reopen(self, db_session: AsyncSession, data: dict) -> None:
+        svc = ElectionService(db_session)
+        _closed, err = await svc.close_election(
+            uuid.UUID(data["election_id"]),
+            uuid.UUID(data["org_id"]),
+            closed_by=uuid.UUID(data["user1_id"]),
+        )
+        assert err is None, err
+        reopened, _n, err = await svc.rollback_election(
+            uuid.UUID(data["election_id"]),
+            uuid.UUID(data["org_id"]),
+            performed_by=uuid.UUID(data["user1_id"]),
+            reason="re-drive",
+        )
+        assert err is None, err
+        assert reopened is not None and reopened.status.value == "open"
+
+    async def test_link_retired_by_a_rollback_says_reopened_not_expired(
+        self, db_session: AsyncSession, setup_election
+    ):
+        data = setup_election
+        first = await _send_ballots(db_session, data)
+        old_raw = _raw_token(first[0])
+        await self._close_and_reopen(db_session, data)
+
+        election, token, error = await svc_lookup(db_session, old_raw)
+        assert (election, token) == (None, None)
+        assert error == REOPENED_TOKEN_MESSAGE
+
+    async def test_after_the_re_send_the_old_link_still_says_reopened(
+        self, db_session: AsyncSession, setup_election
+    ):
+        data = setup_election
+        first = await _send_ballots(db_session, data)
+        old_raw = _raw_token(first[0])
+        await self._close_and_reopen(db_session, data)
+        fresh = await _send_ballots(db_session, data)
+        new_raw = _raw_token(next(m for m in fresh if m.to_email == first[0].to_email))
+
+        _e, _t, error = await svc_lookup(db_session, old_raw)
+        # The re-send keys new tokens to the new salt, so the old link has no
+        # newer sibling by hash: it was reopened, not reminded.
+        assert error == REOPENED_TOKEN_MESSAGE
+        assert error != "Voting token has expired"
+
+        election, token, error = await svc_lookup(db_session, new_raw)
+        assert error is None
+        assert election is not None and token is not None
+
+
+async def svc_lookup(db_session: AsyncSession, raw: str):
+    return await ElectionService(db_session).get_ballot_by_token(raw)

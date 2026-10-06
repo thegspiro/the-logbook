@@ -398,16 +398,24 @@ pre-deploy double-vote window (MED, in `docs/UPGRADING.md`), pooled
 
 Frontend round 2 (a follow-up PR after #2856 merged) fixed W50-24, 26, 29,
 30, 36, 43, 46, 50, 51, 52, 53, 56, 57, 58, 59, 61, 62, 63, 64, 73 and the
-frontend halves of fourteen backend fixes, each with a Vitest; gated clean,
-not re-driven on screen (usage limit). Open: W50-74 to W50-82 (NIT). The manual (`docs/training/14-elections.md`) corrected on five
+frontend halves of fourteen backend fixes, each with a Vitest. Re-driven on
+screen 2026-10-06 (two browsers, from each finding's own scenario): 20 of 23
+held; the three that did not — the list card's close stamp (the list endpoint
+never sent `closed_at`), the in-app receipt and focus after a nomination (both
+unmounted by a refetch's loading state) — and six more things seen on the way
+are W50-83 to W50-92: eight fixed with tests (W50-83, 84, 85 confirmed live
+again), W50-91 a re-observation of W50-11, W50-92 a note. Open: W50-74 to
+W50-82, W50-91, W50-92 (NIT/NOTE). The manual (`docs/training/14-elections.md`) corrected on five
 lines the drive contradicted.
 
 Gate: backend — the election suite 622 passed and the CI unit selection
 11977 passed after round 2 and the template carry; flake8, black and isort
 clean; each new Alembic revision proven up, down and up; `generate_schema_docs`
 and `check_route_permissions --strict` clean. Frontend — typecheck, eslint,
-prettier and the election suites (143 passed) clean after round 1; the
-round-2 gate is recorded when that round lands. Next: W51.
+prettier and the election suites (143 passed) clean after round 1; round 2
+and the re-drive — typecheck, eslint, prettier and the election suites (61
+page and ballot tests, 15 panel tests) clean; backend election suites 173
+passed, flake8, black and isort clean. Next: W51.
 
 - **Any forms or prospects run** — `scripts/clear_hidden_form_answers.py`
   still judges each rule one level deep (`FormsService._is_field_visible`,

@@ -191,3 +191,40 @@ class TestClosedAtStamp(TestLifecycleSetup):
         assert f"Election closed {now:%Y-%m-%d}" in pdf_text, pdf_text[:400]
         assert f"Election closed {scheduled_end:%Y-%m-%d}" not in pdf_text
         assert "by Alice Anderson" in pdf_text
+
+
+class TestListCarriesClosedAt(TestLifecycleSetup):
+    """The list endpoint built its response field by field and left
+    ``closed_at`` out, so the election card dated an early close to the
+    scheduled end — three days in the future on the re-drive (REDRIVE-A-1)."""
+
+    async def test_list_response_carries_the_actual_close(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        from types import SimpleNamespace
+
+        from app.api.v1.endpoints.elections import list_elections
+
+        org_id, user1_id, _ = setup_org_and_users
+        now = datetime.now(timezone.utc)
+        election_id = await self._insert_election(
+            db_session,
+            org_id,
+            user1_id,
+            start=now - timedelta(days=1),
+            end=now + timedelta(days=3),
+        )
+        svc = ElectionService(db_session)
+        closed, err = await svc.close_election(
+            uuid.UUID(election_id), uuid.UUID(org_id), closed_by=uuid.UUID(user1_id)
+        )
+        assert err is None, err
+
+        listed = await list_elections(
+            db=db_session,
+            current_user=SimpleNamespace(organization_id=org_id, id=user1_id),
+        )
+        row = next(e for e in listed if str(e.id) == election_id)
+        assert row.closed_at is not None
+        assert _within_a_minute(row.closed_at, now)
+        assert not _within_a_minute(row.closed_at, row.end_date)
