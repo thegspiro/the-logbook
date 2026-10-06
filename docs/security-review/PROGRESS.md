@@ -16,6 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2968](https://github.com/thegspiro/the-logbook/pull/2968)**: branch
+`claude/security-review-facilities`, Feature 12 (Facilities), pass 7 — 0
+code fixes, 0 new findings. FAC-13/FAC-30 re-verified unchanged (both
+owner decisions); FAC-41/FAC-44 re-read in full and confirmed fixed and
+intact rather than taken on their own prior "FIXED" annotation. Real delta
+since pass 6 reviewed in full — 28 non-merge commits, with a full-depth-
+clone check run first (confirmed no shallow-clone truncation risk, unlike
+the immediately prior Inventory pass). Route count unchanged at 98. Gate
+green (flake8/black/isort, migrations, route-permission check — 245
+routes, 209 scoped backend tests, frontend typecheck/lint, 110 scoped
+frontend tests). See the Log entry below for detail.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 7, PR #2966, merged docs-only — not independently recorded), preserved for history</summary>
+
 **PR [#2966](https://github.com/thegspiro/the-logbook/pull/2966)**: branch
 `claude/security-review-inventory`, Feature 11 (Inventory), pass 7 — 0 code
 fixes, 0 new findings, INV-16 narrowed (the MSUP-25 fix routes
@@ -29,6 +44,8 @@ single proportionate permission. Gate green (flake8/black/isort, migrations,
 route-permission check — 245 routes, 1566 scoped + full inventory/label/nfc/
 kiosk backend tests, frontend typecheck/lint, 1574 scoped frontend tests).
 See the Log entry below for detail.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 10, Documents &amp; legal, pass 7, PR #2962, merged docs-only — not independently recorded), preserved for history</summary>
@@ -17842,7 +17859,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
@@ -17872,6 +17889,73 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-06 — Feature 12 (Facilities, pass 7) — real delta (28 commits), 0 fixes, 0 new findings, FAC-41/FAC-44 confirmed fixed and intact (watchdog pickup)
+
+Watchdog pickup. PR #2966 (Feature 11, Inventory, pass 7) had merged with
+0 application-code changes (docs-only per this file's own rule — only
+`INV-11-inventory.md`, `KNOWN_LIMITATIONS.md`, `PROGRESS.md`), so it is
+not independently recordable; cleared above. Rotation row 12 (Facilities)
+was the first `⬜`.
+
+**Real delta since pass 6 (PR #2621, merged 2026-09-17T03:26:59Z): 28
+non-merge commits.** Confirmed the clone was already full-depth before
+trusting the count (`git fetch --unshallow` reported "already a complete
+repository" — the shallow-clone truncation the immediately prior Inventory
+pass hit did not apply here). 10 are pure layout/copy/test-only changes
+(one of which is the separate workflow-review rotation's own W49 pass,
+form-accessibility only); 8 touch `permissions.py` in diff context near
+`FACILITIES_*` constants for unrelated features without changing a
+facilities grant (confirmed by grep, not diff-silence); 10 are real
+application-logic changes, each read via `git show`.
+
+**FAC-13 and FAC-30 re-verified unchanged** at their current line numbers
+(`facilities.py:3833-3843` / `documents_service.py:57-61`) — both still
+owner decisions, already in `KNOWN_LIMITATIONS.md`. Specifically confirmed
+this pass that the DOC-9 perf rewrite of `accessible_folder_ids`
+(`870ea19b4`, landed in this window) does not touch FAC-13's code path
+(`get_facility_sub_folders` calls `can_access_folder` directly, never the
+rewritten function), so DOC-9's fix could not have changed FAC-13's
+disposition either way.
+
+**FAC-41/FAC-44 re-read in full and confirmed fixed and intact**, not
+taken on the doc's own prior "FIXED 2026-10-05" annotation: the fix
+(`17bdf7797`, migration `c56303befb2c`) preserves org-scoping in the
+rewritten query, keeps the new `document_id` column a non-FK by design
+(preserving FAC-26's permission-check reasoning), and stays a single
+locking read throughout (FAC-29's guarantee holds). It is also the most
+recent commit in this pass's 28-commit delta, so nothing since has had a
+chance to regress it.
+
+**Route count: 98, unchanged.** Verified by parsing every
+`@router.(get|post|put|patch|delete)(` decorator and confirming a
+permission dependency in each signature — the real-commit diff this
+window touched no route decorator.
+
+**10 real commits reviewed, all clean** — the FAC-41/FAC-44 fix itself;
+the shared DOC-9 rewrite (verified not to interact with facilities'
+folder-ACL path); two department-local-date correctness swaps; an
+`ondelete="RESTRICT"` addition (not `SET NULL`, so Pitfall #2 doesn't
+apply); and three frontend commits adding a room-NFC-tag check-in route
+that is explicitly tracked as the Locations feature's own LOC-37 finding,
+not a Facilities one (confirmed, not taken on the commit message alone —
+the route is deliberately ungated at the router level because auth is
+enforced server-side by the existing org-scoped `GET
+/locations/{id}/display`).
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+the full scope; `validate_migrations.py --strict` passed (527 revisions,
+single head, no migration this module this pass); `check_route_permissions.py
+--strict` 245 routes, 0 errors/warnings; scoped backend tests (`-k
+"facilit"`) 209 passed, 1 pre-existing skip (`pywebpush`); frontend `npm
+run typecheck` 0 errors; `npm run lint` 0 errors/warnings; scoped frontend
+suite (`npx vitest run src/modules/facilities`) 110 passed (15 files).
+Findings doc: [`FAC-12-facilities.md`](./FAC-12-facilities.md)'s **Pass 7**
+section. No `KNOWN_LIMITATIONS.md` change needed — FAC-13/FAC-30's entries
+were re-verified accurate, and FAC-41/FAC-44 were never mirrored there
+(they were scalability flags with a recommended fix, not owner-decision
+items) so there's nothing to update now that they're fixed. Rotation row
+12 → ✅ (pending PR merge). Next: Feature 13 (Apparatus & NFC).
 
 ### 2026-10-06 — Feature 11 (Inventory, pass 7) — real delta (77 commits), 0 fixes, INV-16 narrowed, 0 new findings (watchdog pickup)
 
