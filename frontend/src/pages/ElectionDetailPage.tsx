@@ -372,9 +372,19 @@ export const ElectionDetailPage: React.FC = () => {
     // ahead, moves it to now (W50-56) — say so before the click, and say
     // that ballots are a separate send, which the manual once got wrong.
     const startIsAhead = new Date(election.start_date).getTime() > Date.now();
-    const openMessage = startIsAhead
-      ? `Open voting now? The scheduled start (${formatDateTime(election.start_date, tz)}) moves to now, the voter roll is frozen and the ballot locks. Ballot emails are not sent by this step — use Send Ballot Emails afterwards.`
-      : 'Open voting now? The voter roll is frozen and the ballot locks. Ballot emails are not sent by this step — use Send Ballot Emails afterwards.';
+    // The emailed ballot carries ballot items only, and the ballot locks on
+    // opening, so an election built from positions alone can never mail a
+    // ballot — say so while it can still be changed (W50-11, owner decision
+    // 2026-10-05), not after the Send button turns out to be disabled.
+    const emailBallotsImpossible = (election.ballot_items?.length ?? 0) === 0;
+    const emailWarning = emailBallotsImpossible
+      ? ' This election has no ballot items, so ballot emails cannot be sent once it opens and members can vote in the app only. To email ballots, add the races in the Ballot Builder before opening.'
+      : '';
+    const openMessage =
+      (startIsAhead
+        ? `Open voting now? The scheduled start (${formatDateTime(election.start_date, tz)}) moves to now, the voter roll is frozen and the ballot locks. Ballot emails are not sent by this step — use Send Ballot Emails afterwards.`
+        : 'Open voting now? The voter roll is frozen and the ballot locks. Ballot emails are not sent by this step — use Send Ballot Emails afterwards.') +
+      emailWarning;
     if (
       !(await confirm({
         title: 'Open election',

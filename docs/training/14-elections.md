@@ -537,14 +537,14 @@ skipped member with the reason, which is the part you act on.
 
 ### Edge Cases
 
-| Scenario                                                     | Behavior                                                                                                                                                 |
-| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Member without email address                                 | Skipped during send; reason logged                                                                                                                       |
-| Ballot sent to member who already voted                      | Second submission is rejected — votes are never overwritten (double-vote prevention is enforced at the database level)                                   |
-| Member with zero eligible ballot items                       | Skipped during send (no empty ballot); reason shown in the send summary                                                                                  |
-| Election opened without ballot items or candidates           | Cannot open — at least one accepted candidate or one ballot item is required                                                                             |
-| Election opened with candidates but no ballot items          | Members vote in the app; ballot emails can never be sent for it (the ballot is locked once open) — see above                                             |
-| A member checked in at the meeting after the election opened | Recorded as present, but **cannot vote**: the roll froze at opening. The Attendance tab says so while voting is open; add a voter override to admit them |
+| Scenario                                                     | Behavior                                                                                                                                                                                        |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Member without email address                                 | Skipped during send; reason logged                                                                                                                                                              |
+| Ballot sent to member who already voted                      | Second submission is rejected — votes are never overwritten (double-vote prevention is enforced at the database level)                                                                          |
+| Member with zero eligible ballot items                       | Skipped during send (no empty ballot); reason shown in the send summary                                                                                                                         |
+| Election opened without ballot items or candidates           | Cannot open — at least one accepted candidate or one ballot item is required                                                                                                                    |
+| Election opened with candidates but no ballot items          | Members vote in the app; ballot emails can never be sent for it (the ballot is locked once open) — see above. Since 2026-10-05 the **Open election** dialog warns about this before you confirm |
+| A member checked in at the meeting after the election opened | Recorded as present, but **cannot vote**: the roll froze at opening. The Attendance tab says so while voting is open; add a voter override to admit them                                        |
 
 ### Voter-Roll Freeze
 

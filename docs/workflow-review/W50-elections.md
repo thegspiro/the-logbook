@@ -194,7 +194,9 @@ Covered by `ElectionDetailPage.loaded.test.tsx` and the new `test_ballot_send_me
 **Where:** `backend/app/services/election_service.py:2517`.
 **Flagged:** whether an early close should release results, and to whom, is a visibility decision. The tab now says "Voting is closed. Results will be available after the scheduled end, Wednesday, October 7, 2026 at 9:00 PM." Mirrored into `KNOWN_LIMITATIONS.md`.
 
-### W50-11 — LOW — An election on positions alone cannot email ballots, found out only after opening — 🚩 FLAGGED
+### W50-11 — LOW — An election on positions alone cannot email ballots, found out only after opening — ✅ DECIDED (2026-10-05)
+
+**Owner decision (2026-10-05):** warn on Open when email ballots are impossible. The Open election confirmation now names it for an election with no ballot items (`ElectionDetailPage.w50-open-confirm.test.tsx`).
 
 **Did:** the officer election, built from positions and candidates as the create form offers, and then opened.
 **Saw:**
