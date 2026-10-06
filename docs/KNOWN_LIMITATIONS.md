@@ -1322,26 +1322,6 @@ sync status, a connected Cal.com bookings panel, a warning state carrying a
 real provider error) and is not capturable from a demo database at all. The
 connect _dialogs_ are ordinary forms and have been captured.
 
-## Training — The Competency Heat-Map Nobody Built (2026-08-09)
-
-`docs/training/02-training.md` described **Training Admin > Advanced >
-Competency** as "a department-wide readiness heat-map": members down the rows,
-competency areas across the columns, colour-coded cells, and a filter bar for
-station, rank or category. It even gave the colour key — dark green for expert
-through red for a gap.
-
-`CompetencySection` in `frontend/src/pages/TrainingEnhancementsTab.tsx` renders
-a card list of matrix _definitions_: one card per position, showing the name,
-the position, and a count of skill requirements. No members, no cells, no
-filter bar. The legend is the Dreyfus scale (novice → expert), which is a
-different set of five labels from the ones the guide listed.
-
-The per-member data does exist — `GET /training/competency/me` and
-`/training/competency/members/{id}` both return a member's level per skill,
-with score history and a next-evaluation date — so the heat-map is a screen
-away, not a schema away. It simply has no screen. The placeholder is left open
-and the prose now describes the definitions list that shipped.
-
 ## Admin — No Scheduled Tasks Page (2026-08-09)
 
 `docs/training/08-admin-reports.md` told administrators to "Navigate to

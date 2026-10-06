@@ -1668,6 +1668,16 @@ export const recertificationService = {
 // ==================== Competency Services ====================
 
 export const competencyService = {
+  /** Every active member's stored levels, for the department heat-map. */
+  async getDepartmentCompetencies(): Promise<import('../types/training').CompetencyHeatmap> {
+    const response = await api.get<import('../types/training').CompetencyHeatmap>('/training/competency/department');
+    return {
+      members: asArray(response.data.members),
+      skills: asArray(response.data.skills),
+      competencies: asArray(response.data.competencies),
+    };
+  },
+
   async getMatrices(position?: string): Promise<import('../types/training').CompetencyMatrix[]> {
     const response = await api.get<import('../types/training').CompetencyMatrix[]>('/training/competency/matrices', {
       params: position ? { position } : undefined,

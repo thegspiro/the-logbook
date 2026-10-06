@@ -2358,6 +2358,17 @@ export interface MemberCompetency {
   skill_name?: string;
 }
 
+/**
+ * The department readiness heat-map. `competencies` are the stored rows the
+ * per-member endpoint serves, for every active member at once; the screen
+ * shows them as they are and grades nothing itself.
+ */
+export interface CompetencyHeatmap {
+  members: Array<{ user_id: string; name: string; station?: string | null; rank?: string | null }>;
+  skills: Array<{ id: string; name: string; category?: string | null }>;
+  competencies: MemberCompetency[];
+}
+
 // ==================== Instructor Qualification Types ====================
 
 export type InstructorQualificationType = 'instructor' | 'evaluator' | 'lead_instructor' | 'mentor';

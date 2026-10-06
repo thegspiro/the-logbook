@@ -21,6 +21,7 @@ from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import safe_error_detail
 from app.schemas.training_enhancements import (
+    CompetencyHeatmapResponse,
     CompetencyMatrixCreate,
     CompetencyMatrixResponse,
     CompetencyMatrixUpdate,
@@ -223,6 +224,22 @@ async def update_competency_matrix(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.get("/competency/department", response_model=CompetencyHeatmapResponse)
+async def get_department_competencies(
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_permission("training.manage")),
+):
+    """Every active member's competency levels, for the readiness heat-map.
+
+    Officer-only for the same reason as the per-member read: competency levels
+    are member training PII.
+
+    **Requires permission: training.manage**
+    """
+    service = CompetencyService(db)
+    return await service.get_department_competencies(str(current_user.organization_id))
 
 
 @router.get(

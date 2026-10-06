@@ -199,6 +199,31 @@ class MemberCompetencyResponse(UTCResponseBase):
     model_config = _response_config
 
 
+class CompetencyHeatmapMember(BaseModel):
+    user_id: str
+    name: str
+    station: Optional[str] = None
+    rank: Optional[str] = None
+
+
+class CompetencyHeatmapSkill(BaseModel):
+    id: str
+    name: str
+    category: Optional[str] = None
+
+
+class CompetencyHeatmapResponse(BaseModel):
+    """The department readiness heat-map: rows, columns and the stored levels.
+
+    ``competencies`` are the same rows ``/competency/members/{id}`` returns,
+    for every active member at once.
+    """
+
+    members: List[CompetencyHeatmapMember]
+    skills: List[CompetencyHeatmapSkill]
+    competencies: List[MemberCompetencyResponse]
+
+
 class MemberCompetencyUpdate(BaseModel):
     """Schema for updating a member's competency"""
 

@@ -2178,13 +2178,30 @@ A competency matrix is a per-position definition: a name, the position it applie
 
 ![The Competency tab: the Dreyfus legend above one card per matrix, each naming its position and how many skills it requires, with Add Matrix beside the heading](./images/02-67-competency-matrix.png)
 
-**Not yet built:** the department-wide member-by-competency heat-map — one row per member, one column per competency area, with a station/rank filter bar. The tab today shows only the matrix definitions; a member's own levels are readable through the API (`/training/competency/me` and `/training/competency/members/{id}`) but have no screen.
+### Department Readiness Heat-Map _(2026-10-06)_
+
+Below the matrices, **Department Readiness** shows every active member down the
+side and every active skill across the top. Each cell is the member's current
+Dreyfus level, abbreviated — **N** Novice, **AB** Advanced Beginner, **C**
+Competent, **P** Proficient, **E** Expert — and a dash where no evaluation is on
+record. Hover or focus a cell for the full level, when the member was last
+evaluated, and when re-evaluation is due.
+
+Filter the rows by **Station** or **Rank** and the columns by **Skill
+category** to look at one crew or one discipline.
+
+The cells are the levels already stored for each member — exactly what that
+member's own competency view reports. The heat-map does not grade anything
+itself: it does not compare a level against a matrix's required level, apply
+waivers, or mark a skill not applicable to a member's role. A member who has
+left the department is not on the map.
 
 ### Edge Cases
 
-- Member competency levels are cached for approximately 5 minutes. Changes to training records or skill test results may not appear immediately — wait for cache expiry or refresh the page.
-- Members whose roles do not include a particular competency area show gray (N/A) cells, not red. This prevents false negatives in department readiness views.
-- If a member has a waiver active for a competency-related requirement, their cell reflects the waiver-adjusted status, not the full requirement.
+- The heat-map is read when the tab opens; reopen the tab to see an evaluation
+  recorded since.
+- An active member with no evaluations yet appears as a row of dashes rather
+  than being left off, so a gap in the roster is visible.
 
 ---
 
@@ -2511,7 +2528,7 @@ The training module has several boundary behaviors that affect how submissions a
 | How to list available registries             | Use the CLI tool: `python scripts/generate_registry.py --list` to see all available registries (NFPA, NREMT, Pro Board, etc.).                                                                                                |
 | Source filter not working on requirements    | Update to the latest version. The source field has been added to the API schema and the filter is now wired up.                                                                                                               |
 | Recertification reminders not sending        | Verify: (1) certification has expiration date, (2) recertification lead time is configured, (3) `EMAIL_ENABLED=true` in environment, (4) Celery beat is running the `process_recertification_reminders` task.                 |
-| Competency matrix shows stale data           | The competency heat-map is cached for ~5 minutes. Wait for cache expiry or clear Redis cache in development.                                                                                                                  |
+| Competency matrix shows stale data           | The readiness heat-map is read when the Competency tab opens and is never cached. Switch away and back to see an evaluation recorded since.                                                                                   |
 | xAPI statements not appearing in LRS         | Multi-agency training records are sent asynchronously via Celery. Check Celery worker logs for delivery failures. Verify LRS endpoint URL and API key in training integration settings.                                       |
 | Instructor not available for session         | Instructor availability is tracked separately from member scheduling. Check the instructor's availability calendar in Training Admin > Instructors.                                                                           |
 | Effectiveness score not calculating          | Training effectiveness scoring (Kirkpatrick model) requires post-training evaluations to be submitted. Scores appear after the evaluation period configured on the training session.                                          |

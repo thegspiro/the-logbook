@@ -385,15 +385,90 @@ class CompetencyService:
         await self.db.refresh(matrix)
         return matrix
 
-    async def get_member_competencies(self, user_id: str, organization_id: str) -> list:
-        """Get all competencies for a member"""
-        result = await self.db.execute(
-            select(MemberCompetency)
-            .where(MemberCompetency.user_id == user_id)
+    def _competencies_query(self, organization_id: str):
+        """Stored MemberCompetency rows with their skill's name, newest first.
+
+        The one read behind both the per-member endpoints and the department
+        heat-map, so the level a heat-map cell shows is exactly the level the
+        member's own view reports — the heat-map grades nothing itself
+        (CLAUDE.md pitfall #29). The skill join carries the org predicate so a
+        row can never be named from another department's catalog.
+        """
+        return (
+            select(MemberCompetency, SkillEvaluation.name)
+            .outerjoin(
+                SkillEvaluation,
+                (SkillEvaluation.id == MemberCompetency.skill_evaluation_id)
+                & (SkillEvaluation.organization_id == organization_id),
+            )
             .where(MemberCompetency.organization_id == organization_id)
             .order_by(MemberCompetency.updated_at.desc())
         )
-        return result.scalars().all()
+
+    @staticmethod
+    def _named(rows) -> list:
+        competencies = []
+        for competency, skill_name in rows:
+            # ``skill_name`` is the response schema's enriched field; it is
+            # not a mapped column, so setting it writes nothing.
+            competency.skill_name = skill_name
+            competencies.append(competency)
+        return competencies
+
+    async def get_member_competencies(self, user_id: str, organization_id: str) -> list:
+        """Get all competencies for a member"""
+        result = await self.db.execute(
+            self._competencies_query(organization_id).where(
+                MemberCompetency.user_id == user_id
+            )
+        )
+        return self._named(result.all())
+
+    async def get_department_competencies(self, organization_id: str) -> Dict[str, Any]:
+        """Every active member's stored levels, for the readiness heat-map.
+
+        Members are the department's active roster — including those with no
+        evaluation yet, who show as a row of empty cells rather than vanishing
+        — and skills are its active skill evaluations, which are the columns.
+        """
+        members_result = await self.db.execute(
+            select(User)
+            .where(
+                User.organization_id == organization_id,
+                User.status == UserStatus.ACTIVE,
+                User.deleted_at.is_(None),
+            )
+            .order_by(User.last_name, User.first_name)
+        )
+        members = [
+            {
+                "user_id": str(member.id),
+                "name": member.full_name,
+                "station": member.station,
+                "rank": member.rank,
+            }
+            for member in members_result.scalars().all()
+        ]
+        active_ids = {m["user_id"] for m in members}
+
+        skills_result = await self.db.execute(
+            select(SkillEvaluation)
+            .where(
+                SkillEvaluation.organization_id == organization_id,
+                SkillEvaluation.active.is_(True),
+            )
+            .order_by(SkillEvaluation.category, SkillEvaluation.name)
+        )
+        skills = [
+            {"id": str(skill.id), "name": skill.name, "category": skill.category}
+            for skill in skills_result.scalars().all()
+        ]
+
+        result = await self.db.execute(self._competencies_query(organization_id))
+        competencies = [
+            c for c in self._named(result.all()) if str(c.user_id) in active_ids
+        ]
+        return {"members": members, "skills": skills, "competencies": competencies}
 
 
 class InstructorQualificationService:
