@@ -16,6 +16,36 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2975](https://github.com/thegspiro/the-logbook/pull/2975)**: branch
+`claude/security-review-training-extended`, Feature 18 (Training
+extended), pass 7 (watchdog pickup — the dedicated `/loop 30m
+/security-review` session had no open PR/branch for this feature). Real
+delta, not a zero-delta pass: nine non-merge commits touched the declared
+scope since pass 6's merge (PR #2862); a new cohort late-joiners feature
+(new table, three new routes), the Map User mapping fix, the TR4-4
+compliance re-derivation fix in the exports, and the DST/all-or-nothing
+cohort-shift hardening (already covered by app-review's A5 rotation) were
+all reviewed fresh. 1 new finding, fixed (TRX7-1, MEDIUM): `credit_
+missed_class` let an officer credit their own missed cohort class with no
+second-officer check — the same self-approval shape `assert_different_
+person` already blocks elsewhere (FIN-4, CS-8, AH-4, TR-5) — now fixed with
+that same helper, plus a guard test. All standing TRX fixes (TRX-1 through
+TRX6's external-sync cluster) re-verified unchanged. Completion gate green
+(flake8/black/isort, migrations — 527 revisions, single head;
+`check_route_permissions.py --strict` — 245 routes, 91/91 in this feature's
+own six endpoint files carrying an auth dependency; 1558 scoped backend
+tests; frontend typecheck/lint). See the Log entry below for detail.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 7, watchdog-pickup placeholder, never itself a PR), preserved for history</summary>
+
+**None.** Feature 18 (Training extended) review in progress (watchdog pickup).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 17, Training core, pass 7, PR #2973, merged), preserved for history</summary>
+
 **PR [#2973](https://github.com/thegspiro/the-logbook/pull/2973)**:
 branch `claude/security-review-training-core`, Feature 17 (Training core),
 pass 7 (watchdog pickup — the dedicated `/loop 30m /security-review` session
@@ -41,6 +71,8 @@ permission on `submit_training_approval`). Completion gate green
 DB-schema-drift issue found and resolved (not a code defect — see the
 findings file's completion-gate section). See the Log entry below for
 detail.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 17, Training core, pass 7, watchdog-pickup placeholder, never itself a PR), preserved for history</summary>
@@ -17988,7 +18020,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
@@ -27954,3 +27986,91 @@ Findings doc: [`TR-17-training-core.md`](./TR-17-training-core.md)'s **Pass
 7** section. `KNOWN_LIMITATIONS.md` gained one new entry (TR7-1) and needed
 no amendment to any existing one. Rotation row 17 → ✅ (pending PR merge).
 Next: Feature 18 (Training extended).
+
+### 2026-10-06 — Feature 18 (Training extended, pass 7) — 1 fixed (MEDIUM), 0 flagged; real delta, not a zero-delta pass (watchdog pickup)
+
+Watchdog pickup: the dedicated `/loop 30m /security-review` session had no
+open PR or branch for this feature. Confirmed via `list_pull_requests`
+(state=open) and `search_pull_requests` (`head:claude/security-review-`)
+that no security-review PR was open before starting. The working tree
+already carried this run's own setup edit (`PROGRESS.md`'s Open PR row
+cleared for Feature 17's merged PR #2973, rotation row 18 marked `🔄`); it
+rides along in this pass's own commit rather than being recorded
+separately.
+
+**Real delta since pass 6 (PR #2862, merged 2026-10-02 23:45 UTC): nine
+non-merge commits** touch one or more of the six changed declared files
+(`course_cohorts.py`, `course_cohort_service.py`, `external_training.py`,
+`training_submissions.py`, `training_enhancement_service.py`,
+`training_submission_service.py`); the other six declared files
+(`training_enhancements.py`, `training_waivers.py`,
+`training_waiver_service.py`, `external_training_service.py`,
+`course_syllabus.py`, `course_syllabus_service.py`) have zero diff,
+confirmed by individual-file `git diff`, not inferred from the stat table's
+absence. Half the delta post-dates SEC-00 pass 7's own last sweep (head
+`532340e3`, 2026-10-04 20:44 UTC) and was read fresh rather than credited to
+that cross-cutting pass.
+
+**One new finding, fixed: TRX7-1 (MEDIUM, separation of duties).**
+`CourseCohortService.credit_missed_class` (new this pass, part of the
+late-joiners feature — W27-3) writes a `COMPLETED` `TrainingRecord` for a
+member on the calling officer's sign-off alone, with no check that the
+officer and the member being credited are different people. An officer who
+is also a late-joining member of their own cohort could credit themselves
+for a class they never attended. This is the same self-approval shape
+`assert_different_person` already blocks in four other places in this
+codebase (FIN-4, CS-8, AH-4, TR-5 — the helper's own module docstring names
+a "fifth path" as the next obvious use) and the same shape
+`TrainingSubmissionService.review_submission`'s `approve` action already
+blocks in this very feature. Fixed by calling the existing helper before the
+record is written; `schedule_makeup_class` is deliberately left unchanged
+since it grants no credit by itself. Guard test added
+(`test_cohort_late_joiners.py::TestCreditingAMissedClass::
+test_an_officer_cannot_credit_their_own_missed_class`).
+
+**Two real correctness fixes in the same delta, both read in full and
+verified to follow this feature's established patterns, not re-derived
+independently:** the external-training Map User fix (`6459652d7` — a
+property-selected-as-column 500, an update-path null-vs-absent bug per
+Pitfall #1's corollary, both fixed with this codebase's standard patterns
+and a 7-of-8-cases-failing-before guard test) and the training-exports
+TR4-4 fix (`21bf76f27` — CSV/PDF compliance exports and the forecast report
+now consume the shared `requirement_applies_to_user`/`tally_standing`
+helpers from `training_compliance.py` instead of re-deriving who a
+requirement applies to, closing the exact Pitfall #29 shape the compliance
+matrix redesign hit on 2026-09-05).
+
+**The cohort-shift hardening (`0d94354b2`, `ff78de73a` — DST-safe shift,
+all-or-nothing shift/cancel, `from_sequence` no longer reaching past
+classes) is already covered by `docs/app-review/course-cohorts.md`'s
+CC-5/CC-6/CC-7 entries** (A5 rotation, pass 3); this pass's own interest was
+narrower — confirming the new `defer_commit`/`complete_deferred_writes`
+machinery introduces no new unscoped-by-id path, which it does not.
+
+Every standing TRX fix (TRX-1 through TRX6's external-sync cluster)
+re-verified at its current citation. Route count in this feature's six
+endpoint files: 91 (up from pass 6's 88 — three new missed-class routes, all
+three confirmed `require_permission("training.manage")`); total application
+routes unchanged at 245 (no new top-level page, Pitfall #30a n/a). One
+read-then-write race considered and explicitly not filed as a finding: two
+concurrent `credit_missed_class` calls on the same member/class are
+backstopped by `course_cohort_missed_classes`'s own unique constraint, so the
+loser's whole transaction rolls back rather than producing a duplicate
+credit — the residual is an unhandled 500 on a double-click, not a
+security or data-integrity gap.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+`app/ tests/ alembic/`; `validate_migrations.py --strict` passed (527
+revisions, single head `15802f3df5c4` — two new migrations this pass, both
+correctly guarded against their tables' `create_all`-only status, both with
+`nullable=True` on every `SET NULL` FK); `check_route_permissions.py
+--strict` passed (245 routes, 0 errors/warnings); scoped backend tests
+(`-k "training or cohort or syllabus or waiver or external or enhancement
+or submission or xapi"`) 1558 passed, 1 skipped (environment-only —
+`pywebpush`); frontend `npm run typecheck` 0 errors, `npm run lint` 0
+errors/0 warnings.
+
+Findings doc: [`TRX-18-training-extended.md`](./TRX-18-training-extended.md)'s
+**Pass 7** section. No `KNOWN_LIMITATIONS.md` change needed — the one new
+finding was fixed, not flagged. Rotation row 18 → ✅ (pending PR merge).
+Next: Feature 19 (Skills testing).

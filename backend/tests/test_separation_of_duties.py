@@ -82,6 +82,7 @@ class TestTheDocumentedCoverageMatchesTheCode:
         {
             "app/api/v1/endpoints/skills_testing.py",
             "app/services/admin_hours_service.py",
+            "app/services/course_cohort_service.py",
             "app/services/driver_exception_service.py",
             "app/services/finance_service.py",
             "app/services/minute_service.py",
@@ -126,11 +127,11 @@ class TestTheDocumentedCoverageMatchesTheCode:
         )
 
     def test_the_call_site_total_matches_the_documented_count(self):
-        # The table says "20 call sites across 8 modules" -- 7 app modules plus
+        # The table says "21 call sites across 9 modules" -- 8 app modules plus
         # the helper's own definition module, which the sweep above skips.
         total = sum(self._call_sites().values())
-        assert total == 20, (
-            f"assert_different_person now has {total} call sites, not the 20 "
+        assert total == 21, (
+            f"assert_different_person now has {total} call sites, not the 21 "
             "docs/COMPLIANCE.md claims; update the coverage table"
         )
 
@@ -138,5 +139,5 @@ class TestTheDocumentedCoverageMatchesTheCode:
         # A silent zero-match walk would pass both assertions above while
         # checking nothing -- the failure mode that let the original claim rot.
         sites = self._call_sites()
-        assert len(sites) >= 7
-        assert sum(sites.values()) >= 20
+        assert len(sites) >= 8
+        assert sum(sites.values()) >= 21
