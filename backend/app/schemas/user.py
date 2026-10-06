@@ -515,6 +515,10 @@ class UserWithRolesResponse(UserResponse):
     """User response with roles included"""
 
     roles: List[RoleResponse] = []
+    # When a sign-in lockout is in force, until when (W02-4). Disclosed to
+    # members.manage holders only, who can lift it; None for everyone else
+    # and once the lock has expired.
+    locked_until: Optional[datetime] = None
     temporary_password: Optional[str] = Field(
         None, description="Auto-generated temporary password (only present on creation)"
     )

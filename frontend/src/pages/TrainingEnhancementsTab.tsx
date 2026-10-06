@@ -27,11 +27,14 @@ import {
   Loader2,
 } from 'lucide-react';
 import { Modal } from '../components/Modal';
+import { MemberPickerModal } from '../components/MemberPickerModal';
+import { EffectivenessEvaluationModal } from '../components/training/EffectivenessEvaluationModal';
 import { EmptyState } from '../components/ux/EmptyState';
 import useLoadData from '../hooks/useLoadData';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
+import { QUALIFICATION_STANDING, qualificationStanding } from '../utils/instructorQualifications';
 import { getTrainingPeriodWindow, TRAINING_PERIOD_LABELS, TrainingExportPeriod } from '../utils/trainingPeriods';
 import {
   recertificationService,
@@ -929,6 +932,7 @@ const InstructorsSection: React.FC = () => {
     reload: loadData,
   } = useLoadData(loadQualData, [] as InstructorQualification[]);
   const [showAddModal, setShowAddModal] = useState(false);
+  const today = getTodayLocalDate(tz);
 
   if (loading) {
     return (
@@ -973,6 +977,9 @@ const InstructorsSection: React.FC = () => {
                   Type
                 </th>
                 <th scope="col" className="pr-4 pb-2">
+                  Qualifies for
+                </th>
+                <th scope="col" className="pr-4 pb-2">
                   Level
                 </th>
                 <th scope="col" className="pr-4 pb-2">
@@ -993,18 +1000,15 @@ const InstructorsSection: React.FC = () => {
                   {/* The stored values are snake_case (`lead_instructor`), so
                       `capitalize` alone leaves the underscore on screen. */}
                   <td className="py-2 pr-4 capitalize">{qual.qualification_type.replace(/_/g, ' ')}</td>
+                  <td className="py-2 pr-4">{qual.course_name || qual.skill_name || '-'}</td>
                   <td className="py-2 pr-4">{qual.certification_level || '-'}</td>
                   <td className="py-2 pr-4">{qual.certification_number || '-'}</td>
                   <td className="py-2 pr-4">{qual.expiration_date ? formatDate(qual.expiration_date, tz) : '-'}</td>
                   <td className="py-2">
                     <span
-                      className={`rounded-sm px-2 py-0.5 text-xs ${
-                        qual.verified
-                          ? 'bg-green-500/10 text-green-700 dark:text-green-400'
-                          : 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
-                      }`}
+                      className={`rounded-sm px-2 py-0.5 text-xs ${QUALIFICATION_STANDING[qualificationStanding(qual, today)].className}`}
                     >
-                      {qual.verified ? 'Verified' : 'Pending'}
+                      {QUALIFICATION_STANDING[qualificationStanding(qual, today)].label}
                     </span>
                   </td>
                 </tr>
@@ -1059,7 +1063,15 @@ const KIRKPATRICK_LEVELS: {
 const EffectivenessSection: React.FC = () => {
   const tz = useTimezone();
   const loadEvalData = useCallback(() => effectivenessService.getEvaluations(), []);
-  const { data: evaluations, loading } = useLoadData(loadEvalData, [] as TrainingEffectivenessEvaluation[]);
+  const {
+    data: evaluations,
+    loading,
+    reload: reloadEvaluations,
+  } = useLoadData(loadEvalData, [] as TrainingEffectivenessEvaluation[]);
+  // Pick the member first, then record the evaluation for them, so the form
+  // never asks for a raw member id and no modal opens on top of another.
+  const [pickingMember, setPickingMember] = useState(false);
+  const [evaluatedMember, setEvaluatedMember] = useState<{ userId: string; memberName: string } | null>(null);
 
   const countByLevel = (level: EvaluationLevel) => evaluations.filter((ev) => ev.evaluation_level === level).length;
 
@@ -1080,12 +1092,38 @@ const EffectivenessSection: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-theme-text-primary text-lg font-semibold">Training Effectiveness</h2>
-        <p className="text-theme-text-muted text-sm">
-          Kirkpatrick Model evaluation: Reaction, Learning, Behavior, Results
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-theme-text-primary text-lg font-semibold">Training Effectiveness</h2>
+          <p className="text-theme-text-muted text-sm">
+            Kirkpatrick Model evaluation: Reaction, Learning, Behavior, Results
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setPickingMember(true)}
+          className="btn-primary flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
+        >
+          <Plus className="h-4 w-4" />
+          <span>Submit Evaluation</span>
+        </button>
       </div>
+
+      <MemberPickerModal
+        isOpen={pickingMember}
+        onClose={() => setPickingMember(false)}
+        onSelect={(member) => {
+          setPickingMember(false);
+          setEvaluatedMember(member);
+        }}
+        title="Whose training are you evaluating?"
+      />
+      <EffectivenessEvaluationModal
+        isOpen={evaluatedMember !== null}
+        onClose={() => setEvaluatedMember(null)}
+        onSaved={() => void reloadEvaluations()}
+        member={evaluatedMember}
+      />
 
       <div className="grid gap-4 md:grid-cols-4">
         {KIRKPATRICK_LEVELS.map((item) => {
@@ -1454,21 +1492,26 @@ const ReportsSection: React.FC = () => {
                   <tr key={f.user_id} className="border-theme-surface-border/50 border-b">
                     <td className="text-theme-text-primary py-2 pr-4">{f.user_name || f.user_id}</td>
                     <td className="py-2 pr-4">
-                      <span
-                        className={
-                          f.current_compliance_percentage >= 80
-                            ? 'text-green-600'
-                            : f.current_compliance_percentage >= 50
-                              ? 'text-yellow-600'
-                              : 'text-red-600'
-                        }
-                      >
-                        {f.current_compliance_percentage}%
-                      </span>
+                      {f.current_compliance_percentage === null ? (
+                        // No requirement grades this member.
+                        <span className="text-theme-text-muted">N/A</span>
+                      ) : (
+                        <span
+                          className={
+                            f.current_compliance_percentage >= 80
+                              ? 'text-green-600'
+                              : f.current_compliance_percentage >= 50
+                                ? 'text-yellow-600'
+                                : 'text-red-600'
+                          }
+                        >
+                          {f.current_compliance_percentage}%
+                        </span>
+                      )}
                     </td>
-                    <td className="py-2 pr-4">{f.forecast_30_days}%</td>
-                    <td className="py-2 pr-4">{f.forecast_60_days}%</td>
-                    <td className="py-2 pr-4">{f.forecast_90_days}%</td>
+                    <td className="py-2 pr-4">{f.forecast_30_days === null ? 'N/A' : `${f.forecast_30_days}%`}</td>
+                    <td className="py-2 pr-4">{f.forecast_60_days === null ? 'N/A' : `${f.forecast_60_days}%`}</td>
+                    <td className="py-2 pr-4">{f.forecast_90_days === null ? 'N/A' : `${f.forecast_90_days}%`}</td>
                     <td className="py-2">
                       {f.at_risk_requirements.length > 0 && (
                         <span className="text-xs text-red-500">

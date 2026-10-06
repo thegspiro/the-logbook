@@ -99,3 +99,11 @@ def test_find_matching_recovery_code_legacy_plaintext():
     legacy = [mfa_service.normalize_recovery_code(c) for c in codes]
     assert mfa_service.find_matching_recovery_code(codes[0], legacy) == legacy[0]
     assert mfa_service.find_matching_recovery_code("nope-nope", legacy) is None
+
+
+def test_a_code_issued_before_the_upgrade_still_verifies():
+    # Owner decision CI-10: stronger codes arrive on the next regeneration;
+    # nobody's existing codes are invalidated by the upgrade.
+    legacy_code = "a1b2c-3d4"
+    stored = [mfa_service.hash_recovery_code(legacy_code)]
+    assert mfa_service.find_matching_recovery_code("A1B2C-3D4", stored) == stored[0]

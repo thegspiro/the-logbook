@@ -649,6 +649,9 @@ class StorefrontResponse(UTCResponseBase):
 # ============================================
 
 
+STORE_ORDER_MAX_LINES = 200
+
+
 class StoreOrderItemInput(BaseModel):
     """One line of a submitted order"""
 
@@ -672,7 +675,11 @@ class StoreOrderCreate(BaseModel):
     model_config = _REQUEST_CONFIG
 
     window_id: Optional[str] = Field(None, max_length=36)
-    items: List[StoreOrderItemInput] = Field(..., min_length=1)
+    # Owner decision (SF-11): generous enough for a quartermaster's bulk order
+    # across the roster, while bounding the work done under the order lock.
+    items: List[StoreOrderItemInput] = Field(
+        ..., min_length=1, max_length=STORE_ORDER_MAX_LINES
+    )
     payment_method: Optional[StorePaymentMethod] = None
     fulfillment_method: StoreFulfillmentMethod = StoreFulfillmentMethod.PICKUP
     shipping_address: Optional[str] = None

@@ -105,6 +105,7 @@ from loguru import logger
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.error_reporting import persist_task_error_log
 from app.models.call_tracking import CallTrackingMode
 from app.models.event import (
     EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS,
@@ -310,6 +311,12 @@ SCHEDULE = {
         "recommended_time": "03:30",
         "cron": "30 3 * * *",
     },
+    "self_report_attachment_retention": {
+        "description": "Delete self-reported training certificate files once a decided submission is older than the department's retention period (self-report settings). Departments that never set one keep files indefinitely.",
+        "frequency": "daily",
+        "recommended_time": "03:45",
+        "cron": "45 3 * * *",
+    },
     "scheduled_emails": {
         "description": "Process pending scheduled emails that are due to be sent",
         "frequency": "every 1 minute",
@@ -441,6 +448,18 @@ SCHEDULE = {
         "frequency": "every 30 minutes",
         "recommended_time": "*/30 * * * *",
         "cron": "*/30 * * * *",
+    },
+    "reap_expired_sessions": {
+        "description": "Delete sign-in session rows 30 days after their refresh token expired (each holds an IP address and browser)",
+        "frequency": "daily",
+        "recommended_time": "00:45",
+        "cron": "45 0 * * *",
+    },
+    "notify_expired_passwords": {
+        "description": "Tell members whose password has expired, once, by email and in-app; the API refuses it a grace period later",
+        "frequency": "daily",
+        "recommended_time": "07:50",
+        "cron": "50 7 * * *",
     },
     "expire_ip_exceptions": {
         "description": "Mark approved IP allowlist/blocklist exceptions past their valid_until as expired (nothing else recomputes the stored status)",
@@ -609,6 +628,7 @@ async def _for_each_org(
             total += count
         except Exception as e:
             logger.error(f"{task_name} failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), task_name, e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # The orgs share one session; roll back the failed unit of work so a
             # broken commit doesn't leave the session in a failed state that
@@ -904,7 +924,7 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
 
     from app.models.meeting import ActionItemStatus, MeetingActionItem
     from app.models.minute import ActionItem as MinutesActionItem
-    from app.models.minute import MinutesActionItemStatus
+    from app.models.minute import MeetingMinutes, MinutesActionItemStatus
 
     todays = await _org_todays(db)
     fallback_today = org_today(None)
@@ -913,9 +933,14 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     three_days = max(todays.values(), default=fallback_today) + timedelta(days=3)
     total_reminders = 0
 
+    # Both sweeps run platform-wide, so each joins back to its organization
+    # and skips a deactivated one, as the per-org jobs do (CRON2-31-12).
     # ── Meeting action items ──
     meeting_items = await db.execute(
-        select(MeetingActionItem).where(
+        select(MeetingActionItem)
+        .join(Organization, Organization.id == MeetingActionItem.organization_id)
+        .where(
+            Organization.active.isnot(False),
             MeetingActionItem.status.in_(
                 [ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]
             ),
@@ -964,7 +989,10 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     minutes_items = await db.execute(
         select(MinutesActionItem)
         .options(selectinload(MinutesActionItem.minutes))
+        .join(MeetingMinutes, MeetingMinutes.id == MinutesActionItem.minutes_id)
+        .join(Organization, Organization.id == MeetingMinutes.organization_id)
         .where(
+            Organization.active.isnot(False),
             MinutesActionItem.status.in_(
                 [
                     MinutesActionItemStatus.PENDING.value,
@@ -1317,6 +1345,7 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
 
         except Exception as e:
             logger.error(f"Event reminders failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), "Event reminders", e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
@@ -1519,6 +1548,7 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
 
         except Exception as e:
             logger.error(f"Post-event validation failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), "Post-event validation", e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
@@ -1930,6 +1960,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
 
         except Exception as e:
             logger.error(f"Post-shift validation failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), "Post-shift validation", e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
@@ -2397,6 +2428,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
 
         except Exception as e:
             logger.error(f"Shift reminders failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), "Shift reminders", e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
@@ -2914,6 +2946,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                     }
 
                     # In-app notification
+                    in_app_ok = False
                     try:
                         notif = NotificationLog(
                             id=generate_uuid(),
@@ -2929,6 +2962,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                         )
                         db.add(notif)
                         org_notifications += 1
+                        in_app_ok = True
                     except Exception as e:
                         logger.error(
                             "Failed end-of-shift in-app summary for user "
@@ -2939,16 +2973,25 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                         )
 
                     # Email
-                    if user.email and member_receives_email(
-                        user.notification_preferences,
-                        EmailKind.SHIFT_NOTICES,
-                        department_required_kinds(org),
-                    ):
+                    # An email is due only where one can go: with email off for
+                    # the department, waiting on it would re-send the in-app
+                    # notice every run for the whole lookback window.
+                    email_svc = EmailService(organization=org)
+                    email_due = (
+                        bool(user.email)
+                        and email_svc.can_send
+                        and member_receives_email(
+                            user.notification_preferences,
+                            EmailKind.SHIFT_NOTICES,
+                            department_required_kinds(org),
+                        )
+                    )
+                    email_ok = False
+                    if email_due:
                         try:
                             from app.services.email_service import wrap_email_body
 
                             full_url = f"{settings.FRONTEND_URL}{action_url}"
-                            email_svc = EmailService(organization=org)
 
                             details_rows = [
                                 "<tr><td style='padding:2px 8px;color:#555'>"
@@ -3076,6 +3119,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                             )
                             if sent > 0:
                                 org_emails += 1
+                                email_ok = True
                         except Exception as email_err:
                             logger.error(
                                 "End-of-shift summary email failed for {}: {}",
@@ -3083,7 +3127,14 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                                 email_err,
                             )
 
-                    newly_sent.append(uid)
+                    # Delivered means the email went, when one was due: email
+                    # is the channel of record (pitfall #18), so a member whose
+                    # email failed is retried on the next run, inside the
+                    # lookback window, even though that repeats the in-app
+                    # notice (owner decision CRON-31-7). A member who gets no
+                    # email is delivered once the in-app notice is written.
+                    if email_ok if email_due else in_app_ok:
+                        newly_sent.append(uid)
 
                 if newly_sent:
                     shift.activities = {
@@ -3095,6 +3146,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
 
         except Exception as e:
             logger.error(f"End-of-shift summary failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), "End-of-shift summary", e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
@@ -3370,6 +3422,7 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
 
         except Exception as e:
             logger.error(f"Trainee report escalation failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), "Trainee report escalation", e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
@@ -3840,6 +3893,23 @@ async def run_retention_enforcement(db: AsyncSession) -> Dict[str, Any]:
     result = await RetentionService(db).enforce()
     await db.commit()
     result["task"] = "retention_enforcement"
+    return result
+
+
+async def run_self_report_attachment_retention(db: AsyncSession) -> Dict[str, Any]:
+    """Expire self-reported certificate files per each department's setting.
+
+    The reader of ``SelfReportConfig.attachment_retention_days``; see
+    app/services/self_report_attachment_retention.py. Commits per
+    organization itself, so one department's failure does not discard
+    another's completed sweep.
+    """
+    from app.services.self_report_attachment_retention import (
+        SelfReportAttachmentRetention,
+    )
+
+    result = await SelfReportAttachmentRetention(db).sweep()
+    result["task"] = "self_report_attachment_retention"
     return result
 
 
@@ -5075,6 +5145,9 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
             logger.error(
                 f"Compliance auto-report failed for org {config.organization_id}: {e}"
             )
+            await persist_task_error_log(
+                str(config.organization_id), "Compliance auto-report", e
+            )
             try:
                 await db.rollback()
             except Exception:
@@ -5307,6 +5380,7 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
 
         except Exception as e:
             logger.error(f"Series end reminders failed for org {org.id}: {e}")
+            await persist_task_error_log(str(org.id), "Series end reminders", e)
             results.append({"org_id": str(org.id), "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
@@ -6151,6 +6225,7 @@ async def run_event_request_reminders(db: AsyncSession) -> Dict[str, Any]:
                 results.append({"organization": str(org.id), "reminders": org_sent})
         except Exception as e:
             logger.warning("Event request reminders failed for org {}: {}", org.id, e)
+            await persist_task_error_log(str(org.id), "Event request reminders", e)
             try:
                 await db.rollback()
             except Exception:
@@ -6196,6 +6271,7 @@ async def run_officer_directory_sync(db: AsyncSession) -> Dict[str, Any]:
             synced += 1
         except Exception as e:
             logger.warning("Officer directory sync failed for org {}: {}", org_id, e)
+            await persist_task_error_log(str(org_id), "Officer directory sync", e)
             try:
                 await db.rollback()
             except Exception:
@@ -6296,6 +6372,7 @@ async def run_prospect_attendance_advance(db: AsyncSession) -> Dict[str, Any]:
             logger.warning(
                 "Prospect attendance advance failed for org {}: {}", org_id, e
             )
+            await persist_task_error_log(str(org_id), "Prospect attendance advance", e)
             try:
                 await db.rollback()
             except Exception:
@@ -6325,6 +6402,136 @@ async def run_admin_hours_auto_close(db: AsyncSession) -> Dict[str, Any]:
     if closed:
         logger.info("Admin-hours auto-close: {} stale session(s)", closed)
     return {"task": "admin_hours_auto_close", "closed": closed}
+
+
+# Days a session row is kept after its refresh token can no longer be used.
+# Long enough to answer "where was I signed in last month", short enough that
+# an IP address and browser string do not outlive the session by years
+# (owner decision AUTH-17, 2026-10-04).
+SESSION_RETENTION_DAYS_AFTER_REFRESH_EXPIRY = 30
+_SESSION_REAP_BATCH = 1000
+
+
+async def run_reap_expired_sessions(db: AsyncSession) -> Dict[str, Any]:
+    """Delete session rows well past the point anyone could use them.
+
+    A session ends quietly when its tokens lapse, and nothing deleted the
+    row: each one kept an IP address and user agent forever, one per sign-in
+    per device. A refresh token is issued at a rotation, which also sets
+    ``expires_at`` to that moment plus the access-token lifetime, so the
+    refresh token is dead by ``expires_at + REFRESH_TOKEN_EXPIRE_DAYS``. Rows
+    past that by the retention window go. Batched, because the first run on
+    an older installation can find years of rows on a table every request
+    reads.
+    """
+    from sqlalchemy import delete
+
+    from app.core.config import settings
+    from app.models.user import Session as UserSession
+
+    cutoff = datetime.now(timezone.utc) - timedelta(
+        days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+        + SESSION_RETENTION_DAYS_AFTER_REFRESH_EXPIRY
+    )
+    deleted = 0
+    while True:
+        ids = (
+            (
+                await db.execute(
+                    select(UserSession.id)
+                    .where(UserSession.expires_at < cutoff)
+                    .limit(_SESSION_REAP_BATCH)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if not ids:
+            break
+        await db.execute(delete(UserSession).where(UserSession.id.in_(ids)))
+        await db.commit()
+        deleted += len(ids)
+        if len(ids) < _SESSION_REAP_BATCH:
+            break
+    if deleted:
+        logger.info("Reaped {} expired session row(s)", deleted)
+    return {"task": "reap_expired_sessions", "deleted": deleted}
+
+
+async def run_notify_expired_passwords(db: AsyncSession) -> Dict[str, Any]:
+    """Tell each member whose password has expired, once, and start their grace.
+
+    AUTH-15: the API refuses an expired password
+    ``HIPAA_PASSWORD_EXPIRY_GRACE_DAYS`` after the member was told, so the
+    telling has to reach members who are not signing in. In-app and by email
+    (security notices are always sent). ``password_expiry_notified_at`` makes
+    it once per expiry: it is cleared when the password changes.
+    """
+    from app.core.config import settings
+    from app.models.user import UserStatus
+    from app.utils.password_expiry import password_change_deadline
+    from app.utils.security_notifications import notify_security_event
+
+    max_age_days = settings.HIPAA_MAXIMUM_PASSWORD_AGE_DAYS
+    if max_age_days <= 0:
+        return {"task": "notify_expired_passwords", "notified": 0}
+
+    now = datetime.now(timezone.utc)
+    expired_before = now - timedelta(days=max_age_days)
+    # Ids, not instances: a rollback after one member's failure expires every
+    # loaded object, and an async session cannot lazy-load them back.
+    pairs = (
+        await db.execute(
+            select(User.id, User.organization_id)
+            .join(Organization, Organization.id == User.organization_id)
+            .where(
+                Organization.active.isnot(False),
+                User.status == UserStatus.ACTIVE,
+                User.deleted_at.is_(None),
+                User.password_hash.is_not(None),
+                User.password_changed_at <= expired_before,
+                User.password_expiry_notified_at.is_(None),
+            )
+            .order_by(User.organization_id)
+        )
+    ).all()
+
+    notified = 0
+    for user_id, org_id in pairs:
+        try:
+            user = await db.get(User, user_id)
+            org = await db.get(Organization, org_id)
+            if user is None:
+                continue
+            user.password_expiry_notified_at = now
+            deadline = password_change_deadline(user)
+            when = (
+                f"{deadline:%B} {deadline.day}, {deadline.year}" if deadline else "soon"
+            )
+            await notify_security_event(
+                db,
+                user,
+                subject="Your password has expired",
+                message=(
+                    f"Your password is more than {max_age_days} days old. "
+                    f"Change it from your account settings by {when} (UTC); "
+                    "after that you will not be able to use The Logbook until "
+                    "you do."
+                ),
+                action_url="/account",
+                org=org,
+            )
+            # Committed per member, so a notice that went out is never sent
+            # again because a later one failed.
+            await db.commit()
+            notified += 1
+        except Exception as exc:
+            await db.rollback()
+            logger.error(f"Expired-password notice failed for user {user_id}: {exc}")
+
+    if notified:
+        logger.info("Sent {} expired-password notice(s)", notified)
+    return {"task": "notify_expired_passwords", "notified": notified}
 
 
 async def run_expire_ip_exceptions(db: AsyncSession) -> Dict[str, Any]:
@@ -6401,11 +6608,12 @@ async def run_salesforce_auto_sync(db: AsyncSession) -> Dict[str, Any]:
             integration.last_sync_at = datetime.now(dt_timezone.utc)
             await db.commit()
             synced += 1
-        except Exception:
+        except Exception as e:
             await db.rollback()
             logger.opt(exception=True).warning(
                 "Salesforce auto-sync failed for org {}", org_id
             )
+            await persist_task_error_log(str(org_id), "Salesforce auto-sync", e)
             failed += 1
 
     return {
@@ -6460,6 +6668,7 @@ TASK_RUNNERS = {
     "audit_log_archival": run_audit_log_archival,
     "audit_log_ship": run_audit_log_ship,
     "retention_enforcement": run_retention_enforcement,
+    "self_report_attachment_retention": run_self_report_attachment_retention,
     "scheduled_emails": run_scheduled_emails,
     "storefront_window_lifecycle": run_storefront_window_lifecycle,
     "storefront_payment_reminders": run_storefront_payment_reminders,
@@ -6481,6 +6690,8 @@ TASK_RUNNERS = {
     "mark_overdue_maintenance": run_mark_overdue_maintenance,
     "admin_hours_auto_close": run_admin_hours_auto_close,
     "expire_ip_exceptions": run_expire_ip_exceptions,
+    "reap_expired_sessions": run_reap_expired_sessions,
+    "notify_expired_passwords": run_notify_expired_passwords,
     "membership_inactivity_warnings": run_membership_inactivity_warnings,
     "shift_pattern_generation": run_shift_pattern_generation,
     "swap_offer_expiry": run_swap_offer_expiry,
@@ -6534,6 +6745,8 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "mark_overdue_maintenance": 86400,
     "admin_hours_auto_close": 1800,
     "expire_ip_exceptions": 86400,
+    "reap_expired_sessions": 86400,
+    "notify_expired_passwords": 86400,
     "membership_inactivity_warnings": 86400,
     "recert_resets": 86400,
     "enrollment_expiry": 86400,
@@ -6552,6 +6765,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "audit_log_ship": 1800,
     # Daily — org-configured records retention
     "retention_enforcement": 86400,
+    "self_report_attachment_retention": 86400,
     # Monthly (approx — 30 days)
     "membership_tier_advance": 2592000,
 }

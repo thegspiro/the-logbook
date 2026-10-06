@@ -495,6 +495,10 @@ class User(Base):
     must_change_password = Column(
         Boolean, default=False, nullable=False, server_default="0"
     )
+    # When the member was first told their password had expired; the server
+    # refuses an expired password HIPAA_PASSWORD_EXPIRY_GRACE_DAYS after this
+    # (AUTH-15). Cleared whenever the password changes.
+    password_expiry_notified_at = Column(DateTime(timezone=True), nullable=True)
     failed_login_attempts = Column(Integer, default=0)
     locked_until = Column(DateTime(timezone=True))
     password_reset_token = Column(String(128), index=True)
@@ -960,11 +964,6 @@ class Session(Base):
 
     token = Column(String(512), nullable=False, unique=True, index=True)
     refresh_token = Column(String(512), index=True)
-    # The immediately-previous refresh token, honored for a short grace window
-    # after rotation so two concurrent legitimate refreshes (multi-tab, app
-    # boot, network retry) don't look like token theft and trigger a mass logout.
-    previous_refresh_token = Column(String(512), nullable=True, index=True)
-    previous_refresh_expires_at = Column(DateTime(timezone=True), nullable=True)
     ip_address = Column(String(45))
     user_agent = Column(Text)
     geo_location = Column(JSON)

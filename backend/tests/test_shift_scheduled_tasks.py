@@ -18,6 +18,7 @@ review fixes were implemented:
 import json
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import select, text
@@ -553,6 +554,89 @@ class TestEndOfShiftSummaryFinalizationGate:
             .all()
         )
         assert len(notifs) == 1
+
+
+class TestEndOfShiftSummaryCountsDeliveryByEmail:
+    """CRON-31-7: a member is stamped sent only once the email went.
+
+    Email is the channel of record, so a failed email is retried on the next
+    run inside the lookback window, even though that repeats the in-app
+    notice. Where email cannot go at all, the in-app notice is the delivery.
+    """
+
+    async def _summaries(self, db_session, org_id, user_id):
+        return (
+            (
+                await db_session.execute(
+                    select(NotificationLog).where(
+                        NotificationLog.organization_id == org_id,
+                        NotificationLog.recipient_id == user_id,
+                        NotificationLog.category == "shift_summary",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    async def _setup(self, db_session):
+        org_id = await _insert_org(db_session)
+        user_id = await _insert_user(db_session, org_id=org_id)
+        shift_id, _, _ = await _insert_shift(
+            db_session,
+            org_id=org_id,
+            start_offset_minutes=-13 * 60,
+            is_finalized=True,
+        )
+        await _insert_attendance(
+            db_session, shift_id=shift_id, user_id=user_id, duration_minutes=720
+        )
+        await db_session.flush()
+        return org_id, user_id
+
+    def _email(self, monkeypatch, send_email):
+        from app.services.email_service import EmailService
+
+        monkeypatch.setattr(EmailService, "can_send", property(lambda self: True))
+        monkeypatch.setattr(EmailService, "send_email", send_email)
+
+    async def test_a_failed_email_is_retried_on_the_next_run(
+        self, db_session: AsyncSession, monkeypatch
+    ):
+        send = AsyncMock(return_value=(0, 1))
+        self._email(monkeypatch, send)
+        org_id, user_id = await self._setup(db_session)
+
+        await run_end_of_shift_summary(db_session)
+        await run_end_of_shift_summary(db_session)
+
+        assert send.await_count == 2
+        assert len(await self._summaries(db_session, org_id, user_id)) == 2
+
+    async def test_a_raising_email_is_retried_too(
+        self, db_session: AsyncSession, monkeypatch
+    ):
+        send = AsyncMock(side_effect=RuntimeError("smtp down"))
+        self._email(monkeypatch, send)
+        await self._setup(db_session)
+
+        await run_end_of_shift_summary(db_session)
+        await run_end_of_shift_summary(db_session)
+
+        assert send.await_count == 2
+
+    async def test_a_sent_email_is_not_sent_again(
+        self, db_session: AsyncSession, monkeypatch
+    ):
+        send = AsyncMock(return_value=(1, 0))
+        self._email(monkeypatch, send)
+        org_id, user_id = await self._setup(db_session)
+
+        await run_end_of_shift_summary(db_session)
+        await run_end_of_shift_summary(db_session)
+
+        assert send.await_count == 1
+        assert len(await self._summaries(db_session, org_id, user_id)) == 1
 
 
 # ── run_end_of_shift_checklist_reminders ─────────────────────────────

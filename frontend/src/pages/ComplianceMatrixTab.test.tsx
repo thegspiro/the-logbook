@@ -461,6 +461,58 @@ describe('ComplianceMatrixTab', () => {
     });
   });
 
+  describe('a member nothing grades', () => {
+    const withLifeMember = (): ComplianceMatrix => {
+      const m = matrix();
+      m.members.push({
+        user_id: 'u4',
+        member_name: 'Brennan, Pat',
+        membership_type: 'life',
+        standing: 'not_applicable',
+        completion_pct: null,
+        requirements_met: 0,
+        requirements_total: 0,
+        requirements: [],
+      });
+      return m;
+    };
+
+    beforeEach(() => {
+      getComplianceMatrix.mockReset();
+      getComplianceMatrix.mockResolvedValue(withLifeMember());
+    });
+
+    it('sits in a muted group of its own, after the graded members', async () => {
+      renderWithRouter(<ComplianceMatrixTab />);
+      const rail = within(await screen.findByRole('navigation', { name: 'Compliance queue' }));
+
+      expect(rail.getByText('Not applicable')).toBeInTheDocument();
+      const names = rail.getAllByRole('button').map((b) => b.textContent ?? '');
+      expect(names[3]).toContain('Brennan, Pat');
+      // No percentage of its own, so not "100%".
+      expect(names[3]).toContain('n/a');
+      expect(names[3]).not.toContain('100%');
+    });
+
+    it('is counted as not applicable in the summary, not as compliant', async () => {
+      renderWithRouter(<ComplianceMatrixTab />);
+      expect(
+        await screen.findByText(/4 tracked members · 2 requirements · 1 non-compliant, 1 at risk, 1 not applicable/)
+      ).toBeInTheDocument();
+    });
+
+    it('shows N/A as the standing figure in the detail pane', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<ComplianceMatrixTab />);
+      const rail = within(await screen.findByRole('navigation', { name: 'Compliance queue' }));
+      await user.click(rail.getByRole('button', { name: /Brennan, Pat/ }));
+
+      expect(await screen.findByRole('heading', { name: 'Brennan, Pat' })).toBeInTheDocument();
+      expect(screen.getByText('N/A')).toBeInTheDocument();
+      expect(screen.getByText('No requirements apply to this member.')).toBeInTheDocument();
+    });
+  });
+
   describe('an all-clear department', () => {
     it('says nobody is behind rather than showing an empty pane', async () => {
       const clear = matrix();

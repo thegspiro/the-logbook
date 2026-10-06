@@ -121,13 +121,11 @@ class TestItTeamRanks:
 class TestARankTheLadderNoLongerHas:
     """A *seeded* code the department deleted, which is the reachable case.
 
-    ``resolve_rank_code`` answers from ``DEFAULT_RANK_CODES`` before it consults
-    the organization's rows — deliberately, because a department onboarded
-    before a code joined ``DEFAULT_RANKS`` has no row for it while the
-    eligibility fallback still honours it, and rejecting those is the EMT bug in
-    #1833. But the IT team is named at step 10 and its accounts are created at
-    completion, with the ladder edited at step 11 in between, so that
-    permissiveness let a code the administrator had just deleted be written
+    ``resolve_rank_code`` honours ``DEFAULT_RANK_CODES`` for an organization
+    with no rank rows at all, the state the EMT fix in #1833 was written for.
+    But the IT team is named at step 10 and its accounts are created at
+    completion, with the ladder edited at step 11 in between, so a department
+    that cleared its ladder would have had a code it had just deleted written
     anyway — and ``get_rank_default_permissions`` grants its static defaults, so
     the account held Captain-level access under a rank the ladder no longer
     lists.

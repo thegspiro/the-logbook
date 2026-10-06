@@ -6,6 +6,7 @@ import api from './apiClient';
 import { enqueueGeneric } from '../utils/genericOfflineQueue';
 import { usePendingSyncStore } from '../stores/pendingSyncStore';
 import { toAppError } from '../utils/errorHandling';
+import { TRAINING_RECORDS_PAGE_SIZE } from '../constants/config';
 import type {
   SkillTemplate,
   SkillTemplateCreate,
@@ -14,7 +15,8 @@ import type {
   SkillTemplateUpdate,
   SkillTest,
   SkillTestCreate,
-  SkillTestListItem,
+  SkillTestListPage,
+  SkillTestListParams,
   SkillTestUpdate,
   SkillTestViewer,
   SkillTestCandidate,
@@ -23,7 +25,10 @@ import type {
 import type {
   CohortAdHocClassCreate,
   CohortClassReschedule,
+  CohortMakeupCreate,
   CohortMemberAdd,
+  CohortMissedClass,
+  CohortMissedClassDecisionResult,
   CohortOperationResult,
   CohortSchedulePreviewRequest,
   CohortSchedulePreviewResponse,
@@ -117,8 +122,13 @@ export interface TrainingDashboardSummary {
     active_courses: number;
     training_sessions: number;
     active_programs: number;
+    /** Members at least one requirement grades — the percentage's denominator. */
+    graded_members?: number;
+    /** Members no requirement grades; outside the percentage entirely. */
+    not_applicable_members?: number;
     compliant_members: number;
-    compliance_percentage: number;
+    /** Null when no member is graded against anything. */
+    compliance_percentage: number | null;
     expiring_count: number;
     completions_last_30_days: number;
     total_hours_this_year: number;
@@ -216,7 +226,12 @@ export const trainingService = {
   },
 
   /**
-   * Get training records
+   * Get every training record matching the filters.
+   *
+   * The endpoint serves at most TRAINING_RECORDS_PAGE_SIZE records a request
+   * (TR2-2), so this walks the pages until a short one. Every caller lists one
+   * member's history and builds stats and tables from the whole of it; a
+   * single capped request would truncate those silently for a long career.
    */
   async getRecords(params?: {
     user_id?: string;
@@ -224,8 +239,15 @@ export const trainingService = {
     start_date?: string;
     end_date?: string;
   }): Promise<TrainingRecord[]> {
-    const response = await api.get<TrainingRecord[]>('/training/records', { params });
-    return asArray(response.data);
+    const records: TrainingRecord[] = [];
+    for (let skip = 0; ; skip += TRAINING_RECORDS_PAGE_SIZE) {
+      const response = await api.get<TrainingRecord[]>('/training/records', {
+        params: { ...params, skip, limit: TRAINING_RECORDS_PAGE_SIZE },
+      });
+      const page = asArray(response.data);
+      records.push(...page);
+      if (page.length < TRAINING_RECORDS_PAGE_SIZE) return records;
+    }
   },
 
   /**
@@ -1478,16 +1500,15 @@ export const skillsTestingService = {
   },
 
   // Tests
-  async getTests(params?: {
-    status?: string;
-    candidate_id?: string;
-    template_id?: string;
-    include_practice?: boolean;
-    /** Officer review queue: official results nobody has signed off yet. */
-    pending_validation?: boolean;
-  }): Promise<SkillTestListItem[]> {
-    const response = await api.get<SkillTestListItem[]>('/training/skills-testing/tests', { params });
-    return asArray(response.data);
+  /** One page of tests, newest first. The server pages (50 rows by default,
+   *  200 at most), so pass `limit`/`offset` and read `total` to go further. */
+  async getTests(params?: SkillTestListParams): Promise<SkillTestListPage> {
+    const response = await api.get<SkillTestListPage | null>('/training/skills-testing/tests', { params });
+    // Same defence as asArray: a captive portal's 200 must read as an empty
+    // page, not take the screen down.
+    const items = asArray(response.data?.items ?? []);
+    const total = typeof response.data?.total === 'number' ? response.data.total : items.length;
+    return { items, total };
   },
 
   async getTest(testId: string): Promise<SkillTest> {
@@ -2146,5 +2167,33 @@ export const courseCohortService = {
 
   async removeMember(cohortId: string, userId: string): Promise<void> {
     await api.delete(`/training/cohorts/${cohortId}/members/${userId}`);
+  },
+
+  /** Classes held before a member joined, and the decision for each. */
+  async listMissedClasses(cohortId: string, userId: string): Promise<CohortMissedClass[]> {
+    const response = await api.get<CohortMissedClass[]>(
+      `/training/cohorts/${cohortId}/members/${userId}/missed-classes`
+    );
+    return response.data;
+  },
+
+  async creditMissedClass(cohortId: string, userId: string, classId: string): Promise<CohortMissedClassDecisionResult> {
+    const response = await api.post<CohortMissedClassDecisionResult>(
+      `/training/cohorts/${cohortId}/members/${userId}/missed-classes/${classId}/credit`
+    );
+    return response.data;
+  },
+
+  async scheduleMakeup(
+    cohortId: string,
+    userId: string,
+    classId: string,
+    data: CohortMakeupCreate
+  ): Promise<CohortMissedClassDecisionResult> {
+    const response = await api.post<CohortMissedClassDecisionResult>(
+      `/training/cohorts/${cohortId}/members/${userId}/missed-classes/${classId}/makeup`,
+      data
+    );
+    return response.data;
   },
 };

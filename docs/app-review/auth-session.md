@@ -79,7 +79,7 @@ its count gains an attacker nothing, and the obvious tightening (a validator
 requiring one of the two) changes a public auth endpoint's response from 401 to
 422 for existing clients. Recorded rather than changed.
 
-### AUTH-21 — LOW — A double-fired refresh can revoke every session the member has — 🚩 FLAGGED
+### AUTH-21 — LOW — A double-fired refresh can revoke every session the member has — ✅ FIXED (2026-10-05, option b)
 
 **What:** `refresh_access_token` looks the session up by refresh token with a
 plain `SELECT` (`auth_service.py:382`) and then rotates `session.refresh_token`
@@ -113,6 +113,22 @@ a concurrent request", which needs no lock and distinguishes a benign double-fir
 from a genuine replay; **(c)** accept it and narrow the blast radius by revoking
 only the one session rather than all of them. (b) is the most promising and the
 most invasive. Mirrored into `KNOWN_LIMITATIONS.md`.
+
+**Fixed 2026-10-05 with (b), the owner's choice.** The rotation is now an
+`UPDATE sessions … WHERE id = :id AND refresh_token = :presented`. InnoDB
+re-reads the row under the UPDATE's lock, so of two overlapping refreshes one
+matches and the other affects no rows; the loser raises
+`RefreshTokenSuperseded`, which the endpoint answers with **409
+`LB-AUTH-012`** and revokes nothing. `performSharedRefresh` treats that answer
+as success, because the shared cookie jar already holds the winner's tokens,
+and the original request is retried. Tests:
+`tests/test_auth_refresh_rotation.py` (an interleaved rotation against the real
+database keeps both sessions) and `apiClient.test.ts`.
+
+**Still replay, by design:** a second refresh that _starts_ after the first has
+committed finds no row and is treated as replay, as before. Telling that apart
+from theft needs the previous token on record, which CI3-33 removed with the
+rotation grace period at the owner's direction.
 
 ### Re-verified this pass, all still open
 

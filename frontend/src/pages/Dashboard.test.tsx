@@ -51,6 +51,7 @@ const {
   mockGetUserInventory,
   mockGetInventorySummary,
   mockGetEligiblePositions,
+  mockGetEligiblePositionsBulk,
   mockGetMyCompliance,
   mockGetSchedulingSummary,
   mockGetTrainingEnrollments,
@@ -77,6 +78,7 @@ const {
   mockGetUserInventory: vi.fn(),
   mockGetInventorySummary: vi.fn(),
   mockGetEligiblePositions: vi.fn(),
+  mockGetEligiblePositionsBulk: vi.fn(),
   mockGetMyCompliance: vi.fn(),
   mockGetSchedulingSummary: vi.fn(),
   mockGetTrainingEnrollments: vi.fn(),
@@ -93,6 +95,7 @@ vi.mock('../modules/scheduling/services/api', () => ({
     getSummary: mockGetSchedulingSummary,
     signupForShift: mockSignupForShift,
     getEligiblePositions: mockGetEligiblePositions,
+    getEligiblePositionsBulk: mockGetEligiblePositionsBulk,
   },
 }));
 
@@ -243,6 +246,7 @@ const ALL_SERVICE_MOCKS = [
   mockGetUserInventory,
   mockGetInventorySummary,
   mockGetEligiblePositions,
+  mockGetEligiblePositionsBulk,
   mockGetMyCompliance,
   mockGetSchedulingSummary,
   mockGetAdminHoursSummary,
@@ -278,6 +282,9 @@ describe('Dashboard', () => {
     mockGetMyTraining.mockResolvedValue({ hours_summary: { total_hours: 0, hours_this_month: 0 }, certifications: [] });
     mockGetEvents.mockResolvedValue([]);
     mockGetEligiblePositions.mockResolvedValue({ positions: ['firefighter'], is_excluded: false });
+    mockGetEligiblePositionsBulk.mockImplementation((ids: string[]) =>
+      Promise.resolve(Object.fromEntries(ids.map((id) => [id, ['firefighter']])))
+    );
     // Default: a department that tracks no screenings.
     mockGetMyCompliance.mockResolvedValue({
       total_requirements: 0,
@@ -1843,6 +1850,32 @@ describe('Dashboard', () => {
 
       expect(await screen.findByRole('button', { name: /^Sign Up$/ })).toBeInTheDocument();
       expect(screen.getByText(/Nothing else through/)).toBeInTheDocument();
+    });
+
+    it('says a shift the member cannot take is not eligible, without a Sign Up', async () => {
+      mockGetOpenShifts.mockResolvedValue([
+        makeShift({ id: 'open-ok', shift_date: inWindow(1) }),
+        makeShift({ id: 'open-no', shift_date: inWindow(2) }),
+      ]);
+      mockGetEligiblePositionsBulk.mockResolvedValue({ 'open-ok': ['firefighter'], 'open-no': [] });
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Not eligible')).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: /^Sign Up$/ })).toHaveLength(1);
+      expect(mockGetEligiblePositionsBulk).toHaveBeenCalledTimes(1);
+      expect(mockGetEligiblePositionsBulk).toHaveBeenCalledWith(['open-ok', 'open-no']);
+    });
+
+    it('keeps Sign Up when the eligibility lookup fails', async () => {
+      mockGetOpenShifts.mockResolvedValue([makeShift({ id: 'open-1', shift_date: inWindow(1) })]);
+      mockGetEligiblePositionsBulk.mockRejectedValue(new Error('offline'));
+
+      renderWithRouter(<Dashboard />);
+
+      await waitFor(() => expect(mockGetEligiblePositionsBulk).toHaveBeenCalled());
+      expect(await screen.findByRole('button', { name: /^Sign Up$/ })).toBeInTheDocument();
+      expect(screen.queryByText('Not eligible')).not.toBeInTheDocument();
     });
 
     it('signs the member up for an open shift', async () => {

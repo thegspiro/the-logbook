@@ -69,7 +69,7 @@ export const ForgotPasswordPage: React.FC = () => {
     [email, cooldown, captcha]
   );
 
-  if (answer?.auth_provider) {
+  if (answer?.auth_provider || answer?.email_disabled) {
     return (
       <main
         id="main-content"

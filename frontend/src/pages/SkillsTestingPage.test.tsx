@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import { SkillsTestingPage } from './SkillsTestingPage';
@@ -57,6 +57,7 @@ vi.mock('../stores/skillsTestingStore', () => ({
           created_at: '2026-01-15T10:00:00Z',
         },
       ],
+      testsTotal: 1,
       testsLoading: false,
       loadTemplates: mockLoadTemplates,
       loadTests: mockLoadTests,
@@ -120,7 +121,28 @@ describe('SkillsTestingPage', () => {
     it('should load templates and tests on mount', () => {
       renderWithRouter(<SkillsTestingPage />);
       expect(mockLoadTemplates).toHaveBeenCalledWith({ status: 'published' });
-      expect(mockLoadTests).toHaveBeenCalledWith({ candidate_id: 'user-1' });
+      expect(mockLoadTests).toHaveBeenCalledWith({ candidate_id: 'user-1', limit: 25, offset: 0 });
+    });
+  });
+
+  // The history is paged by the server (SKT3-2), so a search in the browser
+  // would only search the page on screen.
+  describe('My Results Tab', () => {
+    it('searches the history on the server', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SkillsTestingPage />);
+
+      await user.click(screen.getByText('My Results'));
+      await user.type(screen.getByPlaceholderText('Search your results...'), 'SCBA');
+
+      await waitFor(() =>
+        expect(mockLoadTests).toHaveBeenLastCalledWith({
+          candidate_id: 'user-1',
+          limit: 25,
+          offset: 0,
+          search: 'SCBA',
+        })
+      );
     });
   });
 

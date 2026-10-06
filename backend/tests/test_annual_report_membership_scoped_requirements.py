@@ -31,7 +31,7 @@ from app.models.training import (
     RequirementType,
     TrainingRequirement,
 )
-from app.models.user import Organization, Position, User, UserStatus
+from app.models.user import Organization, User, UserStatus
 from app.services.compliance_officer_service import AnnualComplianceReportService
 
 pytestmark = [pytest.mark.integration]
@@ -67,7 +67,7 @@ async def _member(db_session, org, membership_type: str) -> User:
     return user
 
 
-async def _member_with_position(db_session, org, position: Position) -> User:
+async def _member_with_rank(db_session, org, rank: str) -> User:
     handle = uuid.uuid4().hex[:10]
     user = User(
         id=str(uuid.uuid4()),
@@ -79,34 +79,17 @@ async def _member_with_position(db_session, org, position: Position) -> User:
         password_hash="x",
         status=UserStatus.ACTIVE,
         membership_type="active",
+        rank=rank,
     )
-    user.positions.append(position)
     db_session.add(user)
     await db_session.flush()
     return user
 
 
-async def _position(db_session, org, name: str) -> Position:
-    position = Position(
-        id=str(uuid.uuid4()),
-        organization_id=org.id,
-        name=name,
-        slug=f"{name.lower()}-{uuid.uuid4().hex[:8]}",
-        permissions=[],
-    )
-    db_session.add(position)
-    await db_session.flush()
-    return position
-
-
-async def _role_scoped_requirement(
-    db_session, org, position: Position
-) -> TrainingRequirement:
+async def _role_scoped_requirement(db_session, org, rank: str) -> TrainingRequirement:
     """A requirement scoped ONLY by `required_roles` -- no
-    `required_membership_types`, `applies_to_all=False`. Reachable through
-    the requirement-config UI (a requirement can name roles without also
-    naming membership types), and the one shape `requirement_applies_to_member`
-    cannot resolve without a member's role ids."""
+    `required_membership_types`, `applies_to_all=False`. `required_roles`
+    holds rank slugs (CMP4-5), matched against `User.rank`."""
     req = TrainingRequirement(
         id=str(uuid.uuid4()),
         organization_id=org.id,
@@ -117,7 +100,7 @@ async def _role_scoped_requirement(
         due_date_type=DueDateType.CALENDAR_PERIOD,
         active=True,
         applies_to_all=False,
-        required_roles=[position.id],
+        required_roles=[rank],
     )
     db_session.add(req)
     await db_session.flush()
@@ -161,8 +144,15 @@ class TestGenerateAnnualReportMembershipScoping:
 
         [row] = report["member_compliance"]
         assert row["requirements_total"] == 0
-        assert row["compliance_pct"] == 100.0
-        assert row["status"] == "compliant"
+        # Nothing grades them: not applicable, outside the org percentage
+        # (TR4-4), rather than a vacuous 100% / compliant.
+        assert row["compliance_pct"] is None
+        assert row["status"] == "not_applicable"
+        summary = report["executive_summary"]
+        assert summary["not_applicable_members"] == 1
+        assert summary["graded_members"] == 0
+        assert summary["fully_compliant_members"] == 0
+        assert summary["overall_compliance_pct"] is None
 
     async def test_member_in_scope_is_still_graded(self, db_session):
         """The other direction, so the test above can't pass by always
@@ -204,21 +194,16 @@ class TestGenerateAnnualReportMembershipScoping:
 
 
 class TestGenerateAnnualReportRoleScopedRequirements:
-    """`requirement_applies_to_member`'s `required_roles` branch only ever
-    matches when the caller passes the member's role ids -- a requirement
-    scoped ONLY by `required_roles` (no `required_membership_types`,
-    `applies_to_all=False`) previously matched nobody here, because neither
-    loop loaded or passed `User.positions`. That silently excluded a
-    role-scoped requirement from every member's denominator (inflating
-    their compliance_pct) while reporting zero applicable members in
-    "Requirement Analysis" -- even for a member who actually held the role."""
+    """A requirement scoped ONLY by `required_roles` (no
+    `required_membership_types`, `applies_to_all=False`) grades the members
+    whose rank it names. It used to be compared against position ids, which
+    nothing writes there, so it graded nobody (CMP4-5)."""
 
-    async def test_member_holding_the_role_is_graded(self, db_session):
+    async def test_member_holding_the_rank_is_graded(self, db_session):
         org = await _org(db_session)
-        position = await _position(db_session, org, "Safety Officer")
-        member = await _member_with_position(db_session, org, position)
+        member = await _member_with_rank(db_session, org, "captain")
         assert member.organization_id == org.id
-        await _role_scoped_requirement(db_session, org, position)
+        await _role_scoped_requirement(db_session, org, "captain")
 
         service = AnnualComplianceReportService(db_session)
         report = await service.generate_annual_report(org.id, year=2026)
@@ -228,35 +213,38 @@ class TestGenerateAnnualReportRoleScopedRequirements:
         assert row["compliance_pct"] == 0.0
         assert row["status"] == "non_compliant"
 
-    async def test_member_without_the_role_is_not_graded(self, db_session):
+    async def test_member_of_another_rank_is_not_graded(self, db_session):
         org = await _org(db_session)
-        position = await _position(db_session, org, "Safety Officer")
-        other_position = await _position(db_session, org, "Driver")
-        member = await _member_with_position(db_session, org, other_position)
+        member = await _member_with_rank(db_session, org, "firefighter")
         assert member.organization_id == org.id
-        await _role_scoped_requirement(db_session, org, position)
+        await _role_scoped_requirement(db_session, org, "captain")
 
         service = AnnualComplianceReportService(db_session)
         report = await service.generate_annual_report(org.id, year=2026)
 
         [row] = report["member_compliance"]
         assert row["requirements_total"] == 0
-        assert row["compliance_pct"] == 100.0
-        assert row["status"] == "compliant"
+        # Nothing grades them: not applicable, outside the org percentage
+        # (TR4-4), rather than a vacuous 100% / compliant.
+        assert row["compliance_pct"] is None
+        assert row["status"] == "not_applicable"
+        summary = report["executive_summary"]
+        assert summary["not_applicable_members"] == 1
+        assert summary["graded_members"] == 0
+        assert summary["fully_compliant_members"] == 0
+        assert summary["overall_compliance_pct"] is None
 
-    async def test_requirement_analysis_counts_only_role_holders(self, db_session):
+    async def test_requirement_analysis_counts_only_rank_holders(self, db_session):
         org = await _org(db_session)
-        position = await _position(db_session, org, "Safety Officer")
-        holder = await _member_with_position(db_session, org, position)
-        other_position = await _position(db_session, org, "Driver")
-        non_holder = await _member_with_position(db_session, org, other_position)
+        holder = await _member_with_rank(db_session, org, "captain")
+        non_holder = await _member_with_rank(db_session, org, "firefighter")
         assert holder.organization_id == org.id
         assert non_holder.organization_id == org.id
-        await _role_scoped_requirement(db_session, org, position)
+        await _role_scoped_requirement(db_session, org, "captain")
 
         service = AnnualComplianceReportService(db_session)
         report = await service.generate_annual_report(org.id, year=2026)
 
         [analysis] = report["requirement_analysis"]
-        assert analysis["members_total"] == 1  # only the role holder
+        assert analysis["members_total"] == 1  # only the rank holder
         assert analysis["members_compliant"] == 0

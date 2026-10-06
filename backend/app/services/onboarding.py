@@ -1107,11 +1107,12 @@ class OnboardingService:
         created at completion, with the ladder edited at step 11 in between.
         Two things follow from that gap.
 
-        It must not resurrect a deleted rank. ``resolve_rank_code`` answers from
-        the built-in seed codes before it consults the organization's rows —
-        right for the rest of the system, wrong here, because a department that
-        removes Captain on the ladder step would otherwise still get an account
-        holding ``captain`` and the static Captain grants that come with it.
+        It must not resurrect a deleted rank. ``resolve_rank_code`` honours the
+        built-in seed codes for an organization with no rank rows — right for
+        a department never seeded, wrong here, because a department that
+        removes every rung on the ladder step would otherwise still get an
+        account holding ``captain`` and the static Captain grants that come
+        with it.
         ``resolve_configured_rank_code`` requires a row, which onboarding always
         has: the ladder is seeded on arrival at that step.
 

@@ -349,8 +349,12 @@ def _names_to_resolve(event, current_user) -> Dict[str, str]:
     return wanted
 
 
-def _build_rsvp_response(rsvp, user=None) -> RSVPResponse:
-    """Build an RSVPResponse from an EventRSVP model and optional User."""
+def _build_rsvp_response(rsvp, user=None, event=None) -> RSVPResponse:
+    """Build an RSVPResponse from an EventRSVP model and optional User.
+
+    ``credited_check_in_at`` needs the event's scheduled start, so it is
+    reported only when the caller passes the event.
+    """
     status_val = rsvp.status.value if hasattr(rsvp.status, "value") else rsvp.status
     return RSVPResponse(
         id=rsvp.id,
@@ -368,6 +372,11 @@ def _build_rsvp_response(rsvp, user=None) -> RSVPResponse:
         checked_out_at=rsvp.checked_out_at,
         attendance_duration_minutes=rsvp.attendance_duration_minutes,
         early_check_in_minutes=rsvp.early_check_in_minutes,
+        credited_check_in_at=(
+            EventService.credited_check_in_time(event, rsvp)
+            if event is not None
+            else None
+        ),
         override_check_in_at=rsvp.override_check_in_at,
         override_check_out_at=rsvp.override_check_out_at,
         override_duration_minutes=rsvp.override_duration_minutes,
@@ -1884,7 +1893,9 @@ async def list_event_rsvps(
         limit=limit,
     )
 
-    return [_build_rsvp_response(rsvp, user=rsvp.user) for rsvp in rsvps]
+    return [
+        _build_rsvp_response(rsvp, user=rsvp.user, event=rsvp.event) for rsvp in rsvps
+    ]
 
 
 @router.get("/{event_id}/attendees", response_model=list[EventAttendeeResponse])

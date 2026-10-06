@@ -398,7 +398,8 @@ export interface ComplianceMemberEntry {
   rank?: string;
   total_requirements: number;
   completed_requirements: number;
-  compliance_percentage: number;
+  /** Null when no requirement grades the member (not applicable). */
+  compliance_percentage: number | null;
   overdue_items: string[];
   upcoming_deadlines: Array<{ name: string; due_date: string }>;
 }
@@ -410,7 +411,10 @@ export interface ComplianceStatusReport {
   fully_compliant_count: number;
   partially_compliant_count: number;
   non_compliant_count: number;
-  overall_compliance_rate: number;
+  /** Members no requirement grades; in no bucket and not in the overall rate. */
+  not_applicable_count?: number;
+  /** Null when no member is graded against anything. */
+  overall_compliance_rate: number | null;
   entries: ComplianceMemberEntry[];
 }
 
@@ -430,6 +434,11 @@ export interface CallVolumeSummary {
   busiest_day: string;
   busiest_day_count: number;
   by_type_totals: Record<string, number>;
+  /**
+   * Runs per apparatus id, served only by the count-only source. These are
+   * unit responses: they legitimately sum to more than `total_calls`.
+   */
+  by_apparatus_runs?: Record<string, number>;
 }
 
 export interface CallVolumeReport {
@@ -453,6 +462,13 @@ export interface CallVolumeReport {
    * count-only source, where nothing yet links two units to one incident.
    */
   counts_unit_responses?: boolean;
+  /** Apparatus id to unit number or name, for `summary.by_apparatus_runs`. */
+  apparatus_labels?: Record<string, string>;
+  /**
+   * Shifts in the period that have started but not been closed out. Calls are
+   * recorded at close-out, so a non-zero count means the figures will grow.
+   */
+  unfinalized_shifts?: number;
 }
 
 // ============================================================================

@@ -13,6 +13,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.schemas.storefront import (
+    STORE_ORDER_MAX_LINES,
     StoreOrderCreate,
     StoreOrderPaymentRecord,
     StoreOrderRefund,
@@ -91,6 +92,26 @@ class TestOrderValidation:
         with pytest.raises(ValidationError):
             StoreOrderCreate.model_validate(
                 {"items": [], "fulfillmentMethod": "pickup"}
+            )
+
+    # SF-11: a cart is capped at STORE_ORDER_MAX_LINES lines.
+    def test_a_cart_at_the_line_cap_is_accepted(self):
+        lines = [
+            {"productId": f"p{i}", "quantity": 1} for i in range(STORE_ORDER_MAX_LINES)
+        ]
+        order = StoreOrderCreate.model_validate(
+            {"items": lines, "fulfillmentMethod": "pickup"}
+        )
+        assert len(order.items) == STORE_ORDER_MAX_LINES
+
+    def test_a_cart_over_the_line_cap_is_refused(self):
+        lines = [
+            {"productId": f"p{i}", "quantity": 1}
+            for i in range(STORE_ORDER_MAX_LINES + 1)
+        ]
+        with pytest.raises(ValidationError, match="at most 200"):
+            StoreOrderCreate.model_validate(
+                {"items": lines, "fulfillmentMethod": "pickup"}
             )
 
     def test_quantity_must_be_positive(self):

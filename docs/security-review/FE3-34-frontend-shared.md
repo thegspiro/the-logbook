@@ -255,7 +255,7 @@ dedicated test coverage of each drain path, is exactly the kind of rushed
 security-sensitive change this rotation's own standing rule warns against.
 Mirrored into `KNOWN_LIMITATIONS.md`.
 
-### FE3-34-2 — HIGH — `authStore.logout()` presents an unauthenticated UI even when the server-side logout call fails — OPEN, FLAGGED
+### FE3-34-2 — HIGH — `authStore.logout()` presents an unauthenticated UI even when the server-side logout call fails — ✅ FIXED 2026-10-05
 
 **What:** `logout()` wraps `authService.logout()` in
 `try { ... } catch { /* Logout errors are non-critical; cookies are cleared
@@ -291,6 +291,19 @@ this rotation's own precedent (Pitfall #16, the shared-device purge) treats
 as highest-stakes to get right on the first try rather than patch
 speculatively in the same pass as three other fixes. Mirrored into
 `KNOWN_LIMITATIONS.md`.
+
+**Fixed 2026-10-05 (owner decision: retry, then block).** `logout()` now
+asks the server up to three times (pauses of 500 ms and 1.5 s,
+`SIGN_OUT_RETRY_DELAYS_MS`). A 401 counts as confirmed, because the server
+holds no live session for those cookies. If no attempt is confirmed, the
+local session is still torn down (the purge still runs), but
+`signOutUnconfirmed` is set and persisted under `sign_out_unconfirmed` in
+`localStorage`, so a reload cannot bring back a plain login screen.
+`SignOutUnconfirmedNotice`, mounted at the app root, covers the screen
+with no dismiss. It tells the member to close every browser window and
+offers **Try signing out again** (`retrySignOut`), which clears the block
+once the server confirms. Tests: `authStore.test.ts` ("logout that the
+server does not confirm") and `SignOutUnconfirmedNotice.test.tsx`.
 
 ### FE3-34-3 — MEDIUM-HIGH — a wrong/expired MFA code was treated as an expired session, purging local data and hard-redirecting instead of showing "invalid code" — ✅ FIXED
 

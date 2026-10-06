@@ -395,6 +395,11 @@ Alex Brooks") and the search field is announced as **Search Members**
 _(2026-09-28)_, and the monitoring view's **Status** column reads "Going"
 rather than "going".
 
+For a member who tapped in early, Edit Times opens on the **scheduled start**,
+which is what they are credited from, rather than on the tap. Saving it
+unchanged therefore changes nothing; to credit time before the start, set the
+earlier time yourself.
+
 ---
 
 ## Guest Check-In for Non-Members (2026-08-09)
@@ -572,6 +577,12 @@ classes, and scheduling or postponing an event request showed either a raw
 internal code or _"An unexpected error occurred"_. All of them now show the
 sentence. (For integrators: the refusal is an HTTP **409**, where some routes
 answered 400 or 404.)
+
+A closed event can still be edited for housekeeping — the title, the
+description, the location — from the ordinary edit form. Only a change to its
+times, its check-in rules or its type is refused, because the credited hours
+were worked out from those. The form re-sends every field each time; a field
+saved unchanged is not counted as a change.
 
 **On a Training event, finalizing writes each member's training record**
 _(2026-09-29)_. Every checked-in member gets a **Completed** record for the

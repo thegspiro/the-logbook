@@ -1,12 +1,15 @@
 /**
  * Scheduling Notifications Panel
  *
- * Configure which scheduling events trigger in-app notifications
- * for department members. Supports preset notification rules.
+ * Shift decline/drop, assignment, shift reminder and equipment check
+ * failure alert settings, all stored in the organization's settings JSON
+ * and each read by the sender it configures.
  *
- * Includes shift decline/drop notification settings and equipment
- * check failure alert settings, both stored in the organization's
- * settings JSON.
+ * Six on/off switches (New Assignment, Assignment Confirmed, Assignment
+ * Declined, Time-Off Approved, Swap Request, Understaffed Shift) used to sit
+ * above these. They stored `schedule_change` notification rules that no
+ * sender consulted, so they were removed (owner decision W36-1, CLAUDE.md
+ * pitfall 19) rather than left implying a notice could be silenced.
  *
  * Extracted from the SchedulingPage monolith for maintainability.
  */
@@ -14,49 +17,9 @@
 import React, { useState, useEffect, useCallback, useId } from 'react';
 import { Bell, Clock, Loader2, Mail, AlertTriangle, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { notificationsService, organizationService } from '../../../services/api';
-import type { NotificationRuleRecord } from '../../../services/api';
+import { organizationService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useEmailListInput } from '../../../hooks/useEmailListInput';
-
-const SCHEDULING_NOTIFICATION_PRESETS = [
-  {
-    name: 'New Assignment',
-    description: 'Notify members when they are assigned to a shift',
-    trigger: 'schedule_change' as const,
-    config: { event: 'assignment_created' },
-  },
-  {
-    name: 'Assignment Confirmed',
-    description: 'Notify shift officers when a member confirms their assignment',
-    trigger: 'schedule_change' as const,
-    config: { event: 'assignment_confirmed' },
-  },
-  {
-    name: 'Assignment Declined',
-    description: 'Alert when a member declines their shift assignment',
-    trigger: 'schedule_change' as const,
-    config: { event: 'assignment_declined' },
-  },
-  {
-    name: 'Time-Off Approved',
-    description: 'Notify members when their time-off request is approved',
-    trigger: 'schedule_change' as const,
-    config: { event: 'timeoff_approved' },
-  },
-  {
-    name: 'Swap Request',
-    description: 'Notify affected members about shift swap requests',
-    trigger: 'schedule_change' as const,
-    config: { event: 'swap_requested' },
-  },
-  {
-    name: 'Understaffed Shift',
-    description: 'Alert when a shift falls below minimum staffing',
-    trigger: 'schedule_change' as const,
-    config: { event: 'understaffed' },
-  },
-];
 
 interface DeclineSettings {
   notify_on_decline: boolean;
@@ -127,11 +90,6 @@ const AVAILABLE_ROLES = [
 
 export const SchedulingNotificationsPanel: React.FC = () => {
   const reminderLookaheadId = useId();
-  const notInEffectId = useId();
-  const [rules, setRules] = useState<NotificationRuleRecord[]>([]);
-  const [loadingRules, setLoadingRules] = useState(true);
-  const [rulesLoadFailed, setRulesLoadFailed] = useState(false);
-  const [creating, setCreating] = useState<string | null>(null);
 
   // Shift decline/drop notification settings (stored in org settings)
   const [declineSettings, setDeclineSettings] = useState<DeclineSettings>(DEFAULT_DECLINE_SETTINGS);
@@ -151,27 +109,6 @@ export const SchedulingNotificationsPanel: React.FC = () => {
   );
   const [loadingEquipAlerts, setLoadingEquipAlerts] = useState(true);
   const [savingEquipAlerts, setSavingEquipAlerts] = useState(false);
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const { rules: data } = await notificationsService.getRules({
-          category: 'scheduling',
-        });
-        setRules(data);
-      } catch (err) {
-        // Worth interrupting for: with no rules loaded every switch reads as
-        // off, so an already-enabled notification looks disabled and toggling
-        // it posts a second rule with the same name instead of flipping the
-        // one that exists.
-        setRulesLoadFailed(true);
-        toast.error(getErrorMessage(err, 'Could not load the notification settings'));
-      } finally {
-        setLoadingRules(false);
-      }
-    };
-    void load();
-  }, []);
 
   // Load org settings (decline + equipment alerts)
   useEffect(() => {
@@ -311,55 +248,6 @@ export const SchedulingNotificationsPanel: React.FC = () => {
   );
   const equipCc = useEmailListInput(equipAlertSettings.cc_emails, onEquipCcChange);
 
-  // CLAUDE.md pitfall 19. These presets store `schedule_change` rules, and the
-  // backend names which triggers a sender actually consults. Until one does,
-  // the switch changes nothing — the notices go out, or not, regardless — so
-  // the panel says so rather than letting "off" imply they are silenced. With
-  // no stored rule to report it, not-in-effect is the answer the backend gave
-  // for every rule of this trigger so far.
-  const presetsInEffect = rules.some((r) => r.trigger === 'schedule_change' && r.enforced);
-
-  const isRuleEnabled = (presetName: string) => {
-    return rules.some((r) => r.name === presetName && r.enabled);
-  };
-
-  const getRuleForPreset = (presetName: string) => {
-    return rules.find((r) => r.name === presetName);
-  };
-
-  const handleToggle = async (preset: (typeof SCHEDULING_NOTIFICATION_PRESETS)[number]) => {
-    const existing = getRuleForPreset(preset.name);
-    if (existing) {
-      try {
-        const updated = await notificationsService.toggleRule(existing.id, !existing.enabled);
-        setRules((prev) => prev.map((r) => (r.id === existing.id ? updated : r)));
-      } catch (err) {
-        // The switch reverts on its own (setRules never runs), so success needs
-        // no toast — but without this the revert is the only feedback, and it
-        // reads as a dead control rather than a failed save.
-        toast.error(getErrorMessage(err, 'Failed to update the notification'));
-      }
-    } else {
-      setCreating(preset.name);
-      try {
-        const newRule = await notificationsService.createRule({
-          name: preset.name,
-          description: preset.description,
-          trigger: preset.trigger,
-          category: 'scheduling',
-          channel: 'in_app',
-          enabled: true,
-          config: preset.config,
-        });
-        setRules((prev) => [...prev, newRule]);
-      } catch (err) {
-        toast.error(getErrorMessage(err, 'Failed to turn on the notification'));
-      } finally {
-        setCreating(null);
-      }
-    }
-  };
-
   return (
     <div className="card-secondary p-4 sm:p-5">
       <div className="mb-1 flex items-center gap-2">
@@ -367,66 +255,11 @@ export const SchedulingNotificationsPanel: React.FC = () => {
         <h3 className="text-theme-text-primary text-base font-semibold">Scheduling Notifications</h3>
       </div>
       <p className="text-theme-text-muted mb-4 text-xs">
-        Choose which scheduling events send members an in-app notification.
+        Choose who is told when shifts are declined, assigned or coming up, and when an equipment check fails.
       </p>
-      {!loadingRules && !rulesLoadFailed && !presetsInEffect && (
-        <p id={notInEffectId} className="alert-warning mb-4 text-xs">
-          Not in effect yet — these switches are saved, but scheduling does not read them. Each of these notices is
-          sent, or not, whatever the switch shows.
-        </p>
-      )}
-
-      {loadingRules ? (
-        <div className="text-theme-text-muted flex items-center gap-2 py-4 text-sm" role="status" aria-live="polite">
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading notification rules...
-        </div>
-      ) : rulesLoadFailed ? (
-        <div className="alert-warning flex items-start gap-2 text-sm" role="alert">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>
-            These settings could not be loaded, so the switches are hidden rather than shown as off. Reload the page to
-            try again.
-          </span>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {SCHEDULING_NOTIFICATION_PRESETS.map((preset) => {
-            const enabled = isRuleEnabled(preset.name);
-            const isCreating = creating === preset.name;
-
-            return (
-              <div
-                key={preset.name}
-                className="bg-theme-surface-hover/50 flex items-center justify-between rounded-lg p-3"
-              >
-                <div className="mr-3 min-w-0">
-                  <p className="text-theme-text-primary text-sm font-medium">{preset.name}</p>
-                  <p className="text-theme-text-muted mt-0.5 text-xs">{preset.description}</p>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={enabled}
-                  aria-label={preset.name}
-                  aria-describedby={presetsInEffect ? undefined : notInEffectId}
-                  onClick={() => {
-                    void handleToggle(preset);
-                  }}
-                  disabled={isCreating}
-                  className={`toggle-track-sm ${
-                    enabled ? 'bg-violet-600' : 'bg-theme-surface-border'
-                  } ${isCreating ? 'opacity-50' : ''}`}
-                >
-                  <span className={`toggle-knob-sm ${enabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
 
       {/* Shift Decline/Drop Notification Settings */}
-      <div className="border-theme-surface-border mt-5 border-t pt-5">
+      <div>
         <div className="mb-1 flex items-center gap-2">
           <Mail className="h-4 w-4 text-amber-500" />
           <h4 className="text-theme-text-primary text-sm font-semibold">Shift Decline / Drop Alerts</h4>

@@ -5,14 +5,20 @@ Shared httpx.AsyncClient with security-hardened defaults:
 - Connection pooling with per-service limits
 - Explicit TLS verification
 - No redirect following (SSRF protection)
+- Direct connections pinned to the address validated at resolution time
+  (SCH-10), so DNS rebinding cannot land a request on an internal host
 - Response body size cap, enforced centrally via a wrapping transport
+- Wall-clock deadline on the whole request, enforced by the client's send()
 """
 
+import asyncio
 import ssl
 import typing
 
 import httpx
 from httpx._utils import get_environment_proxies
+
+from app.utils.ssrf_transport import SSRFSafeAsyncTransport
 
 # INT-7 (security-review, 2026-09-06 pass 3): httpx.Timeout(10.0, connect=5.0)
 # sets a 5s *connect* timeout and a 10s *read* timeout that applies to each
@@ -21,8 +27,9 @@ from httpx._utils import get_environment_proxies
 # keyword value it accepts maps to one of connect/read/write/pool). A remote
 # server that trickles one chunk per 9 seconds resets the read timer on every
 # chunk and can hold the connection open indefinitely while this client
-# accumulates data, well past any "10s total" reading of this constant. See
-# docs/security-review/INT-27-integrations.md and KNOWN_LIMITATIONS.md.
+# accumulates data, well past any "10s total" reading of this constant. The
+# total is capped separately, by INTEGRATION_DEADLINE_SECONDS below. See
+# docs/security-review/INT-27-integrations.md.
 INTEGRATION_TIMEOUT = httpx.Timeout(10.0, connect=5.0)
 
 # Connection pool limits per service type
@@ -40,6 +47,63 @@ INTEGRATION_LIMITS = httpx.Limits(
 # ever fully materialized in memory — with no change needed at any
 # connector's call site. See docs/security-review/INT-27-integrations.md.
 MAX_RESPONSE_SIZE = 10 * 1024 * 1024
+
+
+# Wall-clock cap on one request, from connect to the last byte of a
+# non-streamed body. httpx's Timeout cannot express this (see above), so
+# _DeadlineAsyncClient enforces it around send(). Generous next to the 10s
+# per-read timeout: it exists to end a server that drips a byte every few
+# seconds, not to cut short a slow but honest one.
+INTEGRATION_DEADLINE_SECONDS = 60.0
+
+
+class RequestDeadlineExceeded(httpx.TimeoutException):
+    """Raised when a request outlives INTEGRATION_DEADLINE_SECONDS.
+
+    A TimeoutException, so every connector's existing timeout handling (and
+    every `except httpx.HTTPError`) treats it like the timeouts httpx raises
+    itself.
+    """
+
+
+class _DeadlineAsyncClient(httpx.AsyncClient):
+    """An AsyncClient whose every request has a total-duration deadline.
+
+    ``send()`` is the one method ``get``/``post``/``request`` all reach, and
+    for a non-streamed request it returns only after the body is read, so the
+    deadline covers connect, every read and the drain. A cancelled send closes
+    its response itself.
+    """
+
+    def __init__(self, *args: typing.Any, deadline: float, **kwargs: typing.Any):
+        super().__init__(*args, **kwargs)
+        self._deadline = deadline
+
+    async def send(
+        self,
+        request: httpx.Request,
+        *,
+        stream: bool = False,
+        auth: httpx._types.AuthTypes | httpx._client.UseClientDefault | None = (
+            httpx.USE_CLIENT_DEFAULT
+        ),
+        follow_redirects: bool | httpx._client.UseClientDefault = (
+            httpx.USE_CLIENT_DEFAULT
+        ),
+    ) -> httpx.Response:
+        try:
+            async with asyncio.timeout(self._deadline):
+                return await super().send(
+                    request,
+                    stream=stream,
+                    auth=auth,
+                    follow_redirects=follow_redirects,
+                )
+        except TimeoutError as exc:
+            raise RequestDeadlineExceeded(
+                f"Request exceeded the {self._deadline:g}s deadline",
+                request=request,
+            ) from exc
 
 
 class ResponseTooLargeError(httpx.TransportError):
@@ -243,10 +307,12 @@ def create_integration_client(
     trust_env: bool = True,
     proxy: httpx.Proxy | httpx.URL | str | None = None,
     timeout: httpx.Timeout = INTEGRATION_TIMEOUT,
+    deadline: float = INTEGRATION_DEADLINE_SECONDS,
     headers: typing.Mapping[str, str] | None = None,
     http1: bool = True,
     http2: bool = False,
     cert: ClientCert | None = None,
+    allow_private_destinations: bool = False,
     **kwargs: object,
 ) -> httpx.AsyncClient:
     """Create a security-hardened httpx client for external API calls.
@@ -363,15 +429,37 @@ def create_integration_client(
     the transport's own `cert=` argument; it is not passed to
     `httpx.AsyncClient`, which would only route it into a transport of its
     own that this function never lets it build.
+
+    SCH-10: the direct-connection transport is wrapped in
+    `SSRFSafeAsyncTransport`, which resolves the request's host once, refuses
+    a non-public answer, and connects to that validated address while keeping
+    the original hostname for the `Host` header and TLS SNI/certificate
+    verification. A caller's own `assert_outbound_url_safe()` still runs, but
+    it is no longer the only check: the connection cannot re-resolve onto an
+    internal address after it. `allow_private_destinations=True` is for an
+    operator-configured destination on a trusted private network (audit
+    shipping's `AUDIT_SHIP_ALLOW_PRIVATE_DESTINATION`) and lifts only the
+    public-address requirement — the connection is still pinned.
+
+    Proxy mounts are not pinned. Through a proxy the proxy resolves the
+    destination, so there is no local connection to pin, and httpcore 1.0's
+    CONNECT tunnel takes its TLS server name from the URL rather than the
+    `sni_hostname` extension, so rewriting the URL to an address would break
+    certificate verification. A deployment that routes integrations through
+    an egress proxy relies on that proxy's own destination policy for
+    rebinding; see docs/KNOWN_LIMITATIONS.md.
     """
     verify = _tls_verify(cert, trust_env)
     transport = _SizeLimitedTransport(
-        httpx.AsyncHTTPTransport(
-            verify=verify,
-            trust_env=trust_env,
-            http1=http1,
-            http2=http2,
-            limits=INTEGRATION_LIMITS,
+        SSRFSafeAsyncTransport(
+            transport=httpx.AsyncHTTPTransport(
+                verify=verify,
+                trust_env=trust_env,
+                http1=http1,
+                http2=http2,
+                limits=INTEGRATION_LIMITS,
+            ),
+            allow_private=allow_private_destinations,
         ),
         MAX_RESPONSE_SIZE,
     )
@@ -404,7 +492,8 @@ def create_integration_client(
     merged_headers = httpx.Headers(headers) if headers else httpx.Headers()
     merged_headers["Accept-Encoding"] = "identity"
 
-    return httpx.AsyncClient(
+    return _DeadlineAsyncClient(
+        deadline=deadline,
         timeout=timeout,
         follow_redirects=False,
         transport=transport,

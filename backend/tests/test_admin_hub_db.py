@@ -8,7 +8,7 @@ a filter that counts somebody who left, a supersede check that isn't there.
 """
 
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 
@@ -160,6 +160,26 @@ async def _queue(db_session, org, user, module_key: str = "members") -> dict:
 #: date.today() would be the host's, which differs across the dateline for
 #: part of the day and would make the day-count assertions flake in CI.
 TODAY = datetime.now(timezone.utc).date()
+
+
+@pytest.fixture(autouse=True)
+def _resolvers_share_todays_date(monkeypatch):
+    """Pin the service's "today" to the TODAY these rows are built from.
+
+    TODAY is fixed when the module is imported, and the service reads the
+    clock on every call. A run that crosses UTC midnight — CI starting at
+    23:57 — built rows against one day and graded them against the next, and
+    every age assertion was off by one.
+    """
+    original = AdminHubService._context
+
+    async def pinned(self, user):
+        ctx = await original(self, user)
+        ctx.today = TODAY
+        ctx.local_midnight = datetime.combine(TODAY, time.min, timezone.utc)
+        return ctx
+
+    monkeypatch.setattr(AdminHubService, "_context", pinned)
 
 
 # ── The members queue ───────────────────────────────────────────────────────

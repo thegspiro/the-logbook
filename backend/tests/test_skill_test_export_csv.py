@@ -14,6 +14,7 @@ produced file proves both branches carry it.
 import csv
 import io
 import uuid
+from datetime import date, timedelta
 
 import pytest
 from sqlalchemy import select, text
@@ -125,8 +126,11 @@ async def _export_rows(db_session: AsyncSession, officer: User, detail: str):
         candidate_id=None,
         template_id=None,
         include_practice=False,
-        date_from=None,
-        date_to=None,
+        search=None,
+        # A window around today: the seeded tests were opened just now, and the
+        # export refuses to run without one (SKT3-2).
+        date_from=date.today() - timedelta(days=1),
+        date_to=date.today() + timedelta(days=1),
         db=db_session,
         current_user=officer,
     )

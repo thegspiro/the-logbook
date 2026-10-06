@@ -74,6 +74,7 @@ _DELIBERATELY_KEPT: dict[str, frozenset[str]] = {
             "email_verified",
             "must_change_password",
             "password_changed_at",
+            "password_expiry_notified_at",
             "failed_login_attempts",
             "locked_until",
             "last_login_at",

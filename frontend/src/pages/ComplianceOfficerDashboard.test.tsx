@@ -188,6 +188,65 @@ describe('ComplianceOfficerDashboard', () => {
     expect(mockGetAttestations).toHaveBeenCalledWith();
   });
 
+  describe('attestation form (CS-8)', () => {
+    const attestation = {
+      attestation_id: 'att-1',
+      period_type: 'quarterly',
+      period_year: 2026,
+      period_quarter: 3,
+      compliance_percentage: 81.3,
+      compliance_as_of: '2026-09-30',
+      notes: '',
+      areas_reviewed: [],
+      exceptions: [],
+      attested_at: '2026-10-05T12:00:00Z',
+      attested_by: 'user-1',
+      created_at: '2026-10-05T12:00:00Z',
+    };
+
+    beforeEach(() => {
+      mockCreateAttestation.mockReset();
+      mockCreateAttestation.mockResolvedValue(attestation);
+    });
+
+    it('asks for no percentage and sends the quarter of a quarterly attestation', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<ComplianceOfficerDashboard activeTab="attestations" />);
+
+      await user.click(await screen.findByRole('button', { name: 'New Attestation' }));
+      expect(screen.queryByLabelText('Compliance %')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Quarter')).not.toBeInTheDocument();
+
+      await user.selectOptions(screen.getByLabelText('Period Type'), 'quarterly');
+      await user.selectOptions(screen.getByLabelText('Quarter'), '3');
+      await user.click(screen.getByRole('button', { name: 'Submit Attestation' }));
+
+      expect(mockCreateAttestation).toHaveBeenCalledTimes(1);
+      const sent = mockCreateAttestation.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(sent).toMatchObject({ period_type: 'quarterly', period_quarter: 3 });
+      expect(sent).not.toHaveProperty('compliance_percentage');
+      expect(await screen.findByText('81.3%')).toBeInTheDocument();
+      expect(screen.getByText('as of Sep 30, 2026')).toBeInTheDocument();
+    });
+
+    it('sends no quarter for an annual attestation', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<ComplianceOfficerDashboard activeTab="attestations" />);
+
+      await user.click(await screen.findByRole('button', { name: 'New Attestation' }));
+      await user.click(screen.getByRole('button', { name: 'Submit Attestation' }));
+
+      expect(mockCreateAttestation.mock.calls[0]?.[0]).not.toHaveProperty('period_quarter');
+    });
+
+    it('shows N/A for an attestation with no graded member', async () => {
+      mockGetAttestations.mockResolvedValue([{ ...attestation, compliance_percentage: null }]);
+      renderWithRouter(<ComplianceOfficerDashboard activeTab="attestations" />);
+
+      expect(await screen.findByText('N/A')).toBeInTheDocument();
+    });
+  });
+
   it('displays admin hours and total contributed hours in annual report', async () => {
     renderWithRouter(<ComplianceOfficerDashboard activeTab="annual-report" />);
 

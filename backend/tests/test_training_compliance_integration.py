@@ -122,18 +122,24 @@ async def _insert_cert_requirement(
     source: str = "national",
     due_date: date | None = None,
     recency_days: int | None = None,
+    name_match_until: date | None = None,
 ) -> str:
-    """Insert a CERTIFICATION-type training requirement and return its id."""
+    """Insert a CERTIFICATION-type training requirement and return its id.
+
+    ``name_match_until`` defaults to today: a requirement that existed when
+    the name-match cut-off migration ran, so these tests' records, which
+    carry no course link, still credit it by course name.
+    """
     req_id = _uid()
     await db_session.execute(
         text(
             "INSERT INTO training_requirements "
             "(id, organization_id, name, requirement_type, source, "
             "frequency, due_date_type, due_date, recency_days, "
-            "applies_to_all, active, created_at, updated_at) "
+            "name_match_until, applies_to_all, active, created_at, updated_at) "
             "VALUES (:id, :org_id, :name, :req_type, :source, "
             ":freq, :ddt, :due_date, :recency_days, "
-            "1, 1, :now, :now)"
+            ":name_match_until, 1, 1, :now, :now)"
         ),
         {
             "id": req_id,
@@ -145,6 +151,7 @@ async def _insert_cert_requirement(
             "ddt": "certification_period",
             "due_date": due_date,
             "recency_days": recency_days,
+            "name_match_until": name_match_until or date.today(),
             "now": _NOW,
         },
     )

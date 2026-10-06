@@ -12,7 +12,7 @@
 import { useEffect } from 'react';
 import toast from 'react-hot-toast';
 import api from '../services/apiClient';
-import { flushOne, getGenericItem, isGenericSendable, listGenericPending } from '../utils/genericOfflineQueue';
+import { flushOne, getGenericItem, isGenericSendable, listOwnGenericPending } from '../utils/genericOfflineQueue';
 import { describeNfcSync } from '../modules/inventory/utils/nfcOfflineSync';
 import { usePendingSyncStore } from '../stores/pendingSyncStore';
 
@@ -36,7 +36,10 @@ async function runDrain(): Promise<void> {
   const setStatus = usePendingSyncStore.getState().setStatus;
   const refresh = usePendingSyncStore.getState().refresh;
   try {
-    const items = (await listGenericPending()).filter((item) => isGenericSendable(item));
+    // Only the signed-in member's own items. Another member's (left by a
+    // sign-in purge that failed) and held ones (queued before owners were
+    // recorded) stay where they are without holding up the rest (FE3-34-5).
+    const items = (await listOwnGenericPending()).filter((item) => isGenericSendable(item));
     if (items.length === 0) return;
     setStatus('syncing');
     let succeeded = 0;

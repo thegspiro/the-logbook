@@ -47,7 +47,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { useOnlineStatus } from '../../../hooks/useOnlineStatus';
 import {
   enqueueCheck,
-  listPendingChecks,
+  listOwnPendingChecks,
   dequeueCheck,
   markCheckSubmitted,
   markPhotosUploaded,
@@ -56,6 +56,7 @@ import {
   CHECK_QUEUE_MAX_RETRIES,
   type SyncStatus,
 } from '../../../utils/offlineQueue';
+import { isOwnedByCurrentMember } from '../../../utils/offlineQueueOwner';
 import type {
   EquipmentCheckTemplate,
   CheckTemplateCompartment,
@@ -459,11 +460,18 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     setSyncStatus('syncing');
 
     try {
-      const pending = await listPendingChecks();
+      // The signed-in member's own checks only: another member's, or one queued
+      // before owners were recorded, must not go out under this session
+      // (FE3-34-5).
+      const pending = await listOwnPendingChecks();
       let failed = 0;
       let discarded = 0;
 
       for (const entry of pending) {
+        // Asked again per entry: a sign-out and someone else's sign-in can
+        // land while an earlier entry's photos are still uploading, and this
+        // request would go out with their cookies.
+        if (!isOwnedByCurrentMember(entry)) continue;
         try {
           let checkId = entry.submittedCheckId;
           let submittedItemIds = entry.submittedItemIds;

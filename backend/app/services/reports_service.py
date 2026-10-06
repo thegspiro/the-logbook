@@ -31,7 +31,9 @@ from app.models.training import (
     ProgramEnrollment,
     RequirementProgress,
     RequirementProgressStatus,
+    Shift,
     ShiftCompletionReport,
+    ShiftStatus,
     TrainingCourse,
     TrainingRecord,
     TrainingRequirement,
@@ -44,6 +46,7 @@ from app.services.training_compliance import (
     member_join_date,
     requirement_applies_to_user,
 )
+from app.utils.apparatus_ref import resolve_apparatus_labels
 from app.utils.hours import (
     hours_from_minutes,
     round_hours_exact,
@@ -1204,6 +1207,7 @@ class ReportsService:
         fully_compliant = 0
         partially_compliant = 0
         non_compliant = 0
+        not_applicable = 0
         # The department's date is needed only to judge a catch-up period, so
         # an org that has configured none is spared the lookup.
         today = (
@@ -1237,15 +1241,19 @@ class ReportsService:
                 graded.append(rid)
             total_reqs = len(graded)
             completed_count = sum(1 for rid in graded if rid in completed_ids)
+            # None for a member nothing grades: they are not applicable, and
+            # sit outside every bucket and the overall rate (TR4-4).
             pct = (
-                round(completed_count / total_reqs * 100, 1) if total_reqs > 0 else 100
+                round(completed_count / total_reqs * 100, 1) if total_reqs > 0 else None
             )
 
             overdue_items = [
                 req_map[rid].name for rid in graded if rid not in completed_ids
             ]
 
-            if pct >= 100:
+            if pct is None:
+                not_applicable += 1
+            elif pct >= 100:
                 fully_compliant += 1
             elif pct > 0:
                 partially_compliant += 1
@@ -1266,16 +1274,21 @@ class ReportsService:
                 }
             )
 
-        report_entries.sort(key=lambda e: e["compliance_percentage"])
-
-        overall_rate = (
-            round(
-                sum(e["compliance_percentage"] for e in report_entries)
-                / len(report_entries),
-                1,
+        # Not-applicable members last: they have no percentage to rank by.
+        report_entries.sort(
+            key=lambda e: (
+                e["compliance_percentage"] is None,
+                e["compliance_percentage"] or 0,
             )
-            if report_entries
-            else 0
+        )
+
+        graded_pcts = [
+            e["compliance_percentage"]
+            for e in report_entries
+            if e["compliance_percentage"] is not None
+        ]
+        overall_rate = (
+            round(sum(graded_pcts) / len(graded_pcts), 1) if graded_pcts else None
         )
 
         return {
@@ -1285,6 +1298,7 @@ class ReportsService:
             "fully_compliant_count": fully_compliant,
             "partially_compliant_count": partially_compliant,
             "non_compliant_count": non_compliant,
+            "not_applicable_count": not_applicable,
             "overall_compliance_rate": overall_rate,
             "entries": report_entries,
         }
@@ -1323,9 +1337,53 @@ class ReportsService:
         call_service = CallTrackingService(self.db)
         tracking = await call_service.get_settings(str(organization_id))
         if tracking.get("mode") == CallTrackingMode.COUNT_ONLY:
-            return await self._generate_call_volume_from_counts(
+            report = await self._generate_call_volume_from_counts(
                 organization_id, period_start, period_end, call_service
             )
+        else:
+            report = await self._generate_call_volume_from_reports(
+                organization_id, period_start, period_end, call_service
+            )
+        # Both sources are written when a shift is finalized, so a period
+        # read before its last shift is closed out under-reports. Say so
+        # rather than present a short number as final (SCHED-11).
+        report["unfinalized_shifts"] = await self._count_unfinalized_shifts(
+            organization_id, period_start, period_end
+        )
+        return report
+
+    async def _count_unfinalized_shifts(
+        self, organization_id: UUID, period_start: date, period_end: date
+    ) -> int:
+        """Shifts in the period that have started but not been closed out.
+
+        A shift that has not started yet has no calls to be missing, and a
+        cancelled one never will.
+        """
+        return int(
+            (
+                await self.db.execute(
+                    select(func.count(Shift.id)).where(
+                        Shift.organization_id == str(organization_id),
+                        Shift.shift_date >= period_start,
+                        Shift.shift_date <= period_end,
+                        Shift.start_time <= datetime.now(timezone.utc),
+                        Shift.is_finalized.is_(False),
+                        Shift.status != ShiftStatus.CANCELLED,
+                    )
+                )
+            ).scalar()
+            or 0
+        )
+
+    async def _generate_call_volume_from_reports(
+        self,
+        organization_id: UUID,
+        period_start: date,
+        period_end: date,
+        call_service: "CallTrackingService",
+    ) -> Dict[str, Any]:
+        """Call volume for a department on detailed tracking."""
 
         reports_result = await self.db.execute(
             select(ShiftCompletionReport).where(
@@ -1488,6 +1546,12 @@ class ReportsService:
                 # a call, which is normal and not an error to reconcile away.
                 "by_apparatus_runs": unit_runs,
             },
+            # The run counts are keyed by apparatus id, which resolves against
+            # either apparatus table (see utils/apparatus_ref). A unit since
+            # deleted has no label here and the screen says so.
+            "apparatus_labels": await resolve_apparatus_labels(
+                self.db, unit_runs.keys(), organization_id
+            ),
             # A slug is a storage key, not something to show an officer.
             # Retired types are in here too, so a report covering last year
             # still labels a type the department has since stopped offering.

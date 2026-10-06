@@ -203,6 +203,7 @@ function mapPipelineResponse(data: BackendPipelineResponse): Pipeline {
     conversion_config: data.conversion_config,
     public_status_enabled: data.public_status_enabled ?? false,
     public_show_future_stages: data.public_show_future_stages ?? true,
+    auto_transfer_on_approval: data.auto_transfer_on_approval ?? false,
     report_stage_groups: data.report_stage_groups ?? undefined,
     stages: (data.steps || []).map(mapStepToStage),
     applicant_count: data.prospect_count ?? 0,
@@ -530,6 +531,8 @@ export const pipelineService = {
       is_template: data.is_template ?? false,
       inactivity_config: data.inactivity_config,
     };
+    if (data.auto_transfer_on_approval !== undefined)
+      payload.auto_transfer_on_approval = data.auto_transfer_on_approval;
     const response = await api.post<BackendPipelineResponse>('/prospective-members/pipelines', payload);
     return mapPipelineResponse(response.data);
   },
@@ -546,6 +549,8 @@ export const pipelineService = {
     if (data.public_status_enabled !== undefined) payload.public_status_enabled = data.public_status_enabled;
     if (data.public_show_future_stages !== undefined)
       payload.public_show_future_stages = data.public_show_future_stages;
+    if (data.auto_transfer_on_approval !== undefined)
+      payload.auto_transfer_on_approval = data.auto_transfer_on_approval;
 
     const response = await api.put<BackendPipelineResponse>(`/prospective-members/pipelines/${pipelineId}`, payload);
     return mapPipelineResponse(response.data);
@@ -847,7 +852,12 @@ export const applicantService = {
   async advanceStage(applicantId: string, data?: AdvanceStageRequest): Promise<Applicant> {
     const response = await api.post<BackendProspectResponse>(
       `/prospective-members/prospects/${applicantId}/advance`,
-      data ? { notes: data.notes } : {}
+      data
+        ? {
+            notes: data.notes,
+            ...(data.completed_items ? { completed_items: data.completed_items } : {}),
+          }
+        : {}
     );
     return mapProspectToApplicant(response.data);
   },

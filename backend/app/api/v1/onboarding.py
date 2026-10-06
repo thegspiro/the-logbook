@@ -2742,6 +2742,26 @@ async def get_session_data(request: Request, db: AsyncSession = Depends(get_db))
     }
 
 
+async def _audit_reset_durably(event_type: str, client_ip: str, message: str) -> None:
+    """Write one reset audit event in a transaction of its own, and commit it."""
+    from app.core.audit import log_audit_event
+    from app.core.database import async_session_factory
+
+    async with async_session_factory() as audit_db:
+        entry = await log_audit_event(
+            db=audit_db,
+            event_type=event_type,
+            event_category="onboarding",
+            severity="warning",
+            ip_address=client_ip,
+            event_data={"action": "full_reset", "message": message},
+        )
+        if entry is None:
+            # create_log_entry swallows its own failures and returns None.
+            raise RuntimeError(f"audit log refused {event_type}")
+        await audit_db.commit()
+
+
 @router.post("/reset", dependencies=[Depends(_rate_limit_onboarding_reset)])
 async def reset_onboarding(
     request: Request,
@@ -2783,21 +2803,27 @@ async def reset_onboarding(
         "System-owner authentication is required to reset onboarding.",
     )
 
+    # The attempt is recorded and committed in its own transaction before any
+    # row is deleted (owner decision ONB-8). Written on the request's session,
+    # a failed reset rolled the record of its own attempt back with the data.
+    # No durable record, no reset: this is the one operation that erases
+    # everything else the audit log could have said.
+    client_ip = get_client_ip(request)
     try:
-        # Log the reset BEFORE deletion to ensure we capture it
-        from app.core.audit import log_audit_event
-
-        await log_audit_event(
-            db=db,
-            event_type="onboarding.reset_initiated",
-            event_category="onboarding",
-            severity="warning",
-            ip_address=get_client_ip(request),
-            event_data={
-                "action": "full_reset",
-                "message": "Onboarding reset initiated - clearing all data",
-            },
+        await _audit_reset_durably(
+            "onboarding.reset_initiated",
+            client_ip,
+            "Onboarding reset initiated - clearing all data",
         )
+    except Exception as e:
+        logger.error(f"Refusing onboarding reset: audit write failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reset onboarding. Please check the server logs for details.",
+        )
+
+    try:
+        from app.core.audit import log_audit_event
 
         # Delete in order to respect foreign key constraints
         # 1. Delete onboarding sessions
@@ -2845,7 +2871,7 @@ async def reset_onboarding(
             event_type="onboarding.reset_completed",
             event_category="onboarding",
             severity="warning",
-            ip_address=get_client_ip(request),
+            ip_address=client_ip,
             event_data={
                 "action": "full_reset",
                 "message": "Onboarding reset completed - all data cleared successfully",
@@ -2873,6 +2899,14 @@ async def reset_onboarding(
     except Exception as e:
         await db.rollback()
         logger.error(f"Failed to reset onboarding: {e}")
+        try:
+            await _audit_reset_durably(
+                "onboarding.reset_failed",
+                client_ip,
+                "Onboarding reset failed - nothing was deleted",
+            )
+        except Exception as audit_error:
+            logger.error(f"Could not record the failed onboarding reset: {audit_error}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to reset onboarding. Please check the server logs for details.",

@@ -920,6 +920,7 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Saw:** 20 ballots sent and accepted by token; every member's in-app eligibility `is_eligible: false` "restricted to a specific voter list"; cleared only by rollback → PATCH `null` → reopen (step 8).
 **Where:** `election_service.py:1214` (`is not None`) against `:2528`, `:3174`, `:6392` (truthiness); `POST /elections`.
 **Fix:** round 2 — `[]` normalised to `None` on create and update by a schema validator. Test: `backend/tests/test_w50_empty_eligible_list.py`.
+**Stored rows (2026-10-05, owner decision):** migration `9a4c1e7b5d22` sets every stored `[]` to NULL and logs the election ids. Test: `test_eligible_voters_empty_list_migration.py`.
 
 ### W50-42 — MED — A 60-character write-in of punctuation returns 500; write-ins render double-escaped — ✅ FIXED (S15, `3de83db`) · confirmed live · frontend half: ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
 
@@ -927,6 +928,7 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Saw:** `&lt;script&gt;…` stored and shown literally; the long one → 500, log `DataError (1406, "Data too long for column 'name'")`.
 **Where:** `election_service.py` ~8245 (HTML-escaped into `String(200)`); `CandidateManagement.tsx`; `ElectionResults.tsx`.
 **Fix:** S15 stores the name as typed (`test_w50_s15.py`; S16 is the test-ballot exemption, see W50-18). **Confirmed live** (`notes/CONFIRM-backend.md`, CONFIRM-12/16): a 62-character write-in of quotes and angle brackets → 201, stored and returned exactly once and unescaped in `/candidates`, `/results` and the certified PDF. The render check that a stored `<b>` shows as text once is frontend round 2.
+**Stored rows (2026-10-05, owner decision):** migration `b3e8d5a1c947` unescapes every stored write-in name that `html.unescape` changes and logs the candidate ids. Test: `test_unescape_write_in_names_migration.py`.
 
 ### W50-43 — MED — Every ballot page load sends the lookup twice, halving the shared 10/min budget — ✅ FIXED (frontend round 2; Vitest-covered, gated, not re-driven on screen — see Not driven)
 

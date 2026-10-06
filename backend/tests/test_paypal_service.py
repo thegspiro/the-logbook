@@ -165,3 +165,21 @@ class TestPayPalConfigSchema:
     def test_rejects_unknown_keys(self):
         with pytest.raises(ValidationError, match="secret_backdoor"):
             PayPalConfig(secret_backdoor="x")
+
+
+class TestWebhookAutoApplyReader:
+    """SF-auto-apply: the webhook reads the stored choice, defaulting on."""
+
+    def test_reads_the_stored_choice_and_defaults_on(self):
+        from app.api.public.paypal_webhook import paypal_auto_apply
+
+        assert paypal_auto_apply({"auto_apply_payments": False}) is False
+        assert paypal_auto_apply({"auto_apply_payments": True}) is True
+        assert paypal_auto_apply({}) is True
+
+    def test_the_schema_and_the_webhook_share_one_default(self):
+        from app.api.public.paypal_webhook import paypal_auto_apply
+        from app.schemas.integration import PAYPAL_AUTO_APPLY_DEFAULT, PayPalConfig
+
+        assert PayPalConfig().auto_apply_payments is PAYPAL_AUTO_APPLY_DEFAULT
+        assert paypal_auto_apply({}) is PAYPAL_AUTO_APPLY_DEFAULT

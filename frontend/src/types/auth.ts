@@ -79,6 +79,8 @@ export interface PasswordResetRequestResponse {
   expires_in_minutes?: number | undefined;
   /** Set when the department signs in through an outside provider, and no link is sent. */
   auth_provider?: string | undefined;
+  /** Set when the department's email is off, and no link is sent. */
+  email_disabled?: boolean | undefined;
 }
 
 export interface PasswordResetConfirm {

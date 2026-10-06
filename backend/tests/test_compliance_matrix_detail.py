@@ -308,8 +308,14 @@ class TestRequirementTargetHelpers:
 
 
 class TestClassifyStanding:
-    def test_no_requirements_is_compliant(self):
-        assert classify_standing(0, 0) == ("compliant", 100.0)
+    def test_no_requirements_is_not_applicable(self):
+        """An empty tally is not a pass: the member is not applicable, with
+        no percentage to count in any department figure (TR4-4)."""
+        assert classify_standing(0, 0) == ("not_applicable", None)
+        assert classify_standing(0, 0, threshold_type="all_required") == (
+            "not_applicable",
+            None,
+        )
 
     def test_percentage_mode(self):
         assert classify_standing(6, 6)[0] == "compliant"

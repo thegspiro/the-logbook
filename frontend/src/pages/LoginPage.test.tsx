@@ -34,6 +34,7 @@ vi.mock('../services/api', () => ({
   authService: {
     getGoogleOAuthUrl: () => '/api/v1/auth/google',
     getMicrosoftOAuthUrl: () => '/api/v1/auth/microsoft',
+    getAuthentikOAuthUrl: () => '/api/v1/auth/oauth/authentik',
   },
 }));
 
@@ -168,5 +169,45 @@ describe('LoginPage second-factor step', () => {
     renderLogin();
     fireEvent.click(await screen.findByRole('button', { name: 'Use a recovery code' }));
     expect(screen.getByLabelText('Recovery code')).toHaveAttribute('placeholder', 'xxxxx-xxxxx-xxxxx-xxxxx');
+  });
+});
+
+describe('LoginPage single sign-on (W01-11)', () => {
+  const answer = (oauth: Record<string, boolean>) => (url: string) =>
+    url === '/api/v1/onboarding/status'
+      ? Promise.resolve({ data: { needs_onboarding: false } })
+      : url === '/api/v1/auth/branding'
+        ? Promise.resolve({ data: { name: null, logo: null } })
+        : Promise.resolve({ data: oauth });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGet.mockReset();
+  });
+
+  it('offers Authentik when the server has it set up', async () => {
+    mockGet.mockImplementation(answer({ googleEnabled: false, microsoftEnabled: false, authentikEnabled: true }));
+    renderLogin();
+
+    expect(await screen.findByRole('button', { name: /authentik sso/i })).toBeInTheDocument();
+  });
+
+  it('offers no Authentik button otherwise, including from an older server', async () => {
+    mockGet.mockImplementation(answer({ googleEnabled: false, microsoftEnabled: false }));
+    renderLogin();
+
+    expect(await screen.findByText(/Sign in to your account/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /authentik sso/i })).not.toBeInTheDocument();
+  });
+
+  it('explains a provider that could not be reached', async () => {
+    mockGet.mockImplementation(answer({ googleEnabled: false, microsoftEnabled: false, authentikEnabled: true }));
+    render(
+      <MemoryRouter initialEntries={['/login?error=provider_unavailable']}>
+        <LoginPage />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText(/sign-in service could not be reached/i)).toBeInTheDocument();
   });
 });

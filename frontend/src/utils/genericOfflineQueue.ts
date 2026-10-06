@@ -14,10 +14,11 @@
 import type { AxiosInstance } from 'axios';
 import { openIndexedDb } from './offlineDb';
 import { isNetworkError } from './errorHandling';
+import { isOwnedByCurrentMember, requireQueueOwner, type OwnedQueueEntry } from './offlineQueueOwner';
 
 export type GenericQueueKind = 'training-submission' | 'event-rsvp' | 'nfc-put-away' | 'nfc-shelf-audit';
 
-export interface GenericQueuedItem {
+export interface GenericQueuedItem extends OwnedQueueEntry {
   id: string;
   kind: GenericQueueKind;
   url: string;
@@ -75,6 +76,7 @@ export async function enqueueGeneric(
 ): Promise<GenericQueuedItem> {
   const entry: GenericQueuedItem = {
     id: queueId(),
+    ownerId: requireQueueOwner(),
     kind,
     url,
     body,
@@ -91,13 +93,32 @@ export async function enqueueGeneric(
   return entry;
 }
 
-/** Write an entry as given, replacing any with the same id. */
+/**
+ * Write an entry as the signed-in member's, replacing their own entry with the
+ * same id.
+ *
+ * The owner is stamped here rather than trusted from `item`, and an existing
+ * entry that is not the member's own — another member's, or one held for
+ * review — is never overwritten: rewriting it would hand it to this member
+ * without the review the hold exists for (FE3-34-5).
+ */
 export async function putGenericItem(item: GenericQueuedItem): Promise<void> {
+  const ownerId = requireQueueOwner();
   const db = await openDB();
   await new Promise<void>((resolve, reject) => {
-    const req = txStore(db, 'readwrite').put(item);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
+    const store = txStore(db, 'readwrite');
+    const read = store.get(item.id);
+    read.onerror = () => reject(read.error ?? new Error('IndexedDB request failed'));
+    read.onsuccess = () => {
+      const existing = read.result as GenericQueuedItem | undefined;
+      if (existing && existing.ownerId !== ownerId) {
+        reject(new Error('This queued item belongs to another session and was not changed'));
+        return;
+      }
+      const req = store.put({ ...item, ownerId });
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
+    };
   });
 }
 
@@ -116,6 +137,11 @@ export function isGenericSendable(item: GenericQueuedItem, now: number = Date.no
   return now - (item.updatedAt ?? item.queuedAt) >= GENERIC_HELD_STALE_MS;
 }
 
+/**
+ * Every queued item on this device, oldest first, whoever queued it.
+ *
+ * Not for draining: use listOwnGenericPending (FE3-34-5).
+ */
 export async function listGenericPending(): Promise<GenericQueuedItem[]> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -123,6 +149,11 @@ export async function listGenericPending(): Promise<GenericQueuedItem[]> {
     req.onsuccess = () => resolve((req.result as GenericQueuedItem[]).sort((a, b) => a.queuedAt - b.queuedAt));
     req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
   });
+}
+
+/** The signed-in member's queued items, oldest first — the only ones to send. */
+export async function listOwnGenericPending(): Promise<GenericQueuedItem[]> {
+  return (await listGenericPending()).filter((item) => isOwnedByCurrentMember(item));
 }
 
 export async function dequeueGeneric(id: string): Promise<void> {
@@ -152,12 +183,35 @@ export async function markGenericRetry(id: string, errorMessage: string): Promis
   return existing;
 }
 
+/**
+ * The number of the signed-in member's items waiting to send — not another
+ * member's, and not held ones, since neither will sync under this session.
+ */
 export async function genericPendingCount(): Promise<number> {
+  return (await listOwnGenericPending()).length;
+}
+
+/**
+ * Give an item queued before owners were recorded to `ownerId`, so it sends.
+ * Read and write share one transaction, and an item that already has an owner
+ * is never reassigned. Returns whether the item was claimed.
+ */
+export async function claimUntaggedGeneric(id: string, ownerId: string): Promise<boolean> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const req = txStore(db, 'readonly').count();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
+    const store = txStore(db, 'readwrite');
+    const read = store.get(id);
+    read.onerror = () => reject(read.error ?? new Error('IndexedDB request failed'));
+    read.onsuccess = () => {
+      const existing = read.result as GenericQueuedItem | undefined;
+      if (!existing || existing.ownerId) {
+        resolve(false);
+        return;
+      }
+      const req = store.put({ ...existing, ownerId });
+      req.onsuccess = () => resolve(true);
+      req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
+    };
   });
 }
 
@@ -181,6 +235,10 @@ export async function flushOne(
   axios: AxiosInstance,
   onSynced?: (data: unknown) => void
 ): Promise<boolean> {
+  // The drain already sends only the member's own items; this is checked again
+  // at the moment of sending because the member can change between the list
+  // and the send, and the request goes out with whoever's cookies are live.
+  if (!isOwnedByCurrentMember(item)) return false;
   try {
     const response = await axios.post<unknown>(item.url, item.body);
     await dequeueGeneric(item.id);

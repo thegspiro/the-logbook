@@ -63,3 +63,68 @@ describe('getCallVolumeExportData', () => {
     expect(columns.map((c) => c.header)).toContain('mutual aid');
   });
 });
+
+describe('unit responses in the export', () => {
+  it('names the total column for what it counts', () => {
+    const { columns } = getCallVolumeExportData(report({ counts_unit_responses: true }));
+    const headers = columns.map((c) => c.header);
+    expect(headers).toContain('Unit Responses');
+    expect(headers).not.toContain('Total Calls');
+  });
+
+  it('keeps "Total Calls" for deduplicated incident counts', () => {
+    const { columns } = getCallVolumeExportData(report());
+    expect(columns.map((c) => c.header)).toContain('Total Calls');
+  });
+});
+
+describe('runs by unit', () => {
+  const withRuns = (labels?: Record<string, string>) =>
+    report({
+      counts_unit_responses: true,
+      summary: { ...report().summary, by_apparatus_runs: { 'app-1': 2, 'app-2': 4 } },
+      ...(labels ? { apparatus_labels: labels } : {}),
+    });
+
+  it('lists each unit by its label, busiest first', () => {
+    render(<CallVolumeRenderer data={withRuns({ 'app-1': 'E1', 'app-2': 'M2' })} />);
+    expect(screen.getByText('Runs by Unit:')).toBeInTheDocument();
+    const chips = screen.getAllByText(/^(E1|M2):/).map((el) => el.textContent);
+    expect(chips).toEqual(['M2: 4', 'E1: 2']);
+  });
+
+  it('says a unit is gone rather than printing its id', () => {
+    render(<CallVolumeRenderer data={withRuns({ 'app-2': 'M2' })} />);
+    expect(screen.getByText(/Removed unit/)).toBeInTheDocument();
+    expect(screen.queryByText(/app-1/)).not.toBeInTheDocument();
+  });
+
+  it('is absent when the source sends no run counts', () => {
+    render(<CallVolumeRenderer data={report()} />);
+    expect(screen.queryByText('Runs by Unit:')).not.toBeInTheDocument();
+  });
+});
+
+describe('preliminary marker', () => {
+  it('says the figures are preliminary while shifts are still open', () => {
+    render(<CallVolumeRenderer data={report({ unfinalized_shifts: 2 })} />);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      /Preliminary\..*2 shifts in this period have not been closed out/
+    );
+  });
+
+  it('uses the singular for one shift', () => {
+    render(<CallVolumeRenderer data={report({ unfinalized_shifts: 1 })} />);
+    expect(screen.getByRole('status')).toHaveTextContent(/1 shift in this period has not/);
+  });
+
+  it('says nothing once every shift is closed out', () => {
+    render(<CallVolumeRenderer data={report({ unfinalized_shifts: 0 })} />);
+    expect(screen.queryByText(/Preliminary/)).not.toBeInTheDocument();
+  });
+
+  it('says nothing for an older backend that does not send the count', () => {
+    render(<CallVolumeRenderer data={report()} />);
+    expect(screen.queryByText(/Preliminary/)).not.toBeInTheDocument();
+  });
+});

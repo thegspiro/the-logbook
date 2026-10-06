@@ -46,6 +46,7 @@ import {
   ClipboardCheck,
   CheckCircle2,
   AlertTriangle,
+  Info,
   LogIn,
   LogOut,
   QrCode,
@@ -1717,7 +1718,17 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                           {completedEquipmentChecks.length === 1 ? '' : 's'} completed
                         </span>
                       </div>
-                    ) : null}
+                    ) : (
+                      // Said rather than omitted: with no row at all the section
+                      // looked complete, and an officer could not tell "nothing
+                      // to check" from "checks not reported".
+                      <div className="border-theme-surface-border bg-theme-surface flex items-center gap-2 rounded-md border p-2">
+                        <Info className="text-theme-text-muted h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span className="text-theme-text-secondary">
+                          No end-of-shift equipment checklist applies to this shift
+                        </span>
+                      </div>
+                    )}
 
                     {/* Attendance check-in/out summary */}
                     {(() => {

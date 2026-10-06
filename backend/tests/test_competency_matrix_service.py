@@ -31,6 +31,7 @@ def _req(req_type, frequency=RequirementFrequency.ONE_TIME, **kw):
         training_type=kw.get("training_type"),
         name=kw.get("name", "Req"),
         registry_code=kw.get("registry_code"),
+        name_match_until=kw.get("name_match_until"),
         required_hours=kw.get("required_hours"),
         required_courses=kw.get("required_courses"),
         include_current_month=kw.get("include_current_month"),
@@ -130,10 +131,19 @@ class TestCertificationStatus:
         assert out["status"] == "current"
         assert out["expiration_date"] is None
 
-    def test_matches_by_name_substring(self):
-        req = _req(RequirementType.CERTIFICATION, name="EMT")
+    def test_matches_by_name_substring_for_a_legacy_record(self):
+        req = _req(RequirementType.CERTIFICATION, name="EMT", name_match_until=TODAY)
         rec = _rec(TODAY - timedelta(days=10), None, course_name="State EMT-B Course")
         assert _evaluate(req, [rec])["status"] == "current"
+
+    def test_no_name_match_after_the_cutoff(self):
+        req = _req(
+            RequirementType.CERTIFICATION,
+            name="EMT",
+            name_match_until=TODAY - timedelta(days=30),
+        )
+        rec = _rec(TODAY - timedelta(days=10), None, course_name="State EMT-B Course")
+        assert _evaluate(req, [rec])["status"] != "current"
 
     def test_picks_most_recent_record(self):
         old = _rec(

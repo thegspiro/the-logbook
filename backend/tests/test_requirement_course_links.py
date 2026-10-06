@@ -14,6 +14,7 @@ Two behaviours are covered:
 DB is mocked; no MySQL.
 """
 
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -29,6 +30,7 @@ def _requirement(**overrides):
         "training_type": None,
         "registry_code": None,
         "required_courses": None,
+        "name_match_until": date(2026, 10, 5),
     }
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -40,6 +42,7 @@ def _record(**overrides):
         "course_name": None,
         "training_type": None,
         "certification_number": None,
+        "completion_date": date(2026, 1, 1),
     }
     base.update(overrides)
     return SimpleNamespace(**base)

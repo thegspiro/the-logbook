@@ -1564,11 +1564,15 @@ Generated reports land in the **Report History** list beneath it, each row
 carrying its period, when it was generated, how long it took, and the headline
 compliance figure.
 
-> **Monthly and annual currently produce the same figures.** A monthly report is
-> generated from the whole year and then labelled with the month — the period
-> label, the stored month and the history row are right, the numbers behind them
-> are the year's. Read a monthly report as a year-to-date one until this is
-> resolved; it is recorded in `docs/KNOWN_LIMITATIONS.md`.
+> **What a monthly report counts.** Training hours, admin hours, exercises,
+> effectiveness evaluations and record completeness are the month's. Each
+> member's standing is the one the compliance screen would have shown on the
+> month's last day, counting only training completed by then — so for an annual
+> requirement it is the progress made so far that year, and a member who met it
+> in March is still compliant in July. A month still in progress is graded as of
+> today. ISO readiness stays a figure for the whole year. Monthly reports
+> generated before 2026-10-04 hold the whole year's figures under the month's
+> label.
 
 > **0% compliant is not necessarily a fault.** With the compliant threshold at
 > 100% — the default — a member missing one requirement out of the department's

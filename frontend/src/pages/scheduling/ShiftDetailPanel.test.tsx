@@ -136,6 +136,19 @@ describe('ShiftDetailPanel close-out equipment checks', () => {
     expect(screen.getByText(/1 end-of-shift checklist still pending/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Close out shift' })).toBeDisabled();
   });
+
+  it('says when no end-of-shift checklist applies, rather than leaving the row out', async () => {
+    // A ladder shift in a department with only an engine checklist: before
+    // this the equipment row vanished and the section looked complete.
+    vi.mocked(equipmentCheckService.getShiftChecklists).mockResolvedValueOnce([]);
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftDetailPanel shift={shift as never} onClose={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Close out shift' }));
+
+    expect(screen.getByText('No end-of-shift equipment checklist applies to this shift')).toBeInTheDocument();
+    expect(screen.queryByText(/checklist still pending/)).not.toBeInTheDocument();
+  });
 });
 
 /**

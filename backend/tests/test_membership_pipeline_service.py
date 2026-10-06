@@ -934,3 +934,57 @@ class TestElectionVoteGate:
         mock_advance.assert_not_called()
         db.add.assert_not_called()
         db.commit.assert_not_called()
+
+
+class TestAdvanceCarriesChecklistTicks:
+    """The drawer's Advance completes a checklist stage, so the ticks have to
+    travel with it: complete-step grades them on the same call."""
+
+    def _prospect(self):
+        steps = [
+            SimpleNamespace(id="step-1", sort_order=1, name="Onboarding"),
+            SimpleNamespace(id="step-2", sort_order=2, name="Probation"),
+        ]
+        return SimpleNamespace(
+            current_step_id="step-1", pipeline=SimpleNamespace(steps=steps)
+        )
+
+    async def test_ticks_reach_complete_step_as_an_action_result(self):
+        service = MembershipPipelineService(AsyncMock())
+        service.get_prospect = AsyncMock(return_value=self._prospect())
+        service.complete_step = AsyncMock(return_value="done")
+
+        await service.advance_prospect(
+            "p-1", "org-1", "officer-1", completed_items=["Gear issued"]
+        )
+
+        kwargs = service.complete_step.await_args.kwargs
+        assert kwargs["step_id"] == "step-1"
+        assert kwargs["action_result"] == {"completed_items": ["Gear issued"]}
+
+    async def test_an_advance_without_ticks_sends_none(self):
+        service = MembershipPipelineService(AsyncMock())
+        service.get_prospect = AsyncMock(return_value=self._prospect())
+        service.complete_step = AsyncMock(return_value="done")
+
+        await service.advance_prospect("p-1", "org-1", "officer-1")
+
+        assert service.complete_step.await_args.kwargs["action_result"] is None
+
+
+class TestAdvanceRequestBoundsTicks:
+    def test_an_overlong_item_is_refused(self):
+        from pydantic import ValidationError
+
+        from app.schemas.membership_pipeline import AdvanceProspectRequest
+
+        with pytest.raises(ValidationError, match="255"):
+            AdvanceProspectRequest(completed_items=["x" * 256])
+
+    def test_too_many_items_are_refused(self):
+        from pydantic import ValidationError
+
+        from app.schemas.membership_pipeline import AdvanceProspectRequest
+
+        with pytest.raises(ValidationError):
+            AdvanceProspectRequest(completed_items=["x"] * 201)

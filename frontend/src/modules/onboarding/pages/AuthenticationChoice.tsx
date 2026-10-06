@@ -144,7 +144,8 @@ const AuthenticationChoice: React.FC = () => {
         'Support for LDAP, SAML, OAuth',
         'Advanced authentication flows',
       ],
-      setupInfo: "You'll need to deploy Authentik on your infrastructure and configure an OAuth2/OIDC provider.",
+      setupInfo:
+        "You'll need to deploy Authentik, create an OAuth2/OIDC provider with a signing key, and set the AUTHENTIK_* settings on this server. Until then members sign in with passwords.",
       recommended: false,
     },
     {

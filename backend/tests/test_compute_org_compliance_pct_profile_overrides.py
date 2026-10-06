@@ -39,7 +39,10 @@ from app.models.training import (
     TrainingRequirement,
 )
 from app.models.user import Organization, User, UserStatus
-from app.services.training_compliance import compute_org_compliance_pct
+from app.services.training_compliance import (
+    compute_org_compliance_pct,
+    compute_org_compliance_tally,
+)
 
 pytestmark = [pytest.mark.integration]
 
@@ -151,8 +154,9 @@ class TestEmptyRequiredRequirementIds:
         pct = await compute_org_compliance_pct(db_session, org.id)
 
         # The only member is graded against zero requirements (the profile's
-        # explicit []), so they are trivially fully compliant.
-        assert pct == 100.0
+        # explicit []), so they are not applicable — and with nobody else
+        # graded there is no percentage to report, rather than a vacuous 100.
+        assert pct is None
 
     async def test_unset_required_requirement_ids_still_grades_all(self, db_session):
         """The other direction, so the test above cannot pass by always
@@ -264,9 +268,10 @@ class TestMembershipTypeExclusion:
         pct = await compute_org_compliance_pct(db_session, org.id)
 
         # The requirement never applies to this member, so their denominator
-        # is empty and they are trivially fully compliant — matching
-        # get_compliance_matrix's own `continue` for the same case.
-        assert pct == 100.0
+        # is empty and they are not applicable — matching
+        # get_compliance_matrix's own `continue` for the same case. Nobody is
+        # graded, so there is no percentage at all.
+        assert pct is None
 
     async def test_requirement_restricted_to_the_members_own_type_still_counts(
         self, db_session
@@ -314,3 +319,56 @@ class TestMembershipTypeExclusion:
         pct = await compute_org_compliance_pct(db_session, org.id)
 
         assert pct == 0.0
+
+
+class TestNotApplicableMembersAreExcluded:
+    """TR4-4: a member no requirement grades is outside the percentage —
+    neither in its numerator, as a "compliant" member used to be, nor in its
+    denominator."""
+
+    async def test_not_applicable_member_leaves_both_sides(self, db_session):
+        org = await _org(db_session)
+        regular = await _active_member(db_session, org)  # "active": N/A
+        reservist = await _active_member(db_session, org)
+        reservist.membership_type = "reserve"
+        await db_session.flush()
+        assert regular.organization_id == reservist.organization_id == org.id
+        await _annual_hours_requirement(
+            db_session,
+            org,
+            required_membership_types=["reserve"],
+            applies_to_all=False,
+        )  # grades only the reservist, who has logged nothing
+
+        tally = await compute_org_compliance_tally(db_session, org.id)
+        pct = await compute_org_compliance_pct(db_session, org.id)
+
+        assert (tally.compliant, tally.graded, tally.not_applicable) == (0, 1, 1)
+        # Previously 50.0: the regular member counted as compliant.
+        assert pct == 0.0
+
+    async def test_a_graded_compliant_member_is_not_diluted(self, db_session):
+        """The other direction: a passing member next to an N/A one reads
+        100%, not 50% — the N/A member is not in the denominator either."""
+        org = await _org(db_session)
+        regular = await _active_member(db_session, org)  # "active": N/A
+        reservist = await _active_member(db_session, org)
+        reservist.membership_type = "reserve"
+        await db_session.flush()
+        assert regular.organization_id == reservist.organization_id == org.id
+        await _annual_hours_requirement(
+            db_session,
+            org,
+            required_membership_types=["reserve"],
+            applies_to_all=False,
+        )
+        # A 0% pass bar, so the reservist passes without filing hours.
+        config = await _config(db_session, org)
+        config.compliant_threshold = 0.0
+        config.at_risk_threshold = 0.0
+        await db_session.flush()
+
+        tally = await compute_org_compliance_tally(db_session, org.id)
+
+        assert (tally.compliant, tally.graded, tally.not_applicable) == (1, 1, 1)
+        assert tally.pct == 100.0

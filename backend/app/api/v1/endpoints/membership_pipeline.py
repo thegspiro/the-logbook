@@ -1393,6 +1393,7 @@ async def advance_prospect(
             organization_id=current_user.organization_id,
             advanced_by=current_user.id,
             notes=data.notes if data else None,
+            completed_items=data.completed_items if data else None,
         )
     except ValueError as e:
         # 409, not 400: the request is well-formed, the prospect just has
