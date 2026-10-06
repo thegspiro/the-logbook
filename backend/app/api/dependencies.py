@@ -8,6 +8,8 @@ Permission aggregation combines **position permissions** (from the
 (from the ``OPERATIONAL_RANKS`` config keyed by ``User.rank``).
 """
 
+from datetime import datetime, timezone
+
 from fastapi import Cookie, Depends, Header, HTTPException, Query, Request, status
 from loguru import logger
 from sqlalchemy import select
@@ -24,6 +26,7 @@ from app.core.permissions import (
 from app.models.user import Organization, User
 from app.services.auth_service import AuthService
 from app.utils.db_retry import is_transient_db_error
+from app.utils.password_expiry import is_password_expired, is_past_grace
 
 
 class PaginationParams:
@@ -214,6 +217,26 @@ async def get_current_user(
                 error_code=ErrorCode.AUTH_PASSWORD_CHANGE_REQUIRED,
                 headers={"X-Password-Change-Required": "true"},
             )
+
+    # Enforce the maximum password age (AUTH-15), after the grace period that
+    # starts when the member is first told. The first authenticated request
+    # after expiry is such a telling if the daily notice has not run yet: the
+    # browser sends that member to the change screen, and the response to an
+    # API client says so in the header below. Refused paths match the
+    # must_change_password gate, so the change itself stays reachable.
+    if is_password_expired(user):
+        if getattr(user, "password_expiry_notified_at", None) is None:
+            user.password_expiry_notified_at = datetime.now(timezone.utc)
+            await db.flush()
+        if is_past_grace(user):
+            path = request.url.path.rstrip("/")
+            if not any(path.endswith(s) for s in _MUST_CHANGE_PW_ALLOWED_SUFFIXES):
+                raise CodedHTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Your password has expired. Change it to continue.",
+                    error_code=ErrorCode.AUTH_PASSWORD_CHANGE_REQUIRED,
+                    headers={"X-Password-Change-Required": "true"},
+                )
 
     # Enforce an org-wide MFA requirement: an un-enrolled user in an org that
     # requires MFA may only reach the enrollment/session paths until they set

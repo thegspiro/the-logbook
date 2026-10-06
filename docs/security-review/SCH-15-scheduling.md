@@ -239,7 +239,21 @@ in the update payload). Guard tests:
 tests: create/update each reject a foreign id and a partial match, and
 create accepts a fully in-org list).
 
-### SCH-10 — LOW/MED (correction; repo-wide, not scheduling-specific) — the DNS-rebinding TOCTOU is narrowed, not closed — 🚩 FLAGGED
+### SCH-10 — LOW/MED (correction; repo-wide, not scheduling-specific) — the DNS-rebinding TOCTOU is narrowed, not closed — ✅ FIXED 2026-10-05 (direct connections)
+
+**Resolution (2026-10-05, owner decision: pin the resolved IP via
+`SSRFSafeAsyncTransport` in the shared factory plus `audit_ship`):**
+`create_integration_client()` now wraps its direct transport in
+`SSRFSafeAsyncTransport`, which resolves once, refuses a non-public answer,
+and connects to the validated address with the original hostname kept for
+`Host` and TLS SNI — so `calcom_service.py` and every other factory sender no
+longer re-resolve at connect time. `audit_ship_service.py` builds its client
+from the factory, with `AUDIT_SHIP_ALLOW_PRIVATE_DESTINATION` carried through
+as a pinned, metadata-refusing private opt-in. Guarded by
+`backend/tests/test_integration_dns_pinning.py`. Residual: a request routed
+through an egress proxy is not pinned (the proxy resolves, and httpcore's
+`CONNECT` tunnel ignores `sni_hostname`), recorded in
+`docs/KNOWN_LIMITATIONS.md`. The original finding follows unchanged.
 
 **What:** the draft of this review claimed `calcom_service.py` "closes the
 DNS-rebinding TOCTOU" by calling `assert_outbound_url_safe()` immediately

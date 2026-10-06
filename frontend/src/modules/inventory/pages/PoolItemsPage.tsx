@@ -493,7 +493,7 @@ const PoolItemsPage: React.FC = () => {
 
       <Link
         to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 text-sm"
+        className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 flex items-center gap-1 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Admin
@@ -580,12 +580,12 @@ const PoolItemsPage: React.FC = () => {
             </option>
           ))}
         </select>
-        <label className="text-theme-text-secondary flex cursor-pointer items-center gap-2 text-sm whitespace-nowrap">
+        <label className="text-theme-text-secondary mobile-touch-target flex cursor-pointer items-center justify-start gap-2 text-sm whitespace-nowrap">
           <input
             type="checkbox"
             checked={lowStockOnly}
             onChange={(e) => setLowStockOnly(e.target.checked)}
-            className="rounded"
+            className="form-checkbox"
           />
           Low stock only
         </label>

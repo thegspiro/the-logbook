@@ -65,16 +65,17 @@ describe('the advancement cadence', () => {
 });
 
 describe('office eligibility', () => {
-  it('says on the control that elections do not check it', async () => {
-    // No nomination or candidate path reads `can_hold_office`, so clearing it
-    // does not stop a member being nominated. CLAUDE.md pitfall #19 allows a
-    // reader or a disclosure; this is the disclosure.
+  it('says what clearing it does, now that elections enforce it', async () => {
+    // TIER-OFFICE: nominations, acceptances and officer-added candidates read
+    // `can_hold_office`, so the "not yet enforced" warning is gone.
     const user = userEvent.setup();
     renderSection([tier()]);
     await openRights(user);
 
-    expect(screen.getByText(/not yet enforced/i)).toBeInTheDocument();
-    expect(screen.getByText(/screen candidates by hand/i)).toBeInTheDocument();
+    expect(screen.queryByText(/not yet enforced/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/cannot be nominated, accept a nomination or be added as a candidate/i)
+    ).toBeInTheDocument();
   });
 
   it('still lets the value be recorded', async () => {

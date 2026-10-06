@@ -63,7 +63,11 @@ from app.utils.embroidery import (
 )
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
-from app.utils.org_timezone import resolve_scheduling_timezone, to_local
+from app.utils.org_timezone import (
+    resolve_org_today,
+    resolve_scheduling_timezone,
+    to_local,
+)
 from app.utils.size_order import size_sort_key, sort_by_size
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 from app.utils.storefront_payments import (
@@ -1247,8 +1251,11 @@ class StorefrontService:
         MAX (not count) so a deleted order never causes a number to repeat;
         ``offset`` lets the retry allocator step past a number a concurrent
         transaction just took, which REPEATABLE READ would otherwise hide.
+
+        The year is the department's: on a US department's New Year's Eve the
+        server's UTC clock has already moved to the next year.
         """
-        year = _utcnow().year
+        year = (await resolve_org_today(self.db, organization_id)).year
         prefix = f"ORD-{year}-"
         result = await self.db.execute(
             select(StoreOrder.order_number).where(
@@ -1734,9 +1741,17 @@ class StorefrontService:
         return lines
 
     async def get_order(
-        self, order_id: str, organization_id: str, user_id: Optional[str] = None
+        self,
+        order_id: str,
+        organization_id: str,
+        user_id: Optional[str] = None,
+        for_update: bool = False,
     ) -> Optional[StoreOrder]:
-        """Fetch one order, always org-scoped; ``user_id`` narrows to the owner."""
+        """Fetch one order, always org-scoped; ``user_id`` narrows to the owner.
+
+        ``for_update`` locks the order row and re-reads it past the session's
+        identity map, for a read-modify-write on its money columns (SF-9).
+        """
         query = (
             select(StoreOrder)
             .options(
@@ -1751,6 +1766,8 @@ class StorefrontService:
         )
         if user_id:
             query = query.where(StoreOrder.user_id == str(user_id))
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
@@ -1920,15 +1937,26 @@ class StorefrontService:
         self,
         order_id: str,
         organization_id: str,
-        amount: Decimal,
+        amount: Optional[Decimal],
         actor_id: Optional[str],
         payment_method: Optional[StorePaymentMethod] = None,
         reference: Optional[str] = None,
         mark_paid: bool = True,
         notify_member: bool = True,
     ) -> StoreOrder:
-        """Record money the department has actually confirmed receiving."""
-        order = await self.get_order(order_id, organization_id)
+        """Record money the department has actually confirmed receiving.
+
+        ``amount=None`` settles whatever balance remains, read under the lock.
+
+        A read-modify-write on ``amount_paid``, so the order row is locked
+        first (SF-9, pitfall 27): the PayPal webhook's auto-apply landing while
+        a treasurer works the same order would otherwise both read one
+        balance, and the second write would drop the first payment. Every path
+        that does not raise ends its transaction, so the lock is never held
+        past this call; a caller that catches the ValueError and carries on
+        must roll back to release it.
+        """
+        order = await self.get_order(order_id, organization_id, for_update=True)
         if not order:
             raise ValueError("Order not found")
         if order.status == StoreOrderStatus.CANCELLED:
@@ -1945,6 +1973,13 @@ class StorefrontService:
             actor_id, order.user_id, action="record a payment on", record="order"
         )
 
+        if amount is None:
+            if _is_settled(order):
+                # Settled by someone else between the caller's check and the
+                # lock. Nothing to write; end the transaction to drop the lock.
+                await self.db.commit()
+                return order
+            amount = Decimal(order.total or 0) - Decimal(order.amount_paid or 0)
         applied = _money(amount)
         if applied <= 0:
             raise ValueError("Payment amount must be greater than zero")
@@ -2023,12 +2058,12 @@ class StorefrontService:
             # so a bulk run over a mixed selection doesn't fail on it.
             return order
 
-        balance = _money(Decimal(order.total or 0) - Decimal(order.amount_paid or 0))
-
+        # The balance is read again under the order lock, not here: two
+        # settlements computing it from one unlocked read would each pay it.
         return await self.record_payment(
             order_id,
             organization_id,
-            balance,
+            None,
             actor_id,
             payment_method=payment_method or order.payment_method,
             reference=reference,
@@ -2127,6 +2162,10 @@ class StorefrontService:
                 )
                 updated += 1
             except ValueError as exc:
+                # record_payment may have locked the order before refusing it;
+                # nothing was written, so rolling back only releases that lock
+                # rather than carrying it into the next order (SF-9).
+                await self.db.rollback()
                 skipped += 1
                 errors.append({"order_id": str(order_id), "error": str(exc)})
         return {"updated": updated, "skipped": skipped, "errors": errors}
@@ -2595,8 +2634,14 @@ class StorefrontService:
 
         ``order_id`` lets an administrator attach an unmatched payment to the
         order it belongs to — the manual half of reconciliation.
+
+        The event row is locked and marked applied in the same commit that
+        records the payment, so two applications of one event (a double
+        click, or an administrator racing the webhook's auto-apply) cannot
+        both read it unapplied and pay the order twice (SF-9). Lock order is
+        event, then order; nothing locks them the other way round.
         """
-        event = await self.get_payment_event(event_id, organization_id)
+        event = await self.get_payment_event(event_id, organization_id, for_update=True)
         if event is None:
             raise ValueError("Payment not found")
         if event.status == StorePaymentEventStatus.APPLIED:
@@ -2609,6 +2654,14 @@ class StorefrontService:
         order = await self.get_order(target_id, organization_id)
         if order is None:
             raise ValueError("Order not found")
+
+        # Pending until record_payment commits, which writes these with the
+        # payment or, if it refuses, leaves them for the caller's rollback.
+        event.matched_order_id = order.id
+        event.status = StorePaymentEventStatus.APPLIED
+        event.resolved_at = _utcnow()
+        event.resolved_by = actor_id
+        event.note = f"Applied to order {order.order_number}."
 
         await self.record_payment(
             order.id,
@@ -2624,13 +2677,6 @@ class StorefrontService:
             mark_paid=True,
             notify_member=True,
         )
-
-        event.matched_order_id = order.id
-        event.status = StorePaymentEventStatus.APPLIED
-        event.resolved_at = _utcnow()
-        event.resolved_by = actor_id
-        event.note = f"Applied to order {order.order_number}."
-        await self.db.commit()
         # Re-read rather than refresh: the caller serializes the matched order
         # alongside the event, and refresh() would leave that relationship
         # expired for a lazy load asyncio cannot service.
@@ -2661,9 +2707,9 @@ class StorefrontService:
         return refreshed or event
 
     async def get_payment_event(
-        self, event_id: str, organization_id: str
+        self, event_id: str, organization_id: str, for_update: bool = False
     ) -> Optional[StorePaymentEvent]:
-        result = await self.db.execute(
+        query = (
             select(StorePaymentEvent)
             .options(selectinload(StorePaymentEvent.matched_order))
             .where(
@@ -2671,6 +2717,9 @@ class StorefrontService:
                 StorePaymentEvent.organization_id == str(organization_id),
             )
         )
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def count_unresolved_payment_events(self, organization_id: str) -> int:

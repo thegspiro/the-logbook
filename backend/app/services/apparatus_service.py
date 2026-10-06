@@ -59,9 +59,58 @@ from app.schemas.apparatus import (
     ApparatusTypeUpdate,
     ApparatusUpdate,
 )
+from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import resolve_org_today
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
+
+NFPA_DUE_SOON_DAYS = 30
+
+
+def _nfpa_next_due(mtype, last, last_date, records) -> Optional[date]:
+    """When the next NFPA test falls due for one maintenance type.
+
+    The completed record's own ``next_due_date`` wins, because whoever
+    recorded the test set it. Otherwise an open (scheduled) record's due date,
+    then the type's calendar interval counted from the last test. A distance
+    or engine-hours interval has no date, so it gives none.
+    """
+    from dateutil.relativedelta import relativedelta
+
+    if last is not None and last.next_due_date:
+        recorded: date = last.next_due_date
+        return recorded
+    open_due: list[date] = [
+        r.due_date for r in records if not r.is_completed and r.due_date
+    ]
+    if open_due:
+        return min(open_due)
+    unit = getattr(mtype.default_interval_unit, "value", mtype.default_interval_unit)
+    value = mtype.default_interval_value
+    if (
+        last_date is None
+        or not value
+        or unit not in ("days", "weeks", "months", "years")
+    ):
+        return None
+    due: date = last_date + relativedelta(**{unit: int(value)})
+    return due
+
+
+def _nfpa_status(last_date, next_due, today: date) -> str:
+    """Standing of one required NFPA test.
+
+    ``never_performed`` is reported, not alarmed on: the seeded tests apply to
+    every apparatus type, and an engine with no aerial device will never have
+    an aerial test. A test that was due and missed is ``overdue``.
+    """
+    if next_due is not None and next_due < today:
+        return "overdue"
+    if last_date is None:
+        return "scheduled" if next_due is not None else "never_performed"
+    if next_due is not None and next_due <= today + timedelta(days=NFPA_DUE_SOON_DAYS):
+        return "due_soon"
+    return "current"
 
 
 class ApparatusService:
@@ -1198,12 +1247,9 @@ class ApparatusService:
         if maintenance_data.is_historic and not maintenance_data.occurred_date:
             raise ValueError("occurred_date is required for historic entries")
 
+        # `model_dump()` has already converted the nested FileAttachment models
+        # to dicts, which is what the JSON column needs.
         dump = maintenance_data.model_dump()
-        # Convert attachment models to dicts for JSON storage
-        if dump.get("attachments"):
-            dump["attachments"] = [
-                a if isinstance(a, dict) else a for a in dump["attachments"]
-            ]
 
         maintenance = ApparatusMaintenance(
             organization_id=organization_id,
@@ -1332,12 +1378,6 @@ class ApparatusService:
         )
 
         update_data = maintenance_data.model_dump(exclude_unset=True)
-
-        # Convert attachment models to dicts for JSON storage
-        if "attachments" in update_data and update_data["attachments"]:
-            update_data["attachments"] = [
-                a if isinstance(a, dict) else a for a in update_data["attachments"]
-            ]
 
         # Handle completion
         if (
@@ -2012,7 +2052,7 @@ class ApparatusService:
 
     async def list_nfpa_compliance(
         self,
-        organization_id: UUID,
+        organization_id: str,
         apparatus_id: Optional[str] = None,
         compliance_status: Optional[str] = None,
     ) -> List[ApparatusNFPACompliance]:
@@ -2081,9 +2121,14 @@ class ApparatusService:
         if not record:
             return None
 
-        update_data = compliance_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(record, field, value)
+        # An explicit null clears a field; a null against a required one (the
+        # standard, section or description) is a ValueError, so a 400, rather
+        # than an integrity error at flush (CLAUDE.md pitfall 1).
+        apply_updates(
+            record,
+            compliance_data.model_dump(exclude_unset=True),
+            skip={"organization_id", "id", "apparatus_id"},
+        )
 
         if checked_by:
             record.last_checked_by = checked_by
@@ -2103,6 +2148,112 @@ class ApparatusService:
         await self.db.delete(record)
         await self.db.commit()
         return True
+
+    async def get_nfpa_summary(
+        self, apparatus_id: str, organization_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """NFPA standing for one apparatus, decided here rather than on screen.
+
+        Two sources, because departments record NFPA work two ways:
+
+        * **Required maintenance** — every active maintenance type marked
+          ``is_nfpa_required`` that applies to this apparatus's type (the
+          seeded pump, hose and ground-ladder tests and any the department
+          adds), graded from this apparatus's maintenance records.
+        * **Compliance items** — the per-standard records kept on the NFPA
+          Compliance list, each with its own next due date.
+
+        Dates are the department's, not UTC's. "Due soon" is within
+        ``NFPA_DUE_SOON_DAYS``.
+        """
+        apparatus = await self.get_apparatus(
+            apparatus_id, organization_id, include_relations=False
+        )
+        if apparatus is None:
+            return None
+        today = await resolve_org_today(self.db, str(organization_id))
+
+        types = [
+            t
+            for t in await self.list_maintenance_types(str(organization_id))
+            if t.is_nfpa_required
+            and (
+                not t.applies_to_types
+                or str(apparatus.apparatus_type_id)
+                in {str(x) for x in t.applies_to_types}
+            )
+        ]
+        records: List[ApparatusMaintenance] = []
+        if types:
+            records = list(
+                (
+                    await self.db.execute(
+                        select(ApparatusMaintenance).where(
+                            ApparatusMaintenance.organization_id
+                            == str(organization_id),
+                            ApparatusMaintenance.apparatus_id == str(apparatus.id),
+                            ApparatusMaintenance.maintenance_type_id.in_(
+                                [str(t.id) for t in types]
+                            ),
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+
+        required = []
+        for mtype in types:
+            mine = [r for r in records if str(r.maintenance_type_id) == str(mtype.id)]
+            done = [
+                r
+                for r in mine
+                if r.is_completed and (r.completed_date or r.occurred_date)
+            ]
+            last = max(
+                done,
+                key=lambda r: r.completed_date or r.occurred_date or date.min,
+                default=None,
+            )
+            last_date = (last.completed_date or last.occurred_date) if last else None
+            next_due = _nfpa_next_due(mtype, last, last_date, mine)
+            required.append(
+                {
+                    "maintenance_type_id": str(mtype.id),
+                    "name": mtype.name,
+                    "nfpa_reference": mtype.nfpa_reference,
+                    "last_completed_date": last_date,
+                    "last_record_id": str(last.id) if last else None,
+                    "next_due_date": next_due,
+                    "status": _nfpa_status(last_date, next_due, today),
+                }
+            )
+
+        items = []
+        for record in await self.list_nfpa_compliance(
+            organization_id, apparatus_id=apparatus.id
+        ):
+            status = record.compliance_status or "pending"
+            if (
+                status != "exempt"
+                and record.next_due_date is not None
+                and record.next_due_date < today
+            ):
+                status = "overdue"
+            items.append({"record": record, "status": status})
+
+        statuses = [r["status"] for r in required] + [i["status"] for i in items]
+        return {
+            "apparatus_id": str(apparatus.id),
+            "as_of": today,
+            "required_maintenance": required,
+            "compliance_items": items,
+            "overdue_count": sum(
+                1 for s in statuses if s in ("overdue", "non_compliant")
+            ),
+            "due_soon_count": sum(1 for s in statuses if s == "due_soon"),
+            "never_performed_count": sum(1 for s in statuses if s == "never_performed"),
+        }
 
     # ========================================================================
     # Report Configs
@@ -2487,12 +2638,9 @@ class ApparatusService:
             label="service provider",
         )
 
+        # As in `create_maintenance_record`: `model_dump()` has already turned
+        # the nested NoteAttachment models into the dicts the JSON column needs.
         dump = note_data.model_dump()
-        # Convert attachment models to dicts for JSON storage
-        if dump.get("attachments"):
-            dump["attachments"] = [
-                a if isinstance(a, dict) else a for a in dump["attachments"]
-            ]
 
         note = ApparatusComponentNote(
             organization_id=organization_id,
@@ -2535,12 +2683,6 @@ class ApparatusService:
         if update_data.get("status") == "resolved" and note.status != "resolved":
             note.resolved_by = resolved_by
             note.resolved_at = datetime.now(timezone.utc)
-
-        # Convert attachment models to dicts for JSON storage
-        if update_data.get("attachments"):
-            update_data["attachments"] = [
-                a if isinstance(a, dict) else a for a in update_data["attachments"]
-            ]
 
         for field, value in update_data.items():
             setattr(note, field, value)

@@ -36,7 +36,12 @@ from app.services.admin_hub_service import MODULE_REGISTRY, AdminHubService
 
 pytestmark = pytest.mark.integration
 
-NOW = datetime.now(timezone.utc)
+
+def _now() -> datetime:
+    # Read per test, not at import: collection can finish before midnight UTC
+    # and the test run after it, which ages every timestamp by a day and
+    # breaks the exact ``oldest_age_days`` assertions.
+    return datetime.now(timezone.utc)
 
 
 async def _org(db_session) -> Organization:
@@ -276,7 +281,7 @@ class TestStorefrontAttentionQueue:
             org,
             admin,
             payment_status=StorePaymentStatus.PENDING_VERIFICATION,
-            reported_at=NOW - timedelta(days=3),
+            reported_at=_now() - timedelta(days=3),
         )
 
         queue = await _queue(db_session, admin)
@@ -334,8 +339,8 @@ class TestStorefrontAttentionQueue:
                 organization_id=org.id,
                 name="Spring order",
                 status=StoreWindowStatus.CLOSED,
-                closes_at=NOW - timedelta(days=50),
-                closed_at=NOW - timedelta(days=45),
+                closes_at=_now() - timedelta(days=50),
+                closed_at=_now() - timedelta(days=45),
             )
         )
         await db_session.flush()
@@ -359,8 +364,8 @@ class TestStorefrontAttentionQueue:
                 organization_id=org.id,
                 name="Just closed",
                 status=StoreWindowStatus.CLOSED,
-                closes_at=NOW - timedelta(days=2),
-                closed_at=NOW - timedelta(days=2),
+                closes_at=_now() - timedelta(days=2),
+                closed_at=_now() - timedelta(days=2),
             )
         )
         await db_session.flush()
@@ -382,8 +387,8 @@ class TestStorefrontAttentionQueue:
                 organization_id=org.id,
                 name="Closed late",
                 status=StoreWindowStatus.CLOSED,
-                closes_at=NOW - timedelta(days=60),
-                closed_at=NOW - timedelta(days=1),
+                closes_at=_now() - timedelta(days=60),
+                closed_at=_now() - timedelta(days=1),
             )
         )
         await db_session.flush()
@@ -401,7 +406,7 @@ class TestStorefrontAttentionQueue:
                 name="No schedule",
                 status=StoreWindowStatus.CLOSED,
                 closes_at=None,
-                closed_at=NOW - timedelta(days=40),
+                closed_at=_now() - timedelta(days=40),
             )
         )
         await db_session.flush()
@@ -425,7 +430,7 @@ class TestStorefrontAttentionQueue:
             admin,
             status=StoreOrderStatus.CANCELLED,
             payment_status=StorePaymentStatus.PENDING_VERIFICATION,
-            reported_at=NOW - timedelta(days=5),
+            reported_at=_now() - timedelta(days=5),
         )
 
         assert "store_pending_verification" not in await _queue(db_session, admin)
@@ -457,7 +462,7 @@ class TestStorefrontAttentionQueue:
             theirs,
             their_admin,
             payment_status=StorePaymentStatus.PENDING_VERIFICATION,
-            reported_at=NOW - timedelta(days=1),
+            reported_at=_now() - timedelta(days=1),
         )
 
         assert await _queue(db_session, my_admin) == {}
@@ -535,7 +540,7 @@ class TestStoreMetricsCrossOrgIsolation:
             theirs,
             their_admin,
             payment_status=StorePaymentStatus.PENDING_VERIFICATION,
-            reported_at=NOW - timedelta(days=1),
+            reported_at=_now() - timedelta(days=1),
         )
 
         value, _ = await _metric(db_session, my_admin, "pending_verification")

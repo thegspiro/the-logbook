@@ -110,6 +110,12 @@ Report/dashboard aggregation accumulates via `float()` before coercing back to
 upper cap; `list_donors`/`get_donor` expose full donor PII to `fundraising.view`
 (policy question). **Status:** flagged.
 
+**Float part resolved 2026-10-05 (owner decision):** `get_grant_report` and
+`get_fundraising_report` sum money as `Decimal` and convert each total to a
+float once, at the response; the average gift rounds half-up to the cent.
+Covered by `TestGrantReportIsExact` and `TestFundraisingReportIsExact`. Zero
+and unbounded amounts, and the donor-PII gate, stand as before.
+
 ## Notes
 
 - GF-1/GF-2/GF-4 are the **XC-1/XC-3 pattern with real cross-tenant impact** —

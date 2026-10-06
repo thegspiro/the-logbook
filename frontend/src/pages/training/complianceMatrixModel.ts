@@ -47,7 +47,11 @@ export interface EvaluatedMember {
   cells: EvaluatedCell[];
   met: number;
   total: number;
-  pct: number;
+  /**
+   * 0-100, or **null** when nothing grades the member. Same rule as
+   * `RequirementRollup.pct`: an empty denominator is not success.
+   */
+  pct: number | null;
   /** Cells that are not met — the open items a coordinator has to clear. */
   open: number;
   standing: Standing;
@@ -262,8 +266,9 @@ const standingOf = (member: ComplianceMatrixMember, met: number, total: number):
   // The backend classifies against the org's configured thresholds, so prefer
   // its answer; the fallback is only for a server that predates the field.
   if (member.standing) return member.standing;
-  if (total === 0 || met >= total) return Standing.COMPLIANT;
-  return member.completion_pct >= 75 ? Standing.AT_RISK : Standing.NON_COMPLIANT;
+  if (total === 0) return Standing.NOT_APPLICABLE;
+  if (met >= total) return Standing.COMPLIANT;
+  return (member.completion_pct ?? 0) >= 75 ? Standing.AT_RISK : Standing.NON_COMPLIANT;
 };
 
 export const evaluateMember = (
@@ -282,7 +287,9 @@ export const evaluateMember = (
     cells,
     met,
     total,
-    pct: total === 0 ? 100 : Math.round((met / total) * 100),
+    // Nothing graded is not applicable, not 100% — the backend's
+    // classify_standing() reports the same member as `not_applicable`.
+    pct: total === 0 ? null : Math.round((met / total) * 100),
     open: total - met,
     standing: standingOf(member, met, total),
   };
@@ -295,7 +302,8 @@ export const evaluateMatrix = (matrix: ComplianceMatrix, timezone?: string): Eva
 };
 
 /**
- * Worst first: most open items, then lowest percentage, then by name.
+ * Worst first: most open items, then lowest percentage, then by name. A member
+ * with no percentage (not applicable) sorts after every graded one.
  *
  * The tie-breakers matter — without them the queue reorders between renders
  * for members with identical standing, and a coordinator loses their place
@@ -303,7 +311,8 @@ export const evaluateMatrix = (matrix: ComplianceMatrix, timezone?: string): Eva
  */
 export const rankMembers = (members: EvaluatedMember[]): EvaluatedMember[] =>
   [...members].sort(
-    (a, b) => b.open - a.open || a.pct - b.pct || a.member.member_name.localeCompare(b.member.member_name)
+    (a, b) =>
+      b.open - a.open || (a.pct ?? 101) - (b.pct ?? 101) || a.member.member_name.localeCompare(b.member.member_name)
   );
 
 export const rollUpRequirements = (
@@ -343,10 +352,11 @@ export const rollUpRequirements = (
  * from that very list. One definition, not two.
  *
  * A requirement nobody is graded against is not compliant either; there is
- * simply nothing to report, which the rail says in its own group.
+ * simply nothing to report — not applicable, which the rail says in its own
+ * group.
  */
 export const requirementStanding = (rollup: RequirementRollup): Standing => {
-  if (rollup.total === 0) return Standing.AT_RISK;
+  if (rollup.total === 0) return Standing.NOT_APPLICABLE;
   return rollup.behind.length === 0 ? Standing.COMPLIANT : Standing.AT_RISK;
 };
 

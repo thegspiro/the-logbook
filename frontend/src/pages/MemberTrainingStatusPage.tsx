@@ -60,6 +60,11 @@ const STATUS_META: Record<MemberComplianceStatusColor, { label: string; cls: str
     label: 'Exempt',
     cls: 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border',
   },
+  // No requirement grades the member: nothing to pass or fail.
+  not_applicable: {
+    label: 'Not applicable',
+    cls: 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border',
+  },
 };
 
 const MemberTrainingStatusPage: React.FC = () => {
@@ -140,7 +145,7 @@ const MemberTrainingStatusPage: React.FC = () => {
   const sortedRows = useMemo(() => {
     if (!sortField || !sortDir) return rows;
     const dir = sortDir === 'asc' ? 1 : -1;
-    const statusRank: Record<string, number> = { red: 0, yellow: 1, green: 2, exempt: 3 };
+    const statusRank: Record<string, number> = { red: 0, yellow: 1, green: 2, not_applicable: 3, exempt: 4 };
     return [...rows].sort((a, b) => {
       let av: number | string;
       let bv: number | string;
@@ -363,7 +368,7 @@ const MemberTrainingStatusPage: React.FC = () => {
                         >
                           {meta.label}
                         </span>
-                        {r.compliance_status !== 'exempt' && (
+                        {r.compliance_status !== 'exempt' && r.compliance_status !== 'not_applicable' && (
                           <span className="text-theme-text-muted text-xs">
                             {r.requirements_met}/{r.requirements_total} met
                           </span>

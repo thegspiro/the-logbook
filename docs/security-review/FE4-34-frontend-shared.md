@@ -241,7 +241,7 @@ FE3-34-4 scenario (a request in flight across a `clearCache()`/
 removed per its own stated convention ("When one is resolved... remove it
 here") — this doc is now the record of the fix.
 
-### FE3-34-5 (HIGH) — an offline queue item could sync under the next member's identity on a shared device — ⚠️ PARTIALLY FIXED, REOPENED
+### FE3-34-5 (HIGH) — an offline queue item could sync under the next member's identity on a shared device — ✅ FIXED (2026-10-05; partially fixed and reopened at the time of this pass)
 
 **Original defect:** none of the three offline queues
 (`genericOfflineQueue.ts`, `offlineQueue.ts`, `shiftReportOfflineQueue.ts`)
@@ -312,6 +312,47 @@ how to treat already-queued untagged legacy entries), not a same-PR patch —
 correctly flagged rather than guessed at, matching this doc's own standard
 for FE3-34-2.
 
+**Fixed (2026-10-05), on the owner's decision: owner-tag new entries and
+quarantine untagged ones.** Appended rather than rewritten, per this
+rotation's convention; the disposition above was correct when written.
+
+- **Tagging.** Every entry in all three queues now carries `ownerId`, the
+  signed-in member's id (`useAuthStore.getState().user.id` while
+  `isAuthenticated`), stamped inside the queue module at write time —
+  `enqueueCheck`, `enqueueShiftReport`, `enqueueGeneric`, and
+  `putGenericItem` (which also refuses to overwrite an entry owned by
+  anyone else). `utils/offlineQueueOwner.ts` is the one place that reads it.
+  With nobody signed in the write is refused (`OfflineQueueOwnerError`)
+  rather than stored unowned: that state only arises after logout or expiry,
+  when the purge has already run and an unowned entry would be offered to
+  whoever signs in next.
+- **Checked at sync.** `useOfflineSyncEngine` drains `listOwnGenericPending()`,
+  `flushOne` re-checks ownership at the moment of sending, and the
+  equipment-check and shift-report page drains read `listOwnPendingChecks()`
+  / `listOwnPendingReports()` and re-check each entry before sending it.
+  Another member's entries are skipped, not deleted — their owner may sign
+  back in on this device — and do not hold up the rest of the queue. The
+  pending counts (`pendingCount`, `pendingReportCount`,
+  `genericPendingCount`) count only the member's own.
+- **Legacy entries quarantined.** No IndexedDB version bump was needed —
+  `ownerId` is a field on the stored record, not an index — so entries
+  queued before this change survive the upgrade untouched and read as
+  untagged. They are never sent automatically. `HeldOfflineItemsNotice`
+  (mounted once in `AppLayout`, above the page) shows how many are held and
+  of what kind — nothing from their payloads — with **Send as me**
+  (re-tags them to the signed-in member, then drains) and **Discard**, each
+  behind a `useConfirm` that states the consequence.
+- `purgeLocalMemberData()`'s never-throw contract is unchanged.
+
+**Guard tests:** `utils/offlineQueueOwnership.test.ts` (fake-indexeddb) —
+tagging for each queue, refusal with nobody signed in, sync skipping
+other-owner and untagged entries while draining the member's own, the
+purge-failure scenario from this finding (clears refused, previous member's
+entries survive, none is sent under the next member), and claim/discard of
+held entries; `components/HeldOfflineItemsNotice.test.tsx` for the review
+notice and its confirmations; `stores/pendingSyncStore.test.ts` for the
+held count. `KNOWN_LIMITATIONS.md`'s FE3-34-5 entry removed.
+
 ## Verified good ✅
 
 All of FE2-34's and FE3-34's "Verified good" claims re-checked and still
@@ -361,7 +402,8 @@ of every prior open item.
   writeup above); the timing-race fix is real but doesn't cover the
   purge-failure path, and closing that gap properly needs an
   owner-tagged-queue-entry design, not a drive-by patch. Restored to
-  `KNOWN_LIMITATIONS.md`.
+  `KNOWN_LIMITATIONS.md`. _Since fixed (2026-10-05) — see the appended
+  resolution under its writeup above._
 
 ## Documentation corrections
 

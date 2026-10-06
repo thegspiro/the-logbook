@@ -1,15 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type React from 'react';
-import { act, screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '@/test/utils';
-import type { ApprovalChain, ApprovalStepRecord } from '../types';
-
-const mockGetChain = vi.fn();
-vi.mock('../services/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../services/api')>()),
-  approvalChainService: { get: (...args: unknown[]) => mockGetChain(...args) as unknown },
-}));
+import type { ApprovalStepRecord } from '../types';
 
 const mockApproveStep = vi.fn();
 const mockDenyStep = vi.fn();
@@ -20,45 +14,37 @@ vi.mock('../store/financeStore', () => ({
 
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 
-const mockCheckPermission = vi.fn();
-vi.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector: (s: { checkPermission: (p: string) => boolean }) => unknown) =>
-    selector({ checkPermission: (p) => mockCheckPermission(p) as boolean }),
-}));
-
 import { ApprovalStepActions } from './ApprovalStepActions';
 
-const record = (id: string, stepId: string, status: ApprovalStepRecord['status'], stepOrder: number) =>
-  ({
-    id,
-    chainId: 'chain-1',
-    stepId,
-    entityType: 'purchase_request',
-    entityId: 'pr-1',
-    status,
-    stepName: `Step ${stepId}`,
-    stepOrder,
-    createdAt: '2026-09-20T15:00:00Z',
-  }) satisfies ApprovalStepRecord;
+type Flags = Pick<ApprovalStepRecord, 'assigneeLabel' | 'canAct' | 'requiresOverride'>;
 
-const chain = (types: Record<string, 'approval' | 'notification'>): Partial<ApprovalChain> => ({
-  id: 'chain-1',
-  steps: Object.entries(types).map(([id, stepType], i) => ({
-    id,
-    chainId: 'chain-1',
-    stepOrder: i,
-    name: `Step ${id}`,
-    stepType,
-    allowSelfApproval: false,
-    required: true,
-    createdAt: '2026-09-01T00:00:00Z',
-  })),
+const record = (
+  id: string,
+  stepId: string,
+  status: ApprovalStepRecord['status'],
+  stepOrder: number,
+  flags: Flags = {}
+): ApprovalStepRecord => ({
+  id,
+  chainId: 'chain-1',
+  stepId,
+  entityType: 'purchase_request',
+  entityId: 'pr-1',
+  status,
+  stepName: `Step ${stepId}`,
+  stepOrder,
+  createdAt: '2026-09-20T15:00:00Z',
+  assigneeLabel: `Approver ${stepId}`,
+  canAct: false,
+  requiresOverride: false,
+  ...flags,
 });
 
-// Step a is done, b is the one waiting, c comes after it.
-const steps = [
+// Step a is done, b is the one waiting, c comes after it. The backend sets the
+// viewer flags only on b, the step the request is waiting on.
+const stepsWith = (flags: Flags) => [
   record('sr-a', 'a', 'approved', 1),
-  record('sr-b', 'b', 'pending', 2),
+  record('sr-b', 'b', 'pending', 2, { assigneeLabel: 'Treasurer position', ...flags }),
   record('sr-c', 'c', 'pending', 3),
 ];
 
@@ -67,7 +53,7 @@ const renderActions = (props: Partial<React.ComponentProps<typeof ApprovalStepAc
   renderWithRouter(
     <ApprovalStepActions
       isPendingApproval
-      steps={steps}
+      steps={stepsWith({ canAct: true })}
       subject="New supply hose (PR-0001)"
       onDecided={onDecided}
       {...props}
@@ -76,102 +62,109 @@ const renderActions = (props: Partial<React.ComponentProps<typeof ApprovalStepAc
   return { onDecided };
 };
 
-// Lets the chain lookup resolve and its state update render, so a "nothing is
-// shown" assertion is made after the component has decided, not before.
-const settle = () =>
-  act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-
 describe('ApprovalStepActions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetChain.mockReset();
-    mockCheckPermission.mockReset();
     mockApproveStep.mockReset();
     mockDenyStep.mockReset();
-    mockGetChain.mockResolvedValue(chain({ a: 'approval', b: 'approval', c: 'approval' }));
-    mockCheckPermission.mockImplementation((p: string) => p === 'finance.approve');
     mockApproveStep.mockResolvedValue(undefined);
     mockDenyStep.mockResolvedValue(undefined);
   });
 
-  it('approves the step the request is waiting on, then asks the page to re-fetch', async () => {
+  it('says who the step is waiting on and offers Approve / Deny to its named approver', async () => {
     const user = userEvent.setup();
     const { onDecided } = renderActions();
 
-    await user.click(await screen.findByRole('button', { name: 'Approve' }));
+    expect(screen.getByText(/Waiting on/)).toHaveTextContent('Waiting on Treasurer position.');
+    await user.click(screen.getByRole('button', { name: 'Approve' }));
     await user.type(within(screen.getByRole('dialog')).getByLabelText(/Notes/), 'Fine');
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Approve' }));
 
-    await waitFor(() => expect(mockApproveStep).toHaveBeenCalledWith('sr-b', 'Fine'));
+    await waitFor(() => expect(mockApproveStep).toHaveBeenCalledWith('sr-b', 'Fine', undefined));
     expect(onDecided).toHaveBeenCalledTimes(1);
-    expect(mockGetChain).toHaveBeenCalledWith('chain-1');
   });
 
   it('denies the current step with the reason given', async () => {
     const user = userEvent.setup();
     renderActions();
 
-    await user.click(await screen.findByRole('button', { name: 'Deny' }));
+    await user.click(screen.getByRole('button', { name: 'Deny' }));
     await user.type(within(screen.getByRole('dialog')).getByLabelText(/Reason/), 'Duplicate request');
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Deny' }));
 
-    await waitFor(() => expect(mockDenyStep).toHaveBeenCalledWith('sr-b', 'Duplicate request'));
+    await waitFor(() => expect(mockDenyStep).toHaveBeenCalledWith('sr-b', 'Duplicate request', undefined));
   });
 
   it('takes the first pending step in the order the API sent, not a re-sort by step order', async () => {
     // Two steps sharing an order: the backend's own tiebreak put sr-y first,
     // and that is the one it will accept a decision on.
-    const tied = [record('sr-y', 'y', 'pending', 1), record('sr-x', 'x', 'pending', 1)];
-    mockGetChain.mockResolvedValue(chain({ x: 'approval', y: 'approval' }));
+    const tied = [
+      record('sr-y', 'y', 'pending', 1, { canAct: true }),
+      record('sr-x', 'x', 'pending', 1, { canAct: true }),
+    ];
     const user = userEvent.setup();
     renderActions({ steps: tied });
 
-    await user.click(await screen.findByRole('button', { name: 'Approve' }));
+    await user.click(screen.getByRole('button', { name: 'Approve' }));
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Approve' }));
 
-    await waitFor(() => expect(mockApproveStep).toHaveBeenCalledWith('sr-y', undefined));
+    await waitFor(() => expect(mockApproveStep).toHaveBeenCalledWith('sr-y', undefined, undefined));
+  });
+
+  it('offers an approvals admin the override actions, which need a reason', async () => {
+    const user = userEvent.setup();
+    renderActions({ steps: stepsWith({ requiresOverride: true }) });
+
+    expect(screen.getByText(/Waiting on/)).toHaveTextContent('Waiting on Treasurer position.');
+    expect(screen.getByText('Not assigned to you')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Approve as approvals admin' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText(/This step is assigned to/)).toHaveTextContent(
+      'This step is assigned to Treasurer position.'
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Approve as approvals admin' }));
+    expect(within(dialog).getByText('Override reason is required.')).toBeInTheDocument();
+    expect(mockApproveStep).not.toHaveBeenCalled();
+
+    await user.type(within(dialog).getByLabelText(/Override reason/), 'Treasurer on leave');
+    await user.click(within(dialog).getByRole('button', { name: 'Approve as approvals admin' }));
+
+    await waitFor(() => expect(mockApproveStep).toHaveBeenCalledWith('sr-b', undefined, 'Treasurer on leave'));
+  });
+
+  it('only says who the step is waiting on to a viewer who cannot act on it', () => {
+    renderActions({ steps: stepsWith({}) });
+
+    expect(screen.getByText(/Waiting on/)).toHaveTextContent('Waiting on Treasurer position.');
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('shows nothing when the request is not pending approval', () => {
     renderActions({ isPendingApproval: false });
 
+    expect(screen.queryByText(/Waiting on/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
-    expect(mockGetChain).not.toHaveBeenCalled();
-  });
-
-  it('shows nothing to a viewer without finance.approve', () => {
-    mockCheckPermission.mockReturnValue(false);
-    renderActions();
-
-    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
-    expect(mockGetChain).not.toHaveBeenCalled();
   });
 
   it('shows nothing when no step is pending', () => {
     renderActions({ steps: [record('sr-a', 'a', 'approved', 1), record('sr-b', 'b', 'sent', 2)] });
 
+    expect(screen.queryByText(/Waiting on/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
-    expect(mockGetChain).not.toHaveBeenCalled();
   });
 
-  it('shows nothing when the waiting step is a notification', async () => {
-    mockGetChain.mockResolvedValue(chain({ a: 'approval', b: 'notification', c: 'approval' }));
-    renderActions();
+  it('acts only on the step the request is waiting on, whatever later steps say', () => {
+    // A later step's flags are never set by the backend; if they were, they
+    // must not put buttons on a step that is not current.
+    const steps = [
+      record('sr-a', 'a', 'pending', 1, { assigneeLabel: 'Chief position' }),
+      record('sr-b', 'b', 'pending', 2, { canAct: true }),
+    ];
+    renderActions({ steps });
 
-    await waitFor(() => expect(mockGetChain).toHaveBeenCalledWith('chain-1'));
-    await settle();
-    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Deny' })).not.toBeInTheDocument();
-  });
-
-  it('shows nothing when the step’s type cannot be read', async () => {
-    mockGetChain.mockRejectedValue(new Error('offline'));
-    renderActions();
-
-    await waitFor(() => expect(mockGetChain).toHaveBeenCalledWith('chain-1'));
-    await settle();
-    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Waiting on/)).toHaveTextContent('Waiting on Chief position.');
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });

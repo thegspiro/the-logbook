@@ -1,7 +1,20 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import toast from 'react-hot-toast';
-import { BookOpen, Plus, Search, Edit2, Trash2, X, Clock, Award, Filter, ChevronDown, ListOrdered } from 'lucide-react';
+import {
+  BookOpen,
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  X,
+  Clock,
+  Award,
+  Filter,
+  ChevronDown,
+  ListOrdered,
+  RotateCcw,
+} from 'lucide-react';
 import { trainingService } from '../services/api';
 import { CourseSyllabusBuilder } from '../components/training/CourseSyllabusBuilder';
 import { SkeletonCardGrid } from '../components/ux/Skeleton';
@@ -463,6 +476,10 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('');
   const [filterCategory, setFilterCategory] = useState<string>('');
+  // A deactivated course leaves the library, so an officer needs a way to
+  // see it again to bring it back. Only managers are offered it; members see
+  // the courses they can actually train on.
+  const [showInactive, setShowInactive] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
   // Pagination state
@@ -489,11 +506,13 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
     });
   };
 
-  const loadData = async () => {
+  const includeInactive = canManage && showInactive;
+
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [coursesData, categoriesData] = await Promise.all([
-        trainingService.getCourses(),
+        trainingService.getCourses(!includeInactive),
         trainingService.getCategories(),
       ]);
       setCourses(coursesData);
@@ -503,17 +522,17 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
     } finally {
       setLoading(false);
     }
-  };
+  }, [includeInactive]);
 
   useEffect(() => {
     void loadData();
-  }, []);
+  }, [loadData]);
 
   const handleDelete = async (courseId: string, courseName: string) => {
     if (
       !(await confirm({
         title: 'Deactivate course',
-        message: `Deactivate "${courseName}"? It will no longer be available for new training records.`,
+        message: `Deactivate "${courseName}"? It will no longer be available for new training records. You can bring it back later from Filters → Show inactive courses.`,
         confirmLabel: 'Deactivate',
         cancelLabel: 'Keep it',
       }))
@@ -525,6 +544,16 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
       void loadData();
     } catch {
       toast.error('Failed to deactivate course');
+    }
+  };
+
+  const handleReactivate = async (courseId: string) => {
+    try {
+      await trainingService.updateCourse(courseId, { active: true });
+      toast.success('Course reactivated');
+      void loadData();
+    } catch {
+      toast.error('Failed to reactivate course');
     }
   };
 
@@ -623,7 +652,7 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
             <button
               onClick={() => setShowFilters(!showFilters)}
               className={`touch:min-h-[44px] flex items-center space-x-2 rounded-lg border px-4 py-2 text-sm ${
-                showFilters || filterType || filterCategory
+                showFilters || filterType || filterCategory || includeInactive
                   ? 'border-red-500 bg-red-600/20 text-red-700 dark:text-red-400'
                   : 'bg-theme-surface-secondary border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary'
               }`}
@@ -678,6 +707,17 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
                   ))}
                 </select>
               </div>
+              {canManage && (
+                <label className="text-theme-text-secondary flex items-center gap-2 text-sm md:col-span-2">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox"
+                    checked={showInactive}
+                    onChange={(e) => setShowInactive(e.target.checked)}
+                  />
+                  Show inactive courses
+                </label>
+              )}
             </div>
           )}
         </div>
@@ -745,15 +785,28 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
                         >
                           <Edit2 className="h-4 w-4" />
                         </button>
-                        <button
-                          onClick={() => {
-                            void handleDelete(course.id, course.name);
-                          }}
-                          className="text-theme-text-muted touch-target-phone rounded-sm p-1.5 hover:text-red-700 dark:hover:text-red-400"
-                          aria-label={`Deactivate ${course.name}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {course.active ? (
+                          <button
+                            onClick={() => {
+                              void handleDelete(course.id, course.name);
+                            }}
+                            className="text-theme-text-muted touch-target-phone rounded-sm p-1.5 hover:text-red-700 dark:hover:text-red-400"
+                            aria-label={`Deactivate ${course.name}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              void handleReactivate(course.id);
+                            }}
+                            className="text-theme-text-muted touch-target-phone rounded-sm p-1.5 hover:text-green-700 dark:hover:text-green-400"
+                            aria-label={`Reactivate ${course.name}`}
+                            title="Reactivate"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>

@@ -52,6 +52,114 @@ The Scheduling module manages shift scheduling, member self-service signup, swap
 - **Platoon Rotations (opt-in)** — _(2026-06-19)_ Person-level platoon membership (A/B/C) drives multi-platoon rotation generation with leave-aware staffing and a hold-over roster. Off by default; toggled per department (see below)
 - **Full Shift Lifecycle** — _(2026-07-16)_ Per-shift officer authority, a live readiness panel, cancel-instead-of-delete, reopen/unfinalize, crew pass-down notes, and optional server-side close-out enforcement (require end-of-shift checks; restrict check-in to the roster). See below
 - **Personal Calendar Feed & Automation** — _(2026-07-16)_ Members subscribe to their shifts in Google/Apple Calendar via a private ICS link; departments can auto-generate shifts from patterns on a rolling horizon and get overtime/hours advisories. See below
+- **Shifts With Other Departments** — _(2026-09-27 → 09-29)_ Members log time on another jurisdiction's apparatus by start and end time (+12 / +24 presets), picked from an officer-kept list; it counts on save and an officer can reject it. See [below](#september-24--october-4-2026)
+- **Setup Guide** — _(2026-09-29)_ The administration hub walks a new department through template → pattern → shifts on the calendar
+
+---
+
+## September 24 – October 4, 2026
+
+### Shifts with other departments _(2026-09-27 → 09-29)_
+
+A member who rides a neighbouring jurisdiction's apparatus had no way to get
+credit for it — every counted hour came from attendance on this department's
+own shifts. **My Shifts → Hours** now has **Shifts with other departments**
+with **Log outside shift**:
+
+- **Start and End**, with **+12 hours** / **+24 hours** buttons; the server
+  derives the date (the start's local date, so a night shift counts on the day
+  it began) and the hours. Not in the future, at most 48 hours an entry. Entries
+  logged on 2026-09-27–29 as a date and hours open in that shape and can be
+  given times.
+- **Department** and **Apparatus** from a list scheduling officers keep under
+  **Settings → Outside Apparatus** (`/scheduling/admin/settings/outside-apparatus`).
+  A unit with shifts logged on it cannot be deleted, only turned off; each entry
+  keeps the names it was logged under.
+- **Counts as soon as it is saved.** An officer rejects one with a reason
+  ("Not counted", locked to the member) and can restore it, from **Scheduling
+  Reports → Member Hours**, which also gains an **Outside Hours** column and an
+  **Outside apparatus staffed** per-unit summary.
+- Reported **beside** worked hours (`external_*`), but **added into** each
+  member's totals on the Shift Compliance report.
+
+API under `/api/v1/scheduling/external-hours`; migrations `f03c9f236904`
+(three tables) and `31027aabca12` (`start_at` / `end_at`), both additive and
+guarded. Limits in `docs/KNOWN_LIMITATIONS.md`; endpoints in
+`docs/SCHEDULING_MODULE.md`.
+
+### Signing up
+
+- **A signup goes straight onto the schedule.** It is stored as `assigned`; the
+  member confirms it themselves. The UI's promise that "an officer will
+  confirm your assignment" was removed (2026-09-29, W33-2) — no officer queue
+  ever received a signup.
+- **Re-signing up after a decline works** _(2026-09-26)_. The duplicate check
+  ignored declined/cancelled rows but the one-row-per-member-per-shift
+  constraint did not, so the signup failed as "Member is already assigned to
+  this shift". The inactive row is now cleared under the shift lock once the
+  signup passes its checks.
+- **"Today" is the department's date** _(2026-09-26)_ for open shifts, the
+  calendars, auto-generation, swap-offer expiry, leave cancellations, the
+  compliance report and the calendar feed — tonight's shift no longer reads as
+  past every evening in the Americas.
+- **Probationary members are active** _(2026-10-03)_: they sign in, can be
+  assigned, and appear on the platoon roster, availability and compliance
+  reports. Exclude the membership type under Eligibility to stop self-signup.
+
+### Swaps
+
+- **Open Swap** now reads "An officer finds cover; it stays yours until then".
+  It never could be picked up by another member, and approving it moves nothing
+  — open in `docs/KNOWN_LIMITATIONS.md` (W33-4).
+- **Officers approve offers to a named member** and **pending swaps are
+  cancelled with their seat** _(2026-09-30)_ — see
+  [Trades a member can complete](#trades-a-member-can-complete).
+- The Requests tab sends a double-clicked Approve once, and a filtered empty
+  list says "Showing pending requests only. Choose All Statuses to see the
+  rest."
+
+### Shift Reports tab _(2026-09-27 → 09-28)_
+
+- A member (no `training.manage`) sees no toggle — a heading, **Shift reports
+  about you**, and an empty state saying when a report appears and what it
+  holds.
+- Officers' views: **About me**, **Written by me**, **Review Queue** and
+  **Flagged** (where review is required), **Drafts**; **New report** is a button
+  beside the strip rather than its last segment.
+- **Written by me**: **Your reporting summary** (Reports written, Shift hours
+  covered, Calls covered, and **Drafts to finish →** / **Awaiting review →**
+  buttons), a **Reports written per month** chart sized by count, **Not
+  acknowledged yet** and **Waiting N days** on cards.
+- `?view=` is honoured and kept: `?tab=shift-reports&view=create` no longer
+  lands on the default list.
+
+### Check-in, settings and administration
+
+- **Early check-out on the QR check-in page asks first** — "Check out early?",
+  **Stay checked in** / **Check out now** — because a check-out cannot be undone
+  by the member (W34).
+- **Seven settings sections**: Outside Apparatus joined on 2026-09-27.
+- **Notifications' six switches are marked "Not in effect yet"** — they store
+  `schedule_change` rules nothing reads (W36-1, open).
+- **"Require assignment confirmation" is removed** from Department Defaults; it
+  was stored and read by nothing.
+- **Setup guide** on `/scheduling/admin`: **Create a shift template**, **Set up a
+  repeating pattern** _(optional)_, **Put shifts on the calendar** — ticked off
+  from `active_templates` / `active_patterns` / `shifts_scheduled` on
+  `/scheduling/summary`, hidden once the required two are done, dismissible.
+  Empty departments no longer read "every shift closed out" or "Every shift in
+  this range has the crew it asks for", and a member's empty board says shifts
+  have not been published yet.
+- **Pattern generation** names any driver seat it left empty for want of an
+  EVOC-qualified member (an 8-second notice), and says "No new shifts. Dates
+  already on the schedule are skipped…" instead of "Generated 0 shifts" (W32).
+- **Shift Compliance** reads **Not applicable** for a requirement nobody is
+  held to (W37-1); it still grades training hours requirements from shift
+  attendance alone (W37-2, open).
+- **Writing an apparatus NFC tag** from the shift panel needs
+  `apparatus.manage_nfc_tags` _(2026-10-02)_.
+- Plain-language copy across the module, and accessible names on every row
+  action and form field the workflow review drove (W30, W32–W36).
 
 ---
 
@@ -146,6 +254,15 @@ handing the seat to the target.
 A pending swap is cancelled, and both members told, when the seat it names goes
 away — withdrawal, removal, decline, reassignment, shift cancellation, approved
 time off, leave, or another approved swap of the same seat.
+
+A **two-way exchange** (a requested shift and a target member) requires each
+member to be qualified for the seat they take — the same eligibility rule as
+signup. It is refused when submitted, `GET
+/scheduling/shifts/{id}/exchange-candidates` lists only qualifying pairs, and
+approval re-checks it: a pair that lapsed while pending is refused with
+`LB-SCHED-002`, which a duty officer may override (`override_qualification` on
+the review, noted on the request and audited). One-way offers and moves are not
+gated by this rule.
 
 `swap_offer_expiry` is a daily sweep closing offers still pending the day
 before the shift, notifying both members and the duty officer. A pending offer
@@ -609,13 +726,16 @@ assignments, check-in state) remains visible to any member.
 `/scheduling` is the member's page. Nothing administrative is reached from it —
 see **Scheduling Administration** below.
 
-| Tab           | Description                                     |
-| ------------- | ----------------------------------------------- |
-| Schedule      | Calendar view of shifts                         |
-| My Shifts     | Personal shifts, confirm/decline, swap/time-off |
-| Open Shifts   | Browse and sign up for available shifts         |
-| Requests      | Swap and time-off request management            |
-| Shift Reports | End-of-shift reports you filed or are named on  |
+| Tab           | Description                                                                        |
+| ------------- | ---------------------------------------------------------------------------------- |
+| Schedule      | Calendar view of shifts                                                            |
+| My Shifts     | Personal shifts, confirm/decline, swap/time-off                                    |
+| Open Shifts   | Shifts with a seat you are cleared for; signing up puts you straight on the roster |
+| Requests      | Swap and time-off request management                                               |
+| Shift Reports | Reports about you; with `training.manage`, the ones you write and review           |
+
+My Shifts has **Upcoming**, **Past** and **Hours** views; Hours includes
+**Shifts with other departments** _(2026-09-27)_.
 
 ### Scheduling Administration _(2026-09-05)_
 
@@ -624,16 +744,16 @@ Training Admin and Inventory Admin. It replaces the strip of officer tools that
 used to sit on the member-facing page, where an administrator had to open the
 schedule to find the settings.
 
-| Page                    | URL                                    | Permission          |
-| ----------------------- | -------------------------------------- | ------------------- |
-| Shift Planning          | `/scheduling/admin/planning`           | `scheduling.manage` |
-| Shift Templates         | `/scheduling/admin/planning/templates` | `scheduling.manage` |
-| Shift Patterns          | `/scheduling/admin/planning/patterns`  | `scheduling.manage` |
-| Shift Close-Out         | `/scheduling/admin/closeout`           | `scheduling.manage` |
-| Scheduling Reports      | `/scheduling/admin/reports`            | `scheduling.manage` |
-| Platoons                | `/scheduling/admin/platoons`           | `scheduling.manage` |
-| Who Can Fill What       | `/scheduling/admin/positions`          | `scheduling.manage` |
-| Settings (six sections) | `/scheduling/admin/settings/<section>` | `scheduling.manage` |
+| Page                      | URL                                    | Permission          |
+| ------------------------- | -------------------------------------- | ------------------- |
+| Shift Planning            | `/scheduling/admin/planning`           | `scheduling.manage` |
+| Shift Templates           | `/scheduling/admin/planning/templates` | `scheduling.manage` |
+| Shift Patterns            | `/scheduling/admin/planning/patterns`  | `scheduling.manage` |
+| Shift Close-Out           | `/scheduling/admin/closeout`           | `scheduling.manage` |
+| Scheduling Reports        | `/scheduling/admin/reports`            | `scheduling.manage` |
+| Platoons                  | `/scheduling/admin/platoons`           | `scheduling.manage` |
+| Who Can Fill What         | `/scheduling/admin/positions`          | `scheduling.manage` |
+| Settings (seven sections) | `/scheduling/admin/settings/<section>` | `scheduling.manage` |
 
 **Shift Planning** _(2026-09-05)_ is one screen with three routed sections —
 staffing gaps, templates, patterns — in the order the work happens. The gaps view
@@ -654,7 +774,7 @@ there is one of it. A shift officer's own route to closing their shift is
 unchanged and does not go through this page.
 
 Settings sections: `general`, `apparatus`, `platoons`, `eligibility`,
-`notifications`, `shift-reports` — each its own route, so a section can be
+`notifications`, `shift-reports`, `outside-apparatus` (2026-09-27) — each its own route, so a section can be
 linked to and bookmarked. The old `Equipment` section is gone; its two links
 into Inventory are cards on the hub, gated on Inventory's own grants.
 
@@ -678,13 +798,15 @@ GET    /api/v1/scheduling/shifts             # List shifts
 POST   /api/v1/scheduling/shifts             # Create shift
 GET    /api/v1/scheduling/shifts/{id}        # Get shift details
 POST   /api/v1/scheduling/shifts/{id}/signup # Sign up for shift
-POST   /api/v1/scheduling/shifts/{id}/withdraw # Withdraw from shift
+DELETE /api/v1/scheduling/shifts/{id}/signup # Withdraw from shift
 POST   /api/v1/scheduling/shifts/{id}/assignments # Assign member
 GET    /api/v1/scheduling/templates          # List templates
 POST   /api/v1/scheduling/templates          # Create template
 POST   /api/v1/scheduling/patterns           # Create shift pattern
 POST   /api/v1/scheduling/swap-requests      # Request swap
-POST   /api/v1/scheduling/time-off-requests  # Request time off
+POST   /api/v1/scheduling/time-off           # Request time off
+GET    /api/v1/scheduling/summary            # Counts, incl. active_templates / active_patterns (2026-09-29)
+*      /api/v1/scheduling/external-hours/*   # Shifts with other departments (2026-09-27) — see docs/SCHEDULING_MODULE.md
 GET    /api/v1/scheduling/reports/*           # Scheduling reports
 GET    /api/v1/scheduling/apparatus          # List basic apparatus
 GET    /api/v1/scheduling/shifts/{id}/unavailable-members  # Unavailable user IDs for assignment filtering

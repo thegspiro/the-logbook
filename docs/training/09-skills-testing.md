@@ -741,11 +741,28 @@ Navigate to **Training Admin > Skills Testing > Tests** and click on any complet
 
 ### Test History
 
-The tests list page supports filtering by:
+The **Test Records** tab supports filtering by:
 
-- **Status** — not_started, in_progress, completed, cancelled
-- **Candidate** — filter by specific member
-- **Template** — filter by specific skill sheet
+- **Status** — in progress, completed, cancelled, voided, or **Needs
+  Validation** (the review queue)
+- **Search** — a template, candidate or examiner name
+- **Date range** — when the test was completed, or when it was opened if it is
+  still unfinished. The tab opens on the **last twelve months**; clear the range
+  to see every test on file. The **Needs Validation** card on the Templates tab
+  links to the queue with no date range, so every result awaiting sign-off is
+  listed however old it is.
+
+_(2026-10-05)_ Records come a page at a time — 25 by default, with a **Per
+page** choice and page buttons under the list — rather than the department's
+whole history on every visit. Search runs across every page, not just the one
+on screen. **My Results** on the member's Skills Testing page and the skills
+list on **My Training** page the same way.
+
+**Export** downloads the records the tab is showing — the same status, search
+and date range — as a CSV with one row per evaluated step. It needs a date
+range of **at most a year**; with no range, or a longer one, the button is
+greyed out and the line under the date picker says why. For a longer audit
+period, export it a year at a time.
 
 ### What the member sees _(2026-08-08)_
 
@@ -804,21 +821,32 @@ template used to rewrite the structure that _completed_ tests read from — so:
 ## Skills Testing Summary Dashboard
 
 **Required Permission:** Authenticated _(revised 2026-08-08 — the Skills Testing
-page is no longer officer-only, so the Summary tab is reachable by any member.
-The figures below are department-wide aggregates and carry no individual's
-name.)_
+page is no longer officer-only. The figures are department-wide aggregates and
+carry no individual's name.)_
 
-Navigate to **Training Admin > Skills Testing > Summary** for a department-wide overview:
+The summary is the row of cards across the top of **Training Admin > Skills
+Testing > Templates** _(revised 2026-10-05 — there is no separate Summary tab)_:
 
-| Metric                  | Description                                                                                                                                     |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Total Templates**     | Number of skill sheet templates (archived excluded)                                                                                             |
-| **Published Templates** | Templates available for testing                                                                                                                 |
-| **Total Tests**         | All-time official test sessions. Practice attempts and **voided** results are excluded                                                          |
-| **Tests This Month**    | Official test sessions created in the current month, on the same exclusions                                                                     |
-| **Pass Rate**           | Percentage of **validated** completed tests that resulted in a pass                                                                             |
-| **Average Score**       | Mean percentage score across **validated** completed tests                                                                                      |
-| **Needs Validation**    | Official results awaiting an officer's sign-off. It **replaces the Pass Rate card** while the queue is non-empty, and appears for officers only |
+| Card                 | Description                                                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **Templates**        | Number of skill sheet templates (archived excluded)                                                                                  |
+| **Tests This Month** | Official test sessions created in the current month. Practice attempts and **voided** results are excluded                           |
+| **Needs Validation** | Official results awaiting an officer's sign-off — **officers only**, shown even at 0. Click it to open Test Records filtered to them |
+| **Pass Rate**        | Percentage of **validated** completed tests that resulted in a pass — officers only; members see —                                  |
+| **Avg Score**        | Mean percentage score across **validated** completed tests — officers only; members see —                                            |
+
+The summary endpoint also reports published templates and all-time test totals,
+which no card shows. _(Corrected 2026-10-04: this table used to list seven
+metrics, including **Total Templates**, **Published Templates** and **Total
+Tests**, and send you to a **Summary** tab. There is no Summary tab, and the
+cards are the ones above.)_
+
+> **"—" means there is nothing to measure yet** _(2026-09-29)_. **Pass Rate**
+> and **Avg Score** show "—" when the department has no figure — no validated
+> test yet, or (for the score) nothing tested carried points. They used to show
+> **0%**, so a department whose only test passed read "Pass Rate 100%" beside
+> "Avg Score 0%", and a department that had run no tests read as failing every
+> one.
 
 > **Pass rate and average score count only validated results** _(2026-08-08)_.
 > A member-run result nobody has signed off is a submission, not yet the
@@ -828,8 +856,9 @@ Navigate to **Training Admin > Skills Testing > Summary** for a department-wide 
 
 > **Needs Validation is deliberately officer-only.** It is an org-wide count of
 > _other people's_ outstanding evaluations, which is not a member's to see, and
-> it is only actionable by someone who can validate. Members receive `0` rather
-> than a hidden card.
+> it is only actionable by someone who can validate. Until 2026-10-05 the card
+> appeared only while the queue was non-empty and took the Pass Rate card's
+> place; it now sits beside it permanently.
 
 ![Skills testing summary with a non-zero Needs Validation count](./images/09-12-summary-pending-validation.png)
 
@@ -1369,7 +1398,7 @@ _Revised 2026-08-08 — examining moved out from behind `training.manage`._
 | Set disclosure defaults                    | `training.manage`                         |
 | View own results                           | Authenticated (own results only)          |
 | View all results                           | `training.manage`                         |
-| View summary dashboard                     | `training.manage`                         |
+| View the summary cards                     | Authenticated (Needs Validation, Pass Rate and Avg Score: `training.manage`) |
 
 > A member who opens a test they are not party to gets a **"not found"**, not a
 > "forbidden". A withheld result reads as absent rather than off-limits —
@@ -1443,7 +1472,7 @@ Competency Matrix reflects new scores
 | A practice test says it cannot be finished, over and over        | Fixed 2026-08-08. If the completion reached the server but its response never got back to your phone, every retry used to fail permanently on a test that had in fact gone through. The review screen now shows the existing results instead, and reports the server's actual message.                                                                            |
 | Template shows "archived" — can I still view old tests?          | Yes. Historical test results always reference the template version they were administered under. Archived templates just can't be used for new tests.                                                                                                                                                                                                             |
 | Score calculation seems wrong                                    | The score is calculated as: (total points earned / total possible points) × 100. Each criterion has a configurable point value. Check that all sections, criteria, and point values are correct.                                                                                                                                                                  |
-| Summary dashboard shows 0% pass rate                             | The pass rate only includes completed tests. If all tests are still in progress or cancelled, the rate will show 0%.                                                                                                                                                                                                                                              |
+| Pass Rate or Avg Score shows —                                   | Either you are not a training officer (these figures are officer-only), or no official test has been validated yet. They count validated completed tests only, so a queue of results awaiting sign-off leaves them at — until an officer validates one. |
 | Non-critical criteria showing as "FAIL"                          | Fixed: Non-critical criteria that are unchecked now display "Not Completed" instead of "FAIL". Pull latest changes.                                                                                                                                                                                                                                               |
 | Completed test times show UTC instead of local time              | Fixed: All timestamps now display in the user's local timezone. Pull latest changes and hard-refresh.                                                                                                                                                                                                                                                             |
 | Practice test results appearing in compliance                    | Practice tests are excluded from compliance calculations. If incorrectly categorized, delete the practice record — the candidate, the examiner or an officer can.                                                                                                                                                                                                 |

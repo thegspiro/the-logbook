@@ -694,30 +694,28 @@ class TestIsKnownRank:
     """
 
     async def test_a_stored_row_is_known(self):
-        db = _db([_one(SimpleNamespace(id="r1"))])
+        db = _db([_rows([("custom_rank",)])])
         service = OperationalRankService(db)
         assert await service.is_known_rank("org-1", "custom_rank") is True
 
     async def test_an_unstored_unseeded_code_is_not(self):
-        db = _db([_one(None)])
+        db = _db([_rows([])])
         service = OperationalRankService(db)
         assert await service.is_known_rank("org-1", "capitan") is False
 
     @pytest.mark.parametrize("code", sorted({c for c, _l, _o, _p in DEFAULT_RANKS}))
     async def test_every_seed_code_is_known_without_a_stored_row(self, code):
-        """The half that matters, and the half that would recreate #1833.
+        """The half that would recreate #1833: a department never seeded.
 
-        Seeding only ever fires into an empty table, so a department onboarded
-        before a code joined ``DEFAULT_RANKS`` has no row for it — while
-        ``_get_slug_eligibility_map``'s fallback still honours it. Validating
-        against stored rows alone would refuse a rank the rest of the system
-        treats as perfectly valid, which is the shape of the EMT seat bug: one
-        registry disagreeing with another about what exists.
+        With no rank rows at all, validating against stored rows alone would
+        refuse every rank ``_get_slug_eligibility_map``'s fallback treats as
+        valid — the shape of the EMT seat bug: one registry disagreeing with
+        another about what exists. A department *with* a ladder is held to it
+        (``TestADeletedSeedRungIsRefused``).
         """
-        db = _db([_one(None)])
+        db = _db([_rows([])])
         service = OperationalRankService(db)
         assert await service.is_known_rank("org-1", code) is True
-        db.execute.assert_not_awaited()
 
     @pytest.mark.parametrize("blank", ["", "   ", None])
     async def test_a_blank_code_is_not_a_rank(self, blank):
@@ -728,13 +726,13 @@ class TestIsKnownRank:
         assert await service.is_known_rank("org-1", blank) is False
 
     async def test_surrounding_whitespace_does_not_change_the_answer(self):
-        db = _db([_one(None)])
+        db = _db([_rows([])])
         service = OperationalRankService(db)
         assert await service.is_known_rank("org-1", "  firefighter  ") is True
 
     async def test_the_lookup_is_scoped_to_the_organization(self):
         """A rank another department configured is not this one's rank."""
-        db = _db([_one(None)])
+        db = _db([_rows([])])
         service = OperationalRankService(db)
         await service.is_known_rank("org-1", "their_custom_rank")
         clause = str(db.execute.await_args[0][0])
@@ -757,7 +755,7 @@ class TestResolveRankCodeCanonicalizes:
     """
 
     async def test_surrounding_whitespace_is_stripped_from_what_is_stored(self):
-        db = _db([])
+        db = _db([_rows([])])
         service = OperationalRankService(db)
         assert await service.resolve_rank_code("org-1", "  firefighter  ") == (
             "firefighter"
@@ -768,12 +766,12 @@ class TestResolveRankCodeCanonicalizes:
         # The prospect conversion UI suggests display-cased values, and MySQL's
         # default collation would have matched a stored row that way anyway.
         # Accepting them is fine; storing them verbatim is not.
-        db = _db([])
+        db = _db([_rows([])])
         service = OperationalRankService(db)
         assert await service.resolve_rank_code("org-1", spelling) == "firefighter"
 
     async def test_a_stored_row_returns_its_own_spelling(self):
-        db = _db([_one("station_captain")])
+        db = _db([_rows([("station_captain",)])])
         service = OperationalRankService(db)
         assert (
             await service.resolve_rank_code("org-1", "STATION_CAPTAIN")
@@ -781,7 +779,7 @@ class TestResolveRankCodeCanonicalizes:
         )
 
     async def test_an_unknown_code_resolves_to_none(self):
-        db = _db([_one(None)])
+        db = _db([_rows([])])
         service = OperationalRankService(db)
         assert await service.resolve_rank_code("org-1", "fire_cheif") is None
 
@@ -792,18 +790,22 @@ class TestResolveRankCodeCanonicalizes:
         assert await service.resolve_rank_code("org-1", blank) is None
         db.execute.assert_not_awaited()
 
-    async def test_the_sql_folds_case_rather_than_trusting_the_collation(self):
+    async def test_case_is_folded_in_python_rather_than_by_the_collation(self):
         """MySQL's default collation is case-insensitive; not every backend is.
 
         Relying on it would make the answer depend on database configuration,
         which is the kind of invisible dependency that only shows up as a
-        member who cannot sign up for anything.
+        member who cannot sign up for anything. The ladder is read whole and
+        compared folded, so the query carries no rank-code predicate at all.
         """
-        db = _db([_one(None)])
+        db = _db([_rows([("Custom_Rank",)])])
         service = OperationalRankService(db)
-        await service.resolve_rank_code("org-1", "Custom_Rank")
+        assert await service.resolve_rank_code("org-1", "custom_rank") == (
+            "Custom_Rank"
+        )
         clause = str(db.execute.await_args[0][0]).lower()
-        assert "lower(" in clause
+        assert "rank_code =" not in clause
+        assert "organization_id" in clause
 
     @pytest.mark.parametrize(
         "spelling", ["firefighter", " firefighter ", "Firefighter", "FIREFIGHTER"]
@@ -816,10 +818,44 @@ class TestResolveRankCodeCanonicalizes:
         """
         from app.core.permissions import get_rank_default_permissions
 
-        db = _db([])
+        db = _db([_rows([])])
         service = OperationalRankService(db)
         stored = await service.resolve_rank_code("org-1", spelling)
         assert get_rank_default_permissions(stored), (
             f"a member stored with rank {stored!r} holds no rank permissions, "
             "which is the silent disqualification this check exists to prevent"
         )
+
+
+class TestADeletedSeedRungIsRefused:
+    """ONBOARD-3: once a department has a ladder, the ladder is the vocabulary.
+
+    Setup lets a department delete seeded rungs, and every rank picker lists
+    stored rows only. Honouring a deleted ``firefighter`` on a direct write —
+    the member API, a CSV import, prospect conversion — assigned a rank the
+    department had removed, with the static grants that come with it.
+    """
+
+    async def test_a_seeded_code_missing_from_a_stored_ladder_is_refused(self):
+        db = _db([_rows([("fire_chief",), ("captain",)])])
+        service = OperationalRankService(db)
+        assert await service.resolve_rank_code("org-1", "firefighter") is None
+
+    async def test_a_seeded_code_the_ladder_kept_still_resolves(self):
+        db = _db([_rows([("fire_chief",), ("firefighter",)])])
+        service = OperationalRankService(db)
+        assert await service.resolve_rank_code("org-1", "Firefighter") == (
+            "firefighter"
+        )
+
+    async def test_an_organization_with_no_ladder_keeps_the_built_ins(self):
+        # The #1833 shape: nothing seeded, so refusing the built-ins would
+        # refuse every rank the eligibility fallback treats as valid.
+        db = _db([_rows([])])
+        service = OperationalRankService(db)
+        assert await service.resolve_rank_code("org-1", "emt") == "emt"
+
+    async def test_is_known_rank_follows_the_same_rule(self):
+        db = _db([_rows([("captain",)])])
+        service = OperationalRankService(db)
+        assert await service.is_known_rank("org-1", "emt") is False

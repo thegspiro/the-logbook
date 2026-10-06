@@ -64,10 +64,9 @@ const DateTimeQuarterHour: React.FC<DateTimeQuarterHourProps> = ({
     onChange(`${date}T${newTime}`);
   };
 
-  // Wraps rather than shrinks: three selects cannot narrow below their text,
-  // so in a half-width form column (EventForm's Start/End pair on a tablet)
-  // a single row pushed AM/PM past the page edge and scrolled it sideways.
   return (
+    // Wraps rather than shrinking: the time selects keep a minimum width, so on
+    // a phone the time row drops below the date instead of crushing both.
     <div className="flex flex-wrap items-center gap-2">
       <input
         type="date"
@@ -77,7 +76,7 @@ const DateTimeQuarterHour: React.FC<DateTimeQuarterHourProps> = ({
         {...(min ? { min } : {})}
         onChange={(e) => handleDateChange(e.target.value)}
         className={className}
-        style={{ flex: '1 1 8rem', minWidth: '9rem' }}
+        style={{ flex: '1 1 10rem', minWidth: '10rem' }}
       />
       <TimeQuarterHour
         value={timePart}

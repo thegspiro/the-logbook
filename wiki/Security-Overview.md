@@ -142,7 +142,7 @@ that is a standing grant to finish somebody else's installation.
 - **Audit archival**: Scheduled task archives old audit entries while maintaining hash chain integrity _(2026-07: the `rehash_chain` op is now break-glass — gated by `AUDIT_ALLOW_CHAIN_REHASH`, repairs legacy rows only, and fails closed with 409 on a keyed-row mismatch rather than rebuilding over a tamper)_
 - **Audit deletion logging**: All audit log deletions are themselves logged for accountability
 - **Hardened file logs**: Secure permissions and restricted access paths for file-based log rotation
-- **HIPAA cache exclusions expanded**: `/admin-hours/`, `/facilities/`, `/organizations/`, `/documents/`, `/training/` added to `UNCACHEABLE_PREFIXES`
+- **HIPAA cache exclusions expanded**: `/admin-hours/`, `/facilities/`, `/organization/`, `/documents/`, `/training/` added to `UNCACHEABLE_PREFIXES`
 - **Shared API client factory**: Module API services use `createApiClient()` with consistent interceptors, eliminating ~300 lines of duplicated security config
 - **Encryption at rest**: AES-256-GCM authenticated encryption for sensitive database fields (emergency contacts, medical information, PII) using `ENCRYPTION_KEY` and `ENCRYPTION_SALT` environment variables (legacy Fernet values still readable)
 - **Docker hardening**: Read-only root filesystems, `no-new-privileges` security option, dropped capabilities, explicit tmpfs mounts
@@ -301,7 +301,7 @@ Multi-layer brute force protection:
 
 1. **Per-IP Rate Limiting**: Tracks failed logins by IP
 2. **Per-User Rate Limiting**: Tracks failed logins by username
-3. **Progressive Lockout**: 30-minute lockout after threshold
+3. **Account Lockout**: 15-minute lockout (default) after `MAX_LOGIN_ATTEMPTS` consecutive failures; wrong two-factor codes count toward it
 4. **Alert Generation**: Notifies administrators
 
 ---
@@ -681,7 +681,7 @@ npx lighthouse http://localhost:3000 --only-categories=accessibility --output=ht
 - **History**: Last 12 passwords remembered
 - **Age**: Maximum 90 days between changes (configurable)
 - **Complexity**: Enforced on client and server side
-- **Lockout**: 5 failed attempts = 30 minute lockout
+- **Lockout**: 5 failed attempts = 15-minute lockout by default (both configurable); wrong two-factor codes count toward it
 - **Reset**: Secure password reset with time-limited tokens
 
 ### Best Practices for Users
@@ -851,7 +851,7 @@ Automated monitoring for:
 ### Session Management
 
 - **Token Type**: JWT (JSON Web Tokens)
-- **Access Token Lifetime**: 8 hours (configurable)
+- **Access Token Lifetime**: 30 minutes by default (`ACCESS_TOKEN_EXPIRE_MINUTES`; `.env.example.full` and the Unraid compose file set 480)
 - **Refresh Token Lifetime**: 7 days (configurable)
 - **Automatic Logout**: 15 minutes inactivity (configurable, aligned with HIPAA recommendation)
 - **Concurrent Sessions**: Configurable limit
@@ -1173,12 +1173,15 @@ rather than per-organization:
   overlaid onto `CountryBlockRule` rows) is **disabled by default** and enabled
   only when the operator sets `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT=true` — because
   a change affects every tenant
-- Applied in real-time via the blocking middleware; IP allowlist exceptions are
-  honored (allowlisted IPs bypass country blocks)
+- Applied in real time by the blocking middleware. Approved IP exceptions are
+  recorded but **not** read by enforcement — the middleware passes an empty
+  allowlist, because it runs before any tenant context exists and one
+  organization's exception would otherwise relax the block for every tenant —
+  so an approved address is still blocked if its country is
 - **Fail-open by default, or fail-closed via `GEOIP_FAIL_CLOSED`**: when set, an
   IP whose country can't be resolved (including a missing/corrupt MaxMind DB) is
-  blocked; private/reserved and allowlisted IPs are always allowed so an internal
-  operator can recover
+  blocked; private/reserved IPs are always allowed so an internal operator can
+  recover
 
 ### Scheduled Task Auto-Run
 

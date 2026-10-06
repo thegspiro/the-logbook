@@ -137,6 +137,7 @@ Individual member training history.
 - `rank_at_completion`: Member's rank at the time the record was created (auto-populated, VARCHAR 100)
 - `station_at_completion`: Member's station at the time the record was created (auto-populated, VARCHAR 100)
 - `attachments`: JSON array of attached document/certificate metadata (`file_name`, `file_path`, `file_type`, `file_size`, `uploaded_at`, `uploaded_by`). Files are stored on disk; see "Training-Record Attachments (2026-05)" under API Endpoints. Mutated via `flag_modified` (CLAUDE.md pitfall #12)
+- `source_event_id` _(2026-09-29, migration `2b15c5a8ba82`)_: FK to `events.id`, `ondelete="SET NULL"`, nullable. The event whose Finalize Attendance wrote (or adopted) this record. Server-set only, never read from a request body. A unique index `uq_training_record_event_user` on `(source_event_id, user_id)` makes it the record's identity for that credit, so reopening and re-finalizing an event updates the row in place however the event's title or date was edited in between. `NULL` for manual, self-reported and imported records, and for every record that predates the revision — nothing is backfilled; a department corrects a past event by reopening and re-finalizing it. The downgrade drops the links: after a re-upgrade a session-less Training event writes a second row on its next finalize.
 
 ### TrainingRequirement
 
@@ -1071,6 +1072,71 @@ GET    /api/v1/training/module-config/skill-names          # Get active SkillEva
 > `_BOOL_FIELD_DEFAULTS` coercion in `app/schemas/training_module_config.py`, so
 > legacy rows with NULL booleans no longer 500 when the config is read.
 
+### Grading Date: the Department's, Not the Server's _(2026-09-26)_
+
+The compliance engine evaluates "as of today" against the date in the
+organization's timezone (`org_today` / `resolve_org_today` / `today_in` /
+`local_date` in `app/utils/org_timezone.py`), not `date.today()`. The server
+runs in UTC, so the old reading was a day ahead for a US department every
+evening. The whole engine moved in one change so that no two screens grade the
+same member against different days (CLAUDE.md pitfall 29):
+`TrainingService.evaluate_requirement_detail` and its callers, the compliance
+matrix and its `as_of`, `compute_org_compliance_pct`, member status, the
+compliance summary, requirement progress (resolved once per page in
+`get_requirements_progress_for`), expiring certifications, the competency
+matrix, the annual compliance report, the compliance CSV/PDF and forecast, My
+Training and the MCP training tools. Program enrollments (default deadline,
+recert schedule and resets, expiry sweep, reopen, a requirement's evaluation
+window, days-left), the struggling-member and deadline warnings,
+recertification renewal tasks, instructor and member qualification expiry and
+EVOC operator certificates moved with it. Enrollment timestamps
+(`enrolled_at`, `cycle_started_at`) are read as the department's calendar day
+via `local_date`. Pinned by `tests/test_compliance_engine_org_today.py` and
+`tests/test_org_local_today.py`. Call sites still on `date.today()` elsewhere in
+the backend are listed in `docs/KNOWN_LIMITATIONS.md` ("'Today' Is Still the
+Server's Date in 92 Places").
+
+### "Not Set Up" Instead of 100% _(2026-09-29)_
+
+`compute_org_compliance_pct` returns 100 for an organization with no active
+requirement — arithmetically true, and read as "everyone is current". Its
+contract is unchanged; callers check `count_active_requirements(db, org_id)`
+(`training_compliance.py`) first and show "not set up" instead (the admin hub
+metric, the dashboard widget, the admin summary). `GET
+/training/dashboard-summary` gains additive `stats` counts —
+`active_requirements`, `active_courses` (active), `training_sessions` (all) and
+`active_programs` (active, non-template) — which the Training Officer
+Dashboard's setup guide ticks its steps off. The frontend now validates that
+response's shape (`stats`, `pending_validation` and its six lists) before any
+widget reads it; a malformed body takes the page's load-error path rather than
+rendering zeros (#2867).
+
+### Self-Reported Submission Notifications _(2026-09-28)_
+
+`TrainingSubmissionService` writes in-app `NotificationLog` rows in two
+categories, so neither stacks with the other in the inbox:
+
+- `training_submission` (`REVIEW_PROMPT_CATEGORY`) — one per submission to every
+  active member holding the Training Officer position (the session-approval
+  email's recipients), `action_url` `/training/admin?page=records&tab=submissions`.
+  Sent on entry to `pending_review` (submit, draft hand-off, resubmission after a
+  revision request, approval reversal), never for an auto-approved submission,
+  never to the submitter or to the officer who reversed. Archived for every
+  officer on approve, reject, revision request or withdrawal.
+- `training_submission_update` (`MEMBER_NOTICE_CATEGORY`) — to the submitter,
+  `action_url` `/training/submit`, only when the outcome differs from what they
+  sent: rejected (with reason), approved with changes (each overridden hours,
+  credit hours or training type as before → after), revision requested (with
+  notes; archived on resubmit), approval reversed (with reason). A plain
+  approval and an officer deciding their own submission send nothing.
+
+Both are built and inserted by `_deliver_in_app` inside a SAVEPOINT after the
+decision commits, and never raise: a failure is logged and the decision stands.
+A session-level rollback there would expire the submission and current user just
+before the endpoint serializes them. `archive_related_notifications` now writes a
+whole-second `expires_at`, because MySQL 8 rounds a fractional `DATETIME(0)` up
+and left an archived row visible for up to half a second. No schema change.
+
 ## Database Migrations
 
 ### Initial Training System
@@ -1158,6 +1224,16 @@ Adds to `training_requirements`:
 ### Actor FK On-Delete Hardening (2026-07-02)
 
 - `20260702_0001_training_actor_fks_set_null.py` — Switches all 28 audit/actor FKs across the training tables (`created_by`, `updated_by`, `approved_by`, `reviewed_by`, `verified_by`, `granted_by`, `evaluated_by`, `evaluator_id`, `last_evaluator_id`, etc.) from bare `ForeignKey("users.id")` (MySQL default RESTRICT, which blocked user deletion) to `ON DELETE SET NULL`, and relaxes `skill_checkoffs.evaluator_id` from NOT NULL. Existing MySQL auto-named constraints are discovered via the inspector at run time and recreated under deterministic names
+
+### Event Attendance Source & Grandfathering (2026-09 / 2026-10)
+
+- `20260929_1413_2b15c5a8ba82_training_record_event_source.py` — Adds
+  `training_records.source_event_id` and the unique
+  `(source_event_id, user_id)` index (see TrainingRecord above). No backfill.
+- `20261003_0144_d058b5e7c1f4_add_grandfathering_dates_to_training_.py` —
+  Adds `new_member_cutoff_date`, `existing_member_deadline` and
+  `applies_to_joined_before` (all nullable `DATE`) to `training_requirements`.
+  `NULL` keeps the previous behaviour, so existing rows are unaffected.
 
 ### Module Review — Cycle Tracking & Credit Ledger (2026-07)
 
@@ -1345,6 +1421,42 @@ The external training integration system allows organizations to connect to exte
 | Lexipol          | `lexipol`          | Policy acknowledgment and training       |
 | I Am Responding  | `i_am_responding`  | Response tracking with training features |
 | Custom API       | `custom_api`       | Generic adapter for any compatible API   |
+
+#### Target Solutions _(2026-09-29)_
+
+Until #2815 a `target_solutions` provider was sent to the Vector Solutions REST
+API, which takes a different credential and returns certifications rather than
+completions. It now requests Target Solutions' **Training Records API**: one
+`GET {api_base_url}?action=reports.buildReport&reportType=completionsall`
+authenticated by `key` and `secret` query parameters, returning a CSV.
+
+- **Mapping.** `Transcript ID` is the external record id (a re-sync updates the
+  same import in place); `Duration (hours)` fills both `credit_hours` and
+  `duration_minutes`; members are matched on the `Email` column against the
+  member's email, case- and whitespace-insensitive, skipping deleted members. An
+  unmatched member stays in the user mappings and is auto-matched on a later
+  sync unless an officer has set or cleared that mapping by hand.
+- **Credentials.** `api_secret` is required for this provider. Because key and
+  secret must travel in the URL they are redacted from httpx's request log line,
+  Sentry breadcrumbs, spans and error-event frame variables, and from error
+  messages returned to officers. An `api_base_url` containing a key, secret or
+  token is rejected, since that column is plain text while
+  `api_key`/`api_secret` are encrypted.
+- **Scheduled syncs come in two sizes** (#2822). `run_scheduled_sync` runs a
+  **review** (`sync_type = "review"`, the last `REVIEW_LOOKBACK_DAYS` = 30 days)
+  when no successful (completed or partial) review sync log exists since the
+  most recent `config.review_time` (default `02:00`, department timezone via
+  `resolve_scheduling_timezone`); otherwise an incremental **pull** since the
+  last sync, at least since yesterday. A newly enabled provider therefore starts
+  with the 30-day backfill, and a failed review is retried on the next run.
+  `next_sync_at` is the earlier of the next pull (`sync_interval_hours`, which
+  the form defaults to 1 for this provider) and the next review. The review
+  ledger is the existing sync log, so there was no migration. A malformed
+  stored `review_time` falls back to the default rather than raising in the
+  scheduler loop. Other providers are unchanged: one sync every
+  `sync_interval_hours` after the previous one.
+- The interim "sync at set times of day" (`config.sync_times`, #2818) never
+  shipped in a release; #2822 replaced it.
 
 ### Models
 
@@ -1539,7 +1651,11 @@ POST   /api/v1/training/external/providers/{id}/imports/bulk
 4. **Process Records**: Each record is normalized and stored as ExternalTrainingImport
 5. **Auto-Map Users**: System attempts to match external users by email
 6. **Auto-Map Categories**: System attempts to match categories by name
-7. **Review Mappings**: Admin reviews and fixes unmapped users/categories
+7. **Review Mappings**: Admin reviews and fixes unmapped users/categories from
+   each card's dropdown. Mapping a user by hand (`PATCH …/user-mappings/{id}`)
+   also moves that user's not-yet-imported records to the chosen member, or
+   detaches them on an explicit `internal_user_id: null`; imported records keep
+   their member _(2026-10-04)_
 8. **Import Records**: Records are imported as TrainingRecords
 
 ### Provider Configuration

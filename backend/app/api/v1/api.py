@@ -50,6 +50,8 @@ from app.api.v1.endpoints import (
     medical_screening,
     medical_supplies,
     meetings,
+    member_badges,
+    member_id_cards,
     member_leaves,
     member_service_history,
     member_status,
@@ -254,6 +256,12 @@ api_router.include_router(
     dependencies=module_gate("storefront", "The Department Store"),
 )
 api_router.include_router(labels.router, tags=["labels"])
+api_router.include_router(
+    member_id_cards.router, prefix="/member-id-cards", tags=["member-id-cards"]
+)
+api_router.include_router(
+    member_badges.router, prefix="/member-badges", tags=["member-badges"]
+)
 api_router.include_router(station_documents.router, tags=["station-documents"])
 api_router.include_router(forms.router, prefix="/forms", tags=["forms"])
 api_router.include_router(

@@ -13,7 +13,7 @@
 ### HOOK (0:00 – 0:30)
 
 **[SCREEN: Dashboard with the full sidebar expanded showing every module.
-Quick cuts of: Settings page, Position Management, Member Admin, Integrations,
+Quick cuts of: Settings page, Role Management, Member Admin, Integrations,
 IP Security, Platform Analytics.]**
 
 > "The IT Manager is the most powerful role in The Logbook. You have the wildcard
@@ -57,8 +57,8 @@ IP Security, Platform Analytics.]**
 **[SCREEN: Show the General settings tab/section.]**
 
 > "**General settings** let you update everything you entered during onboarding —
-> department name, address, contact info, timezone, and logo. You can also set
-> the department's official website URL and social media links."
+> department name, address, contact info, timezone, and logo. The department's
+> website sits with the phone and email under Contact."
 
 **[SCREEN: Show editing the organization name, then scrolling through fields]**
 
@@ -66,7 +66,12 @@ IP Security, Platform Analytics.]**
 > time, every shift schedule, every deadline will display incorrectly for your
 > members. Make sure it matches your department's physical location."
 
-**[CALLOUT: "Settings → General → Timezone — verify this is correct"]**
+> "And it's the department's calendar, not just its clock. Expiry and overdue
+> checks, compliance grading, alert timing, and the times printed in emails,
+> PDFs and CSV exports all follow it. The server's own clock and the `TZ`
+> variable in your environment file don't."
+
+**[CALLOUT: "Settings → General → Profile → Timezone — verify this is correct"]**
 
 ### MODULE TOGGLES (3:30 – 4:30)
 
@@ -85,15 +90,16 @@ IP Security, Platform Analytics.]**
 
 ### BRANDING & APPEARANCE (4:30 – 5:00)
 
-> "You can customize the platform's appearance — upload your department logo,
-> set the primary color scheme to match your department's colors. The platform
-> supports light mode, dark mode, system-matched, and a high-contrast mode for
-> accessibility."
+> "Branding is your logo. Upload it under General, Profile — a PNG or JPEG, up
+> to five megabytes; SVG is refused — and it's used on the sign-in page, at the
+> top of every email, and as the installed app's icon. **Remove logo** takes it
+> off again."
 
-**[SCREEN: Show changing the theme, uploading a logo]**
+**[SCREEN: Show uploading a logo, then My Account → Appearance]**
 
-> "Individual members can choose their own theme preference, but the
-> organization-wide default is what new members see on first login."
+> "There's no department colour scheme to set. The platform supports light
+> mode, dark mode, system-matched, and a high-contrast mode for accessibility,
+> and each member picks their own under My Account, Appearance."
 
 ### WHERE THE REST OF THE SETTINGS LIVE (ADDED 2026-09-12)
 
@@ -107,13 +113,18 @@ IP Security, Platform Analytics.]**
 > That's newer than it looks; until September eleventh the choice only ever
 > reached the browser that made it."
 
+> "With the top bar, groups that don't fit the screen move, in order, into a
+> **More** menu at the right-hand end — so on a laptop, some of your menu lives
+> under More."
+
 **[SCREEN: Members → Administration → Settings, the five-section strip visible]**
 
 > "And five settings that used to be scattered are now one screen at
 > **Members, Administration, Settings** — contact visibility, membership ID
 > numbering, the operational rank ladder, the membership tier ladder, and EVOC
 > levels. Each one is its own address, so you can send an officer straight to
-> the one they need."
+> the one they need. Membership ID numbering takes your own pattern now — year,
+> prefix, running number — and can restart every calendar or fiscal year."
 
 **[CALLOUT: "Five sections, five different permissions — check before you
 delegate"]**
@@ -141,20 +152,23 @@ delegate"]**
 > "The first real task after setup is getting your roster into the system. There
 > are two approaches — individual entry and bulk import."
 
-> "For individual entry, click 'Add Member.' Fill in the basics: first name,
-> last name, email address. Then assign their position — Firefighter, Captain,
+> "For individual entry, click 'Add Member.' The required fields are marked:
+> first and last name, home address, primary phone, email, and one emergency
+> contact — plus a membership number, unless your department numbers members
+> automatically. Position and rank are optional here — Firefighter, Captain,
 > Secretary, whatever applies."
 
-**[SCREEN: Fill in a sample member form. Show the position dropdown.]**
+**[SCREEN: Fill in a sample member form. Show the required markers, then the
+position dropdown.]**
 
-> "You can also fill in optional fields — phone number, emergency contact,
-> membership type, station assignment. The more data you enter now, the less
-> back-and-forth you'll have later."
+> "The more data you enter now, the less back-and-forth you'll have later."
 
-**[SCREEN: Save the member. Show the success confirmation.]**
+**[SCREEN: The Account Password card — "Set initial password" unticked. Save the
+member. Show the success confirmation.]**
 
-> "When you save, if email is configured, the system can automatically send
-> an invitation email with login credentials."
+> "When you save, the system emails a temporary password — if email is
+> configured. If it isn't, the form makes you set an initial password yourself,
+> so nobody ends up with an account they can't sign in to."
 
 ### BULK IMPORT VIA CSV (6:30 – 8:30)
 
@@ -183,7 +197,10 @@ application briefly to show the columns.]**
 
 > "**Emails must be unique** — every member needs a different email address."
 
-> "**Leave membership number blank** to have the system assign one."
+> "**Leave membership number blank** to have the system assign one — but only
+> if membership ID numbers are enabled with **Auto-Generate IDs** on, in
+> Members administration → Settings. Otherwise the member is imported without
+> one."
 
 > "**Role names must match** — use the exact role name from your Roles page.
 > 'Firefighter,' not 'FF' or 'fire fighter.' A name that doesn't match will
@@ -227,14 +244,15 @@ your roster · row width"]**
 > so a phone number lands in the email field. A shifted row is rejected, never
 > guessed at."
 
-**[SCREEN: The "Send welcome emails" checkbox, unchecked, in the review step]**
+**[SCREEN: The "Send welcome emails now" checkbox, unchecked, in the review step]**
 
 > "Look at this checkbox before you confirm. Creating a member queues a
 > temporary-password email immediately, and an import creates them by the dozen —
 > loading a roster for testing, or from a list with stale addresses, used to put
 > unrecallable mail in front of every one of them. It's **off by default** for
 > imports now. Load the roster quietly, check it, then issue credentials from
-> Member Management."
+> Member Management. If your email isn't set up yet, the checkbox is greyed out
+> — import quietly and set passwords with **Reset Password**."
 
 **[SCREEN: Click Import; the row counter advances; click Stop part-way]**
 
@@ -282,7 +300,7 @@ errorReason column]**
 
 ### THE PERMISSION MODEL (10:00 – 11:00)
 
-**[SCREEN: Navigate to Settings → Position Management (RoleManagementPage)]**
+**[SCREEN: Navigate to Organization Settings → Role Management (RoleManagementPage)]**
 
 > "The Logbook uses a dot-notation permission system. Permissions look like
 > 'events.manage,' 'training.view,' 'settings.edit.' Positions are bundles of
@@ -323,11 +341,13 @@ errorReason column]**
 
 ### CREATING CUSTOM POSITIONS (12:30 – 13:30)
 
-**[SCREEN: Click "Create Position" button]**
+**[SCREEN: Click "Create Custom Role" button; the dialog's Priority hint in
+view]**
 
-> "Need a custom position? Click 'Create Position.' Give it a name, a
-> description, and set its priority level — this determines where it falls in
-> the hierarchy."
+> "Need a custom position? Click **Create Custom Role**. Give it a name and a
+> description. **Priority** only sets the order positions are listed in and
+> which one counts as a member's main position — it grants nothing, and the
+> dialog says so. What a position can do is the permissions you tick."
 
 **[SCREEN: Create a "Social Media Coordinator" position with settings.manage
 and events.view permissions]**
@@ -335,6 +355,18 @@ and events.view permissions]**
 > "For example, let's create a 'Social Media Coordinator' position. They need to
 > view events so they can post about them, and maybe manage the public portal
 > settings. Toggle on the permissions they need, save, and you're done."
+
+> "And that public-portal part really does need **settings.manage**. Until
+> late September, the portal's admin screens — API keys, access logs, which
+> fields are published — answered any signed-in member. They don't now, so if
+> something outside The Logbook was calling them as an ordinary member, expect
+> it to start getting refused. The portal's **Configuration** tab is down to
+> **Rate Limiting**; the allowed-origins and caching boxes went because nothing
+> read them."
+
+**[PRODUCTION NOTE — 2026-10-04. New line (2026-09-29), about 15 seconds;
+re-time Chapter 4. No new footage needed unless you cut to the Configuration
+tab.]**
 
 ### ASSIGNING MULTIPLE POSITIONS (13:30 – 14:00)
 
@@ -372,40 +404,47 @@ and events.view permissions]**
 
 ### IP SECURITY (15:30 – 16:30)
 
-**[SCREEN: Navigate to IP Security module (IPSecurityPage)]**
+**[SCREEN: Go to `/ip-security` (IPSecurityAdminPage) — "Review IP exception
+requests and manage blocked countries", with the Pending Requests, All
+Exceptions, Blocked Attempts and Blocked Countries tabs.]**
 
-> "The IP Security module lets you restrict access by IP address. This is useful
-> if you want to limit admin access to your station's network, or if you need to
-> block specific IP ranges."
+> "IP Security is about **country blocking**, and the exceptions to it. There
+> are no IP allowlists or blocklists to build here. Neither page is in the
+> menus, so bookmark the addresses."
 
-**[SCREEN: Show the IP security dashboard with allowlist/blocklist]**
+> "A member who needs an exception — somebody travelling, say — files it
+> themselves at `/ip-security/my-requests`: the address, the reason, a use case
+> and how many days. You review those under **Pending Requests**, see every one
+> under **All Exceptions**, and see what was turned away under **Blocked
+> Attempts**."
 
-> "You can create allowlists — only these IPs can access the system. Or
-> blocklists — these IPs are denied. You can also restrict access by geographic
-> region."
+**[CALLOUT: "An approved exception does not currently lift a country block"]**
 
-**[CALLOUT: "Use IP allowlisting for admin access from station networks only"]**
+> "And be straight with the member: approving an exception is recorded, but
+> right now it **doesn't lift a country block**. That's a known limitation
+> waiting on a decision, not something you've configured wrong."
 
-> "One note on the geographic (country) blocking: for security, the blocked-
-> country list is normally set once at deploy time — your operator configures it
-> with the `BLOCKED_COUNTRIES` setting — and the in-app add/remove controls are
-> off by default. If you want to manage blocked countries from inside the app,
-> your operator enables the `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT` setting. This
-> is because country blocking applies to the whole deployment, not just one
-> department. Your IP allowlists and blocklists are unaffected — you manage
-> those in the app as usual."
+**[SCREEN: The Blocked Countries tab]**
+
+> "**Blocked Countries** blocks every request from a country, for every
+> organization on this server — which is why its add and remove controls only
+> work when your operator turns on `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT`.
+> Countries your operator set at deploy time with `BLOCKED_COUNTRIES` aren't
+> listed on this tab, so an empty list doesn't mean nothing is blocked."
 
 ### SESSION & PASSWORD POLICIES (16:30 – 17:30)
 
-> "Under security settings, you can configure session timeouts — how long before
-> an inactive user is automatically logged out. For HIPAA compliance, the
-> recommended timeout is 15 to 30 minutes."
+> "Session timeouts and password policy aren't on a screen — they're
+> deployment settings in your environment file, because they apply to every
+> department on the server. An inactive session signs out after fifteen minutes
+> by default, which is what HIPAA guidance recommends."
 
-**[SCREEN: Show session timeout settings]**
+**[SCREEN: `.env` — `HIPAA_SESSION_TIMEOUT_MINUTES`, `PASSWORD_MIN_LENGTH`,
+`HIPAA_MAXIMUM_PASSWORD_AGE_DAYS`]**
 
-> "Password policies are also configurable — minimum length, complexity
-> requirements, maximum age before forced rotation. The defaults are HIPAA-
-> compliant, but you can make them stricter."
+> "Password policy lives there too — minimum length, twelve by default,
+> complexity requirements, and maximum age before forced rotation, ninety days.
+> The defaults are HIPAA-compliant, but you can make them stricter."
 
 ### BRUTE-FORCE PROTECTION, AND WHICH WAY EACH CONTROL FAILS (17:30 – 18:45) — ADDED 2026-08-19
 
@@ -418,8 +457,10 @@ breached password, CAPTCHA — with the "on failure" column highlighted.]**
 
 > "**Rate limiting** counts all attempts in a short window, per IP. **Account
 > lockout** counts consecutive failures against one user — five, then fifteen
-> minutes by default. Both numbers are settings. That pair sounds complete, and
-> it isn't."
+> minutes by default. Both numbers are settings. And for a two-factor account,
+> wrong codes count too. Typing the right password again doesn't reset the
+> count any more — only a correct code does — so nobody holding a password can
+> keep guessing codes. That pair sounds complete, and it isn't."
 
 **[CALLOUT: "Lockout is per-user. Spraying one password across a thousand
 accounts never reaches five failures on any of them."]**
@@ -490,20 +531,33 @@ the browser console for CSP, not the server log."]**
 
 ### EVENTS SETTINGS (18:00 – 19:00)
 
-**[SCREEN: Navigate to Events → Settings (EventsSettingsTab)]**
+**[SCREEN: Navigate to Events → Event settings (EventsSettingsTab); show the
+section list: Visibility, Categories, Attendance, Outreach Types, Hour
+Tracking, Pipeline, Email, Public Form, Headline Metrics]**
 
 > "Each module has its own settings page. Let's walk through the most important
 > ones, starting with Events."
 
-> "In Events settings, you can configure event types — business meetings,
-> training drills, social events, fundraisers. You can set default RSVP
-> deadlines, enable or disable QR code check-in, and control whether event
-> request approval is required."
+> "In **Event settings**, **Visibility** and **Categories** shape how events
+> are sorted — which categories members filter by, and your own categories on
+> top of the built-in types. **Pipeline**, **Email** and **Public Form** cover
+> event requests from the public: how they're handled, what's sent, and the
+> form itself."
 
-**[SCREEN: Show event type configuration, QR check-in toggle]**
+**[SCREEN: The Attendance section: "Who can see who's going", then the
+per-event-type choice of who takes attendance requests]**
 
-**[CALLOUT: "QR Check-In generates a unique QR code for each event for
-contactless attendance tracking"]**
+> "And **Attendance** answers two questions: who can see who's going, and who
+> takes an 'I was there' request when an event's own organizer and alternate
+> can't — a position you pick per event type. Leave a type unset and it goes to
+> the Secretary."
+
+**[CALLOUT: "QR Check-In is switched on per event, on the event itself"]**
+
+**[PRODUCTION NOTE — 2026-10-04. Rewritten. There are no default RSVP
+deadlines and no department-wide QR check-in switch in Event settings —
+pre-existing errors. The attendance-request fallback is new (2026-10-02). New
+footage needed.]**
 
 ### TRAINING SETTINGS (19:00 – 20:00)
 
@@ -532,9 +586,23 @@ thresholds]**
 
 **[SCREEN: Show creating or editing a shift template]**
 
-> "You can also configure shift swap rules — whether swaps need officer approval,
-> how far in advance members can request swaps, and blackout dates when swaps
-> aren't allowed."
+**[SCREEN: Administration → Scheduling → Settings. Show the section list:
+General, Apparatus, Platoons, Eligibility, Notifications, Shift Reports,
+Outside Apparatus. Open Notifications and hold on the "Not in effect yet"
+notice.]**
+
+> "The rest lives under Scheduling **Settings**, in seven sections — General,
+> Apparatus, Platoons, Eligibility, Notifications, Shift Reports, and Outside
+> Apparatus, the list of other departments' rigs your members ride on. There
+> are no swap rules to set: every trade goes to an officer who isn't in it, and
+> that isn't configurable. And read the yellow notice on **Notifications** —
+> those switches are saved but not in effect yet, so turning one off does not
+> stop that notice."
+
+**[PRODUCTION NOTE — 2026-10-04. Rewritten. The previous take promised swap
+rules, an advance-notice window and swap blackout dates; none has ever existed
+in Scheduling settings. Wrong before this window; found, not caused, by it.
+Outside Apparatus is new (2026-09-27). New footage needed.]**
 
 ### ELECTIONS SETTINGS (21:00 – 22:00)
 
@@ -592,7 +660,11 @@ Credentials Flow and Run As user, but blur all credentials.]**
 **[SCREEN: Set sync direction, then show a successful readiness result and
 member preview.]**
 
-> "Direction is the conflict control: push, pull, or both. There is no separate
+> "No scheduled sync runs unless you tick **Sync automatically every 30
+> minutes** — then it pushes, pulls, or both, every half hour, and the manual
+> sync buttons still work. Webhook updates from Salesforce arrive regardless."
+
+> "Direction is the conflict control: **Push**, **Pull** or **Bidirectional**. There is no separate
 > Salesforce-wins or Logbook-wins policy. Rate limits retry with bounded
 > backoff, and if a later page of a pull fails, the pull fails rather than
 > applying an incomplete result set."
@@ -602,6 +674,23 @@ member preview.]**
 > "If you didn't set up email during onboarding, this is where you do it. Go
 > to **Administration > Organization Settings**, click the **Email** tab, and
 > select your platform."
+
+**[SCREEN: The top of the Email tab — the Email link address card showing a
+public https address and its source line.]**
+
+> "At the top of the Email tab is the **Email link address**: the address every
+> emailed link starts with, password resets and ballots included, and where it
+> came from. Red means it only works on the server itself. As the IT Manager —
+> the System Owner — you can change it right here: type the address, Save, and
+> confirm **Change address**. No restart. It only accepts an address the server
+> already serves, and **Go back to the server setting** undoes it. Other
+> admins see it read-only."
+
+> "One more trap on the same card. If that address is a LAN address, a `.local`
+> name or a bare hostname, email links and the logo work at the station and fail
+> at home. The backend logs a warning at startup, and this card and Email
+> Templates both show it. If members read mail outside the station, set the
+> public address."
 
 **[SCREEN: Show email settings with platform buttons — Gmail, Microsoft 365, SMTP (any provider), Cloudflare, Not configured]**
 
@@ -665,6 +754,11 @@ member preview.]**
 > election announcements, and custom notifications. Important and
 > acknowledgment-required department messages are emailed automatically too."
 
+> "And when a member replies to any of them, the reply goes to the department
+> contact email on **Settings → General → Contact** — so set that to a mailbox
+> somebody reads. Leave it blank and replies go to your sending address, which
+> is often a no-reply account."
+
 > "If you also configure Twilio — account SID, auth token, and a sending number
 > in the environment settings — the platform can send **SMS** for _urgent_
 > department messages, reaching members even when they're off the app. Without
@@ -681,6 +775,20 @@ member preview.]**
 > accept and fall back to an SMTP server those departments don't have. And if
 > you've set a deployment-wide Cloudflare account, it's a **default for
 > organizations that haven't chosen**, not an override for ones that have."
+
+**[SCREEN: Settings → Email, the "Email link address" card showing the
+current address and where it came from; then Change address]**
+
+> "Last card on that page, and check it once: **Email link address**. Every
+> link in an outgoing email — password resets, ballots, approvals — starts with
+> it. The card says where it came from, `FRONTEND_URL` or your allowed
+> origins, and warns you if it only works on the server itself. If it's wrong,
+> fix `FRONTEND_URL` — or, if you hold **system.manage_link_domain**, change it
+> right here. It applies to the whole installation."
+
+**[PRODUCTION NOTE — 2026-10-04. New beat (2026-09-25), about 20 seconds;
+re-time Chapter 7. Out of the box only the IT Manager's wildcard holds
+`system.manage_link_domain`. Use a documentation domain on screen.]**
 
 ### CALENDAR SYNC (25:30 – 26:00)
 
@@ -829,6 +937,19 @@ print.]**
 > somebody at a desk can ping that printer all day and it will still fail from
 > the app."
 
+> "And before any of it works, the server has to be told it may. Set
+> **`LABEL_PRINTER_ALLOWED_NETWORKS`** in the environment to the printers'
+> addresses or subnet — `192.0.2.0/24`, say — and restart. **Empty is the
+> default, and empty means off**: no printer is ever contacted, however it's
+> registered. That's deliberate — it's an operator decision, not something an
+> organization admin can switch on, because otherwise the print socket is a way
+> to make your server knock on anything it can reach."
+
+**[PRODUCTION NOTE — 2026-10-04. Added. The allowlist has existed since
+2026-08-24 and the chapter never said so — the commonest reason a correctly
+registered printer never prints. Pre-existing omission. About 15 seconds;
+re-time Chapter 7. Use RFC 5737 addresses on screen.]**
+
 > "And nothing checks the address when you save it. Registration succeeds
 > either way. The failure shows up at print time, or when somebody hits Check
 > status — which is exactly when nobody wants to be discovering it."
@@ -879,6 +1000,12 @@ print.]**
 > "The Error Monitoring page shows any client-side or server-side errors. Each
 > error includes the type, the affected component, the timestamp, and any
 > available stack trace."
+
+> "Two exceptions, on purpose: anonymous suggestion-box submissions never show
+> up here, and The Logbook's own nginx doesn't log them — a line with an IP and
+> a timestamp would name the sender. If you run your own proxy in front — SWAG,
+> Nginx Proxy Manager, a load balancer — add the same exclusion; it's in the
+> upgrade notes."
 
 **[SCREEN: Show the error list, click into one to show details]**
 
@@ -1012,7 +1139,8 @@ types collapsing to four]**
 > would get a number that was never true. No historical scan is rewritten.
 > Training submitted before this has no start time recorded, because blank is
 > the truth and nine in the morning would be a guess. Existing email templates
-> keep their own colours. Nobody's standing shifts are inferred from their past
+> kept their own colours — until the late-September upgrade, which resets every
+> template's wording and colours along with it. Nobody's standing shifts are inferred from their past
 > assignments. And a department with no metric preferences gets the built-in
 > defaults, not a blank administration page."
 
@@ -1129,7 +1257,9 @@ delivery pass that compresses this chapter must not drop either.]**
 > "One: if you want ID cards, turn on the NFC ID Cards integration and grant
 > `members.manage_id_cards` to whoever issues them, and `members.check_in` to
 > whoever runs a station. It ships off, and it is enforced on the server — not
-> just by hiding a screen."
+> just by hiding a screen. One grant is already made for you: since October
+> 2026 the seeded **Assistant Membership Coordinator** position holds
+> `members.manage_id_cards`."
 
 > "Two: register your label printers, and check the address is reachable from
 > the server."
@@ -1232,9 +1362,11 @@ delivery pass that compresses this chapter must not drop either.]**
 > author and submit equipment checklists.**"
 
 > "No seeded position grants `inventory.*`, so this only reaches positions you
-> built yourself. Usually a quartermaster. It is deliberate — a checklist is a
-> list of inventory items — but if it is wider than you want, replace the
-> wildcard with the specific grants."
+> built yourself. It is deliberate — a checklist is a list of inventory items —
+> but if it is wider than you want, replace the wildcard with the specific
+> grants. Separately, the seeded **Quartermaster** position has been given the
+> checklist-managing permission itself, `inventory.check_manage`, since
+> September 30 — where its grants were still as shipped."
 
 ### GMAIL AND MICROSOFT 365 EMAIL NEVER WORKED (ADDED 2026-09-06)
 
@@ -1362,13 +1494,25 @@ delivery pass that compresses this chapter must not drop either.]**
 > So the person with the keys to the server was the only person who could sign
 > off a purchase."
 
-> "Here's what that actually cost departments, and it's worse than it sounds.
-> With no approval chain configured at all, requests **skip approval
-> entirely** — they don't fail, they just go through. But build a chain, which
-> needed the configure permission, so in practice an IT manager did it — and
-> don't also grant approve — and **every submitted request lands in Pending
-> Approval with nobody able to action it.** The half-configured state is the
-> one that strands records."
+> "Here's what that actually cost departments. A submitted request waits in
+> **Pending Approval** for somebody holding the approve permission — and with
+> nobody holding it, **every submitted request sat there with nobody able to
+> action it.** A request no chain applied to was stranded the same way."
+
+**[SCREEN: Finance → Approvals: a pending request with Approve and Deny; then a
+purchase request's detail page showing the same two buttons]**
+
+> "Since the end of September there's somewhere to do it, too: a **Finance →
+> Approvals** screen lists everything waiting, and the request's own page has
+> **Approve** and **Deny** for whoever holds the permission — including a
+> request no approval chain applies to."
+
+**[PRODUCTION NOTE — 2026-10-04. Rewritten. "With no approval chain configured
+at all, requests skip approval entirely" was wrong: such a request waits in
+Pending Approval. Until 2026-09-30 nothing in the app could move it; the
+Approvals screen arrived 2026-09-29 and approve/deny for chain-less requests on
+2026-09-30. New footage needed for the screen cue; about 10 seconds longer,
+re-time this chapter.]**
 
 **[CALLOUT: "Gated grant — only where finance is exactly view + manage"]**
 
@@ -1466,6 +1610,77 @@ written."]**
 > "If your department wants the top bar, set it once: Settings, Organization,
 > Profile, Navigation Layout. It applies to everybody from their next page
 > load."
+
+### THE LATE-SEPTEMBER UPGRADE: EMAIL, NEW POSITIONS, AND GEAR REMINDERS (ADDED 2026-09-30)
+
+**[SCREEN: Terminal — backup, `alembic heads` printing one line,
+`alembic upgrade head`]**
+
+> "Coming from the September twelfth release, this one carries **fifty-two**
+> migrations. Same drill: back up, run `alembic heads`, confirm it prints
+> exactly one line, then upgrade. The head you should land on is
+> `601fdb28ab8c`. And the rule hasn't changed — **never downgrade to fix a
+> fork.**"
+
+**[CALLOUT: "Head: 601fdb28ab8c — confirm it, don't assume it"]**
+
+**[BEAT — the one that can stop the restart]**
+
+> "Check `FRONTEND_URL` **before** you restart. In production the backend now
+> refuses to start while it points at the machine itself — unless
+> `ALLOWED_ORIGINS` names a public address it can use instead. Run the
+> preflight check from the next section and it'll tell you."
+
+**[SCREEN: Email Templates → a template with the Previous version (before the
+redesign) panel open]**
+
+> "Several migrations rewrite data, and the two that will surprise people are
+> about email. One, `b795d1b3401b`, moves every template nobody edited onto the
+> current design. The other, `15c5bc7700aa`,
+> **resets every template — edited ones included** — wording, footer and
+> colours. Nothing is deleted: it saves the old wording first, and **Email
+> Templates** shows it in a **Previous version** panel with **Load this
+> wording**. Tell whoever looks after your templates before they notice."
+
+**[SCREEN: Positions list — Chief, and the new vacant Compliance Officer]**
+
+> "Three things appear in your positions. The seeded **Fire Chief** is now
+> called **Chief** — only where nobody renamed it; permissions and holders don't
+> move. There's a new **Assistant Membership Coordinator**, who helps run
+> applicants without editing member records. And a new **Compliance
+> Officer**, held by nobody."
+
+**[CALLOUT: "The Compliance box is live the moment the upgrade finishes"]**
+
+> "That last one comes with a **Compliance suggestion box that's already
+> accepting submissions**. Until somebody holds the position, anything filed
+> there waits unread. And appointing someone grants `training.manage` and
+> starts copying them on urgent certification alerts. So either appoint before
+> you announce the upgrade, or open Administration, Forms & Comms, Suggestion
+> Boxes, and untick **Accepting submissions**."
+
+**[SCREEN: `GET /api/v1/users/property-return-reminders/overdue` output, then
+the Property Return Reminder email template]**
+
+> "One more that goes out by itself. Dropped members who still have department
+> gear now get a reminder email — thirty days after the drop, then ninety —
+> copied to your Chief, Quartermaster and IT Manager. **The first run after you
+> upgrade reaches your whole backlog at once.** So pull the overdue list first,
+> mark returned gear as returned, and fix any wrong drop dates."
+
+> "And if an election is open across the upgrade, re-check its eligibility
+> afterwards. The meeting-attendance rule for voting now counts only meetings
+> since the member joined, up to today — so some members' percentages move with
+> no setting touched."
+
+> "Everything else — and there's a lot of it — is in `docs/UPGRADING.md`. Read
+> the entries dated late September before you restart, not after."
+
+**[PRODUCTION NOTE — 2026-09-30. New section. The beats that cannot be cut are
+the **FRONTEND_URL refusal**, the **template reset** (edited templates
+included), the **live Compliance box**, and the **first-run property-return
+backlog**: each is something that happens to a department without anyone
+asking. Head and migration count are taken from the code at `f9897a4a`.]**
 
 ### ASK BEFORE YOU RESTART (31:00 – 32:15) — ADDED 2026-08-19
 
@@ -1705,7 +1920,9 @@ docker compose exec backup bash /scripts/verify_backup.sh \
 
 ### ANONYMIZING A DEPARTED MEMBER (38:00 – 39:00)
 
-**[SCREEN: An archived member's record showing the Anonymize action]**
+**[SCREEN: An archived member's profile → Membership card → under Status,
+**Anonymize member** → the dialog's Removed and Kept panels → type the member's
+name → **Anonymize** enabled (do not confirm).]**
 
 > "Last one, and it's the one to understand before you use it. When a member
 > leaves, you still need their history — training completions, attendance
@@ -1724,6 +1941,9 @@ docker compose exec backup bash /scripts/verify_backup.sh \
 > chained and rewriting it would break integrity verification — the
 > anonymization event itself records only an internal ID, never the name. And
 > election records, because ballot signatures have to stay intact."
+
+> "You type their name to confirm, and afterwards they leave the roster — they
+> can't be reactivated."
 
 > "It's irreversible, it only works on members who've already been dropped or
 > archived, and you can't run it on yourself. Do it _after_ departure clearance
@@ -1747,23 +1967,25 @@ docker compose exec backup bash /scripts/verify_backup.sh \
 
 **[SCREEN: Show each task as a quick demonstration — 15-20 seconds each]**
 
-> "**Resetting a member's password:** Members page → click member → Account →
-> Reset Password."
+> "**Resetting a member's password:** Members → Administration → Member
+> Management → **Reset Password** on the member's row."
 
 **[SCREEN: Quick demo of the flow]**
 
-> "**Disabling an account:** When someone leaves the department. Members page →
-> click member → Account → Disable Account. This preserves their historical data
-> but prevents login."
+> "**Disabling an account:** When someone leaves the department, open their
+> profile and press the pencil beside Status on the Membership card — its
+> tooltip reads **Change status**. Only
+> an active member can sign in, so any other status stops login and keeps their
+> historical data."
 
 **[SCREEN: Quick demo]**
 
-> "**Adding a new position:** Settings → Position Management → Create Position.
-> Name it, set permissions, save."
+> "**Adding a new position:** Organization Settings → Role Management → **Create
+> Custom Role**. Name it, set permissions, save."
 
 **[SCREEN: Quick demo]**
 
-> "**Viewing who has access to what:** Settings → Position Management. Click any
+> "**Viewing who has access to what:** Organization Settings → Role Management. Click any
 > position to see its permissions. Click any member to see their combined
 > permissions from all positions."
 
@@ -1920,3 +2142,26 @@ answers on port 9100, and — for the "unreachable from the server" beat — a
 second address that is reachable from the presenter's desk and not from the
 app. Use RFC 5737 documentation addresses (`192.0.2.x`) on screen; never a real
 department's printer address.
+
+### Added 2026-09-30 — written in-script, not queued
+
+- **Chapter 9, "The late-September upgrade: email, new positions, and gear
+  reminders"** (~3:00). Head `601fdb28ab8c`, fifty-two migrations from the
+  September 12 head. See its production note for the beats that cannot be cut.
+- **Rewritten because they were wrong:** the IP Security beat (there are no
+  allowlists or blocklists — it is country blocking and member-filed
+  exceptions), the Session & Password Policies beat (environment settings, not
+  a screen), **Create Custom Role** and what Priority does, the Add Member
+  required fields, the Chapter 6 Events Settings beat (no QR check-in toggle
+  and no default RSVP deadline — every event gets a QR code), and two
+  quick-reference routes (Reset Password, Change status). Do not reuse footage
+  of an "allowlist/blocklist dashboard", a session-timeout screen or a QR
+  check-in toggle; none of them exists.
+- **Added:** the Email link address card, replies going to the department
+  contact email, the LAN-address warning, wrong 2FA codes counting toward
+  lockout, the timezone as the department's calendar, the top bar's More menu,
+  the Salesforce auto-sync box, the suggestion-box logging exclusion, the
+  `inventory.kiosk` wildcard reach, and the Anonymize dialog.
+
+**EDITOR:** ~5:00 on top of everything above. Re-time Chapters 2–10 and the
+clip table from the recorded take.

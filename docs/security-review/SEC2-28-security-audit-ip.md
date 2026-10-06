@@ -171,7 +171,9 @@ precisely). Removed both; no behavior change.
 
 ## Flagged — needs a product decision, not fixed
 
-### SEC2-28-5 — HIGH (by-design-safe direction, but a real functional gap) — Approved IP-allowlist exceptions have no effect on geo-blocking enforcement
+### SEC2-28-5 — HIGH (by-design-safe direction, but a real functional gap) — Approved IP-allowlist exceptions have no effect on geo-blocking enforcement — ✅ RESOLVED (2026-10-05)
+
+**Resolved (owner decision INT2-28, option (a)):** when the country check would block a request, `IPBlockingMiddleware` asks `ip_has_active_allowlist_exception` whether that exact address holds an approved, in-date allowlist exception and lets it through if so. The lookup is keyed on the single address, never unioned into a list, cached for 60 seconds in a map capped at 10,000 entries, and fails closed. Accepted consequence: an exception approved in one department lets its address past the shared country block for every request. Tests: `test_ip_allowlist_middleware.py`, `test_ip_exception_lookup_db.py`. As found:
 
 **What:** `IPBlockingMiddleware.__call__` calls `geoip.is_ip_blocked(client_ip,
 set())` unconditionally — the allowlist argument is always empty, at the

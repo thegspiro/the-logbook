@@ -8,9 +8,9 @@ Used by both the dashboard admin-summary and the training compliance-matrix endp
 import calendar
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, and_, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -84,6 +84,20 @@ def _get_custom_annual_window(req, today: date):
         return date(yr, start_month, start_day), date(yr, end_month, end_day)
 
 
+def biannual_window(req, today: date) -> tuple[date, date]:
+    """The window a BIANNUAL ("Every 2 Years") requirement is graded over.
+
+    The requirement's year and the calendar year before it, or the current
+    and previous years when it names none. This is the one definition: the
+    compliance evaluators, the training service, the competency matrix and
+    the scheduling compliance report all call it. BIANNUAL used to have no
+    window here, so hours, shifts and calls counted from a member's whole
+    history (owner decision BIANNUAL-window, 2026-10-05).
+    """
+    base_year = getattr(req, "year", None) or today.year
+    return date(base_year - 1, 1, 1), date(base_year, 12, 31)
+
+
 def get_requirement_date_window(req, today: date):
     """Return (start_date, end_date) for evaluating a requirement's compliance window.
 
@@ -118,7 +132,7 @@ def get_requirement_date_window(req, today: date):
     if freq == RequirementFrequency.ONE_TIME.value:
         return None, None
     elif freq == RequirementFrequency.BIANNUAL.value:
-        return None, None
+        return biannual_window(req, today)
     elif freq == RequirementFrequency.QUARTERLY.value:
         quarter_month = ((today.month - 1) // 3) * 3 + 1
         start_date = date(current_year, quarter_month, 1)
@@ -140,6 +154,22 @@ def get_requirement_date_window(req, today: date):
             return custom
         yr = req.year if req.year else current_year
         return date(yr, 1, 1), date(yr, 12, 31)
+
+
+def requirement_as_of(req, today: date, org_include_current_month: bool) -> date:
+    """The date ``req`` is graded as of: ``today``, or the end of last month.
+
+    The requirement's own ``include_current_month`` overrides the org default.
+    The grader and :func:`graded_records_clause` both resolve it here, so the
+    records loaded are the records the grader's windows were computed from.
+    """
+    return resolve_as_of_date(
+        today,
+        effective_include_current_month(
+            getattr(req, "include_current_month", None),
+            org_include_current_month,
+        ),
+    )
 
 
 def recency_cutoff(req, today: date) -> Optional[date]:
@@ -182,6 +212,60 @@ def apply_recency(req, records, today: date):
     return [r for r in records if is_recent_enough(req, r, today)]
 
 
+def completion_window(req, as_of: date) -> Tuple[Optional[date], Optional[date]]:
+    """The completion dates a windowed requirement can count, as of ``as_of``.
+
+    The frequency window (:func:`get_requirement_date_window`) narrowed by the
+    freshness cutoff (:func:`recency_cutoff`). ``(start, None)`` means
+    "``start`` or later", which only a freshness cutoff on an otherwise
+    unbounded (one-time) requirement produces; ``(None, None)`` means any
+    completion date, including none at all.
+
+    This is the window, not the certification rule: a CERTIFICATION
+    requirement ignores its frequency window, so callers handle that type
+    before asking. Shared by :func:`graded_records_clause` and
+    ``TrainingService._preload_window``.
+    """
+    start, end = get_requirement_date_window(req, as_of)
+    if not (start and end):
+        start, end = None, None
+    cutoff = recency_cutoff(req, as_of)
+    if cutoff is not None:
+        start = cutoff if start is None else max(start, cutoff)
+    return start, end
+
+
+def hours_record_counts(req, record) -> bool:
+    """Whether ``record`` counts toward HOURS requirement ``req``.
+
+    The one definition (CLAUDE.md pitfall 29). My Training and the compliance
+    screens used to apply different halves of it: one narrowed by course and
+    ignored the requirement's categories, the other the reverse, so a member
+    could read "met" on one and "not met" on the other. Each criterion the
+    requirement sets narrows the pool; one it leaves unset restricts nothing,
+    so "24 hours of any training" still counts every record.
+
+    ``TrainingService._record_satisfies_requirement`` and both HOURS branches
+    of ``TrainingService`` call this; the SQL-sum path in
+    ``check_requirement_progress`` applies the same three filters in SQL.
+    """
+    if req.training_type and record.training_type != req.training_type:
+        return False
+    category_ids = getattr(req, "category_ids", None)
+    if category_ids:
+        if not record.category_id or str(record.category_id) not in {
+            str(c) for c in category_ids
+        }:
+            return False
+    required_courses = getattr(req, "required_courses", None)
+    if required_courses:
+        if not record.course_id or str(record.course_id) not in {
+            str(c) for c in required_courses
+        }:
+            return False
+    return True
+
+
 def certification_record_matches(req, record) -> bool:
     """Does ``record`` satisfy the CERTIFICATION requirement ``req``?
 
@@ -194,7 +278,8 @@ def certification_record_matches(req, record) -> bool:
        the course out of the library, so a record for that course is
        unambiguously the certification in question.
     2. The requirement's ``training_type``.
-    3. The requirement name appearing in the record's course name.
+    3. The requirement name appearing in the record's course name — for
+       legacy records only (see below).
     4. The requirement's registry code appearing in the certification number.
 
     Matches 2–4 are heuristics kept for requirements created before the library
@@ -202,6 +287,14 @@ def certification_record_matches(req, record) -> bool:
     why linking a course *widens* the match rather than replacing it: an
     existing "CPR" requirement must keep crediting the records it already
     credited when an officer links the CPR course to it.
+
+    The name match let any course containing the requirement's name satisfy
+    it — a "CPR Refresher" event credited a "CPR" certification. The owner
+    chose to keep it for legacy records only rather than drop it (which would
+    have changed published compliance overnight): it applies to a record
+    completed on or before the requirement's ``name_match_until``, the day
+    this installation's rule changed (see :func:`_name_match_is_legacy`).
+    Requirements created since carry no cut-off and never match by name.
 
     Shared by the compliance matrix, the member compliance summary, and the
     competency matrix so all three agree on what counts.
@@ -221,6 +314,7 @@ def certification_record_matches(req, record) -> bool:
         record.course_name
         and req_name
         and req_name.lower() in record.course_name.lower()
+        and _name_match_is_legacy(req, record)
     ):
         return True
 
@@ -233,6 +327,23 @@ def certification_record_matches(req, record) -> bool:
         return True
 
     return False
+
+
+def _name_match_is_legacy(req, record) -> bool:
+    """Whether ``record`` predates ``req``'s name-match cut-off.
+
+    Dated by its completion date. A completed record with none is dated by
+    when it was entered, so an undated record written after the cut-off
+    cannot borrow the legacy rule; one with neither date is not legacy.
+    """
+    until = getattr(req, "name_match_until", None)
+    if until is None:
+        return False
+    when = getattr(record, "completion_date", None)
+    if when is None:
+        created_at = getattr(record, "created_at", None)
+        when = created_at.date() if created_at is not None else None
+    return when is not None and when <= until
 
 
 @dataclass(frozen=True)
@@ -324,7 +435,7 @@ def _grade_member_requirement(
     Matching strategy depends on requirement_type:
     - HOURS:          Sum hours of completed records matching training_type within date window
     - COURSES:        Check if required course IDs are all completed
-    - CERTIFICATION:  Check for matching certification records (by name or training_type)
+    - CERTIFICATION:  Check for matching records (see certification_record_matches)
     - SHIFTS/CALLS:   Count matching records within date window
     - Others:         Match by training_type or name
     """
@@ -339,13 +450,7 @@ def _grade_member_requirement(
     # Resolve the effective evaluation date for this requirement (per-requirement
     # override inherits the org default). Everything below — window, proration,
     # and expiry/overdue checks — keys off this date.
-    today = resolve_as_of_date(
-        today,
-        effective_include_current_month(
-            getattr(req, "include_current_month", None),
-            org_include_current_month,
-        ),
-    )
+    today = requirement_as_of(req, today, org_include_current_month)
     start_date, end_date = get_requirement_date_window(req, today)
     _waivers = waivers or []
 
@@ -374,7 +479,9 @@ def _grade_member_requirement(
             as_of=today.isoformat(),
         )
 
-    # Filter completed records within the date window
+    # Filter completed records within the date window. Which records each
+    # branch below reads is mirrored by graded_records_clause, which bounds
+    # the load feeding this function — change one, change the other.
     completed = [r for r in member_records if r.status == TrainingStatus.COMPLETED]
     # A freshness window narrows the pool for every requirement type before the
     # frequency window is applied, so a stale completion can't satisfy anything
@@ -389,16 +496,9 @@ def _grade_member_requirement(
     else:
         windowed = completed
 
-    # ---- HOURS requirements: sum hours by training_type and/or category ----
+    # ---- HOURS requirements: sum hours of the records that count ----
     if req_type == RequirementType.HOURS.value:
-        type_matched = windowed
-        if req.training_type:
-            type_matched = [r for r in windowed if r.training_type == req.training_type]
-        if req.category_ids:
-            cat_set = set(req.category_ids)
-            type_matched = [
-                r for r in type_matched if r.category_id and r.category_id in cat_set
-            ]
+        type_matched = [r for r in windowed if hours_record_counts(req, r)]
 
         total_hours = sum(r.hours_completed or 0 for r in type_matched)
         required = req.required_hours or 0
@@ -692,6 +792,168 @@ def evaluate_member_requirement(
     return ev.status, ev.completion_date, ev.expiry_date
 
 
+# The requirement types _grade_member_requirement grades in a typed branch.
+# Every other type falls through to its last branch, the only place a record
+# that is not COMPLETED is read.
+_TYPED_BRANCH_TYPES = frozenset(
+    {
+        RequirementType.HOURS.value,
+        RequirementType.COURSES.value,
+        RequirementType.CERTIFICATION.value,
+        RequirementType.SHIFTS.value,
+        RequirementType.CALLS.value,
+    }
+)
+
+
+def graded_records_clause(
+    requirements: Iterable[TrainingRequirement],
+    today: date,
+    org_include_current_month: bool,
+) -> ColumnElement[bool]:
+    """Every ``TrainingRecord`` the grader can read for any of ``requirements``.
+
+    A filter for the record load that feeds :func:`evaluate_member_requirement`
+    across a whole department (TR2-4, TR4-2), which used to read every record
+    each member ever had. It is exact, not an approximation: grading the
+    records it selects gives the same result as grading all of them, because
+    it selects a superset of what :func:`_grade_member_requirement` reads,
+    branch by branch, for each requirement:
+
+    - **Windowed types** (hours, courses, shifts, calls, and the fallback
+      types) read COMPLETED records with a completion date inside
+      :func:`completion_window`. Every frequency now has a bounded window
+      except ONE_TIME, and so does every rolling requirement, so this is a
+      date range — including biannual hours, whose expired-certificate
+      override reads only the windowed records. A certification-period due
+      date changes nothing here: the grader never reads one.
+    - **ONE_TIME without a freshness cutoff** has no window. The grader reads
+      every COMPLETED record, including one with no completion date, so all
+      of them are selected — that requirement still costs the member's full
+      completed history.
+    - **CERTIFICATION** ignores the frequency window and reads every COMPLETED
+      record :func:`certification_record_matches` accepts. With a freshness
+      cutoff that is "completed on or after the cutoff". Without one it is
+      the member's full completed history: the match is partly a
+      case-insensitive substring test (requirement name in course name,
+      registry code in certification number), and SQL's ``LIKE`` folds case
+      by the column collation, not by Python's ``str.lower``, so pushing it
+      into the query could drop a record the grader would have counted. The
+      name test applies only to records up to ``name_match_until``, but the
+      registry-code test and the course and type matches have no date bound,
+      so a certification still selects every completed record; the cut-off
+      narrows what the grader accepts, never what it needs loaded.
+    - **Fallback types** (skills evaluation, checklist, knowledge test) also
+      read IN_PROGRESS records of any date when nothing completed matches,
+      so every IN_PROGRESS record is selected while one is active.
+
+    SCHEDULED, CANCELLED and FAILED records are never read and never loaded.
+    Grandfathering, catch-up deadlines and waivers read the member and the
+    waiver tables, not records, so they widen nothing.
+
+    ``today`` and ``org_include_current_month`` must be the values the
+    caller grades with: windows are resolved per requirement through
+    :func:`requirement_as_of`, as the grader resolves them.
+    """
+    spans: List[Tuple[date, Optional[date]]] = []
+    all_completed = False
+    in_progress = False
+    for req in requirements:
+        as_of = requirement_as_of(req, today, org_include_current_month)
+        req_type = getattr(req.requirement_type, "value", req.requirement_type)
+        if req_type not in _TYPED_BRANCH_TYPES:
+            in_progress = True
+        if req_type == RequirementType.CERTIFICATION.value:
+            start, end = recency_cutoff(req, as_of), None
+        else:
+            start, end = completion_window(req, as_of)
+        if start is None:
+            all_completed = True
+        elif end is None or start <= end:
+            # start > end: the freshness cutoff falls after the window closes,
+            # so the grader's windowed pool is empty and nothing is needed.
+            spans.append((start, end))
+
+    clauses: List[ColumnElement[bool]] = []
+    completed = TrainingRecord.status == TrainingStatus.COMPLETED
+    if all_completed:
+        clauses.append(completed)
+    elif spans:
+        clauses.append(
+            and_(
+                completed,
+                or_(
+                    *(
+                        (
+                            TrainingRecord.completion_date >= start
+                            if end is None
+                            else TrainingRecord.completion_date.between(start, end)
+                        )
+                        for start, end in _merge_spans(spans)
+                    )
+                ),
+            )
+        )
+    if in_progress:
+        clauses.append(TrainingRecord.status == TrainingStatus.IN_PROGRESS)
+    return or_(*clauses) if clauses else false()
+
+
+def _merge_spans(
+    spans: List[Tuple[date, Optional[date]]],
+) -> List[Tuple[date, Optional[date]]]:
+    """Coalesce overlapping or adjacent date ranges (``None`` end = open)."""
+    merged: List[Tuple[date, Optional[date]]] = []
+    for start, end in sorted(spans, key=lambda s: s[0]):
+        if merged:
+            last_start, last_end = merged[-1]
+            if last_end is None or start <= last_end + timedelta(days=1):
+                merged[-1] = (
+                    last_start,
+                    None if last_end is None or end is None else max(last_end, end),
+                )
+                continue
+        merged.append((start, end))
+    return merged
+
+
+async def load_graded_records(
+    db: AsyncSession,
+    org_id: str,
+    member_ids: Sequence[str],
+    requirements: Iterable[TrainingRequirement],
+    today: date,
+    org_include_current_month: bool,
+    *,
+    also: Sequence[ColumnElement[bool]] = (),
+) -> List[TrainingRecord]:
+    """The records needed to grade ``member_ids`` against ``requirements``.
+
+    Bounded by :func:`graded_records_clause`. ``also`` widens the load for
+    whatever else the caller reads from the same rows (the dashboard's
+    expiring and recent lists, a report's certificate count); each is OR'd in,
+    so it can only add records.
+
+    Ordered by id so the grader's ties (``max`` over equal completion dates)
+    and any caller's ``[:5]`` resolve the same way whatever subset is loaded.
+    """
+    if not member_ids:
+        return []
+    result = await db.execute(
+        select(TrainingRecord)
+        .where(
+            TrainingRecord.organization_id == org_id,
+            TrainingRecord.user_id.in_([str(m) for m in member_ids]),
+            or_(
+                graded_records_clause(requirements, today, org_include_current_month),
+                *also,
+            ),
+        )
+        .order_by(TrainingRecord.id)
+    )
+    return list(result.scalars().all())
+
+
 def _find_matching_profile(
     member: User,
     profiles: List[ComplianceProfile],
@@ -830,16 +1092,34 @@ def tally_standing(statuses: Iterable[str]) -> Tuple[int, int]:
 def requirement_applies_to_member(
     req,
     membership_type: str,
-    role_ids: Optional[List[str]] = None,
+    rank: Optional[str] = None,
     join_date: Optional[date] = None,
+    position_slugs: Optional[List[str]] = None,
 ) -> bool:
     """Whether a requirement applies to a member.
 
     Matches ``TrainingService.get_applicable_requirements`` (the
     member-facing ``/my-training`` path) precedence exactly:
     ``applies_to_all`` wins outright; otherwise ``required_membership_types``
-    is checked; otherwise ``required_roles``. A requirement naming none of
-    the three applies to nobody.
+    is checked; otherwise the member matches if their rank is named in
+    ``required_roles`` or they hold a position named in
+    ``required_positions`` (both by slug). A requirement naming none of these
+    applies to nobody.
+
+    ``required_roles`` holds *rank* slugs (``User.rank``, e.g. ``"captain"``):
+    the model's column comment, the training-program requirements schema and
+    every writer say so, and the scheduling shift-compliance report matched
+    it that way all along. Every grader here compared it against position
+    ids instead, which nothing ever writes there, so a requirement scoped
+    only by rank applied to nobody on /my-training, the matrix, the
+    dashboard percentage, the period roster, the profile card or the annual
+    report (CMP4-5; the owner chose rank matching over migrating the column).
+
+    ``required_positions`` holds position *slugs*, written by the training
+    program requirements API. Before CMP4-2 nothing here read it, so a
+    requirement scoped only that way graded nobody anywhere this helper is
+    called. Roles and positions are OR'd, as the scheduling compliance
+    report already does.
 
     Extracted after this exact precedence check was independently
     reimplemented, incompletely, at four call sites
@@ -864,38 +1144,48 @@ def requirement_applies_to_member(
         return True
     if req.required_membership_types:
         return membership_type in req.required_membership_types
-    if req.required_roles and role_ids:
-        return any(rid in role_ids for rid in req.required_roles)
+    if req.required_roles and rank:
+        if rank in req.required_roles:
+            return True
+    if req.required_positions and position_slugs:
+        if any(slug in position_slugs for slug in req.required_positions):
+            return True
     return False
 
 
-def member_role_ids(member) -> List[str]:
-    """The ids ``required_roles`` is matched against: the member's positions.
+def member_position_slugs(member) -> List[str]:
+    """The slugs ``required_positions`` is matched against.
 
-    ``User.roles`` is a synonym for ``User.positions``, and both the requirement
-    form and ``get_applicable_requirements`` store and compare position ids.
-    The relationship is lazy, so a caller loading members in bulk must
+    ``User.positions`` is lazy, so a caller loading members in bulk must
     ``selectinload(User.positions)`` first — touching it unloaded on an
     AsyncSession raises MissingGreenlet.
     """
     positions = getattr(member, "positions", None) or []
-    return [str(p.id) for p in positions if getattr(p, "id", None)]
+    return [str(p.slug) for p in positions if getattr(p, "slug", None)]
 
 
 def requirement_applies_to_user(req, member) -> bool:
     """:func:`requirement_applies_to_member` with every input read off ``member``.
 
-    The form a bulk caller should use: it cannot forget the role ids or the
-    join date, which is how the dashboard percentage and the compliance matrix
-    came to ignore role-scoped requirements that ``/my-training`` and the
-    profile card enforced.
+    The form a bulk caller should use: it cannot forget the rank, the
+    position slugs or the join date, which is how the dashboard percentage and
+    the compliance matrix came to ignore scoped requirements that
+    ``/my-training`` and the profile card enforced.
     """
     return requirement_applies_to_member(
         req,
         getattr(member, "membership_type", None) or "active",
-        member_role_ids(member),
+        getattr(member, "rank", None),
         join_date=member_join_date(member),
+        position_slugs=member_position_slugs(member),
     )
+
+
+# The standing of a member nothing grades: no requirement applies to them, or
+# every one that does is still inside its catch-up period. Not "compliant" —
+# a denominator of nothing is not a pass — and never counted in any
+# percentage's population, numerator or denominator.
+STANDING_NOT_APPLICABLE = "not_applicable"
 
 
 def classify_standing(
@@ -904,20 +1194,26 @@ def classify_standing(
     compliant_threshold: float = 100.0,
     at_risk_threshold: float = 75.0,
     threshold_type: str = "percentage",
-) -> Tuple[str, float]:
+) -> Tuple[str, Optional[float]]:
     """Turn a met/total tally into a standing plus its percentage.
 
     Returns (status, compliance_pct) where status is one of:
-    "compliant", "at_risk", "non_compliant".
+    "compliant", "at_risk", "non_compliant", or "not_applicable" — the last
+    with a ``None`` percentage, when ``total_count`` is zero.
 
     Split out of ``_evaluate_member_compliance`` so the compliance matrix can
     label a member without evaluating every requirement a second time. Both
     paths must agree — a member shown as "at risk" on the matrix and
     "non-compliant" on the dashboard is a support call — so the thresholds are
     applied here and nowhere else.
+
+    An empty tally used to read ``("compliant", 100.0)``, which counted a
+    member nothing measures toward every department percentage. The
+    department decided such a member is excluded from those percentages
+    entirely and shown as not applicable (TR4-4).
     """
     if total_count <= 0:
-        return "compliant", 100.0
+        return STANDING_NOT_APPLICABLE, None
 
     pct = round(completed_count / total_count * 100, 1)
 
@@ -942,15 +1238,12 @@ def _evaluate_member_compliance(
     threshold_type: str,
     org_include_current_month: bool = True,
     join_date: Optional[date] = None,
-) -> Tuple[str, float]:
+) -> Tuple[str, Optional[float]]:
     """Evaluate a member's compliance status against a set of requirements.
 
-    Returns (status, compliance_pct) where status is one of:
-    "compliant", "at_risk", "non_compliant".
+    Returns :func:`classify_standing`'s (status, compliance_pct); an empty
+    ``member_reqs`` is "not_applicable" with no percentage.
     """
-    if not member_reqs:
-        return "compliant", 100.0
-
     statuses = []
     for req in member_reqs:
         req_status, _, _ = evaluate_member_requirement(
@@ -986,6 +1279,110 @@ async def _load_compliance_config(
     return result.scalars().first()
 
 
+@dataclass(frozen=True)
+class MemberGrading:
+    """What grades one member: their requirements and pass bars."""
+
+    requirements: List[TrainingRequirement]
+    compliant_threshold: float
+    at_risk_threshold: float
+
+
+@dataclass(frozen=True)
+class ComplianceGrading:
+    """An organization's compliance configuration, resolved once per request.
+
+    The one definition of which requirements grade a member and against
+    which thresholds. ``compute_org_compliance_tally`` (the dashboard and hub
+    percentage), ``get_compliance_matrix`` and the dashboard's "Department
+    Compliance" card all resolve members through :meth:`for_member` and
+    classify through :func:`classify_standing`. The card used to grade every
+    applicable requirement at a fixed 100% instead, and read differently
+    from the matrix it links to for any org using profiles (TR4-3).
+    """
+
+    compliant_threshold: float = 100.0
+    at_risk_threshold: float = 75.0
+    threshold_type: str = "percentage"
+    include_current_month: bool = True
+    # Highest priority first: _find_matching_profile takes the first match.
+    profiles: Tuple[ComplianceProfile, ...] = ()
+
+    @classmethod
+    def from_config(cls, config: Optional[ComplianceConfig]) -> "ComplianceGrading":
+        """Defaults when the org has configured nothing (legacy behaviour)."""
+        if config is None:
+            return cls()
+        return cls(
+            compliant_threshold=config.compliant_threshold,
+            at_risk_threshold=config.at_risk_threshold,
+            threshold_type=config.threshold_type or "percentage",
+            include_current_month=bool(config.include_current_month),
+            profiles=tuple(
+                sorted(config.profiles or [], key=lambda p: p.priority, reverse=True)
+            ),
+        )
+
+    def for_member(
+        self, member: User, requirements: List[TrainingRequirement]
+    ) -> MemberGrading:
+        """The requirements that grade ``member``, and their thresholds.
+
+        A matching profile narrows the requirement list and may override the
+        thresholds; then every requirement that does not apply to the member
+        (``requirement_applies_to_user``) is dropped. ``member.positions``
+        must be loaded when any profile exists.
+        """
+        member_reqs = list(requirements)
+        compliant_threshold = self.compliant_threshold
+        at_risk_threshold = self.at_risk_threshold
+        profile = (
+            _find_matching_profile(member, list(self.profiles))
+            if self.profiles
+            else None
+        )
+        if profile:
+            # `is not None`, not truthy: a profile that explicitly selects zero
+            # required requirements (`[]`, "nothing is required for this
+            # group") must not fall through to grading against every org-wide
+            # requirement — `[]` and "never set" (`None`) differ. See CMP2-3.
+            if profile.required_requirement_ids is not None:
+                by_id = {str(r.id): r for r in requirements}
+                member_reqs = [
+                    by_id[rid]
+                    for rid in profile.required_requirement_ids
+                    if rid in by_id
+                ]
+            # Threshold overrides apply whenever the profile matched,
+            # independent of whether it also narrows the list (CMP2-3).
+            if profile.compliant_threshold_override is not None:
+                compliant_threshold = profile.compliant_threshold_override
+            if profile.at_risk_threshold_override is not None:
+                at_risk_threshold = profile.at_risk_threshold_override
+        # A requirement that does not apply to the member is not in their
+        # denominator. See requirement_applies_to_member's docstring for why
+        # this is one shared check rather than a reimplementation per screen.
+        return MemberGrading(
+            requirements=[
+                req for req in member_reqs if requirement_applies_to_user(req, member)
+            ],
+            compliant_threshold=compliant_threshold,
+            at_risk_threshold=at_risk_threshold,
+        )
+
+    def classify(
+        self, grading: MemberGrading, met: int, total: int
+    ) -> Tuple[str, Optional[float]]:
+        """:func:`classify_standing` with this member's thresholds."""
+        return classify_standing(
+            met,
+            total,
+            grading.compliant_threshold,
+            grading.at_risk_threshold,
+            self.threshold_type,
+        )
+
+
 async def get_org_include_current_month(db: AsyncSession, org_id: str) -> bool:
     """Return the org-wide "count the in-progress month" compliance default.
 
@@ -1015,10 +1412,59 @@ async def count_active_requirements(db: AsyncSession, org_id: str) -> int:
     return int(count or 0)
 
 
+@dataclass(frozen=True)
+class OrgComplianceTally:
+    """Who a department compliance percentage counts, and who passes.
+
+    ``graded`` is the percentage's denominator: members at least one
+    requirement grades. A member with nothing applicable is counted in
+    ``not_applicable`` and in neither side of the percentage (TR4-4).
+    """
+
+    compliant: int
+    graded: int
+    not_applicable: int
+    active_requirements: int
+
+    @property
+    def members(self) -> int:
+        return self.graded + self.not_applicable
+
+    @property
+    def pct(self) -> Optional[float]:
+        """Share of graded members who are compliant; None when nobody is."""
+        if self.graded == 0:
+            return None
+        return round(self.compliant / self.graded * 100, 1)
+
+
 async def compute_org_compliance_pct(
     db: AsyncSession, org_id: str, today: Optional[date] = None
-) -> float:
+) -> Optional[float]:
     """Compute organization-wide training compliance percentage.
+
+    The percentage of *graded* members — those at least one requirement
+    applies to — who are compliant; see :func:`compute_org_compliance_tally`.
+
+    If there are no active requirements, returns 100.0 (callers check
+    :func:`count_active_requirements` first and say "not set up").
+    If there are no active members, returns 0.0.
+    If requirements exist but none applies to any member, returns None: there
+    is nothing measured to report, and callers show it as not applicable
+    rather than as a vacuous 100%.
+    """
+    tally = await compute_org_compliance_tally(db, org_id, today)
+    if tally.members == 0:
+        return 0.0
+    if tally.active_requirements == 0:
+        return 100.0
+    return tally.pct
+
+
+async def compute_org_compliance_tally(
+    db: AsyncSession, org_id: str, today: Optional[date] = None
+) -> OrgComplianceTally:
+    """Grade every active, non-exempt member and count the standings.
 
     When a compliance configuration exists with profiles, each member is
     matched to a profile (by membership type / role). The profile's
@@ -1027,10 +1473,6 @@ async def compute_org_compliance_pct(
 
     Without a compliance config, falls back to the legacy behaviour:
     evaluate every active training requirement for every member.
-
-    Returns the percentage of members who are fully compliant.
-    If there are no active requirements, returns 100.0.
-    If there are no active members, returns 0.0.
     """
     # Get active members (exclude compliance-exempt members)
     # positions is eager-loaded because _find_matching_profile reads it for
@@ -1052,7 +1494,7 @@ async def compute_org_compliance_pct(
     members = members_result.scalars().all()
 
     if not members:
-        return 0.0
+        return OrgComplianceTally(0, 0, 0, 0)
 
     # Get active requirements
     reqs_result = await db.execute(
@@ -1064,118 +1506,57 @@ async def compute_org_compliance_pct(
     requirements = reqs_result.scalars().all()
 
     if not requirements:
-        return 100.0  # No requirements = fully compliant
+        return OrgComplianceTally(0, 0, len(members), 0)
 
-    # Build requirements lookup by ID
-    reqs_by_id: Dict[str, TrainingRequirement] = {str(r.id): r for r in requirements}
+    grading = ComplianceGrading.from_config(await _load_compliance_config(db, org_id))
 
-    # Load compliance config (if configured)
-    config = await _load_compliance_config(db, org_id)
-    profiles: List[ComplianceProfile] = []
-    if config and config.profiles:
-        # Sort by priority descending (higher priority first)
-        profiles = sorted(
-            config.profiles,
-            key=lambda p: p.priority,
-            reverse=True,
-        )
+    # The department's date, as every other compliance view uses: the dashboard
+    # percentage and the matrix it links to must grade against the same day.
+    # Resolved before the record load, which is bounded by the windows it sets.
+    if today is None:
+        today = await resolve_org_today(db, org_id)
 
-    # Default thresholds
-    compliant_threshold = 100.0
-    at_risk_threshold = 75.0
-    threshold_type = "percentage"
-    if config:
-        compliant_threshold = config.compliant_threshold
-        at_risk_threshold = config.at_risk_threshold
-        threshold_type = config.threshold_type or "percentage"
-
-    # Get all training records for these members
-    records_result = await db.execute(
-        select(TrainingRecord).where(
-            TrainingRecord.organization_id == org_id,
-            TrainingRecord.user_id.in_([m.id for m in members]),
-        )
-    )
-    all_records = records_result.scalars().all()
-
-    # Build lookup: user_id -> [records]
     records_by_user: Dict[str, list] = {}
-    for r in all_records:
+    for r in await load_graded_records(
+        db,
+        org_id,
+        [m.id for m in members],
+        requirements,
+        today,
+        grading.include_current_month,
+    ):
         records_by_user.setdefault(r.user_id, []).append(r)
 
     # Fetch waivers
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
 
-    # Org-wide evaluation-period default; per-requirement overrides are applied
-    # inside the evaluator. Config is already loaded above.
-    org_include_current = True if config is None else bool(config.include_current_month)
-    # The department's date, as every other compliance view uses: the dashboard
-    # percentage and the matrix it links to must grade against the same day.
-    if today is None:
-        today = await resolve_org_today(db, org_id)
     compliant_count = 0
+    not_applicable_count = 0
 
     for member in members:
         member_records = records_by_user.get(member.id, [])
         member_waivers = waivers_by_user.get(str(member.id), [])
 
-        # Determine which requirements apply to this member
-        member_reqs = list(requirements)  # default: all requirements
-        member_compliant_threshold = compliant_threshold
-        member_at_risk_threshold = at_risk_threshold
-
-        if profiles:
-            profile = _find_matching_profile(member, profiles)
-            if profile:
-                # `is not None`, not truthy: a profile that explicitly selects
-                # zero required requirements (`[]`, meaning "nothing is
-                # required for this group") must not fall through to grading
-                # against every org-wide requirement, which `if
-                # profile.required_requirement_ids:` did — `[]` and "never
-                # set" (`None`) were indistinguishable. See CMP2-3.
-                if profile.required_requirement_ids is not None:
-                    # Use only the requirements specified in the profile
-                    member_reqs = [
-                        reqs_by_id[rid]
-                        for rid in profile.required_requirement_ids
-                        if rid in reqs_by_id
-                    ]
-                # Threshold overrides apply whenever this profile matched,
-                # independent of whether it also overrides the requirement
-                # list — these were previously nested inside the same `if`
-                # above and so silently skipped for a profile with an empty
-                # required list (CMP2-3).
-                if profile.compliant_threshold_override is not None:
-                    member_compliant_threshold = profile.compliant_threshold_override
-                if profile.at_risk_threshold_override is not None:
-                    member_at_risk_threshold = profile.at_risk_threshold_override
-
-        # A requirement that doesn't apply to this member is not in their
-        # denominator. get_compliance_matrix (training.py) already applies
-        # this same exclusion per-member; without it here, a member holding
-        # a requirement that was never meant to apply to them was graded
-        # against it anyway — evaluate_member_requirement almost always
-        # reports "not_started" for such a requirement, so this dashboard
-        # percentage could disagree with the matrix for the exact
-        # member/requirement pair it's supposed to describe the same way.
-        # See requirement_applies_to_member's own docstring for why this is
-        # a shared helper rather than a fourth ad-hoc reimplementation.
-        member_reqs = [
-            req for req in member_reqs if requirement_applies_to_user(req, member)
-        ]
-
+        member_grading = grading.for_member(member, list(requirements))
         status, _ = _evaluate_member_compliance(
-            member_reqs,
+            member_grading.requirements,
             member_records,
             today,
             member_waivers,
-            member_compliant_threshold,
-            member_at_risk_threshold,
-            threshold_type,
-            org_include_current_month=org_include_current,
+            member_grading.compliant_threshold,
+            member_grading.at_risk_threshold,
+            grading.threshold_type,
+            org_include_current_month=grading.include_current_month,
             join_date=member_join_date(member),
         )
-        if status == "compliant":
+        if status == STANDING_NOT_APPLICABLE:
+            not_applicable_count += 1
+        elif status == "compliant":
             compliant_count += 1
 
-    return round(compliant_count / len(members) * 100, 1)
+    return OrgComplianceTally(
+        compliant=compliant_count,
+        graded=len(members) - not_applicable_count,
+        not_applicable=not_applicable_count,
+        active_requirements=len(requirements),
+    )

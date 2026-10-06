@@ -28,6 +28,8 @@ import { StatusBadge } from '../components/StatusBadge';
 import { ApparatusTypeBadge } from '../components/ApparatusTypeBadge';
 import { formatNumber } from '../../../utils/dateFormatting';
 import { useAuthStore } from '../../../stores/authStore';
+import { NfpaDepartmentSwitch } from '../components/NfpaDepartmentSwitch';
+import { useApparatusNfpaSettings } from '../hooks/useApparatusNfpaSettings';
 
 export const ApparatusListPage: React.FC = () => {
   const navigate = useNavigate();
@@ -40,6 +42,10 @@ export const ApparatusListPage: React.FC = () => {
   const canManage = checkPermission('apparatus.manage');
   const canCreate = canManage || checkPermission('apparatus.create');
   const canEdit = canManage || checkPermission('apparatus.edit');
+  // The switch writes organization settings, so it is offered only to those
+  // the settings endpoint will accept it from.
+  const canManageSettings = checkPermission('settings.manage');
+  const { settings: nfpaSettings, refresh: refreshNfpaSettings } = useApparatusNfpaSettings();
 
   const {
     apparatusList,
@@ -118,7 +124,9 @@ export const ApparatusListPage: React.FC = () => {
                 <Truck className="h-6 w-6 text-white" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-theme-text-primary truncate text-lg font-bold sm:text-xl">Apparatus Management</h1>
+                <h1 className="text-theme-text-primary text-lg leading-tight font-bold sm:text-xl">
+                  Apparatus Management
+                </h1>
                 <p className="text-theme-text-muted hidden text-sm sm:block">
                   Manage your fleet vehicles and equipment
                 </p>
@@ -194,6 +202,10 @@ export const ApparatusListPage: React.FC = () => {
               </p>
             </div>
           </div>
+        )}
+
+        {canManageSettings && nfpaSettings && (
+          <NfpaDepartmentSwitch settings={nfpaSettings} onChanged={refreshNfpaSettings} />
         )}
 
         {/* Actions Bar */}

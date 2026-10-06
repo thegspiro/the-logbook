@@ -17,7 +17,7 @@ import type {
   User,
   UserProfileUpdate,
 } from '../types/user';
-import { asArray } from '../utils/asArray';
+import { asArray, expectArray } from '../utils/asArray';
 
 export const userService = {
   /**
@@ -186,6 +186,15 @@ export const userService = {
    */
   async adminResetMfa(userId: string): Promise<{ message: string }> {
     const response = await api.post<{ message: string }>(`/users/${userId}/reset-mfa`);
+    return response.data;
+  },
+
+  /**
+   * Lift a sign-in lockout before it expires (members.manage). Clears the
+   * failed-attempt count with it.
+   */
+  async adminUnlockAccount(userId: string): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>(`/users/${userId}/unlock`);
     return response.data;
   },
 
@@ -382,7 +391,9 @@ export const userService = {
     const response = await api.get<import('../types/user').MemberAuditLogEntry[]>(`/users/${userId}/audit-history`, {
       params: { page, page_size: 50, event_type: eventType || undefined },
     });
-    return response.data;
+    // "No history" is a statement about the member's record, so an unreadable
+    // body surfaces as the page's load error rather than an empty timeline.
+    return expectArray(response.data, 'audit history');
   },
 };
 

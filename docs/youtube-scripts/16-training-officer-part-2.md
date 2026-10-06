@@ -160,7 +160,7 @@ official test.]**
 > "This is your documentation for NFPA compliance — proof that your members are
 > tested and proficient."
 
-**[SCREEN: Filter the records list to "Awaiting validation".]**
+**[SCREEN: Filter the records list to "Needs Validation".]**
 
 > "There's a filter here for results **waiting on you** — the ones a member ran.
 > The count also shows on the Skills Testing dashboard, so it comes and finds you
@@ -230,7 +230,8 @@ official test.]**
 > "One setting on the Thresholds tab worth knowing: the **Evaluation Period**.
 > If your drills land late in the month, leaving the current month in the
 > calculation makes members look non-compliant before they've even had the
-> class. Uncheck **Count the current in-progress month** and compliance stops at
+> class. Uncheck **Count the current (in-progress) month in compliance
+> calculations** and compliance stops at
 > the end of last month, so members are measured against where they stood when
 > the month began. It's a department-wide default, and any single requirement
 > can override it from its own Evaluation Period dropdown."
@@ -287,18 +288,35 @@ the CSV and PDF buttons]**
 ### TRAINING EVENTS (8:15 – 9:15)
 
 > "Training and Events are connected. When you create an event with the type
-> 'Training,' you can link it to specific training requirements."
+> 'Training,' fill in the **Training details** section that appears on the form:
+> the course, category and requirement it counts toward. Once the event exists,
+> you change those on its **Requirements & Programs** card."
 
-**[SCREEN: Show creating an event of type "Training" and linking a requirement]**
+**[SCREEN: Events → Create Event, type "Training", the "Training details
+(optional)" section with a course and a requirement picked.]**
 
-> "After the event, attendance records can feed directly into training
-> completions. Members who checked in can be bulk-credited for the training
-> requirement attached to that event."
+> "After the event, **Finalize Attendance** — or **End Event** — writes a
+> training record for every member who checked in, for the time they actually
+> attended. Somebody left early? Fix their times with **Edit Times** first. Anyone
+> with no time to credit is named in the finalize message. Have attendance
+> reopened, set their times with **Edit Times**, and finalize again."
 
-> "This means: create the training event, members RSVP and check in, and after
-> the event you batch-update everyone's training records with one action."
+**[SCREEN: The event page after Finalize Attendance on a Training event — the
+toast naming the records written, and the Requirements & Programs card.]**
+
+> "If the session was set to need an officer's confirmation, the attendance comes
+> to you instead: **Review and approve** on the event's Requirements & Programs
+> card opens the approval page, where you can adjust anyone's minutes before you
+> record it. Until then members see the class as **In Progress**."
+
+> "One more change: Training events no longer add **admin hours**. The same
+> hours were being counted twice — once as training, once as admin time."
 
 **[CALLOUT: "Event attendance → automatic training credit"]**
+
+**[PRODUCTION: Rewritten 2026-09-30 because finalizing a Training event now
+writes the training records. The beat now runs about 1:30 rather than 1:00 —
+re-time Chapter 4 and the clip table when it is re-recorded.]**
 
 ### MULTI-CLASS COURSES & COHORTS (9:15 – 10:45)
 
@@ -355,8 +373,8 @@ Cohort Detail page with the full class timeline]**
 
 > "Fifteen training events, on the calendar, each with its own training
 > session. Your recruits see the whole schedule, they check in with the QR code
-> the same as always, and the hours flow into their pipeline automatically. One
-> screen instead of an afternoon."
+> the same as always, and when each class's attendance is finalized the hours
+> flow into their pipeline. One screen instead of an afternoon."
 
 ### WHEN PLANS CHANGE (10:45 – 11:15)
 
@@ -368,10 +386,13 @@ Shift remaining control]**
 
 > "Reschedule one class and its calendar event moves with it — nobody loses
 > their spot. Cancel one and everybody signed up sees a cancellation, not a
-> class that quietly vanished. Add a make-up session. Or push everything that
-> hasn't happened yet back a week, in one click."
+> class that quietly vanished. Or push everything that hasn't happened yet back
+> a week, in one click. A make-up night that was never on the syllabus goes on
+> the calendar as an ordinary Training event, and a late joiner can't be added
+> to a running cohort's roster from the app yet — settle the roster before you
+> generate."
 
-**[CALLOUT: "Reschedule · Cancel · Add class · Shift remaining"]**
+**[CALLOUT: "Reschedule · Cancel · Shift remaining"]**
 
 > "One thing worth knowing: editing the course's syllabus does not change a
 > school that's already running. That's on purpose — you don't want a recruit
@@ -382,23 +403,51 @@ Shift remaining control]**
 
 ### EXTERNAL TRAINING (11:15 – 11:45)
 
-**[SCREEN: Navigate to External Training page (ExternalTrainingPage)]**
+**[SCREEN: Training Admin → Records → Submissions (Review Submissions)]**
 
-> "The External Training page tracks training taken outside the department —
-> courses at the fire academy, conferences, mutual aid training. Members submit
-> these for your approval, and they count toward their compliance requirements
+> "Training taken outside the department — courses at the fire academy,
+> conferences, mutual aid training — reaches you two ways. Members submit it
+> themselves with **Submit Training**, and it waits for you on **Review
+> Submissions**. Once approved, it counts toward their compliance requirements
 > just like internal training."
+
+**[SCREEN: Training Admin → Setup → Integrations (External Training
+Integrations): a provider card with Sync Now and Mappings, then the Import
+Queue]**
+
+> "Or, if your members train on a platform like Target Solutions or Vector
+> Solutions, connect it under **Integrations**. Completed courses sync in on
+> their own and land in the **Import Queue** for you to check, and every so
+> often it re-reads the last thirty days so a late correction on their side
+> isn't missed."
+
+**[PRODUCTION NOTE — 2026-10-04. Rewritten. The previous take described
+**External Training Integrations** (ExternalTrainingPage) as the member
+submission queue — it is the provider sync screen; member submissions are
+Submit Training / Review Submissions. Wrong before this window; found, not
+caused, by it. A Target Solutions provider saved before 2026-09-29 needs its
+API Key and API Secret re-entered. About 15 seconds longer; re-time this
+chapter and record both cues.]**
 
 ### SHIFT COMPLETION REPORTS & SKILL SCORING (11:45 – 13:15)
 
 > "After each shift, officers file shift completion reports on their trainees.
 > Let me show you the workflow."
 
-**[SCREEN: Navigate to Training Admin > Shift Reports > Create]**
+**[SCREEN: Scheduling → Shift Reports → "New report". Pick a shift card from
+the list.]**
 
-> "You select the trainee, the shift date, and the shift — hours and calls
-> auto-populate from attendance records. Then you rate their performance 1-5,
-> note strengths and areas for improvement, and write a narrative."
+> "Reports start from the shift, not the trainee. Go to Scheduling, open
+> **Shift Reports**, click **New report**, and pick the shift — hours and calls
+> auto-populate from attendance records for the whole crew. Then, for each
+> trainee, you rate their performance 1-5, note strengths and areas for
+> improvement, and write a narrative."
+
+**[PRODUCTION NOTE — 2026-10-04. Re-record this cue. The previous take filmed
+"Training Admin > Shift Reports > Create"; there is no Create there. Training
+Admin's **New Report** tab only points to Scheduling (**Go to Shift Reports**),
+or, for a department without the Scheduling module, to **Log Shift Report**.
+Wrong before this window; found, not caused, by it.]**
 
 **[SCREEN: Show the skills section with 1-5 score buttons]**
 
@@ -422,15 +471,15 @@ green and amber linkage tags on skills._
 > "When you have a pile of pending reports — say, after a busy weekend — you
 > can batch-review them."
 
-**[SCREEN: Navigate to Pending Review view]**
+**[SCREEN: Scheduling > Shift Reports > Review Queue]**
 
-> "Check the reports you want to approve, or hit Select All. Then click
+> "Check the reports you want to approve, or hit Select all. Then click
 > 'Approve Selected' — up to 100 at a time. You can also batch-flag reports
-> that need follow-up."
+> that need follow-up, with a comment saying why."
 
-**[SCREENSHOT NEEDED]:** _Pending Review view with checkboxes on 5 report
-cards, 3 checked, and the "Approve Selected (3)" / "Flag Selected (3)"
-action buttons visible._
+**[SCREENSHOT NEEDED]:** _Review Queue view with checkboxes on 5 report
+cards, 3 checked, the "3 selected" label, the "Flag Selected" / "Approve
+Selected" buttons, and the comment field below them._
 
 > "Flagged reports appear in their own tab, and you can re-review them later."
 
@@ -442,15 +491,17 @@ action buttons visible._
 
 **[CALLOUT: Workflow steps appearing one at a time]**
 
-> "**Weekly:** Check the dashboard for new submissions and approaching
-> expirations. Approve or reject any member-submitted external training.
+> "**Weekly:** Check the dashboard and your notifications for new submissions
+> and approaching expirations. Approve or reject any member-submitted external training.
 > Review pending shift reports — batch-approve routine ones, flag any that
 > need a closer look."
 
 > "**Before Training Events:** Ensure the event is linked to the correct
 > requirement. Prepare any skills testing templates needed."
 
-> "**After Training Events:** Bulk-record completions for all attendees. Update
+> "**After Training Events:** Finalize the event's attendance — that writes
+> every attendee's record — and approve it if the session needs your
+> confirmation. Update
 > skills testing records if practical evaluations were conducted. File shift
 > completion reports with skill scores for any on-shift training observations."
 
@@ -520,7 +571,7 @@ action buttons visible._
 **[SCREEN: session editor with Requirement, Course, and Program.]**
 
 > "Link a session to the requirement, course, and program it should advance.
-> Cross-organization or mismatched links are rejected. Approved attendance feeds
+> Cross-organization or mismatched links are rejected. Finalized attendance feeds
 > only the owned requirement, and deleting a program cannot take a requirement it
 > does not own with it."
 

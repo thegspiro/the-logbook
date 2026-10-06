@@ -172,8 +172,9 @@ Confirm step, then click Generate.]**
 
 > "There it is. Fifteen training events on the department calendar, each with
 > its own training session. Your recruits already have the whole schedule, they
-> check in with the QR code the same as any other event, and the hours flow into
-> their pipeline. That was one screen."
+> check in with the QR code the same as any other event, and when each class's
+> attendance is finalized the hours flow into their pipeline. That was one
+> screen."
 
 **[TRANSITION: When plans change]**
 
@@ -208,7 +209,7 @@ appears.]**
 
 **[CALLOUT: "Cancelled, not deleted — people see the change"]**
 
-### SHIFT AND ADD (8:00 – 8:45)
+### SHIFT REMAINING AND THE ROSTER (8:00 – 8:45)
 
 **[SCREEN: Click Shift remaining, enter 7, click Apply; the remaining dates
 all move.]**
@@ -216,6 +217,16 @@ all move.]**
 > "Weather took out a week? Shift remaining, seven days, done. Everything that
 > hasn't happened yet moves. Classes that already ran stay put — their
 > attendance records are attached to those dates."
+
+> "Two things it gets right for you. A seven o'clock class stays at seven
+> o'clock, even if the clocks change in between. And if any class it would move
+> already has its attendance finalized, it moves **nothing** and tells you why
+> — you never end up with half a schedule shifted."
+
+**[PRODUCTION NOTE — 2026-10-04. New line (fixed 2026-10-04: the shift used to
+move a class an hour across a daylight-saving change, and a finalized class
+partway through left the earlier ones moved). About 10 seconds; re-time
+Chapter 4.]**
 
 **[SCREEN: Click Add class; fill in a make-up session.]**
 
@@ -337,9 +348,10 @@ timeline with attendance counts.]**
 
 **[SCREEN: edit one generated training session; show Requirement, Course, and Program selectors.]**
 
-> "A session can now link to a requirement, course, and program. Approval feeds
-> progress only when those records belong to this organization and form a valid
-> program relationship. A generated cohort already supplies its course context;
+> "A session can now link to a requirement, course, and program. Finalized
+> attendance — and approval, where the session asks for it — feeds progress only
+> when those records belong to this organization and form a valid program
+> relationship. A generated cohort already supplies its course context;
 > add a program requirement only when attendance should satisfy that requirement.
 > Deleting a program cannot delete a requirement it does not own, and editing the
 > syllabus still does not retroactively reschedule a running cohort."

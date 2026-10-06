@@ -108,7 +108,9 @@ asserts the raise, that `update_event` is never awaited, that the first class's
 datetime is untouched, and that nothing committed. Mutation-verified by removing
 the pre-check call.
 
-### CC-7 — LOW — `from_sequence` silently includes classes that already happened — 🚩 FLAGGED
+### CC-7 — LOW — `from_sequence` silently includes classes that already happened — ✅ FIXED (2026-10-05)
+
+**Resolved (owner decision): both bounds apply.** `shift_remaining` always filters `scheduled_start > now`, and `from_sequence` narrows that to positions at or after _n_; a class whose date has passed never moves. Test: `TestShiftRemaining::test_a_class_whose_date_has_passed_never_moves`. As found:
 
 **What:** the sequence bound **replaces** the future-only bound rather than
 narrowing it:

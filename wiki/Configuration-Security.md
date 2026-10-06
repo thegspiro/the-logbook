@@ -20,17 +20,25 @@ Configure security settings for The Logbook, including authentication, encryptio
 
 ## Password Policy
 
-| Setting            | Default       | Description                          |
-| ------------------ | ------------- | ------------------------------------ |
-| Minimum length     | 12 characters | Configurable                         |
-| Requires uppercase | Yes           | At least one uppercase letter        |
-| Requires lowercase | Yes           | At least one lowercase letter        |
-| Requires number    | Yes           | At least one digit                   |
-| Requires special   | Yes           | At least one special character       |
-| Password history   | 12            | Cannot reuse last 12 passwords       |
-| Max password age   | 90 days       | Forced change after 90 days          |
-| Lockout threshold  | 5 attempts    | Account locked after 5 failed logins |
-| Lockout duration   | 30 minutes    | Auto-unlock after 30 minutes         |
+| Setting            | Default       | Description                            |
+| ------------------ | ------------- | -------------------------------------- |
+| Minimum length     | 12 characters | Configurable                           |
+| Requires uppercase | Yes           | At least one uppercase letter          |
+| Requires lowercase | Yes           | At least one lowercase letter          |
+| Requires number    | Yes           | At least one digit                     |
+| Requires special   | Yes           | At least one special character         |
+| Password history   | 12            | Cannot reuse last 12 passwords         |
+| Max password age   | 90 days       | Forced change after 90 days, see below |
+| Lockout threshold  | 5 attempts    | Account locked after 5 failed logins   |
+| Lockout duration   | 15 minutes    | Auto-unlock after 15 minutes           |
+
+**Password expiry is enforced by the server, after a grace period.** Past
+`HIPAA_MAXIMUM_PASSWORD_AGE_DAYS`, the browser sends a member straight to the
+change-password screen. The API refuses everything except the password change
+`HIPAA_PASSWORD_EXPIRY_GRACE_DAYS` (default 14) after the member is first told,
+either by the daily `notify_expired_passwords` notice (in-app and email) or by
+their first request after expiry. Turning this on does not lock anyone out on
+upgrade day: everyone's grace starts at their own notice.
 
 ---
 
@@ -395,6 +403,13 @@ header.
 - **When left empty**, the effective allowlist is derived from the
   `ALLOWED_ORIGINS` hostnames plus `localhost`/`127.0.0.1` (so health checks keep
   working).
+- **A malformed or missing `Host` is a 400 too** _(2026-09-24, starlette
+  1.7.0)_, wherever the allowlist is active. The middleware now parses the header properly, so `host:garbage-port`
+  no longer passes as `host`. A health check or proxy that sends no `Host`, or a
+  hand-built one with a bad port, is refused where it used to get through —
+  send the real hostname. In the same upgrade CORS responses always carry
+  `Vary: Origin`, and a preflight's `Vary` lists the request headers; a cache in
+  front of the API that ignored `Vary` should be checked.
 
 ---
 

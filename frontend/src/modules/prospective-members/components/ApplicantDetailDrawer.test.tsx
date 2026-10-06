@@ -337,3 +337,35 @@ describe('ApplicantDetailDrawer contact edit', () => {
     );
   });
 });
+
+describe('ApplicantDetailDrawer checklist stage', () => {
+  const checklistApplicant = {
+    current_stage_type: 'checklist',
+    current_stage_config: {
+      items: [{ label: 'Gear issued' }, { label: 'Station tour' }],
+      require_all: true,
+    },
+  } as unknown as Partial<Applicant>;
+
+  // Nothing rendered the items as tickable, so a stage with items configured
+  // could never be completed: the server refused every advance.
+  it('renders each configured item as a checkbox', async () => {
+    renderDrawer(checklistApplicant);
+    await screen.findByText('Stage History');
+
+    expect(screen.getByRole('checkbox', { name: 'Gear issued' })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Station tour' })).not.toBeChecked();
+    expect(screen.getByText(/0 of 2 items done — tick every item to advance/)).toBeInTheDocument();
+  });
+
+  it('counts ticks as the officer makes them', async () => {
+    const user = userEvent.setup();
+    renderDrawer(checklistApplicant);
+    await screen.findByText('Stage History');
+
+    await user.click(screen.getByRole('checkbox', { name: 'Gear issued' }));
+
+    expect(screen.getByRole('checkbox', { name: 'Gear issued' })).toBeChecked();
+    expect(screen.getByText(/1 of 2 items done/)).toBeInTheDocument();
+  });
+});

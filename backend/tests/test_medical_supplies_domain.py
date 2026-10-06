@@ -26,6 +26,7 @@ from app.schemas.inventory import (
     InventoryLotBulkCreate,
     ItemRetireRequest,
 )
+from app.services.inventory_service import ItemOutsideDomainError
 
 
 @pytest.fixture(autouse=True)
@@ -541,3 +542,67 @@ class TestLotDomainPinning:
             )
 
         assert err.value.status_code == 400
+
+
+class TestEveryWriteRechecksUnderTheLock:
+    """MSUP-25: each medical write hands the domain to the locked mutation.
+
+    The preflight alone was the whole check; a reclassification between it
+    and the mutation went through. The service re-validates under its own
+    lock only when told which domain to hold the item to.
+    """
+
+    async def test_item_update(self, svc):
+        from app.schemas.inventory import InventoryItemUpdate
+
+        svc.update_item = AsyncMock(return_value=(MagicMock(), None))
+        await ms.update_medical_item(
+            MEDICAL_ITEM,
+            InventoryItemUpdate(name="Gauze"),
+            db=AsyncMock(),
+            current_user=_user(),
+        )
+        assert svc.update_item.await_args.kwargs["required_item_types"] == (
+            MEDICAL_ITEM_TYPES
+        )
+
+    async def test_lot_add_update_and_delete(self, svc):
+        from app.schemas.inventory import InventoryLotCreate, InventoryLotUpdate
+
+        svc.add_lot = AsyncMock(return_value=MagicMock())
+        svc.update_lot = AsyncMock(return_value=MagicMock())
+        svc.delete_lot = AsyncMock(return_value=True)
+
+        await ms.add_medical_item_lot(
+            MEDICAL_ITEM,
+            InventoryLotCreate(quantity=1),
+            db=AsyncMock(),
+            current_user=_user(),
+        )
+        await ms.update_medical_lot(
+            "lot-1",
+            InventoryLotUpdate(quantity=2),
+            db=AsyncMock(),
+            current_user=_user(),
+        )
+        await ms.delete_medical_lot("lot-1", db=AsyncMock(), current_user=_user())
+
+        for call in (svc.add_lot, svc.update_lot, svc.delete_lot):
+            assert call.await_args.kwargs["required_item_types"] == MEDICAL_ITEM_TYPES
+
+    async def test_a_delivery_that_raced_out_of_the_domain_is_not_found(self, svc):
+        svc.add_lots_bulk = AsyncMock(side_effect=ItemOutsideDomainError())
+
+        with pytest.raises(HTTPException) as err:
+            await ms.receive_medical_delivery(
+                InventoryLotBulkCreate(
+                    entries=[{"inventory_item_id": MEDICAL_ITEM, "quantity": 5}]
+                ),
+                db=AsyncMock(),
+                current_user=_user(),
+            )
+
+        assert err.value.status_code == 404
+        assert svc.add_lots_bulk.await_args.kwargs["required_item_types"] == (
+            MEDICAL_ITEM_TYPES
+        )

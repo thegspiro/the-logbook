@@ -295,4 +295,9 @@ ANALYTICS_CHECK_IN_FAILURE = "check_in_failure"
 # ============================================
 
 AUDIT_CATEGORY_ELECTIONS = "elections"
+AUDIT_EVENT_LOGIN = "login"
 AUDIT_EVENT_LOGIN_FAILED = "login_failed"
+AUDIT_EVENT_LOGOUT = "logout"
+AUDIT_EVENT_ACCOUNT_LOCKED = "account_locked"
+AUDIT_EVENT_ACCOUNT_UNLOCKED = "account_unlocked"
+AUDIT_CATEGORY_AUTHENTICATION = "authentication"

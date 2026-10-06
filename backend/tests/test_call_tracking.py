@@ -2269,3 +2269,82 @@ class TestCloseoutCallStepBelongsToCountOnlyTracking:
             str(shift.id)
         )
         assert recorded == 3
+
+
+class TestCountOnlyReportUnitRuns:
+    """The per-unit run counts reach the screen with the unit's name.
+
+    ``by_apparatus_runs`` is keyed by apparatus id, which is meaningless to an
+    officer; the report serves the labels beside it (SCHED-16).
+    """
+
+    async def test_serves_a_label_for_each_unit_with_runs(self):
+        from app.services.reports_service import ReportsService
+
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_scalars([]))
+        call_service = MagicMock()
+        call_service.apparatus_run_counts = AsyncMock(
+            return_value={"app-1": 3, "app-2": 1}
+        )
+        call_service.type_labels = AsyncMock(return_value={})
+
+        with patch(
+            "app.services.reports_service.resolve_apparatus_labels",
+            AsyncMock(return_value={"app-1": "E1"}),
+        ) as labels:
+            report = await ReportsService(db)._generate_call_volume_from_counts(
+                "org-1", date(2026, 8, 1), date(2026, 8, 31), call_service
+            )
+
+        assert report["summary"]["by_apparatus_runs"] == {"app-1": 3, "app-2": 1}
+        assert report["apparatus_labels"] == {"app-1": "E1"}
+        ids = set(labels.await_args.args[1])
+        assert ids == {"app-1", "app-2"}
+        assert labels.await_args.args[2] == "org-1"
+
+
+@pytest.mark.integration
+class TestCallVolumeReportPreliminaryMarker:
+    """Both call sources are written at close-out, so a period read before its
+    last shift is finalized under-reports. The report counts those shifts so
+    the screen can say the figures are preliminary (SCHED-11)."""
+
+    async def _report(self, db_session, org):
+        from app.services.reports_service import ReportsService
+
+        return await ReportsService(db_session)._generate_call_volume(
+            org.id, date(2026, 8, 1), date(2026, 8, 31)
+        )
+
+    @pytest.mark.parametrize("mode", [CallTrackingMode.COUNT_ONLY, "detailed"])
+    async def test_counts_a_started_shift_not_yet_closed_out(self, db_session, mode):
+        org = await _make_org(db_session)
+        org.settings = {"scheduling": {"call_tracking": {"mode": mode}}}
+        await _make_shift(db_session, org, "e1")
+
+        report = await self._report(db_session, org)
+
+        assert report["unfinalized_shifts"] == 1
+
+    async def test_finalized_and_cancelled_shifts_are_not_counted(self, db_session):
+        from app.models.training import ShiftStatus
+
+        org = await _make_org(db_session)
+        finalized = await _make_shift(db_session, org, "e1")
+        finalized.is_finalized = True
+        cancelled = await _make_shift(db_session, org, "e2")
+        cancelled.status = ShiftStatus.CANCELLED
+        await db_session.flush()
+
+        report = await self._report(db_session, org)
+
+        assert report["unfinalized_shifts"] == 0
+
+    async def test_a_shift_outside_the_period_is_not_counted(self, db_session):
+        org = await _make_org(db_session)
+        await _make_shift(db_session, org, "e1", date(2026, 7, 31))
+
+        report = await self._report(db_session, org)
+
+        assert report["unfinalized_shifts"] == 0

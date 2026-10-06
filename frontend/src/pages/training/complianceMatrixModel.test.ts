@@ -240,6 +240,50 @@ describe('evaluateMember', () => {
   });
 });
 
+describe('a member nothing grades', () => {
+  const reqs = new Map([['r1', requirement()]]);
+
+  it('reports no percentage rather than 100%, and reads not applicable', () => {
+    // Same rule as the by-requirement rollup: an empty denominator is not
+    // success. The backend's classify_standing() says not_applicable too.
+    const result = evaluateMember(
+      member({ requirements: [], completion_pct: null, standing: 'not_applicable' }),
+      reqs,
+      AS_OF
+    );
+    expect(result.total).toBe(0);
+    expect(result.pct).toBeNull();
+    expect(result.open).toBe(0);
+    expect(result.standing).toBe(Standing.NOT_APPLICABLE);
+  });
+
+  it('derives not applicable when the server omits the standing', () => {
+    const result = evaluateMember(member({ requirements: [], completion_pct: null }), reqs, AS_OF);
+    expect(result.standing).toBe(Standing.NOT_APPLICABLE);
+  });
+
+  it('counts a member whose every requirement is in catch-up as not applicable', () => {
+    const result = evaluateMember(
+      member({ requirements: [cell({ status: 'catch_up' })], completion_pct: null }),
+      reqs,
+      AS_OF
+    );
+    expect(result.cells).toHaveLength(1);
+    expect(result.pct).toBeNull();
+    expect(result.standing).toBe(Standing.NOT_APPLICABLE);
+  });
+
+  it('ranks after every graded member, including a fully compliant one', () => {
+    const graded = evaluateMember(member({ user_id: 'a', member_name: 'Zeller' }), reqs, AS_OF);
+    const notApplicable = evaluateMember(
+      member({ user_id: 'b', member_name: 'Abbott', requirements: [], completion_pct: null }),
+      reqs,
+      AS_OF
+    );
+    expect(rankMembers([notApplicable, graded]).map((m) => m.member.member_name)).toEqual(['Zeller', 'Abbott']);
+  });
+});
+
 describe('a certification expiring soon', () => {
   const reqs = new Map([['r1', requirement()]]);
 
@@ -575,8 +619,8 @@ describe('requirementStanding', () => {
     expect(requirementStanding(rollup({ met: 10, total: 10, pct: 100 }))).toBe(Standing.COMPLIANT);
   });
 
-  it('does not call a requirement nobody is graded against compliant', () => {
-    expect(requirementStanding(rollup({ met: 0, total: 0, pct: null }))).toBe(Standing.AT_RISK);
+  it('calls a requirement nobody is graded against not applicable, not compliant', () => {
+    expect(requirementStanding(rollup({ met: 0, total: 0, pct: null }))).toBe(Standing.NOT_APPLICABLE);
   });
 });
 

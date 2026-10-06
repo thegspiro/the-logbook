@@ -44,6 +44,7 @@ from app.schemas.external_shift_hours import (
     ExternalShiftHoursResponse,
     ExternalShiftHoursUpdate,
 )
+from app.schemas.training import TrainingRequirementCreate, TrainingRequirementUpdate
 from app.services.external_shift_hours_service import ExternalShiftHoursService
 from app.services.scheduling_service import SchedulingService
 
@@ -672,7 +673,7 @@ class TestTotals:
         )
         for req_type, extra in (
             (RequirementType.SHIFTS, {"required_shifts": 2}),
-            (RequirementType.HOURS, {"required_hours": 22}),
+            (RequirementType.HOURS, {"required_hours": 22, "shift_credited": True}),
         ):
             db_session.add(
                 TrainingRequirement(
@@ -746,3 +747,93 @@ class TestPermissionGates:
     def test_create_schema_requires_an_apparatus(self):
         with pytest.raises(ValidationError, match="external_apparatus_id"):
             ExternalShiftHoursCreate(shift_date=date(2025, 1, 1), hours=8)
+
+
+def _requirement(org_id: str, name: str, req_type: RequirementType, **extra):
+    return TrainingRequirement(
+        id=_uid(),
+        organization_id=org_id,
+        name=name,
+        requirement_type=req_type.value,
+        frequency=RequirementFrequency.ANNUAL.value,
+        due_date_type=DueDateType.CALENDAR_PERIOD.value,
+        applies_to_all=True,
+        active=True,
+        **extra,
+    )
+
+
+@pytest.mark.integration
+class TestOnlyShiftCreditedRequirementsAreGraded:
+    """W37-2: shift attendance grades only what the department marked."""
+
+    async def test_an_unmarked_hours_requirement_is_left_to_training(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        await _worked(db_session, org_id, user_id, date(2025, 6, 2), 720)
+        db_session.add(
+            _requirement(
+                org_id, "Annual Hazmat Hours", RequirementType.HOURS, required_hours=6
+            )
+        )
+        db_session.add(
+            _requirement(
+                org_id,
+                "Duty Hours",
+                RequirementType.HOURS,
+                required_hours=6,
+                shift_credited=True,
+            )
+        )
+        await db_session.flush()
+
+        results = await SchedulingService(db_session).get_shift_compliance(
+            org_id, reference_date=date(2025, 7, 1)
+        )
+
+        assert [r["requirement_name"] for r in results] == ["Duty Hours"]
+        assert results[0]["members"][0]["compliant"] is True
+
+    async def test_a_shifts_requirement_is_shift_credited_by_default(
+        self, db_session, org_and_member
+    ):
+        org_id, _ = org_and_member
+        shifts = _requirement(
+            org_id, "Min shifts", RequirementType.SHIFTS, required_shifts=2
+        )
+        hours = _requirement(
+            org_id, "Min hours", RequirementType.HOURS, required_hours=2
+        )
+        opted_out = _requirement(
+            org_id,
+            "Shifts, graded elsewhere",
+            RequirementType.SHIFTS,
+            required_shifts=2,
+            shift_credited=False,
+        )
+        db_session.add_all([shifts, hours, opted_out])
+        await db_session.flush()
+
+        assert shifts.shift_credited is True
+        assert hours.shift_credited is False
+        assert opted_out.shift_credited is False
+
+
+class TestShiftCreditedSchema:
+    def test_update_refuses_an_explicit_null(self):
+        with pytest.raises(ValidationError):
+            TrainingRequirementUpdate(shift_credited=None)
+
+    def test_update_leaves_an_omitted_flag_unset(self):
+        update = TrainingRequirementUpdate(name="Renamed")
+        assert "shift_credited" not in update.model_dump(exclude_unset=True)
+
+    def test_create_leaves_the_default_to_the_model(self):
+        create = TrainingRequirementCreate(
+            name="Min shifts",
+            requirement_type=RequirementType.SHIFTS,
+            required_shifts=2,
+            frequency=RequirementFrequency.ANNUAL.value,
+        )
+        assert create.shift_credited is None

@@ -76,37 +76,39 @@ Response:
 
 ### Module Endpoints
 
-| Prefix                        | Module                                                | Permission                       |
-| ----------------------------- | ----------------------------------------------------- | -------------------------------- |
-| `/api/v1/training`            | Training                                              | `training.manage` (admin)        |
-| `/api/v1/scheduling`          | Scheduling                                            | `scheduling.manage` (admin)      |
-| `/api/v1/events`              | Events                                                | `events.manage` (admin)          |
-| `/api/v1/elections`           | Elections                                             | `elections.manage` (admin)       |
-| `/api/v1/inventory`           | Inventory                                             | `inventory.manage` (admin)       |
-| `/api/v1/equipment-checks`    | Equipment Checks                                      | `equipment_check.manage` (admin) |
-| `/api/v1/facilities`          | Facilities                                            | `facilities.manage` (admin)      |
-| `/api/v1/apparatus`           | Apparatus                                             | Authenticated                    |
-| `/api/v1/forms`               | Forms                                                 | Authenticated                    |
-| `/api/v1/minutes`             | Meeting Minutes                                       | Authenticated                    |
-| `/api/v1/documents`           | Documents                                             | Authenticated                    |
-| `/api/v1/pipelines`           | Prospective Members                                   | `prospective_members.manage`     |
-| `/api/v1/prospective-members` | Prospective Members (pipelines, prospects, documents) | `prospective_members.manage`     |
-| `/api/v1/audit-logs`          | Audit Logs (admin read API)                           | `audit.view`                     |
-| `/api/v1/reports`             | Reports                                               | `reports.view`                   |
+| Prefix                        | Module                                                | Permission                                                                                                                                |
+| ----------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/v1/training`            | Training                                              | `training.manage` (admin)                                                                                                                 |
+| `/api/v1/scheduling`          | Scheduling                                            | `scheduling.manage` (admin)                                                                                                               |
+| `/api/v1/events`              | Events                                                | `events.manage` (admin)                                                                                                                   |
+| `/api/v1/elections`           | Elections                                             | `elections.manage` (admin)                                                                                                                |
+| `/api/v1/inventory`           | Inventory                                             | `inventory.manage` (admin)                                                                                                                |
+| `/api/v1/equipment-checks`    | Equipment Checks                                      | `equipment_check.manage` (admin)                                                                                                          |
+| `/api/v1/facilities`          | Facilities                                            | `facilities.manage` (admin)                                                                                                               |
+| `/api/v1/locations`           | Locations & room kiosks                               | Authenticated (reads); `locations.create`/`.edit`/`.delete`/`.manage` to write, `locations.manage_nfc_tags` for the badge-check-in toggle |
+| `/api/v1/apparatus`           | Apparatus                                             | Authenticated                                                                                                                             |
+| `/api/v1/forms`               | Forms                                                 | Authenticated                                                                                                                             |
+| `/api/v1/minutes`             | Meeting Minutes                                       | Authenticated                                                                                                                             |
+| `/api/v1/documents`           | Documents                                             | Authenticated                                                                                                                             |
+| `/api/v1/pipelines`           | Prospective Members                                   | `prospective_members.manage`                                                                                                              |
+| `/api/v1/prospective-members` | Prospective Members (pipelines, prospects, documents) | `prospective_members.manage`                                                                                                              |
+| `/api/v1/audit-logs`          | Audit Logs (admin read API)                           | `audit.view`                                                                                                                              |
+| `/api/v1/reports`             | Reports                                               | `reports.view`                                                                                                                            |
 
 ### Public Endpoints (No Auth Required)
 
-| Prefix                                                           | Description                                                                                                                                                                    |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `/api/public/v1/forms/{slug}`                                    | Public form access                                                                                                                                                             |
-| `/api/public/v1/forms/{slug}/submit`                             | Public form submission (rate-limited)                                                                                                                                          |
-| `/api/public/portal/*`                                           | Public portal endpoints (`X-API-Key` required). IP rate limit runs before bcrypt; keys use a selective 16-char lookup prefix (`logbook_`+8), legacy keys self-heal on next use |
-| `/api/public/v1/display/{code}`                                  | Room display (kiosk) — current events in that room                                                                                                                             |
-| `/api/public/v1/display/{code}/events/{event_id}/guest`          | Guest sign-in page detail _(2026-08-09)_                                                                                                                                       |
-| `/api/public/v1/display/{code}/events/{event_id}/guest-check-in` | Guest (non-member) attendance write _(2026-08-09)_                                                                                                                             |
-| `/health`                                                        | Health check                                                                                                                                                                   |
-| `/health/db`                                                     | Database health                                                                                                                                                                |
-| `/health/redis`                                                  | Redis health                                                                                                                                                                   |
+| Prefix                                                           | Description                                                                                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/api/public/v1/forms/{slug}`                                    | Public form access                                                                                                                                                                                                                                                                               |
+| `/api/public/v1/forms/{slug}/submit`                             | Public form submission (rate-limited)                                                                                                                                                                                                                                                            |
+| `/api/public/portal/*`                                           | Public portal endpoints (`X-API-Key` required). IP rate limit runs before bcrypt; keys use a selective 16-char lookup prefix (`logbook_`+8), legacy keys self-heal on next use                                                                                                                   |
+| `/api/public/v1/display/{code}`                                  | Room display (kiosk) — current events in that room                                                                                                                                                                                                                                               |
+| `/api/public/v1/display/{code}/badge-tap`                        | Member ID card tap at a room kiosk _(2026-10-03)_ — rate-limited 60/min per IP **and** per room; refuses unless both the room's own switch and the department's NFC ID Cards integration are on, re-checked on every tap. Response carries a first name and last initial only, never a member id |
+| `/api/public/v1/display/{code}/events/{event_id}/guest`          | Guest sign-in page detail _(2026-08-09)_                                                                                                                                                                                                                                                         |
+| `/api/public/v1/display/{code}/events/{event_id}/guest-check-in` | Guest (non-member) attendance write _(2026-08-09)_                                                                                                                                                                                                                                               |
+| `/health`                                                        | Health check                                                                                                                                                                                                                                                                                     |
+| `/health/db`                                                     | Database health                                                                                                                                                                                                                                                                                  |
+| `/health/redis`                                                  | Redis health                                                                                                                                                                                                                                                                                     |
 
 ### Security & Monitoring
 
@@ -331,10 +333,11 @@ same way** — do not generalize from one to the others:
 | -------------------------- | --------------------------- | ------------------------------------------------------------------------ |
 | `/dashboard/widgets`       | **`null`** in the response  | Only `fundraising` (`grants`). Finance and community are permission-only |
 | `/dashboard/operations`    | **omitted** from `sections` | Yes — every section checks module **and** permission                     |
-| `/dashboard/asset-widgets` | **omitted** from `widgets`  | No — permission-only                                                     |
+| `/dashboard/asset-widgets` | **omitted** from `widgets`  | Yes — every block checks module **and** permission                       |
 
-Only `/dashboard/operations` combines module and permission checks throughout,
-and only the two list-based responses omit what the caller cannot see.
+`/dashboard/operations` and `/dashboard/asset-widgets` both combine module and
+permission checks throughout, and only the two list-based responses omit what
+the caller cannot see.
 `/dashboard/widgets` explicitly serializes `finance`, `fundraising` and
 `community` as `null`, so **an integrator can tell the difference between "no
 access" and "no data" on that endpoint** — the other two are opaque.
@@ -363,11 +366,17 @@ have data are never `null`. Treat `null` as unauthorized.
 | Section                  | Requires (any of)                                                                                          |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------- |
 | `operational_readiness`  | `scheduling.manage`                                                                                        |
-| `critical_exceptions`    | `meetings.manage`, `minutes.manage`, `scheduling.manage`, `equipment_check.manage`, `notifications.manage` |
+| `critical_exceptions`    | `meetings.manage`, `minutes.manage`, `scheduling.manage`, `inventory.check_manage`, `notifications.manage` |
 | `membership_health`      | `members.manage`                                                                                           |
 | `upcoming_command_dates` | `events.manage`                                                                                            |
 | `period_trends`          | `training.manage`                                                                                          |
 | `pending_approvals`      | `admin_hours.manage`                                                                                       |
+
+`critical_exceptions` is finer-grained than the row above suggests: it is
+assembled item by item, each item behind the single permission owning its data
+source, and the section is omitted entirely when no item survived. Holding
+`notifications.manage` alone therefore returns the section with the notification
+item only — not the shift, action-item or equipment-check items.
 
 Dates are resolved in the organization's configured timezone, falling back to
 UTC if it is unset or unrecognized.
@@ -375,11 +384,27 @@ UTC if it is unset or unrecognized.
 ### `/dashboard/asset-widgets`
 
 Returns **counts and fixed links only** for Inventory, Apparatus and
-Facilities, gated on `inventory.view`, `apparatus.view` and `facilities.view`
-respectively — **permission-only; there is no module check here.** Each is
-authorized independently, so managing inventory does not reveal apparatus or
-facilities. Protected facility fields (codes, accounts, budgets, leases) are
-deliberately not reachable through this endpoint.
+Facilities. Each block is authorized independently, so managing inventory does
+not reveal apparatus or facilities. Protected facility fields (codes, accounts,
+budgets, leases) are deliberately not reachable through this endpoint.
+
+**A `*.view` grant is not enough, and the module must be switched on.** These
+are management-reporting tallies — deficiency counts, overdue checks,
+compliance deadlines — so each block requires its module's _manage_ permission
+or `settings.manage`, **and** the module enabled for the organization:
+
+| Block        | Requires                                                                                                        |
+| ------------ | --------------------------------------------------------------------------------------------------------------- |
+| `inventory`  | module on, **and** `inventory.manage`                                                                           |
+| `apparatus`  | module on, **and** (`apparatus.manage` or `settings.manage`), **and** `apparatus.view` or `apparatus.manage`    |
+| `facilities` | module on, **and** (`facilities.manage` or `settings.manage`), **and** `facilities.view` or `facilities.manage` |
+
+The second condition on each row is a destination check, not a second data
+gate: every widget links into that module's pages, and those routes have their
+own entry permissions, so a caller who cannot open the destination is not shown
+a tile whose only action is Access Denied. For `inventory` the destination gate
+(`inventory.manage`) is the stricter of the two and subsumes the
+`settings.manage` arm.
 
 ---
 

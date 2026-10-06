@@ -47,7 +47,7 @@ from app.schemas.inventory import (
     ItemRetireRequest,
     ItemsListResponse,
 )
-from app.services.inventory_service import InventoryService
+from app.services.inventory_service import InventoryService, ItemOutsideDomainError
 from app.utils.org_timezone import resolve_org_today
 
 router = APIRouter()
@@ -427,10 +427,13 @@ async def update_medical_item(
             )
         await _require_medical_category(service, str(data["category_id"]), org_id)
 
+    # The preflights above fail fast; required_item_types is the
+    # authoritative check, repeated under the item's lock (MSUP-25).
     updated, error = await service.update_item(
         item_id=item_id,
         organization_id=current_user.organization_id,
         update_data=data,
+        required_item_types=MEDICAL_ITEM_TYPES,
     )
     if error:
         raise HTTPException(
@@ -569,6 +572,7 @@ async def add_medical_item_lot(
         organization_id=org_id,
         data=data.model_dump(exclude_unset=True),
         created_by=str(current_user.id),
+        required_item_types=MEDICAL_ITEM_TYPES,
     )
     if lot is None:
         raise HTTPException(status_code=404, detail=_NOT_FOUND)
@@ -611,7 +615,10 @@ async def receive_medical_delivery(
             organization_id=org_id,
             entries=[e.model_dump(exclude_unset=True) for e in data.entries],
             created_by=str(current_user.id),
+            required_item_types=MEDICAL_ITEM_TYPES,
         )
+    except ItemOutsideDomainError:
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
@@ -641,6 +648,7 @@ async def update_medical_lot(
             lot_id=lot_id,
             organization_id=org_id,
             data=data.model_dump(exclude_unset=True),
+            required_item_types=MEDICAL_ITEM_TYPES,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -668,7 +676,9 @@ async def delete_medical_lot(
     if not await service.lot_in_domain(lot_id, org_id, MEDICAL_ITEM_TYPES):
         raise HTTPException(status_code=404, detail="Stock lot not found")
 
-    if not await service.delete_lot(lot_id, org_id):
+    if not await service.delete_lot(
+        lot_id, org_id, required_item_types=MEDICAL_ITEM_TYPES
+    ):
         raise HTTPException(status_code=404, detail="Stock lot not found")
 
 

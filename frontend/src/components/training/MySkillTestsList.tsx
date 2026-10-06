@@ -23,6 +23,8 @@ import { formatDate } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { Skeleton } from '../ux/Skeleton';
+import { Pagination } from '../ux/Pagination';
+import { DEFAULT_PAGE_SIZE } from '../../constants/config';
 import { formatScore } from '../../utils/skillScoreFormat';
 
 interface MySkillTestsListProps {
@@ -34,6 +36,8 @@ export const MySkillTestsList: React.FC<MySkillTestsListProps> = ({ userId }) =>
   const navigate = useNavigate();
   const tz = useTimezone();
   const [tests, setTests] = useState<SkillTestListItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,14 +51,17 @@ export const MySkillTestsList: React.FC<MySkillTestsListProps> = ({ userId }) =>
       const data = await skillsTestingService.getTests({
         candidate_id: userId,
         include_practice: true,
+        limit: DEFAULT_PAGE_SIZE,
+        offset: (page - 1) * DEFAULT_PAGE_SIZE,
       });
-      setTests(data);
+      setTests(data.items);
+      setTotal(data.total);
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to load your skills tests'));
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, page]);
 
   useEffect(() => {
     void load();
@@ -147,6 +154,9 @@ export const MySkillTestsList: React.FC<MySkillTestsListProps> = ({ userId }) =>
           </button>
         );
       })}
+      {total > DEFAULT_PAGE_SIZE && (
+        <Pagination currentPage={page} totalItems={total} pageSize={DEFAULT_PAGE_SIZE} onPageChange={setPage} />
+      )}
     </div>
   );
 };

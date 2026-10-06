@@ -208,6 +208,20 @@ export async function handleExpiredSession(): Promise<void> {
   }
 }
 
+/** Mirrors ErrorCode.AUTH_REFRESH_SUPERSEDED in app/core/error_codes.py. */
+const REFRESH_SUPERSEDED_CODE = 'LB-AUTH-012';
+
+function isRefreshSuperseded(err: unknown): boolean {
+  if (!axios.isAxiosError(err)) return false;
+  const data: unknown = err.response?.data;
+  return (
+    err.response?.status === 409 &&
+    typeof data === 'object' &&
+    data !== null &&
+    (data as { code?: unknown }).code === REFRESH_SUPERSEDED_CODE
+  );
+}
+
 /**
  * Perform a token refresh, sharing a single in-flight request across
  * all axios instances (global + module-specific).  This prevents
@@ -229,6 +243,14 @@ export function performSharedRefresh(): Promise<void> {
       .then(() => {
         // New tokens are set via httpOnly cookies by the backend.
         // No in-memory token storage needed.
+      })
+      .catch((err: unknown) => {
+        // Another tab refreshed the same session at the same moment and won
+        // the rotation. The cookie jar is shared, so it already holds the new
+        // tokens: retrying with them is the right outcome, and treating this
+        // as an expired session would sign this tab out for nothing.
+        if (isRefreshSuperseded(err)) return;
+        throw err;
       })
       .finally(() => {
         refreshPromise = null;

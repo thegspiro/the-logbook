@@ -5,11 +5,14 @@ import { postLoginRedirect } from '../utils/postLoginRedirect';
 import { authService } from '../services/api';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { KeyRound } from 'lucide-react';
 
 // OAuth configuration - these would be loaded from organization settings
 interface OAuthConfig {
   googleEnabled: boolean;
   microsoftEnabled: boolean;
+  // Absent from servers older than the Authentik provider.
+  authentikEnabled?: boolean | undefined;
 }
 
 interface OrgBranding {
@@ -170,17 +173,19 @@ export const LoginPage: React.FC = () => {
   useEffect(() => {
     const code = new URLSearchParams(location.search).get('error');
     if (!code) return;
-    // The same codes come back from both the Google and the Microsoft
-    // callback, so the wording must not name one provider.
+    // The same codes come back from every provider's callback, so the wording
+    // must not name one provider.
     const messages: Record<string, string> = {
       access_denied: 'Sign-in was cancelled.',
       invalid_state: 'Your sign-in expired. Try again.',
       domain_not_allowed: "That account's email domain isn't allowed. Contact your administrator.",
       no_account: 'No account matches that email. Contact your administrator for access.',
-      no_email: 'That Microsoft account has no email address. Contact your administrator.',
+      no_email: 'That sign-in account has no email address. Contact your administrator.',
       inactive: 'Your account is inactive. Contact your administrator.',
-      account_conflict: 'That Google or Microsoft account is already linked to a different user.',
-      unverified_email: 'Your Google email address is not verified.',
+      account_conflict: 'That sign-in account is already linked to a different user.',
+      unverified_email: 'Your sign-in provider has not verified your email address.',
+      provider_unavailable: 'The sign-in service could not be reached. Try again, or contact your administrator.',
+      provider_misconfigured: 'Single sign-on is not set up correctly. Contact your administrator.',
     };
     setOAuthError(messages[code] || 'Sign-in failed. Try again.');
     // Strip the error param so a refresh doesn't re-show it.
@@ -266,7 +271,11 @@ export const LoginPage: React.FC = () => {
     window.location.href = authService.getMicrosoftOAuthUrl();
   };
 
-  const hasOAuthEnabled = oauthConfig.googleEnabled || oauthConfig.microsoftEnabled;
+  const handleAuthentikLogin = () => {
+    window.location.href = authService.getAuthentikOAuthUrl();
+  };
+
+  const hasOAuthEnabled = oauthConfig.googleEnabled || oauthConfig.microsoftEnabled || oauthConfig.authentikEnabled;
 
   // While we confirm the app is configured, show a spinner rather than
   // flashing the login form (which we may immediately redirect away from).
@@ -658,6 +667,18 @@ export const LoginPage: React.FC = () => {
                       <path d="M24 11.4H12.6V0H24v11.4z" fill="#FBBC09" />
                     </svg>
                     <span className="ml-2">Microsoft</span>
+                  </button>
+                )}
+
+                {oauthConfig.authentikEnabled && (
+                  <button
+                    type="button"
+                    onClick={handleAuthentikLogin}
+                    disabled={isLoading}
+                    className="btn-secondary text-theme-text-muted inline-flex w-full justify-center text-sm font-medium shadow-xs focus:ring-offset-2 disabled:cursor-not-allowed"
+                  >
+                    <KeyRound className="h-5 w-5" aria-hidden="true" />
+                    <span className="ml-2">Authentik SSO</span>
                   </button>
                 )}
               </div>

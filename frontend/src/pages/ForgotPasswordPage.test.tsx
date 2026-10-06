@@ -75,4 +75,17 @@ describe('ForgotPasswordPage', () => {
     expect(screen.getByText(/reset your password through google/i)).toBeInTheDocument();
     expect(screen.queryByText(/check your email/i)).not.toBeInTheDocument();
   });
+
+  it('sends the member to an administrator when the department has email off', async () => {
+    requestPasswordReset.mockResolvedValue({
+      message: 'Password reset emails are turned off for this department. Ask an administrator to reset your password.',
+      email_disabled: true,
+    });
+
+    await submit();
+
+    expect(await screen.findByText(/no reset link was sent/i)).toBeInTheDocument();
+    expect(screen.getByText(/ask an administrator/i)).toBeInTheDocument();
+    expect(screen.queryByText(/check your email/i)).not.toBeInTheDocument();
+  });
 });

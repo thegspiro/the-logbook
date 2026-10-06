@@ -405,6 +405,36 @@ export interface CourseCohortMember {
   display_name?: string;
   email?: string;
   progress_percentage?: number;
+  /** Classes held before this member joined that still need a decision. */
+  missed_classes_pending?: number;
+}
+
+/** A class held before a late joiner was added, and what was decided for it. */
+export interface CohortMissedClass {
+  cohort_class_id: string;
+  sequence: number;
+  title: string;
+  scheduled_start: string;
+  scheduled_end: string;
+  credit_hours?: number | null;
+  resolution?: 'credited' | 'makeup_scheduled' | null;
+  /** No decision yet, or the make-up session was cancelled. */
+  pending: boolean;
+  training_record_id?: string | null;
+  makeup_class_id?: string | null;
+  makeup_scheduled_start?: string | null;
+  makeup_status?: string | null;
+  recorded_at?: string | null;
+}
+
+export interface CohortMakeupCreate {
+  scheduled_start: string;
+  scheduled_end: string;
+}
+
+export interface CohortMissedClassDecisionResult {
+  missed_class: CohortMissedClass;
+  warnings: string[];
 }
 
 export interface CourseCohortDetail extends CourseCohort {
@@ -659,7 +689,8 @@ export interface ComplianceSummary {
   requirements_total: number;
   certs_expiring_soon: number;
   certs_expired: number;
-  compliance_status: 'green' | 'yellow' | 'red' | 'exempt';
+  /** `not_applicable`: no requirement grades the member and no certificate is lapsing. */
+  compliance_status: 'green' | 'yellow' | 'red' | 'exempt' | 'not_applicable';
   compliance_label: string;
   hours_this_year: number;
   active_certifications: number;
@@ -696,6 +727,7 @@ export interface TrainingRequirement {
   // Opt-in: may imported/external training (e.g. Vector Solutions) auto-credit
   // this requirement by category? Off by default — in-house delivery only.
   allows_external_credit?: boolean;
+  shift_credited?: boolean;
   training_type?: TrainingType;
   // Requirement quantities (field used depends on requirement_type)
   required_hours?: number;
@@ -756,6 +788,8 @@ export interface TrainingRequirementCreate {
   registry_code?: string | undefined;
   is_editable?: boolean | undefined;
   allows_external_credit?: boolean | undefined;
+  /** May shift attendance satisfy it on the Shift Compliance report? Omitted on create, the type decides. */
+  shift_credited?: boolean | undefined;
   training_type?: TrainingType | undefined;
   required_hours?: number | null | undefined;
   required_courses?: string[] | undefined;
@@ -804,6 +838,8 @@ export interface TrainingRequirementUpdate {
   registry_code?: string | undefined;
   is_editable?: boolean | undefined;
   allows_external_credit?: boolean | undefined;
+  /** May shift attendance satisfy it on the Shift Compliance report? Omitted on create, the type decides. */
+  shift_credited?: boolean | undefined;
   training_type?: TrainingType | undefined;
   required_hours?: number | null | undefined;
   required_courses?: string[] | undefined;
@@ -1456,7 +1492,7 @@ export interface ExternalUserMapping {
 }
 
 export interface ExternalUserMappingUpdate {
-  internal_user_id?: string;
+  internal_user_id?: string | null;
   is_mapped?: boolean;
 }
 
@@ -1569,6 +1605,8 @@ export interface SelfReportConfig {
   allowed_training_types?: string[];
   max_hours_per_submission?: number;
   member_instructions?: string;
+  /** Days a decided submission's certificate files are kept; null = indefinitely. */
+  attachment_retention_days?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -1583,6 +1621,7 @@ export interface SelfReportConfigUpdate {
   allowed_training_types?: string[] | null;
   max_hours_per_submission?: number | null;
   member_instructions?: string | null;
+  attachment_retention_days?: number | null;
 }
 
 /**
@@ -2515,10 +2554,11 @@ export interface ReportExportResponse {
 export interface ComplianceForecast {
   user_id: string;
   user_name?: string;
-  current_compliance_percentage: number;
-  forecast_30_days: number;
-  forecast_60_days: number;
-  forecast_90_days: number;
+  /** Each is null when no requirement grades the member (not applicable). */
+  current_compliance_percentage: number | null;
+  forecast_30_days: number | null;
+  forecast_60_days: number | null;
+  forecast_90_days: number | null;
   at_risk_requirements: Array<Record<string, unknown>>;
   expiring_certifications: Array<Record<string, unknown>>;
 }
@@ -2570,7 +2610,10 @@ export interface ComplianceAttestation {
   period_type: string;
   period_year: number;
   period_quarter?: number | undefined;
-  compliance_percentage: number;
+  /** Computed by the server when attested; null when no member was graded. */
+  compliance_percentage: number | null;
+  /** The day the figure was graded as of (the period's end, or the day attested). Absent on attestations recorded before CS-8. */
+  compliance_as_of?: string | undefined;
   notes: string;
   areas_reviewed: string[];
   exceptions: Array<Record<string, unknown>>;
@@ -2584,7 +2627,6 @@ export interface AttestationCreate {
   period_type: string;
   period_year: number;
   period_quarter?: number | undefined;
-  compliance_percentage: number;
   notes: string;
   areas_reviewed: string[];
   exceptions: Array<{ requirement_name: string; reason: string; mitigation: string }>;
@@ -2616,7 +2658,8 @@ export interface IncompleteRecord {
 export interface AnnualReportMember {
   user_id: string;
   name: string;
-  compliance_pct: number;
+  /** Null when no requirement grades the member (status `not_applicable`). */
+  compliance_pct: number | null;
   hours_completed: number;
   admin_hours_approved: number;
   admin_hours_pending: number;
@@ -2624,7 +2667,7 @@ export interface AnnualReportMember {
   requirements_met: number;
   requirements_total: number;
   expired_certifications: number;
-  status: 'compliant' | 'at_risk' | 'non_compliant';
+  status: 'compliant' | 'at_risk' | 'non_compliant' | 'not_applicable';
 }
 
 export interface AnnualReportRequirement {
@@ -2642,8 +2685,12 @@ export interface AnnualComplianceReport {
   year: number;
   generated_at: string;
   executive_summary: {
-    overall_compliance_pct: number;
+    /** Of graded members; null when no member is graded against anything. */
+    overall_compliance_pct: number | null;
     total_members: number;
+    /** Members at least one requirement grades — the percentage's denominator. */
+    graded_members?: number;
+    not_applicable_members?: number;
     fully_compliant_members: number;
     total_training_hours: number;
     total_admin_hours: number;
@@ -2836,9 +2883,12 @@ export interface ComplianceReportSummary {
   periodMonth?: number;
   status: string;
   summary?: {
-    overall_compliance_pct: number;
+    /** Null when no member is graded against anything. */
+    overall_compliance_pct: number | null;
     fully_compliant_members: number;
     total_members: number;
+    /** Absent on reports stored before not-applicable members were split out. */
+    graded_members?: number;
     at_risk_members: number;
     non_compliant_members: number;
     total_training_hours: number;
@@ -2891,7 +2941,7 @@ export interface SeedDefaultsResponse {
 }
 
 // Month-at-a-glance member training roster (records → Monthly Status tab)
-export type MemberComplianceStatusColor = 'green' | 'yellow' | 'red' | 'exempt';
+export type MemberComplianceStatusColor = 'green' | 'yellow' | 'red' | 'exempt' | 'not_applicable';
 
 export interface MemberPeriodStatusRow {
   user_id: string;

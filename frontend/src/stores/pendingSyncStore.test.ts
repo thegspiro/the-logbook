@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockGenericCount = vi.fn();
 const mockEquipmentCount = vi.fn();
 const mockReportCount = vi.fn();
+const mockListHeld = vi.fn();
 
 vi.mock('../utils/genericOfflineQueue', () => ({
   genericPendingCount: () => mockGenericCount() as Promise<number>,
@@ -14,19 +15,47 @@ vi.mock('../utils/shiftReportOfflineQueue', () => ({
   pendingReportCount: () => mockReportCount() as Promise<number>,
 }));
 
+vi.mock('../utils/offlineQueueQuarantine', () => ({
+  listHeldOfflineItems: () => mockListHeld() as Promise<unknown[]>,
+}));
+
 // Import the store AFTER the queue mocks are in place.
 import { usePendingSyncStore } from './pendingSyncStore';
 
 describe('pendingSyncStore', () => {
   beforeEach(() => {
-    usePendingSyncStore.setState({ count: 0, status: 'idle', lastError: null });
+    usePendingSyncStore.setState({ count: 0, heldCount: 0, status: 'idle', lastError: null });
     vi.clearAllMocks();
+    mockGenericCount.mockReset();
+    mockEquipmentCount.mockReset();
+    mockReportCount.mockReset();
+    mockListHeld.mockReset();
     mockGenericCount.mockResolvedValue(0);
     mockEquipmentCount.mockResolvedValue(0);
     mockReportCount.mockResolvedValue(0);
+    mockListHeld.mockResolvedValue([]);
   });
 
   describe('refresh', () => {
+    it('counts held items apart from the ones that will sync', async () => {
+      mockGenericCount.mockResolvedValue(1);
+      mockListHeld.mockResolvedValue([{ id: 'a' }, { id: 'b' }]);
+
+      await usePendingSyncStore.getState().refresh();
+
+      expect(usePendingSyncStore.getState().count).toBe(1);
+      expect(usePendingSyncStore.getState().heldCount).toBe(2);
+    });
+
+    it('reports nothing held when the held list cannot be read', async () => {
+      usePendingSyncStore.setState({ heldCount: 3 });
+      mockListHeld.mockRejectedValue(new Error('IndexedDB blocked'));
+
+      await usePendingSyncStore.getState().refresh();
+
+      expect(usePendingSyncStore.getState().heldCount).toBe(0);
+    });
+
     it('sums the three queues into the badge count', async () => {
       mockGenericCount.mockResolvedValue(2);
       mockEquipmentCount.mockResolvedValue(3);

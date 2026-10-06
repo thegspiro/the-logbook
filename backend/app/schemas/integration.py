@@ -195,6 +195,12 @@ class CalcomConfig(BaseModel):
     webhook_secret: str = ""
 
 
+# Owner decision (SF-auto-apply): an exact-amount PayPal capture settles its
+# order unless the department turns this off. Named once so the setup schema
+# and the webhook cannot drift apart.
+PAYPAL_AUTO_APPLY_DEFAULT = True
+
+
 class PayPalConfig(BaseModel):
     """PayPal REST app credentials plus reconciliation behaviour.
 
@@ -214,8 +220,10 @@ class PayPalConfig(BaseModel):
     # signatures: PayPal's verify API keys the check on this id.
     webhook_id: str = ""
     # When off, captures are still recorded and matched but never applied —
-    # a department that wants a human to press the button keeps that.
-    auto_apply_payments: bool = True
+    # a department that wants a human to press the button keeps that. The
+    # setup form always sends it; the default covers a config saved without
+    # it, and the webhook reads the same constant (SF-auto-apply).
+    auto_apply_payments: bool = PAYPAL_AUTO_APPLY_DEFAULT
 
 
 class ClaudeMcpConfig(BaseModel):

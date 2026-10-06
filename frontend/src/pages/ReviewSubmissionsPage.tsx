@@ -794,6 +794,9 @@ const DEFAULT_FIELD_CONFIG: Record<string, FieldConfig> = {
   attachments: { visible: true, required: false, label: 'Supporting Documents' },
 };
 
+// Mirrors ATTACHMENT_RETENTION_MIN_DAYS in backend/app/schemas/training_submission.py.
+const ATTACHMENT_RETENTION_MIN_DAYS = 90;
+
 const ConfigEditor: React.FC<{
   config: SelfReportConfig;
   onSave: (updates: SelfReportConfigUpdate) => Promise<void>;
@@ -807,6 +810,8 @@ const ConfigEditor: React.FC<{
   const [notifyMember, setNotifyMember] = useState(config.notify_member_on_decision);
   const [maxHours, setMaxHours] = useState<number | undefined>(config.max_hours_per_submission ?? undefined);
   const [instructions, setInstructions] = useState(config.member_instructions || '');
+  const [retentionDays, setRetentionDays] = useState<number | undefined>(config.attachment_retention_days ?? undefined);
+  const retentionTooShort = retentionDays !== undefined && retentionDays < ATTACHMENT_RETENTION_MIN_DAYS;
   const [fieldConfig, setFieldConfig] = useState<Record<string, FieldConfig>>(() => {
     // Merge defaults with existing config
     const merged = { ...DEFAULT_FIELD_CONFIG };
@@ -837,6 +842,7 @@ const ConfigEditor: React.FC<{
         notify_member_on_decision: notifyMember,
         max_hours_per_submission: maxHours ?? null,
         member_instructions: instructions || null,
+        attachment_retention_days: retentionDays ?? null,
         field_config: fieldConfig,
       });
     } finally {
@@ -938,6 +944,36 @@ const ConfigEditor: React.FC<{
         </div>
       </div>
 
+      {/* Certificate file retention */}
+      <div>
+        <h3 className="text-theme-text-secondary mb-3 text-sm font-medium">Certificate Files</h3>
+        <label htmlFor="attachment-retention-days" className="text-theme-text-muted mb-1 block text-xs">
+          Delete certificate files after (days)
+        </label>
+        <input
+          id="attachment-retention-days"
+          type="number"
+          value={retentionDays ?? ''}
+          onChange={(e) => setRetentionDays(e.target.value ? parseInt(e.target.value, 10) : undefined)}
+          placeholder="Keep indefinitely"
+          className="form-input-sm w-48"
+          min={ATTACHMENT_RETENTION_MIN_DAYS}
+          step={1}
+          aria-describedby="attachment-retention-help"
+          aria-invalid={retentionTooShort}
+        />
+        <p id="attachment-retention-help" className="text-theme-text-muted mt-1 text-xs">
+          Counted from the approval or rejection. Once a submission is older than this, its uploaded certificate files
+          are permanently deleted from the submission and from the member&apos;s training record; the record itself
+          stays. Leave empty to keep files indefinitely. Minimum {ATTACHMENT_RETENTION_MIN_DAYS} days.
+        </p>
+        {retentionTooShort && (
+          <p role="alert" className="mt-1 text-xs text-red-700 dark:text-red-300">
+            Must be at least {ATTACHMENT_RETENTION_MIN_DAYS} days, or empty.
+          </p>
+        )}
+      </div>
+
       {/* Instructions */}
       <div>
         <h3 className="text-theme-text-secondary mb-3 text-sm font-medium">Member Instructions</h3>
@@ -999,7 +1035,7 @@ const ConfigEditor: React.FC<{
           onClick={() => {
             void handleSave();
           }}
-          disabled={saving}
+          disabled={saving || retentionTooShort}
           className="btn-primary flex items-center space-x-2 text-sm font-medium"
         >
           <Save className="h-4 w-4" />
@@ -1114,7 +1150,7 @@ const ReviewSubmissionsPage: React.FC = () => {
         >
           <button
             onClick={() => setActiveView('pending')}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            className={`touch:min-h-11 flex-1 rounded-md px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
               activeView === 'pending'
                 ? 'bg-red-800 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
@@ -1130,7 +1166,7 @@ const ReviewSubmissionsPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveView('all')}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            className={`touch:min-h-11 flex-1 rounded-md px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
               activeView === 'all'
                 ? 'bg-red-800 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
@@ -1141,7 +1177,7 @@ const ReviewSubmissionsPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveView('config')}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            className={`touch:min-h-11 flex-1 rounded-md px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
               activeView === 'config'
                 ? 'bg-red-800 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'

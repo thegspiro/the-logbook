@@ -50,6 +50,40 @@ describe('RequirementModal', () => {
     expect(await screen.findByRole('button', { name: 'Create Requirement' })).toBeEnabled();
   });
 
+  describe('shift credit', () => {
+    it('leaves a new hours requirement off the shift report unless ticked', async () => {
+      onSave.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(<RequirementModal requirement={null} categories={[]} onClose={vi.fn()} onSave={onSave} />);
+
+      await user.type(screen.getByLabelText(/^Name/), 'Annual Hazmat Hours');
+      await user.type(screen.getByLabelText(/^Required Hours/), '6');
+      expect(screen.getByRole('checkbox', { name: /Shift attendance satisfies/ })).not.toBeChecked();
+      await user.click(screen.getByRole('button', { name: 'Create Requirement' }));
+
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ shift_credited: false }), false, undefined);
+    });
+
+    it('sends the flag an officer ticked on an existing hours requirement', async () => {
+      onSave.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(
+        <RequirementModal
+          requirement={existing({ shift_credited: false })}
+          categories={[]}
+          onClose={vi.fn()}
+          onSave={onSave}
+        />
+      );
+
+      await user.click(screen.getByRole('checkbox', { name: /Shift attendance satisfies/ }));
+      await user.click(screen.getByRole('button', { name: 'Update Requirement' }));
+      await user.click(screen.getByRole('button', { name: 'Save for everyone' }));
+
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ shift_credited: true }), true, 'req-1');
+    });
+  });
+
   describe('existing members', () => {
     it('sends a cutoff when existing members are exempted on create', async () => {
       onSave.mockResolvedValue(undefined);

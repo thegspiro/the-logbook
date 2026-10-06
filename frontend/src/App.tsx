@@ -19,6 +19,7 @@ import { RouteTitleManager } from './components/RouteTitleManager';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { PullToRefreshProvider } from './contexts/PullToRefreshContext';
 import { ConfirmProvider } from './contexts/ConfirmContext';
+import { SignOutUnconfirmedNotice } from './components/SignOutUnconfirmedNotice';
 
 // Protected Route & Layout
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -107,6 +108,7 @@ function App() {
             <RouteTitleManager />
             <div className="App">
               <UpdateNotification />
+              <SignOutUnconfirmedNotice />
               <Suspense fallback={<PageLoadingFallback />}>
                 <Routes>
                   {/* ============================================

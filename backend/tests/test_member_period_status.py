@@ -23,7 +23,10 @@ def _scalars(items):
 
 
 class _DB:
-    """Returns queued execute() results in order (members, requirements, records)."""
+    """Returns queued execute() results in order (members, requirements).
+
+    The records arrive through ``load_graded_records``, patched in ``_call``.
+    """
 
     def __init__(self, results):
         self._results = list(results)
@@ -71,8 +74,9 @@ async def _call(monkeypatch, members, requirements, records, evaluate):
     )
     monkeypatch.setattr(mod, "_load_compliance_config", AsyncMock(return_value=None))
     monkeypatch.setattr(mod, "_evaluate_member_requirement", evaluate)
+    monkeypatch.setattr(mod, "load_graded_records", AsyncMock(return_value=records))
 
-    db = _DB([_scalars(members), _scalars(requirements), _scalars(records)])
+    db = _DB([_scalars(members), _scalars(requirements)])
     user = SimpleNamespace(organization_id="org-1")
     return await mod.get_member_period_status(
         start_date=date(2026, 7, 1),
@@ -123,6 +127,53 @@ class TestMemberPeriodStatus:
         assert row["compliance_status"] == "green"
         assert row["trainings_completed"] == 0
         assert row["last_activity"] is None
+
+    async def test_member_nothing_grades_is_not_applicable(self, monkeypatch):
+        """No requirement applies, so there is no standing to colour — not
+        green, which read as passing what nobody measured (TR4-4)."""
+        m = _member("u1", "Life", "Member")
+        reserve_only = _req(
+            "r1", applies_to_all=False, required_membership_types=["reserve"]
+        )
+
+        def evaluate(*_a, **_k):  # pragma: no cover - should not be called
+            raise AssertionError("an inapplicable requirement is not evaluated")
+
+        result = await _call(monkeypatch, [m], [reserve_only], [], evaluate)
+        row = result["members"][0]
+        assert row["compliance_status"] == "not_applicable"
+        assert row["requirements_total"] == 0
+
+    async def test_configured_zero_threshold_is_honoured(self, monkeypatch):
+        """A configured 0% compliant threshold was replaced by the 100%
+        default (`or`); it now classifies exactly as the matrix does."""
+        m = _member("u1", "Pat", "Lenient")
+        config = SimpleNamespace(
+            compliant_threshold=0.0,
+            at_risk_threshold=0.0,
+            threshold_type="percentage",
+        )
+
+        def evaluate(*_a, **_k):
+            return ("not_started", None, None)
+
+        monkeypatch.setattr(
+            mod, "_load_compliance_config", AsyncMock(return_value=config)
+        )
+        monkeypatch.setattr(mod, "fetch_org_waivers", AsyncMock(return_value={}))
+        monkeypatch.setattr(
+            mod, "get_org_include_current_month", AsyncMock(return_value=True)
+        )
+        monkeypatch.setattr(mod, "_evaluate_member_requirement", evaluate)
+        monkeypatch.setattr(mod, "load_graded_records", AsyncMock(return_value=[]))
+        db = _DB([_scalars([m]), _scalars([_req("r1")])])
+        result = await mod.get_member_period_status(
+            start_date=date(2026, 7, 1),
+            end_date=date(2026, 7, 31),
+            db=db,
+            current_user=SimpleNamespace(organization_id="org-1"),
+        )
+        assert result["members"][0]["compliance_status"] == "green"
 
     async def test_exempt_member_surfaced_as_exempt(self, monkeypatch):
         m = _member("u1", "Chief", "Boss", exempt=True)

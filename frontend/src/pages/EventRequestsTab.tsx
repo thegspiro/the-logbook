@@ -53,7 +53,7 @@ import type {
 import { useTimezone } from '../hooks/useTimezone';
 import { useRanks } from '../hooks/useRanks';
 import { formatShortDateTime, localToUTC } from '../utils/dateFormatting';
-import { getErrorMessage } from '../utils/errorHandling';
+import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
 import { positionLabel } from '../modules/scheduling/utils/positionLabels';
 import { asArray, expectArray } from '../utils/asArray';
 import { displayNameOf } from '../utils/memberName';
@@ -437,10 +437,11 @@ const EventRequestsTab: React.FC = () => {
       setScheduleNotes('');
       await refreshDetail(requestId);
     } catch (err) {
-      const message = getErrorMessage(err, 'Failed to schedule request.');
-      toast.error(
-        message.includes('already booked') ? message : 'Failed to schedule request. The room may be double-booked.'
-      );
+      // The server's sentence when it gave one: a double-booked room, or an
+      // event whose attendance is already closed, are different fixes and the
+      // coordinator can only tell them apart by reading which it was. The
+      // room hint is kept for a failure that came back without a reason.
+      toast.error(getErrorDetail(err) || 'Failed to schedule request. The room may be double-booked.');
     } finally {
       setActionLoading(false);
     }
@@ -458,8 +459,8 @@ const EventRequestsTab: React.FC = () => {
       setPostponeReason('');
       setPostponeNewDate('');
       await refreshDetail(requestId);
-    } catch {
-      toast.error('Failed to postpone request.');
+    } catch (err) {
+      toast.error(getErrorDetail(err) || 'Failed to postpone request.');
     } finally {
       setActionLoading(false);
     }
@@ -529,7 +530,7 @@ const EventRequestsTab: React.FC = () => {
 
   if (loading && requests.length === 0) {
     return (
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl py-8">
         <div className="flex h-64 items-center justify-center" role="status" aria-live="polite">
           <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
         </div>
@@ -539,7 +540,7 @@ const EventRequestsTab: React.FC = () => {
 
   if (error) {
     return (
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl py-8">
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
           <p className="text-red-700 dark:text-red-300">{error}</p>
           <button
@@ -554,7 +555,7 @@ const EventRequestsTab: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-6xl py-8">
       <div className="space-y-6">
         {/* Header */}
         <div>

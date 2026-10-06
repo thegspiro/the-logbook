@@ -9,7 +9,7 @@ is a record of note and keeps "John Heather".
 import uuid
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -81,7 +81,15 @@ class TestEquipmentCheckNameMap:
             return_value=(timezone.utc, now - timedelta(days=30), now)
         )
 
-        report = await service.get_compliance_report("org-1")
+        # The per-apparatus "has a checklist" lookup reads templates through
+        # its own queries; it is not what this test is about, and leaving it
+        # live would consume the mocked results meant for the name lookup.
+        with patch(
+            "app.services.equipment_readiness_service.EquipmentReadinessService."
+            "apparatus_with_checklists",
+            new=AsyncMock(return_value={"a1"}),
+        ):
+            report = await service.get_compliance_report("org-1")
 
         assert report["members"][0]["user_name"] == "John Heather"
         assert report["apparatus"][0]["last_checked_by"] == "John Heather"

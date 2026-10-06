@@ -413,13 +413,13 @@ const ImpactPlannerPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+      <div className="mx-auto max-w-6xl py-6 sm:py-8">
         {/* Header */}
         <Breadcrumbs />
 
         <Link
           to="/inventory/admin"
-          className="text-theme-text-muted hover:text-theme-text-primary mb-4 inline-flex items-center gap-1.5 text-sm"
+          className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 mb-4 inline-flex items-center gap-1.5 text-sm"
         >
           <ArrowLeft className="h-4 w-4" /> Back to Admin
         </Link>
@@ -524,7 +524,7 @@ const ImpactPlannerPage: React.FC = () => {
                   ) : (
                     <button
                       onClick={() => setShowSaveForm(true)}
-                      className="mt-2 text-xs text-blue-600 hover:underline dark:text-blue-400"
+                      className="touch:min-h-11 mt-2 text-xs text-blue-800 hover:underline dark:text-blue-400"
                     >
                       Save current filters as a plan
                     </button>

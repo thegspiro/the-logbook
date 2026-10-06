@@ -871,3 +871,93 @@ export interface ApparatusCustomField {
   createdAt: string;
   updatedAt: string;
 }
+
+// =============================================================================
+// NFPA Compliance
+// =============================================================================
+
+export const NfpaComplianceStatus = {
+  COMPLIANT: 'compliant',
+  NON_COMPLIANT: 'non_compliant',
+  PENDING: 'pending',
+  EXEMPT: 'exempt',
+} as const;
+export type NfpaComplianceStatus = (typeof NfpaComplianceStatus)[keyof typeof NfpaComplianceStatus];
+
+/** A record on the per-apparatus NFPA compliance list. */
+export interface ApparatusNfpaCompliance {
+  id: string;
+  organizationId: string;
+  apparatusId: string;
+  standardCode: string;
+  sectionReference: string;
+  requirementDescription: string;
+  isCompliant: boolean;
+  complianceStatus: NfpaComplianceStatus;
+  lastCheckedDate: string | null;
+  lastCheckedBy: string | null;
+  nextDueDate: string | null;
+  notes: string | null;
+  exemptionReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApparatusNfpaComplianceCreate {
+  apparatusId: string;
+  standardCode: string;
+  sectionReference: string;
+  requirementDescription: string;
+  complianceStatus?: NfpaComplianceStatus | undefined;
+  lastCheckedDate?: string | undefined;
+  nextDueDate?: string | undefined;
+  notes?: string | undefined;
+  exemptionReason?: string | undefined;
+}
+
+/** Update payload: an explicit null clears a field (CLAUDE.md pitfall 1). */
+export interface ApparatusNfpaComplianceUpdate {
+  standardCode?: string | undefined;
+  sectionReference?: string | undefined;
+  requirementDescription?: string | undefined;
+  complianceStatus?: NfpaComplianceStatus | undefined;
+  lastCheckedDate?: string | null | undefined;
+  nextDueDate?: string | null | undefined;
+  notes?: string | null | undefined;
+  exemptionReason?: string | null | undefined;
+}
+
+/** Statuses the server works out; the screen only labels them. */
+export type NfpaStanding = 'current' | 'due_soon' | 'overdue' | 'scheduled' | 'never_performed' | NfpaComplianceStatus;
+
+export interface NfpaRequiredMaintenance {
+  maintenanceTypeId: string;
+  name: string;
+  nfpaReference: string | null;
+  lastCompletedDate: string | null;
+  lastRecordId: string | null;
+  nextDueDate: string | null;
+  status: NfpaStanding;
+}
+
+export interface NfpaComplianceItemStatus {
+  record: ApparatusNfpaCompliance;
+  status: NfpaStanding;
+}
+
+export interface ApparatusNfpaSummary {
+  apparatusId: string;
+  asOf: string;
+  requiredMaintenance: NfpaRequiredMaintenance[];
+  complianceItems: NfpaComplianceItemStatus[];
+  overdueCount: number;
+  dueSoonCount: number;
+  neverPerformedCount: number;
+}
+
+export interface ApparatusNfpaSettings {
+  enabled: boolean;
+  defaultForOrganizationType: boolean;
+  /** null until the department chooses; then it overrides the default. */
+  explicitChoice: boolean | null;
+}

@@ -57,6 +57,7 @@ attendance or readiness information.
 2. [Calendar Views](#calendar-views)
 3. [My Shifts](#my-shifts)
 4. [Open Shifts](#open-shifts)
+   - [Shifts with other departments](#shifts-with-other-departments-2026-09-27--09-29)
 5. [Shift Assignments](#shift-assignments)
 6. [Printing Station Documents](#printing-station-documents)
 7. [Attendance Tracking](#attendance-tracking)
@@ -73,6 +74,8 @@ attendance or readiness information.
 18. [Troubleshooting](#troubleshooting)
 19. [The Schedule Board and Standing Shifts](#the-schedule-board-and-standing-shifts-2026-08-23--08-24)
 20. [Equipment Checks: Four Item Types and Sealed Containers](#equipment-checks-four-item-types-and-sealed-containers-2026-08-23)
+21. [The Shift Reports tab](#the-shift-reports-tab-2026-09-27--09-28)
+22. [Late September 2026: what else changed](#late-september-2026-what-else-changed)
 
 ---
 
@@ -80,19 +83,27 @@ attendance or readiness information.
 
 Navigate to **Shift Scheduling** in the sidebar. The scheduling page is organized into tabs:
 
-| Tab                 | Description                                                                                                                                      |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Schedule**        | Calendar view of all shifts                                                                                                                      |
-| **My Shifts**       | Your personal shift assignments                                                                                                                  |
-| **Open Shifts**     | Shifts with a seat you are cleared for and nobody has claimed. `scheduling.manage` sees the department-wide staffing-gap view instead              |
-| **Requests**        | Time-off and swap requests                                                                                                                       |
-| **Shift Templates** | Reusable shift configurations                                                                                                                    |
-| **Reports**         | Hours, coverage, and compliance reports                                                                                                          |
-| **Settings**        | Notification preferences, shift rules, coverage settings, and shift report configuration (section toggles, apparatus skills/tasks, rating scale) |
+| Tab               | Description                                                                                                                         |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **Schedule**      | The shift board — week and month views of every shift                                                                               |
+| **My Shifts**     | Your assignments: **Upcoming**, **Past**, and **Hours** (your hours for the year, and shifts with other departments)                |
+| **Open Shifts**   | Shifts with a seat you are cleared for and nobody has claimed. `scheduling.manage` sees the department-wide staffing-gap view instead |
+| **Requests**      | Time-off and swap requests                                                                                                          |
+| **Shift Reports** | End-of-shift reports — about you, and (with `training.manage`) the ones you write and review. Hidden where shift reports are off     |
+
+Templates, patterns, reports and settings are not tabs here: they moved to
+**Scheduling Administration** (`/scheduling/admin`) on 2026-09-05 — see
+[Scheduling Administration](#scheduling-administration-moved-2026-09-05).
+
+> **Corrected 2026-10-04.** This table still listed **Shift Templates**,
+> **Reports** and **Settings** tabs, which left the page on 2026-09-05, and
+> omitted **Shift Reports**.
 
 > **Note:** _(2026-04-11)_ Departments that do not use the Scheduling module can file shift completion reports via the standalone **Manual Shift Report** page at `/training/manual-shift-report`. See [Training > Manual Shift Report Entry](./02-training.md#manual-shift-report-entry-2026-04-11) for details.
 
 ![Scheduling page tab bar with the schedule view below it](./images/03-01-scheduling-tabs.png)
+
+**[SCREENSHOT — REPLACE `03-01-scheduling-tabs.png`.** The header subtitle under **Shift Scheduling** changed on 2026-09-29 from "Manage schedules, sign up for shifts, and handle trades" to "See the schedule, sign up for shifts, and request swaps and time off". Every desktop shot of the scheduling page carries that line — `03-04`, `03-61` and `03-62` among them; re-shoot them in the same pass.**]**
 
 > **Note:** The scheduling module uses a dedicated state store and API service. All scheduling data (shifts, templates, patterns, members) is managed centrally and updates in real time across all tabs.
 
@@ -150,6 +161,10 @@ For each shift you can see:
 **Confirming an Assignment:**
 When you are assigned to a shift, you may need to confirm your availability. Click **Confirm** on the assignment to acknowledge.
 
+The tab has three views: **Upcoming**, **Past** and **Hours**. **Hours** is your
+own hours and calls for the year, and — since 2026-09-27 — the list of
+[shifts you worked with other departments](#shifts-with-other-departments-2026-09-27--09-29).
+
 ![My Shifts tab listing upcoming shifts with status badges](./images/03-04-my-shifts.png)
 
 ---
@@ -160,11 +175,32 @@ The **Open Shifts** tab lists shifts that need additional coverage. Members can 
 
 1. Browse available open shifts by date.
 2. Click **Sign Up** to volunteer for a shift.
-3. An officer will review and approve your sign-up.
+3. Pick the seat, then **Confirm Sign Up**. The shift goes straight onto your
+   schedule — the toast reads "Signed up for shift" — and appears on **My
+   Shifts**, where you can confirm it.
 
-You can also **withdraw** from an open shift you signed up for, as long as it has not been approved yet.
+There is no officer approval step. A self signup is written to the roster as
+_assigned_, exactly as if an officer had assigned you, and the only
+confirmation is your own.
+
+> **Corrected 2026-09-29.** This section, the tab's own intro and the signup
+> toast all said an officer would "review and confirm" a signup, and that you
+> could withdraw "as long as it has not been approved yet". No officer queue
+> has ever received a signup (workflow review W33-2); the tab now reads "Shifts
+> with open seats. Sign up for one and it goes straight onto your schedule."
+> You leave a shift you signed up for the same way as one you were assigned to.
+
+**Signing up again after you declined** _(2026-09-26)_. If you declined a
+shift, or lost the seat to a cancellation or approved time off, you can sign up
+for it again. The rule always said so, but the database still held your old,
+inactive row for that shift, so the signup passed every check and was then
+refused as **"Member is already assigned to this shift"**. The old row is now
+cleared — under the same lock as the signup — once the signup has passed its
+checks; a signup that is refused leaves it where it was.
 
 ![Open Shifts tab showing shifts with vacant positions](./images/03-05-open-shifts.png)
+
+**[SCREENSHOT — REPLACE `03-05-open-shifts.png`.** The tab intro changed on 2026-09-29 from "Browse available shifts … A scheduling officer will review and confirm your signup." to "Shifts with open seats. Sign up for one and it goes straight onto your schedule." Re-shoot Open Shifts as a member with the new intro visible above the list.**]**
 
 > **Hint:** Open shifts are a great way to pick up additional hours toward shift-based training requirements.
 
@@ -197,9 +233,89 @@ and a member compare boards and see different lists, that is why.
 
 ![Open Shifts as an ordinary member (a firefighter): only the shifts with a seat her rank can fill](./images/03-100-open-shifts-member.png)
 
+**[SCREENSHOT — REPLACE `03-100-open-shifts-member.png`.** Shot 2026-09-24, before the 2026-09-29 copy pass: the intro above the list still promises an officer will confirm the signup. Re-shoot the same member view with "Shifts with open seats. Sign up for one and it goes straight onto your schedule."**]**
+
 ![The same Open Shifts tab as the scheduling administrator: every short-staffed shift in the department, including the officer and driver seats the firefighter's list leaves out](./images/03-105-open-shifts-admin.png)
 
+**[SCREENSHOT — REPLACE `03-105-open-shifts-admin.png`.** Same intro change as `03-100`; re-shoot the administrator's view with the new intro.**]**
+
 ---
+
+## Shifts with other departments _(2026-09-27 → 09-29)_
+
+Members who ride a neighbouring jurisdiction's apparatus had no way to get
+credit for it: every counted shift hour came from attendance on one of this
+department's own shifts. Now a member logs that time themselves.
+
+**Where:** **My Shifts → Hours**, in the **Shifts with other departments** card
+("Log time on another jurisdiction's apparatus so it counts toward your
+hours."). Click **Log outside shift**.
+
+1. Give the shift's **Start** and **End**. **+12 hours** and **+24 hours** set
+   the end from the start for the standard tours, and moving the start moves
+   the end with it. The form shows what the entry **Counts as** in hours.
+2. Choose the **Department**, then the **Apparatus** — both from a list your
+   scheduling officers keep. If yours is not there, the form says: "Don't see
+   it? Ask a scheduling officer to add it under Scheduling → Settings → Outside
+   Apparatus."
+3. Optionally a **Position** (e.g. Driver) and **Notes**, then **Log shift**.
+
+The rules: a shift cannot start in the future, must end after it starts, and
+one entry covers at most 48 hours ("log a longer stretch as the shifts it
+was"). A night shift counts on the day it **began**, judged on the
+department's calendar.
+
+**It counts the moment you save it.** There is no approval queue. You can edit
+or delete your own entry; an officer who decides an entry should not count
+rejects it with a reason, and from then on it reads **Not counted** with the
+reason beneath it, and is locked to you. An officer can restore it.
+
+> **Changed 2026-09-29.** The first version (2026-09-27) asked for a date and
+> an hours figure. It now asks for the start and end. An entry logged before
+> the change opens on its date and hours ("This shift was logged as a date and
+> hours, without its start and end times.") with **Enter start and end times
+> instead** to give it times.
+
+**Where it shows up.** Outside hours are reported **beside** your own
+department's figures, not inside them: "+N hrs with other departments" on your
+Hours view, an **Outside Hours** column on the Member Hours report. The Shift
+Compliance report **does** add them into each member's shift and hour totals.
+
+> **Screenshot needed:**
+> _[My Shifts → Hours as a member → the "Shifts with other departments" card with two entries (one showing a start–end time range, one reading **Not counted** with its reason) and the **Log outside shift** button.]_
+
+> **Screenshot needed:**
+> _[My Shifts → Hours → Log outside shift → the "Log a shift with another department" dialog with Start and End filled, the **+12 hours** / **+24 hours** buttons, "Counts as 12 hours", and Department and Apparatus chosen.]_
+
+### For scheduling officers: the list and the review
+
+- **The list.** **Scheduling Admin → Settings → Outside Apparatus**
+  (`/scheduling/admin/settings/outside-apparatus`, `scheduling.manage`): **Add
+  a department**, then its units. Members pick only an active unit of an
+  active department. Turn an entry off to hide it from members; one that
+  shifts have been logged on cannot be deleted ("Shifts have been logged on it,
+  so it stays on record. Turn it off to hide it from members instead."). An
+  entry keeps the names it was logged under, so a rename never rewrites
+  history.
+- **The review.** **Scheduling Reports → Member Hours** gains two sections
+  under the table: **Outside apparatus staffed** (shifts, hours and members per
+  unit for the period) and **Shifts with other departments**, every entry with
+  a **Show** filter (All / Counted / Not counted) and **Reject** (with a reason) /
+  **Restore**.
+
+> **Screenshot needed:**
+> _[Scheduling Admin → Settings → Outside Apparatus → one department with two units, one turned off, and the "Add a department" field.]_
+
+> **Screenshot needed:**
+> _[Scheduling Reports → Member Hours → scrolled to the "Outside apparatus staffed" table and the "Shifts with other departments" list with a Reject button on a row.]_
+
+---
+
+> **Screenshot needed:**
+> _[Member at /scheduling?tab=my-shifts&view=hours, with at least one outside department and unit seeded. The 'Log a shift with another department' dialog opened from 'Log outside shift' and filled in: a Start, an End set with '+12 hours', the 'Counts as 12 hours' line, a Department and Apparatus chosen, and Position 'Driver'. Use placeholder department names, never a real neighbouring department.]_
+
+> **Screenshot needed:**
+> _[Member at /scheduling?tab=my-shifts&view=hours. The 'Shifts with other departments' section under the Hours table, with two counted entries showing date, time range, hours and apparatus, and one 'Not counted' entry with its Reason line; a card above should read '+N hrs with other departments'.]_
 
 ## Shift Assignments
 
@@ -325,6 +441,25 @@ table you can edit:
 > nothing in the frontend calls it. The nearest thing to retroactive recording
 > is **Add hours for members who didn't check in**, which appears in the
 > close-out checklist and takes a number of hours rather than times.
+
+**Checking in from the apparatus QR code.** Scanning the code on an
+apparatus opens **Shift Check-In** (`/scheduling/checkin`) for whichever shift
+that apparatus is running, with the same **Check In** / **Check Out** pair.
+
+**Checking out early now asks first** _(2026-09-29)_. A check-out cannot be
+taken back — the server refuses a second check-in on the same shift — and the
+button sits where a phone in a pocket or a gloved hand finds it. One stray tap
+used to end a 12-hour shift eleven hours early, for good, until an officer
+repaired the record. Before the shift's scheduled end, **Check Out** on this
+page now asks **"Check out early?"** — "Your shift runs until _time_. Checking
+out now records your hours up to now, and you cannot check back in to this
+shift." — with **Stay checked in** and **Check out now**. At or after the
+scheduled end it checks out without asking. **Check Out** under your assignment on
+the shift panel does not ask. A check-out in the first minute now reads "0 hours" rather than a
+bare "hours".
+
+> **Screenshot needed:**
+> _[Shift Check-In at phone width, one hour into a shift → tap Check Out → the "Check out early?" dialog with **Stay checked in** and **Check out now**.]_
 
 ### Post-Shift Validation
 
@@ -553,7 +688,9 @@ A swap starts from the shift you are giving up, not from a blank form:
 2. Click **Swap** on the shift you want covered. The dialog names that shift in
    its subtitle; there is nothing to pick, because it is the one you clicked.
 3. Choose a **Swap Type**:
-   - **Open Swap** — any member can pick it up. This is the default.
+   - **Open Swap** — "An officer finds cover; it stays yours until then".
+     This is the default. Other members cannot see an open swap, and the seat
+     stays yours until an officer moves somebody into it.
    - **Specific Shift** — you want a particular shift in return. Pick it from
      the list of everything scheduled from today onward, each entry showing its
      day, times and apparatus.
@@ -561,15 +698,39 @@ A swap starts from the shift you are giving up, not from a blank form:
 
 ![The Request Shift Swap dialog — the two swap-type cards, the shift picker and the reason field](./images/03-67-swap-request-dialog.png)
 
+**[SCREENSHOT — REPLACE `03-67-swap-request-dialog.png`.** The Open Swap card's subtitle changed on 2026-09-29 from "Any member can pick it up" to "An officer finds cover; it stays yours until then". Re-shoot the dialog with both swap-type cards readable.**]**
+
+> **Corrected 2026-09-29.** "Any member can pick it up" was never true: no
+> other member can see an open swap, and approving one records the review
+> without moving the seat (workflow review W33-4). Whether other members
+> should see open swaps, and whether approval should release the seat, are
+> open decisions recorded in `docs/KNOWN_LIMITATIONS.md`. To hand your seat to
+> a particular member, offer it from the shift on the board — see
+> [Trades somebody can actually accept](#trades-somebody-can-actually-accept).
+
 The request then appears under **Requests > Swap Requests**, where you can
 follow or cancel it.
 
 **Swap Workflow:**
 
 1. Member A requests a swap.
-2. Member B accepts or declines.
-3. An officer reviews and approves the swap.
-4. Assignments are updated automatically.
+2. For a **Specific Shift** trade, member B accepts or declines; for a seat
+   **offered to a named member**, that member can take it themselves.
+3. An officer reviews and approves the swap. Since 2026-09-30 an officer can
+   also approve an offer made to a named member, which hands the seat to them;
+   on the Requests tab it reads "→ Offered to _name_" rather than "Open swap".
+4. Assignments are updated automatically — except for an **Open Swap**, where
+   approval moves nothing and the officer assigns cover from the shift.
+
+A pending swap is cancelled — and both members told — the moment the seat it
+names goes away: you withdraw or decline, an officer removes or reassigns you,
+the shift is cancelled, your time off is approved, you go on leave, or another
+swap of the same seat is approved _(2026-09-30)_.
+
+**Requests tab.** The list defaults to **Pending**, so an answered request
+drops out of view; an empty filtered list now says "Showing pending requests
+only. Choose All Statuses to see the rest." A double-clicked **Approve** or
+**Deny** is sent once _(2026-09-29)_.
 
 > **Reviewers can now reach the queues they review** _(2026-09-13)_**.** Both
 > the time-off and swap lists hand a reviewer the department's whole queue and
@@ -630,7 +791,22 @@ To generate shifts from a pattern:
 3. Click **Generate Shifts**.
 4. Review and confirm the generated shifts.
 
+What you are told afterwards _(2026-09-29)_:
+
+- **"Generated N shifts"** — the count created.
+- **"No new shifts. Dates already on the schedule are skipped, as are dates
+  outside the pattern's own start and end."** — the normal answer to re-running
+  a range. It used to read "Generated 0 shifts".
+- **"N driver seats were left unfilled: …"** — a red notice that stays eight
+  seconds. When generation seats a platoon, it leaves a driver seat empty
+  rather than put a member without the vehicle's EVOC level in it, and names
+  each one. Both generate screens used to drop this, so the empty seat was
+  found on the night.
+
 ![The shift patterns page — each pattern with its type badge, rotation settings and Generate Shifts action](./images/03-13-shift-patterns.png)
+
+> **Screenshot needed:**
+> _[Scheduling administrator at /scheduling/admin/planning/patterns. A pattern's Generate panel after generating a date range that is already fully on the schedule, with the 'No new shifts. Dates already on the schedule are skipped…' toast visible. Generate the same range once first so the second run creates nothing.]_
 
 ### Understanding Platoon Rotations
 
@@ -761,14 +937,16 @@ When a shift is below minimum staffing:
 
 ## Shift Reports and Compliance
 
-The **Reports** tab provides several reporting views:
+**Scheduling Reports** (`/scheduling/admin/reports`, `scheduling.manage`,
+reached from the Scheduling Administration hub) has five tabs:
 
-| Report           | Description                                                                    |
-| ---------------- | ------------------------------------------------------------------------------ |
-| **Member Hours** | Hours _worked_ per member for a date range, with the scheduled hours alongside |
-| **Coverage**     | Shift staffing levels and gaps                                                 |
-| **Call Volume**  | Calls by day, week, or month                                                   |
-| **Compliance**   | Member compliance against shift/hours requirements                             |
+| Report               | Description                                                                                         |
+| -------------------- | --------------------------------------------------------------------------------------------------- |
+| **Member Hours**     | Hours _worked_ per member for a date range, with scheduled hours and outside hours alongside       |
+| **Coverage**         | Shift staffing levels and gaps                                                                      |
+| **Call Volume**      | Calls by day, week, or month                                                                        |
+| **Availability**     | Member availability over the dates you pick                                                         |
+| **Shift Compliance** | Member compliance against shift/hours requirements                                                  |
 
 ### Member Hours: worked vs. scheduled _(2026-08-01)_
 
@@ -788,9 +966,24 @@ reports saw a discrepancy with nothing to explain it.
 > report too — hours are not lost because the paperwork did not match what
 > happened on the day.
 
+**Outside Hours** _(2026-09-27)_ is a column beside these, for time members
+logged on other departments' apparatus; below the table sit **Outside
+apparatus staffed** and **Shifts with other departments** — see
+[Shifts with other departments](#shifts-with-other-departments-2026-09-27--09-29).
+
+> **Screenshot needed:**
+> _[Scheduling administrator (scheduling.manage) at /scheduling/admin/reports, Member Hours generated for a range containing outside shifts. Show the Outside Hours column, the 'Outside apparatus staffed' table with its Total row, and the 'Shifts with other departments' list with a Reject button and one 'Not counted' row. Use placeholder department names such as 'Township Fire Company', never a real neighbouring department.]_
+
 ### Compliance Report
 
-The compliance report evaluates each member's shift attendance and hours against active training requirements of type SHIFTS or HOURS.
+The **Shift Compliance** report evaluates each member's shift attendance and hours against the active SHIFTS and HOURS requirements marked **Shift attendance satisfies this requirement** (the **Shift Credit** box on the requirement form).
+
+A SHIFTS requirement is ticked by default. An HOURS requirement is not: training hours such as annual hazmat hours are graded from training records on the training screens, and duty shifts do not count toward them. Tick the box on an HOURS requirement only when hours on shift are what it measures. Before 2026-10-05 the report graded every HOURS requirement from shifts, so an existing HOURS requirement that should stay on this report needs ticking once.
+
+The summary cards above the list count **requirement checks** — one per member
+per requirement that applies to them — so a member under three requirements is
+three checks. **Checks Met** and **Checks Not Met** split that total; they are
+not head counts of members.
 
 For each requirement, the report shows:
 
@@ -798,6 +991,18 @@ For each requirement, the report shows:
 - Each member's completed value
 - Compliance percentage
 - Whether the member is compliant
+
+A requirement no member is held to reads **Not applicable** _(2026-09-29)_
+rather than "0% · 0/0 compliant" in red, which read as everyone failing it.
+Since 2026-10-03 the report also skips members a requirement exempts because
+they joined before it — see [Training](./02-training.md).
+
+> **Know what this report grades.** It counts **shift attendance** (plus
+> outside shifts) against every active HOURS or SHIFTS requirement — including
+> a training hours requirement the Training module grades from training
+> records. The two can disagree about the same member; which requirements shift
+> hours should satisfy is an open decision (workflow review W37-2, in
+> `docs/KNOWN_LIMITATIONS.md`).
 
 ![Scheduling compliance report with per-member shift totals](./images/03-14-scheduling-reports.png)
 
@@ -995,18 +1200,19 @@ Organization Settings and Event Settings: a **section list down the left** on a
 computer, a **scrollable tab strip across the top** on a phone, and one heading
 rather than the two stacked titles it used to show.
 
-Six sections, of which five are always present. They live under
+Seven sections, of which six are always present. They live under
 **Administration → Scheduling Admin → Settings**, and each is its own address,
 `/scheduling/admin/settings/<section>`:
 
-| Section           | What it holds                                             |
-| ----------------- | --------------------------------------------------------- |
-| **General**       | Shift defaults, overtime cap, and close-out rules         |
-| **Apparatus**     | Apparatus and resource type defaults                      |
-| **Platoons**      | Platoon rosters and assignments                           |
-| **Eligibility**   | Which membership types may sign themselves up for a shift |
-| **Notifications** | Shift reminders and alerts                                |
-| **Shift Reports** | End-of-shift reporting options                            |
+| Section               | What it holds                                                          |
+| --------------------- | ---------------------------------------------------------------------- |
+| **General**           | Shift defaults, overtime, and close-out                                |
+| **Apparatus**         | Apparatus and resource type defaults                                   |
+| **Platoons**          | Platoon rosters and assignments                                        |
+| **Eligibility**       | Who may sign up for a shift                                            |
+| **Notifications**     | Shift reminders and alerts                                             |
+| **Shift Reports**     | End-of-shift reporting options                                         |
+| **Outside Apparatus** | Other departments members ride with _(2026-09-27)_ — see [Shifts with other departments](#for-scheduling-officers-the-list-and-the-review) |
 
 Equipment-check requirements and templates are not here: they are managed in
 Inventory, from the checklist console in **Inventory Admin**
@@ -1020,7 +1226,36 @@ leaving you on a page that has gone.
 
 ![Scheduling settings on desktop, with the section list beside the selected section's card](./images/03-47-settings-desktop.png)
 
+**[SCREENSHOT — REPLACE `03-47-settings-desktop.png`.** The section list gained a seventh entry, **Outside Apparatus** ("Other departments members ride with"), on 2026-09-27, and General's description now reads "Shift defaults, overtime, and close-out". Re-shoot with all seven sections in the list.**]**
+
 ![Scheduling settings at phone width, the section list replaced by a scrollable tab strip](./images/03-48-settings-phone.png)
+
+**[SCREENSHOT — CHECK `03-48-settings-phone.png`.** The tab strip now carries seven sections and settings screens were given their full width on phones on 2026-10-04; re-shoot if the strip or card width visibly differs.**]**
+
+### What the settings do not do _(2026-09-29)_
+
+- **The six Notifications switches are not read by anything yet.** New
+  Assignment, Assignment Confirmed, Assignment Declined, Time-Off Approved,
+  Swap Request and Understaffed Shift each store a rule that no scheduling
+  sender consults: a member gets a "Time-Off Approved" notice with that switch
+  off. The section now says so above the switches — "Not in effect yet — these
+  switches are saved, but scheduling does not read them. Each of these notices
+  is sent, or not, whatever the switch shows." — and the notice disappears by
+  itself once a rule is wired. Whether to wire them or remove them is an open
+  decision (`docs/KNOWN_LIMITATIONS.md`, W36-1).
+- **"Require assignment confirmation" is gone from General → Department Defaults.** The checkbox was
+  stored and read by nothing: assignments were never held for confirmation
+  whichever way it was set. The stored value is left alone.
+- **Probationary members can be scheduled** _(2026-10-03)_. Shift eligibility,
+  the platoon roster, the availability summary and the compliance report
+  treated only `active` as active, so a member set to Probationary could not
+  sign in and was refused on assignment as "no longer active". Probationary now
+  counts as active everywhere. To keep probationary members from signing
+  themselves up, exclude the membership type under **Eligibility → Excluded
+  from Self-Signup**.
+
+> **Screenshot needed:**
+> _[Scheduling Admin → Settings → Notifications → the "Not in effect yet" notice above the six switches.]_
 
 ### Two things that changed with it
 
@@ -1153,20 +1388,17 @@ which positions are open to everyone regardless of rank.
 
 **How it affects shift signup:**
 
-- Every open slot in the Dashboard's **Next 30 Days** list offers a **Sign Up**
-  button. Eligibility is checked when you press it, not before — the row gives
-  no advance warning
+- The Dashboard's **Next 30 Days** list checks your eligibility for every
+  open slot it shows when it loads. A slot your rank qualifies for offers a
+  **Sign Up** button; one it does not reads **Not eligible** instead
 - Pressing **Sign Up** expands the row into a position dropdown holding **only
   the positions your rank qualifies for**, with a Confirm button beside it
-- If your rank qualifies for none of the open positions, the expanded row says
-  **"Not eligible for this shift."** instead of a dropdown
+- If the check could not run when the list loaded, the button stays and the
+  same check runs when you press it: a rank that qualifies for none of the
+  positions gets **"Not eligible for this shift."** instead of a dropdown
 - Ranks with no `eligible_positions` defined default to all positions being eligible (backward-compatible)
 
 ![An open shift row expanded after pressing Sign Up, its position dropdown holding only the positions the member's rank qualifies for](./images/03-62-dashboard-signup-positions.png)
-
-> **The button is not a promise.** It appears on every shift, so a member can
-> press Sign Up and be told they are not eligible. This is a known rough edge —
-> see [Known Limitations](../KNOWN_LIMITATIONS.md).
 
 ### Scheduling Administration _(moved 2026-09-05)_
 
@@ -1186,7 +1418,7 @@ opened the schedule to find the settings. That strip is gone.
 | `/scheduling/admin/reports`            | Scheduling Reports      | Hours, coverage and compliance reports                             |
 | `/scheduling/admin/platoons`           | Platoons                | Department-wide roster and bulk assignment                         |
 | `/scheduling/admin/positions`          | Who Can Fill What       | Position eligibility roster                                        |
-| `/scheduling/admin/settings/<section>` | Settings (six sections) | `general`, `apparatus`, `platoons`, `eligibility`, `notifications`, `shift-reports` |
+| `/scheduling/admin/settings/<section>` | Settings (seven sections) | `general`, `apparatus`, `platoons`, `eligibility`, `notifications`, `shift-reports`, `outside-apparatus` (2026-09-27) |
 
 Every page here requires `scheduling.manage` — the hub, the settings sections
 and the position roster alike. The position roster's API
@@ -1229,6 +1461,37 @@ coming up short.
 > that states no crew size anywhere; the fix is to state one.
 
 ![The Scheduling Administration hub: the headline metrics To close out, Short-staffed, Hours this month and Needs attention, the Needs attention queue, and the card grid grouped Before the shift, On the shift, After the shift, People & eligibility, Reporting and Department settings](./images/20-16-scheduling-admin-hub.png)
+
+**[SCREENSHOT — REPLACE `20-16-scheduling-admin-hub.png`.** The Department settings group gained an **Outside Apparatus** card ("Other departments and units members log shifts on") on 2026-09-27, and several card descriptions were reworded on 2026-09-29 (Shift Templates: "Reusable shift setups — hours, crew seats and vehicle"; Shift Patterns: "Repeating rotations, and generating shifts from them"; Who Can Fill What: "Which positions each member is cleared for, and why"). Re-shoot the hub on a department that has scheduled shifts, so the setup guide below is not shown.**]**
+
+**A setup guide for a department starting out** _(2026-09-29)_. On a
+department that has not yet built what it needs to schedule, the hub opens with
+**Set up scheduling for your department** — "N of 2 required steps done":
+
+1. **Create a shift template** — **Open Shift Templates**
+2. **Set up a repeating pattern** _(optional)_ — **Open Shift Patterns**
+3. **Put shifts on the calendar** — **Go to the Schedule**
+
+Each step ticks itself off from the department's own counts (an active
+template, an active pattern, a shift scheduled). The guide disappears once the
+two required steps are done — the optional pattern does not hold it open — and
+the **×** hides it on that browser.
+
+Three other empty states stopped claiming success over nothing:
+
+- The hub's close-out metric reads **"no shifts scheduled yet"** rather than
+  "every shift closed out" on a department that has never scheduled one.
+- **Shift Planning** over a range with no shifts says **"No shifts are
+  scheduled in this range"** and how to fill it, instead of "Every shift in
+  this range has the crew it asks for".
+- **The Schedule board, to a member**, over an empty week or month: "Your
+  scheduling officer has not published shifts for these dates. Once they do,
+  shifts with open seats show up here and you can sign up for them." Officers
+  still get **Create the first shift**. Neither message shows beside a load
+  error.
+
+> **Screenshot needed:**
+> _[Scheduling Admin hub on a fresh department with no templates → the "Set up scheduling for your department" card reading "0 of 2 required steps done", its three numbered steps with their links, and the × in the corner.]_
 
 ![Shift Planning on its Staffing gaps tab: a date range, the count of short shifts and open seats, and each short shift with its empty seats and an assign control, beside the Templates and Patterns tabs](./images/20-17-staffing-gaps.png)
 
@@ -2060,7 +2323,7 @@ These edge cases describe system behavior during shift assignment, time-off appr
 
 | Scenario                                    | Behavior                                                                                                                                                         |
 | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Member already assigned to this shift       | Returns "Member is already assigned to this shift." Declined and cancelled assignments are excluded from this check — members can re-sign up after cancellation. |
+| Member already assigned to this shift       | Returns "Member is already assigned to this shift." Declined and cancelled assignments are excluded from this check — members can re-sign up after declining or cancellation. Until 2026-09-26 that re-signup was refused anyway, by the database's one-row-per-member-per-shift constraint; the inactive row is now removed under the shift lock once the signup passes. |
 | Overlapping shift on same day               | System checks ±1 day for time conflicts. Returns "Member has a conflicting shift on [date]" with all conflict dates listed.                                      |
 | Shift has no end time                       | Overlap detection falls back to same-day check only — any assignment on the same date is flagged.                                                                |
 | Member on active Leave of Absence           | Returns "Member is on leave of absence for this date." Only the shift's date is checked, not the full time span.                                                 |
@@ -2143,6 +2406,8 @@ Officers with `training.manage` permission can now review multiple shift reports
 
 ![The Review Queue with several reports selected and the batch approve and flag actions above them](./images/03-61-review-queue-batch.png)
 
+**[SCREENSHOT — REPLACE `03-61-review-queue-batch.png`.** The view strip's last segment, **+ New**, became a separate **New report** button beside the strip on 2026-09-28, and the page subtitle now reads "See the schedule, sign up for shifts, and request swaps and time off" (was "Manage schedules, sign up for shifts, and handle trades"). Re-shoot the same selection state.**]**
+
 > **Hint:** Batch review does not support per-report field redaction. For reports requiring individual redaction, review them one at a time using the standard review modal.
 
 ### Flagged Reports View
@@ -2157,7 +2422,14 @@ Reports that reviewers flag for follow-up are now accessible from a dedicated **
 The reason and the re-review action are in the opened card, not on the
 collapsed one: a list of flagged reports tells you _which_, not _why_.
 
+When the reviewer left a comment, that comment is the only red box _(2026-09-28)_.
+The generic "This report is flagged. Review it again to approve it or add
+notes." appears only on a flagged report with no comment — the two used to sit
+one above the other saying the same thing.
+
 ![The Flagged view — two reports, one expanded to its reviewer's reason and Re-Review Report button](./images/03-62-flagged-queue.png)
+
+**[SCREENSHOT — REPLACE `03-62-flagged-queue.png`.** Same strip and subtitle change as `03-61`; and the expanded card now shows only the reviewer's comment box, not a second generic red box above it.**]**
 
 ### Trainee & Officer Names on Report Cards
 
@@ -2227,6 +2499,10 @@ The **Shift Reports** settings panel (Scheduling > Settings > Shift Reports) now
 
 | Issue                                                                                     | Solution                                                                                                                                                                                                               |
 | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Member is already assigned to this shift" when signing up for a shift you declined       | Fixed 2026-09-26 — re-signing up after a decline, a cancellation or approved time off now works. |
+| Tonight's shift showed as past, could not be signed up for, or dropped off Open Shifts in the evening | Fixed 2026-09-26 — scheduling now dates "today" by the department's calendar, not the server's UTC date, for the open-shifts list, the calendars, swap-offer expiry, leave cancellations, auto-generation and the compliance report. |
+| A probationary member gets "Account is inactive", or is refused on a shift as no longer active | Fixed 2026-10-03 — probationary counts as active. Exclude the membership type under Eligibility to stop self-signup. |
+| A swap or offer is still pending after the member left the shift                          | Fixed 2026-09-30 — removing, declining, reassigning or cancelling the seat now cancels the swaps naming it and tells both members. |
 | Cannot sign up for an open shift                                                          | Check that you are logged in as an active member and the shift has not already been filled.                                                                                                                            |
 | Shift assignment shows "Member is on leave"                                               | The member has an active leave of absence covering the shift date. The leave must be deactivated before assigning.                                                                                                     |
 | Attendance hours not calculating                                                          | Ensure both check-in and check-out times are recorded. Duration is calculated automatically.                                                                                                                           |
@@ -2668,7 +2944,7 @@ The shift report creation flow has been completely redesigned. Instead of creati
 
 ### How It Works
 
-1. Go to **Shift Reports** and click **New**
+1. Go to **Shift Reports** and click **New report** (beside the view strip since 2026-09-28; it was the strip's last segment, **New**)
 2. **Pick a shift.** The picker is a scrollable list of cards for the last fortnight, each naming the rig, the date, and how many members, calls and hours it carried — not a dropdown. Choosing one loads the crew and fills the shared fields from the shift itself
 3. Check the **shared data**: hours on shift, calls responded and call types come from the shift and apply to everybody on it. Hours is the one required field. There is also an **Overall Shift Narrative** for observations about the shift rather than about a person
 4. Each **trainee** on the crew has an **Evaluate** control that opens their panel:
@@ -3055,6 +3331,9 @@ rather than a plain list.
 
 ![The bottom of the Requests tab's first page of time-off requests, with the Load more time-off requests control beneath the twentieth row](./images/03-79-requests-load-more.png)
 
+> **Screenshot needed:**
+> _[Member at /scheduling?tab=requests on the default Pending filter, after their only swap request was approved. It shows 'No swap requests', 'Your swap requests will appear here…' and the line 'Showing pending requests only. Choose All Statuses to see the rest.']_
+
 ## August 19–23, 2026 update — equipment checks survive a dead spot
 
 A check completed with no signal and submitted on reconnect can no longer
@@ -3173,6 +3452,12 @@ there wasn't one, which is the shape every one-way offer has. A duty officer
 can now approve the offer too, which hands the seat to the member named; on the
 Requests tab it reads "→ Offered to _name_".
 
+- **Exchanging shifts with someone needs both of you qualified.** On My Shifts,
+  _Request swap → Exchange With a Member_ lists only seats you are qualified
+  for, held by members qualified for yours — a driver can trade with another
+  driver seat, but not with a firefighter who isn't cleared to drive. Giving
+  your shift away without taking one back isn't an exchange, and isn't limited
+  this way.
 - **A request goes away when its seat does.** If you leave a shift — withdraw,
   decline, take approved time off, go on leave, or an officer removes or
   reassigns you — any pending swap or offer for that seat is cancelled, and you
@@ -3581,3 +3866,131 @@ alternative after a slash — "Driver/Operator" is two names for one seat, and a
 mid-word cut ("DRIVER/OPERA") reads as a printer fault — and is otherwise
 truncated rather than reduced to its first word, which would print a
 department's "Assistant Chief" and "Assistant Driver" identically.
+
+## The Shift Reports tab _(2026-09-27 → 09-28)_
+
+The tab now explains itself to a member, and its officer views were cleaned up.
+Who sees which view is decided by `training.manage`.
+
+### What a member sees
+
+A member without `training.manage` used to see a segmented control with one,
+already-selected **About me** button that did nothing, above a one-line empty
+state. Now there is no toggle — just a heading, **Shift reports about you**:
+"Feedback your officers write after shifts you worked. Open a report to read it
+and acknowledge it."
+
+With no reports yet, the empty state says when one appears ("When an officer
+files a report for a shift you worked, it will show up here."), adds "A training
+officer reviews each report before it is shared with you." where the department
+requires review, and lists what a report holds: the shift itself, your
+officer's feedback, and a place to acknowledge it.
+
+> **Screenshot needed:**
+> _[Scheduling → Shift Reports as a member with no reports → the "Shift reports about you" heading and the "No shift reports yet" empty state with its three cards.]_
+
+### What an officer sees
+
+| View              | Content                                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------------------- |
+| **About me**      | Reports other people wrote about your shifts                                                      |
+| **Written by me** | Reports you wrote about your crew, under **Your reporting summary**                               |
+| **Review Queue**  | Reports awaiting review — only where the department requires review                              |
+| **Flagged**       | Reports flagged for follow-up — likewise                                                          |
+| **Drafts**        | Drafts created when a shift is finalized, with a count badge                                      |
+
+**New report** is a button beside the strip, not its last segment: as **New**
+it read as a sixth filter and scrolled off the end of the strip on a phone.
+
+**Written by me** _(2026-09-28)_:
+
+- **Your reporting summary** is a heading, and the tiles say what they count:
+  **Reports written**, **Shift hours covered**, **Calls covered**. The grid
+  sizes to the tiles shown instead of leaving empty cells.
+- **Drafts to finish →** and **Awaiting review →** appear only when there are
+  some, and are buttons that open those views — as clickable boxes they could
+  not be reached by keyboard and looked like the tiles that do nothing.
+- The chart is **Reports written per month**, sized by the number of reports
+  with month names ("Jul"). It used to size its bars by hours while labelling
+  them with the report count.
+- The list is headed **Reports you've written (N)** — "Most recent shift first.
+  Select a report to read it in full." Each card drops the author chip (it is
+  always you), shows **Not acknowledged yet** on an approved report the member
+  has not acknowledged, and reads **Waiting 3 days** where it used to say "3d".
+- With nothing written yet, the empty state offers **Write a report**.
+
+In **About me**, cards drop your own name from the title.
+
+**On a phone** the status badges sit on their own row under the title; they
+used to share it and crush the member's name to "Al…".
+
+> **Screenshot needed:**
+> _[Scheduling → Shift Reports as a training officer → Written by me → "Your reporting summary" with its tiles (including a Drafts to finish → button), the "Reports written per month" chart, and the "Reports you've written (N)" list beginning below.]_
+
+> **Screenshot needed:**
+> _[Scheduling → Shift Reports at 390 px width as an officer → a report card with its status badges on their own row beneath the member's full name.]_
+
+### Links into a view now land on it
+
+A link such as `?tab=shift-reports&view=create` — the hand-off the Training
+module uses — landed on the default list, because the Schedule tab's calendar
+rewrote `?view=` to its own mode before the Shift Reports tab read it. The
+calendar now only writes `view` while it is on screen, and the Shift Reports tab
+writes its selected view into `?view=`, so a refresh or the back button keeps
+the view you were on.
+
+## Late September 2026: what else changed
+
+Smaller changes from 2026-09-24 to 2026-10-04 that an officer or member may
+notice. The larger ones are in the sections linked.
+
+| Change | Where described |
+| ------ | --------------- |
+| Signing up again after a decline works | [Open Shifts](#open-shifts) |
+| A signup goes straight onto your schedule; no officer confirms it | [Open Shifts](#open-shifts) |
+| Shifts with other departments, by start and end time | [Shifts with other departments](#shifts-with-other-departments-2026-09-27--09-29) |
+| Open Swap no longer promises any member can pick it up | [Shift Swap Requests](#shift-swap-requests) |
+| Officers approve offers made to a named member; swaps are cancelled with their seat | [Shift Swap Requests](#shift-swap-requests) |
+| Check out early asks first | [Attendance Tracking](#attendance-tracking) |
+| Seven settings sections; six notification switches marked not in effect; the confirmation switch removed; probationary members scheduled | [Finding Your Way Around Scheduling Settings](#finding-your-way-around-scheduling-settings-2026-08-09) |
+| Setup guide on the administration hub; honest empty states | [Scheduling Administration](#scheduling-administration-moved-2026-09-05) |
+| Pattern generation reports unfilled driver seats and explains "no new shifts" | [Patterns](#patterns) |
+| "Not applicable" on Shift Compliance | [Compliance Report](#compliance-report) |
+| Shift Reports tab | [The Shift Reports tab](#the-shift-reports-tab-2026-09-27--09-28) |
+
+And:
+
+- **"Today" is the department's date** _(2026-09-26)_. The open-shifts list,
+  the week and month calendars, auto-generation's horizon, swap-offer expiry,
+  cancelling a member's shifts when they go on leave, the compliance report and
+  the calendar feed all used the server's UTC date — so every evening in the
+  Americas, tonight's shift was treated as past: a member could not sign up for
+  it, a leave left it assigned, and it dropped off the open list.
+- **Plainer wording throughout** _(2026-09-29)_. The page subtitle reads "See
+  the schedule, sign up for shifts, and request swaps and time off"; swap and
+  time-off requests say "sent — track it on the Requests tab"; the delete-shift
+  question is "Delete this shift? Its assignments are removed too, and this
+  cannot be undone."; "trade" is now "swap" everywhere a member reads it. **Every
+  desktop screenshot of the scheduling page in this guide still shows the old
+  subtitle, "Manage schedules, sign up for shifts, and handle trades".**
+- **Screen readers can tell rows apart** _(2026-09-29)_. Each row's buttons
+  carry their shift or member ("Sign up for shift on Sun, Oct 4, 7:00 AM
+  (E-1)", "Approve swap for _name_"); the close-out wizard's hours boxes read
+  "Hours for _member_"; the close-out queue's buttons name their shift; the
+  position roster says why each member is cleared ("By rank:", "By held
+  position:", "By qualification:", "By completed training:", "Open to
+  everyone:"); the platoon picker is "Platoon to assign"; the template form's
+  pickers are "Starts at" / "Ends at" and its seats "Position 1", "Position 2"…;
+  the pattern form's fields, mode buttons, preset cards and weekdays carry names
+  and pressed state; the fields on the manual shift report form
+  (`/training/log-shift`) and the acknowledgment comment box are labelled.
+- **Emails you can switch off** _(2026-09-28)_. Shift reminders and assignment
+  emails are the **Shift notices** kind, and an officer's "a member declined a
+  shift" and "shift drafts finalized" emails are **Scheduling officer duties**;
+  a member who turns a kind off still gets the in-app notice, unless the
+  department has made that kind required.
+- **Writing an apparatus NFC tag** from the shift panel's QR block needs
+  `apparatus.manage_nfc_tags` _(2026-10-02)_; printing the QR card does not.
+- **Still open:** the app footer prints on the check-in sheet and the printed
+  shift report (W37-3).
+

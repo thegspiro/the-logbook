@@ -631,6 +631,73 @@ takes effect without a restart and takes priority over `FRONTEND_URL`.
 4. Links already sent keep the old address. Re-send what is still needed —
    members request a new password reset, the secretary re-sends ballots.
 
+### An Officer Stopped Receiving Low-Stock or Other Duty Emails After Upgrading
+
+**Cause**: Since 2026-09-28 every member email is either always sent or
+optional, and officer duty emails (Quartermaster duties, Event officer duties,
+Scheduling officer duties, Training officer duties, Election administration,
+Membership and store administration) are optional. An officer who has
+**Email Notifications** switched off, or has turned off that duty under **My
+Account → Notifications → Emails you can turn off**, no longer receives them.
+Before the upgrade most of these senders ignored the switch. Quartermaster
+alerts (low stock, shelf audit, retirement, expiring supplies, failed equipment
+checks) have no in-app copy, so the officer hears nothing at all.
+
+**Solutions**:
+
+1. Ask the officer to switch the email back on under **My Account →
+   Notifications**.
+2. Or make it required for everyone: **Administration → Forms & Comms → Member
+   Emails & Texts**, then **Require for every member** on that email's card
+   (`settings.manage` or `organization.update_settings`). A required email
+   reaches every member whatever their own switches say.
+
+### Links and the Logo in Emails Work at the Station but Not From Home
+
+**Symptom**: Emailed links and the department logo work on the station's
+computers, but a member reading on a phone or at home gets a page that will not
+load and no crest.
+
+**Cause**: `FRONTEND_URL` (or the email link address a System Owner saved on
+**Settings → Email**) is an address only the station network can resolve: a
+private or link-local IP such as `192.168.1.50`, a name ending `.local`, `.lan`,
+`.internal`, `.intranet`, `.home.arpa` or `.localdomain`, or a bare hostname
+such as `http://tower`. Nobody at the station sees a problem, because every
+link works for them.
+
+**Check** (since 2026-09-28): with `EMAIL_ENABLED=true` the startup log and
+`python -m app.preflight`'s advisory list report it, in every environment:
+
+```
+WARNING: FRONTEND_URL is 'http://192.168.1.50:7880', which only resolves inside a local network. Links and the logo in outgoing email will not open for a member reading away from the station. ...
+```
+
+The service still starts. The **Email link address** card on **Settings →
+Email** shows "This address only works inside your station's network…", and a
+notice above every tab of **Administration → Forms & Comms → Email Templates** says the same,
+with a **Change the email link address** link.
+
+**Solution**: If members only read mail at the station, nothing needs to
+change. Otherwise set `FRONTEND_URL` to the public address members use, or have
+a System Owner change the **Email link address** on **Settings → Email**. Mail
+already sent keeps the old links.
+
+### The Department Logo Is Missing From Emails
+
+**Cause**: Since 2026-09-25 an uploaded logo is linked from
+`<FRONTEND_URL>/api/public/v1/branding/email-logo?v=<digest>` rather than
+embedded. No logo is linked while `FRONTEND_URL` is a loopback address, so the
+email shows the department name instead. An email sent before the logo was
+replaced also shows the name, because the old address stops answering.
+
+**Solutions**:
+
+1. Set `FRONTEND_URL` to the public address (see above).
+2. If you run your own reverse proxy, make sure it sends `/api/` to the backend,
+   as the bundled configurations do. The path has no file extension on purpose.
+3. A station-only address produces the same symptom away from the station —
+   see the entry above.
+
 ---
 
 ## User Account Issues
@@ -1403,6 +1470,29 @@ Password reset links expire after **30 minutes**.
 **Cause**: `FRONTEND_URL` is not set to the site's public address. See
 [Links in Emails Point to localhost or Will Not Open](#links-in-emails-point-to-localhost-or-will-not-open).
 
+#### Symptom: "No Reset Link Was Sent"
+
+**Cause**: The department's sign-in method is not local passwords (Google,
+Microsoft, or Authentik), so no reset token is issued. The page shows the server's message,
+for example "This organization uses Google for authentication. Please reset
+your password through Google."
+
+**Solution**: Reset the password with that provider. Authentik has no sign-in
+behind it yet, so a department that chose it cannot reset passwords at all —
+see [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md) (W01-11).
+
+#### Symptom: "Too Many Attempts" when opening or submitting the reset link
+
+**Cause**: Requesting a link, opening it and submitting the new password share
+one budget of **3 requests per 5 minutes** per address (`rate_limit_password_reset`).
+Before 2026-09-28 this showed as "Invalid Reset Link".
+
+**Solutions**:
+
+1. Wait the minutes the page shows, then reload it. The link is not spent: it
+   still works until it expires.
+2. Do not request a second link while waiting — that uses the same budget.
+
 ---
 
 ### Account Lockout
@@ -1418,6 +1508,24 @@ After **5 failed login attempts**, accounts are temporarily locked for **30 minu
 1. Wait for the lockout period to expire (message shows remaining time)
 2. Use "Forgot Password" to reset your password
 3. Contact your administrator if you're locked out repeatedly
+
+#### Symptom: "Incorrect username or password" although the password is right
+
+**Cause**: The account is locked. With `ACCOUNT_LOCKOUT_REVEAL=false` (the
+default) a locked account answers exactly like a wrong password, so members
+report "my password stopped working". With `ACCOUNT_LOCKOUT_REVEAL=true` the
+message reads "Account temporarily locked due to repeated failed sign-in
+attempts. Try again in about N minute(s), or reset your password." No
+administrator screen shows the lock (see
+[KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md), W02-4).
+
+**Solutions**:
+
+1. Wait for the lockout period to expire.
+2. Use **Forgot your password?** to reset the password; a completed reset clears the
+   lock.
+3. An administrator's password reset from Member Management clears it too, as
+   does `backend/scripts/reset_login_lockout.py <username> --unlock`.
 
 ---
 
@@ -2413,6 +2521,21 @@ A calendar month is "waived" if the leave covers **15 or more days** of that mon
 **Recommended crontab**:
 
 ```
+
+#### Equipment Request: The Member Was Not Told It Was Decided
+
+**Symptoms**: A quartermaster approved, declined or issued a member's request on **Inventory Admin → Gear Requests**, but the member says nothing arrived.
+
+Since 2026-09-28 each decision sends the member a bell entry linking to **My Issued Gear**, a web push if push is configured, and an email (never a text). The request's status and the quartermaster's note are always visible on **My Issued Gear → My Requests**, whatever else fails.
+
+**Causes and checks, in order**:
+
+1. **The department turned the notice off.** Under **Notifications → Notification Rules**, an **Equipment Request Update** rule that is switched off stops the bell entry, push and email together. With no rule it is on.
+2. **The member is inactive, or has no email address** — inactive members are skipped entirely; no address means no email.
+3. **The member turned the email off.** **Equipment and inventory updates**, or the master **Email Notifications** switch, under **My Account → Notifications** stops the email only; the bell entry still arrives. A department can make it required under **Administration → Forms & Comms → Member Emails & Texts**.
+4. **It was approved with Approve & fulfill now.** That path says nothing at approval; the member hears once, when the item is issued. If the fulfil dialog was abandoned, the member hears nothing until the request is fulfilled.
+5. **Email is not working** — check the email configuration and the backend log.
+6. **The API restarted at the wrong moment.** The notice runs after the response, inside the API process, and is not retried; if the process stopped in between, that notice is lost.
 # Daily at 6:00 AM — cert expiration alerts
 0 6 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=cert_expiration_alerts
 
@@ -4858,6 +4981,32 @@ docker logs intranet-backend 2>&1 | grep -i "election-package\|election_package"
 - Verify the package status is actually `ready` (not still `draft`)
 - Ensure the pipeline_id filter (if any) matches the correct pipeline
 
+### A Converted Member Did Not Receive Their Target Role
+
+**Symptoms**: An applicant had a **Target Role**, but after conversion the new member holds only the default member position.
+
+**Causes**:
+
+1. **The conversion was automatic, and the role was not applied.** Open the applicant's **Activity Log**. A `target_role_not_applied` entry means the member who chose the role is no longer active or no longer holds every permission it grants — or the role was saved before 2026-09-30, when the chooser was not recorded. Assign the position by hand from the member's profile.
+2. **The applicant was added between 2026-09-24 and 2026-09-29 through Add Applicant.** Those saves dropped the Target Role, so none was stored. Assign it by hand.
+3. **Nothing stored one before 2026-09-24.** Every earlier conversion granted the default position only.
+
+**Related — 403 "You cannot assign a role that grants permissions beyond your own."** on Add Applicant, the drawer's contact editor, or a **Convert to Member** whose dialog names a **Target Role**, means the chosen position grants a permission you do not hold. The attempt is reported to security monitoring.
+
+A coordinator converting an applicant whose stored role a Chief chose is refused differently. Converting with the stored role answers 403 "This applicant's target position grants permissions beyond your own. Choose positions you can grant, or ask someone who holds them to convert this applicant." and is not reported to security monitoring, because the coordinator did not choose that role. Choosing **No specific role** in the Convert dialog alone does not help: with no role sent, the stored role is applied and checked. Either ask someone who holds those permissions to convert, or clear the stored role first — open the applicant's drawer, click **Edit**, set **Target Role** to **No specific role**, **Save** — then convert, and have someone who holds the permissions assign the position afterwards.
+
+### Convert Says the Applicant Cannot Be Converted Yet
+
+**Symptoms**: **Convert to Member** (or the automatic conversion after a pipeline's final stage) is refused with "This applicant cannot be converted yet: …".
+
+**Cause**: Since 2026-09-28 conversion waits for every stage marked required in the applicant's pipeline to be completed. A skipped stage does not count; optional stages never hold it. The message names the stage. On a **Multi-Signer Approval** stage it lists who has not signed: "Approval still needed from: chief, president."
+
+**Solutions**:
+
+1. Have the named officers sign. They sign from **Sign-offs** (`/prospective-members/sign-offs`), reached from the dashboard's "waiting on your sign-off" row — there is no sidebar link.
+2. Complete the named stage from the applicant's drawer.
+3. If the department does not actually enforce that stage, open **Pipeline Settings**, edit the stage, untick **This stage is required (cannot be skipped)**, then **Skip** it on the applicant. Stages are required by default, so a pipeline built without thought for the flag can hold every conversion.
+
 ---
 
 ## Elections Module Issues
@@ -5240,6 +5389,20 @@ Expected: 10 system folders (SOPs, Policies, Forms & Templates, Reports, Trainin
 2. **RSVP limit reached**: The event may have reached its maximum RSVP capacity. Admins can use RSVP override to bypass limits.
 
 3. **Missing `events.view` permission**: Users need at least view permission to RSVP.
+
+### "Attendance for this event has been finalized, so … is no longer available"
+
+**Symptoms**: Saving an event, cancelling or deleting it, rescheduling a cohort class, or scheduling an event request is refused with "Attendance for this event has been finalized, so <action> is no longer available. A department leader can reopen attendance to make corrections." (HTTP 409 on every route since 2026-09-29; before that some routes returned a raw `ATTENDANCE_LOCKED::` message or "An unexpected error occurred".)
+
+**Cause**: The event's attendance was finalized — by **End Event**, by recording an actual end, or by **Finalize Attendance** — and the change would alter what it credited.
+
+**Solution**: Someone holding `events.reopen_attendance` presses **Reopen Attendance** on the event, the change is made, and attendance is finalized again.
+
+**Edge cases**:
+
+- The edit form cannot save **any** change to a finalized event, even a title fix, because it always sends the schedule and check-in fields. Reopen first.
+- On the event requests screen the same refusal shows only as "Failed to postpone request.", or as a generic failure on schedule.
+- Shifting or cancelling a cohort's classes is not atomic: classes before the finalized one stay moved or cancelled while the request reports the refusal. See [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md), "Events — Attendance-Lock Refusals".
 
 ---
 
@@ -6959,6 +7122,20 @@ missing optional column produces a warning, not a rejection. Notes:
 
 **Fix:** Ensure you have `inventory.manage` permission. The import page is at `/inventory/import` and is linked from the main Inventory page.
 
+### Problem: The Items page and item search fail with a server error after an import
+
+**Cause:** An import made before 2026-09-29 saved a row with a negative quantity or purchase price. Every item list that includes that row fails validation (the backend log shows `Unhandled ValidationError … quantity`), which takes down the Items page and item search for the whole department. The import now refuses such rows, but upgrading does not repair one already stored.
+
+**Fix:** Back up the database, then find the rows:
+
+```sql
+SELECT id, organization_id, name, quantity, purchase_price
+FROM inventory_items
+WHERE quantity < 0 OR purchase_price < 0;
+```
+
+Set each value to the real count or price (or to 0). The list works again at once, with no restart. If the query returns nothing, this is not the cause.
+
 ---
 
 ## Events Settings 422 Errors
@@ -7336,6 +7513,10 @@ docker exec logbook-backend alembic upgrade head
 4. Quarantine items (pending inspection) cannot have charges until inspection is complete
 
 **Edge Case — Pool items with cost recovery:** Pool items track replacement cost per unit. If a member returns fewer units than issued, the cost recovery charge is automatically calculated. If the cost recovery amount seems wrong, check the item's `replacement_cost_per_unit` field.
+
+### Problem: The Inventory admin hub says "Some inventory services did not respond (returns)"
+
+**Status (Fixed 2026-09-27):** The hub asked for return requests with a status the backend does not have, so every load failed that source, showed this banner and listed no pending returns. It now asks for `requested` returns: pending member returns appear in **Needs attention** as **Pending return** (with **Review**), and the **Return Requests** card shows a count. An unknown `?status=` on `GET /inventory/return-requests` is now a 422 naming the valid values rather than a 500. If the banner still names `returns` after upgrading, reload the page to pick up the new build.
 
 ---
 
@@ -9748,6 +9929,89 @@ New `EMAIL_USE_SSL` environment variable added to `.env.example` and `.env.examp
 ---
 
 ---
+
+## Late September 2026 Fixes (2026-09-24 → 10-04)
+
+### Problem: An upload larger than 1 MB fails with 413 Request Entity Too Large
+
+**Cause (Fixed 2026-09-30):** `frontend/nginx.conf` set no
+`client_max_body_size`, so nginx's 1 MB default applied to everything proxied
+to `/api` in the default Docker deployment — a single 2 MB phone screenshot
+was refused before the backend saw it. The infrastructure nginx and the AWS
+guide's host nginx allowed 50 MB, below the backend's own 60 MB ceiling
+(`MAX_REQUEST_BODY_SIZE`), so a maximum-size 50 MB prospect document (plus its
+multipart envelope) or a suggestion with five 10 MB screenshots failed there.
+
+**Solution:** All three now use `60M`. Rebuild the frontend image
+(`docker compose up -d --build`) to pick it up. A reverse proxy you maintain
+yourself — Nginx Proxy Manager, SWAG, a host nginx — has its own limit: set it
+to `60M` too, or it will still refuse first.
+
+### Problem: The `production` profile's nginx container will not start
+
+**Symptom:** `[emerg] cannot load certificate "/etc/nginx/ssl/fullchain.pem"`.
+
+**Cause (Changed 2026-09-30):** The container now reads
+`infrastructure/nginx/docker.conf` and its certificate from
+`infrastructure/nginx/ssl/` (`fullchain.pem`, `privkey.pem`), and will not start
+without both. See [DEPLOYMENT.md](DEPLOYMENT.md#docker-compose-production-profile)
+and [UPGRADING.md](UPGRADING.md).
+
+### Problem: The app is still reachable over plain HTTP on port 3000 behind the nginx container
+
+**Cause:** `--profile production` starts nginx but leaves the frontend's port
+3000 published. Pin
+`COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.proxy.yml`
+in `.env`; the proxy file unpublishes port 3000 so nginx is the only way in.
+The installers respect that pin since 2026-09-30 — before, re-running one
+republished port 3000 until the next `docker compose up -d`.
+
+### Problem: Finance — creating a fiscal year fails with 422, or clearing a field does nothing
+
+**Cause (Fixed 2026-09-30):** The Finance pages sent camelCase field names and
+the server read only snake_case. Creates were refused for "missing" fields;
+updates silently dropped every multi-word field (a cleared **Budget** on a
+purchase request reported success and kept the old one). Every Finance request
+now accepts both spellings. Re-make any edit that "saved" without effect.
+
+### Problem: Finance — a request is stuck in Pending Approval with no approval steps
+
+**Cause:** No approval chain matched it, or the chain has no steps.
+**Solution (2026-09-30):** a `finance.approve` holder other than the requester
+opens the request and uses the **"No approval chain applies to this request"**
+panel's **Approve** or **Deny**. Add steps to the chain (Finance → Settings →
+Approval Chains → **Add step**, built 2026-09-29) to route future requests.
+
+### Problem: IP Security — New Request, Reject, Revoke or Add Country fails with 422
+
+**Cause (Fixed 2026-09-29):** the page posted camelCase bodies to snake_case
+schemas. **Approve** succeeded but dropped the duration override and notes —
+check exceptions approved before this date.
+
+### Problem: A time in an email, PDF or CSV is a day (or several hours) off
+
+**Cause (Fixed 2026-09-25 → 09-27):** emailed times, PDF dates and several CSV
+exports used UTC, and many "today" checks used the server's UTC date. They now
+use the timezone in **Settings → Organization → Profile → Timezone**
+(America/New_York when unset). **If times are still off, check that setting.**
+Training records created before 2026-09-27 from evening events keep their UTC
+date by design — see KNOWN_LIMITATIONS.md, "Today" Is the Department's Date.
+
+### Problem: A new member cannot sign in — nobody knows their password
+
+**Cause (Fixed 2026-09-27):** With email off, **Add Member** and prospect
+conversion generated a temporary password that only the (unsent) welcome email
+carried. Now Add Member requires **Set initial password** when email cannot
+send, Import Members withdraws **Send welcome emails now**, and the conversion
+dialog asks how the member gets a password. For an account created before the
+fix, use **Reset Password** in Member Management.
+
+### Problem: Requests with no or malformed `Host` header now get 400
+
+**Cause (2026-09-24):** starlette 1.7.0's `TrustedHostMiddleware` parses `Host`
+properly wherever the Host allowlist is active (production, staging, or any
+environment with `TRUSTED_HOSTS` set). Make health checks and proxies send the real hostname. See
+[Configuration → Security](../wiki/Configuration-Security.md#host-header-allowlist-2026-07).
 
 ## Still Stuck?
 

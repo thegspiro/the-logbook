@@ -1,27 +1,19 @@
 /**
- * The toggles in this panel used to fail into `console.warn`. Because the
- * switch only moves when `setRules` runs, a failed save looked exactly like a
- * dead control: the officer clicks, the switch snaps back, and nothing says
- * why. These cover the two write paths reaching the user on failure.
+ * The panel holds the scheduling notification settings each sender reads.
+ * Six preset switches used to sit above them, storing `schedule_change` rules
+ * nothing consulted (W36-1, CLAUDE.md pitfall 19); they were removed, and
+ * these cases keep them gone and keep the remaining settings saving.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-const mockGetRules = vi.fn();
-const mockToggleRule = vi.fn();
-const mockCreateRule = vi.fn();
 const mockGetSettings = vi.fn();
 const mockUpdateSettings = vi.fn();
 const mockToastError = vi.fn();
 
 vi.mock('../../../services/api', () => ({
-  notificationsService: {
-    getRules: (...a: unknown[]) => mockGetRules(...a) as unknown,
-    toggleRule: (...a: unknown[]) => mockToggleRule(...a) as unknown,
-    createRule: (...a: unknown[]) => mockCreateRule(...a) as unknown,
-  },
   organizationService: {
     getSettings: (...a: unknown[]) => mockGetSettings(...a) as unknown,
     updateSettings: (...a: unknown[]) => mockUpdateSettings(...a) as unknown,
@@ -35,91 +27,54 @@ vi.mock('react-hot-toast', () => ({
 // Imported after the mocks so the panel picks them up.
 import { SchedulingNotificationsPanel } from './SchedulingNotificationsPanel';
 
-const existingRule = {
-  id: 'rule-1',
-  name: 'New Assignment',
-  description: 'Notify members when they are assigned to a shift',
-  trigger: 'schedule_change',
-  category: 'scheduling',
-  channel: 'in_app',
-  enabled: true,
-  enforced: false,
-  config: { event: 'assignment_created' },
-};
-
 describe('SchedulingNotificationsPanel', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    mockGetRules.mockResolvedValue({ rules: [existingRule] });
+    mockGetSettings.mockReset();
     mockGetSettings.mockResolvedValue({});
+    mockUpdateSettings.mockReset();
+    mockUpdateSettings.mockResolvedValue({});
+    mockToastError.mockReset();
   });
 
-  it('tells the officer when toggling a rule off fails', async () => {
+  it('offers no switch for a notice it cannot silence', async () => {
+    render(<SchedulingNotificationsPanel />);
+
+    expect(await screen.findByText('Enable decline/drop notifications')).toBeInTheDocument();
+    for (const name of [
+      'New Assignment',
+      'Assignment Confirmed',
+      'Assignment Declined',
+      'Time-Off Approved',
+      'Swap Request',
+      'Understaffed Shift',
+    ]) {
+      expect(screen.queryByRole('switch', { name })).not.toBeInTheDocument();
+    }
+    expect(screen.queryByText(/Not in effect yet/)).not.toBeInTheDocument();
+  });
+
+  it('saves the decline alert switch to the organization settings', async () => {
     const user = userEvent.setup();
-    mockToggleRule.mockRejectedValue(new Error('Service unavailable'));
     render(<SchedulingNotificationsPanel />);
 
-    const toggle = await screen.findByRole('switch', { name: 'New Assignment' });
-    expect(toggle).toHaveAttribute('aria-checked', 'true');
-    await user.click(toggle);
-
-    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Service unavailable'));
-    // The switch reverts, which is why the message is the only thing
-    // distinguishing a failure from a control that does nothing.
-    expect(await screen.findByRole('switch', { name: 'New Assignment' })).toHaveAttribute('aria-checked', 'true');
-  });
-
-  it('tells the officer when turning on a new rule fails', async () => {
-    const user = userEvent.setup();
-    mockGetRules.mockResolvedValue({ rules: [] });
-    mockCreateRule.mockRejectedValue(new Error('Service unavailable'));
-    render(<SchedulingNotificationsPanel />);
-
-    await user.click(await screen.findByRole('switch', { name: 'Swap Request' }));
-
-    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Service unavailable'));
-  });
-
-  it('hides the switches when the rules could not be loaded', async () => {
-    // Left rendering, every switch would read as off and clicking one would
-    // post a duplicate rule rather than flipping the one that already exists.
-    mockGetRules.mockRejectedValue(new Error('Service unavailable'));
-    render(<SchedulingNotificationsPanel />);
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(/could not be loaded/i);
-    expect(screen.queryByRole('switch', { name: 'New Assignment' })).not.toBeInTheDocument();
-    expect(mockToastError).toHaveBeenCalledWith('Service unavailable');
-  });
-
-  it('leaves the switch on after a successful toggle', async () => {
-    const user = userEvent.setup();
-    mockToggleRule.mockResolvedValue({ ...existingRule, enabled: false });
-    render(<SchedulingNotificationsPanel />);
-
-    await user.click(await screen.findByRole('switch', { name: 'New Assignment' }));
+    const checkbox = await screen.findByRole('checkbox', { name: 'Enable decline/drop notifications' });
+    expect(checkbox).toBeChecked();
+    await user.click(checkbox);
 
     await waitFor(() =>
-      expect(screen.getByRole('switch', { name: 'New Assignment' })).toHaveAttribute('aria-checked', 'false')
+      expect(mockUpdateSettings).toHaveBeenCalledWith({
+        scheduling: expect.objectContaining({ notify_on_decline: false }) as unknown,
+      })
     );
-    expect(mockToastError).not.toHaveBeenCalled();
   });
 
-  // CLAUDE.md pitfall 19: nothing reads `schedule_change` rules, so a switch
-  // showing "off" must not read as silencing the notice.
-  it('says the switches are not in effect when the backend reports them unread', async () => {
+  it('tells the officer when a save fails', async () => {
+    const user = userEvent.setup();
+    mockUpdateSettings.mockRejectedValue(new Error('Service unavailable'));
     render(<SchedulingNotificationsPanel />);
 
-    const toggle = await screen.findByRole('switch', { name: 'New Assignment' });
-    expect(toggle).toHaveAccessibleDescription(/Not in effect yet/);
-    expect(screen.getByText(/these switches are saved, but scheduling does not read them/)).toBeInTheDocument();
-  });
+    await user.click(await screen.findByRole('checkbox', { name: 'Enable decline/drop notifications' }));
 
-  it('drops the notice once the backend reports the rules as read', async () => {
-    mockGetRules.mockResolvedValue({ rules: [{ ...existingRule, enforced: true }] });
-    render(<SchedulingNotificationsPanel />);
-
-    const toggle = await screen.findByRole('switch', { name: 'New Assignment' });
-    expect(toggle).not.toHaveAccessibleDescription();
-    expect(screen.queryByText(/Not in effect yet/)).not.toBeInTheDocument();
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Service unavailable'));
   });
 });

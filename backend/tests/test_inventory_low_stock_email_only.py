@@ -86,6 +86,8 @@ class TestLowStockAlerts:
         assert result["errors"] == []
         assert _FakeEmail.sent["to"] == ["qm@fd.example"]
         assert "Low Stock Alert" in _FakeEmail.sent["subject"]
+        # The query includes an item sitting exactly at its reorder point.
+        assert "at or below reorder point" in _FakeEmail.sent["subject"]
 
     async def test_no_text_is_sent_even_with_a_number_on_file(self):
         # The regression guard for the 2026-08 email-first change: this alert

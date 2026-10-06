@@ -32,6 +32,19 @@ default, and a department can **require** it for every member.
    set.
 4. Only after the second factor verifies are full session cookies issued.
 
+**Wrong codes count toward the account lockout** _(2026-09-28)_. For an MFA
+account the password step does not reset `failed_login_attempts`: a correct
+password is not full authentication, and resetting there let anyone holding
+the password guess four codes, sign in again and guess four more. Each wrong
+TOTP or recovery code at `/auth/mfa/login` adds to the same counter the
+password step uses; at `MAX_LOGIN_ATTEMPTS` (default 5) the account locks for
+`ACCOUNT_LOCKOUT_DURATION_MINUTES` (default 15). Only a successful second
+factor clears the count. With `ACCOUNT_LOCKOUT_REVEAL` off (the default) the
+member sees only the generic wrong-credentials message, so a help-desk report
+reads "my password stopped working". An administrator's password reset clears
+the lock, as does `backend/scripts/reset_login_lockout.py <username> --unlock`.
+Password-only accounts are unchanged: a correct password clears the count.
+
 ### OAuth Logins Are Challenged Too _(2026-08-12)_
 
 "Sign in with Google" / "Sign in with Microsoft" no longer bypasses the second
@@ -128,6 +141,17 @@ require MFA for the whole department from **Settings → Authentication**
   (`POST /auth/mfa/recovery-codes`, requires a current TOTP code). The new set
   replaces the old one (previous codes stop working) and is shown once. The
   Security card warns when codes are running low (≤3) or exhausted.
+- **A lost response is retry-safe (AUTH-7).** `verify-setup` and
+  `recovery-codes` accept an `Idempotency-Key` header. A retry with the same
+  key and the same authenticator code, from the same member, within 10
+  minutes, returns the set already issued instead of failing on the spent
+  code. A key reused with a different code is refused (422), and a set
+  replaced since, or MFA turned off since, is never replayed. The issued
+  response is held encrypted with the application key, in Redis when it is
+  connected (so any worker can answer the retry) and otherwise in a bounded
+  per-process map (`app/core/issued_secrets.py`). Requests without the
+  header behave as before. `MfaSettingsCard` sends one key per attempt and
+  reuses it when the same code is submitted again.
 
 ### Admin MFA Reset
 

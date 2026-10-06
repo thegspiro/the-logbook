@@ -91,6 +91,23 @@ export interface SwapRequestCreate {
 export interface SwapRequestReview {
   status: 'approved' | 'denied' | 'cancelled';
   reviewer_notes?: string;
+  /** Approve a two-way exchange whose members are not both qualified for the
+   *  seat they take. Recorded on the request and in the audit log. */
+  override_qualification?: boolean;
+}
+
+/**
+ * A seat the caller could exchange theirs for. The server lists only pairs
+ * where both members are cleared for the seat they would take, by the same
+ * rule that refuses an unqualified exchange when it is submitted.
+ */
+export interface ExchangeCandidate {
+  shift_id: string;
+  shift_date: string;
+  start_time?: string | null;
+  user_id: string;
+  user_name?: string | null;
+  position?: string | null;
 }
 
 /**

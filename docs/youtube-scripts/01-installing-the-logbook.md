@@ -139,8 +139,18 @@ curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/u
 > "The one thing it needs from you is `--public-url` — the address your
 > members will open the site at. Every link in an email, password resets and
 > ballots included, is built from it. Leave it off and the installer stops
-> before touching anything; give it `localhost` and it refuses, because a
-> production server won't start with that."
+> before touching anything; give it `localhost` and it refuses, because a link
+> to localhost opens nothing on the phone of the member who receives it."
+
+> "The server itself is a little more forgiving, and it's worth knowing how. If
+> `FRONTEND_URL` is left at localhost, it uses the first public address in
+> `ALLOWED_ORIGINS` instead. Only when neither names a public address does a
+> production server refuse to start."
+
+**[PRODUCTION NOTE — 2026-10-04. "A production server won't start with that"
+was incomplete: since 2026-09-25 a loopback `FRONTEND_URL` falls back to the
+first public `ALLOWED_ORIGINS` entry, and startup is refused only when there is
+none. Narration only, about 12 seconds.]**
 
 **[CALLOUT: "--public-url is required — use the address members will actually open"]**
 
@@ -280,8 +290,20 @@ python3 -c "import secrets; print(secrets.token_hex(16))"
 > network, that might be something like `http://192.168.1.50:3000`. For a
 > domain, it would be `https://logbook.yourdepartment.org`."
 
+> "**FRONTEND_URL** — the address your members open the site at. Every link in
+> every email, password resets and ballots included, is built from it. Leave it
+> at localhost and The Logbook uses the first address in ALLOWED_ORIGINS that
+> isn't localhost instead. If neither names a real address, a production
+> server refuses to start."
+
+**[CALLOUT: "FRONTEND_URL = where emailed links point"]**
+
 > "**Timezone** — set `TZ` to your IANA timezone. For example,
-> `America/New_York`, `America/Chicago`, or `America/Los_Angeles`."
+> `America/New_York`, `America/Chicago`, or `America/Los_Angeles`. That only
+> sets the containers' clock, though. The department's own dates — when a
+> certificate expires, what 'today' is, and every time printed in an email or
+> an export — come from the timezone you pick in the setup wizard, which you
+> can change later under Settings, General, Profile. Get that one right."
 
 > "**Modules** — you don't turn these on or off here in the environment file.
 > Once you're up and running, you'll enable or disable modules for your
@@ -450,7 +472,27 @@ docker compose --profile production up -d
 
 > "This starts the Nginx container which handles SSL termination and proxies
 > requests to the frontend and backend. You'll need to set up your SSL
-> certificates — Let's Encrypt with Certbot is the easiest free option."
+> certificates — Let's Encrypt with Certbot is the easiest free option. Put
+> them in `infrastructure/nginx/ssl/` as `fullchain.pem` and `privkey.pem`
+> **before** you start it: nginx won't start without them."
+
+**[SCREEN: The proxy override command]**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  -f docker-compose.proxy.yml up -d
+```
+
+> "If that bundled nginx is the only way in, add `docker-compose.proxy.yml`.
+> It starts nginx and stops publishing port 3000 — otherwise the frontend is
+> still reachable over plain HTTP, round the side of your certificate. Leave it
+> out if you run your own proxy on the host that needs port 3000. Uploads go
+> up to 60 megabytes through either proxy that ships."
+
+**[PRODUCTION NOTE — 2026-10-04. Added. The certificate location, the proxy
+override and the 60 MB limit arrived 2026-09-30; a host-installed nginx copied
+before then still caps uploads at 50 MB. About 25 seconds; re-time this
+chapter. New screen recording of the command.]**
 
 > "And remember the production override we talked about in the manual setup —
 > on an internet-facing box you'll want that hardened posture too. If you
@@ -469,6 +511,11 @@ docker compose --profile production up -d
 > "The Unraid template pre-configures the Docker network, volume mappings, and
 > resource limits to play nicely with other containers on your NAS. Check the
 > Unraid quick-start guide in the repository for the full walkthrough."
+
+> "One field in the template matters more than it looks: **Public Site
+> Address**. That's the address every emailed link uses. Leave it blank and the
+> first Allowed Origins address is used. If you use the setup script instead,
+> it asks for your public HTTPS address and writes it to both settings for you."
 
 **[CALLOUT: "See: unraid/QUICK-START.md in the repository"]**
 
@@ -533,8 +580,10 @@ curl http://localhost:3001/health
 **[CALLOUT: Issue #1]**
 
 > "**Number one: Port conflicts.** If you already have something running on port
-> 3000, 3001, 3306, or 6379, Docker will fail to bind. Check with
-> `docker compose logs` and change the ports in your `.env` file if needed."
+> 3000 or 3001, Docker will fail to bind. The database and Redis ports aren't
+> published to the host by default, so they won't collide. Check with
+> `docker compose logs` and change `FRONTEND_PORT` or `BACKEND_PORT` in your
+> `.env` file if needed."
 
 **[CALLOUT: Issue #2]**
 

@@ -27,6 +27,8 @@ import { useRanks } from '../hooks/useRanks';
 import { UserStatus } from '../constants/enums';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { ADMINISTRATIVE_RANK_HINT, isAdministrativeMember } from '../utils/membership';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatTime } from '../utils/dateFormatting';
 import { displayNameOf, givenName } from '../utils/memberName';
 
 type ViewMode = 'by-member' | 'by-role';
@@ -47,6 +49,8 @@ export const MembersAdminPage: React.FC = () => {
   const navigate = useNavigate();
   const { checkPermission, user: currentUser } = useAuthStore();
   const { rankOptions } = useRanks();
+  const tz = useTimezone();
+  const [unlockingUserId, setUnlockingUserId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('by-member');
   const [users, setUsers] = useState<UserWithRoles[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -343,6 +347,20 @@ export const MembersAdminPage: React.FC = () => {
     }
   };
 
+  const handleUnlock = async (user: UserWithRoles) => {
+    try {
+      setUnlockingUserId(user.id);
+      setError(null);
+      await userService.adminUnlockAccount(user.id);
+      toast.success(`${user.full_name || user.username} can sign in again`);
+      await fetchData();
+    } catch (err: unknown) {
+      setError(getErrorDetail(err) || 'Unable to unlock this account. Try again.');
+    } finally {
+      setUnlockingUserId(null);
+    }
+  };
+
   const handleResetMfa = async () => {
     if (!resetMfaUser) return;
     try {
@@ -423,7 +441,7 @@ export const MembersAdminPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl py-8">
           <div className="flex h-64 items-center justify-center">
             <div className="text-theme-text-muted" role="status" aria-live="polite">
               Loading...
@@ -437,7 +455,7 @@ export const MembersAdminPage: React.FC = () => {
   if (error && !editingRoles && !editingMembers && !editingProfile && !resetPasswordUser && !resetMfaUser) {
     return (
       <div className="min-h-screen">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl py-8">
           <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
             <div className="flex">
               <div className="ml-3">
@@ -452,7 +470,7 @@ export const MembersAdminPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl py-8">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-theme-text-primary text-2xl font-bold">Member Management</h2>
@@ -627,6 +645,11 @@ export const MembersAdminPage: React.FC = () => {
                       >
                         {user.status}
                       </span>
+                      {user.locked_until && (
+                        <span className="mt-1 block text-xs font-semibold text-red-700 dark:text-red-400">
+                          Sign-in locked until {formatTime(user.locked_until, tz)}
+                        </span>
+                      )}
                     </td>
                     <td data-label="Actions" className="px-6 py-4 text-right text-sm font-medium whitespace-nowrap">
                       <div className="flex flex-wrap justify-end gap-3">
@@ -648,6 +671,15 @@ export const MembersAdminPage: React.FC = () => {
                             className="touch-target-phone text-yellow-700 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300"
                           >
                             Reset Password
+                          </button>
+                        )}
+                        {currentUser?.id !== user.id && user.locked_until && (
+                          <button
+                            onClick={() => void handleUnlock(user)}
+                            disabled={unlockingUserId === user.id}
+                            className="touch-target-phone text-yellow-700 hover:text-yellow-800 disabled:opacity-50 dark:text-yellow-400 dark:hover:text-yellow-300"
+                          >
+                            {unlockingUserId === user.id ? 'Unlocking…' : 'Unlock'}
                           </button>
                         )}
                         {currentUser?.id !== user.id && user.mfa_enabled && (

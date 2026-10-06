@@ -305,7 +305,10 @@ has to be on the page or the record looks like an arithmetic error.
 /training/skills-testing/tests/export/csv` with `detail=summary` (one row per
 test) or `detail=criteria` (one row per evaluated step, which is what a state
 or ISO reviewer asks for), filterable by status, candidate, template and
-completion date. Export button on the Test Records tab.
+completion date. Export button on the Test Records tab. _(2026-10-05, SKT3-2:
+the date range is now required and capped at 366 days, and it matches a test's
+completion date or, while unfinished, its opening date — the same window the
+now-paged list filters on.)_
 
 Written with `SafeCsvWriter`, non-negotiably: criterion labels, examiner notes
 and void reasons are all free text a member can influence, and the file is

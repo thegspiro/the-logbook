@@ -33,6 +33,20 @@ This is separate from [Member ID Cards](Member-ID-Cards), which identify
 **people** at a check-in station and are switched on under Settings →
 Integrations. The two share a hashing scheme and nothing else.
 
+> **Other tags in the app, and who writes them** _(2026-10-03)_. Inventory tags
+> are written by `inventory.manage` holders (compartment tags by
+> `inventory.check_manage`). The app's other NFC tags have their own writer
+> grants, decided by the owner on 2026-10-02: **apparatus** shift check-in tags
+> need `apparatus.manage_nfc_tags` (leadership and the Apparatus Officer), and
+> **room door** tags, which check a member into the event open in that room,
+> need `locations.manage_nfc_tags` (leadership and the Facilities Manager). See
+> [Apparatus → NFC Tags on the Fleet](Module-Apparatus#nfc-tags-on-the-fleet-2026-08-18).
+> On the event and admin-hours QR pages, a member now sees one line — "Have an
+> NFC tag here? Tap it with your phone to check in" ("clock in or out" for
+> admin hours) — and the tag writer sits
+> closed behind **Set up an NFC tag**, offered only to `events.manage` /
+> `admin_hours.manage` holders _(2026-10-03)_.
+
 ## Before you start
 
 ### What each device can do
@@ -160,6 +174,11 @@ item whose only tag is marked lost counts as untagged. Narrow the list with
 - A typed or USB-read serial works in either mode. **Skip this item** passes
   one over.
 
+With inventory NFC off, the page says "NFC tag tracking is turned off for your
+department. An administrator can turn it on under NFC Tags." _(2026-09-29)_ —
+the same wording as Put Away and Shelf Audit. It used to tell a quartermaster to
+turn it on themselves, which their grant does not allow.
+
 ## Using the tags
 
 ### In the distribute and return scanner
@@ -226,6 +245,9 @@ Give a storage area an audit schedule and the app tracks when it is due.
 2. Under **Shelf audit schedule**, pick **Weekly**, **Monthly**, **Quarterly**
    or **Yearly**. It saves immediately. **Not scheduled** takes it off.
 
+> **Screenshot needed:**
+> _[Quartermaster (`inventory.manage`), inventory NFC tags on, `/inventory/storage-areas`, the Edit Storage Area dialog of an active shelf: the **NFC Tags** card and the **Shelf audit schedule** select set to **Monthly**, with its status line ("Last audited …; next due …" or "Overdue since …"). Demo data only; no real tag serials in view.]_
+
 Due dates count from the area's **latest saved audit**, in calendar periods: a
 monthly shelf audited on 31 January is next due on 28 February. An area that
 has never been audited is due now.
@@ -260,6 +282,9 @@ their card.
    Administration → Self-Service Kiosk** (`/inventory/kiosk`) and presses
    **Start kiosk**.
 
+> **Screenshot needed:**
+> _[Quartermaster, `/inventory/admin/categories`, editing a loaner category with **Allow self-checkout at the kiosk** switched on and **Kiosk loan period (days)** set to 14; behind the dialog, the category card's **Kiosk · 14d** chip if visible. Demo category names only.]_
+
 **Using it** (members)
 
 1. Tap your ID card. The kiosk greets you and lists what you have out.
@@ -287,6 +312,23 @@ the officer who opened the kiosk as the one who checked it out.
 **The officer's session still times out.** Every tap counts as activity, so a
 busy kiosk stays signed in; an idle one signs out after the department's
 session timeout, and the officer signs in again.
+
+**Fixed in workflow review W45** _(2026-09-29)_:
+
+- **The next member can just tap their card.** A card tapped while the kiosk
+  was still greeting the previous member went to the item lookup and read
+  "This tag is not linked to anything" until that member pressed **Done** or a
+  minute passed. A tap the item lookup refuses is now tried as a card, and the
+  new member is greeted.
+- **A suspended card says so** — "This card is suspended. Ask an officer." — rather
+  than calling it lost or replaced; lost and revoked cards keep their own wording,
+  as at the check-in station.
+- **A refusal reads as the kiosk's answer**, in the server's words ("Radio is
+  not available (checked out).") without the support code an error toast
+  carries.
+- **With inventory NFC off**, the kiosk's notice says "An administrator can turn
+  it on under NFC Tags." It used to say "turn it on", sending a kiosk officer to
+  a settings page their grant does not open.
 
 ### Apparatus compartment tags
 
@@ -394,6 +436,13 @@ put-away, which leaves no per-item record to read. Retired items are left out.
 **Download CSV** exports up to 5,000 rows. The report works with NFC turned
 off.
 
+Known quirks from workflow review W44 (open, cosmetic): an item created today
+and never handled is listed as **Never**, ahead of everything, because creation
+is not handling (W44-2); an item whose storage area was deleted still shows that
+area's name here, while its own page shows "--" (W44-4). On **Tag Items in
+Bulk**, two items with the same name and no serial or asset tag read
+identically, since the list does not carry the barcode (W44-3).
+
 ### Last Seen
 
 The item page shows **Last Seen (NFC)** below the NFC Tags card: the ten most
@@ -437,6 +486,7 @@ record**: the log tracks equipment, not where members were.
 | "... is not on this checklist"                            | The tapped item's checklist row is not linked to that inventory item. Link it in the checklist builder                                                                                                                                                       |
 | Put-away refuses an item                                  | It is assigned, checked out, lost, stolen or retired. The message says which; fix the record first                                                                                                                                                           |
 | A shelf audit lists an item as missing that is there      | Its tag was not read. Tap it again before **Finish audit**; an item on a shelf with no tag is always missing                                                                                                                                                 |
+| "... An administrator can turn it on under NFC Tags"      | Inventory NFC is off. Only `settings.manage` / `organization.update_settings` can switch it on; ask an administrator                                                                                                                                         |
 | **Or tap their ID card** does not appear                  | The NFC ID Cards integration is not connected, inventory NFC is off, or the phone has no Web NFC                                                                                                                                                             |
 
 ## Reference

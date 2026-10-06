@@ -204,7 +204,11 @@ describe('InventoryBarcodePrintPage', () => {
     expect(mockGetItems).toHaveBeenCalledTimes(1);
   });
 
-  describe('a run larger than one print job', () => {
+  // An explicit budget because each test here renders a 500-label part of a
+  // 1,200-item run: ~2-3s standalone, so the 5s default timed them out
+  // whenever the runner was loaded (it did, beside a concurrent Playwright
+  // pass) with no assertion having failed.
+  describe('a run larger than one print job', { timeout: 30_000 }, () => {
     // 1,200 items across three list pages: 500, 500, 200.
     const all = Array.from({ length: 1200 }, (_, i) =>
       makeItem({ id: `it-${i + 1}`, name: `Tool ${i + 1}`, barcode: `INV-${i + 1}` })

@@ -17,8 +17,9 @@ from sqlalchemy.orm import selectinload
 from app.core.audit import log_audit_event
 from app.core.permissions import (
     default_positions_for,
-    get_all_permissions,
+    describe_invalid_permission_grants,
     get_rank_default_permissions,
+    invalid_permission_grants,
     permission_matches,
     permission_matches_any,
 )
@@ -186,10 +187,9 @@ class RoleManagementService:
             slug = f"{base_slug}_{counter}"
 
         # Validate permissions
-        valid_permissions = set(get_all_permissions())
-        invalid = set(permissions) - valid_permissions
+        invalid = invalid_permission_grants(permissions)
         if invalid:
-            raise ValueError(f"Invalid permissions: {', '.join(invalid)}")
+            raise ValueError(describe_invalid_permission_grants(invalid))
 
         # Create role
         role = Role(
@@ -291,10 +291,9 @@ class RoleManagementService:
                 changes["description"] = {"old": role.description, "new": description}
                 role.description = description
             if permissions is not None:
-                valid_permissions = set(get_all_permissions())
-                invalid = set(permissions) - valid_permissions
+                invalid = invalid_permission_grants(permissions)
                 if invalid:
-                    raise ValueError(f"Invalid permissions: {', '.join(invalid)}")
+                    raise ValueError(describe_invalid_permission_grants(invalid))
                 # A position's permissions are shared by every holder, so
                 # emptying the one that carries members.manage locks the whole
                 # organization out at once.
@@ -319,10 +318,9 @@ class RoleManagementService:
                 changes["description"] = {"old": role.description, "new": description}
                 role.description = description
             if permissions is not None:
-                valid_permissions = set(get_all_permissions())
-                invalid = set(permissions) - valid_permissions
+                invalid = invalid_permission_grants(permissions)
                 if invalid:
-                    raise ValueError(f"Invalid permissions: {', '.join(invalid)}")
+                    raise ValueError(describe_invalid_permission_grants(invalid))
                 await assert_role_change_retains_administrator(
                     db,
                     organization_id,

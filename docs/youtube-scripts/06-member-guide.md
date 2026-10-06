@@ -58,8 +58,8 @@ tablet, checking training status on a laptop.]**
 
 **[SCREEN: Show 2FA prompt if applicable]**
 
-> "If this is your first login, I'd recommend immediately going to your User
-> Settings to change your password and set up 2FA if it's not already required."
+> "If this is your first login, I'd recommend going straight to **My Account**
+> to change your password and set up two-factor if it's not already required."
 
 ### THE MEMBER DASHBOARD (2:30 – 4:30)
 
@@ -106,6 +106,14 @@ Administrative]**
 > leadership has marked to stay, then the newest. You see five; **Older
 > Items** opens the rest. Once you've read something, it drops off the next
 > time the page loads — unless it's one of those marked to stay."
+
+> "And if several notifications of the same kind land together — five
+> attendance prompts after a busy weekend — they fold into one row that says
+> how many. Tap it and they open out, each with its own link."
+
+**[PRODUCTION NOTE — 2026-10-04. New line, about 8 seconds. To film it, the
+demo member needs two or more unpinned notifications of one category; a pinned
+one never folds.]**
 
 **[SCREEN: Scroll to the two shift panels]**
 
@@ -185,6 +193,9 @@ this narration walks. The demo seeder produces both.]**
 > "Choose Yes, No, or Maybe. If you choose No, you can optionally add a reason.
 > Your RSVP can be changed anytime before the RSVP deadline."
 
+> "Once that deadline passes, or the event has ended, the RSVP buttons go away.
+> Missed it? Check in when you get there, or ask an officer to record you."
+
 **[SCREEN: Click "Yes" and show the confirmation]**
 
 > "That's it. Your officers can now see you're coming. Done in five seconds."
@@ -195,7 +206,9 @@ of 1 on the waitlist"]**
 
 > "If an event has a limit and it's already full, a Yes puts you on the waitlist
 > instead. The Event Information card shows how full it is, your RSVP shows your
-> place in line, and if a spot opens you're moved to Going automatically."
+> place in line, and if a spot opens you're moved to Going automatically. You'll
+> see that in your notifications in the app — 'You're off the waitlist' — so
+> keep an eye on the bell. There's no email for this one."
 
 **[CALLOUT: "RSVP in 5 seconds — no more group text chains"]**
 
@@ -208,11 +221,28 @@ of 1 on the waitlist"]**
 
 **[SCREEN: Show a QR code displayed on screen]**
 
-> "Open your phone's camera or The Logbook app, scan the QR code, and you're
-> checked in. No paper sign-in sheet, no waiting in line."
+**[SCREEN: The check-in page opens; tap "Check In to This Event"; "You're
+Checked In" appears]**
+
+> "Open your phone's camera or The Logbook app and scan the QR code. The
+> event's check-in page opens — tap **Check In to This Event**, and you'll see
+> **You're Checked In**. No paper sign-in sheet, no waiting in line."
 
 > "If you don't have your phone, a Captain or officer with manage access can
 > manually check you in."
+
+**[SCREEN: A past event's page, as a member with no check-in: the "I was there"
+card, then the short request form]**
+
+> "And if the event's over and you never got checked in — dead phone, nobody
+> put the code up — open the event and press **I was there**. That asks the
+> organizer to mark you present; they confirm or decline it, and you'll see
+> which. You've got thirty days."
+
+**[PRODUCTION NOTE — 2026-10-04. The check-in line now names the button the
+member actually taps (pre-existing omission: scanning alone never checked
+anyone in). "I was there" is new (2026-09-30), about 15 seconds; re-time
+Chapter 3. Film it with a member who has no attendance on an ended event.]**
 
 **[SCREEN: An Android phone held against an NFC sticker on a wall, then the
 check-in page opening by itself. Real phone, real tag — this cannot be faked
@@ -222,6 +252,10 @@ convincingly. — ADDED 2026-08-19]**
 > don't scan anything — just hold your phone against the sticker and the
 > check-in page opens on its own. Handy in a dark bay, or with gloves on, where
 > a camera is exactly the thing that won't cooperate."
+
+> "A tag by a meeting-room door works the same way, for whatever's on in that
+> room. If two things are open at once, it asks **Which event are you here
+> for?** — pick yours."
 
 **[SCREEN: The Events page with Tap Tag pressed, scan armed.]**
 
@@ -254,8 +288,12 @@ the screen confirming and clearing for the next person]**
 and the last four characters, and that's it"]**
 
 > "If you lose a card, tell an officer. They'll suspend it, and if it doesn't
-> turn up, revoke it — and a revoked card is dead for good. You get a new one,
-> not the old one switched back on."
+> turn up, revoke it — and a revoked registration is never switched back on.
+> If the card turns up later, the officer registers it again, as new."
+
+**[PRODUCTION NOTE — 2026-10-04. "A revoked card is dead for good" stopped
+being true on 2026-09-30: the physical card can be re-registered; the old
+registration stays revoked on the record. Re-record the narration only.]**
 
 **[SCREEN: Show a check-in landing well before the event start, flagged as
 early — ADDED 2026-08-24]**
@@ -300,6 +338,17 @@ early — ADDED 2026-08-24]**
 > days. Red means expired."
 
 **[CALLOUT: Color-coded status: "Green = current. Yellow = expiring soon. Red = expired."]**
+
+**[SCREEN: Point to the "Required Training" card at the top of the page]**
+
+> "Up top, **Required Training** tells you how many of the requirements your
+> department has set for you are met. If it says **None assigned**, nothing is
+> asked of you yet — that isn't a fault."
+
+**[B-ROLL: A brand-new member's My Training — "Nothing is on your training
+record yet", with the three ways training reaches the page and the "Submit
+External Training" button. Added 2026-10-04; about 10 seconds, re-time
+Chapter 4.]**
 
 > "Click on any certification to see the details — when you completed it, who
 > recorded it, and any attached documentation like scanned certificates."
@@ -370,8 +419,17 @@ empty.]**
 
 **[SCREEN: Submit the form. Show the success message.]**
 
-> "Your submission goes to the Training Officer for review. You'll get a
-> notification when it's approved or if they need more information."
+> "Your submission goes to the Training Officer for review. If they approve
+> it as you sent it, it simply lands on your record — no message. You hear
+> from The Logbook, in your notifications, when the answer is anything else:
+> they turned it down, they changed your hours or the training type, they need
+> more from you, or they reversed an approval they'd given. Each notice says
+> why."
+
+**[PRODUCTION NOTE — 2026-10-04. Rewritten. The previous line promised a
+notification on approval; a plain approval sends nothing (owner decision
+2026-09-29). If you film it, show a "revision requested" notice in My
+Updates.]**
 
 **[CALLOUT: "Always upload your certificate — it speeds up approval"]**
 
@@ -499,13 +557,20 @@ Copy button, and Reset link]**
 > conflict. The Logbook handles this digitally — no more calling around to find
 > someone to cover."
 
-**[SCREEN: Click on one of your assigned shifts. Click "Request Swap."]**
+**[SCREEN: The schedule board. On your next-shift card, click "Offer trade";
+the "Give up this shift" dialog opens with "Offer it to someone specific"
+selected.]**
 
-> "Click on the shift you need to swap, then click 'Request Swap.' You can
-> either propose a specific swap — 'I'll trade Tuesday for your Thursday' — or
-> just post the shift as available for anyone to pick up."
+> "There are two different jobs here, and they start in two different places.
+> If you just need somebody to take your seat, open the shift on the schedule
+> and click **Offer trade** — or **Give up shift**, then **Offer it to someone
+> specific**."
 
-**[SCREEN: Show the swap request form with options]**
+**[PRODUCTION NOTE — 2026-10-04. Rewritten. The previous take started every
+swap from a "Request Swap" button on the shift; no control has that label.
+The one-way handover is the board's **Give up this shift** dialog, and the
+two-shift trade is the **Swap** button on My Shifts → Upcoming, which opens
+**Request Shift Swap**. Both [SCREEN] cues in this chapter need new footage.]**
 
 **[REWRITTEN 2026-08-24 — a one-way offer is now completed by the person you
 offered it to, with no officer involved. A two-way trade still goes to an
@@ -519,17 +584,31 @@ the two into one flow.]**
 
 **[SCREEN: Show the candidate list, least-loaded first]**
 
+**[SCREEN: Pick a member; click "Send offer to <name>"]**
+
 > "They get Accept or Decline. If they accept, you're off and they're on. No
 > officer, no waiting — because that's the same as you dropping the seat and
-> them picking it up, and neither of those ever needed permission."
+> them picking it up, and neither of those ever needed permission. An officer
+> can also approve the offer from their Requests tab, and the seat moves the
+> same way."
+
+**[SCREEN: My Shifts → Upcoming. Click "Swap" on a shift; the "Request Shift
+Swap" dialog opens. Choose "Specific Shift", pick one under "Select Shift",
+add a Reason, click "Submit Request".]**
 
 > "A real trade is different. Your Tuesday for their Thursday moves two
-> rosters, so that one goes to an officer — and it has to be an officer who
-> isn't in the swap. Not you, not them."
+> rosters, so it starts from **My Shifts** — the **Swap** button on an upcoming
+> shift — and goes to an officer, and it has to be an officer who isn't in the
+> swap. Not you, not them."
 
-> "Or post it open, and any eligible member can claim it."
+**[SCREEN: Point to the "Open Swap" card: "An officer finds cover; it stays
+yours until then"]**
 
-**[SCREEN: Submit the swap request. Show the pending status.]**
+> "The other choice in that dialog, **Open Swap**, is not a notice board. No
+> member sees it. It asks an officer to find cover, and the shift stays yours
+> until they do."
+
+**[SCREEN: Show the pending status.]**
 
 **[CALLOUT: "While your offer is out, you can't release the seat"]**
 
@@ -540,9 +619,27 @@ the two into one flow.]**
 > "And if nobody answers, the offer closes the day before the shift and you,
 > them and the duty officer all get told. It won't quietly sit there."
 
+> "Same if either of you comes off that shift before it's settled — you take
+> time off, you withdraw, an officer moves you. The swap is cancelled on its
+> own, and you both get an email and a notice saying so."
+
 > "One thing you can't hand over: a training seat. It carries your program and
 > your evaluating officer, so moving it would file your training against
 > somebody else."
+
+> "And a swap goes with its seat. If you come off the shift any other way —
+> you withdraw, an officer reassigns you, your time off is approved — any
+> swap still waiting on that seat is cancelled, and both of you are told."
+
+**[SCREEN: My Shifts → Hours → "Shifts with other departments" → "Log outside
+shift"]**
+
+> "One more thing on the Hours tab: if you ride on another department's
+> apparatus, **Log outside shift** under **Shifts with other departments**
+> records it, and it counts toward your hours."
+
+**[EDITOR: The two beats above are new (2026-10-04) and add roughly 25
+seconds; re-time Chapter 5.]**
 
 ### MY EQUIPMENT (15:00 – 15:30)
 
@@ -552,6 +649,19 @@ the two into one flow.]**
 > gear assigned to you — radios, pagers, turnout gear, specialized equipment.
 > If your department tracks equipment assignments, you can see exactly what's
 > checked out to you."
+
+**[SCREEN: Point to the "Pending requests" card, then a row under My Requests →
+Gear Requests showing "Declined" and a "Quartermaster:" note]**
+
+> "Asked for something? **Pending requests** counts what's still waiting, and
+> under **My Requests** each one says where it stands — Awaiting review,
+> Approved, Declined or Issued — with the quartermaster's note if they left
+> one. You're told when the answer comes, too, so you don't have to keep
+> checking."
+
+**[PRODUCTION NOTE — 2026-10-04. New beat, about 15 seconds; re-time Chapter 5.
+Outcome notices (in-app, push and email) arrived 2026-09-28 and are on by
+default. Film with a member who has one declined request with a review note.]**
 
 **[TRANSITION: From your gear to the truck's]**
 
@@ -677,9 +787,9 @@ appear.]**
 
 **[SCREEN: Walk through selecting candidates and submitting the ballot]**
 
-> "Your vote is confidential — only the aggregate results are visible to
-> officers. You can only vote once per election, so make sure you're done
-> before submitting."
+> "In an anonymous election — which is the default — the system records that
+> you voted, but not how. Officers see the totals, not your choices. You can
+> only vote once per election, so make sure you're done before submitting."
 
 **[SCREEN: Show the confirmation screen with the vote receipt]**
 
@@ -687,16 +797,21 @@ appear.]**
 > was recorded without revealing who you voted for. Save it if you ever want to
 > verify your vote was counted."
 
-**[CALLOUT: "Your vote is confidential — only aggregate results are published. Save your receipt!"]**
+**[CALLOUT: "Anonymous elections (the default) record that you voted, not how. Save your receipt!"]**
 
 ### MEETING MINUTES (19:30 – 20:00)
 
 **[SCREEN: Navigate to Minutes (MinutesPage)]**
 
-> "Published meeting minutes are accessible to all members. Search by date or
-> keyword to find what was discussed at any past meeting."
+> "Meeting minutes are accessible to all members. Each meeting is listed with
+> its minutes as a link underneath — open one to read it. Search by title,
+> agenda or notes to find what was discussed at any past meeting."
 
-**[SCREEN: Show browsing and searching minutes]**
+**[SCREEN: Show the meeting list, open a minutes link, then search]**
+
+**[PRODUCTION NOTE — 2026-10-04. "Search by date" was never offered; the
+search box reads "Search by title, agenda, or notes...". The page now lists
+meetings, with minutes under each (2026-10-03). Re-record.]**
 
 ### NOTIFICATIONS (20:00 – 20:30)
 
@@ -711,11 +826,22 @@ appear.]**
 
 **[SCREEN: Show the Messages page and an Acknowledge button]**
 
-> "In Settings → Notifications you choose how you're reached: email alerts, and
-> whether you get a text message for urgent announcements. To get those texts,
-> make sure your mobile number is on file."
+> "In **My Account → Notifications** you choose how you're reached. **Email
+> Notifications** is the master switch, and under **Emails you can turn off**
+> you pick them one by one — the notice still shows in your bell either way.
+> **Always emailed to you** lists the few your department has to be able to
+> prove reached you; those come whatever you choose. And **Urgent Text
+> Messages** is the text for urgent announcements — make sure your mobile
+> number is on file."
 
-**[SCREEN: Show notification preferences including the Urgent Text Messages toggle]**
+**[SCREEN: Show My Account → Notifications: the Email Notifications switch,
+the "Emails you can turn off" list, "Always emailed to you", and the Urgent
+Text Messages toggle]**
+
+**[PRODUCTION NOTE — 2026-10-04. The per-email switches and the "Always
+emailed to you" list are new (2026-09-28); turning Email Notifications off
+now stops every optional email. About 10 seconds longer; re-time Chapter 6
+and re-record this cue.]**
 
 **[TRANSITION: Profile and wrap-up]**
 
@@ -723,22 +849,24 @@ appear.]**
 
 ## CHAPTER 7: Your Profile & Personal Settings (20:30 – 24:00)
 
-### USER SETTINGS (20:30 – 21:30)
+### MY ACCOUNT (20:30 – 21:30)
 
-**[SCREEN: Navigate to User Settings (UserSettingsPage)]**
+**[SCREEN: Navigate to My Account (the account icon, or the Settings tab on a
+phone's bottom bar)]**
 
-> "Your personal settings are where you customize the platform for yourself."
+> "Your personal settings are where you customize the platform for yourself.
+> It's called **My Account**."
 
-**[SCREEN: Walk through settings options]**
+**[SCREEN: Walk through the section list: Account, Password, Security, Privacy,
+Emergency Contacts, Appearance, Notifications, App]**
 
-> "**Profile:** Update your name, phone number, emergency contact, and profile
-> photo."
+> "**Account:** your name, contact details and photo. **Password** and
+> **Security** — that's two-factor authentication — each have their own
+> section, and so do your **Emergency Contacts**."
 
-> "**Security:** Change your password, set up or manage two-factor
-> authentication."
-
-> "**Preferences:** Choose your theme — light mode, dark mode, or match your
-> system. Set your notification preferences."
+> "**Appearance:** your theme — light, dark, high contrast or match your
+> system — and, on a phone, the two tabs either side of **Add** on the bottom
+> bar. **Notifications** is how the department reaches you."
 
 **[SCREEN: Show toggling dark mode on. The interface changes.]**
 
@@ -747,10 +875,16 @@ appear.]**
 
 ### YOUR PRIVACY CHOICES & YOUR DATA (21:30 – 22:30)
 
-**[SCREEN: Settings → Security, scrolled to the Privacy Choices section]**
+**[SCREEN: My Account → Privacy, scrolled to the Privacy Choices section]**
 
-> "Still on the Security tab, scroll down. This part is yours, and I don't want
+> "Now open **Privacy** and scroll down. This part is yours, and I don't want
 > you to miss it."
+
+**[PRODUCTION NOTE — 2026-10-04. The page is **My Account** (renamed
+2026-09-29) and its sections changed; the phone bottom-bar choice under
+Appearance is new (2026-10-02). Privacy Choices and Your Data have been on the
+**Privacy** section since early September, not Security — that cue was wrong
+before this window. Re-record the walkthrough and this cue.]**
 
 > "**Privacy Choices.** Three things the department can only do if you say yes.
 > Using your photo in publications and on social media. Listing your name and

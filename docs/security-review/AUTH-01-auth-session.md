@@ -1,9 +1,190 @@
 # Security Review — Auth & Session Lifecycle
 
-**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5), pass 6 (this PR)
+**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5), #2593 (pass 6), pass 7 (this PR)
 
 Passes are recorded in this one file rather than a new `AUTH<n>-01-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 7 (2026-10-05)
+
+**0 fixed, 0 new findings, 0 flagged.** Six files in this feature's scope
+changed since pass 6's baseline; all six are other tracks' already-reviewed
+work, re-verified here rather than taken on trust, plus a full re-enumeration
+of all 26 routes and a re-check of every open item.
+
+**Backend:** the same nine files pass 5/6 scoped —
+`app/api/v1/endpoints/auth.py`, `app/services/auth_service.py`,
+`app/services/mfa_service.py`, `app/services/oauth_service.py`,
+`app/services/consent_service.py`, `app/api/dependencies.py`,
+`app/core/security.py`, `app/core/suspicious_ip.py`, `app/schemas/auth.py`
+**Frontend:** `stores/authStore.ts`, `services/apiClient.ts`,
+`services/authService.ts`
+**Migrations:** none written this pass; 511 revisions, single head
+`edf608b5a8ea` — none touch this feature's tables
+
+### Scope and method
+
+Baseline: `6da437f21` (merge commit of PR #2593, pass 6's landing point,
+confirmed via `gh api repos/thegspiro/the-logbook/pulls/2593
+--jq '{merge_commit_sha, merged, title}'` — the shallow clone's commit
+messages don't carry the PR-number grep trail passes 4–6 could follow, so the
+SHA was fetched from GitHub directly rather than assumed). The clone needed
+deepening (`git fetch --deepen=1500`) before that commit, and the baselines
+for passes 4 and 5, were reachable at all.
+
+`git diff 6da437f21 HEAD` across all twelve scoped files (nine backend, three
+frontend) is non-empty in exactly six: `dependencies.py` (+15/-1), `auth.py`
+(+39/-29 across several hunks), `schemas/auth.py` (+3), `auth_service.py`
+(+15/-6), `authService.ts` (+5/-1), `authStore.ts` (+104/-61). The other six
+(`mfa_service.py`, `oauth_service.py`, `consent_service.py`,
+`core/security.py`, `core/suspicious_ip.py`, `apiClient.ts`) are
+byte-identical to pass 6 — confirmed by the diff itself returning nothing for
+each path, not inferred from an unrelated commit touching the file (an early
+`git log -1 -- <path>` check was misleading here: it named a later merge
+commit for three of these files that turned out, on inspection, to carry no
+actual change to their content — a merge commit can be listed against a path
+by history simplification even when the tree is identical to one parent).
+
+Each of the six changed files was read in full rather than trusting the diff
+hunks alone, per pass 5's own stated discipline.
+
+### Route inventory — re-enumerated in full, unchanged
+
+All 26 routes individually re-read against their current handler signatures
+(not grepped from memory) — every `@router.` decorator in `auth.py` and the
+`Depends(...)` on the function immediately below it. The table is identical
+to pass 4's, still 14 public / 12 private, still exactly the 14 `auth.py`
+entries in `ALLOWLISTED_PUBLIC` (`tests/test_endpoint_auth_coverage.py`). No
+route added, removed, or re-gated. See pass 4's table for the full listing;
+reproducing it unchanged here would not add information.
+
+### The six changed files, reviewed
+
+- **`dependencies.py` — `get_request_enabled_modules` retyped from `Request`
+  to `HTTPConnection`, with an `isinstance` guard returning `None` for a
+  WebSocket handshake.** This is module-gating infrastructure
+  (`require_module`), not one of this feature's three auth-resolution
+  functions (`get_current_user` / `get_current_active_user` /
+  `get_optional_current_user`), none of which changed. The docstring is
+  explicit that this does not weaken authentication anywhere: an endpoint
+  that needs a signed-in user still declares its own
+  `Depends(get_current_user)`, unaffected by this dependency's early return.
+  Read in full (`dependencies.py:428-498`) rather than taken on the
+  docstring's word; the `None` return only ever widens `require_module`'s
+  pass-through, which already had to admit sessionless token-authorized
+  callers (the public ballot link) for the reason documented at
+  `dependencies.py:514-521`. Not a finding.
+- **`auth.py` — `get_login_branding` now calls the new
+  `branding_service.get_primary_branding()` helper instead of inlining the
+  same query.** Read `get_primary_branding`
+  (`app/services/branding_service.py:61-79`): identical query
+  (`Organization.active.is_(True)`, oldest-first, `limit(1)`), identical
+  degrade-to-default on a missing/malformed `appearance` block. A
+  deduplication, not a behavior change.
+- **`auth.py` — three `Organization.active == True` comparisons became
+  `.is_(True)`.** Style/lint correctness (`# noqa: E712` removed because the
+  comparison no longer needs it), not a security-relevant change — both
+  forms produce the same `WHERE` clause against a boolean column.
+- **`auth.py`/`schemas/auth.py` — `CurrentUser` gains `bottom_nav_slots`.**
+  Read `normalize_bottom_nav_slots` (`app/schemas/user.py:110-131`): a
+  non-list input returns `None`, and every element is checked against a
+  compiled regex allowlist (`_BOTTOM_NAV_PATH`) before being kept, with
+  malformed JSON degrading to "no customization" rather than raising
+  (Pitfall #19's shape). Carries no PII/secret; dimension 5 is clean.
+- **`auth.py` — `forgot-password` now echoes `RESET_TOKEN_EXPIRY_MINUTES` in
+  both response branches (org found / not found).** The value is a constant,
+  identical on every branch regardless of whether the account exists, so
+  reporting it adds no enumeration signal — read both return sites
+  (`auth.py:1500-1505`, `auth.py:1622-1625`) to confirm the constant, not a
+  per-user computation, is what's returned. The message text is unchanged;
+  this corrects a frontend copy that had guessed "1 hour" against an actual
+  shorter expiry (not reviewed as a frontend defect — a wrong display string
+  is not a security finding).
+- **`auth_service.py` — `authenticate_user`'s success path no longer clears
+  `failed_login_attempts`/`locked_until` when `user.mfa_enabled`.** This is a
+  real hardening fix (workflow-review W04, landed before this pass started),
+  closing a genuine lockout bypass: previously, a correct password reset the
+  counter even though the second factor hadn't been checked yet, so an
+  attacker holding a stolen password could guess
+  `MAX_LOGIN_ATTEMPTS - 1` TOTP codes, resubmit the password to zero the
+  counter, and repeat indefinitely — the account-lockout defense never
+  tripped against second-factor guessing. Verified the other half of the
+  invariant holds: `mfa_login` only zeroes the same two columns on a
+  verified second factor (`auth.py:1000-1001`), after the TOTP/recovery-code
+  check, never on the password step alone. Re-ran
+  `tests/test_auth_lockout_race.py` — passes.
+
+### Considered and deliberately not raised as a finding
+
+- **`mfa_login`'s failed-attempt increment (`auth.py:965`) is reachable
+  without ever taking the row lock the password-step path takes (Pitfall
+  #27).** `MFALogin.code` and `MFALogin.recovery_code`
+  (`schemas/auth.py:198-206`) are both `Optional` with no
+  `model_validator` requiring at least one — a schema-valid request can omit
+  both. When either is present and non-empty, `_verify_and_consume_totp` /
+  `_verify_and_consume_recovery_code` runs first and takes
+  `.with_for_update()` on the same user row before the handler's own
+  `user.failed_login_attempts += 1` at line 965 executes; because
+  `populate_existing=True` refreshes the same identity-mapped object (the
+  mechanism pass 5 verified for the consuming helpers applies equally here —
+  `locked_user is user`), the increment that follows is reading and writing
+  the just-locked, just-refreshed value, not a stale one. The gap is real
+  only for a request carrying **neither** field: that skips both consuming
+  helpers entirely and reaches the increment with no lock ever taken. But a
+  request with no code and no recovery code verifies nothing and guesses
+  nothing — racing it buys an attacker zero information, since the "guess"
+  that goes unlocked is not a guess at all. Same reasoning pass 5 already
+  applied to `mfa_setup`'s unlocked secret write: a race with no
+  attacker-observable secret or guess behind it is not a security
+  improvement to close. Not raised as a new finding.
+
+### Re-verified: both open items, unchanged
+
+- **AUTH-15** (HIPAA max password age enforced only in the browser) — still
+  🚩 FLAGGED, re-checked at current lines: `auth_service.py:295-298` still
+  only logs; `auth.py:180-189` (`password_expired` computed) and `auth.py:1422`
+  (reported via `/session-settings`) still only report it.
+  `dependencies.py:119-239`'s `get_current_user` still has no gate on
+  `password_expired` — only on `must_change_password` and org `mfa_required`.
+  Still needs the rollout decision recorded in pass 4. Still accurate in
+  `docs/KNOWN_LIMITATIONS.md`.
+- **AUTH-17** (no session reaper) — still 🚩 FLAGGED. `delete(UserSession)`
+  (`grep -rn "delete(UserSession)" app/`) is still reached only from
+  `auth_service._revoke_all_user_sessions:484`; `scheduled_tasks.py` still
+  has no session job among its registered tasks. Still needs the
+  retention-window decision. Still accurate in `docs/KNOWN_LIMITATIONS.md`.
+- **AUTH-21** (app-review track, double-fired refresh can revoke every
+  session) — re-confirmed unchanged at `auth_service.py:392`
+  (`select(UserSession).where(UserSession.refresh_token == refresh_token)`,
+  still a plain `SELECT`, no `.with_for_update()`). Not this track's finding
+  to fix; still flagged in `docs/app-review/auth-session.md` and
+  `docs/KNOWN_LIMITATIONS.md`, both unchanged.
+
+### Documentation correction
+
+This file's own header never recorded pass 6's actual PR number — it said
+"pass 6 (this PR)" and was never updated after #2593 merged. Corrected above
+to `#2593`, fetched via the GitHub REST API rather than guessed.
+
+### Completion gate (pass 7)
+
+| Check                                                                                                                                                                                                | Result                                                                              |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `python3 -m flake8 app/ tests/ alembic/` (7.3.0, CI's pin)                                                                                                                                           | ✅ 0 violations                                                                     |
+| `python3 -m black --check app/ tests/ alembic/` (26.5.1, CI's pin)                                                                                                                                   | ✅ 1862 files unchanged                                                             |
+| `python3 -m isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)                                                                                                                               | ✅ clean                                                                            |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                    | ✅ single head `edf608b5a8ea`, 511 revisions                                        |
+| scoped backend tests (`-k "auth or mfa or oauth or consent or suspicious_ip or dependencies or permission"`)                                                                                         | ✅ 777 passed, 2 skipped (both pre-existing: optional `pywebpush`, Docker registry) |
+| standing guards (`endpoint_auth_coverage`, `org_scoping_ratchet`, `capacity_locking`, `like_escaping`, `mfa_verification_consumes`, `auth_lockout_race`, `auth_gate_remediation_paths`) run directly | ✅ 67 passed                                                                        |
+| backend full unit suite (`pytest tests/ -m "not integration and not slow and not docker"`)                                                                                                           | ✅ 12534 passed, 1 pre-existing skip, 0 failed                                      |
+| `cd frontend && npm run typecheck`                                                                                                                                                                   | ✅ 0 errors (aliased 7.0.2 compiler)                                                |
+| `cd frontend && npm run lint`                                                                                                                                                                        | ✅ 0 errors, 0 warnings                                                             |
+
+No source file was changed by this pass — every check above verifies a tree
+this pass read but did not modify, not a regression check against a new fix.
+Rotation row 01 moves to `✅`.
 
 ---
 
@@ -540,7 +721,7 @@ sequence terminates; and `test_ordinary_routes_stay_closed_while_either_gate_app
 is the counterweight that keeps a future "just allow a bit more" from becoming
 a bypass.
 
-#### AUTH-15 — MED — The HIPAA maximum-password-age control is enforced only in the browser — 🚩 FLAGGED
+#### AUTH-15 — MED — The HIPAA maximum-password-age control is enforced only in the browser — ✅ FIXED (2026-10-04)
 
 **What:** `HIPAA_MAXIMUM_PASSWORD_AGE_DAYS` (`core/config.py:176`, default
 **90**) has exactly three readers, and none of them refuses a request:
@@ -587,6 +768,19 @@ to fix it. It needs an owner decision on the rollout (a grace period, a
 staged threshold, a per-org opt-in, or simply accepting the cutover), which
 is exactly the class this rotation flags rather than implements. Mirrored into
 `docs/KNOWN_LIMITATIONS.md`.
+
+**Resolution (2026-10-04): FIXED with a grace period**, the rollout the owner
+chose. `get_current_user` now refuses an expired password with the same 403,
+error code and `X-Password-Change-Required` header as the `must_change_password`
+gate, and on the same allow-list, so the change itself stays reachable. It
+does so only `HIPAA_PASSWORD_EXPIRY_GRACE_DAYS` (default 14) after
+`users.password_expiry_notified_at`, which the daily `notify_expired_passwords`
+task sets when it tells the member (in-app and email), or the member's first
+authenticated request after expiry sets if that comes sooner. The column
+starts NULL, so no member is refused on the day this deploys; every password
+change clears it. The browser still sends an expired member to the change
+screen at once. Arithmetic in `app/utils/password_expiry.py`; tests in
+`backend/tests/test_password_expiry_gate.py`.
 
 #### AUTH-16 — LOW — Nothing enforced "a verified second factor is always consumed"; the non-consuming verifier survived as a landmine — ✅ FIXED
 
@@ -931,6 +1125,17 @@ secret-shown-once response in this file (`mfa_verify_setup`'s recovery codes
 have the identical exposure), not specific to TOTP replay, and the right
 fix (an idempotency-key mechanism, or a "re-show last-issued codes" path) is
 a product decision this pass is not making unilaterally in an auth path.
+
+**Follow-up (2026-10-04): FIXED with an idempotency key**, the option the
+owner chose. `verify-setup` and `recovery-codes` accept `Idempotency-Key`; a
+retry with the same key and code from the same member within ten minutes is
+answered with the set already issued, before the spent code is checked. The
+replay is bound to the member, the endpoint and a hash of the code (a
+different code under the same key is a 422), the stored response is
+encrypted with the application key, and a set replaced since or MFA turned
+off since is never replayed. Requests without the header behave as before.
+See `app/core/issued_secrets.py` and
+`backend/tests/test_mfa_recovery_code_replay.py`.
 
 **Guard test:** `TestTotpConsumedAcrossMfaRoutes` in
 `backend/tests/test_auth_mfa_endpoints.py` —

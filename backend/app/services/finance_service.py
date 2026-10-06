@@ -12,6 +12,7 @@ import secrets
 from collections.abc import AsyncIterator
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from types import SimpleNamespace
 from typing import Optional
 
 from loguru import logger
@@ -30,7 +31,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, contains_eager, selectinload
 
-from app.api.dependencies import PaginationParams
+from app.api.dependencies import PaginationParams, user_has_permission
 from app.core.config import settings
 from app.models.apparatus import Apparatus
 from app.models.email_template import EmailTemplate
@@ -62,6 +63,18 @@ from app.models.finance import (
     PurchaseRequestStatus,
 )
 from app.models.user import User
+from app.services.finance_approver_matching import (
+    FINANCE_APPROVE,
+    ApproverDecision,
+    ApproverDirectory,
+    authorize_step_actor,
+    describe_assignee,
+    is_approvals_admin,
+    is_known_permission,
+    is_valid_single_email,
+    normalize_approver_type,
+    user_matches_step,
+)
 from app.services.separation_of_duties import (
     SeparationOfDutiesError,
     assert_different_person,
@@ -70,7 +83,7 @@ from app.utils.csv_export import SafeCsvWriter
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
-from app.utils.org_timezone import resolve_scheduling_timezone
+from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
 from app.utils.sql_search import LIKE_ESCAPE_CHAR
 
 # The statuses that genuinely resolve a step, so a later step may become
@@ -107,6 +120,16 @@ class FinanceEntityNotFoundError(ValueError):
 
 class ManualApprovalConflictError(ValueError):
     """The request cannot take a manual decision in its current state (→ 409)."""
+
+
+class ApprovalTokenNotValidError(ValueError):
+    """The token exists but no longer authorizes its step (→ 404).
+
+    Answered exactly like an unknown token: a link minted while a step was an
+    email step must stop working once the step is reassigned to a member, and
+    telling the holder anything more would describe the chain to someone who
+    is no longer part of it.
+    """
 
 
 def _apply_payment_totals(dues: MemberDues) -> None:
@@ -151,6 +174,11 @@ class FinanceService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        # Set by approve_step / deny_step to how the caller was allowed to act
+        # (named approver, or an approvals-admin override), so the endpoint
+        # can audit it without re-running the match after the mutation. The
+        # service is built per request, so this never crosses requests.
+        self.last_approver_decision: Optional[ApproverDecision] = None
 
     # ========================================
     # Fiscal Years
@@ -437,13 +465,19 @@ class FinanceService:
         self, org_id: str, created_by: str, steps: Optional[list] = None, **kwargs
     ) -> ApprovalChain:
         await self._validate_approval_chain_fks(org_id, kwargs)
+        # Every nested step is validated before the chain row exists, so one
+        # bad approver cannot leave a half-built chain behind in the session.
+        for index, step_data in enumerate(steps or [], start=1):
+            await self._validate_chain_step_fks(org_id, step_data)
+            await self._validate_step_approver(
+                org_id, step_data, label=f"Step {index}: "
+            )
         chain = ApprovalChain(organization_id=org_id, created_by=created_by, **kwargs)
         self.db.add(chain)
         await self.db.flush()
 
         if steps:
             for step_data in steps:
-                await self._validate_chain_step_fks(org_id, step_data)
                 step = ApprovalChainStep(chain_id=chain.id, **step_data)
                 self.db.add(step)
             await self.db.flush()
@@ -494,6 +528,87 @@ class FinanceService:
                 label="Email template",
             )
 
+    async def _validate_step_approver(
+        self,
+        org_id: str,
+        data: dict,
+        existing: Optional[ApprovalChainStep] = None,
+        label: str = "",
+    ) -> None:
+        """Refuse an approval step whose named approver cannot be resolved.
+
+        Enforcement made a step's ``approver_value`` load-bearing: a typo in a
+        position slug is no longer cosmetic, it is a step nobody can approve.
+        So the pair is checked where it is written. On update, only a write
+        that touches the approver (or turns the step into an approval step) is
+        checked — renaming a step that was already broken before this rule
+        existed stays possible, and the coverage report is where that step
+        shows up. Normalizes ``approver_value`` in ``data`` (trimmed).
+        """
+        # The schemas hand over plain strings; store the enum, so a step read
+        # back from the identity map in the same session looks like one read
+        # from the database (``_advance_reachable_steps`` reads ``.value``).
+        if "approver_type" in data:
+            data["approver_type"] = normalize_approver_type(data["approver_type"])
+        touched = {"approver_type", "approver_value", "step_type"} & set(data)
+        if existing is not None and not touched:
+            return
+
+        def current(field, default=None):
+            if field in data:
+                return data[field]
+            return getattr(existing, field) if existing is not None else default
+
+        step_type = current("step_type", ApprovalStepType.APPROVAL)
+        step_type_value = getattr(step_type, "value", step_type)
+        if step_type_value == ApprovalStepType.NOTIFICATION.value:
+            return
+        approver_type = normalize_approver_type(current("approver_type"))
+        if approver_type is None:
+            return
+
+        value = (current("approver_value") or "").strip()
+        if "approver_value" in data:
+            data["approver_value"] = value or None
+        noun = {
+            ApproverType.POSITION: "a position",
+            ApproverType.PERMISSION: "a permission",
+            ApproverType.SPECIFIC_USER: "a member",
+            ApproverType.EMAIL: "an email address",
+        }[approver_type]
+        if not value:
+            raise ValueError(
+                f"{label}Approver value is required: choose {noun} for this "
+                "approval step."
+            )
+
+        if approver_type == ApproverType.POSITION:
+            if await ApproverDirectory(self.db, org_id).position(value) is None:
+                raise ValueError(
+                    f"{label}Approver value: no position '{value}' exists in "
+                    "this department."
+                )
+        elif approver_type == ApproverType.SPECIFIC_USER:
+            user = await ApproverDirectory(self.db, org_id).user(value)
+            if user is None or not user.is_active:
+                raise ValueError(
+                    f"{label}Approver value: that member is not an active "
+                    "member of this department."
+                )
+        elif approver_type == ApproverType.PERMISSION:
+            if not is_known_permission(value):
+                raise ValueError(
+                    f"{label}Approver value: '{value}' is not a known "
+                    "permission. Name a single permission such as "
+                    "finance.approve."
+                )
+        elif approver_type == ApproverType.EMAIL:
+            if not is_valid_single_email(value):
+                raise ValueError(
+                    f"{label}Approver value: '{value}' is not a single valid "
+                    "email address."
+                )
+
     async def delete_approval_chain(self, chain_id: str, org_id: str) -> None:
         chain = await self.get_approval_chain(chain_id, org_id)
         if not chain:
@@ -508,6 +623,7 @@ class FinanceService:
         if not chain:
             raise ValueError("Approval chain not found")
         await self._validate_chain_step_fks(org_id, kwargs)
+        await self._validate_step_approver(org_id, kwargs)
         step = ApprovalChainStep(chain_id=chain_id, **kwargs)
         self.db.add(step)
         await self.db.flush()
@@ -530,6 +646,7 @@ class FinanceService:
         step = result.scalar_one_or_none()
         if not step:
             raise ValueError("Approval chain step not found")
+        await self._validate_step_approver(org_id, kwargs, existing=step)
         apply_updates(step, kwargs)
         await self.db.flush()
         return step
@@ -840,13 +957,36 @@ class FinanceService:
             terminated += 1
         return terminated
 
+    async def _authorize_step_actor(
+        self,
+        record: ApprovalStepRecord,
+        actor: User,
+        override_reason: Optional[str],
+        org_id: str,
+    ) -> ApproverDecision:
+        """The named-approver check, run on the locked, current record.
+
+        ``require_permission("finance.approve")`` on the endpoint only says the
+        caller may approve *something*; this says they may approve *this* step
+        — or are an approvals admin overriding it with a stated reason.
+        Raises ``ApproverMismatchError`` before anything is written.
+        """
+        if record.step is None:
+            raise ValueError("Approval chain step not found")
+        decision = await authorize_step_actor(
+            self.db, actor, record.step, org_id, override_reason
+        )
+        self.last_approver_decision = decision
+        return decision
+
     async def approve_step(
         self,
         step_record_id: str,
-        approver_id: str,
+        approver: User,
         notes: Optional[str] = None,
         *,
         org_id: str,
+        override_reason: Optional[str] = None,
     ) -> ApprovalStepRecord:
         # Scope the lookup to the caller's org via the owning chain. The endpoint
         # only proves the caller holds finance.approve in their OWN org, so
@@ -868,12 +1008,16 @@ class FinanceService:
         if record.status != ApprovalStepStatus.PENDING:
             raise ValueError("This step is not pending approval")
         await self._ensure_current_step(record, org_id)
+        await self._authorize_step_actor(record, approver, override_reason, org_id)
+        approver_id = str(approver.id)
 
         # SEC (FIN-4): holding finance.approve says nothing about *whose*
         # request this is. Without this, a treasurer could raise a check
         # request and walk it through its own approval chain — the one control
         # every set of department bylaws puts on disbursements. Denial is left
-        # unguarded: withdrawing your own request is not a conflict.
+        # unguarded: withdrawing your own request is not a conflict. An
+        # approvals-admin override does not lift this: the override answers
+        # "who is named on the step", never "may you sign your own request".
         assert_different_person(
             approver_id,
             await self._entity_creator_id(record.entity_type, record.entity_id, org_id),
@@ -909,10 +1053,11 @@ class FinanceService:
     async def deny_step(
         self,
         step_record_id: str,
-        denier_id: str,
+        denier: User,
         notes: Optional[str] = None,
         *,
         org_id: str,
+        override_reason: Optional[str] = None,
     ) -> ApprovalStepRecord:
         # Org-scoped via the owning chain — see approve_step for the IDOR this
         # join closes.
@@ -932,6 +1077,8 @@ class FinanceService:
         if record.status != ApprovalStepStatus.PENDING:
             raise ValueError("This step is not pending approval")
         await self._ensure_current_step(record, org_id)
+        await self._authorize_step_actor(record, denier, override_reason, org_id)
+        denier_id = str(denier.id)
 
         now = datetime.now(timezone.utc)
         record.status = ApprovalStepStatus.DENIED
@@ -951,6 +1098,23 @@ class FinanceService:
         await self.db.flush()
         logger.info("Approval step {} denied by {}", step_record_id, denier_id)
         return record
+
+    @staticmethod
+    def _ensure_token_step_is_email(record: ApprovalStepRecord) -> None:
+        """A token authorizes only a step that is still an EMAIL approval step.
+
+        The token is minted when an email step becomes reachable and lives for
+        7 days. If an admin reassigns the step to a position or a member in the
+        meantime, the emailed address is no longer the approver — the step's
+        CURRENT definition decides, not the one in force when the link went out.
+        """
+        step = record.step
+        if (
+            step is None
+            or step.step_type != ApprovalStepType.APPROVAL
+            or normalize_approver_type(step.approver_type) != ApproverType.EMAIL
+        ):
+            raise ApprovalTokenNotValidError("Approval not found")
 
     async def approve_by_token(
         self, token: str, notes: Optional[str] = None
@@ -979,6 +1143,7 @@ class FinanceService:
         record = result.scalar_one_or_none()
         if not record:
             raise ValueError("Invalid approval token")
+        self._ensure_token_step_is_email(record)
         org_id = record.chain.organization_id
         if record.status != ApprovalStepStatus.PENDING:
             raise ValueError("This step has already been acted on")
@@ -1036,13 +1201,17 @@ class FinanceService:
         result = await self.db.execute(
             select(ApprovalStepRecord)
             .join(ApprovalChain, ApprovalChain.id == ApprovalStepRecord.chain_id)
-            .options(contains_eager(ApprovalStepRecord.chain))
+            .options(
+                selectinload(ApprovalStepRecord.step),
+                contains_eager(ApprovalStepRecord.chain),
+            )
             .where(ApprovalStepRecord.approval_token == token)
             .with_for_update()
         )
         record = result.scalar_one_or_none()
         if not record:
             raise ValueError("Invalid approval token")
+        self._ensure_token_step_is_email(record)
         org_id = record.chain.organization_id
         if record.status != ApprovalStepStatus.PENDING:
             raise ValueError("This step has already been acted on")
@@ -1065,16 +1234,60 @@ class FinanceService:
         await self.db.flush()
         return record
 
-    async def get_pending_approvals(
-        self, user_id: str, org_id: str, *, skip: int = 0, limit: int = 100
-    ) -> list[dict]:
-        """Return one currently actionable step per entity in one query.
+    @staticmethod
+    def _has_earlier_pending_step():
+        """EXISTS: a PENDING record on the same entity sits ahead of this one.
 
-        ``user_id`` remains part of the public service signature for callers that
-        will eventually filter permission-based assignments.  Organization scope
-        is applied inside every arm of the entity union and again to requesters.
+        Correlated against the unaliased ``ApprovalStepRecord`` /
+        ``ApprovalChainStep`` of the enclosing query. Its negation is what
+        "the step this request is currently waiting on" means in SQL, and the
+        ordering (step_order, created_at, id) matches
+        ``get_approval_records`` so the list and the approve guard agree.
         """
-        del user_id
+        prior_record = aliased(ApprovalStepRecord)
+        prior_step = aliased(ApprovalChainStep)
+        return exists(
+            select(1)
+            .select_from(prior_record)
+            .join(prior_step, prior_step.id == prior_record.step_id)
+            .where(
+                prior_record.entity_type == ApprovalStepRecord.entity_type,
+                prior_record.entity_id == ApprovalStepRecord.entity_id,
+                prior_record.status == ApprovalStepStatus.PENDING,
+                or_(
+                    prior_step.step_order < ApprovalChainStep.step_order,
+                    and_(
+                        prior_step.step_order == ApprovalChainStep.step_order,
+                        or_(
+                            prior_record.created_at < ApprovalStepRecord.created_at,
+                            and_(
+                                prior_record.created_at
+                                == ApprovalStepRecord.created_at,
+                                prior_record.id < ApprovalStepRecord.id,
+                            ),
+                        ),
+                    ),
+                ),
+            )
+        )
+
+    async def get_pending_approvals(
+        self, user: User, org_id: str, *, skip: int = 0, limit: int = 100
+    ) -> list[dict]:
+        """The steps requests are currently waiting on that ``user`` can act on.
+
+        One row per request, from one query: organization scope is applied
+        inside every arm of the entity union and again to requesters. Each
+        row is then matched against ``user`` (finance_approver_matching), with
+        lookups cached per distinct approver, so the cost is per *assignee*,
+        not per row.
+
+        A named approver sees only their own steps. An approvals admin
+        (``finance.configure_approvals``) sees every step, the ones they are
+        not named on flagged ``requires_override`` — they can act on those,
+        but only by giving a reason.
+        """
+        admin = is_approvals_admin(user)
         entities = union_all(
             select(
                 PurchaseRequest.id.label("entity_id"),
@@ -1102,34 +1315,9 @@ class FinanceService:
             ).where(CheckRequest.organization_id == org_id),
         ).subquery("pending_entities")
 
-        prior_record = aliased(ApprovalStepRecord)
-        prior_step = aliased(ApprovalChainStep)
-        has_earlier_pending_step = exists(
-            select(1)
-            .select_from(prior_record)
-            .join(prior_step, prior_step.id == prior_record.step_id)
-            .where(
-                prior_record.entity_type == ApprovalStepRecord.entity_type,
-                prior_record.entity_id == ApprovalStepRecord.entity_id,
-                prior_record.status == ApprovalStepStatus.PENDING,
-                or_(
-                    prior_step.step_order < ApprovalChainStep.step_order,
-                    and_(
-                        prior_step.step_order == ApprovalChainStep.step_order,
-                        or_(
-                            prior_record.created_at < ApprovalStepRecord.created_at,
-                            and_(
-                                prior_record.created_at
-                                == ApprovalStepRecord.created_at,
-                                prior_record.id < ApprovalStepRecord.id,
-                            ),
-                        ),
-                    ),
-                ),
-            )
-        )
+        has_earlier_pending_step = self._has_earlier_pending_step()
 
-        result = await self.db.execute(
+        query = (
             select(
                 ApprovalStepRecord.id.label("step_record_id"),
                 ApprovalStepRecord.entity_type,
@@ -1139,6 +1327,9 @@ class FinanceService:
                 entities.c.submitted_at,
                 ApprovalChainStep.name.label("step_name"),
                 ApprovalChainStep.step_order,
+                ApprovalChainStep.step_type,
+                ApprovalChainStep.approver_type,
+                ApprovalChainStep.approver_value,
                 User.first_name,
                 User.last_name,
                 User.preferred_name,
@@ -1170,12 +1361,33 @@ class FinanceService:
                 entities.c.entity_id,
                 ApprovalStepRecord.id,
             )
-            .offset(skip)
-            .limit(limit)
         )
+        # An admin sees every row, so the page can be cut in SQL. Anyone else
+        # sees a subset only matching can decide, so the page is cut after
+        # matching — an org's pending approvals are a short list.
+        if admin:
+            query = query.offset(skip).limit(limit)
+        result = await self.db.execute(query)
 
+        directory = ApproverDirectory(self.db, org_id)
+        verdicts: dict[tuple, tuple[bool, str]] = {}
         approvals = []
-        for row in result:
+        for row in result.all():
+            approver_type = normalize_approver_type(row.approver_type)
+            step = SimpleNamespace(
+                step_type=row.step_type,
+                approver_type=approver_type,
+                approver_value=row.approver_value,
+            )
+            key = (row.step_type, approver_type, row.approver_value)
+            if key not in verdicts:
+                verdicts[key] = (
+                    await user_matches_step(self.db, user, step, org_id),
+                    await describe_assignee(step, directory),
+                )
+            can_act, assignee_label = verdicts[key]
+            if not can_act and not admin:
+                continue
             requester_name = format_display_name(
                 row.first_name, row.last_name, row.preferred_name
             )
@@ -1194,9 +1406,151 @@ class FinanceService:
                     "step_name": row.step_name,
                     "step_order": row.step_order,
                     "submitted_at": row.submitted_at,
+                    "approver_type": approver_type.value if approver_type else None,
+                    "approver_value": row.approver_value,
+                    "assignee_label": assignee_label,
+                    "can_act": can_act,
+                    "requires_override": not can_act,
                 }
             )
+        if not admin:
+            approvals = approvals[skip : skip + limit]
         return approvals
+
+    async def step_actor_flags(
+        self, user: User, records: list[ApprovalStepRecord], org_id: str
+    ) -> dict[str, dict]:
+        """Per record: who it waits on, and whether ``user`` may act on it now.
+
+        For the request detail pages, so they show the same answer approve /
+        deny will give rather than re-deriving it. Only the step the request
+        is currently waiting on (the first PENDING record, as in
+        ``get_current_pending_step``) can be acted on, and only through the
+        ``finance.approve``-gated endpoints, so both flags require that too.
+        Separation of duties is not folded in: it depends on the request, and
+        the approve endpoint still refuses the requester with its own message.
+        """
+        directory = ApproverDirectory(self.db, org_id)
+        current = next(
+            (r for r in records if r.status == ApprovalStepStatus.PENDING), None
+        )
+        may_approve = user_has_permission(user, FINANCE_APPROVE)
+        admin = is_approvals_admin(user)
+        flags: dict[str, dict] = {}
+        for record in records:
+            step = record.step
+            if step is None:
+                continue
+            entry = {
+                "assignee_label": await describe_assignee(step, directory),
+                "can_act": False,
+                "requires_override": False,
+            }
+            if (
+                record is current
+                and may_approve
+                and step.step_type == ApprovalStepType.APPROVAL
+            ):
+                matched = await user_matches_step(self.db, user, step, org_id)
+                entry["can_act"] = matched
+                entry["requires_override"] = not matched and admin
+            flags[str(record.id)] = entry
+        return flags
+
+    async def get_approver_coverage(self, org_id: str) -> list[dict]:
+        """Every approval step in the org's chains, and who can act on it.
+
+        Enforcement turned a mistyped slug or a departed member into a step
+        nobody can approve — the request just waits. This is how an admin
+        finds those steps before a requester does. Eligibility is counted by
+        running every active member through ``user_matches_step``, the same
+        function that gates approve/deny, so the report cannot disagree with
+        the enforcement it describes.
+        """
+        chains_result = await self.db.execute(
+            select(ApprovalChain)
+            .options(selectinload(ApprovalChain.steps))
+            .where(ApprovalChain.organization_id == org_id)
+            .order_by(ApprovalChain.name, ApprovalChain.id)
+            # Steps can be added to a chain already in the identity map; the
+            # report must read what is stored, not a stale collection.
+            .execution_options(populate_existing=True)
+        )
+        chains = list(chains_result.scalars().unique().all())
+
+        pending_result = await self.db.execute(
+            select(ApprovalStepRecord.step_id, func.count(ApprovalStepRecord.id))
+            .join(ApprovalChain, ApprovalChain.id == ApprovalStepRecord.chain_id)
+            .join(ApprovalChainStep, ApprovalChainStep.id == ApprovalStepRecord.step_id)
+            .where(
+                ApprovalChain.organization_id == org_id,
+                ApprovalStepRecord.status == ApprovalStepStatus.PENDING,
+                ~self._has_earlier_pending_step(),
+            )
+            .group_by(ApprovalStepRecord.step_id)
+        )
+        pending_by_step = {step_id: count for step_id, count in pending_result}
+
+        directory = ApproverDirectory(self.db, org_id)
+        members = await directory.active_members()
+        rows = []
+        for chain in chains:
+            for step in sorted(chain.steps, key=lambda s: (s.step_order, s.id)):
+                if step.step_type != ApprovalStepType.APPROVAL:
+                    continue
+                approver_type = normalize_approver_type(step.approver_type)
+                value = (step.approver_value or "").strip()
+                eligible = 0
+                for member in members:
+                    if await user_matches_step(self.db, member, step, org_id):
+                        eligible += 1
+                rows.append(
+                    {
+                        "chain_id": chain.id,
+                        "chain_name": chain.name,
+                        "chain_is_active": bool(chain.is_active),
+                        "step_id": step.id,
+                        "step_name": step.name,
+                        "step_order": step.step_order,
+                        "approver_type": (
+                            approver_type.value if approver_type else None
+                        ),
+                        "approver_value": step.approver_value,
+                        "assignee_label": await describe_assignee(step, directory),
+                        "eligible_active_count": eligible,
+                        "problem": await self._coverage_problem(
+                            approver_type, value, eligible, directory
+                        ),
+                        "pending_request_count": pending_by_step.get(step.id, 0),
+                    }
+                )
+        return rows
+
+    @staticmethod
+    async def _coverage_problem(
+        approver_type: Optional[ApproverType],
+        value: str,
+        eligible: int,
+        directory: ApproverDirectory,
+    ) -> Optional[str]:
+        if approver_type is None:
+            return None if eligible else "no_active_members"
+        if not value:
+            return "no_value"
+        if approver_type == ApproverType.EMAIL:
+            # An email approver is usually outside the department and acts
+            # from the emailed link, so no matching member is normal.
+            return None if is_valid_single_email(value) else "invalid_email"
+        if approver_type == ApproverType.POSITION:
+            if await directory.position(value) is None:
+                return "not_found"
+        elif approver_type == ApproverType.SPECIFIC_USER:
+            if await directory.user(value) is None:
+                return "not_found"
+        elif approver_type == ApproverType.PERMISSION:
+            if not is_known_permission(value):
+                return "not_found"
+        return None if eligible else "no_active_members"
 
     # ========================================
     # Manual approval (no approval chain applies)
@@ -1760,11 +2114,12 @@ class FinanceService:
         offset would regenerate the same colliding number.
         """
         fy = await self.get_fiscal_year(fiscal_year_id, org_id)
-        year = ""
         if fy and fy.start_date:
             year = str(fy.start_date.year)
         else:
-            year = str(datetime.now(timezone.utc).year)
+            # The department's year, not the server's: UTC is already next
+            # year on a US department's New Year's Eve.
+            year = str((await resolve_org_today(self.db, org_id)).year)
 
         table_map = {
             "PR": PurchaseRequest,
@@ -1856,14 +2211,22 @@ class FinanceService:
         return list(result.scalars().all())
 
     async def get_purchase_request(
-        self, pr_id: str, org_id: str
+        self, pr_id: str, org_id: str, for_update: bool = False
     ) -> Optional[PurchaseRequest]:
-        result = await self.db.execute(
-            select(PurchaseRequest).where(
-                PurchaseRequest.id == pr_id,
-                PurchaseRequest.organization_id == org_id,
-            )
+        """A purchase request by id, org-scoped.
+
+        ``for_update`` locks the row for the caller's transaction and refreshes
+        an instance already in the session (``populate_existing``): a status
+        check made off a stale identity-map copy would pass for a request a
+        concurrent transaction has just moved on (CLAUDE.md Pitfall #27).
+        """
+        query = select(PurchaseRequest).where(
+            PurchaseRequest.id == pr_id,
+            PurchaseRequest.organization_id == org_id,
         )
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def create_purchase_request(
@@ -1886,7 +2249,7 @@ class FinanceService:
     async def update_purchase_request(
         self, pr_id: str, org_id: str, **kwargs
     ) -> PurchaseRequest:
-        pr = await self.get_purchase_request(pr_id, org_id)
+        pr = await self.get_purchase_request(pr_id, org_id, for_update=True)
         if not pr:
             raise ValueError("Purchase request not found")
         if pr.status not in (
@@ -1901,7 +2264,7 @@ class FinanceService:
         return pr
 
     async def submit_purchase_request(self, pr_id: str, org_id: str) -> PurchaseRequest:
-        pr = await self.get_purchase_request(pr_id, org_id)
+        pr = await self.get_purchase_request(pr_id, org_id, for_update=True)
         if not pr:
             raise ValueError("Purchase request not found")
         if pr.status != PurchaseRequestStatus.DRAFT:
@@ -1950,7 +2313,7 @@ class FinanceService:
         return pr
 
     async def mark_pr_ordered(self, pr_id: str, org_id: str) -> PurchaseRequest:
-        pr = await self.get_purchase_request(pr_id, org_id)
+        pr = await self.get_purchase_request(pr_id, org_id, for_update=True)
         if not pr:
             raise ValueError("Purchase request not found")
         if pr.status != PurchaseRequestStatus.APPROVED:
@@ -1962,7 +2325,7 @@ class FinanceService:
         return pr
 
     async def mark_pr_received(self, pr_id: str, org_id: str) -> PurchaseRequest:
-        pr = await self.get_purchase_request(pr_id, org_id)
+        pr = await self.get_purchase_request(pr_id, org_id, for_update=True)
         if not pr:
             raise ValueError("Purchase request not found")
         if pr.status != PurchaseRequestStatus.ORDERED:
@@ -2099,8 +2462,19 @@ class FinanceService:
         return list(result.scalars().unique().all())
 
     async def get_expense_report(
-        self, er_id: str, org_id: str, restrict_to_user: Optional[str] = None
+        self,
+        er_id: str,
+        org_id: str,
+        restrict_to_user: Optional[str] = None,
+        for_update: bool = False,
     ) -> Optional[ExpenseReport]:
+        """An expense report by id, org-scoped.
+
+        ``for_update`` locks the row for the caller's transaction and refreshes
+        an instance already in the session (``populate_existing``): a status
+        check made off a stale identity-map copy would pass for a request a
+        concurrent transaction has just moved on (CLAUDE.md Pitfall #27).
+        """
         query = (
             select(ExpenseReport)
             .options(selectinload(ExpenseReport.line_items))
@@ -2111,6 +2485,8 @@ class FinanceService:
         )
         if restrict_to_user is not None:
             query = query.where(ExpenseReport.submitted_by == restrict_to_user)
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
@@ -2154,7 +2530,7 @@ class FinanceService:
     async def update_expense_report(
         self, er_id: str, org_id: str, **kwargs
     ) -> ExpenseReport:
-        er = await self.get_expense_report(er_id, org_id)
+        er = await self.get_expense_report(er_id, org_id, for_update=True)
         if not er:
             raise ValueError("Expense report not found")
         if er.status not in (
@@ -2197,7 +2573,7 @@ class FinanceService:
         return item
 
     async def submit_expense_report(self, er_id: str, org_id: str) -> ExpenseReport:
-        er = await self.get_expense_report(er_id, org_id)
+        er = await self.get_expense_report(er_id, org_id, for_update=True)
         if not er:
             raise ValueError("Expense report not found")
         if er.status != ExpenseReportStatus.DRAFT:
@@ -2300,14 +2676,22 @@ class FinanceService:
         return list(result.scalars().all())
 
     async def get_check_request(
-        self, cr_id: str, org_id: str
+        self, cr_id: str, org_id: str, for_update: bool = False
     ) -> Optional[CheckRequest]:
-        result = await self.db.execute(
-            select(CheckRequest).where(
-                CheckRequest.id == cr_id,
-                CheckRequest.organization_id == org_id,
-            )
+        """A check request by id, org-scoped.
+
+        ``for_update`` locks the row for the caller's transaction and refreshes
+        an instance already in the session (``populate_existing``): a status
+        check made off a stale identity-map copy would pass for a request a
+        concurrent transaction has just moved on (CLAUDE.md Pitfall #27).
+        """
+        query = select(CheckRequest).where(
+            CheckRequest.id == cr_id,
+            CheckRequest.organization_id == org_id,
         )
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def create_check_request(
@@ -2329,7 +2713,7 @@ class FinanceService:
     async def update_check_request(
         self, cr_id: str, org_id: str, **kwargs
     ) -> CheckRequest:
-        cr = await self.get_check_request(cr_id, org_id)
+        cr = await self.get_check_request(cr_id, org_id, for_update=True)
         if not cr:
             raise ValueError("Check request not found")
         if cr.status not in (
@@ -2344,7 +2728,7 @@ class FinanceService:
         return cr
 
     async def submit_check_request(self, cr_id: str, org_id: str) -> CheckRequest:
-        cr = await self.get_check_request(cr_id, org_id)
+        cr = await self.get_check_request(cr_id, org_id, for_update=True)
         if not cr:
             raise ValueError("Check request not found")
         if cr.status != CheckRequestStatus.DRAFT:
@@ -2590,6 +2974,15 @@ class FinanceService:
         meeting — cannot be deduplicated and is always appended, which is why
         the reference is the thing worth capturing.
         """
+        # Locked: amount_paid/status are recomputed from dues.payments below
+        # (_apply_payment_totals), not accumulated. Two concurrent payments
+        # against the same dues row would otherwise both read the ledger
+        # before either commits, both append their own row, and the second to
+        # flush would overwrite amount_paid with a total that excludes the
+        # first payment -- the ledger row itself would still exist, but the
+        # cached total silently drops it (CLAUDE.md Pitfall #27, same shape
+        # FIN-31 fixed for Budget). The lock serializes this exactly like
+        # approve_step/_mutate_budget already do.
         result = await self.db.execute(
             select(MemberDues)
             .where(
@@ -2597,6 +2990,7 @@ class FinanceService:
                 MemberDues.organization_id == org_id,
             )
             .options(selectinload(MemberDues.payments))
+            .with_for_update()
         )
         dues = result.scalar_one_or_none()
         if not dues:

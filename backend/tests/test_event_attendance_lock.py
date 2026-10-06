@@ -25,12 +25,14 @@ import pytest
 from app.api.v1.endpoints.events import _resolve_display_names
 from app.core.permissions import ALL_PERMISSIONS, OPERATIONAL_RANKS
 from app.models.admin_hours import AdminHoursEntryMethod
+from app.models.event import CheckInWindowType
 from app.services.admin_hours_service import AdminHoursService
 from app.services.event_service import (
     ATTENDANCE_LOCKED_PREFIX,
     EventService,
     attendance_is_finalized,
     attendance_locked_error,
+    changed_attendance_fields,
 )
 
 
@@ -70,6 +72,17 @@ def _event(finalized=True, **overrides):
     }
     fields.update(overrides)
     return SimpleNamespace(**fields)
+
+
+@pytest.fixture(autouse=True)
+def _no_room_booking_lock(monkeypatch):
+    """update_event takes the room-booking lock first (EV-26). It is a
+    statement these mocked sessions would otherwise have to answer, and it is
+    covered on a real database by test_room_booking_race.py."""
+    monkeypatch.setattr(
+        "app.services.location_service.LocationService.lock_room_bookings",
+        AsyncMock(),
+    )
 
 
 def _mock_db(*results):
@@ -230,6 +243,188 @@ class TestUpdateSplitsDescriptiveFromAttendanceSensitive:
         assert str(excinfo.value).startswith(ATTENDANCE_LOCKED_PREFIX)
         assert "end_datetime" in str(excinfo.value)
         assert event.end_datetime != new_end
+
+
+class TestTheLockComparesValuesNotPresence:
+    """The edit form re-sends every schedule and check-in field it shows.
+
+    Deciding the lock by which fields were present refused a title fix on a
+    finalized event; it is decided by which ones would change.
+    """
+
+    def test_a_naive_stored_time_equals_the_same_aware_instant(self):
+        stored = datetime(2026, 6, 1, 19, 0)
+        event = _event(start_datetime=stored)
+        sent = {"start_datetime": stored.replace(tzinfo=timezone.utc)}
+        assert changed_attendance_fields(event, sent) == set()
+
+    def test_sub_second_noise_is_not_a_change(self):
+        # MySQL DATETIME keeps whole seconds; the payload may carry more.
+        stored = datetime(2026, 6, 1, 19, 0, tzinfo=timezone.utc)
+        event = _event(start_datetime=stored)
+        sent = {"start_datetime": stored.replace(microsecond=500)}
+        assert changed_attendance_fields(event, sent) == set()
+
+    def test_an_enum_column_equals_its_string(self):
+        event = _event(check_in_window_type=CheckInWindowType.FLEXIBLE)
+        sent = {"check_in_window_type": CheckInWindowType.FLEXIBLE.value}
+        assert changed_attendance_fields(event, sent) == set()
+
+    def test_a_null_check_in_rule_equals_the_default_the_form_fills_in(self):
+        # Older events store NULL; the edit form shows and re-sends the
+        # default the check-in window already applies for it.
+        event = _event(
+            check_in_window_type=None,
+            check_in_minutes_before=None,
+            check_in_minutes_after=None,
+            require_checkout=None,
+        )
+        sent = {
+            "check_in_window_type": "flexible",
+            "check_in_minutes_before": 60,
+            "check_in_minutes_after": 15,
+            "require_checkout": False,
+        }
+        assert changed_attendance_fields(event, sent) == set()
+
+    def test_switching_a_null_window_to_a_timed_one_is_a_change(self):
+        event = _event(check_in_window_type=None, check_in_minutes_before=None)
+        assert changed_attendance_fields(event, {"check_in_window_type": "window"}) == {
+            "check_in_window_type"
+        }
+
+    def test_a_real_change_is_still_reported(self):
+        event = _event()
+        sent = {
+            "check_in_minutes_before": 30,
+            "check_in_minutes_after": event.check_in_minutes_after,
+            "end_datetime": event.end_datetime + timedelta(minutes=15),
+        }
+        assert changed_attendance_fields(event, sent) == {
+            "check_in_minutes_before",
+            "end_datetime",
+        }
+
+    async def test_a_title_fix_from_the_edit_form_saves(self):
+        event = _event(
+            title="Old title",
+            description=None,
+            location_id=None,
+            location=None,
+            location_obj=None,
+            is_draft=False,
+            updated_by=None,
+        )
+        form = {
+            "title": "Monthly Drill (corrected)",
+            "start_datetime": event.start_datetime,
+            "end_datetime": event.end_datetime,
+            "event_type": event.event_type,
+            "custom_category": event.custom_category,
+            "check_in_window_type": event.check_in_window_type,
+            "check_in_minutes_before": event.check_in_minutes_before,
+            "check_in_minutes_after": event.check_in_minutes_after,
+        }
+        svc = EventService(_mock_db(_one(event)))
+        payload = SimpleNamespace(model_dump=lambda **_: dict(form))
+
+        result = await svc.update_event("event-1", "org-1", payload)
+
+        assert result is event
+        assert event.title == "Monthly Drill (corrected)"
+
+    def _series(self, occurrence):
+        anchor = _event(recurrence_parent_id=None, is_cancelled=False)
+        svc = EventService(_mock_db(_one(anchor), _all([occurrence])))
+        svc.event_credits_training = MagicMock(return_value=False)
+        svc._follow_training_changes = AsyncMock(return_value=None)
+        return svc
+
+    async def test_a_series_description_edit_reaching_a_closed_occurrence_saves(
+        self,
+    ):
+        occurrence = _event(description="old", updated_by=None)
+        svc = self._series(occurrence)
+        payload = SimpleNamespace(
+            model_dump=lambda **_: {
+                "description": "new",
+                "check_in_minutes_before": occurrence.check_in_minutes_before,
+                "check_in_window_type": occurrence.check_in_window_type,
+            }
+        )
+
+        assert await svc.update_future_events("event-1", "org-1", payload) == 1
+        assert occurrence.description == "new"
+
+    async def test_a_series_change_to_a_closed_occurrence_s_rules_is_refused(self):
+        occurrence = _event(description="old", updated_by=None)
+        svc = self._series(occurrence)
+        payload = SimpleNamespace(
+            model_dump=lambda **_: {"description": "new", "check_in_minutes_before": 5}
+        )
+
+        with pytest.raises(ValueError, match="check_in_minutes_before"):
+            await svc.update_future_events("event-1", "org-1", payload)
+        assert occurrence.description == "old"
+
+
+class TestDeferredCommit:
+    """A caller moving several events as one change commits once itself."""
+
+    async def test_update_flushes_and_holds_the_reversal_for_after_commit(self):
+        event = _event(
+            finalized=False,
+            title="Drill",
+            description=None,
+            location_id=None,
+            location=None,
+            location_obj=None,
+            is_draft=False,
+            updated_by=None,
+        )
+        db = _mock_db(_one(event))
+        svc = EventService(db)
+        svc._follow_training_changes = AsyncMock(return_value=("training", "ref"))
+        svc._reverse_pipeline_after_commit = AsyncMock()
+        payload = SimpleNamespace(model_dump=lambda **_: {"title": "Drill 2"})
+
+        await svc.update_event("event-1", "org-1", payload, defer_commit=True)
+
+        db.commit.assert_not_awaited()
+        db.flush.assert_awaited()
+        svc._reverse_pipeline_after_commit.assert_not_awaited()
+
+        await svc.complete_deferred_writes("org-1")
+        svc._reverse_pipeline_after_commit.assert_awaited_once_with(
+            [("training", "ref")], "org-1"
+        )
+
+    async def test_cancel_flushes_and_holds_the_reversals(self):
+        event = _event(finalized=False, rsvps=[], cancellation_reason=None)
+        db = _mock_db(_one(event))
+        svc = EventService(db)
+        svc._revoke_event_attendance_credit = AsyncMock(return_value=["reversal"])
+        svc._reverse_pipeline_after_commit = AsyncMock()
+
+        await svc.cancel_event("event-1", "org-1", "weather", defer_commit=True)
+
+        assert event.is_cancelled is True
+        db.commit.assert_not_awaited()
+        await svc.complete_deferred_writes("org-1")
+        svc._reverse_pipeline_after_commit.assert_awaited_once_with(
+            ["reversal"], "org-1"
+        )
+
+    async def test_a_deferred_cancel_cannot_promise_notifications(self):
+        svc = EventService(_mock_db())
+        with pytest.raises(ValueError, match="notifications"):
+            await svc.cancel_event(
+                "event-1",
+                "org-1",
+                "weather",
+                send_notifications=True,
+                defer_commit=True,
+            )
 
 
 class TestReopen:

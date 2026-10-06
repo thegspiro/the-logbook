@@ -157,6 +157,54 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/events', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members/admin', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.manage'] },
+  // The hub's other three tabs. Add and Import stand on `users.create` as well,
+  // so without it the hub falls back to the roster and measures that instead.
+  {
+    path: '/members/admin?tab=add',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['members.manage', 'users.create'],
+    expectText: 'Add New Member',
+  },
+  {
+    path: '/members/admin?tab=import',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['members.manage', 'users.create'],
+    expectText: 'Import Members from CSV',
+  },
+  {
+    path: '/members/admin?tab=settings',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['members.manage'],
+    expectText: 'Roster settings',
+  },
+  {
+    path: '/members/admin/waivers',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['members.manage'],
+    expectText: 'Waiver Management',
+  },
+  // Both read the member through `/users/:id/with-roles`; the catch-all `{}` has
+  // no id, so without the record these measure their load-error states.
+  {
+    path: '/members/admin/edit/1',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['members.manage'],
+    fixture: { memberRecord: true },
+    expectText: 'Edit Member: Alex Tester',
+  },
+  {
+    path: '/members/admin/history/1',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['members.manage'],
+    fixture: { memberRecord: true },
+    expectText: 'Audit History',
+  },
   // All five sections of this settings screen, each listed rather than left to
   // a representative, because each renders a different body under one shell.
   //
@@ -493,6 +541,129 @@ export const ALL_ROUTES: RouteCheck[] = [
   // inventory.check_manage is a distinct grant from inventory.manage, and
   // checkPermission compares literally — without it this hub renders Access
   // Denied, which passes both budgets while measuring an error page.
+  // Inventory Administration and the pages its hub links to. Four of them
+  // (Pool, Members, Charges, Impact Planner) crashed to the error screen on a
+  // malformed response while this list did not name them; `expectText` is the
+  // page's own heading, so a redirect or a substituted screen cannot pass.
+  {
+    path: '/inventory/admin',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Inventory Administration',
+  },
+  {
+    path: '/inventory/admin/setup',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Inventory Setup',
+  },
+  {
+    path: '/inventory/admin/items',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Inventory Items',
+  },
+  {
+    path: '/inventory/admin/pool',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Pool Items',
+  },
+  {
+    path: '/inventory/admin/categories',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Categories',
+  },
+  {
+    path: '/inventory/admin/maintenance',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Maintenance & Inspections',
+  },
+  {
+    path: '/inventory/admin/members',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Member Equipment',
+  },
+  {
+    path: '/inventory/admin/charges',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Charge Management',
+  },
+  {
+    path: '/inventory/admin/returns',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Return Requests',
+  },
+  {
+    path: '/inventory/admin/requests',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Gear Requests',
+  },
+  {
+    path: '/inventory/admin/write-offs',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Write-Off Requests',
+  },
+  {
+    path: '/inventory/admin/reorder',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Reorder Requests',
+  },
+  {
+    path: '/inventory/admin/kits',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Gear Kits',
+  },
+  {
+    path: '/inventory/admin/variant-groups',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Variant Groups',
+  },
+  {
+    path: '/inventory/admin/allowances',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Issuance Allowances',
+  },
+  {
+    path: '/inventory/admin/vendors',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Vendors',
+  },
+  {
+    path: '/inventory/admin/impact-planner',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.manage'],
+    expectText: 'Impact Planner',
+  },
   {
     path: '/inventory/admin/checklists',
     maxSmallTargets: 0,
@@ -682,10 +853,9 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxSmallTargets: 0,
     maxTinyText: 0,
     permissions: SCHEDULING_ADMIN,
-    // A preset's description, not the panel heading: the heading renders in
-    // the load-error state too, which is what this entry measured until
-    // helpers.ts served `/notifications/rules` a list.
-    expectText: 'Notify members when they are assigned to a shift',
+    // A control that renders once the organization settings have loaded,
+    // not the panel heading, which renders before they have.
+    expectText: 'Enable decline/drop notifications',
   },
   {
     path: '/scheduling/admin/settings/outside-apparatus',

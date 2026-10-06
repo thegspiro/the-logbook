@@ -965,6 +965,15 @@ No current connector call site passes any of the three — this is the same
 `trust_env`/`proxy` parameters already documented in this function's
 docstring.
 
+**Mechanism changed (2026-09-25, [#2681](https://github.com/thegspiro/the-logbook/pull/2681)).**
+httpx 0.28 deprecates `cert=` on a transport, so `cert` no longer reaches any
+transport, or `httpx.AsyncClient`, as that keyword. `_tls_verify()` in
+`integration_services/base.py` builds an `ssl.SSLContext` with
+`httpx.create_ssl_context()` and loads the client certificate into it with
+`load_cert_chain()`. Every transport this module constructs receives that
+context as `verify=`. The guarantee above is unchanged: a requested client
+certificate still reaches every transport, the proxy mounts included.
+
 **Guard tests** (`test_integration_response_size_cap.py`):
 `test_create_integration_client_http2_kwarg_reaches_the_transport`,
 `test_create_integration_client_http1_false_reaches_the_transport`,
@@ -975,7 +984,20 @@ http2_and_cert` (the proxy-mount path specifically — a proxied request must
 not lose protocol selection or mTLS that the direct-connection transport
 was given).
 
-### INT-9 — P2 — Google Calendar's connector bypasses the response-size cap and any future centralized deadline — tracked, not fixed
+### INT-9 — P2 — Google Calendar's connector bypasses the response-size cap and any future centralized deadline — ✅ size cap and timeouts FIXED 2026-10-05; wall-clock deadline still tracked
+
+**Resolution (2026-10-05, owner decision: a custom httplib2
+`connection_type` with a byte cap and timeout, tested against a streamed
+response):** `_build_service()` now hands `build()` an `AuthorizedHttp` over
+`_BoundedHttp`, whose connections cap the body at `MAX_RESPONSE_SIZE` as it
+is read (and decompressed output via httplib2's `decode_limit_hard`), raising
+the shared `ResponseTooLargeError`, and apply `INTEGRATION_TIMEOUT`'s 5 s
+connect / 10 s read budgets as socket timeouts. Guarded by
+`backend/tests/test_google_calendar_http_bounds.py` against a real loopback
+server streaming four times the cap, a gzip bomb, and stalled responses. The
+wall-clock deadline remains open for this connector and the `httpx` ones
+alike — see `docs/KNOWN_LIMITATIONS.md`. The original finding follows
+unchanged.
 
 **What:** the CHANGELOG's INT-7 entry says "every integration connector's
 outbound calls are covered." That was already corrected once this round for

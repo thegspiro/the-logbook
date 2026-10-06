@@ -2,7 +2,6 @@
 
 from typing import Any, Optional
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mcp.principal import McpPrincipal
@@ -17,7 +16,11 @@ from app.mcp.tools._common import (
     parse_uuid,
 )
 from app.models.document import DocumentFolder, DocumentStatus, FolderVisibility
-from app.services.documents_service import DocumentsService
+from app.services.documents_service import (
+    DocumentsService,
+    reachable_folder_ids,
+    restricted_folders_query,
+)
 
 # Characters of a document's text, or of its description, returned per
 # call. An in-app document is a LONGTEXT column and the description is
@@ -71,26 +74,12 @@ async def _open_folder_ids(db: AsyncSession, organization_id: str) -> set[str]:
     closed. The service key is not a member and gets no leadership bypass.
     Documents with no folder are treated as open by the service layer.
     """
-    rows = await db.execute(
-        select(DocumentFolder).where(DocumentFolder.organization_id == organization_id)
-    )
-    by_id = {f.id: f for f in rows.scalars().all()}
-    open_ids: set[str] = set()
-    for folder in by_id.values():
-        current: Optional[DocumentFolder] = folder
-        seen: set[str] = set()
-        admitted = False
-        while current is not None:
-            if current.id in seen or not _folder_is_open(current):
-                break
-            seen.add(current.id)
-            if current.parent_id is None:
-                admitted = True
-                break
-            current = by_id.get(current.parent_id)
-        if admitted:
-            open_ids.add(folder.id)
-    return open_ids
+    # Judging only the folders that carry a restriction, then walking the
+    # tree in SQL, replaces loading every folder in the organization on each
+    # call (DOC-30); see reachable_folder_ids for the fail-closed cases.
+    rows = await db.execute(restricted_folders_query(organization_id))
+    closed = {f.id for f in rows.scalars().all() if not _folder_is_open(f)}
+    return await reachable_folder_ids(db, organization_id, closed)
 
 
 async def _visible_document(

@@ -1634,14 +1634,14 @@
   --alert-info-border: #bfdbfe; /* blue-200 */
   --alert-info-icon: #2563eb; /* blue-600 */
   --alert-info-title: #1e40af; /* blue-800 */
-  --alert-info-text: #1d4ed8; /* blue-700 */
+  --alert-info-text: #1e3a8a; /* blue-900 — 9.52:1 on #eff6ff (AAA) */
 
   /* Alert: Success (green) */
   --alert-success-bg: #f0fdf4; /* green-50 */
   --alert-success-border: #bbf7d0; /* green-200 */
   --alert-success-icon: #16a34a; /* green-600 */
   --alert-success-title: #166534; /* green-800 */
-  --alert-success-text: #15803d; /* green-700 */
+  --alert-success-text: #14532d; /* green-900 — 8.70:1 on #f0fdf4 (AAA) */
 
   /* Alert: Warning (amber) */
   --alert-warning-bg: #fffbeb; /* amber-50 */
@@ -1655,14 +1655,14 @@
   --alert-purple-border: #e9d5ff; /* purple-200 */
   --alert-purple-icon: #9333ea; /* purple-600 */
   --alert-purple-title: #6b21a8; /* purple-800 */
-  --alert-purple-text: #7e22ce; /* purple-700 */
+  --alert-purple-text: #581c87; /* purple-900 — 10.14:1 on #faf5ff (AAA) */
 
   /* Alert: Danger (red) */
   --alert-danger-bg: #fef2f2; /* red-50 */
   --alert-danger-border: #fecaca; /* red-200 */
   --alert-danger-icon: #dc2626; /* red-600 */
   --alert-danger-title: #991b1b; /* red-800 */
-  --alert-danger-text: #b91c1c; /* red-700 */
+  --alert-danger-text: #7f1d1d; /* red-900 — 9.16:1 on #fef2f2 (AAA) */
 }
 
 .dark {
@@ -2363,6 +2363,10 @@ tbody tr:last-child {
 }
 .member-training-print__compliance--yellow {
   color: #92400e;
+}
+/* No requirement grades the member: neither a pass nor a warning. */
+.member-training-print__compliance--not_applicable {
+  color: #555;
 }
 .member-training-print__stats,
 .member-training-print__summary {

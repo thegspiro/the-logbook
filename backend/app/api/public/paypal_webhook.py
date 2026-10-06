@@ -31,6 +31,7 @@ from app.core.database import get_db
 from app.core.security_middleware import get_client_ip, public_rate_limit
 from app.core.utils import safe_error_detail
 from app.models.integration import Integration
+from app.schemas.integration import PAYPAL_AUTO_APPLY_DEFAULT
 from app.services.integration_services.paypal_service import (
     extract_capture,
     verify_webhook_signature,
@@ -42,6 +43,18 @@ router = APIRouter(
     prefix="/public/v1/webhooks/paypal",
     tags=["public-paypal-webhook"],
 )
+
+
+def paypal_auto_apply(config: dict) -> bool:
+    """Whether a matched capture settles its order without a human.
+
+    The department's stored choice, or the default when its config was
+    saved without one. Only a literal ``False`` turns it off: the config is
+    validated as a bool on save, and a stray non-bool must not silently
+    disable settlement either.
+    """
+    value = config.get("auto_apply_payments", PAYPAL_AUTO_APPLY_DEFAULT)
+    return value is not False
 
 
 async def _rate_limit_webhook(request: Request) -> None:
@@ -122,7 +135,7 @@ async def paypal_inbound_webhook(
             "paypal",
             capture,
             raw_payload=payload,
-            auto_apply=bool(config.get("auto_apply_payments", True)),
+            auto_apply=paypal_auto_apply(config),
         )
     except ValueError as exc:
         logger.error(f"PayPal webhook could not be recorded: {exc}")

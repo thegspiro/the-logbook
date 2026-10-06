@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**286 tables · 4719 columns · 931 foreign keys**
+**288 tables · 4738 columns · 940 foreign keys**
 
 ---
 
@@ -228,14 +228,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`facility_capital_projects`](#facility_capital_projects) | `FacilityCapitalProject` | 23 | Capital improvement and renovation projects for a facility |
 | [`facility_compliance_checklists`](#facility_compliance_checklists) | `FacilityComplianceChecklist` | 14 | Regulatory/compliance checklists for a facility |
 | [`facility_compliance_items`](#facility_compliance_items) | `FacilityComplianceItem` | 13 | Individual items within a compliance checklist |
-| [`facility_documents`](#facility_documents) | `FacilityDocument` | 12 | Documents associated with a facility (blueprints, permits, leases, etc.) |
+| [`facility_documents`](#facility_documents) | `FacilityDocument` | 13 | Documents associated with a facility (blueprints, permits, leases, etc.) |
 | [`facility_emergency_contacts`](#facility_emergency_contacts) | `FacilityEmergencyContact` | 15 | Emergency/vendor contacts for a facility (alarm company, plumber, etc.) |
 | [`facility_inspections`](#facility_inspections) | `FacilityInspection` | 24 | Inspection records for facilities — fire inspections, building code, |
 | [`facility_insurance_policies`](#facility_insurance_policies) | `FacilityInsurancePolicy` | 20 | Insurance policies covering a facility |
 | [`facility_maintenance`](#facility_maintenance) | `FacilityMaintenance` | 28 | Maintenance records for facilities. |
 | [`facility_maintenance_types`](#facility_maintenance_types) | `FacilityMaintenanceType` | 11 | Types of maintenance work that can be performed on facilities. |
 | [`facility_occupants`](#facility_occupants) | `FacilityOccupant` | 14 | Units, crews, or teams assigned to a facility |
-| [`facility_photos`](#facility_photos) | `FacilityPhoto` | 10 | Photos associated with a facility |
+| [`facility_photos`](#facility_photos) | `FacilityPhoto` | 11 | Photos associated with a facility |
 | [`facility_rooms`](#facility_rooms) | `FacilityRoom` | 19 | Individual rooms and spaces within a facility |
 | [`facility_shutoff_locations`](#facility_shutoff_locations) | `FacilityShutoffLocation` | 11 | Utility shutoff locations within a facility (water main, gas main, etc.) |
 | [`facility_statuses`](#facility_statuses) | `FacilityStatus` | 10 | Facility statuses (e.g. Operational, Under Renovation). |
@@ -482,6 +482,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`org_chart_node_holders`](#org_chart_node_holders) | `OrgChartNodeHolder` | 6 | One person leadership listed in a seat by hand. |
 | [`org_chart_nodes`](#org_chart_nodes) | `OrgChartNode` | 14 | One seat on the department's organizational chart. |
 
+### Organization_Lock
+
+<sub>`app/models/organization_lock.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`organization_locks`](#organization_locks) | `OrganizationLock` | 3 | One row per (organization, scope), taken with an exclusive lock. |
+
 ### Organization_Officer
 
 <sub>`app/models/organization_officer.py`</sub>
@@ -586,8 +594,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`basic_apparatus`](#basic_apparatus) | `BasicApparatus` | 10 | Lightweight apparatus/vehicle definition for shift scheduling. |
 | [`competency_matrices`](#competency_matrices) | `CompetencyMatrix` | 11 | Competency Matrix model |
 | [`course_classes`](#course_classes) | `CourseClass` | 25 | Course Class model — one row of a multi-class course's syllabus. |
-| [`course_cohort_classes`](#course_cohort_classes) | `CourseCohortClass` | 25 | Course Cohort Class model — a syllabus row materialized onto real dates. |
+| [`course_cohort_classes`](#course_cohort_classes) | `CourseCohortClass` | 26 | Course Cohort Class model — a syllabus row materialized onto real dates. |
 | [`course_cohort_members`](#course_cohort_members) | `CourseCohortMember` | 10 | Course Cohort Member model — the roster of one cohort. |
+| [`course_cohort_missed_classes`](#course_cohort_missed_classes) | `CohortMissedClass` | 10 | An officer's decision for a class held before a member joined (W27-3). |
 | [`course_cohorts`](#course_cohorts) | `CourseCohort` | 24 | Course Cohort model — one scheduled run of a multi-class course. |
 | [`external_category_mappings`](#external_category_mappings) | `ExternalCategoryMapping` | 12 | External Category Mapping model |
 | [`external_training_imports`](#external_training_imports) | `ExternalTrainingImport` | 25 | External Training Import model |
@@ -605,7 +614,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`renewal_tasks`](#renewal_tasks) | `RenewalTask` | 18 | Renewal Task model |
 | [`requirement_progress`](#requirement_progress) | `RequirementProgress` | 14 | Requirement Progress model |
 | [`requirement_progress_credits`](#requirement_progress_credits) | `RequirementProgressCredit` | 10 | Idempotency ledger for automated requirement-progress credit. |
-| [`self_report_configs`](#self_report_configs) | `SelfReportConfig` | 14 | Self-Report Configuration model |
+| [`self_report_configs`](#self_report_configs) | `SelfReportConfig` | 15 | Self-Report Configuration model |
 | [`shift_assignments`](#shift_assignments) | `ShiftAssignment` | 15 | Assigns a specific member to a specific shift with a designated position. |
 | [`shift_attendance`](#shift_attendance) | `ShiftAttendance` | 8 | Shift Attendance model (Framework) |
 | [`shift_calls`](#shift_calls) | `ShiftCall` | 13 | Shift Call model (Framework) |
@@ -629,7 +638,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`training_module_configs`](#training_module_configs) | `TrainingModuleConfig` | 45 | Training Module Configuration model |
 | [`training_programs`](#training_programs) | `TrainingProgram` | 23 | Training Program model |
 | [`training_records`](#training_records) | `TrainingRecord` | 39 | Training Record model |
-| [`training_requirements`](#training_requirements) | `TrainingRequirement` | 45 | Training Requirement model |
+| [`training_requirements`](#training_requirements) | `TrainingRequirement` | 47 | Training Requirement model |
 | [`training_sessions`](#training_sessions) | `TrainingSession` | 30 | Training Session model |
 | [`training_submissions`](#training_submissions) | `TrainingSubmission` | 25 | Training Submission model |
 | [`training_waivers`](#training_waivers) | `TrainingWaiver` | 13 | Training Waiver / Leave of Absence |
@@ -647,9 +656,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`password_history`](#password_history) | `PasswordHistory` | 4 | Password history for HIPAA compliance (§164.312(d)) |
 | [`positions`](#positions) | `Position` | 11 | Corporate Position model for permission-based access control. |
 | [`prospects`](#prospects) | `Prospect` | 17 | Prospective member – someone who has expressed interest in joining |
-| [`sessions`](#sessions) | `Session` | 12 | User session model for tracking active sessions |
+| [`sessions`](#sessions) | `Session` | 10 | User session model for tracking active sessions |
 | [`user_positions`](#user_positions) | _(association table)_ | 4 |  |
-| [`users`](#users) | `User` | 60 | User model with comprehensive authentication and profile support. |
+| [`users`](#users) | `User` | 62 | User model with comprehensive authentication and profile support. |
 
 ---
 
@@ -2045,8 +2054,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_doc_folders_org` (`organization_id`)
+- `idx_doc_folders_org_slug` (`organization_id`, `slug`)
 - `idx_doc_folders_owner` (`owner_user_id`)
 - `idx_doc_folders_parent` (`parent_id`)
+- `idx_doc_folders_parent_slug` (`parent_id`, `slug`)
 
 ### `documents`
 
@@ -3130,6 +3141,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `facility_id` | VARCHAR(36) | no | FK, IDX |  | → `facilities.id` ON DELETE CASCADE |
 | `file_path` | VARCHAR(500) | no |  |  |  |
+| `document_id` | VARCHAR(36) | yes |  |  |  |
 | `file_name` | VARCHAR(200) | no |  |  |  |
 | `mime_type` | VARCHAR(100) | yes |  |  |  |
 | `document_type` | VARCHAR(100) | yes | IDX |  |  |
@@ -3143,6 +3155,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_facility_documents_expiration` (`expiration_date`)
 - `idx_facility_documents_facility` (`facility_id`)
+- `idx_facility_documents_org_document` (`organization_id`, `document_id`)
 - `idx_facility_documents_type` (`document_type`)
 - `ix_facility_documents_organization_id` (`organization_id`)
 
@@ -3368,6 +3381,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `facility_id` | VARCHAR(36) | no | FK, IDX |  | → `facilities.id` ON DELETE CASCADE |
 | `file_path` | VARCHAR(500) | no |  |  |  |
+| `document_id` | VARCHAR(36) | yes |  |  |  |
 | `file_name` | VARCHAR(200) | no |  |  |  |
 | `mime_type` | VARCHAR(100) | yes |  |  |  |
 | `caption` | VARCHAR(500) | yes |  |  |  |
@@ -3378,6 +3392,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_facility_photos_facility` (`facility_id`)
+- `idx_facility_photos_org_document` (`organization_id`, `document_id`)
 - `ix_facility_photos_organization_id` (`organization_id`)
 
 ### `facility_rooms`
@@ -6883,6 +6898,20 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `ix_org_chart_nodes_org_parent` (`organization_id`, `parent_id`)
 
+## Organization_Lock
+
+### `organization_locks`
+
+**OrganizationLock** · `app/models/organization_lock.py`
+
+> One row per (organization, scope), taken with an exclusive lock. For a check that cannot be made safe by locking a single parent row: booking a room (EV-26) or enrolling a member in a program, where the check is a range read. That read has to be a locking read to see rows committed since the request's snapshot (CLAUDE.md pitfall #27), and a locking range read takes InnoDB gap locks that two *different* parents can share, so locking per room or per program let unrelated decisions deadlock on each other's inserts (the failure ``test_storefront_order_deadlock.py`` documents for the store). Not the ``organizations`` row: every insert into a table with an org foreign key takes a shared lock on it, so an exclusive lock there would stall every write in the department and deadlock against paths that lock something else first. Nothing references this table. Taken through ``app.utils.org_locks.lock_organization_scope``, which creates the row on first use.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `organization_id` | VARCHAR(36) | no | PK, FK |  | → `organizations.id` ON DELETE CASCADE |
+| `scope` | VARCHAR(50) | no | PK |  |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+
 ## Organization_Officer
 
 ### `organization_officers`
@@ -8002,6 +8031,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `phase_id` | VARCHAR(36) | yes | FK |  | → `program_phases.id` ON DELETE SET NULL |
 | `counts_toward_certification` | BOOL | no |  | `True` |  |
 | `cancellation_reason` | TEXT | yes |  |  |  |
+| `makeup_for_class_id` | VARCHAR(36) | yes | FK |  | → `course_cohort_classes.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -8046,6 +8076,34 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Constraints**
 
 - UNIQUE `uq_cohort_member_user` (`cohort_id`, `user_id`)
+
+### `course_cohort_missed_classes`
+
+**CohortMissedClass** · `app/models/training.py`
+
+> An officer's decision for a class held before a member joined (W27-3). A member added to a running cohort is RSVP'd only to classes still to come, so every class before they joined needs a decision: credit them for it (they covered the material elsewhere), or schedule a make-up session for them alone. One row per member and class; a class with no row is still awaiting a decision.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `cohort_id` | VARCHAR(36) | no | FK, IDX |  | → `course_cohorts.id` ON DELETE CASCADE |
+| `cohort_member_id` | VARCHAR(36) | no | FK |  | → `course_cohort_members.id` ON DELETE CASCADE |
+| `cohort_class_id` | VARCHAR(36) | no | FK |  | → `course_cohort_classes.id` ON DELETE CASCADE |
+| `resolution` | ENUM(`credited`, `makeup_scheduled`) | no |  |  |  |
+| `training_record_id` | VARCHAR(36) | yes | FK |  | → `training_records.id` ON DELETE SET NULL |
+| `makeup_class_id` | VARCHAR(36) | yes | FK |  | → `course_cohort_classes.id` ON DELETE SET NULL |
+| `recorded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `recorded_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_course_cohort_missed_classes_cohort_id` (`cohort_id`)
+- `ix_course_cohort_missed_classes_organization_id` (`organization_id`)
+
+**Constraints**
+
+- UNIQUE `uq_cohort_missed_class` (`cohort_member_id`, `cohort_class_id`)
 
 ### `course_cohorts`
 
@@ -8617,6 +8675,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `allowed_training_types` | JSON | yes |  |  |  |
 | `max_hours_per_submission` | FLOAT | yes |  |  |  |
 | `member_instructions` | TEXT | yes |  |  |  |
+| `attachment_retention_days` | INTEGER | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 | `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -9441,8 +9500,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `source` | ENUM(`department`, `state`, `national`) | no |  | `department` |  |
 | `registry_name` | VARCHAR(100) | yes |  |  |  |
 | `registry_code` | VARCHAR(50) | yes |  |  |  |
+| `name_match_until` | DATE | yes |  |  |  |
 | `is_editable` | BOOL | yes |  | `True` |  |
 | `allows_external_credit` | BOOL | no |  | `0` |  |
+| `shift_credited` | BOOL | no |  | `0` |  |
 | `required_hours` | FLOAT | yes |  |  |  |
 | `required_courses` | JSON | yes |  |  |  |
 | `required_shifts` | INTEGER | yes |  |  |  |
@@ -9843,8 +9904,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
 | `token` | VARCHAR(512) | no | UQ, UQ-IDX |  |  |
 | `refresh_token` | VARCHAR(512) | yes | IDX |  |  |
-| `previous_refresh_token` | VARCHAR(512) | yes | IDX |  |  |
-| `previous_refresh_expires_at` | DATETIME | yes |  |  |  |
 | `ip_address` | VARCHAR(45) | yes |  |  |  |
 | `user_agent` | TEXT | yes |  |  |  |
 | `geo_location` | JSON | yes |  |  |  |
@@ -9855,7 +9914,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `ix_sessions_expires_at` (`expires_at`)
-- `ix_sessions_previous_refresh_token` (`previous_refresh_token`)
 - `ix_sessions_refresh_token` (`refresh_token`)
 - UNIQUE `ix_sessions_token` (`token`)
 - `ix_sessions_user_id` (`user_id`)
@@ -9897,6 +9955,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `last_name` | VARCHAR(100) | yes |  |  |  |
 | `preferred_name` | VARCHAR(100) | yes |  |  |  |
 | `membership_number` | VARCHAR(50) | yes |  |  |  |
+| `badge_code` | VARCHAR(16) | yes |  | `generate_badge_code()` |  |
 | `previous_membership_number` | VARCHAR(50) | yes |  |  |  |
 | `phone` | VARCHAR(20) | yes |  |  |  |
 | `mobile` | VARCHAR(20) | yes |  |  |  |
@@ -9934,6 +9993,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `mfa_last_timestep` | INTEGER | yes |  |  |  |
 | `password_changed_at` | DATETIME | yes |  |  |  |
 | `must_change_password` | BOOL | no |  | `0` |  |
+| `password_expiry_notified_at` | DATETIME | yes |  |  |  |
 | `failed_login_attempts` | INTEGER | yes |  | `0` |  |
 | `locked_until` | DATETIME | yes |  |  |  |
 | `password_reset_token` | VARCHAR(128) | yes | IDX |  |  |
@@ -9949,6 +10009,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_user_created_at` (`created_at`)
 - `idx_user_last_login_at` (`last_login_at`)
+- UNIQUE `idx_user_org_badge_code` (`organization_id`, `badge_code`)
 - UNIQUE `idx_user_org_email` (`organization_id`, `email`)
 - UNIQUE `idx_user_org_membership_number` (`organization_id`, `membership_number`)
 - `idx_user_org_status_deleted` (`organization_id`, `status`, `deleted_at`)
@@ -9967,7 +10028,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (344 references)
+### → `users` (345 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10024,6 +10085,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `course_cohort_classes` | `instructor_id` | SET NULL | yes |
 | `course_cohort_members` | `added_by` | SET NULL | yes |
 | `course_cohort_members` | `user_id` | CASCADE | no |
+| `course_cohort_missed_classes` | `recorded_by` | SET NULL | yes |
 | `course_cohorts` | `created_by` | SET NULL | yes |
 | `course_cohorts` | `generated_by` | SET NULL | yes |
 | `department_message_deliveries` | `recipient_id` | CASCADE | no |
@@ -10316,7 +10378,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (232 references)
+### → `organizations` (234 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10354,6 +10416,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `course_classes` | `organization_id` | CASCADE | no |
 | `course_cohort_classes` | `organization_id` | CASCADE | no |
 | `course_cohort_members` | `organization_id` | CASCADE | no |
+| `course_cohort_missed_classes` | `organization_id` | CASCADE | no |
 | `course_cohorts` | `organization_id` | CASCADE | no |
 | `department_message_recipients` | `organization_id` | CASCADE | no |
 | `department_messages` | `organization_id` | CASCADE | no |
@@ -10474,6 +10537,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `org_call_responses` | `organization_id` | CASCADE | no |
 | `org_calls` | `organization_id` | CASCADE | no |
 | `org_chart_nodes` | `organization_id` | CASCADE | no |
+| `organization_locks` | `organization_id` | CASCADE | no |
 | `organization_officers` | `organization_id` | CASCADE | no |
 | `pledges` | `organization_id` | CASCADE | no |
 | `positions` | `organization_id` | CASCADE | no |
@@ -10731,6 +10795,19 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `prospect_step_progress` | `prospect_id` | CASCADE | no |
 | `screening_records` | `prospect_id` | CASCADE | yes |
 
+### → `training_records` (8 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_cohort_missed_classes` | `training_record_id` | SET NULL | yes |
+| `external_training_imports` | `training_record_id` | SET NULL | yes |
+| `multi_agency_trainings` | `training_record_id` | SET NULL | yes |
+| `renewal_tasks` | `new_record_id` | SET NULL | yes |
+| `renewal_tasks` | `training_record_id` | SET NULL | yes |
+| `training_effectiveness_evaluations` | `training_record_id` | CASCADE | yes |
+| `training_submissions` | `training_record_id` | SET NULL | yes |
+| `xapi_statements` | `training_record_id` | SET NULL | yes |
+
 ### → `training_requirements` (8 references)
 
 | From table | Column | On delete | Nullable |
@@ -10779,18 +10856,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `inventory_nfc_scans` | `storage_area_id` | SET NULL | yes |
 | `inventory_nfc_tags` | `storage_area_id` | CASCADE | yes |
 | `storage_areas` | `parent_id` | CASCADE | yes |
-
-### → `training_records` (7 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `external_training_imports` | `training_record_id` | SET NULL | yes |
-| `multi_agency_trainings` | `training_record_id` | SET NULL | yes |
-| `renewal_tasks` | `new_record_id` | SET NULL | yes |
-| `renewal_tasks` | `training_record_id` | SET NULL | yes |
-| `training_effectiveness_evaluations` | `training_record_id` | CASCADE | yes |
-| `training_submissions` | `training_record_id` | SET NULL | yes |
-| `xapi_statements` | `training_record_id` | SET NULL | yes |
 
 ### → `check_template_compartments` (6 references)
 
@@ -10965,6 +11030,22 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `expense_line_items` | `budget_id` | SET NULL | yes |
 | `purchase_requests` | `budget_id` | SET NULL | yes |
 
+### → `course_cohort_classes` (3 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_cohort_classes` | `makeup_for_class_id` | SET NULL | yes |
+| `course_cohort_missed_classes` | `cohort_class_id` | CASCADE | no |
+| `course_cohort_missed_classes` | `makeup_class_id` | SET NULL | yes |
+
+### → `course_cohorts` (3 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_cohort_classes` | `cohort_id` | CASCADE | no |
+| `course_cohort_members` | `cohort_id` | CASCADE | no |
+| `course_cohort_missed_classes` | `cohort_id` | CASCADE | no |
+
 ### → `forms` (3 references)
 
 | From table | Column | On delete | Nullable |
@@ -11070,13 +11151,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `check_item_deployed_lots` | `template_item_id` | CASCADE | no |
 | `shift_equipment_check_items` | `template_item_id` | SET NULL | yes |
-
-### → `course_cohorts` (2 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `course_cohort_classes` | `cohort_id` | CASCADE | no |
-| `course_cohort_members` | `cohort_id` | CASCADE | no |
 
 ### → `departure_clearances` (2 references)
 
@@ -11209,6 +11283,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `course_cohort_classes` | `course_class_id` | SET NULL | yes |
+
+### → `course_cohort_members` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_cohort_missed_classes` | `cohort_member_id` | CASCADE | no |
 
 ### → `dues_schedules` (1 references)
 

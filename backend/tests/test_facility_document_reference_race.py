@@ -1671,10 +1671,10 @@ class TestEnsureFacilityFolderFastPathDoesNotLockTheSharedRoot:
     InnoDB point lookup against the clustered index -- deterministic,
     independent of what else is in the table -- so it isolates exactly the
     one thing FAC-43 is about: whether the fast path itself still takes a
-    lock on that row. The scan behavior above is real on its own terms (it
-    can happen during a genuine slow-path creation, which still calls
-    ``_lock_facilities_root``) -- tracked separately as FAC-44, not fixed
-    here; see docs/security-review/FAC-12-facilities.md.
+    lock on that row. The scan behavior above was FAC-44, since fixed by
+    ``idx_doc_folders_org_slug`` and asserted in
+    ``test_facility_lock_narrowing.py``; the primary-key lock stays because
+    it holds exactly the one row this test is about, whatever the plan.
     """
 
     async def test_fast_path_for_a_different_facility_skips_the_root_lock(

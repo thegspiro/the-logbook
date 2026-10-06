@@ -52,6 +52,7 @@ fails if this document misses a curated code).
 | LB-AUTH-009 | Invalid CSRF token (usually a stale tab after a newer login).          | Reload the page; close duplicate tabs.                                                                                                   |
 | LB-AUTH-010 | Self-registration attempted while disabled.                            | An administrator creates accounts from the Members page, or enables `REGISTRATION_ENABLED`.                                              |
 | LB-AUTH-011 | MFA challenge expired (too long between password and code entry).      | Start the login again and enter the code promptly.                                                                                       |
+| LB-AUTH-012 | Session refreshed by another tab at the same moment (not token theft). | Nothing — the app retries with the new session. A reload picks it up if one ever shows.                                                  |
 
 ## Permissions (LB-PERM)
 
@@ -119,14 +120,15 @@ fails if this document misses a curated code).
 
 ## Scheduling (LB-SCHED)
 
-| Code         | Meaning                                                                             | What to do                                                                                                                                                |
-| ------------ | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| LB-SCHED-001 | The member lacks the EVOC certification the shift's apparatus requires to drive it. | Record the certification on the apparatus's Operators tab, or request a driver qualification exception (Scheduling → Qualifications → Driver exceptions). |
+| Code         | Meaning                                                                              | What to do                                                                                                                                                                          |
+| ------------ | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| LB-SCHED-001 | The member lacks the EVOC certification the shift's apparatus requires to drive it.  | Record the certification on the apparatus's Operators tab, or request a driver qualification exception (Scheduling → Qualifications → Driver exceptions).                           |
+| LB-SCHED-002 | In a two-way shift exchange, one member is not cleared for the seat they would take. | Exchange with a member the picker offers, or record the rank/qualification that grants the position. A duty officer can approve with the qualification override, which is recorded. |
 
-A safety block, not a permissions problem — it applies to officer assignment
-and member self-signup alike. Departments that want it advisory rather than
-blocking can turn off **Enforce EVOC for drivers** in Scheduling → Settings →
-General.
+`LB-SCHED-001` is a safety block, not a permissions problem — it applies to
+officer assignment and member self-signup alike. Departments that want it
+advisory rather than blocking can turn off **Enforce EVOC for drivers** in
+Scheduling → Settings → General.
 
 ## Automatic fallback (LB-API-\<status\>)
 

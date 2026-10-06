@@ -10,7 +10,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
@@ -73,6 +73,64 @@ async def _verify_user_in_org(
         )
     )
     return result.scalar_one_or_none() is not None
+
+
+async def _mapped_member_details(
+    db: AsyncSession, user_id: str, organization_id: str
+) -> tuple[str | None, str | None]:
+    """The mapped member's display name and email, org-scoped.
+
+    ``User.full_name`` is a Python property, not a column, so it cannot be
+    selected: ``select(User.full_name, ...)`` raised ArgumentError, which made
+    both user-mapping endpoints answer 500 the moment any mapping had a member
+    — the whole Users list on the Mappings screen came back empty after the
+    first email auto-match. The legal name is used, as on the rest of this
+    screen's training-record paths.
+    """
+    row = (
+        await db.execute(
+            select(User.first_name, User.last_name, User.email).where(
+                User.id == user_id,
+                User.organization_id == organization_id,
+            )
+        )
+    ).one_or_none()
+    if row is None:
+        return None, None
+    return format_legal_name(row.first_name, row.last_name) or None, row.email
+
+
+async def _apply_user_mapping(
+    db: AsyncSession,
+    mapping: ExternalUserMapping,
+    internal_user_id: str | None,
+    mapped_by: str,
+) -> None:
+    """Point an external user at a member (or at nobody) and carry the
+    provider's not-yet-imported records for that user along with it.
+
+    Sync attaches a waiting record to a member only when the provider sends
+    that record again, and a record older than the provider's lookback never
+    comes back — so without this, mapping a member by hand would leave their
+    older completions stranded with no member. Records already imported keep
+    the member they were imported to; a training record exists for them.
+    ``internal_user_id`` must already be validated as in-org by the caller.
+    """
+    mapping.internal_user_id = internal_user_id
+    mapping.is_mapped = internal_user_id is not None
+    mapping.auto_mapped = False
+    mapping.mapped_by = mapped_by
+    await db.execute(
+        update(ExternalTrainingImport)
+        .where(
+            ExternalTrainingImport.provider_id == mapping.provider_id,
+            ExternalTrainingImport.organization_id == mapping.organization_id,
+            ExternalTrainingImport.external_user_id == mapping.external_user_id,
+            ExternalTrainingImport.import_status != "imported",
+        )
+        .values(user_id=internal_user_id)
+        .execution_options(synchronize_session=False)
+    )
 
 
 # ============================================
@@ -886,18 +944,12 @@ async def list_user_mappings(
         }
 
         if mapping.internal_user_id:
-            user_result = await db.execute(
-                select(User.first_name, User.last_name, User.email).where(
-                    User.id == mapping.internal_user_id,
-                    User.organization_id == str(current_user.organization_id),
-                )
+            (
+                mapping_dict["internal_user_name"],
+                mapping_dict["internal_user_email"],
+            ) = await _mapped_member_details(
+                db, mapping.internal_user_id, str(current_user.organization_id)
             )
-            user_data = user_result.one_or_none()
-            if user_data:
-                mapping_dict["internal_user_name"] = format_legal_name(
-                    user_data.first_name, user_data.last_name
-                )
-                mapping_dict["internal_user_email"] = user_data.email
 
         response.append(ExternalUserMappingResponse(**mapping_dict))
 
@@ -934,30 +986,32 @@ async def update_user_mapping(
             status_code=status.HTTP_404_NOT_FOUND, detail="User mapping not found"
         )
 
-    # Update fields
-    if mapping_update.internal_user_id is not None:
+    # Presence, not value, decides: an explicit null is how the Mappings
+    # screen's "Not mapped" choice unmaps a member, and reading it as "leave
+    # alone" left the old member on the row, still credited by every sync.
+    if "internal_user_id" in mapping_update.model_fields_set:
+        internal_user_id = (
+            str(mapping_update.internal_user_id)
+            if mapping_update.internal_user_id
+            else None
+        )
         # Validate the mapped member belongs to the caller's org before storing
         # it — otherwise a foreign user id is persisted and read back (name +
-        # email) via the enrichment lookup.
-        if mapping_update.internal_user_id:
+        # email) via the enrichment lookup. A deleted member is refused for the
+        # same reason sync never auto-matches one: nobody can see their records.
+        if internal_user_id:
             member_check = await db.execute(
                 select(User.id).where(
-                    User.id == str(mapping_update.internal_user_id),
+                    User.id == internal_user_id,
                     User.organization_id == str(current_user.organization_id),
+                    User.deleted_at.is_(None),
                 )
             )
             if member_check.scalar_one_or_none() is None:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND, detail="Member not found"
                 )
-        mapping.internal_user_id = (
-            str(mapping_update.internal_user_id)
-            if mapping_update.internal_user_id
-            else None
-        )
-        mapping.is_mapped = mapping_update.internal_user_id is not None
-        mapping.auto_mapped = False
-        mapping.mapped_by = current_user.id
+        await _apply_user_mapping(db, mapping, internal_user_id, current_user.id)
 
     if mapping_update.is_mapped is not None:
         mapping.is_mapped = mapping_update.is_mapped
@@ -965,22 +1019,13 @@ async def update_user_mapping(
     await db.commit()
     await db.refresh(mapping)
 
-    # Get internal user details
-    internal_user_name = None
-    internal_user_email = None
-    if mapping.internal_user_id:
-        user_result = await db.execute(
-            select(User.first_name, User.last_name, User.email).where(
-                User.id == mapping.internal_user_id,
-                User.organization_id == str(current_user.organization_id),
-            )
+    internal_user_name, internal_user_email = (
+        await _mapped_member_details(
+            db, mapping.internal_user_id, str(current_user.organization_id)
         )
-        user_data = user_result.one_or_none()
-        if user_data:
-            internal_user_name = format_legal_name(
-                user_data.first_name, user_data.last_name
-            )
-            internal_user_email = user_data.email
+        if mapping.internal_user_id
+        else (None, None)
+    )
 
     return ExternalUserMappingResponse(
         id=mapping.id,

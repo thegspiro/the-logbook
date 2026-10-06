@@ -255,3 +255,34 @@ describe('stage requirement hints', () => {
     expect(screen.getByText(/must be checked in at this stage’s event/)).toBeInTheDocument();
   });
 });
+
+describe('advancing a checklist stage', () => {
+  // The checklist stage is graded on the advance that completes it, so the
+  // drawer's ticks have to go with the request.
+  it('sends the ticked items with the advance', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(
+      <ApplicantActionPanels
+        applicant={{ ...applicant, current_stage_id: 's1', current_stage_type: 'checklist' } as unknown as Applicant}
+        checklistTicks={['Gear issued']}
+        isLastStage={false}
+        isFirstStage={false}
+        onClose={vi.fn()}
+        onConvert={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Advance' }));
+
+    expect(mocks.storeState.advanceApplicant).toHaveBeenCalledWith('app-1', undefined, ['Gear issued']);
+  });
+
+  it('sends no ticks for any other kind of stage', async () => {
+    const user = userEvent.setup();
+    renderPanels({ current_stage_id: 's1', current_stage_type: 'manual_approval' });
+
+    await user.click(screen.getByRole('button', { name: 'Advance' }));
+
+    expect(mocks.storeState.advanceApplicant).toHaveBeenCalledWith('app-1', undefined, undefined);
+  });
+});

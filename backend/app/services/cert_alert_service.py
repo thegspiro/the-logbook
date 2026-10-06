@@ -54,6 +54,27 @@ ALERT_TIERS = [
 ]
 
 
+def _expires_when(days_until: int) -> str:
+    """How soon a certificate expires, as it reads in a sentence.
+
+    The expiring query includes a certificate on its final day, so a bare
+    count produced "expires in 0 days" and "in 1 days".
+    """
+    if days_until <= 0:
+        return "today"
+    if days_until == 1:
+        return "tomorrow"
+    return f"in {days_until} days"
+
+
+def _expiry_subject(days_until: int, course_name: str) -> str:
+    if days_until <= 1:
+        return (
+            f"Certification Expires {_expires_when(days_until).title()}: {course_name}"
+        )
+    return f"Certification Expiring in {days_until} Days: {course_name}"
+
+
 class CertAlertService:
     """Service for managing certification expiration alerts."""
 
@@ -288,12 +309,11 @@ class CertAlertService:
                 if not member:
                     continue
 
-                subject = (
-                    f"Certification Expiring in {days_until} Days: {record.course_name}"
-                )
+                subject = _expiry_subject(days_until, record.course_name)
                 message = (
                     f"Your {record.course_name} certification expires on "
-                    f"{record.expiration_date.strftime('%B %d, %Y')} ({days_until} days). "
+                    f"{record.expiration_date.strftime('%B %d, %Y')} "
+                    f"({_expires_when(days_until)}). "
                     f"Please renew before it expires."
                 )
 
@@ -324,7 +344,7 @@ class CertAlertService:
                                 organization_id=organization_id,
                                 recipient_id=str(officer.id),
                                 subject=f"Member Cert Expiring: {record.course_name} - {member.display_name}",
-                                message=f"{member.display_name}'s {record.course_name} certification expires in {days_until} days.",
+                                message=f"{member.display_name}'s {record.course_name} certification expires {_expires_when(days_until)}.",
                                 action_url=f"/members/{member.id}/training",
                             )
 
@@ -371,7 +391,7 @@ class CertAlertService:
                             f"""<p>Hello {e_first},</p>
         <p>Your <strong>{e_course}</strong> certification expires on
         <strong>{record.expiration_date.strftime('%B %d, %Y')}</strong>
-        ({days_until} day{'s' if days_until != 1 else ''} from today).</p>
+        ({_expires_when(days_until)}).</p>
         {f'<p><strong>Certification #:</strong> {e_cert_num}</p>' if record.certification_number else ''}
         {f'<p><strong>Issuing Agency:</strong> {e_agency}</p>' if record.issuing_agency else ''}
         <p>Please renew your certification before it expires. Contact your training officer if you need assistance.</p>""",
@@ -386,7 +406,8 @@ class CertAlertService:
                             f"Certification Expiration Notice\n\n"
                             f"Hello {member.preferred_name or member.first_name},\n\n"
                             f"Your {record.course_name} certification expires on "
-                            f"{record.expiration_date.strftime('%B %d, %Y')} ({days_until} days).\n\n"
+                            f"{record.expiration_date.strftime('%B %d, %Y')} "
+                            f"({_expires_when(days_until)}).\n\n"
                             f"Please renew before it expires."
                         )
 

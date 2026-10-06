@@ -14,6 +14,12 @@ import {
   CHECK_QUEUE_MAX_RETRIES,
 } from './offlineQueue';
 
+// Every entry is stamped with the signed-in member (FE3-34-5). The real store
+// pulls in the API client; only who is signed in matters here.
+vi.mock('../stores/authStore', () => ({
+  useAuthStore: { getState: () => ({ isAuthenticated: true, user: { id: 'member-1' } }) },
+}));
+
 /**
  * These run against fake-indexeddb — a real, spec-compliant IndexedDB — rather
  * than a stubbed `openOfflineDb`. The queue is a thin layer over IDB, so a

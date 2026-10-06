@@ -1,10 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import SkillsTestingTestRecordsTab from './SkillsTestingTestRecordsTab';
+import { calendarDaysBetween } from '../utils/dateFormatting';
+import type { SkillTestListParams } from '../types/skillsTesting';
 
-const mockLoadTests = vi.fn();
+const mockLoadTests = vi.fn<(params?: SkillTestListParams) => void>();
 const mockLoadTemplates = vi.fn();
 const mockDeleteTest = vi.fn();
 const mockVoidTest = vi.fn();
@@ -64,10 +66,12 @@ const pendingTest = {
 };
 
 let mockTests: (typeof completedTest | typeof unfinishedTest)[] = [];
+let mockTestsTotal = 0;
 
 vi.mock('../stores/skillsTestingStore', () => ({
   useSkillsTestingStore: () => ({
     tests: mockTests,
+    testsTotal: mockTestsTotal,
     testsLoading: false,
     loadTests: mockLoadTests,
     deleteTest: mockDeleteTest,
@@ -100,6 +104,7 @@ describe('SkillsTestingTestRecordsTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockTests = [];
+    mockTestsTotal = 0;
     mockCancelTest.mockResolvedValue(undefined);
     mockDeleteTest.mockResolvedValue(undefined);
     mockValidateTest.mockResolvedValue(undefined);
@@ -271,20 +276,20 @@ describe('SkillsTestingTestRecordsTab', () => {
       expect(mockBulkValidateTests).toHaveBeenCalledWith(['test-4', 'test-5']);
     });
 
-    // Selecting rows the officer has filtered away is how a bulk action
-    // surprises someone.
-    it('select-all respects the search box', async () => {
+    // The list is paged, so a search in the browser would only ever search
+    // the page on screen. It goes to the server with the queue's own filter.
+    it('searches the queue on the server', async () => {
       const user = userEvent.setup();
       mockTests = [pendingTest, secondPending];
-      mockBulkValidateTests.mockResolvedValue({ validated: ['test-5'], skipped: [] });
       renderWithRouter(<SkillsTestingTestRecordsTab />);
       await openQueue(user);
       await user.type(screen.getByPlaceholderText(/search tests/i), 'Dana');
 
-      await user.click(await screen.findByLabelText(/select every result/i));
-      await user.click(screen.getByRole('button', { name: /accept 1/i }));
-
-      expect(mockBulkValidateTests).toHaveBeenCalledWith(['test-5']);
+      await waitFor(() =>
+        expect(mockLoadTests).toHaveBeenLastCalledWith(
+          expect.objectContaining({ pending_validation: true, search: 'Dana', offset: 0 })
+        )
+      );
     });
 
     it('cannot accept with nothing selected', async () => {
@@ -328,6 +333,89 @@ describe('SkillsTestingTestRecordsTab', () => {
       await openQueue(user);
 
       expect(await screen.findByRole('button', { name: /^accept$/i })).toBeDisabled();
+    });
+  });
+
+  // SKT3-2: the tab used to fetch the department's whole history on every
+  // load, and export it the same way.
+  describe('Paging and the export window', () => {
+    const lastLoad = (): SkillTestListParams => {
+      const calls = mockLoadTests.mock.calls;
+      return calls[calls.length - 1]?.[0] ?? {};
+    };
+
+    afterEach(() => {
+      window.history.pushState({}, '', '/');
+    });
+
+    it('loads the first page of the last twelve months', () => {
+      renderWithRouter(<SkillsTestingTestRecordsTab />);
+
+      const params = lastLoad();
+      expect(params.limit).toBe(25);
+      expect(params.offset).toBe(0);
+      expect(calendarDaysBetween(params.date_to, params.date_from)).toBe(365);
+    });
+
+    it('pages through the server rather than the browser', async () => {
+      const user = userEvent.setup();
+      mockTests = [completedTest];
+      mockTestsTotal = 60;
+      renderWithRouter(<SkillsTestingTestRecordsTab />);
+
+      expect(screen.getByText('60')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /next page/i }));
+
+      expect(lastLoad()).toEqual(expect.objectContaining({ limit: 25, offset: 25 }));
+    });
+
+    it('offers no pager when everything fits on one page', () => {
+      mockTests = [completedTest];
+      mockTestsTotal = 1;
+      renderWithRouter(<SkillsTestingTestRecordsTab />);
+
+      expect(screen.queryByRole('button', { name: /next page/i })).not.toBeInTheDocument();
+    });
+
+    it('exports exactly the range and filters on screen', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SkillsTestingTestRecordsTab />);
+      await user.selectOptions(screen.getByLabelText(/filter by status/i), 'completed');
+
+      const params = lastLoad();
+      const link = screen.getByRole('link', { name: /export/i });
+      const query = new URL(link.getAttribute('href') ?? '', 'http://x').searchParams;
+      expect(query.get('detail')).toBe('criteria');
+      expect(query.get('status')).toBe('completed');
+      expect(query.get('date_from')).toBe(params.date_from);
+      expect(query.get('date_to')).toBe(params.date_to);
+      // Paging is the list's business; the file is the whole filtered set.
+      expect(query.has('limit')).toBe(false);
+      expect(query.has('offset')).toBe(false);
+    });
+
+    it('cannot export once the range is cleared, and says why', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SkillsTestingTestRecordsTab />);
+
+      await user.click(screen.getByRole('button', { name: /clear date range/i }));
+
+      expect(screen.queryByRole('link', { name: /export/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /export unavailable/i })).toBeDisabled();
+      expect(screen.getByText(/choose a date range to export/i)).toBeInTheDocument();
+      expect(lastLoad().date_from).toBeUndefined();
+    });
+
+    // The Needs Validation tile counts every result awaiting sign-off; a
+    // default window would hide the oldest ones behind it.
+    it('opens the review queue from its deep link undated', () => {
+      window.history.pushState({}, '', '/?status=pending_validation');
+      renderWithRouter(<SkillsTestingTestRecordsTab />);
+
+      const params = lastLoad();
+      expect(params.pending_validation).toBe(true);
+      expect(params.date_from).toBeUndefined();
+      expect(params.date_to).toBeUndefined();
     });
   });
 });

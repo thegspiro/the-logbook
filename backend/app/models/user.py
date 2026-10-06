@@ -97,6 +97,7 @@ from sqlalchemy.sql import and_, func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
+from app.utils.member_badge import generate_badge_code
 from app.utils.member_names import format_display_name, format_legal_name
 from app.utils.membership import (
     DEFAULT_CLASS,
@@ -316,6 +317,12 @@ class User(Base):
     membership_number = Column(
         String(50)
     )  # Organization-assigned membership ID (e.g., "001", "M-042")
+    # The code a member's printed and on-screen badge carries, issued at
+    # random by the server (app/utils/member_badge.py). Unlike the membership
+    # number it appears nowhere in the directory, so a colleague cannot print
+    # a working copy; reissuing it cancels a lost badge. Never add it to a
+    # general user response — it is served only by /member-badges.
+    badge_code = Column(String(16), nullable=True, default=generate_badge_code)
     previous_membership_number = Column(
         String(50)
     )  # Preserved on soft-delete so returning members can reclaim their number
@@ -495,6 +502,10 @@ class User(Base):
     must_change_password = Column(
         Boolean, default=False, nullable=False, server_default="0"
     )
+    # When the member was first told their password had expired; the server
+    # refuses an expired password HIPAA_PASSWORD_EXPIRY_GRACE_DAYS after this
+    # (AUTH-15). Cleared whenever the password changes.
+    password_expiry_notified_at = Column(DateTime(timezone=True), nullable=True)
     failed_login_attempts = Column(Integer, default=0)
     locked_until = Column(DateTime(timezone=True))
     password_reset_token = Column(String(128), index=True)
@@ -535,6 +546,7 @@ class User(Base):
             "membership_number",
             unique=True,
         ),
+        Index("idx_user_org_badge_code", "organization_id", "badge_code", unique=True),
         Index("idx_user_org_status_deleted", "organization_id", "status", "deleted_at"),
         Index("idx_user_created_at", "created_at"),
         Index("idx_user_last_login_at", "last_login_at"),
@@ -960,11 +972,6 @@ class Session(Base):
 
     token = Column(String(512), nullable=False, unique=True, index=True)
     refresh_token = Column(String(512), index=True)
-    # The immediately-previous refresh token, honored for a short grace window
-    # after rotation so two concurrent legitimate refreshes (multi-tab, app
-    # boot, network retry) don't look like token theft and trigger a mass logout.
-    previous_refresh_token = Column(String(512), nullable=True, index=True)
-    previous_refresh_expires_at = Column(DateTime(timezone=True), nullable=True)
     ip_address = Column(String(45))
     user_agent = Column(Text)
     geo_location = Column(JSON)

@@ -18,10 +18,13 @@ here: a UI notice rather than a silently-different compliance outcome on
 every installation holding a non-default value (this column defaults to 30,
 so that is not a rare opt-in).
 
-`applies_to_roles` is worse un-labelled: the field sits under literal copy
-reading "Leave blank to apply to all members", which asserts a targeting
-behavior that does not exist — a requirement scoped to `["emt"]` still
-applies to every member and prospect in the org.
+`applies_to_roles` was worse un-labelled: before this fix, the field sat under
+literal copy reading "Leave blank to apply to all members", which asserted a
+targeting behavior that does not exist — a requirement scoped to `["emt"]`
+still applies to every member and prospect in the org. That caption was later
+dropped as redundant once the "Not enforced yet" notice below covered the
+same ground; this paragraph is left describing the original motivation, not
+the current copy.
 
 Wiring either is a product decision (it changes who counts as non-compliant,
 and for `applies_to_roles`, changes which requirements even apply to whom)

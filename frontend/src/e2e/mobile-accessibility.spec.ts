@@ -227,17 +227,21 @@ test.describe('mobile accessibility', () => {
   test.describe.configure({ retries: 0 });
 
   test('every feature meets WCAG AA in every theme and reflows to 320px @sweep', async ({ page }) => {
-    // ~50 routes, each rendered in three themes with an axe run apiece. Measured
-    // at 16.1 and 19.4 min on dedicated CI runners (2026-10-04, two consecutive
-    // runs of identical code), so 32 min is 1.65x the slower draw rather than
-    // the 2x the other two sweeps get. That 20% run-to-run spread is the reason
-    // the margin is quoted against the slower sample: a budget set at 1.2x a
-    // lucky 16-minute run would go red on an ordinary bad one, which reports
-    // the runner rather than the code.
+    // ~50 routes, each rendered in three themes with an axe run apiece. Three
+    // runs of identical code on dedicated CI runners (2026-10-04/05) reported
+    // 16.0, 19.3 and 18.6 min, so ~19 is the normal time and the 16.0 was the
+    // fast draw, not the 19.3 a slow one. 32 min is 1.66x the worst of the
+    // three — less than the 2x the other two sweeps get, and quoted against
+    // the worst rather than the mean for that reason.
     //
-    // It is deliberately not 2x of 19.4 (38.8 min). The job cap in ci.yml is
+    // Three samples is what makes that readable at all: off the first run alone
+    // this looked like a 16-minute test with a 2x budget, which would have
+    // invited trimming it toward 20 and gone red on an ordinary run. Add a
+    // sample before narrowing it.
+    //
+    // It is deliberately not 2x of 19.3 (38.6 min). The job cap in ci.yml is
     // derived from this number and would have to clear 40, which is where it
-    // started. 12.6 min of headroom catches a hang; a runner slow enough to
+    // started. 12.7 min of headroom catches a hang; a runner slow enough to
     // exceed 32 has made the whole run pathological anyway.
     //
     // It no longer shares a runner — the frontend-e2e matrix gives each sweep

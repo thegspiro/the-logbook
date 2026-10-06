@@ -304,3 +304,59 @@ class TestPendingSignOffs:
         assert entry["prospect_id"] == prospect.id
         assert "email" not in entry
         assert prospect.email not in resp.text
+
+
+class TestMySignOffsHidesTheCallersOwnApplication:
+    """MP-32: /my-sign-offs carries no {prospect_id} path parameter, so the
+    router-level block_self_prospect_access guard (keyed on that parameter)
+    never runs for it -- the same reason /interviews/{interview_id} needed
+    its own dedicated guard. An officer who also has an active application
+    of their own, naming a role they hold as a required signer, must not
+    see their own name and stage in this list; every other list/aggregate
+    route in this file filters the caller's own record via
+    get_hidden_prospect_ids for exactly this reason.
+    """
+
+    async def test_service_layer_is_unfiltered_endpoint_hides_the_match(
+        self, db_session: AsyncSession, dept
+    ):
+        from fastapi import FastAPI
+        from httpx import ASGITransport, AsyncClient
+
+        from app.api.dependencies import get_current_user
+        from app.core.database import get_db
+
+        org_id, coordinator, chief, _, _ = dept
+        svc = MembershipPipelineService(db_session)
+        pipeline, _, _ = await _pipeline(svc, org_id)
+        # The applicant's email matches the chief's own -- the self-prospect
+        # predicate's email clause -- so this record describes the chief.
+        prospect = await svc.create_prospect(
+            organization_id=org_id,
+            data={
+                "first_name": chief.first_name,
+                "last_name": chief.last_name,
+                "email": chief.email,
+                "pipeline_id": pipeline.id,
+            },
+        )
+        await svc.advance_prospect(prospect.id, org_id, coordinator.id)
+
+        # The service itself is the shared, unfiltered read every caller
+        # builds on (the applicant drawer's own lookups rely on this not
+        # silently dropping rows) -- filtering is the endpoint's job, same
+        # as list_prospects/list_source_events/etc.
+        unfiltered = await svc.list_pending_sign_offs(org_id, chief.id)
+        assert [p["prospect_id"] for p in unfiltered] == [prospect.id]
+
+        app = FastAPI()
+        app.include_router(pipeline_endpoints.router, prefix="/prospective-members")
+        app.dependency_overrides[get_current_user] = lambda: chief
+        app.dependency_overrides[get_db] = lambda: db_session
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.get("/prospective-members/my-sign-offs")
+
+        assert resp.status_code == 200
+        assert resp.json() == []

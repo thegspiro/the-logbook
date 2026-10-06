@@ -49,11 +49,16 @@ active programs, each with a progress bar and "next steps".]**
 
 ### THE FULL PROGRESS VIEW (2:15 – 3:30)
 
-**[SCREEN: Training → My Training → "Active Program Enrollments" → click "View
-full progress". Show the phase timeline with a "You are here" marker.]**
+**[SCREEN: Training → My Training → the "Pipeline Progress" section — a card
+headed by the program's name, each requirement row reading "<requirement name>
+· N%" with its status chip → click "View full progress →". Show the phase
+timeline with a "You are here" marker.]**
 
-> "Go to **Training**, then **My Training**, find your program under **Active
-> Program Enrollments**, and click **View full progress**. Here's your whole
+> "Go to **Training**, then **My Training**, and find your program under
+> **Pipeline Progress**. Each card carries the program's name and your overall
+> percentage. If your department shows requirement details, it lists each
+> requirement by name with a percentage beside it. Click **View full
+> progress**. Here's your whole
 > journey: your **current phase**, marked **'You are here'**, your overall
 > percentage, your time remaining, your next milestones, and every requirement
 > grouped by phase — with what's done and what's left."
@@ -74,8 +79,9 @@ full progress". Show the phase timeline with a "You are here" marker.]**
 **[B-ROLL: A recruit at a live drill, then checking in at a shift, then a skills
 evaluation — cut to the progress bar moving.]**
 
-> "Most of your progress fills itself in. When an officer **approves a training
-> session** you attended, the hours land on your requirement. When a shift
+> "Most of your progress fills itself in. When a **training event** you checked
+> in to has its attendance finalized, the time you actually attended lands on
+> your requirement. When a shift
 > officer **files a report** on your shift, your shift, call, and hour
 > requirements move. When you **pass a skills test** that's tied to a
 > requirement, that requirement completes. And a **course you took externally**
@@ -85,8 +91,9 @@ evaluation — cut to the progress bar moving.]**
 
 ### WHY YOUR BAR MIGHT NOT MOVE YET (4:30 – 5:00)
 
-> "One thing to know: some of these need an **officer to approve** first — a
-> session has to be approved, a self-report has to be reviewed. So if you did the
+> "One thing to know: some of these need an **officer to approve** first — some
+> classes need an officer's sign-off after the event, and you'll see them marked in
+> progress until then; a self-report has to be reviewed. So if you did the
 > training but your bar hasn't moved, it may just be waiting on that approval.
 > Give it a little time before you worry."
 

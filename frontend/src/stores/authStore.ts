@@ -219,12 +219,23 @@ interface AuthState {
    */
   lastLogoutPurge: PurgeResult | null;
 
+  /**
+   * True when Sign Out ended the session in this browser but the server never
+   * confirmed it (FE3-34-2). The httpOnly cookies are cleared only by a
+   * successful `POST /auth/logout`, so until one succeeds the previous
+   * member's session is still live; `SignOutUnconfirmedNotice` blocks the
+   * screen while this holds.
+   */
+  signOutUnconfirmed: boolean;
+
   // Actions
   login: (credentials: LoginCredentials) => Promise<void>;
   completeMfaLogin: (code?: string, recoveryCode?: string) => Promise<void>;
   cancelMfa: () => void;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
+  /** Ask the server again to end a session it has not confirmed ending. */
+  retrySignOut: () => Promise<void>;
   /**
    * Everything `logout` does in this browser, without asking the server to
    * end the session. For when the server has already ended it — a password
@@ -248,6 +259,42 @@ interface AuthState {
 
 const initialLockout = loadLockoutState();
 
+/**
+ * Survives a reload: the store is in memory, and a refreshed tab would
+ * otherwise show the login screen over a session that is still live.
+ */
+const SIGN_OUT_UNCONFIRMED_KEY = 'sign_out_unconfirmed';
+
+function setSignOutUnconfirmedFlag(unconfirmed: boolean): void {
+  if (unconfirmed) localStorage.setItem(SIGN_OUT_UNCONFIRMED_KEY, '1');
+  else localStorage.removeItem(SIGN_OUT_UNCONFIRMED_KEY);
+}
+
+/** Pauses between sign-out attempts: three tries over about two seconds. */
+export const SIGN_OUT_RETRY_DELAYS_MS = [500, 1500] as const;
+
+/**
+ * Whether the server confirmed the session is over.
+ *
+ * A 401 counts as confirmed: the server holds no live session for these
+ * cookies, which is the state sign-out is trying to reach. Anything else that
+ * fails — a dropped connection, a 5xx, the endpoint's own 400 when it could
+ * not delete the session row — is retried, then reported as unconfirmed.
+ */
+async function confirmServerSignOut(): Promise<boolean> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await authService.logout();
+      return true;
+    } catch (err: unknown) {
+      if (toAppError(err).status === 401) return true;
+      const delay = SIGN_OUT_RETRY_DELAYS_MS[attempt];
+      if (delay === undefined) return false;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isAuthenticated: false,
@@ -258,6 +305,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   mfaRequired: false,
   mfaToken: null,
   lastLogoutPurge: null,
+  signOutUnconfirmed: localStorage.getItem(SIGN_OUT_UNCONFIRMED_KEY) === '1',
 
   login: async (credentials: LoginCredentials) => {
     // Client-side lockout check (defense-in-depth; backend enforces the real limit)
@@ -447,12 +495,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // Disable draft autosave before waiting on either the logout request or
     // the asynchronous device purge. The form remains mounted during both.
     localStorage.removeItem('has_session');
-    try {
-      await authService.logout();
-    } catch {
-      // Logout errors are non-critical; cookies are cleared by the backend
-    } finally {
-      await get().endSessionLocally();
+    // The server clears the auth cookies only on a successful logout, so a
+    // failure here leaves the session live behind a login screen. Retried a
+    // few times; if it still cannot be confirmed, the local session is torn
+    // down anyway and the screen says so rather than pretending it is over.
+    const confirmed = await confirmServerSignOut();
+    await get().endSessionLocally();
+    setSignOutUnconfirmedFlag(!confirmed);
+    set({ signOutUnconfirmed: !confirmed });
+  },
+
+  retrySignOut: async () => {
+    if (await confirmServerSignOut()) {
+      setSignOutUnconfirmedFlag(false);
+      set({ signOutUnconfirmed: false });
     }
   },
 

@@ -1,19 +1,21 @@
 /**
- * Approve / Deny for the step a request is currently waiting on, shown on the
- * request's detail page.
+ * Who the request is waiting on, and Approve / Deny for that step, shown on
+ * the request's detail page.
  *
- * Renders nothing unless all of these hold: the request is pending approval,
- * the viewer holds `finance.approve` (the gate on the approve/deny endpoints),
- * there is a pending step, and that step is an approval step rather than a
- * notification. A pending request with no pending step is a different problem
- * and is not handled here.
+ * Whether the viewer may act is the backend's answer, not this component's:
+ * the detail endpoint sets `canAct` (the viewer is the step's named approver)
+ * or `requiresOverride` (an approvals admin who is not) on the step the request
+ * is waiting on, from the same rule approve / deny enforce. Both are false for
+ * a notification step and for a viewer without `finance.approve`, so neither
+ * is re-checked here.
+ *
+ * Renders nothing unless the request is pending approval and has a pending
+ * step. A pending request with no pending step is a different problem and is
+ * not handled here.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { CheckCircle, XCircle } from 'lucide-react';
-import { useAuthStore } from '@/stores/authStore';
-import { approvalChainService } from '../services/api';
-import { ApprovalStepType } from '../types';
 import type { ApprovalStepRecord } from '../types';
 import { ApprovalDecisionDialog } from './ApprovalDecisionDialog';
 import type { ApprovalDecision } from './ApprovalDecisionDialog';
@@ -34,71 +36,89 @@ export const ApprovalStepActions: React.FC<ApprovalStepActionsProps> = ({
   subject,
   onDecided,
 }) => {
-  const canApprove = useAuthStore((s) => s.checkPermission('finance.approve'));
-  const current = isPendingApproval && canApprove ? findCurrentPendingStep(steps) : undefined;
-  const chainId = current?.chainId;
-  const stepId = current?.stepId;
-
-  // The step record does not carry its step's type, so it is read from the
-  // chain. A reachable notification step is marked "sent" by the backend and
-  // so should never be the pending one, but that is an invariant of the
-  // backend's advance logic rather than something this page can see — and
-  // offering Approve on a notification would only earn a confusing refusal.
-  const [stepType, setStepType] = useState<{ stepId: string; type: ApprovalStepType | null } | null>(null);
-
-  useEffect(() => {
-    if (!chainId || !stepId) return undefined;
-    let cancelled = false;
-    approvalChainService
-      .get(chainId)
-      .then((chain) => {
-        if (cancelled) return;
-        const step = chain.steps.find((s) => s.id === stepId);
-        setStepType({ stepId, type: step?.stepType ?? null });
-      })
-      .catch(() => {
-        // Fail closed: without the step's type, offer nothing rather than
-        // buttons that may not apply. The timeline still shows the step.
-        if (!cancelled) setStepType({ stepId, type: null });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [chainId, stepId]);
-
   const [decision, setDecision] = useState<ApprovalDecision | null>(null);
+  const current = isPendingApproval ? findCurrentPendingStep(steps) : undefined;
+  if (!current) return null;
 
-  if (!current || stepType?.stepId !== current.stepId || stepType.type !== ApprovalStepType.APPROVAL) {
-    return null;
-  }
+  const canAct = current.canAct === true;
+  const requiresOverride = !canAct && current.requiresOverride === true;
+  const assigneeLabel = current.assigneeLabel || null;
+  if (!assigneeLabel && !canAct && !requiresOverride) return null;
 
   const open = (action: ApprovalDecision['action']) =>
-    setDecision({ stepRecordId: current.id, action, subject, stepName: current.stepName });
+    setDecision({
+      stepRecordId: current.id,
+      action,
+      subject,
+      stepName: current.stepName,
+      override: requiresOverride ? { assigneeLabel: assigneeLabel || 'someone else' } : undefined,
+    });
+
+  const boxClass =
+    canAct || requiresOverride
+      ? 'border-yellow-200 bg-yellow-50 dark:border-yellow-500/30 dark:bg-yellow-500/10'
+      : 'border-theme-surface-border bg-theme-surface-secondary';
 
   return (
-    <div className="mb-6 flex flex-col gap-3 rounded-lg border border-yellow-200 bg-yellow-50 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-yellow-500/30 dark:bg-yellow-500/10">
-      <p className="text-theme-text-primary text-sm">
-        Waiting on <span className="font-medium">{current.stepName ?? 'the next approval step'}</span>. You can approve
-        or deny this step.
-      </p>
-      <div className="flex shrink-0 flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => open('approve')}
-          className="btn-success inline-flex items-center gap-1.5 text-sm font-medium"
-        >
-          <CheckCircle className="h-4 w-4" />
-          Approve
-        </button>
-        <button
-          type="button"
-          onClick={() => open('deny')}
-          className="btn-secondary inline-flex items-center gap-1.5 text-sm font-medium text-red-700 dark:text-red-400"
-        >
-          <XCircle className="h-4 w-4" />
-          Deny
-        </button>
+    <div
+      className={`mb-6 flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between ${boxClass}`}
+    >
+      <div className="text-theme-text-primary space-y-1 text-sm">
+        {assigneeLabel && (
+          <p>
+            Waiting on <span className="font-medium">{assigneeLabel}</span>.
+          </p>
+        )}
+        {canAct && <p>You can approve or deny this step.</p>}
+        {requiresOverride && (
+          <p className="flex flex-wrap items-center gap-2">
+            <span className="badge bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+              Not assigned to you
+            </span>
+            <span>As an approvals administrator you can act on it by giving an override reason.</span>
+          </p>
+        )}
       </div>
+      {canAct && (
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => open('approve')}
+            className="btn-success inline-flex items-center gap-1.5 text-sm font-medium"
+          >
+            <CheckCircle className="h-4 w-4" />
+            Approve
+          </button>
+          <button
+            type="button"
+            onClick={() => open('deny')}
+            className="btn-secondary inline-flex items-center gap-1.5 text-sm font-medium text-red-700 dark:text-red-400"
+          >
+            <XCircle className="h-4 w-4" />
+            Deny
+          </button>
+        </div>
+      )}
+      {requiresOverride && (
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => open('approve')}
+            className="btn-secondary inline-flex items-center gap-1.5 text-sm font-medium"
+          >
+            <CheckCircle className="h-4 w-4" />
+            Approve as approvals admin
+          </button>
+          <button
+            type="button"
+            onClick={() => open('deny')}
+            className="btn-secondary inline-flex items-center gap-1.5 text-sm font-medium text-red-700 dark:text-red-400"
+          >
+            <XCircle className="h-4 w-4" />
+            Deny as approvals admin
+          </button>
+        </div>
+      )}
       <ApprovalDecisionDialog decision={decision} onClose={() => setDecision(null)} onDecided={onDecided} />
     </div>
   );
