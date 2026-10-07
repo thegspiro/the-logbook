@@ -16,6 +16,17 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #2984 (Feature 25, Messaging & notifications, pass 6) merged
+clean (confirmed via `list_pull_requests`; merged_at 2026-10-07T16:44:54Z).
+0 fixes needed by that pass itself; the Log entry below already records it
+in full, so there is nothing further to record here. Rotation row 25 → ✅.
+Watchdog pickup: over an hour elapsed with no new branch or PR opened for
+Feature 26 (Forms) before this iteration began (confirmed via
+`list_pull_requests`, state=open, no match).
+
+<details>
+<summary>Superseded — prior Open PR note (bridge note recording PR #2983's merge before Feature 25 started; and, nested below, the pre-merge note for PR #2983 itself), preserved for history</summary>
+
 **PR [#2984](https://github.com/thegspiro/the-logbook/pull/2984)**: branch
 `claude/security-review-messaging-notifications`, Feature 25 (Messaging &
 notifications), pass 6 (watchdog pickup — PR #2983, Feature 24, Meetings &
@@ -31,9 +42,6 @@ surface re-enumerated (51/51, unchanged). Completion gate green
 (flake8/black/isort clean; migrations — 538 revisions, single head; 1197
 scoped backend tests; frontend typecheck/lint clean). See the Log entry
 below for detail.
-
-<details>
-<summary>Superseded — prior Open PR note (bridge note recording PR #2983's merge before Feature 25 started; and, nested below, the pre-merge note for PR #2983 itself), preserved for history</summary>
 
 **None.** PR #2983 (Feature 24, Meetings & minutes, pass 6) merged clean
 (confirmed via `list_pull_requests` — not the row above, which was still
@@ -18236,7 +18244,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
@@ -18252,6 +18260,54 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-07 — Feature 26 (Forms, pass 6) — 0 fixed, 0 new findings (watchdog pickup)
+
+Picked up by the scheduled `/loop 30m` watchdog: PR #2984 (Feature 25,
+Messaging & notifications, pass 6) had merged over an hour earlier
+(16:44:54 UTC) with no new `claude/security-review-*` branch or PR opened
+for Feature 26. Confirmed via `list_pull_requests` (state=open) that no
+such PR existed before this iteration began.
+
+Loaded prior art (five prior passes on this feature, `CHECKLIST.md`,
+`SEC-00-cross-cutting-baseline.md`, `docs/module-audit/forms.md`,
+`docs/app-review/forms.md`) before touching code. Diffed all five scope
+files (`endpoints/forms.py`, `public/forms.py`, `forms_service.py`,
+`models/forms.py`, `schemas/forms.py`) against pass 5's merge commit
+(`e2ff2d544`) rather than relying on the commit-list proxy. The entire real
+delta is three hunks from one unrelated feature ("Let members go by a
+preferred name on everyday screens"): two new name matchers added to
+`search_members`'s LIKE search (both correctly escaped, same as the four
+pre-existing ones) and a `submission.submitter.display_name` fallback in
+`list_submissions` for the admin submissions list. Checked the latter
+specifically against CLAUDE.md's rule that signed forms/consents keep the
+legal name — this module's `FormCategory` has no legal/consent category and
+the call site is a computed admin-only display label, not a stored
+system-of-record value, so it is the "everyday screen" case the
+preferred-name feature targets, not the carve-out. No finding. Three other
+commits each touch one CSS line of `FormBuilder.tsx` (the repo-wide
+hover-reveal `pointer-fine:` sweep) — no logic change.
+
+Every standing fix (FORM-1/2/3/5/6/7/8/9/10) and the one open flagged item
+(FORM-12) re-verified unchanged at their current citations; BXC-1 re-read
+and confirmed still closed (per pass 5). Route surface re-enumerated: **21**
+routes in `endpoints/forms.py`, not the "22" every prior pass (1 through 5)
+stated — a direct count of `^@router\.` decorators against the file's
+unchanged 784 lines gives 21; corrected as a stale doc miscount, not a
+removed route (the file has been byte-identical since pass 1). All 21
+carry `forms.view`/`forms.manage` except `submit_form` and
+`GET /member-lookup` (bare `get_current_user`, by design), unchanged.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+`app/ tests/ alembic/`; `validate_migrations.py --strict` passed (538
+revisions, single head `8c4f2a6e1d93`); scoped backend tests
+(`-k form`) 656 passed, 1 skipped (environment-only — `pywebpush`);
+frontend `npm run typecheck` 0 errors, `npm run lint` clean.
+
+Findings doc: [`FORM-26-forms.md`](./FORM-26-forms.md)'s **Pass 6** section.
+No `KNOWN_LIMITATIONS.md` change needed — nothing newly flagged, nothing
+newly resolved. Rotation row 26 → ✅ (pending PR merge). Next: Feature 27
+(Integrations).
 
 ### 2026-10-07 — Feature 25 (Messaging & notifications, pass 6) — 0 fixed, 0 new findings (watchdog pickup)
 
