@@ -16,6 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2990](https://github.com/thegspiro/the-logbook/pull/2990)**: branch
+`claude/security-review-security-audit-ip`, Feature 28 (Security, audit &
+IP), pass 6 (watchdog pickup — PR #2988, Feature 27, Integrations, had
+already merged over 100 minutes earlier with nothing started since,
+confirmed via `list_pull_requests` both before this iteration began and
+again before this PR was opened). Real delta since pass 5 (`bf0a45a6`) is
+substantial: SEC2-28-5 and SEC2-28-7 were both already resolved by
+owner-decision commits outside this rotation loop, re-verified here against
+current code rather than trusted from the doc; also a signing-key cut-over
+fix to `core/audit.py` (already co-reviewed under `CI2-33-core-infra.md`),
+an SSRF DNS-rebinding pin to `audit_ship_service.py` (already co-reviewed
+under `INT-27-integrations.md`), a new per-org scheduled-task error path,
+and cosmetic touches. 0 fixes needed by this pass itself, 0 new findings,
+1 small documentation fix (a dangling cross-reference in
+`KNOWN_LIMITATIONS.md`). SEC2-28-6 and SEC2-28-10 remain open, unchanged.
+Route surface re-enumerated: 35 routes (was 34), all correctly gated.
+Completion gate green (flake8/black/isort clean; migrations — 542
+revisions, single head; 327 scoped backend tests; frontend typecheck/lint
+clean). See the Log entry below for detail.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 6, PR #2988, merged, nothing further to record), preserved for history</summary>
+
 **None.** PR #2988 (Feature 27, Integrations, pass 6) merged clean
 (confirmed via `list_pull_requests`; merged_at 2026-10-07T21:00:43Z). 0
 fixes needed by that pass itself; the Log entry below already records it
@@ -23,6 +46,8 @@ in full, so there is nothing further to record here. Rotation row 27 →
 ✅. Watchdog pickup: over 100 minutes elapsed with no new branch or PR
 opened for Feature 28 (Security, audit & IP) before this iteration began
 (confirmed via `list_pull_requests`, state=open, no match).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 6, PR #2988, before it merged), preserved for history</summary>
