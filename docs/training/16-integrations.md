@@ -652,6 +652,15 @@ Available training providers:
 - **iAmResponding** — Response tracking
 - **Custom API** — Generic webhook-based provider
 
+**Only Target Solutions credits completions automatically** _(2026-10-07)_.
+Its syncs turn every completion whose member is matched into a training record;
+for Vector Solutions, Lexipol, iAmResponding and a Custom API, synced
+completions wait under **Imports** for an officer, as before. Each of those
+providers moves to automatic crediting only after its own review against real
+records. Every provider's completion is keyed by its record id, so a re-sync
+updates it rather than adding it twice; one the provider sends without an id is
+keyed by member, course and completion date instead.
+
 ### Setting up Target Solutions
 
 > **Set up before 2026-09-29? Re-enter it.** Until then a Target Solutions
@@ -681,13 +690,45 @@ officer sees.
 
 Each sync downloads the completions report for its date range. Members are
 matched by the report's **Email** column against their Logbook email (ignoring
-case and spaces; deleted members are skipped). A member who cannot be matched
-yet is listed under **User Mappings**, and is matched automatically on a later
-sync once their email is on file — unless an officer has already set or cleared
-that mapping by hand. To map one by hand, pick the member from the user's
-dropdown under **Mappings → Users** _(2026-10-04)_; their waiting completions
-move to that member immediately. Synced completions wait under **Imports** for an officer
-to import them, as for every provider.
+case and spaces; deleted members are skipped). When no email matches, the
+report's **Employee ID** is matched against the member's **Membership Number**
+_(2026-10-07)_, so keep the two numbers the same in both systems. A member who
+cannot be matched yet is listed under **User Mappings**, and is matched
+automatically on a later sync once their email or membership number is on file
+— unless an officer has already set or cleared that mapping by hand.
+
+To map a member by hand, pick the member from the user's dropdown under
+**Mappings → Users** _(2026-10-04)_; their waiting completions move to that
+member immediately.
+
+**Matched completions are credited automatically** _(2026-10-07)_. A Target
+Solutions sync turns every completion whose member is matched into a training
+record straight away, the same as an upload; only completions nobody matches
+wait under **Imports**. When such a member is mapped later, their waiting
+completions are imported with **Import** or **Bulk Import**.
+
+Credit hours come from the report's **Duration (hours)** column — the hours the
+course is accredited for — never from **Time Spent In Course**, which counts how
+long the member had it open. A row with no duration credits no hours.
+
+**Policy acknowledgments** _(2026-10-07)_. The report's **Assignment Type**
+separates Target Solutions' own courses (**TS Course**) from items your
+department authored (**Admin**) — the documents members must read and
+acknowledge, usually every year because a federal or local rule requires it,
+such as a whistleblower policy or a code of conduct. Admin rows are recorded
+with the training type **Policy Acknowledgment**, with no hours, so they stay
+apart from courses and appear in each member's training history under that
+type.
+
+A training requirement set only to the type **Policy Acknowledgment** is met by
+an acknowledgment of _any_ policy. To require one particular policy every year,
+map it to a library course and link the requirement to that course — see
+**Course mappings** below.
+
+Target Solutions records each acknowledgment click, so a member who opens the
+same policy twice in one day appears twice. The second one on the same day is
+kept under **Imports** marked **duplicate** and never becomes a training record.
+An acknowledgment on a later day — next year's reading — is recorded as usual.
 
 > **Screenshot needed:**
 > _[Training Admin → Setup → Integrations → add a Target Solutions provider: the form with **API Base URL** `https://app.targetsolutions.com/tsapp/api/`, **API Key** and **API Secret \*** filled with placeholder values, and under **Sync Settings** **Enable Auto-Sync** on, **Pull new completions** set to **Every hour** and **Daily 30-day review at** 02:00. Use a demo key, never a real one.]_
@@ -724,6 +765,97 @@ Details:
 - The provider card's **Auto-Sync** line shows both, e.g. "Every 1h · review
   daily at 02:00". Other providers show only "Every _N_h" and their form has a
   single **Sync Interval**, scheduled from the previous sync as before.
+
+#### Course mappings _(2026-10-07)_
+
+Target Solutions gives each course a **Course ID**, and issues a new one when it
+publishes a new version — a new HIPAA video, a re-accredited CAPCE course, a
+revised policy. Requirements link to courses in **your library**, not to
+Target Solutions' IDs, so a new version never means editing a requirement:
+
+1. Create the course once in the library (for example **HIPAA Awareness**) and
+   link your annual requirement to it, with the requirement type **Courses**.
+2. Open the provider's **Mappings → Courses** tab and map each Target Solutions
+   course to its library course. Map every version to the same library course;
+   completing any one of them meets the requirement.
+
+Every course Target Solutions has sent appears on that tab, with how many
+members completed it. An unmapped course that looks like one already in your
+library — the same title once the ID in brackets and the "CAPCE" prefix are
+set aside, or an earlier version you mapped — shows the suggestion with a
+**Map to …** button. Nothing is mapped until an officer chooses; pick a
+different course from the list if the suggestion is wrong.
+
+**When a new version arrives**, everyone holding **training.manage** is emailed
+_New Course Version to Map_, naming the course and the library course it looks
+like. Each course is emailed about once. Officers who turned off **Training
+officer duties** emails under their notification preferences are not emailed.
+Courses that look like nothing in the library are listed on the tab without an
+email.
+
+**Mapping credits past completions.** Members who completed a new version
+before it was mapped read as not current until it is; mapping it updates the
+training records already imported from it, so they become current at once.
+Unmapping takes the course back off those records. A record an officer linked
+to a different course by hand is left alone either way.
+
+**Categories come from the course.** Target Solutions sends no category, so an
+imported completion is filed under its mapped library course's category — the
+first of the course's categories that is still active. The order is: the
+category an officer picks when importing, then a category mapping, then the
+mapped course's category, then the **Bulk Import** default, then the provider's
+default category. Mapping a course also files its earlier records under the
+course's category, when they had none or only the provider's default; a
+category someone chose is kept.
+
+#### Uploading a report by hand _(2026-10-07)_
+
+A Target Solutions provider card always has **Upload Report**, whether or not
+the API key and secret are set and whether or not the last connection test
+passed. A provider that was deleted accepts no uploads, as it accepts no syncs. Use it when the API is not set up yet, is not answering, or to load
+history older than the 30-day review.
+
+1. In Target Solutions, run the Training Records API report link (or download
+   the completions report) and save it as a **CSV** file. The report's title
+   lines above the column headings are fine to leave in.
+2. On the provider card, choose **Upload Report** and pick the file (25 MB at
+   most).
+
+Completions whose member is matched — by email, then Employee ID — become
+training records immediately, exactly as after a sync. Completions nobody
+matches wait under **Imports**. The upload appears in the sync history as
+an **upload**.
+
+**Nothing is recorded twice.** Every completion is identified by its
+**Transcript ID**. Uploading the same file again, uploading a report that
+overlaps an API sync, or an API sync that later brings in a completion already
+uploaded each update the one existing entry. A completion that is already a
+training record is never credited again. An upload and a sync for the same
+provider take turns rather than running over each other, and the database
+itself refuses a second entry with the same Transcript ID.
+
+> **On upgrade:** if two staged entries already shared a Transcript ID, the
+> upgrade keeps one — the one already imported, else the oldest — and marks the
+> others **duplicate**, with the original ID noted on them. Nothing is deleted,
+> and no training record is changed.
+
+#### When the connection test or a sync fails _(2026-10-07)_
+
+The message says what Target Solutions actually sent back. The same text
+appears after **Test Connection** and on a failed sync in the sync history.
+
+| Message begins                                         | What to check                                                                                                                          |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Target Solutions rejected the API key or secret        | Re-enter the key and secret from Target Solutions' API settings.                                                                       |
+| Target Solutions redirected the report request to …    | The message names where it pointed. A sign-in page means the key or secret was not accepted; anything else, check the base URL.        |
+| Target Solutions has no report API at this address     | Set **API Base URL** to `https://app.targetsolutions.com/tsapp/api/`.                                                                  |
+| Target Solutions returned a web page titled "…"        | The title is Target Solutions' own. Check the key and secret, and that the base URL is the API address rather than the website.        |
+| Target Solutions returned a file without the … columns | Target Solutions answered, but not with the completions report. The quoted first line is its own wording, often naming the problem.    |
+| Target Solutions had a server error                    | A problem on their side. Try again later; the next scheduled sync retries automatically.                                               |
+| did not respond within … seconds / Could not connect   | Target Solutions or the network is unreachable from the Logbook server. Check the base URL and that the server can reach the internet. |
+
+The key and secret are never shown in these messages, even when Target
+Solutions' own page or file repeats them.
 
 ---
 

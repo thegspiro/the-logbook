@@ -67,6 +67,7 @@ MIGRATION = _load("*_15c5bc7700aa_*.py")
 # freeze is a default that shipped without a migration.
 _ADDED_AFTER_THE_FREEZE = {
     EmailTemplateType.EQUIPMENT_REQUEST_UPDATE.value: "fb7da5b05833",
+    EmailTemplateType.EXTERNAL_COURSE_MATCH.value: "95dbdfb6591d",
 }
 
 

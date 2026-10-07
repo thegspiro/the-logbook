@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**295 tables · 4852 columns · 963 foreign keys**
+**296 tables · 4863 columns · 967 foreign keys**
 
 ---
 
@@ -620,6 +620,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`course_cohort_missed_classes`](#course_cohort_missed_classes) | `CohortMissedClass` | 10 | An officer's decision for a class held before a member joined (W27-3). |
 | [`course_cohorts`](#course_cohorts) | `CourseCohort` | 24 | Course Cohort model — one scheduled run of a multi-class course. |
 | [`external_category_mappings`](#external_category_mappings) | `ExternalCategoryMapping` | 12 | External Category Mapping model |
+| [`external_course_mappings`](#external_course_mappings) | `ExternalCourseMapping` | 11 | Maps a provider's course id to a course in the department's library. |
 | [`external_training_imports`](#external_training_imports) | `ExternalTrainingImport` | 25 | External Training Import model |
 | [`external_training_providers`](#external_training_providers) | `ExternalTrainingProvider` | 24 | External Training Provider model |
 | [`external_training_sync_logs`](#external_training_sync_logs) | `ExternalTrainingSyncLog` | 18 | External Training Sync Log model |
@@ -2440,7 +2441,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `custom`) | no |  |  |  |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `subject` | VARCHAR(500) | no |  |  |  |
@@ -2502,7 +2503,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `template_id` | VARCHAR(36) | yes | FK |  | → `email_templates.id` ON DELETE SET NULL |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `custom`) | no |  |  |  |
 | `to_emails` | JSON | no |  |  |  |
 | `cc_emails` | JSON | yes |  |  |  |
 | `bcc_emails` | JSON | yes |  |  |  |
@@ -8405,6 +8406,32 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_ext_mapping_external` (`provider_id`, `external_category_id`)
 - `ix_external_category_mappings_organization_id` (`organization_id`)
 
+### `external_course_mappings`
+
+**ExternalCourseMapping** · `app/models/training.py`
+
+> Maps a provider's course id to a course in the department's library. Target Solutions reissues a course under a new Course ID when it publishes a new version (a new HIPAA video, a re-accredited CAPCE course). Requirements link to the library course, never to a provider id, so mapping each version here keeps one annual requirement satisfied by whichever version a member took. Imports set ``TrainingRecord.course_id`` from this mapping.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `provider_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `external_training_providers.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `external_course_id` | VARCHAR(255) | no |  |  |  |
+| `external_course_name` | VARCHAR(500) | no |  |  |  |
+| `internal_course_id` | VARCHAR(36) | yes | FK, IDX |  | → `training_courses.id` ON DELETE SET NULL |
+| `is_mapped` | BOOL | no |  | `False` |  |
+| `notified_at` | DATETIME | yes |  |  |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+| `mapped_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+
+**Indexes**
+
+- UNIQUE `idx_ext_course_mapping_external` (`provider_id`, `external_course_id`)
+- `idx_ext_course_mapping_internal` (`internal_course_id`)
+- `ix_external_course_mappings_organization_id` (`organization_id`)
+
 ### `external_training_imports`
 
 **ExternalTrainingImport** · `app/models/training.py`
@@ -8414,7 +8441,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
-| `provider_id` | VARCHAR(36) | no | FK, IDX |  | → `external_training_providers.id` ON DELETE CASCADE |
+| `provider_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `external_training_providers.id` ON DELETE CASCADE |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `sync_log_id` | VARCHAR(36) | yes | FK, IDX |  | → `external_training_sync_logs.id` ON DELETE SET NULL |
 | `external_record_id` | VARCHAR(255) | no |  |  |  |
@@ -8441,7 +8468,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_ext_import_external` (`provider_id`, `external_record_id`)
+- UNIQUE `idx_ext_import_external` (`provider_id`, `external_record_id`)
 - `idx_ext_import_provider` (`provider_id`, `import_status`)
 - `idx_ext_import_user` (`user_id`)
 - `ix_external_training_imports_import_status` (`import_status`)
@@ -9501,7 +9528,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `name` | VARCHAR(255) | no |  |  |  |
 | `code` | VARCHAR(50) | yes |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`) | no |  |  |  |
+| `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`, `policy_acknowledgment`) | no |  |  |  |
 | `duration_hours` | FLOAT | yes |  |  |  |
 | `credit_hours` | FLOAT | yes |  |  |  |
 | `prerequisites` | JSON | yes |  |  |  |
@@ -9670,7 +9697,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `category_id` | VARCHAR(36) | yes | FK, IDX |  | → `training_categories.id` ON DELETE SET NULL |
 | `course_name` | VARCHAR(255) | no |  |  |  |
 | `course_code` | VARCHAR(50) | yes |  |  |  |
-| `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`) | no |  |  |  |
+| `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`, `policy_acknowledgment`) | no |  |  |  |
 | `scheduled_date` | DATE | yes |  |  |  |
 | `completion_date` | DATE | yes | IDX |  |  |
 | `expiration_date` | DATE | yes | IDX |  |  |
@@ -9730,7 +9757,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `requirement_type` | ENUM(`hours`, `courses`, `certification`, `shifts`, `calls`, `skills_evaluation`, `checklist`, `knowledge_test`) | no | IDX |  |  |
-| `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`) | yes |  |  |  |
+| `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`, `policy_acknowledgment`) | yes |  |  |  |
 | `source` | ENUM(`department`, `state`, `national`) | no |  | `department` |  |
 | `registry_name` | VARCHAR(100) | yes |  |  |  |
 | `registry_code` | VARCHAR(50) | yes |  |  |  |
@@ -9799,7 +9826,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `requirement_id` | VARCHAR(36) | yes | FK |  | → `training_requirements.id` ON DELETE SET NULL |
 | `course_name` | VARCHAR(255) | no |  |  |  |
 | `course_code` | VARCHAR(50) | yes |  |  |  |
-| `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`) | no |  |  |  |
+| `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`, `policy_acknowledgment`) | no |  |  |  |
 | `credit_hours` | FLOAT | no |  |  |  |
 | `instructor` | VARCHAR(255) | yes |  |  |  |
 | `instructor_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
@@ -9842,7 +9869,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `submitted_by` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
 | `course_name` | VARCHAR(255) | no |  |  |  |
 | `course_code` | VARCHAR(50) | yes |  |  |  |
-| `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`) | no |  |  |  |
+| `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`, `policy_acknowledgment`) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `completion_date` | DATE | no | IDX |  |  |
 | `start_time` | TIME | yes |  |  |  |
@@ -10262,7 +10289,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (353 references)
+### → `users` (354 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10370,6 +10397,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `expense_reports` | `approved_by` | SET NULL | yes |
 | `expense_reports` | `submitted_by` | RESTRICT | no |
 | `external_category_mappings` | `mapped_by` | SET NULL | yes |
+| `external_course_mappings` | `mapped_by` | SET NULL | yes |
 | `external_shift_hours` | `reviewed_by` | SET NULL | yes |
 | `external_shift_hours` | `user_id` | CASCADE | no |
 | `external_training_imports` | `user_id` | SET NULL | yes |
@@ -10620,7 +10648,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (241 references)
+### → `organizations` (242 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10692,6 +10720,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `external_agencies` | `organization_id` | CASCADE | no |
 | `external_apparatus` | `organization_id` | CASCADE | no |
 | `external_category_mappings` | `organization_id` | CASCADE | no |
+| `external_course_mappings` | `organization_id` | CASCADE | no |
 | `external_shift_hours` | `organization_id` | CASCADE | no |
 | `external_training_imports` | `organization_id` | CASCADE | no |
 | `external_training_providers` | `organization_id` | CASCADE | no |
@@ -10975,6 +11004,21 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `storage_areas` | `location_id` | SET NULL | yes |
 | `training_records` | `location_id` | SET NULL | yes |
 
+### → `training_courses` (10 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_classes` | `class_course_id` | CASCADE | no |
+| `course_classes` | `course_id` | CASCADE | no |
+| `course_cohort_classes` | `class_course_id` | SET NULL | yes |
+| `course_cohorts` | `course_id` | CASCADE | no |
+| `external_course_mappings` | `internal_course_id` | SET NULL | yes |
+| `instructor_qualifications` | `course_id` | CASCADE | yes |
+| `recertification_pathways` | `assessment_course_id` | SET NULL | yes |
+| `training_effectiveness_evaluations` | `course_id` | SET NULL | yes |
+| `training_records` | `course_id` | SET NULL | yes |
+| `training_sessions` | `course_id` | SET NULL | yes |
+
 ### → `training_requirements` (10 references)
 
 | From table | Column | On delete | Nullable |
@@ -11018,20 +11062,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_sessions` | `category_id` | SET NULL | yes |
 | `training_submissions` | `category_id` | SET NULL | yes |
 
-### → `training_courses` (9 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `course_classes` | `class_course_id` | CASCADE | no |
-| `course_classes` | `course_id` | CASCADE | no |
-| `course_cohort_classes` | `class_course_id` | SET NULL | yes |
-| `course_cohorts` | `course_id` | CASCADE | no |
-| `instructor_qualifications` | `course_id` | CASCADE | yes |
-| `recertification_pathways` | `assessment_course_id` | SET NULL | yes |
-| `training_effectiveness_evaluations` | `course_id` | SET NULL | yes |
-| `training_records` | `course_id` | SET NULL | yes |
-| `training_sessions` | `course_id` | SET NULL | yes |
-
 ### → `training_programs` (9 references)
 
 | From table | Column | On delete | Nullable |
@@ -11071,6 +11101,18 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_effectiveness_evaluations` | `training_record_id` | CASCADE | yes |
 | `training_submissions` | `training_record_id` | SET NULL | yes |
 | `xapi_statements` | `training_record_id` | SET NULL | yes |
+
+### → `external_training_providers` (7 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `external_category_mappings` | `provider_id` | CASCADE | no |
+| `external_course_mappings` | `provider_id` | CASCADE | no |
+| `external_training_imports` | `provider_id` | CASCADE | no |
+| `external_training_sync_logs` | `provider_id` | CASCADE | no |
+| `external_user_mappings` | `provider_id` | CASCADE | no |
+| `training_records` | `external_provider_id` | SET NULL | yes |
+| `xapi_statements` | `source_provider_id` | SET NULL | yes |
 
 ### → `inventory_categories` (7 references)
 
@@ -11129,17 +11171,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `prospect_election_packages` | `election_id` | SET NULL | yes |
 | `votes` | `election_id` | CASCADE | no |
 | `voting_tokens` | `election_id` | CASCADE | no |
-
-### → `external_training_providers` (6 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `external_category_mappings` | `provider_id` | CASCADE | no |
-| `external_training_imports` | `provider_id` | CASCADE | no |
-| `external_training_sync_logs` | `provider_id` | CASCADE | no |
-| `external_user_mappings` | `provider_id` | CASCADE | no |
-| `training_records` | `external_provider_id` | SET NULL | yes |
-| `xapi_statements` | `source_provider_id` | SET NULL | yes |
 
 ### → `program_phases` (6 references)
 

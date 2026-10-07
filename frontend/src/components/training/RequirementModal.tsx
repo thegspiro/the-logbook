@@ -415,6 +415,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                     <option value="orientation">Orientation</option>
                     <option value="refresher">Refresher</option>
                     <option value="specialty">Specialty</option>
+                    <option value="policy_acknowledgment">Policy Acknowledgment</option>
                   </select>
                 </div>
 

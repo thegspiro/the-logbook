@@ -2291,3 +2291,34 @@ shift reports), not reviewed here. Recorded here rather than silently
 worked around, per this pass's own "never report a gate you did not run"
 rule, and because a from-scratch sandbox hitting this is a sign the repair
 path is exercised rarely enough to be worth knowing about.
+
+## Fixed outside a pass (2026-10-07) — provider credentials in failure tracebacks
+
+**Severity:** LOW (latent; no current code path carries a credential into an
+exception message). **Fixed in the same change.**
+
+Target Solutions authenticates with `key` and `secret` query parameters. The
+httpx request log line and Sentry events were already redacted
+(`app/core/logging.py`), and the service's own error messages never carry the
+URL. The gap was the traceback: `sync_training_records` and `test_connection`
+logged failures with `logger.exception`, which writes every chained exception's
+message verbatim. httpx's `raise_for_status()` message contains the full request
+URL, query string included, so any future call of it on a credentialed URL —
+or any exception that quoted the URL — would have put the key and secret in the
+application log. Production sinks run `diagnose=False`, so local variables were
+never at risk; the message text was.
+
+- **Fix:** both handlers log through `_log_failure`, which writes the traceback
+  through `redact_url_secrets`, the redaction the httpx log filter uses.
+- **Verified against the old code:** a test capturing every loguru and
+  standard-library log line across eight failure modes (timeout, connection
+  failure, 5xx, a redirect, an HTML page and a plain-text error echoing the
+  credentials, 401, and an unexpected crash quoting the URL) fails on three of
+  them before the fix and passes on all eight after.
+- **Checked and sound:** credentials are encrypted at rest; responses never
+  include them; the edit form starts blank and sends them only when retyped;
+  a base URL carrying a key, secret or token is rejected; HTTPS is enforced at
+  save and per request; quoted provider responses are scrubbed of the key and
+  secret.
+- **Tests:** `TestNoLogLineCarriesTheCredentials` in
+  `tests/test_external_training_target_solutions.py`.

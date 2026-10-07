@@ -681,6 +681,7 @@ export const TRAINING_TYPE_LABELS: Record<string, string> = {
   orientation: 'Orientation',
   refresher: 'Refresher',
   specialty: 'Specialty',
+  policy_acknowledgment: 'Policy Acknowledgment',
 };
 
 export const COHORT_STATUS_LABELS: Record<string, string> = {

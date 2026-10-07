@@ -6,7 +6,13 @@ import type { RequirementChangeScope } from '../constants/enums';
 import type { Event } from './event';
 
 export type TrainingType =
-  'certification' | 'continuing_education' | 'skills_practice' | 'orientation' | 'refresher' | 'specialty';
+  | 'certification'
+  | 'continuing_education'
+  | 'skills_practice'
+  | 'orientation'
+  | 'refresher'
+  | 'specialty'
+  | 'policy_acknowledgment';
 
 export type TrainingStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
 
@@ -1527,6 +1533,28 @@ export interface ExternalCategoryMappingUpdate {
   is_mapped?: boolean;
 }
 
+export interface ExternalCourseMapping {
+  id: string;
+  provider_id: string;
+  organization_id: string;
+  external_course_id: string;
+  external_course_name: string;
+  internal_course_id?: string | null;
+  internal_course_name?: string | null;
+  is_mapped: boolean;
+  // The library course this one looks like. Offered, never applied: the
+  // officer confirms every mapping.
+  suggested_course_id?: string | null;
+  suggested_course_name?: string | null;
+  members_completed: number;
+  // Set on an update: training records that moved with the mapping.
+  records_updated?: number | null;
+}
+
+export interface ExternalCourseMappingUpdate {
+  internal_course_id: string | null;
+}
+
 export interface ExternalUserMapping {
   id: string;
   provider_id: string;
@@ -1607,6 +1635,18 @@ export interface SyncResponse {
   records_fetched: number;
   records_imported: number;
   records_failed: number;
+}
+
+export interface ReportUploadResponse {
+  sync_log_id: string;
+  status: SyncStatus;
+  message: string;
+  rows_in_report: number;
+  new_rows: number;
+  updated_rows: number;
+  failed_rows: number;
+  training_records_created: number;
+  awaiting_member: number;
 }
 
 export interface TestConnectionResponse {

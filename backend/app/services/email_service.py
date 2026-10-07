@@ -2280,6 +2280,44 @@ class EmailService:
 
         return success_count > 0
 
+    async def send_external_course_match_email(
+        self,
+        to_email: str,
+        context: Dict[str, Any],
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Tell one training officer a provider sent courses that look like
+        library courses. *context* carries the ``external_course_match``
+        template variables, built by ``external_course_mapping``.
+        """
+        from app.services.email_template_service import (
+            DEFAULT_EXTERNAL_COURSE_MATCH_HTML,
+            DEFAULT_EXTERNAL_COURSE_MATCH_SUBJECT,
+            DEFAULT_EXTERNAL_COURSE_MATCH_TEXT,
+        )
+
+        subject, html_body, text_body = await self._render_with_fallback(
+            template_type=EmailTemplateType.EXTERNAL_COURSE_MATCH,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_EXTERNAL_COURSE_MATCH_SUBJECT,
+            default_html=DEFAULT_EXTERNAL_COURSE_MATCH_HTML,
+            default_text=DEFAULT_EXTERNAL_COURSE_MATCH_TEXT,
+        )
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.EXTERNAL_COURSE_MATCH.value,
+        )
+
+        return success_count > 0
+
     async def send_equipment_request_update_email(
         self,
         to_email: str,

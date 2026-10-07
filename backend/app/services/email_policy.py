@@ -281,8 +281,14 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         label="Training officer duties",
         required=False,
         audience=_O,
-        includes=("Training sessions awaiting approval",),
-        rationale="Pending approvals are also listed in Training.",
+        includes=(
+            "Training sessions awaiting approval",
+            "New provider course versions to map",
+        ),
+        rationale=(
+            "Pending approvals are also listed in Training, and unmapped "
+            "courses under the provider's Mappings."
+        ),
     ),
     EmailKind.ELECTION_ADMIN: EmailPolicy(
         label="Election administration",

@@ -224,7 +224,7 @@ async def import_member_qualifications(
         contents = await read_upload_limited(file, MAX_QUALIFICATION_CSV_BYTES)
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail="CSV file exceeds the 2MB limit.",
         )
     try:

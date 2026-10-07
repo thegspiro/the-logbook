@@ -8,7 +8,16 @@ and syncing training records from external platforms.
 from datetime import date, datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from loguru import logger
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,14 +29,15 @@ from app.core.security import encrypt_data
 from app.core.utils import safe_error_detail
 from app.models.training import (
     ExternalCategoryMapping,
+    ExternalCourseMapping,
+    ExternalProviderType,
     ExternalTrainingImport,
     ExternalTrainingProvider,
     ExternalTrainingSyncLog,
     ExternalUserMapping,
     SyncStatus,
     TrainingCategory,
-    TrainingRecord,
-    TrainingStatus,
+    TrainingCourse,
 )
 from app.models.user import User
 from app.schemas.training import (
@@ -35,6 +45,8 @@ from app.schemas.training import (
     BulkImportResponse,
     ExternalCategoryMappingResponse,
     ExternalCategoryMappingUpdate,
+    ExternalCourseMappingResponse,
+    ExternalCourseMappingUpdate,
     ExternalTrainingImportResponse,
     ExternalTrainingProviderCreate,
     ExternalTrainingProviderResponse,
@@ -43,16 +55,23 @@ from app.schemas.training import (
     ExternalUserMappingResponse,
     ExternalUserMappingUpdate,
     ImportRecordRequest,
+    ReportUploadResponse,
     SyncRequest,
     SyncResponse,
 )
 from app.schemas.training import SyncStatus as SyncStatusEnum
 from app.schemas.training import TestConnectionResponse
+from app.services.external_course_mapping import (
+    apply_course_mapping,
+    completion_counts,
+    load_suggestion_candidates,
+)
 from app.services.external_training_service import ExternalTrainingSyncService
 from app.utils.email_providers import REDACTED_SECRET
 from app.utils.member_names import format_legal_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import is_in_org
+from app.utils.upload_limits import read_upload_limited
 from app.utils.url_validator import validate_integration_url
 
 router = APIRouter()
@@ -693,6 +712,332 @@ async def trigger_sync(
     )
 
 
+def _course_mapping_response(
+    mapping: ExternalCourseMapping,
+    courses: dict,
+    suggested,
+    members: int,
+    records_updated=None,
+) -> ExternalCourseMappingResponse:
+    internal = courses.get(str(mapping.internal_course_id))
+    return ExternalCourseMappingResponse(
+        id=mapping.id,
+        provider_id=mapping.provider_id,
+        organization_id=mapping.organization_id,
+        external_course_id=mapping.external_course_id,
+        external_course_name=mapping.external_course_name,
+        internal_course_id=mapping.internal_course_id,
+        internal_course_name=internal.name if internal else None,
+        is_mapped=bool(mapping.is_mapped),
+        suggested_course_id=suggested.id if suggested else None,
+        suggested_course_name=suggested.name if suggested else None,
+        members_completed=members,
+        records_updated=records_updated,
+    )
+
+
+async def _org_provider(db: AsyncSession, provider_id: UUID, organization_id):
+    provider = (
+        await db.execute(
+            select(ExternalTrainingProvider)
+            .where(ExternalTrainingProvider.id == str(provider_id))
+            .where(ExternalTrainingProvider.organization_id == str(organization_id))
+        )
+    ).scalar_one_or_none()
+    if not provider:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found"
+        )
+    return provider
+
+
+async def _all_org_courses(db: AsyncSession, organization_id) -> dict:
+    """Every library course in the org, retired ones included, by id.
+
+    A mapping can point at a course since retired, and its name should still
+    show rather than read as unmapped.
+    """
+    rows = await db.execute(
+        select(TrainingCourse).where(
+            TrainingCourse.organization_id == str(organization_id)
+        )
+    )
+    return {str(c.id): c for c in rows.scalars().all()}
+
+
+@router.get(
+    "/providers/{provider_id}/course-mappings",
+    response_model=list[ExternalCourseMappingResponse],
+)
+async def list_course_mappings(
+    provider_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    List a provider's course ids, the library course each maps to, and, for
+    unmapped ones, the library course it looks like.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    provider = await _org_provider(db, provider_id, current_user.organization_id)
+    mappings = (
+        (
+            await db.execute(
+                select(ExternalCourseMapping)
+                .where(ExternalCourseMapping.provider_id == provider.id)
+                .where(
+                    ExternalCourseMapping.organization_id
+                    == str(current_user.organization_id)
+                )
+                .order_by(
+                    ExternalCourseMapping.is_mapped,
+                    ExternalCourseMapping.external_course_name,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    courses = await _all_org_courses(db, current_user.organization_id)
+    candidates = await load_suggestion_candidates(db, provider)
+    counts = await completion_counts(db, provider.id, provider.organization_id)
+    return [
+        _course_mapping_response(
+            m,
+            courses,
+            (
+                None
+                if m.internal_course_id
+                else candidates.pick(m.external_course_id, m.external_course_name)
+            ),
+            counts.get(m.external_course_id, 0),
+        )
+        for m in mappings
+    ]
+
+
+@router.patch(
+    "/providers/{provider_id}/course-mappings/{mapping_id}",
+    response_model=ExternalCourseMappingResponse,
+)
+async def update_course_mapping(
+    provider_id: UUID,
+    mapping_id: UUID,
+    mapping_update: ExternalCourseMappingUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Map a provider course to a library course, or unmap it with an explicit
+    null. Training records already imported from the course move with it, so
+    members who completed a new version are credited as soon as it is mapped.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    provider = await _org_provider(db, provider_id, current_user.organization_id)
+    mapping = (
+        await db.execute(
+            select(ExternalCourseMapping)
+            .where(ExternalCourseMapping.id == str(mapping_id))
+            .where(ExternalCourseMapping.provider_id == provider.id)
+            .where(
+                ExternalCourseMapping.organization_id
+                == str(current_user.organization_id)
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if not mapping:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Course mapping not found"
+        )
+
+    records_updated = 0
+    if "internal_course_id" in mapping_update.model_fields_set:
+        internal_course_id = (
+            str(mapping_update.internal_course_id)
+            if mapping_update.internal_course_id
+            else None
+        )
+        if internal_course_id and not await is_in_org(
+            db, TrainingCourse, internal_course_id, current_user.organization_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Library course not found",
+            )
+        previous = mapping.internal_course_id
+        records_updated = await apply_course_mapping(
+            db, mapping, internal_course_id, str(current_user.id)
+        )
+        await db.commit()
+        await log_audit_event(
+            db=db,
+            event_type="external_training_course_mapped",
+            event_category="training",
+            severity="info",
+            event_data={
+                "provider_id": str(provider.id),
+                "external_course_id": mapping.external_course_id,
+                "previous_course_id": previous,
+                "internal_course_id": internal_course_id,
+                "training_records_updated": records_updated,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+    courses = await _all_org_courses(db, current_user.organization_id)
+    counts = await completion_counts(db, provider.id, provider.organization_id)
+    suggested = None
+    if not mapping.internal_course_id:
+        candidates = await load_suggestion_candidates(db, provider)
+        suggested = candidates.pick(
+            mapping.external_course_id, mapping.external_course_name
+        )
+    return _course_mapping_response(
+        mapping,
+        courses,
+        suggested,
+        counts.get(mapping.external_course_id, 0),
+        records_updated,
+    )
+
+
+# A completions report is a few kilobytes a month; this allows many years of
+# a large department's history in one file.
+MAX_REPORT_UPLOAD_BYTES = 25 * 1024 * 1024
+
+
+@router.post(
+    "/providers/{provider_id}/upload-report",
+    response_model=ReportUploadResponse,
+)
+async def upload_report(
+    provider_id: UUID,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Upload a Target Solutions completions report (CSV) by hand.
+
+    The same report the Training Records API returns, downloaded from Target
+    Solutions. Completions are keyed by Transcript ID, so a completion that an
+    API sync has already brought in, or that is already a training record, is
+    never added twice. Rows whose member is matched become training records
+    immediately; the rest wait under Imports. Works without an API key or
+    secret, and whether or not the connection test passes; not for a provider
+    that was deleted (deactivated).
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    result = await db.execute(
+        select(ExternalTrainingProvider)
+        .where(ExternalTrainingProvider.id == str(provider_id))
+        .where(ExternalTrainingProvider.organization_id == current_user.organization_id)
+        # A deleted provider is only deactivated; like sync, upload treats it
+        # as gone.
+        .where(ExternalTrainingProvider.active.is_(True))
+    )
+    provider = result.scalar_one_or_none()
+    if not provider:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Provider not found or inactive",
+        )
+    if provider.provider_type != ExternalProviderType.TARGET_SOLUTIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Report upload is only available for Target Solutions",
+        )
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Upload the report as a .csv file",
+        )
+
+    try:
+        raw = await read_upload_limited(file, MAX_REPORT_UPLOAD_BYTES)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail="The report exceeds the 25 MB limit",
+        )
+    try:
+        content = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The file is not UTF-8 text. Download the report as CSV again.",
+        )
+
+    service = ExternalTrainingSyncService(db)
+    try:
+        sync_log, created, awaiting = await service.upload_target_solutions_report(
+            provider, content, str(current_user.id)
+        )
+        await db.commit()
+        await service.notify_course_matches(provider)
+    except ValueError as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    except Exception as e:
+        await db.rollback()
+        logger.exception(f"Report upload failed for provider {provider_id}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
+    finally:
+        await service.close()
+
+    await log_audit_event(
+        db=db,
+        event_type="external_training_report_uploaded",
+        event_category="training",
+        severity="info",
+        event_data={
+            "provider_id": str(provider.id),
+            "sync_log_id": str(sync_log.id),
+            "rows_in_report": sync_log.records_fetched,
+            "training_records_created": created,
+            "awaiting_member": awaiting,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    parts = [f"{created} training record(s) added"]
+    if sync_log.records_updated:
+        parts.append(f"{sync_log.records_updated} already on file")
+    if sync_log.records_skipped:
+        parts.append(
+            f"{sync_log.records_skipped} same-day repeat acknowledgment(s) set aside"
+        )
+    if awaiting:
+        parts.append(f"{awaiting} waiting for a member match under Imports")
+    if sync_log.records_failed:
+        parts.append(f"{sync_log.records_failed} row(s) could not be read")
+    return ReportUploadResponse(
+        sync_log_id=sync_log.id,
+        status=sync_log.status,
+        message="; ".join(parts),
+        rows_in_report=sync_log.records_fetched,
+        new_rows=sync_log.records_imported,
+        updated_rows=sync_log.records_updated,
+        failed_rows=sync_log.records_failed,
+        training_records_created=created,
+        awaiting_member=awaiting,
+    )
+
+
 @router.get(
     "/providers/{provider_id}/sync-logs",
     response_model=list[ExternalTrainingSyncLogResponse],
@@ -1136,57 +1481,28 @@ async def import_single_record(
             detail="Target user not found",
         )
 
-    try:
-        # Create internal training record
-        training_record = TrainingRecord(
-            organization_id=current_user.organization_id,
-            user_id=str(import_request.user_id),
-            course_name=ext_import.course_title,
-            course_code=ext_import.course_code,
-            training_type="continuing_education",  # Default, could be mapped
-            completion_date=(
-                ext_import.completion_date.date()
-                if ext_import.completion_date
-                else None
-            ),
-            hours_completed=(ext_import.duration_minutes or 0) / 60.0,
-            status=TrainingStatus.COMPLETED,
-            score=ext_import.score,
-            passed=ext_import.passed,
-            notes=f"Imported from external provider. External ID: {ext_import.external_record_id}",
-            created_by=current_user.id,
+    category_id = (
+        str(import_request.category_id) if import_request.category_id else None
+    )
+    if category_id and not await is_in_org(
+        db, TrainingCategory, category_id, current_user.organization_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Category not found"
         )
 
-        db.add(training_record)
-        await db.flush()
-
-        # Update import record
-        ext_import.training_record_id = training_record.id
-        ext_import.user_id = str(import_request.user_id)
-        ext_import.import_status = "imported"
-        ext_import.imported_at = datetime.now(timezone.utc)
-        ext_import.import_error = None
-
+    service = ExternalTrainingSyncService(db)
+    try:
+        training_record = await service.import_single_record(
+            ext_import,
+            user_id=str(import_request.user_id),
+            category_id=category_id,
+            created_by=str(current_user.id),
+        )
+        if training_record is not None:
+            await service.feed_imported_records_to_pipelines([training_record])
         await db.commit()
         await db.refresh(ext_import)
-
-        await log_audit_event(
-            db=db,
-            event_type="external_training_verified",
-            event_category="training",
-            severity="info",
-            event_data={
-                "import_id": str(import_id),
-                "provider_id": str(provider_id),
-                "training_record_id": str(training_record.id),
-                "course_title": ext_import.course_title,
-            },
-            user_id=str(current_user.id),
-            username=current_user.username,
-        )
-
-        return ext_import
-
     except Exception as e:
         logger.exception(f"Failed to import record for provider {provider_id}")
         await db.rollback()
@@ -1194,11 +1510,31 @@ async def import_single_record(
         ext_import.import_error = str(e)
         await db.commit()
         await db.refresh(ext_import)
-
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to import record. Check the provider configuration and try again.",
         )
+    finally:
+        await service.close()
+
+    await log_audit_event(
+        db=db,
+        event_type="external_training_verified",
+        event_category="training",
+        severity="info",
+        event_data={
+            "import_id": str(import_id),
+            "provider_id": str(provider_id),
+            "training_record_id": str(ext_import.training_record_id),
+            "course_title": ext_import.course_title,
+            # A completion already on file is linked, not created again.
+            "linked_existing_record": training_record is None,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return ext_import
 
 
 @router.post("/providers/{provider_id}/imports/bulk", response_model=BulkImportResponse)
@@ -1219,6 +1555,20 @@ async def bulk_import_records(
     failed = 0
     errors = []
 
+    default_category_id = (
+        str(bulk_request.default_category_id)
+        if bulk_request.default_category_id
+        else None
+    )
+    if default_category_id and not await is_in_org(
+        db, TrainingCategory, default_category_id, current_user.organization_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Category not found"
+        )
+
+    service = ExternalTrainingSyncService(db)
+    created_records: list = []
     for import_id in bulk_request.external_import_ids:
         result = await db.execute(
             select(ExternalTrainingImport)
@@ -1269,35 +1619,15 @@ async def bulk_import_records(
             continue
 
         try:
-            # Create training record
-            training_record = TrainingRecord(
-                organization_id=current_user.organization_id,
-                user_id=user_id,
-                course_name=ext_import.course_title,
-                course_code=ext_import.course_code,
-                training_type="continuing_education",
-                completion_date=(
-                    ext_import.completion_date.date()
-                    if ext_import.completion_date
-                    else None
-                ),
-                hours_completed=(ext_import.duration_minutes or 0) / 60.0,
-                status=TrainingStatus.COMPLETED,
-                score=ext_import.score,
-                passed=ext_import.passed,
-                notes=f"Imported from external provider. External ID: {ext_import.external_record_id}",
-                created_by=current_user.id,
-            )
-
-            db.add(training_record)
-            await db.flush()
-
-            ext_import.training_record_id = training_record.id
-            ext_import.user_id = user_id
-            ext_import.import_status = "imported"
-            ext_import.imported_at = datetime.now(timezone.utc)
-            ext_import.import_error = None
-
+            async with db.begin_nested():
+                training_record = await service.import_single_record(
+                    ext_import,
+                    user_id=str(user_id),
+                    default_category_id=default_category_id,
+                    created_by=str(current_user.id),
+                )
+            if training_record is not None:
+                created_records.append(training_record)
             imported += 1
 
         except Exception as e:
@@ -1307,6 +1637,10 @@ async def bulk_import_records(
             ext_import.import_status = "failed"
             ext_import.import_error = str(e)
 
+    try:
+        await service.feed_imported_records_to_pipelines(created_records)
+    finally:
+        await service.close()
     await db.commit()
 
     return BulkImportResponse(

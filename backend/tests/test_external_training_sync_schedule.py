@@ -19,6 +19,7 @@ reviewed starts with the 30-day backfill.
 
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from zoneinfo import ZoneInfo
 
@@ -168,6 +169,14 @@ class _Db:
 
     async def commit(self):
         pass
+
+    async def execute(self, statement):
+        # Staging locks the provider row, and crediting looks for this run's
+        # staged rows; with an empty report there are none.
+        return SimpleNamespace(
+            scalars=lambda: SimpleNamespace(all=lambda: []),
+            scalar_one_or_none=lambda: None,
+        )
 
 
 def _recording_service(body: str, db=None):

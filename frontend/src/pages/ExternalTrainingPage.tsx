@@ -26,6 +26,8 @@ import {
   Trash2,
   Edit2,
   PlayCircle,
+  Upload,
+  GraduationCap,
 } from 'lucide-react';
 import { Tooltip } from '../components/ux';
 import { externalTrainingService, trainingService, userService } from '../services/api';
@@ -34,8 +36,10 @@ import type {
   ExternalTrainingProviderCreate,
   ExternalProviderType,
   ExternalCategoryMapping,
+  ExternalCourseMapping,
   ExternalUserMapping,
   TrainingCategory,
+  TrainingCourse,
 } from '../types/training';
 import type { User } from '../types/user';
 
@@ -505,12 +509,14 @@ interface ProviderCardProps {
   onTestConnection: (id: string) => void;
   onSyncCategories: (id: string) => void;
   onSync: (id: string) => void;
+  onUploadReport: (id: string, file: File) => void;
   onEdit: (provider: ExternalTrainingProvider) => void;
   onDelete: (id: string) => void;
   onViewMappings: (id: string) => void;
   isTestingConnection: boolean;
   isSyncingCategories: boolean;
   isSyncing: boolean;
+  isUploading: boolean;
 }
 
 const ProviderCard: React.FC<ProviderCardProps> = ({
@@ -518,12 +524,14 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
   onTestConnection,
   onSyncCategories,
   onSync,
+  onUploadReport,
   onEdit,
   onDelete,
   onViewMappings,
   isTestingConnection,
   isSyncingCategories,
   isSyncing,
+  isUploading,
 }) => {
   const tz = useTimezone();
 
@@ -644,6 +652,35 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
           )}
           Sync Now
         </button>
+        {provider.provider_type === 'target_solutions' && (
+          // A completions report downloaded from Target Solutions, for when the
+          // API is not set up or not answering. It needs no key or secret.
+          <label
+            className={`bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary focus-within:ring-theme-focus-ring flex items-center gap-2 rounded-lg px-3 py-2 text-sm focus-within:ring-2 ${
+              isUploading ? 'pointer-events-none opacity-50' : 'cursor-pointer'
+            }`}
+          >
+            {isUploading ? (
+              <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Upload className="h-4 w-4" aria-hidden="true" />
+            )}
+            Upload Report
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              className="sr-only"
+              disabled={isUploading}
+              aria-label="Upload a Target Solutions completions report (CSV)"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                // Cleared so choosing the same file again still fires onChange.
+                e.target.value = '';
+                if (file) onUploadReport(provider.id, file);
+              }}
+            />
+          </label>
+        )}
         <button
           onClick={() => onViewMappings(provider.id)}
           className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
@@ -937,7 +974,7 @@ interface MappingsModalProps {
 const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, providerId, providerName }) => {
   const dialogRef3 = useDialog<HTMLDivElement>({ isOpen, onClose });
 
-  const [activeTab, setActiveTab] = useState<'categories' | 'users'>('categories');
+  const [activeTab, setActiveTab] = useState<'categories' | 'users' | 'courses'>('categories');
   const [categoryMappings, setCategoryMappings] = useState<ExternalCategoryMapping[]>([]);
   const [userMappings, setUserMappings] = useState<ExternalUserMapping[]>([]);
   // The internal categories an external one can be pointed at. Without them the
@@ -947,22 +984,31 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
   // button had nobody to offer and did nothing at all — the same gap the
   // category picker above once had.
   const [members, setMembers] = useState<User[]>([]);
+  // A provider course maps to a library course, which is what requirements
+  // link to — so a new version of a course is mapped here, never by editing
+  // the requirement.
+  const [courseMappings, setCourseMappings] = useState<ExternalCourseMapping[]>([]);
+  const [libraryCourses, setLibraryCourses] = useState<TrainingCourse[]>([]);
   const [savingMappingId, setSavingMappingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadMappings = useCallback(async () => {
     setLoading(true);
     try {
-      const [categories, users, internal, roster] = await Promise.all([
+      const [categories, users, internal, roster, courses, library] = await Promise.all([
         externalTrainingService.getCategoryMappings(providerId),
         externalTrainingService.getUserMappings(providerId),
         trainingService.getCategories(),
         userService.getUsers(),
+        externalTrainingService.getCourseMappings(providerId),
+        trainingService.getCourses(true),
       ]);
       setCategoryMappings(categories);
       setUserMappings(users);
       setInternalCategories(internal);
       setMembers(roster);
+      setCourseMappings(courses);
+      setLibraryCourses(library);
     } catch (_err) {
       // Error silently handled - mappings modal will show empty state
     } finally {
@@ -1020,6 +1066,28 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
     }
   };
 
+  const mapCourse = async (mapping: ExternalCourseMapping, internalCourseId: string) => {
+    setSavingMappingId(mapping.id);
+    try {
+      // null, not undefined: an omitted key reads as "leave it alone".
+      const updated = await externalTrainingService.updateCourseMapping(providerId, mapping.id, {
+        internal_course_id: internalCourseId || null,
+      });
+      setCourseMappings((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+      const moved = updated.records_updated ?? 0;
+      const records = moved ? `; ${moved} training record${moved === 1 ? '' : 's'} updated` : '';
+      toast.success(
+        internalCourseId
+          ? `"${mapping.external_course_name}" now counts as ${updated.internal_course_name ?? 'the chosen course'}${records}`
+          : `"${mapping.external_course_name}" is unmapped again${records}`
+      );
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save the course mapping'));
+    } finally {
+      setSavingMappingId(null);
+    }
+  };
+
   const memberLabel = (member: User) => {
     const name = member.full_name || `${member.first_name ?? ''} ${member.last_name ?? ''}`.trim() || member.username;
     return member.membership_number ? `${name} (#${member.membership_number})` : name;
@@ -1043,7 +1111,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
             Mappings - {providerName}
           </h2>
           <p className="text-theme-text-muted mt-1 text-sm">
-            Map external categories and users to your internal records
+            Map external categories, users and courses to your internal records
           </p>
         </div>
 
@@ -1074,12 +1142,114 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
             <Users className="mr-2 inline-block h-4 w-4" aria-hidden="true" />
             Users ({userMappings.filter((m) => !m.is_mapped).length} unmapped)
           </button>
+          <button
+            onClick={() => setActiveTab('courses')}
+            role="tab"
+            aria-selected={activeTab === 'courses'}
+            className={`flex-1 px-4 py-3 text-sm font-medium ${
+              activeTab === 'courses'
+                ? 'border-b-2 border-red-500 text-red-500'
+                : 'text-theme-text-muted hover:text-theme-text-primary'
+            }`}
+          >
+            <GraduationCap className="mr-2 inline-block h-4 w-4" aria-hidden="true" />
+            Courses ({courseMappings.filter((m) => !m.is_mapped).length} unmapped)
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6" role="tabpanel">
           {loading ? (
             <div className="text-theme-text-muted py-8 text-center" role="status" aria-live="polite">
               Loading mappings...
+            </div>
+          ) : activeTab === 'courses' ? (
+            <div className="space-y-3">
+              <p className="text-theme-text-muted text-sm">
+                Map each course to a course in your library. Requirements link to the library course, so when a new
+                version arrives under a new Course ID, map it to the same course and members who completed it are
+                credited.
+              </p>
+              {courseMappings.length === 0 ? (
+                <p className="text-theme-text-muted py-8 text-center">
+                  No courses yet. Run a sync or upload a report to discover courses.
+                </p>
+              ) : (
+                courseMappings.map((mapping) => {
+                  const suggestion =
+                    !mapping.is_mapped && mapping.suggested_course_id && mapping.suggested_course_name
+                      ? { id: mapping.suggested_course_id, name: mapping.suggested_course_name }
+                      : null;
+                  return (
+                    <div
+                      key={mapping.id}
+                      className={`rounded-lg border p-4 ${
+                        mapping.is_mapped
+                          ? 'bg-theme-surface-secondary border-theme-surface-border'
+                          : 'border-yellow-500/30 bg-yellow-500/10'
+                      }`}
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-theme-text-primary font-medium">{mapping.external_course_name}</p>
+                          <p className="text-theme-text-muted text-xs">
+                            Course ID: {mapping.external_course_id} | {mapping.members_completed} member
+                            {mapping.members_completed === 1 ? '' : 's'} completed
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {mapping.is_mapped && (
+                            <span className="flex items-center gap-1 text-sm text-green-700 dark:text-green-400">
+                              <CheckCircle className="h-4 w-4" aria-hidden="true" />
+                              Mapped
+                            </span>
+                          )}
+                          <select
+                            value={mapping.internal_course_id ?? ''}
+                            disabled={savingMappingId === mapping.id}
+                            onChange={(e) => {
+                              void mapCourse(mapping, e.target.value);
+                            }}
+                            aria-label={`Library course for ${mapping.external_course_name}`}
+                            className="form-input-sm w-full sm:w-56"
+                          >
+                            <option value="">Not mapped</option>
+                            {/* A course retired from the library still holds
+                                this mapping; without it the select would read
+                                "Not mapped" while records still count toward it. */}
+                            {mapping.internal_course_id &&
+                              !libraryCourses.some((c) => c.id === mapping.internal_course_id) && (
+                                <option value={mapping.internal_course_id}>
+                                  {mapping.internal_course_name ?? 'A retired course'}
+                                </option>
+                              )}
+                            {libraryCourses.map((course) => (
+                              <option key={course.id} value={course.id}>
+                                {course.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      {suggestion && (
+                        <div className="mt-3 flex flex-col gap-2 rounded-md border border-blue-500/30 bg-blue-500/10 p-3 sm:flex-row sm:items-center sm:justify-between">
+                          <p className="text-theme-text-primary text-sm">
+                            Looks like <strong>{suggestion.name}</strong> in your library — likely a new version of it.
+                          </p>
+                          <button
+                            onClick={() => {
+                              void mapCourse(mapping, suggestion.id);
+                            }}
+                            disabled={savingMappingId === mapping.id}
+                            className="btn-primary px-3 text-sm whitespace-nowrap"
+                          >
+                            Map to {suggestion.name}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
             </div>
           ) : activeTab === 'categories' ? (
             <div className="space-y-3">
@@ -1222,6 +1392,7 @@ const ExternalTrainingPage: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [testingProvider, setTestingProvider] = useState<string | null>(null);
   const [syncingProvider, setSyncingProvider] = useState<string | null>(null);
+  const [uploadingProvider, setUploadingProvider] = useState<string | null>(null);
   const [editModal, setEditModal] = useState<{ isOpen: boolean; provider: ExternalTrainingProvider | null }>({
     isOpen: false,
     provider: null,
@@ -1293,6 +1464,19 @@ const ExternalTrainingPage: React.FC = () => {
       toast.error(`Sync failed: ${getErrorMessage(err)}`);
     } finally {
       setSyncingProvider(null);
+    }
+  };
+
+  const handleUploadReport = async (providerId: string, file: File) => {
+    setUploadingProvider(providerId);
+    try {
+      const result = await externalTrainingService.uploadReport(providerId, file);
+      toast.success(`Report uploaded: ${result.message}`);
+      void loadProviders();
+    } catch (err: unknown) {
+      toast.error(`Upload failed: ${getErrorMessage(err)}`);
+    } finally {
+      setUploadingProvider(null);
     }
   };
 
@@ -1428,6 +1612,9 @@ const ExternalTrainingPage: React.FC = () => {
                   onSync={(id) => {
                     void handleSync(id);
                   }}
+                  onUploadReport={(id, file) => {
+                    void handleUploadReport(id, file);
+                  }}
                   onEdit={handleEdit}
                   onDelete={(id) => {
                     void handleDelete(id);
@@ -1436,6 +1623,7 @@ const ExternalTrainingPage: React.FC = () => {
                   isTestingConnection={testingProvider === provider.id}
                   isSyncingCategories={syncingCategoriesProvider === provider.id}
                   isSyncing={syncingProvider === provider.id}
+                  isUploading={uploadingProvider === provider.id}
                 />
               ))
             )}

@@ -51,6 +51,7 @@ const TRAINING_TYPES: { value: TrainingType; label: string }[] = [
   { value: 'orientation', label: 'Orientation' },
   { value: 'refresher', label: 'Refresher' },
   { value: 'specialty', label: 'Specialty' },
+  { value: 'policy_acknowledgment', label: 'Policy Acknowledgment' },
 ];
 
 const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categories, onClose, onSuccess }) => {
@@ -443,6 +444,7 @@ const TypeBadge: React.FC<{ type: TrainingType }> = ({ type }) => {
     orientation: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400',
     refresher: 'bg-orange-500/20 text-orange-700 dark:text-orange-400',
     specialty: 'bg-pink-500/20 text-pink-700 dark:text-pink-400',
+    policy_acknowledgment: 'bg-slate-500/20 text-slate-700 dark:text-slate-300',
   };
 
   const labels: Record<TrainingType, string> = {
@@ -452,6 +454,7 @@ const TypeBadge: React.FC<{ type: TrainingType }> = ({ type }) => {
     orientation: 'Orientation',
     refresher: 'Refresher',
     specialty: 'Specialty',
+    policy_acknowledgment: 'Policy',
   };
 
   return <span className={`rounded-sm px-2 py-0.5 text-xs ${colors[type]}`}>{labels[type]}</span>;

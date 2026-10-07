@@ -375,6 +375,7 @@ from app.models.testing_checklist import (
 )
 from app.models.training import (
     ExternalCategoryMapping,
+    ExternalCourseMapping,
     ExternalTrainingImport,
     ExternalTrainingProvider,
     ExternalTrainingSyncLog,
@@ -585,6 +586,7 @@ __all__ = [
     "SkillCheckoff",
     "ExternalTrainingProvider",
     "ExternalCategoryMapping",
+    "ExternalCourseMapping",
     "ExternalUserMapping",
     "ExternalTrainingSyncLog",
     "ExternalTrainingImport",

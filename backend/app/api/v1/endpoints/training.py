@@ -2160,7 +2160,7 @@ async def parse_historical_import(
         decoded = contents.decode("utf-8-sig")  # Handle BOM
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail="CSV file exceeds the 10MB limit.",
         )
     except UnicodeDecodeError:
@@ -3377,14 +3377,7 @@ async def get_expiring_certifications_detailed(
     ]
 
 
-VALID_TRAINING_TYPES = {
-    "certification",
-    "continuing_education",
-    "skills_practice",
-    "orientation",
-    "refresher",
-    "specialty",
-}
+VALID_TRAINING_TYPES = {t.value for t in TrainingType}
 VALID_STATUSES = {"scheduled", "in_progress", "completed", "cancelled", "failed"}
 
 
@@ -3410,7 +3403,7 @@ async def import_training_csv(
         content = await read_upload_limited(file, MAX_TRAINING_CSV_BYTES)
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail="CSV file exceeds the 10MB limit.",
         )
     try:

@@ -611,6 +611,32 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             "description": "Link to the submission in the Review tab",
         },
     ],
+    "external_course_match": [
+        {"name": "recipient_name", "description": "Training officer's name"},
+        {
+            "name": "provider_name",
+            "description": "The training provider the courses came from",
+        },
+        {
+            "name": "course_count",
+            "description": "How many new courses the email lists",
+        },
+        {
+            "name": "courses_html",
+            "description": (
+                "Each new course with its provider Course ID, the library "
+                "course it looks like, and how many members completed it"
+            ),
+        },
+        {
+            "name": "courses_text",
+            "description": "Plain-text version of the course list",
+        },
+        {
+            "name": "mappings_url",
+            "description": "Link to the integrations screen, where courses are mapped",
+        },
+    ],
     "equipment_request_update": [
         {"name": "member_name", "description": "Requesting member's name"},
         {"name": "item_name", "description": "The item the member asked for"},
@@ -1195,6 +1221,27 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "suggestion_url": "https://example.org/suggestions?tab=review&id=sample",
         }
     ),
+    "external_course_match": _sample(
+        {
+            "recipient_name": "Captain Maria Lopez",
+            "provider_name": "Target Solutions",
+            "course_count": "1",
+            "courses_html": (
+                '<table class="facts" role="presentation" cellpadding="0" '
+                'cellspacing="0"><tr><td class="fact" colspan="2">'
+                '<p class="fact-label">CAPCE HIPAA Awareness (4123987)</p>'
+                '<p class="fact-value">Looks like HIPAA Awareness '
+                "&middot; 3 members completed it</p></td></tr></table>"
+            ),
+            "courses_text": (
+                "- CAPCE HIPAA Awareness (4123987): looks like HIPAA Awareness;"
+                " 3 members completed it"
+            ),
+            "mappings_url": (
+                "https://example.org/training/admin?page=setup&tab=integrations"
+            ),
+        }
+    ),
     "equipment_request_update": _sample(
         {
             "member_name": "John Doe",
@@ -1370,6 +1417,7 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     "application_withdrawn": {"applicant_name": "full"},
     "suggestion_submitted": {"recipient_name": "full"},
     "equipment_request_update": {"member_name": "full"},
+    "external_course_match": {"recipient_name": "full"},
     "shift_assignment": {"recipient_name": "full"},
     "shift_reminder": {"recipient_name": "first"},
     "storefront_order_confirmation": {
@@ -2344,6 +2392,42 @@ View your requests: {{requests_url}}
 DEFAULT_EQUIPMENT_REQUEST_UPDATE_SUBJECT = (
     "Your equipment request was {{status_label}}: {{item_name}}"
 )
+
+# Sent to training officers when a sync or upload brings in a provider course
+# that looks like one already in the library — typically a new version of a
+# course a requirement depends on. Until it is mapped, members who took the
+# new version read as not current, so the email says what to map and where.
+DEFAULT_EXTERNAL_COURSE_MATCH_HTML = build_shell(
+    "New Course Version to Map",
+    """        <p>Hello {{recipient_name}},</p>
+        <p>{{provider_name}} sent {{course_count}} course(s) the Logbook has not
+        seen before that look like courses already in your library. Members
+        who completed them are not credited toward the library course until
+        each one is mapped.</p>
+        {{courses_html}}
+        <p>Mapping a course credits the members who already completed it.</p>
+""" + action("{{mappings_url}}", "Map Courses"),
+    accent=ACCENT_BLUE,
+    chip="Training",
+)
+
+DEFAULT_EXTERNAL_COURSE_MATCH_TEXT = """New Course Version to Map
+
+Hello {{recipient_name}},
+
+{{provider_name}} sent {{course_count}} course(s) the Logbook has not seen
+before that look like courses already in your library. Members who completed
+them are not credited toward the library course until each one is mapped.
+
+{{courses_text}}
+
+Mapping a course credits the members who already completed it.
+
+Map courses: {{mappings_url}}
+
+{{footer_text}}"""
+
+DEFAULT_EXTERNAL_COURSE_MATCH_SUBJECT = "New {{provider_name}} course version to map"
 
 # Default ballot notification email
 DEFAULT_BALLOT_NOTIFICATION_HTML = build_shell(
@@ -3672,6 +3756,9 @@ class EmailTemplateService:
         "ballot_link_notice_html",
         "footer_html",
         "details_html",
+        # Built by external_course_mapping._course_lines, which escapes every
+        # course name and id it inserts.
+        "courses_html",
         "message_html",
         "notes_html",
         "apparatus_html",
@@ -4002,6 +4089,18 @@ class EmailTemplateService:
                 "Sent to a member when the quartermaster approves, declines "
                 "or issues their equipment request, with the quartermaster's "
                 "note if one was left."
+            ),
+        },
+        {
+            "type": EmailTemplateType.EXTERNAL_COURSE_MATCH,
+            "name": "New Course Version to Map",
+            "subject": DEFAULT_EXTERNAL_COURSE_MATCH_SUBJECT,
+            "html": DEFAULT_EXTERNAL_COURSE_MATCH_HTML,
+            "text": DEFAULT_EXTERNAL_COURSE_MATCH_TEXT,
+            "description": (
+                "Sent to training officers when a training provider sends a "
+                "course that looks like one already in the library, so it can "
+                "be mapped and members who completed it credited."
             ),
         },
         {
