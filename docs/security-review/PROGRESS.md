@@ -16,6 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR `claude/security-review-grants-fundraising`** (branch pushed; number
+recorded here once GitHub assigns it): Feature 22 (Grants & fundraising),
+pass 7 (watchdog pickup — PR #2978/#2979 (Feature 21, Admin hours, pass 7,
+plus its own stuck test-flake fix) had both just merged with no branch or PR
+started for the next feature since). Real delta since pass 6 (`e070ce9c`, PR
+#2875) is one non-rotation commit, `93ffd7b6`, bundling GF-9's float-money
+half (now `Decimal`-accumulated end-to-end, already an owner-recorded
+decision in `docs/module-audit/grants-fundraising.md`, independently
+re-verified here) plus two cosmetic changes (a `User.display_name` rename,
+two Tailwind class swaps). 0 fixes needed by this pass itself (the one
+fixable item had already landed before this pass began), 0 new findings.
+Route surface re-enumerated (45/45, unchanged) with every permission string
+checked individually, not spot-checked. Completion gate green
+(flake8/black/isort — isort reinstalled to the CI-pinned 9.0.1 to match;
+migrations — 538 revisions, single head; `check_route_permissions.py
+--strict` — 251 routes, 0 errors/warnings; 718 scoped backend tests, up from
+684; frontend typecheck/lint clean). See the Log entry below for detail.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 7, PR #2978, merged; plus its own stuck follow-up, PR #2979, merged), preserved for history</summary>
+
+**Both merged.** PR #2978 (Feature 21, Admin hours, pass 7) merged via merge
+commit `727a13e9`. PR #2979 (`claude/fix-report-local-times-date-bomb`, a
+test-flake fix unrelated to the rotation's own feature work — two commits
+making `report_local_times`'s row-date tests stop colliding with the real
+calendar date) merged separately via merge commit `a9141c0a`, immediately
+after. Both were the "two stuck PRs" a watchdog session cleared before
+Feature 22's own pass 7 (above) picked up. Rotation row 21 stayed ✅.
+
 **PR [#2978](https://github.com/thegspiro/the-logbook/pull/2978)**: branch
 `claude/security-review-admin-hours`, Feature 21 (Admin hours), pass 7
 (watchdog pickup — PR #2977, Feature 20, had already merged with nothing
@@ -32,6 +61,8 @@ migrations — 538 revisions, single head; `check_route_permissions.py
 --strict` — 251 routes; 139 + 22 scoped backend tests; frontend
 typecheck/lint, 113 + 143 scoped frontend tests). See the Log entry below
 for detail.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 7, PR #2977, merged), preserved for history</summary>
@@ -18107,7 +18138,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
@@ -18127,6 +18158,74 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-07 — Feature 22 (Grants & fundraising, pass 7) — one non-rotation commit reviewed in full, 1 incidental fix re-verified (GF-9's float half), 0 fixed by this pass, 0 new findings (watchdog pickup)
+
+Watchdog pickup. PR #2978 (Feature 21, Admin hours, pass 7) and its own
+stuck follow-up PR #2979 (a test-flake fix, unrelated to the rotation's own
+feature work) had both just merged — closing out Feature 21 — with no branch
+or PR started for the next feature since. No open `claude/security-review-*`
+PR existed (confirmed before this iteration began, recorded in this file's
+Open PR section), confirming the rotation's Step 0, so this iteration took
+Feature 22 (Grants & fundraising), the next `⬜` row.
+
+**The real delta since pass 6 (`e070ce9c`, PR #2875) is one commit,
+`93ffd7b6` — not a security-review-rotation commit, and its own subject line
+("fix(event-requests): show the server's reason on a refused schedule or
+postpone") gives no hint that it touches this feature at all.** `git diff
+e070ce9c..HEAD --stat` against all six declared backend files plus the
+frontend module found exactly two changed files, both inside that one
+commit (confirmed `93ffd7b6..HEAD` is empty for every declared file — nothing
+landed after it). Read every changed line in full:
+
+1. **GF-9's float-money third, now fixed.** `get_grant_report`
+   (`grant_service.py`) and `get_fundraising_report`
+   (`fundraising_service.py`) now accumulate every running total as
+   `Decimal` and convert to `float` once, at the response boundary, with the
+   average gift rounded half-up to the cent. This matches
+   `docs/module-audit/grants-fundraising.md`'s GF-9 entry, already annotated
+   "Float part resolved 2026-10-05 (owner decision)" independently of this
+   rotation — re-verified by reading the current code against that prose
+   (not trusted from it) and running the two guard-test classes it names
+   (`TestGrantReportIsExact`, `TestFundraisingReportIsExact`), both green.
+   GF-9's other two-thirds (zero/unbounded money fields; donor-PII exposure
+   to `fundraising.view`) are unchanged and remain open — re-verified
+   directly, not assumed from the module-audit doc's "stand as before".
+2. Two cosmetic changes: `grants.py`'s note-author lookup switched
+   `user.full_name` for `user.display_name` (both real `User` properties,
+   a repo-wide preferred-name convention), and `GrantsDashboardPage.tsx`
+   swapped two hardcoded Tailwind classes for shared theme utilities.
+   Neither is a finding.
+
+0 fixes needed by this pass itself (the one fixable item had already landed
+via the commit above before this pass began); 0 new findings. Full write-up:
+[`GF-22-grants-fundraising.md`](./GF-22-grants-fundraising.md) → **Pass 7**.
+
+Route surface re-enumerated from scratch, individually, not spot-checked:
+**45 routes**, unchanged — every GET gated `fundraising.view`, every
+POST/PUT/DELETE gated `fundraising.manage`, no route with no auth
+dependency, no OR-gate to check a second alternative on. Re-confirmed
+unchanged (per every prior pass, all re-verified against current code in
+full, cited above): GF-7 (no state-machine/overspend guard on
+`update_application`/`create_expenditure`), GF-8 (`is_anonymous` not
+enforced in `DonationResponse`), GF-27a (dashboard KPI multi-status
+aggregate vs. single-status link), GF-33 (applications page capped at 1,000,
+no pagination UI). All four are product/design decisions, already in
+`docs/KNOWN_LIMITATIONS.md`; no change needed there this pass (GF-9 never
+had its own `KNOWN_LIMITATIONS.md` row to update, despite pass 2's write-up
+once saying it added one).
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` (isort
+reinstalled to the CI-pinned 9.0.1, matching `.github/workflows/ci.yml`'s
+Backend Lint job rather than the 9.0.2 present locally) on
+`app/`/`tests/`/`alembic/` — clean. `validate_migrations.py --strict` — 538
+revisions, single head. `pytest -k "grant or fundraising"` — 718 passed, 1
+pre-existing skip (up from pass 6's 684). `check_route_permissions.py
+--strict` — 251 routes, 0 errors/warnings. Frontend `npm run
+typecheck`/`npm run lint` — clean.
+
+Rotation row 22 → ✅ (pending PR merge). Next: Feature 23 (Medical
+supplies) — stays `⬜` until its own iteration.
 
 ### 2026-10-07 — Feature 21 (Admin hours, pass 7) — one substantial non-rotation commit reviewed in full, 0 fixed, 0 flagged, two long-standing "open by design" items now resolved (watchdog pickup)
 
