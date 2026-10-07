@@ -652,14 +652,14 @@ Available training providers:
 - **iAmResponding** — Response tracking
 - **Custom API** — Generic webhook-based provider
 
-**Matched completions become training records automatically** _(2026-10-07)_
-for Vector Solutions, Target Solutions, Lexipol and iAmResponding: each sync
-credits every completion whose member is matched, and only completions nobody
-matches wait under **Imports**. A **Custom API** provider keeps the review step
-— its completions wait under **Imports** for an officer. Each completion is
-keyed by the provider's record id, so a re-sync updates it rather than crediting
-it twice; a completion the provider sends without an id is keyed by member,
-course and completion date instead.
+**Only Target Solutions credits completions automatically** _(2026-10-07)_.
+Its syncs turn every completion whose member is matched into a training record;
+for Vector Solutions, Lexipol, iAmResponding and a Custom API, synced
+completions wait under **Imports** for an officer, as before. Each of those
+providers moves to automatic crediting only after its own review against real
+records. Every provider's completion is keyed by its record id, so a re-sync
+updates it rather than adding it twice; one the provider sends without an id is
+keyed by member, course and completion date instead.
 
 ### Setting up Target Solutions
 
@@ -703,8 +703,8 @@ member immediately.
 
 **Matched completions are credited automatically** _(2026-10-07)_. A Target
 Solutions sync turns every completion whose member is matched into a training
-record straight away, the same as an upload and the same as the other named
-providers; only completions nobody matches wait under **Imports**. When such a member is mapped later, their waiting
+record straight away, the same as an upload; only completions nobody matches
+wait under **Imports**. When such a member is mapped later, their waiting
 completions are imported with **Import** or **Bulk Import**.
 
 Credit hours come from the report's **Duration (hours)** column — the hours the

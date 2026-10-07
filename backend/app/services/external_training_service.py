@@ -67,14 +67,10 @@ DEFAULT_TS_REVIEW_TIME = time(2, 0)
 
 # Providers whose synced completions become training records without an
 # officer's review, once the member is matched.
-AUTO_CREDIT_PROVIDERS = frozenset(
-    {
-        ExternalProviderType.TARGET_SOLUTIONS,
-        ExternalProviderType.VECTOR_SOLUTIONS,
-        ExternalProviderType.LEXIPOL,
-        ExternalProviderType.I_AM_RESPONDING,
-    }
-)
+# Target Solutions only, for now: it is the one provider proven against a
+# real department's data. Each other provider joins after its own review
+# against real records (owner decision, 2026-10-07).
+AUTO_CREDIT_PROVIDERS = frozenset({ExternalProviderType.TARGET_SOLUTIONS})
 
 
 def _is_blank(value: Any) -> bool:
@@ -475,10 +471,9 @@ class ExternalTrainingSyncService:
             sync_log.records_fetched = len(records)
 
             await self._stage_records(provider, sync_log, records)
-            # Completions from the named providers are credited as they arrive
-            # (owner decision, 2026-10-07): each is keyed by its record id, so
-            # nothing is credited twice. A custom API keeps the officer's
-            # review step, since what its records hold is configured per site.
+            # Completions from AUTO_CREDIT_PROVIDERS are credited as they
+            # arrive: each is keyed by its record id, so nothing is credited
+            # twice. Every other provider keeps the officer's review step.
             if provider.provider_type in AUTO_CREDIT_PROVIDERS:
                 created, awaiting = await self.credit_matched_members(
                     provider, sync_log

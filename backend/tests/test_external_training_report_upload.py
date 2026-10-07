@@ -355,25 +355,13 @@ class TestNoDuplicates:
             ExternalProviderType.VECTOR_SOLUTIONS,
             ExternalProviderType.LEXIPOL,
             ExternalProviderType.I_AM_RESPONDING,
+            ExternalProviderType.CUSTOM_API,
         ],
     )
-    async def test_named_providers_credit_matched_members(
+    async def test_other_providers_keep_the_review_step(
         self, db_session, provider_type
     ):
         _, member, provider = await _setup(db_session, provider_type=provider_type)
-
-        await self._sync_records(db_session, provider, [self._ts_record(MATCHED)])
-
-        (record,) = await _records_for(db_session, provider)
-        assert record.user_id == member.id
-        assert (await _staged(db_session, provider, "T-1")).import_status == (
-            "imported"
-        )
-
-    async def test_a_custom_api_keeps_the_review_step(self, db_session):
-        _, member, provider = await _setup(
-            db_session, provider_type=ExternalProviderType.CUSTOM_API
-        )
 
         await self._sync_records(db_session, provider, [self._ts_record(MATCHED)])
 
@@ -406,10 +394,20 @@ class TestNoDuplicates:
         log = await self._sync_records(db_session, provider, [first, second])
 
         assert log.records_imported == 2
-        records = await _records_for(db_session, provider)
-        assert sorted(r.course_name for r in records) == ["Ethics", "Harassment"]
-        assert {r.user_id for r in records} == {member.id}
-        assert all("None" not in r.external_record_id for r in records)
+        staged = (
+            (
+                await db_session.execute(
+                    select(ExternalTrainingImport).where(
+                        ExternalTrainingImport.provider_id == provider.id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert sorted(r.course_title for r in staged) == ["Ethics", "Harassment"]
+        assert {r.user_id for r in staged} == {member.id}
+        assert all("None" not in r.external_record_id for r in staged)
 
     async def test_an_unidentifiable_completion_is_skipped(self, db_session):
         _, _, provider = await _setup(
