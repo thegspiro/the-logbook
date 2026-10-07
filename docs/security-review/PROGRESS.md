@@ -16,6 +16,17 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #2983 (Feature 24, Meetings & minutes, pass 6) merged clean
+(confirmed via `list_pull_requests` — not the row above, which was still
+narrating it as open; merged_at 2026-10-07T14:37:54Z). 0 fixes needed by
+that pass itself; the Log entry below already records it in full, so there
+is nothing further to record here. Rotation row 24 → ✅. Watchdog pickup:
+over an hour elapsed with no new branch or PR opened for Feature 25
+(Messaging & notifications) before this iteration began.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 6, PR #2983, before it merged), preserved for history</summary>
+
 **PR [#2983](https://github.com/thegspiro/the-logbook/pull/2983)**: branch
 `claude/security-review-meetings-minutes`, Feature 24 (Meetings & minutes),
 pass 6 (no watchdog pickup needed — PR #2981, Feature 23, Medical supplies,
@@ -32,6 +43,8 @@ gate green (flake8/black/isort at CI's pins; migrations — 538 revisions,
 single head; 330 scoped backend tests, up from 289; frontend
 typecheck/lint clean, 37 scoped frontend tests, up from 26). See the Log
 entry below for detail.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (bridge note recording PR #2981's merge before Feature 24 started; and, nested below, the pre-merge note for PR #2981 itself), preserved for history</summary>
@@ -18203,7 +18216,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
@@ -18220,6 +18233,41 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-07 — Feature 25 (Messaging & notifications, pass 6) — 0 fixed, 0 new findings (watchdog pickup)
+
+Picked up by the scheduled `/loop 30m` watchdog: PR #2983 (Feature 24,
+Meetings & minutes, pass 6) had merged over an hour earlier (14:37 UTC) with
+no new `claude/security-review-*` branch or PR opened for Feature 25,
+confirmed via `list_pull_requests` (state=open, no match) both before this
+pass started and again before this PR was opened. Real delta since pass 5
+(`cfeb21e34`) is small: one feature (W50-23, proxy-aware ballot mail notice
+— reviewed fresh against all seven dimensions, clean: both names
+`_html.escape`d before interpolation, the new `ballot_link_notice_html`
+variable correctly added to the raw-HTML allowlist as a pre-escaped
+fragment, its migration guarded on `has_table` with a symmetric
+upgrade/downgrade) plus incidental preferred-name display-helper swaps
+(`format_display_name`/`format_legal_name`) that don't reach any of this
+feature's own HTML output. All eleven byte-identical files confirmed via
+`git diff` rather than assumed from the commit list. Route surface
+re-enumerated at 51/51 (unchanged). Every standing fix (MSG-4 through
+MSG-16) and every open flagged item (MSG-3, MSG-12, MSG-15, MAIL-4, F4,
+MAIL-22, the `NotificationRuleCreate/Update.config` note) re-verified
+unchanged, none re-flagged.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+`app/ tests/ alembic/`; `validate_migrations.py --strict` passed (538
+revisions, single head); scoped backend tests (`-k "message or notification
+or email_template or ballot"`) 1197 passed, 1 skipped (environment-only —
+`pywebpush`); frontend `npm run typecheck` 0 errors, `npm run lint` exit 0.
+`alembic upgrade head` (the console-script entry point, not `python3 -m
+alembic`, which this environment's own startup hook invokes and which fails
+for an unrelated reason — no `__main__.py` in this alembic version) rebuilt
+the schema cleanly end-to-end before the test run.
+
+Findings doc: [`MSG-25-messaging-notifications.md`](./MSG-25-messaging-notifications.md)'s
+**Pass 6** section. No `KNOWN_LIMITATIONS.md` change needed — no new
+findings. Rotation row 25 → ✅ (pending PR merge). Next: Feature 26 (Forms).
 
 ### 2026-10-07 — Feature 24 (Meetings & minutes, pass 6) — 0 fixed, 0 new findings, 2 standing flagged items re-confirmed OPEN
 
