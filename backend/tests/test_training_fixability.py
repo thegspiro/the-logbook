@@ -16,6 +16,7 @@ from uuid import uuid4
 import pytest
 
 from app.models.training import ProgressCreditSource, SubmissionStatus, TrainingStatus
+from app.services.qualification_service import QualificationService
 from app.services.training_program_service import TrainingProgramService
 from app.services.training_submission_service import TrainingSubmissionService
 
@@ -149,17 +150,27 @@ class TestReverseApproval:
         monkeypatch.setattr(
             TrainingProgramService, "reverse_credits_for_source", reverse_mock
         )
+        requalify = AsyncMock(return_value=None)
+        monkeypatch.setattr(
+            QualificationService, "sync_from_training_record", requalify
+        )
+        reviewer_id = str(uuid4())
 
         result = await svc.reverse_approval(
             submission_id="s-1",
-            reviewer_id=str(uuid4()),
+            reviewer_id=reviewer_id,
             organization_id=str(uuid4()),
             reason="wrong member",
         )
 
-        # Spawned record voided (kept for audit).
+        # Spawned record voided (kept for audit), with the reason the member
+        # sees, and the qualification it conferred recomputed.
         assert record.status == TrainingStatus.CANCELLED
         assert "VOIDED" in record.notes
+        assert record.void_reason == "wrong member"
+        assert record.voided_by == reviewer_id
+        assert record.voided_at is not None
+        requalify.assert_awaited_once_with(record)
         # Credit reversed for BOTH the submission and the record source keys.
         assert reverse_mock.await_count == 2
         reversed_sources = {c.kwargs["source_id"] for c in reverse_mock.await_args_list}

@@ -99,6 +99,13 @@ from app.services.training_compliance import (
     requirement_applies_to_user,
     tally_standing,
 )
+from app.services.training_record_notices import (
+    CHANGED,
+    VOIDED,
+    describe_changes,
+    send_training_record_notice,
+    snapshot,
+)
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import fetch_org_waivers, fetch_user_waivers
 from app.utils.org_scoping import assert_all_in_org
@@ -617,15 +624,14 @@ async def _sync_qualifications(db: AsyncSession, records) -> None:
     recorded training which did happen and is already saved.
     """
     service = QualificationService(db)
-    wrote = False
     for record in records:
         try:
-            if await service.sync_from_training_record(record):
-                wrote = True
+            await service.sync_from_training_record(record)
         except Exception as e:  # pragma: no cover - defensive
             logger.error(f"Failed to sync qualification from training record: {e}")
-    if wrote:
-        await db.commit()
+    # Unconditional: a recompute that removes a grant returns None, the same
+    # as one that changed nothing, and its delete is only flushed.
+    await db.commit()
 
 
 @router.get("/records", response_model=list[TrainingRecordResponse])
@@ -1067,11 +1073,20 @@ async def create_records_bulk(
 async def update_record(
     record_id: UUID,
     record_update: TrainingRecordUpdate,
+    background_tasks: BackgroundTasks,
+    reason: str | None = Query(
+        default=None,
+        max_length=1000,
+        description="Why the record was changed; shown to the member",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
     """
     Update a training record
+
+    The member is told what changed, by bell and email, when any value they
+    see on their own record changes.
 
     **Authentication required**
     **Requires permission: training.manage**
@@ -1086,6 +1101,14 @@ async def update_record(
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Record not found"
+        )
+
+    # A void is final: editing the status back would hand back credit the
+    # department removed, behind the member's notice that it was gone.
+    if record.voided_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A voided training record can't be edited",
         )
 
     # Update fields
@@ -1104,6 +1127,7 @@ async def update_record(
         if not cat_ok.scalar_one_or_none():
             raise HTTPException(status_code=404, detail="Training category not found")
 
+    before = snapshot(record)
     for field, value in update_fields.items():
         setattr(record, field, value)
 
@@ -1138,6 +1162,9 @@ async def update_record(
         and update_fields["status"] == TrainingStatus.COMPLETED.value
     ):
         event_data["completion_recorded"] = True
+    changes = describe_changes(before, snapshot(record))
+    if reason and reason.strip():
+        event_data["reason"] = reason.strip()
     await log_audit_event(
         db=db,
         event_type="training_record_updated",
@@ -1148,29 +1175,55 @@ async def update_record(
         username=current_user.username,
     )
 
+    if changes:
+        background_tasks.add_task(
+            send_training_record_notice,
+            str(current_user.organization_id),
+            str(record_id),
+            str(current_user.id),
+            CHANGED,
+            reason=reason,
+            changes=changes,
+        )
+
     return record
 
 
 @router.delete("/records/{record_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def void_record(
     record_id: UUID,
-    reason: str | None = Query(
-        default=None, description="Why the record is being voided (audit trail)"
+    background_tasks: BackgroundTasks,
+    reason: str = Query(
+        ...,
+        min_length=1,
+        max_length=1000,
+        description="Why the record is being voided; shown to the member",
     ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
     """
-    Void a training record entered in error.
+    Void a training record entered in error, or one a member should not have
+    been credited for.
 
     The record is marked ``cancelled`` (never hard-deleted, so the correction
     stays auditable) and any pipeline-requirement credit it produced is
     un-applied — so a mistaken or duplicate entry can be reversed cleanly
-    without leaving inflated progress behind.
+    without leaving inflated progress behind. A reason is required: the
+    member is told of the void, by bell and email, and sees the reason on
+    the record. An imported record keeps its provider id, so a later sync or
+    upload of the same completion links to it rather than crediting it again.
 
     **Authentication required**
     **Requires permission: training.manage**
     """
+    reason = reason.strip()
+    if not reason:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A reason is required to void a training record",
+        )
+
     from app.services.training_program_service import TrainingProgramService
 
     result = await db.execute(
@@ -1200,13 +1253,18 @@ async def void_record(
     )
 
     record.status = TrainingStatus.CANCELLED
-    void_note = f"[VOIDED by {current_user.username}"
-    if reason:
-        void_note += f": {reason}"
-    void_note += "]"
+    record.voided_at = datetime.now(timezone.utc)
+    record.voided_by = str(current_user.id)
+    record.void_reason = reason
+    void_note = f"[VOIDED by {current_user.username}: {reason}]"
     record.notes = f"{record.notes}\n{void_note}" if record.notes else void_note
 
     await db.commit()
+
+    # A qualification this record conferred is recomputed from the records
+    # still standing, so a void removes a grant nothing else supports rather
+    # than leaving the member cleared for a seat on a credential they lost.
+    await _sync_qualifications(db, [record])
 
     await log_audit_event(
         db=db,
@@ -1220,6 +1278,15 @@ async def void_record(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+    )
+
+    background_tasks.add_task(
+        send_training_record_notice,
+        str(current_user.organization_id),
+        str(record_id),
+        str(current_user.id),
+        VOIDED,
+        reason=reason,
     )
 
 

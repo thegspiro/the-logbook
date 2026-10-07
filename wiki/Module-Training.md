@@ -113,8 +113,8 @@ GET    /api/v1/training/records                            # List training recor
 POST   /api/v1/training/records                            # Create a training record
 POST   /api/v1/training/records/bulk                       # Bulk create (up to 500, with duplicate detection)
 POST   /api/v1/training/records/import-csv                 # CSV import with parse and preview
-PATCH  /api/v1/training/records/{id}                       # Update a training record
-DELETE /api/v1/training/records/{id}                       # Void a record (cancels + un-applies pipeline credit)
+PATCH  /api/v1/training/records/{id}                       # Update a training record (member is told what changed; optional ?reason=)
+DELETE /api/v1/training/records/{id}?reason=…              # Void a record, reason required (cancels, un-applies pipeline credit, tells the member)
 GET    /api/v1/training/compliance-summary/{user_id}       # Member compliance card (green/yellow/red)
 GET    /api/v1/training/compliance-matrix                  # All members x requirements grid
 GET    /api/v1/training/competency-matrix                  # Department readiness heat-map

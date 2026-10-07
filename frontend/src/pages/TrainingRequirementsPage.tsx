@@ -796,6 +796,13 @@ const TemplateModal: React.FC<{
   // because a requirement with applies_to_all: false and no targeting applies
   // to nobody and vanishes from every member's compliance view. Selecting a
   // template opens the create form, where officers can narrow the assignment.
+  //
+  // A regulation that mandates one topic (HIPAA, bloodborne pathogens, hazmat)
+  // is a Courses template, never an hours one: an hours requirement filtered
+  // only by training type is met by an hour of anything of that type, so two
+  // medical CE courses satisfied the HIPAA refresher. The officer links the
+  // department's own course, the same way NIMS works below. The hour-total
+  // templates (NFPA 1001/1500, NREMT) stay hours: any CE is what those count.
   const templates: TrainingRequirementCreate[] = [
     {
       name: 'NFPA 1001 Firefighter Annual Training',
@@ -853,10 +860,10 @@ const TemplateModal: React.FC<{
     },
     {
       name: 'Hazmat Operations Refresher',
-      description: 'Annual hazardous materials operations-level refresher required by OSHA 29 CFR 1910.120',
-      requirement_type: 'hours',
+      description:
+        'Annual hazardous materials operations-level refresher required by OSHA 29 CFR 1910.120. Link your hazmat refresher course from the course library.',
+      requirement_type: 'courses',
       training_type: 'refresher',
-      required_hours: 8,
       frequency: 'annual',
       applies_to_all: true,
       due_date_type: 'calendar_period',
@@ -869,10 +876,9 @@ const TemplateModal: React.FC<{
     {
       name: 'Bloodborne Pathogens Annual Refresher',
       description:
-        'Annual bloodborne pathogens and exposure control plan training required by OSHA 29 CFR 1910.1030 for members with occupational exposure',
-      requirement_type: 'hours',
+        'Annual bloodborne pathogens and exposure control plan training required by OSHA 29 CFR 1910.1030 for members with occupational exposure. Link your bloodborne pathogens course from the course library.',
+      requirement_type: 'courses',
       training_type: 'refresher',
-      required_hours: 2,
       frequency: 'annual',
       applies_to_all: true,
       due_date_type: 'calendar_period',
@@ -885,10 +891,9 @@ const TemplateModal: React.FC<{
     {
       name: 'HIPAA Privacy & Security Awareness',
       description:
-        'Annual HIPAA privacy and security training for all personnel with access to protected health information (patient care reports, EMS records)',
-      requirement_type: 'hours',
+        'Annual HIPAA privacy and security training for all personnel with access to protected health information (patient care reports, EMS records). Link your HIPAA course from the course library.',
+      requirement_type: 'courses',
       training_type: 'continuing_education',
-      required_hours: 1,
       frequency: 'annual',
       applies_to_all: true,
       due_date_type: 'calendar_period',

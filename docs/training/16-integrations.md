@@ -768,6 +768,17 @@ Details:
 
 #### Course mappings _(2026-10-07)_
 
+> **Warning:** importing completions does not make a requirement check the
+> right course. A requirement of type **Hours** filtered only by training type
+> is met by **any** imported course of that type. One department's first
+> Target Solutions import showed a member's annual HIPAA refresher as complete
+> on the strength of two CAPCE medical courses — Hematology and Sepsis — with no
+> HIPAA training at all. Before your first import, make every topic-specific
+> requirement (HIPAA, bloodborne pathogens, policy acknowledgments…) a
+> **Courses** requirement and map the provider's courses to it as described
+> below. See
+> [Never Use an Hours Requirement for a Required Topic](./02-training.md#never-use-an-hours-requirement-for-a-required-topic).
+
 Target Solutions gives each course a **Course ID**, and issues a new one when it
 publishes a new version — a new HIPAA video, a re-accredited CAPCE course, a
 revised policy. Requirements link to courses in **your library**, not to
@@ -833,6 +844,12 @@ uploaded each update the one existing entry. A completion that is already a
 training record is never credited again. An upload and a sync for the same
 provider take turns rather than running over each other, and the database
 itself refuses a second entry with the same Transcript ID.
+
+**A voided completion stays voided.** If an officer voids a training record
+that came from Target Solutions — a course a member cheated on, say — the
+record keeps its Transcript ID, so every later sync or upload of that
+completion links to the voided record and credits nothing. See _Fixing a
+Mistaken Approval or Record_ in the Training guide.
 
 > **On upgrade:** if two staged entries already shared a Transcript ID, the
 > upgrade keeps one — the one already imported, else the oldest — and marks the

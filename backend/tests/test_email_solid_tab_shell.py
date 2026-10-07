@@ -68,6 +68,8 @@ MIGRATION = _load("*_15c5bc7700aa_*.py")
 _ADDED_AFTER_THE_FREEZE = {
     EmailTemplateType.EQUIPMENT_REQUEST_UPDATE.value: "fb7da5b05833",
     EmailTemplateType.EXTERNAL_COURSE_MATCH.value: "95dbdfb6591d",
+    EmailTemplateType.TRAINING_RECORD_VOIDED.value: "26ca07c56d0f",
+    EmailTemplateType.TRAINING_RECORD_CHANGED.value: "26ca07c56d0f",
 }
 
 

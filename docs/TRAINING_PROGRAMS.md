@@ -522,10 +522,15 @@ reminders**.
 
 Entries made in error can be undone without hand-editing progress:
 
-- **Void a training record** (`DELETE /training/records/{id}`, `training.manage`)
-  marks the record cancelled — kept for audit, never hard-deleted — and un-applies
-  any pipeline credit it produced. The compliance engine only counts completed
-  records, so a voided one stops counting immediately.
+- **Void a training record**
+  (`DELETE /training/records/{id}?reason=…`, `training.manage`) marks the record
+  cancelled — kept for audit, never hard-deleted — and un-applies any pipeline
+  credit it produced. The compliance engine only counts completed records, so a
+  voided one stops counting immediately. Since 2026-10-07 the `reason` is
+  **required** (a call without one gets 422) and is stored on the record as
+  `void_reason`, shown to the member, and sent to them by bell and email. A
+  voided record can't be edited (`PATCH` returns 400), and a re-import of the same
+  provider completion links to it rather than crediting it again.
 - **Reverse an approval**
   (`POST /training/submissions/{id}/reverse-approval`, `training.manage`) voids the
   record the approval spawned, un-applies the credit keyed on both the submission
@@ -1578,16 +1583,25 @@ hours count toward that requirement's Airway section.
    - **NFPA 1500 Occupational Safety Training** (8 hrs, annual, calendar period)
    - **NREMT EMT Recertification** (40 hrs, 24-month rolling period)
    - **CPR/BLS Certification** (certification, 24-month rolling period)
-   - **Hazmat Operations Refresher** (8 hrs, annual — OSHA 29 CFR 1910.120)
-   - **Bloodborne Pathogens Annual Refresher** (2 hrs, annual — OSHA 29 CFR 1910.1030)
-   - **HIPAA Privacy & Security Awareness** (1 hr, annual — 45 CFR 164.530(b))
+   - **Hazmat Operations Refresher** (course you link, annual — OSHA 29 CFR 1910.120)
+   - **Bloodborne Pathogens Annual Refresher** (course you link, annual — OSHA 29 CFR 1910.1030)
+   - **HIPAA Privacy & Security Awareness** (course you link, annual — 45 CFR 164.530(b))
    - **SCBA Fit Test & Respiratory Protection** (checklist, annual — OSHA 29 CFR 1910.134)
    - **NIMS/ICS Initial Certification** (ICS-100/200, IS-700/800 courses, one-time)
    - **New Member Orientation Checklist** (checklist, one-time, probationary members)
 3. Selecting a template opens the create form pre-filled — review and adjust
-   the hours, due date configuration, and assignment before saving. Templates
+   the hours, due date configuration, and assignment before saving. The
+   Hazmat, Bloodborne Pathogens and HIPAA templates are Courses requirements:
+   pick the department's course for that topic from the library. Templates
    based on national standards carry NFPA/NREMT/OSHA/HIPAA/FEMA source
    attribution automatically.
+
+> **Warning:** never model a topic-specific mandate (HIPAA, bloodborne
+> pathogens, a policy acknowledgment) as an **Hours** requirement filtered only
+> by training type — any course of that type will satisfy it. A department's
+> HIPAA refresher, built that way, was shown as met by two medical CE courses
+> and no HIPAA training. Link the requirement to the course instead. See
+> [Never Use an Hours Requirement for a Required Topic](./training/02-training.md#never-use-an-hours-requirement-for-a-required-topic).
 
 ### 2. Create Training Program
 

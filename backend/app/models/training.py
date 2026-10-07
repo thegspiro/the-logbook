@@ -424,6 +424,17 @@ class TrainingRecord(Base):
     notes = Column(Text)
     attachments = Column(JSON)  # List of file URLs or references
 
+    # Set when an officer voids the record (status becomes CANCELLED), for
+    # example on finding a member cheated. The reason is shown to the member,
+    # who is told of the void. A voided record cannot be edited back into
+    # credit, and it keeps external_record_id, so a later import of the same
+    # provider completion links to it instead of crediting it again.
+    voided_at = Column(DateTime(timezone=True), nullable=True)
+    voided_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    void_reason = Column(Text, nullable=True)
+
     # Certification expiration alert tracking — records when each tier was sent
     alert_90_sent_at = Column(DateTime(timezone=True), nullable=True)
     alert_60_sent_at = Column(DateTime(timezone=True), nullable=True)

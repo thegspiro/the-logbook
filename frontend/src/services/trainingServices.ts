@@ -290,11 +290,22 @@ export const trainingService = {
   },
 
   /**
-   * Update a training record
+   * Update a training record. The member is told what changed; `reason`, when
+   * given, is included in that notice.
    */
-  async updateRecord(recordId: string, updates: TrainingRecordUpdate): Promise<TrainingRecord> {
-    const response = await api.patch<TrainingRecord>(`/training/records/${recordId}`, updates);
+  async updateRecord(recordId: string, updates: TrainingRecordUpdate, reason?: string): Promise<TrainingRecord> {
+    const response = await api.patch<TrainingRecord>(`/training/records/${recordId}`, updates, {
+      params: reason ? { reason } : undefined,
+    });
     return response.data;
+  },
+
+  /**
+   * Void a training record: it stops counting but stays in the member's
+   * history, marked voided. The reason is required and is shown to the member.
+   */
+  async voidRecord(recordId: string, reason: string): Promise<void> {
+    await api.delete(`/training/records/${recordId}`, { params: { reason } });
   },
 
   /**

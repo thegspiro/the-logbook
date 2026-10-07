@@ -1080,9 +1080,22 @@ const MyTrainingPage: React.FC = () => {
                           <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.completion_date, tz)}</td>
                           <td className="px-4 py-2 whitespace-nowrap">{formatHours(r.hours_completed)}</td>
                           <td className="px-4 py-2">
-                            <span className={`rounded-sm px-2 py-1 text-xs ${getStatusColor(r.status)}`}>
-                              {r.status.replace('_', ' ')}
-                            </span>
+                            {r.voided_at ? (
+                              <div className="flex flex-col gap-1">
+                                <span className="w-fit rounded-sm bg-amber-500/10 px-2 py-1 text-xs text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+                                  voided
+                                </span>
+                                {r.void_reason && (
+                                  <span className="text-theme-text-secondary text-xs whitespace-pre-line">
+                                    Reason: {r.void_reason}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className={`rounded-sm px-2 py-1 text-xs ${getStatusColor(r.status)}`}>
+                                {r.status.replace('_', ' ')}
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ))}

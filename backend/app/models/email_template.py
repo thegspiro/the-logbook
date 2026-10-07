@@ -64,6 +64,8 @@ class EmailTemplateType(str, enum.Enum):
     SUGGESTION_SUBMITTED = "suggestion_submitted"
     EQUIPMENT_REQUEST_UPDATE = "equipment_request_update"
     EXTERNAL_COURSE_MATCH = "external_course_match"
+    TRAINING_RECORD_VOIDED = "training_record_voided"
+    TRAINING_RECORD_CHANGED = "training_record_changed"
     CUSTOM = "custom"
 
 

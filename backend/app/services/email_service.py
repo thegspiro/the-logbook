@@ -2318,6 +2318,66 @@ class EmailService:
 
         return success_count > 0
 
+    async def send_training_record_notice_email(
+        self,
+        template_type: EmailTemplateType,
+        to_email: str,
+        context: Dict[str, Any],
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Tell one member an officer voided or edited a training record.
+
+        *template_type* is ``TRAINING_RECORD_VOIDED`` or
+        ``TRAINING_RECORD_CHANGED``; *context* carries its template variables,
+        built by ``training_record_notices``.
+        """
+        from app.services.email_template_service import (
+            DEFAULT_TRAINING_RECORD_CHANGED_HTML,
+            DEFAULT_TRAINING_RECORD_CHANGED_SUBJECT,
+            DEFAULT_TRAINING_RECORD_CHANGED_TEXT,
+            DEFAULT_TRAINING_RECORD_VOIDED_HTML,
+            DEFAULT_TRAINING_RECORD_VOIDED_SUBJECT,
+            DEFAULT_TRAINING_RECORD_VOIDED_TEXT,
+        )
+
+        defaults = {
+            EmailTemplateType.TRAINING_RECORD_VOIDED: (
+                DEFAULT_TRAINING_RECORD_VOIDED_SUBJECT,
+                DEFAULT_TRAINING_RECORD_VOIDED_HTML,
+                DEFAULT_TRAINING_RECORD_VOIDED_TEXT,
+            ),
+            EmailTemplateType.TRAINING_RECORD_CHANGED: (
+                DEFAULT_TRAINING_RECORD_CHANGED_SUBJECT,
+                DEFAULT_TRAINING_RECORD_CHANGED_HTML,
+                DEFAULT_TRAINING_RECORD_CHANGED_TEXT,
+            ),
+        }
+        if template_type not in defaults:
+            raise ValueError(f"Not a training record notice: {template_type}")
+        default_subject, default_html, default_text = defaults[template_type]
+
+        subject, html_body, text_body = await self._render_with_fallback(
+            template_type=template_type,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=default_subject,
+            default_html=default_html,
+            default_text=default_text,
+        )
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=template_type.value,
+        )
+
+        return success_count > 0
+
     async def send_equipment_request_update_email(
         self,
         to_email: str,

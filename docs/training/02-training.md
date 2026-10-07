@@ -836,6 +836,62 @@ compliance engine needs.
 > saving a requirement that would apply to nobody (it would silently disappear
 > from every member's compliance view).
 
+### Never Use an Hours Requirement for a Required Topic
+
+> **Warning — read this before creating any annual refresher.** An **Hours**
+> requirement counts **every** completed hour that matches its filters. If the
+> only filter is a training type such as _Continuing Education_ or _Refresher_,
+> then **any** course of that type satisfies it, whatever the course was
+> about. The member shows as compliant. The requirement is not met.
+
+**This has happened.** A department set up its annual _HIPAA Privacy &
+Security Awareness_ refresher as "1 hour of Continuing Education" — exactly
+what the built-in template used to create. It then imported its members'
+Target Solutions completions. A member who had taken two CAPCE medical courses,
+_Hematology_ and _Sepsis_, and **no HIPAA training at all**, showed the HIPAA
+refresher as complete: **2 of 1 hours**. Nothing on the screen looked wrong.
+Every member with an hour of medical CE would have read the same, and the
+department would have believed its HIPAA training obligation under 45 CFR
+164.530(b) was met when it was not. The mistake surfaces only when someone
+opens a member's record and asks _which_ courses met the requirement — or when
+an auditor does.
+
+**The rule:** when a law, a standard or your own policy names a **subject** —
+HIPAA, bloodborne pathogens, hazmat, harassment prevention, a code of conduct,
+whistleblower protections — the requirement must name the **course**, not an
+amount of time.
+
+| The rule says…                                         | Use                                                                                                                               |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| "Complete HIPAA training each year"                    | **Courses**, linked to your HIPAA course in the library                                                                           |
+| "Read and acknowledge the code of conduct annually"    | **Courses**, linked to that policy's library course                                                                               |
+| "36 hours of continuing education a year, any subject" | **Hours**, filtered by training type — here "any course counts" is the actual rule                                                |
+| "8 hours of hazmat refresher training"                 | **Courses** linked to a course of that length, or **Hours** scoped to a Hazmat **category** that holds nothing but hazmat courses |
+
+An Hours requirement is only safe for a topic when it is narrowed to a
+**training category** (or course) that contains nothing but that topic. A
+category such as _EMS_ or _Medical_ is not narrow enough.
+
+**Check your department now:**
+
+1. Open **Training Admin > Requirements** and look for any requirement whose
+   name is a subject (HIPAA, Bloodborne Pathogens, Hazmat, Harassment, Code of
+   Conduct…) but whose type badge reads **Hours**.
+2. A requirement created from the old HIPAA, Bloodborne Pathogens or Hazmat
+   templates shows a **yellow warning** on its card. Treat that warning as a
+   compliance finding, not a suggestion.
+3. Edit each one: change the type to **Courses** and pick the library course.
+   If the course isn't in the library yet, add it first.
+4. If the course comes from a training provider, map the provider's course to
+   that library course on the integration's **Courses** tab (see
+   [Training Integrations](./16-integrations.md#course-mappings-2026-10-07)), or
+   completions of it will not count.
+5. Open the compliance view for a few members and confirm the requirement is
+   now met by the right course — and unmet for anyone who never took it.
+
+Expect some members to drop out of compliance when you make this change. That
+is the point: they were never compliant, and the screen was hiding it.
+
 ### Picking Courses from the Library _(2026-08-07)_
 
 **Course** and **Certification** requirements now pick from the department's
@@ -920,9 +976,9 @@ Built-in templates:
 | NFPA 1500 Occupational Safety Training | NFPA 1500             | 8 hours, annual, calendar period                     |
 | NREMT EMT Recertification              | NREMT                 | 40 hours, 24-month rolling period                    |
 | CPR/BLS Certification                  | —                     | Certification, 24-month rolling period               |
-| Hazmat Operations Refresher            | OSHA 29 CFR 1910.120  | 8 hours, annual, calendar period                     |
-| Bloodborne Pathogens Annual Refresher  | OSHA 29 CFR 1910.1030 | 2 hours, annual, calendar period                     |
-| HIPAA Privacy & Security Awareness     | 45 CFR 164.530(b)     | 1 hour, annual, calendar period                      |
+| Hazmat Operations Refresher            | OSHA 29 CFR 1910.120  | Courses (link your hazmat course), annual            |
+| Bloodborne Pathogens Annual Refresher  | OSHA 29 CFR 1910.1030 | Courses (link your BBP course), annual               |
+| HIPAA Privacy & Security Awareness     | 45 CFR 164.530(b)     | Courses (link your HIPAA course), annual             |
 | SCBA Fit Test & Respiratory Protection | OSHA 29 CFR 1910.134  | Checklist (4 items), annual                          |
 | NIMS/ICS Initial Certification         | FEMA NIMS             | Courses (ICS-100, ICS-200, IS-700, IS-800), one-time |
 | New Member Orientation Checklist       | —                     | Checklist (5 items), one-time, probationary members  |
@@ -931,6 +987,19 @@ Templates tied to a national standard carry source attribution (NFPA, NREMT,
 OSHA, HIPAA, FEMA) with the standard or CFR citation as the registry code, so
 requirements created from them display a source badge instead of appearing as
 department-defined rules.
+
+**Single-topic templates are Courses requirements** _(2026-10-07)_. HIPAA,
+Bloodborne Pathogens and Hazmat each mandate training on one subject, so their
+templates ask you to pick that course from the library and the form won't save
+until you do. **They used to create Hours requirements that any course of the
+same training type satisfied** — see
+[Never Use an Hours Requirement for a Required Topic](#never-use-an-hours-requirement-for-a-required-topic)
+for what that did to one department's HIPAA compliance. Requirements already
+created from the old templates are **not** changed automatically: the card
+shows a warning until you edit it into a Courses requirement linked to the
+right course. Fix them; do not dismiss the warning. When the provider releases
+a new version of that course, map it on the integration's **Courses** tab so it
+keeps counting.
 
 ### Frequency and Due Dates
 
@@ -1213,9 +1282,19 @@ a submission archives its notifications.
 Approvals and records can be undone without hand-editing anyone's progress:
 
 - **Reverse an approval** — on an already-approved submission, reversing the approval **voids the training record it created**, takes back any pipeline credit it applied, and returns the submission to **pending review** so you can re-decide (reject it, or re-approve with corrected hours).
-- **Void a record** — a training record entered in error can be voided. It is marked **cancelled** (kept for the audit trail, never truly deleted) and any pipeline credit it fed is taken back off automatically. Because compliance only counts completed records, a voided record stops counting right away.
+- **Void a record** — a training record entered in error, or one a member should never have been credited for (a course they cheated on, say), can be voided with **Void** on the member's **Training History** page (`/members/:userId/training`). It is marked **cancelled** (kept for the audit trail, never truly deleted) and any pipeline credit it fed is taken back off automatically. Because compliance only counts completed records, a voided record stops counting right away.
+- **Edit a record** — **Edit** on the same page corrects the course name, training type, completion date, hours, credit hours, expiration date or certification number of any record, including one imported from a training provider.
 
 Both actions require `training.manage` and are recorded in the audit log.
+
+**Voiding and editing tell the member** _(2026-10-07)_:
+
+- **A void needs a reason.** The member is sent a bell notice and an email with the reason, and the record stays in their history (My Training and Training History) marked **voided**, with the reason under it. The email is a required kind — _Changes to your training record_ — so a member who has turned email off still receives it.
+- **A voided record is final.** It can't be edited back into credit; there is no Edit button on it and the server refuses the change.
+- **A void sticks through imports.** A record from a training provider keeps its provider ID (Target Solutions' Transcript ID) when voided, so a later API sync or report upload of the same completion links to the voided record instead of crediting it again. A genuinely new completion of the course — a retake — has a new ID and is credited normally.
+- **A void withdraws a qualification the record granted.** If the record's course grants a qualification (EMT, for example) and no other record supports it, the qualification is removed. This applies to reversing an approval too.
+- **An edit lists what changed.** When a value the member sees on the record changes, they get a bell notice and an email listing each change, before and after, with your note if you add one. An edit to something they don't see sends nothing.
+- Reversing an approval (above) also marks the record it created **voided** in the member's history.
 
 ---
 

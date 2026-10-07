@@ -31,6 +31,7 @@ from app.models.training import (
 )
 from app.models.user import Role, User, user_roles
 from app.services.notifications_service import NotificationsService
+from app.services.qualification_service import QualificationService
 from app.services.separation_of_duties import assert_different_person
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
@@ -692,6 +693,7 @@ class TrainingSubmissionService:
 
         program_service = TrainingProgramService(self.db)
         record_id = submission.training_record_id
+        voided_record = None
 
         # Un-apply pipeline credit keyed on the submission itself (officer-apply)
         # and on the spawned record (any feed), across every requirement it hit.
@@ -716,6 +718,10 @@ class TrainingSubmissionService:
             record = record_result.scalar_one_or_none()
             if record and record.status != TrainingStatus.CANCELLED:
                 record.status = TrainingStatus.CANCELLED
+                record.voided_at = datetime.now(timezone.utc)
+                record.voided_by = str(reviewer_id)
+                record.void_reason = reason or None
+                voided_record = record
                 void_note = f"[VOIDED via approval reversal by {reviewer_id}"
                 if reason:
                     void_note += f": {reason}"
@@ -734,6 +740,19 @@ class TrainingSubmissionService:
         submission.reviewer_notes = note
 
         await self.db.commit()
+        if voided_record is not None:
+            # The qualification the record conferred is recomputed from the
+            # records still standing, so the reversal withdraws it too.
+            try:
+                await QualificationService(self.db).sync_from_training_record(
+                    voided_record
+                )
+                await self.db.commit()
+            except Exception:
+                logger.exception(
+                    f"Failed to recompute qualifications after reversing {submission_id}"
+                )
+                await self.db.rollback()
         await self.db.refresh(submission)
         logger.info(f"Submission {submission_id} approval reversed by {reviewer_id}")
         await self._notify_reviewers(submission, triggered_by=reviewer_id)
