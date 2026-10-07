@@ -32,3 +32,27 @@
 | Integration address checks; Google Calendar response cap                                                                                                                   | [16 — Integrations](./16-integrations.md)                                                                                                         |
 | Elections: receipt shown after voting; closed time on the list; reopened-ballot wording                                                                                    | [14 — Elections](./14-elections.md)                                                                                                               |
 | Members and Inventory administration pages on a phone; Items filters toggle                                                                                                | Layout only; the Items **Filters** toggle below 640px is noted in the screenshot list                                                             |
+
+---
+
+# October 6–7, 2026 workflow updates
+
+Index for the second window. Audit:
+[`docs/CHANGE_AUDIT_2026-10-06_TO_10-07.md`](../CHANGE_AUDIT_2026-10-06_TO_10-07.md).
+**Before upgrading,** read the `docs/UPGRADING.md` entry _Every backend setting in
+`.env` now reaches the container (2026-10-06)_: settings that were silently ignored
+start working, and a bad value can stop boot. Screenshots to create or replace are
+in [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) under _Queued by the October
+6 – 7 documentation pass_; nothing has been re-captured.
+
+| Topic                                                                                                                                            | Now in                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| Online knowledge tests; Skill Evaluations screen; offline skills scoring                                                                         | [02 — Training](./02-training.md), [09 — Skills Testing](./09-skills-testing.md) |
+| Cohort rooms; Department Readiness heat-map; shift attendance counts toward "shifts completed"; linked program requirements read live compliance | [02 — Training](./02-training.md)                                                |
+| Qualifications entered or imported; Undo a drop; Add Member status; directory hides archived members; unique position names; phone checks        | [01 — Membership](./01-membership.md)                                            |
+| Open swaps picked up first-come; custom crew seats; shared calls in close-out                                                                    | [03 — Scheduling](./03-scheduling.md)                                            |
+| Admin hours Review Rules; Security Alerts; Role Management confirmation                                                                          | [08 — Admin & Reports](./08-admin-reports.md)                                    |
+| Medical screening picker and Self-recorded badge                                                                                                 | [13 — Medical Screening](./13-medical-screening.md)                              |
+| One ballot, proxy ballots, seats per race, Results revised, results released on close                                                            | [14 — Elections](./14-elections.md)                                              |
+| Integration health page; Claude connections                                                                                                      | [16 — Integrations](./16-integrations.md)                                        |
+| Smaller icon buttons and switches with a mouse; longer titles                                                                                    | Layout only; see the _Existing images_ table in SCREENSHOT_CURRENCY              |

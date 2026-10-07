@@ -1,5 +1,64 @@
 # Screenshot currency
 
+## Queued by the October 6 – 7 documentation pass, 2026-10-07
+
+Covers PR #2965 (owner-decision docket), #2967 (desktop density) and the review
+records through #2980. Audit:
+[CHANGE_AUDIT_2026-10-06_TO_10-07](../CHANGE_AUDIT_2026-10-06_TO_10-07.md). **Nothing
+has been captured** (the capture stack does not run in this environment). Guides
+for these features were written by the feature PRs; the rows below are the screens
+that need a first capture or a replacement. Run `status_report.py` after adding
+inline placeholders to refresh [SCREENSHOT_STATUS.md](./SCREENSHOT_STATUS.md).
+
+**What the seeded demo cannot produce yet:** an alert in each state (open,
+acknowledged, resolved), an integration with a failed sync, a Claude client and a
+live connection (needs `MCP_OAUTH_ENABLED=true` and an https issuer), an offline
+skills evaluation held in IndexedDB, a custom crew seat, a closed election with a
+correction after close, and a proxy authorization. Never capture a real token or
+client secret; use a throwaway demo client.
+
+### New screens (no image exists)
+
+| Guide | Section | Capture brief |
+| ----- | ------- | ------------- |
+| 02-training.md | Knowledge tests (member) | Knowledge Tests list; an attempt in progress with a multiple-answer question; the result screen after submitting |
+| 02-training.md | Knowledge tests (officer) | Training Admin knowledge-test tab: question bank editor and the test settings (`max_attempts`) |
+| 02-training.md | Skill Evaluations | Training Admin › Setup › Skill Evaluations: list, and the evaluator picker (default / positions / named members) |
+| 02-training.md | Competency | Training Admin › Advanced › Competency › Department Readiness grid with station, rank and category filters |
+| 02-training.md | Cohort rooms | Cohort wizard Schedule step room picker; Preview step with one class moved and the "Location already booked" warning |
+| 01-membership.md | Qualifications | Member profile Qualifications card; Members admin › Import Qualifications dry-run result with a rejected row by line |
+| 01-membership.md | Undo a drop | Profile of a dropped member showing the Undo drop control and its confirmation (do not confirm) |
+| 01-membership.md | Add Member | Add Member with the **Status** field |
+| 03-scheduling.md | Shared calls | Close-out wizard step 2 with "calls another unit already logged" ticked, showing unit labels |
+| 03-scheduling.md | Open swaps | Requests tab listing an open swap with **Pick up**, and the refusal message for an unqualified member |
+| 03-scheduling.md | Skills testing offline | Skills-test screen with the "saved on this device" state; Sign Out warning about unsent evaluations (do not confirm) |
+| 08-admin-reports.md | Security Alerts | `/admin/security-alerts` with alerts in each state; the resolve dialog with a note; Download activity list |
+| 08-admin-reports.md | Admin hours Review Rules | `/admin-hours/manage` › Review Rules tab with self-approval and the resync percentage |
+| 08-admin-reports.md | Role Management | The confirmation before changing the baseline Member position's permissions (do not confirm) and the duplicate-name 409 message |
+| 13-medical-screening.md | Add Record | Add Record with the Member/Prospect picker; a record row with the **Self-recorded** badge |
+| 14-elections.md | One ballot | Cast Vote tab showing positions and ballot items together; proxy ballot banner naming the delegating member |
+| 14-elections.md | Seats per race | Create/Edit election race with Seats; Results tab showing two winners |
+| 14-elections.md | Results revised | Results tab with "Results revised <when> by <who>" and the revised line on the certified PDF |
+| 16-integrations.md | Integration health | `/integrations/:integrationId` with sync history, a scrubbed error and **Retry sync**; list showing the health indicator |
+| 16-integrations.md | Claude connections | Consent page `/claude/authorize`; `/claude/connections`; the admin client panel on Integrations (blur secrets) |
+| 02-training.md | Review Submissions › Settings | Certificate Files card with the retention days field and the virus-scan notice (when `CLAMAV_ENABLED=true`) |
+
+### Existing images to replace or check
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| Any image of a **toggle switch** or a hub/table **icon button** at desktop width | **REPLACE** at the next full sweep | With a mouse, `btn-icon` is 36px and `toggle-track` a 24px pill (was 44px); rows holding a switch are 20px shorter. Touch/phone shots are unchanged |
+| `04-*` event cards and Create Event shots at 820–1280px | **CHECK** | Titles clamp at two lines (three from `md`); Start/End stack until `lg` |
+| `18-*` store catalog shots | **REPLACE** | Price moved from beside the name to the end of the badge row |
+| `02-*` cohort list and `03-*` shift-pattern list shots | **CHECK** | Status badge wraps below long names |
+| `03-*` shift-template dialog | **REPLACE** | Starts and Ends are stacked at every width |
+| `03-*` swap request dialog and Requests tab | **CHECK** | Open swaps are picked up, not officer-approved |
+| `03-*` close-out wizard step 2 | **REPLACE** | Gained the shared-calls picker |
+| `14-*` Results tab, Cast Vote tab and Send Ballot Emails shots | **REPLACE** | One ballot model; results released on close; revised mark |
+| `01-*` Members page as a non-manager | **CHECK** | Directory hides archived members and opens on Active |
+| `02-*` Compliance Matrix, Shift Compliance and program enrollment progress | **CHECK** | Shift counts and linked requirements now read shift attendance / live compliance |
+| `13-*` Add Record dialog | **REPLACE** | Member/Prospect picker |
+
 ## Queued by the October 5 – 6 documentation pass, 2026-10-06
 
 Covers PRs #2941–#2972. **Nothing has been captured.** The new placeholders are
