@@ -15,6 +15,7 @@ so a member whose Logbook email was added after the first sync never matched.
 import logging
 import uuid
 from datetime import date, datetime, timezone
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -583,6 +584,131 @@ class TestCredentialRedaction:
             await service.close()
         assert log.status == SyncStatus.FAILED
         assert TS_SECRET not in log.error_message
+
+
+_ECHOED_URL = (
+    f"{TS_BASE_URL}?action=reports.buildReport&key={TS_KEY}&secret={TS_SECRET}"
+)
+
+
+def _raise(exc_type, message):
+    def handler(request):
+        raise exc_type(message, request=request)
+
+    return handler
+
+
+def _respond(status, body="", headers=None):
+    return lambda request: httpx.Response(
+        status, content=body.encode("utf-8"), headers=headers or {}
+    )
+
+
+@pytest.mark.unit
+class TestNoLogLineCarriesTheCredentials:
+    """Every log a failing sync or connection test writes, captured whole.
+
+    Covers what a reader of the logs actually sees: loguru output including
+    the traceback ``logger.exception`` attaches, and the standard-library
+    loggers httpx writes to. Several cases have Target Solutions echo the
+    request — a redirect, an error page, a plain-text error — because that is
+    how a credential would arrive in a message without our own code putting
+    it there.
+    """
+
+    class _Db:
+        def add(self, obj):
+            pass
+
+        async def flush(self):
+            pass
+
+        async def commit(self):
+            pass
+
+        async def rollback(self):
+            pass
+
+        async def execute(self, statement):
+            return SimpleNamespace(
+                scalars=lambda: SimpleNamespace(all=lambda: []),
+                scalar_one_or_none=lambda: None,
+            )
+
+    @pytest.mark.parametrize(
+        "handler",
+        [
+            _raise(httpx.ReadTimeout, f"timed out reading {_ECHOED_URL}"),
+            _raise(httpx.ConnectError, f"cannot connect to {_ECHOED_URL}"),
+            _respond(500, f"Internal error while serving {_ECHOED_URL}"),
+            _respond(302, headers={"location": _ECHOED_URL}),
+            _respond(200, f"<html><title>Bad key {TS_KEY} {TS_SECRET}</title></html>"),
+            _respond(200, f"Error: key={TS_KEY}&secret={TS_SECRET} not accepted"),
+            _respond(401, f"Denied: {_ECHOED_URL}"),
+        ],
+        ids=[
+            "timeout",
+            "connect",
+            "server-error",
+            "redirect",
+            "html-title",
+            "plain-text",
+            "rejected",
+        ],
+    )
+    async def test_sync_and_connection_test_logs(self, handler, caplog):
+        from loguru import logger
+
+        captured: list[str] = []
+        # diagnose=False as every production sink is (app.core.logging), so
+        # the capture shows what the application log would hold.
+        sink = logger.add(
+            lambda m: captured.append(str(m)), level="DEBUG", diagnose=False
+        )
+        caplog.set_level(logging.DEBUG)
+        provider = _ts_provider()
+        service = ExternalTrainingSyncService(self._Db())
+        await service.http_client.aclose()
+        service.http_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        try:
+            log = await service.sync_training_records(provider, "manual")
+            ok, message = await service.test_connection(provider)
+        finally:
+            await service.close()
+            logger.remove(sink)
+
+        written = "\n".join([*captured, caplog.text, log.error_message or "", message])
+        assert ok is False
+        assert log.status == SyncStatus.FAILED
+        assert TS_KEY not in written
+        assert TS_SECRET not in written
+
+    async def test_an_unexpected_crash_after_the_request_is_scrubbed(self, caplog):
+        # A bug further down — not a provider response — that happens to put
+        # the URL in its message still reaches the logs only redacted.
+        from loguru import logger
+
+        captured: list[str] = []
+        # diagnose=False as every production sink is (app.core.logging), so
+        # the capture shows what the application log would hold.
+        sink = logger.add(
+            lambda m: captured.append(str(m)), level="DEBUG", diagnose=False
+        )
+        service = ExternalTrainingSyncService(self._Db())
+
+        async def _boom(*_a, **_k):
+            raise RuntimeError(f"unexpected failure for {_ECHOED_URL}")
+
+        service._fetch_external_records = _boom
+        try:
+            log = await service.sync_training_records(_ts_provider(), "manual")
+        finally:
+            await service.close()
+            logger.remove(sink)
+
+        written = "\n".join([*captured, caplog.text, log.error_message or ""])
+        assert TS_SECRET not in written
+        assert TS_KEY not in written
 
 
 @pytest.mark.unit

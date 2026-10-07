@@ -9,6 +9,7 @@ import csv
 import html
 import io
 import re
+import traceback
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlsplit
@@ -71,6 +72,19 @@ DEFAULT_TS_REVIEW_TIME = time(2, 0)
 # real department's data. Each other provider joins after its own review
 # against real records (owner decision, 2026-10-07).
 AUTO_CREDIT_PROVIDERS = frozenset({ExternalProviderType.TARGET_SOLUTIONS})
+
+
+def _log_failure(message: str) -> None:
+    """Log the exception being handled, its traceback redacted.
+
+    ``logger.exception`` writes every chained exception's message verbatim,
+    and httpx's own ``raise_for_status`` message carries the full request URL
+    — query string included. Target Solutions authenticates in that query
+    string, so a provider failure logged that way would put the key and
+    secret in the application log. The httpx request logger and Sentry are
+    redacted separately (app.core.logging); this covers the traceback.
+    """
+    logger.error(f"{message}\n{redact_url_secrets(traceback.format_exc())}")
 
 
 def _is_blank(value: Any) -> bool:
@@ -220,7 +234,7 @@ class ExternalTrainingSyncService:
         except httpx.ConnectError as e:
             return False, f"Failed to connect: {redact_url_secrets(str(e))}"
         except Exception as e:
-            logger.exception(f"Error testing connection for provider {provider.id}")
+            _log_failure(f"Error testing connection for provider {provider.id}")
             return False, f"Connection test failed: {redact_url_secrets(str(e))}"
 
     async def _test_vector_solutions_connection(
@@ -498,7 +512,7 @@ class ExternalTrainingSyncService:
             await self.notify_course_matches(provider)
 
         except Exception as e:
-            logger.exception(f"Sync failed for provider {provider.id}")
+            _log_failure(f"Sync failed for provider {provider.id}")
             sync_log.status = SyncStatus.FAILED
             # Shown to officers; never let a credential-bearing URL through.
             sync_log.error_message = redact_url_secrets(str(e))
