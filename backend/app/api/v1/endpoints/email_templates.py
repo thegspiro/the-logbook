@@ -748,7 +748,7 @@ async def upload_attachment(
     max_size = 10 * 1024 * 1024
     if len(contents) > max_size:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail="File exceeds 10MB limit",
         )
 

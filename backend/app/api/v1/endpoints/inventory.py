@@ -1550,7 +1550,7 @@ async def import_items_csv(
             content = raw.decode("latin-1")
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail="CSV file exceeds the 10MB limit.",
         )
     except Exception:
