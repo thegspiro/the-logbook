@@ -2,11 +2,244 @@
 
 **Prefix:** `CMP` · **Iteration:** 20 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15
-(pass 5), 2026-10-03 (pass 6) · **PR:** #1902 (pass 1, merged),
+(pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7) · **PR:** #1902 (pass 1, merged),
 [#2059](https://github.com/thegspiro/the-logbook/pull/2059) (pass 2, merged),
 #2245 (pass 3, merged), [#2476](https://github.com/thegspiro/the-logbook/pull/2476)
 (pass 4, merged), [#2583](https://github.com/thegspiro/the-logbook/pull/2583)
-(pass 5, merged), pass 6 (this PR)
+(pass 5, merged), [#2869](https://github.com/thegspiro/the-logbook/pull/2869)
+(pass 6, merged), pass 7 (this PR)
+
+## Pass 7 (2026-10-07)
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session had
+no open PR or branch for this feature: PR #2976 (Feature 19, Skills testing,
+pass 7) had merged ~2 hours earlier with nothing started since, past this
+rotation's documented ~90-minute stall threshold. Confirmed before starting
+via `list_pull_requests` (state=open) and a `head:claude/security-review-`
+search that no security-review PR or branch was open.
+
+**Not a zero-delta pass.** Real commits landed in five of the seven
+in-scope files since pass 6's merge (PR #2869, base `8f96e5c33`): 1,140
+insertions / 266 deletions across `training_compliance.py` (1,043 lines),
+`compliance_officer_service.py` (308), `compliance_config_service.py` (29),
+`compliance_officer.py` (20) and `schemas/compliance_config.py` (6).
+`compliance_config.py` (endpoint) and `models/compliance_config.py` had no
+commit in range. This repo's clone was shallow at the start of this pass —
+the same pre-existing artifact passes 3/5/6 each noted — so scope was
+established from `git diff` (tree comparison) rather than trusted from
+`git log`'s path filter, which silently returns an incomplete commit list
+against a shallow history; `git fetch --unshallow` was run first to get the
+real 13-commit list below, each read individually rather than taken from
+its own commit message.
+
+### Three standing findings closed since pass 6 — re-verified against current code
+
+- **CMP4-2 — ✅ now FIXED** (`9817b8eaa`, 2026-10-04). Pass 4/6 flagged that
+  `requirement_applies_to_member` never read `required_positions`, so a
+  requirement scoped only by position graded nobody. The helper now takes
+  `position_slugs` and ORs a slug match against `required_positions` with
+  the existing `required_roles` match. Verified both direct callers pass
+  it: `training_module_config.py:297` (My Training summary) and
+  `scheduling_service.py:8852` (shift-compliance report, already loading
+  `user_position_slugs` for its own use); every caller that goes through
+  `requirement_applies_to_user` inherits it automatically
+  (`member_position_slugs` reads `member.positions`). No caller found that
+  still calls the low-level helper without the new parameter.
+- **CMP4-3 — ✅ FIXED**, recorded above under "Owner decisions applied
+  (2026-10-05)"; re-verified here against current code rather than re-cited:
+  `AnnualComplianceReportService._generate_period_report`
+  (`compliance_officer_service.py:886-1017`) now builds one
+  `ComplianceGrading` from `_load_compliance_config` and resolves every
+  member through `grading.for_member`/`grading.classify`, the same calls
+  `compute_org_compliance_pct` and the matrix use. `_load_compliance_config`
+  is org-scoped (`ComplianceConfig.organization_id == org_id`); the member
+  query is unchanged (`User.organization_id == organization_id`, active,
+  non-exempt).
+- **CMP4-5 — ✅ FIXED**, recorded above under "Owner decisions applied
+  (2026-10-06)"; re-verified: `requirement_applies_to_member` now takes
+  `rank` in place of position ids, `requirement_applies_to_user` reads
+  `member.rank`, and the scheduling shift-compliance report
+  (`scheduling_service.py:8849-8859`) dropped its own hand-rolled
+  rank/position check for the shared helper — confirmed by reading the
+  current function, not the commit message; it also now honours
+  `required_membership_types`, which it alone used to ignore.
+- **CS-9 (monthly-report windowing) — ✅ now FIXED** (`e8ccba1bf`,
+  2026-10-04). Every prior pass (4 through 6) re-confirmed this open: a
+  "monthly" report was the annual report under a different label — same
+  figures, same year-long window, members graded on training completed
+  after the report's own month ended. `generate_monthly_report` now shares
+  `_generate_period_report` with the annual report, passing the calendar
+  month's own `start_date`/`end_date` and capping `today` at the month's
+  last day (or today, if the month is still running) via `as_of_cap`.
+  `ComplianceReportGenerate` gained a `model_validator` that refuses a
+  monthly request with no `month` (previously it silently fell through to
+  the annual figures). Verified in `compliance_config_service.py:245-246`
+  (the guard) and `compliance_officer_service.py` (the new
+  `generate_monthly_report`, `_attestation_period_bounds`-style month-to-date
+  helper feeding `_generate_period_report`).
+
+### A fourth fix landed under the same "(CS-8)" label as a different, older finding — not a relabeling, a new finding
+
+Pass 1's CS-8 is attestation **dual control**: `create_attestation` has no
+update/delete route, so a filed attestation is immutable except through the
+audit log it's written as. That is unchanged and still open by design —
+confirmed against the fresh 8-route enumeration below (`POST`/`GET
+/attestations`, nothing else).
+
+`bd7833a78` (2026-10-05) cites "(CS-8)" for a **different, previously
+unflagged issue**: `create_attestation` recorded whatever
+`compliance_percentage` the officer typed in the form, with only a `0–100`
+range check — an attestation could certify a number nobody computed, and
+the HTML `number` input made it trivial to attest 100% regardless of
+reality. Fixed by dropping the field entirely: the service now computes
+`compute_org_compliance_pct` itself, evaluated as of the period's last day
+(or today, for a period still running), refuses attesting a period that has
+not started, and stores the date it computed as of (`compliance_as_of`). An
+older client's `compliance_percentage` is accepted in the payload and
+silently ignored (schema no longer declares the field). Verified end to end:
+`AttestationCreate` (`compliance_officer.py:36-59`) carries no percentage
+field; `ComplianceAttestationService.create_attestation`
+(`compliance_officer_service.py:391-465`) computes and stores it;
+`ComplianceOfficerDashboard.tsx`'s attestation form
+(`frontend diff since pass 6`) dropped the "Compliance %" input and gained
+the quarter picker the quarterly path was always missing (without one,
+every quarterly attestation was previously refused for a missing
+`period_quarter` — a second, smaller bug this same commit closed as a
+side effect). This finding and its fix are recorded here under a new id,
+**CS-8-b**, to avoid conflating it with pass 1's still-open CS-8 above.
+
+### Remainder of the real delta — reviewed, no new finding
+
+Six more commits touched the shared `training_compliance.py`, none tied to
+a standing CMP flag, each read in full rather than trusted from its message:
+
+- `ca2ebb66a` — one rule (course **and** category, OR'd) for which records
+  count toward an HOURS requirement, replacing two screens that each
+  checked only one. No query change; pure Python filter logic.
+- `3a49bb432` — BIANNUAL ("Every 2 Years") requirements now get an actual
+  two-year window; three call sites previously read it as unbounded,
+  one year, or two years inconsistently. No new query.
+- `21bf76f27` (TR4-4's backend half) — `classify_standing` returns
+  `(not_applicable, None)` instead of `(compliant, 100.0)` for a member
+  with an empty tally, closing the "a member nothing grades counts as
+  compliant" shape at its source rather than only in the dashboard's
+  display (W29-4 fixed the display earlier; this fixes the figure itself,
+  which the annual report, forecast and attestation now all read).
+- `39049cf8b` — the dashboard's Department Compliance card now grades
+  through the same profile/threshold-aware path as the matrix
+  (`get_training_dashboard_summary`), closing the same class of
+  dashboard-vs-matrix disagreement CMP4-3 closed for the annual report.
+- `87efdf036` — certification name-substring matching (`"CPR Refresher"`
+  satisfying a `"CPR"` requirement) is now legacy-only, gated by a new
+  nullable `training_requirements.name_match_until` column
+  (migration `60aaf273de27`), backfilled to the migration's run date so
+  already-published standings don't move retroactively. Migration
+  reviewed: guards the table's existence (it predates this feature and is
+  migration-managed, not `create_all`-only, but the guard is defensive and
+  harmless either way), uses a bound parameter (`:cutoff`) rather than
+  string interpolation for the backfill `UPDATE`, nullable column, real
+  downgrade. Plain Python substring matching elsewhere in the function —
+  no `LIKE`, no injection surface.
+- `ea939c38d` — a requirement's grandfathering split now carries
+  `name_match_until` along when it copies a row (file predates this pass's
+  window but is read here as part of understanding the split path the
+  certification fix extends).
+- `7489c4865` — SHIFTS ("shifts completed") requirements now count from one
+  shared definition (`load_credited_shift_dates`/`credited_shifts_in_window`:
+  finalized-shift attendance plus counted external shifts, org-scoped,
+  windowed per requirement) instead of three disagreeing sources (training
+  records, unconditional attendance rows, and the shift-compliance report's
+  own copy). Already recorded in this document under "Owner decisions
+  applied (2026-10-06)"; re-verified `load_credited_shift_dates`
+  (`training_compliance.py`) filters `Shift.organization_id` and the
+  member-id list on every query.
+- `9109d6d1f` (TR2-4/TR4-2) — every department-wide grader
+  (`get_training_dashboard_summary`, `get_compliance_matrix`,
+  `compute_org_compliance_tally`, `get_member_period_status`, the
+  annual/monthly report, `get_compliance_summary`) now loads training
+  records through `load_graded_records`, bounded by `graded_records_clause`
+  to each requirement's own window, instead of every record each member
+  ever had. Positive for dimension 6 (abuse resistance / unbounded load):
+  `load_graded_records` (`training_compliance.py:999-1033`) still filters
+  `TrainingRecord.organization_id == org_id` and `user_id.in_(member_ids)`
+  before the window clause — confirmed the bound did not come at the cost
+  of the org filter.
+
+No new migration in this delta touches a compliance-prefixed table or the
+`compliance_officer_service.py`/`compliance_config_service.py` tables
+(`security_alerts`, MCP OAuth, knowledge-tests, custom-seat and election
+migrations landed in the same large owner-decision PR #2965 belong to other
+features' scope).
+
+### Standing items still open, unchanged
+
+- **CMP2-1 — OPEN by design.** `notify_non_compliant_members` and
+  `notify_days_before_deadline` are still write-only: a repository-wide
+  `grep -rn "notify_days_before_deadline\|notify_non_compliant_members"
+backend/app` still hits only `schemas/compliance_config.py` and
+  `models/compliance_config.py`. The "Not yet active" notice is still
+  present in `ComplianceRequirementsConfigPage.tsx`. Needs a scheduled
+  sender (KNOWN_LIMITATIONS' own framing) — a product decision, not a
+  drive-by fix.
+- **CS-8 (attestation dual control) — OPEN by design, unchanged.** See
+  above — still only `POST`/`GET /attestations`.
+- **Attestation history over-fetches globally** (KNOWN_LIMITATIONS,
+  blocked on the deferred `audit_logs.organization_id` column) —
+  unchanged; an availability gap, not a cross-tenant leak, per the existing
+  entry's own framing.
+
+### Route re-enumeration
+
+`compliance_config.py` (12 routes) + `compliance_officer.py` (8 routes) =
+20/20, unchanged from pass 6. Every route carries
+`Depends(require_permission(...))`; permission strings unchanged from every
+prior pass (`training.manage`/`settings.manage`/`compliance.manage`/
+`compliance.view`/`reports.*` combinations, no broadened grant).
+
+### 0 fixes needed by this pass itself; 1 new finding identified and already fixed (CS-8-b); 0 new findings left open
+
+Everything above was already fixed by other work before this pass began;
+this pass's own contribution is verifying each fix against current code
+(not trusted from its commit message), re-confirming the two standing
+by-design items, and documenting CS-8-b so it is not confused with the
+unrelated, still-open original CS-8.
+
+## Completion gate (pass 7)
+
+| Check                                                                                                                                     | Result                                       |
+| ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                             | ✅ 0 violations                              |
+| `black --check app/ tests/ alembic/`                                                                                                      | ✅ 2027 files unchanged                      |
+| `isort --check-only app/ tests/ alembic/`                                                                                                 | ✅ clean                                     |
+| `python3 scripts/validate_migrations.py --strict`                                                                                         | ✅ 538 revisions, single head `8c4f2a6e1d93` |
+| `pytest tests/ -q -k "compliance or attestation"`                                                                                         | ✅ 490 passed, 1 pre-existing skip           |
+| `pytest tests/test_graded_records_bounded_load.py tests/test_certification_name_match_cutoff.py tests/test_requirement_grandfathering.py` | ✅ 45 passed                                 |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                     | ✅ 251 routes, 0 errors/warnings             |
+| `cd frontend && npm run typecheck`                                                                                                        | ✅ 0 errors                                  |
+| `cd frontend && npm run lint`                                                                                                             | ✅ 0 errors (`--max-warnings 10`)            |
+| 8 compliance-scoped frontend test files                                                                                                   | ✅ 131 passed                                |
+
+**Environment-only issue found and resolved, not a code defect:** this
+sandbox's database had been migrated (`alembic upgrade head`, 538
+revisions, clean) but never booted through the application itself, so it
+was missing 12 columns across `events`, `event_rsvps`,
+`shift_completion_reports` and `training_module_configs` that `main.py`'s
+`_add_missing_model_columns` startup repair — not Alembic — backfills for
+columns added to a model without their own migration (the same class of
+gap TR-17 pass 7 hit and documented). Running it once fixed
+`tests/test_training_compliance_not_set_up.py`,
+`test_program_linked_requirement_reads_compliance.py` and
+`test_compliance_matrix_endpoint.py`'s failures, all against
+`events.recurrence_exceptions`/`is_draft` or unrelated tables, confirmed
+unrelated to anything this pass reviewed. Separately, this session's
+`alembic` CLI invocation needed to go through the `alembic` console script
+directly rather than `python3 -m alembic`: the sandbox's bare `python3` in
+`$PATH` resolves to a Python 3.11 install with no `alembic` package, while
+the backend's actual dependencies (including `alembic` itself) are
+installed under `/usr/bin/python3` (3.13, the project's declared
+language version per CLAUDE.md). The `alembic` script's own shebang
+already points at the correct interpreter, so invoking it directly (not
+through `python3 -m`) side-steps the issue.
 
 ## Owner decisions applied (2026-10-05)
 
