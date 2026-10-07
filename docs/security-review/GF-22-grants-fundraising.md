@@ -2,9 +2,258 @@
 
 **Prefix:** `GF` · **Iteration:** 22 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15
-(pass 5), 2026-10-03 (pass 6) · **PR:**
-[#1904](https://github.com/thegspiro/the-logbook/pull/1904) (pass 1), pass 6
-(this PR)
+(pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7) · **PR:**
+[#1904](https://github.com/thegspiro/the-logbook/pull/1904) (pass 1), pass 7
+(this PR; pass 6 merged as PR
+[#2875](https://github.com/thegspiro/the-logbook/pull/2875))
+
+---
+
+## Pass 7 (2026-10-07) — watchdog pickup, 0 fixed, 0 new findings, 1 incidental fix re-verified (GF-9's float half)
+
+**Watchdog pickup.** PR #2978/#2979 (Feature 21, Admin hours, pass 7, plus its
+own test-flake follow-up) had just merged with no branch or PR started for
+Feature 22 since, so this iteration took the next `⬜` row from outside the
+dedicated `/loop 30m /security-review` session. No open
+`claude/security-review-*` PR existed as of the check already recorded in
+`PROGRESS.md`'s Open PR section, confirming the rotation's Step 0.
+
+**Backend:** `app/api/v1/endpoints/grants.py` (1,916 L, 45 endpoints),
+`app/services/grant_service.py` (1,319 L), `app/services/fundraising_service.py`
+(818 L), `app/models/grant.py` (1,191 L), `app/schemas/grant.py` (1,032 L),
+`app/services/dashboard_widget_service.py` (its `fundraising()` method only).
+**Frontend:** `frontend/src/modules/grants-fundraising/` (all 8 pages,
+services, store, routes, types).
+**Migrations:** none touching a grants/fundraising table since pass 6.
+
+### Diff-scoping methodology
+
+Verified pass 6's merge commit (`e070ce9c`, PR #2875) is reachable from `HEAD`
+via `git merge-base --is-ancestor e070ce9c HEAD` (yes — 539 commits between
+them). `git diff e070ce9c..HEAD --stat` against all six declared backend files
+plus the frontend module came back with **two** changed files, both landing
+in a single non-rotation commit, `93ffd7b6` ("fix(event-requests): show the
+server's reason on a refused schedule or postpone" — the commit's own subject
+has nothing to do with this feature; it bundled an unrelated owner-approved
+fix that happened to touch these files). Confirmed `93ffd7b6..HEAD` is empty
+for all declared files — nothing further changed after it landed. Read every
+changed line in full (shown below), not sampled.
+
+1. **`app/services/fundraising_service.py` (`get_fundraising_report`) and
+   `app/services/grant_service.py` (`get_grant_report`) — GF-9's float-money
+   half, now fixed.** Both methods now accumulate every running total as
+   `Decimal` (`sum((Decimal(x.amount or 0) for x in rows), Decimal(0))`) and
+   convert to `float` exactly once, at the response boundary; the average
+   gift rounds half-up to the cent via `Decimal.quantize(Decimal("0.01"),
+rounding=ROUND_HALF_UP)` rather than Python's `round()`. This matches
+   `docs/module-audit/grants-fundraising.md`'s GF-9 entry, already annotated
+   "Float part resolved 2026-10-05 (owner decision)" and
+   `docs/app-review/grants-fundraising.md`'s identical note — both written
+   before this pass, independent of this rotation. Re-verified by reading the
+   current code against that prose rather than trusting it, and by running
+   the two guard-test classes it names: `TestGrantReportIsExact`
+   (`backend/tests/test_grant_service.py:690`) and
+   `TestFundraisingReportIsExact`
+   (`backend/tests/test_fundraising_service.py:516`), both green (see
+   completion gate). No further action needed — this closes the one
+   concretely-fixable third of GF-9; see "GF-9 split" below for why the
+   other two thirds stay open.
+2. **`app/api/v1/endpoints/grants.py:269`** — `_notes_with_authors`'
+   `str(user.id): user.full_name or user.username` became
+   `user.display_name or user.username`. Cosmetic: both are real properties
+   on `User` (`app/models/user.py:560,570`), part of a repo-wide
+   preferred-name display convention unrelated to this feature's security
+   posture. Not a finding.
+3. **`frontend/.../GrantsDashboardPage.tsx`** — two Tailwind class changes:
+   the KPI label switched `truncate` for `leading-snug` (wrapping instead of
+   ellipsis-truncating a long label), and the error banner switched a
+   hardcoded `border-red-200 bg-red-50 text-red-700` for the shared
+   `alert-danger`/`text-theme-alert-danger-text` utilities (dark-mode/theme
+   consistency, not a new string). Not a finding.
+
+**Conclusion: a real but narrow delta** — one money-math correctness fix
+(already recorded elsewhere as an owner decision, now independently
+confirmed still in place and tested) and two cosmetic changes. No new
+surface, no new endpoint, no schema or migration change.
+
+### Route inventory — 45/45, individually enumerated
+
+Every route in `grants.py`, extracted programmatically (not spot-checked) by
+walking each `@router.*` block to its `require_permission(...)` call:
+
+| Method | Path                                      | Function                   | Permission           |
+| ------ | ----------------------------------------- | -------------------------- | -------------------- |
+| GET    | `""`                                      | `list_opportunities`       | `fundraising.view`   |
+| POST   | `""`                                      | `create_opportunity`       | `fundraising.manage` |
+| GET    | `/applications`                           | `list_applications`        | `fundraising.view`   |
+| POST   | `/applications`                           | `create_application`       | `fundraising.manage` |
+| GET    | `/applications/{application_id}`          | `get_application`          | `fundraising.view`   |
+| PUT    | `/applications/{application_id}`          | `update_application`       | `fundraising.manage` |
+| DELETE | `/applications/{application_id}`          | `delete_application`       | `fundraising.manage` |
+| GET    | `/applications/{app_id}/budget-items`     | `list_budget_items`        | `fundraising.view`   |
+| POST   | `/applications/{app_id}/budget-items`     | `create_budget_item`       | `fundraising.manage` |
+| PUT    | `/budget-items/{item_id}`                 | `update_budget_item`       | `fundraising.manage` |
+| DELETE | `/budget-items/{item_id}`                 | `delete_budget_item`       | `fundraising.manage` |
+| GET    | `/applications/{app_id}/expenditures`     | `list_expenditures`        | `fundraising.view`   |
+| POST   | `/applications/{app_id}/expenditures`     | `create_expenditure`       | `fundraising.manage` |
+| PUT    | `/expenditures/{expenditure_id}`          | `update_expenditure`       | `fundraising.manage` |
+| DELETE | `/expenditures/{expenditure_id}`          | `delete_expenditure`       | `fundraising.manage` |
+| GET    | `/compliance-tasks`                       | `list_compliance_tasks`    | `fundraising.view`   |
+| POST   | `/applications/{app_id}/compliance-tasks` | `create_compliance_task`   | `fundraising.manage` |
+| PUT    | `/compliance-tasks/{task_id}`             | `update_compliance_task`   | `fundraising.manage` |
+| DELETE | `/compliance-tasks/{task_id}`             | `delete_compliance_task`   | `fundraising.manage` |
+| GET    | `/applications/{app_id}/notes`            | `list_notes`               | `fundraising.view`   |
+| POST   | `/applications/{app_id}/notes`            | `create_note`              | `fundraising.manage` |
+| GET    | `/campaigns`                              | `list_campaigns`           | `fundraising.view`   |
+| POST   | `/campaigns`                              | `create_campaign`          | `fundraising.manage` |
+| GET    | `/campaigns/{campaign_id}`                | `get_campaign`             | `fundraising.view`   |
+| PUT    | `/campaigns/{campaign_id}`                | `update_campaign`          | `fundraising.manage` |
+| DELETE | `/campaigns/{campaign_id}`                | `delete_campaign`          | `fundraising.manage` |
+| GET    | `/donors`                                 | `list_donors`              | `fundraising.view`   |
+| POST   | `/donors`                                 | `create_donor`             | `fundraising.manage` |
+| GET    | `/donors/{donor_id}`                      | `get_donor`                | `fundraising.view`   |
+| PUT    | `/donors/{donor_id}`                      | `update_donor`             | `fundraising.manage` |
+| GET    | `/donations`                              | `list_donations`           | `fundraising.view`   |
+| POST   | `/donations`                              | `create_donation`          | `fundraising.manage` |
+| PUT    | `/donations/{donation_id}`                | `update_donation`          | `fundraising.manage` |
+| GET    | `/pledges`                                | `list_pledges`             | `fundraising.view`   |
+| POST   | `/pledges`                                | `create_pledge`            | `fundraising.manage` |
+| PUT    | `/pledges/{pledge_id}`                    | `update_pledge`            | `fundraising.manage` |
+| GET    | `/fundraising-events`                     | `list_fundraising_events`  | `fundraising.view`   |
+| POST   | `/fundraising-events`                     | `create_fundraising_event` | `fundraising.manage` |
+| PUT    | `/fundraising-events/{event_id}`          | `update_fundraising_event` | `fundraising.manage` |
+| GET    | `/dashboard`                              | `get_dashboard`            | `fundraising.view`   |
+| GET    | `/reports/grants`                         | `get_grant_report`         | `fundraising.view`   |
+| GET    | `/reports/fundraising`                    | `get_fundraising_report`   | `fundraising.view`   |
+| GET    | `/{opportunity_id}`                       | `get_opportunity`          | `fundraising.view`   |
+| PUT    | `/{opportunity_id}`                       | `update_opportunity`       | `fundraising.manage` |
+| DELETE | `/{opportunity_id}`                       | `delete_opportunity`       | `fundraising.manage` |
+
+All 45 carry `current_user: User = Depends(require_permission(...))` — no
+route with no auth dependency, no OR-gate (every permission string is a
+single literal, so there is no second alternative to check per checklist
+item 2). Router itself is mounted with `module_gate("grants", "Grants &
+Fundraising")` in `api.py:488`, so a disabled module additionally blocks the
+whole prefix. Every GET is gated `.view`, every mutating verb `.manage` —
+matches the data's sensitivity (money), no `.view` gate on a write.
+
+### Re-verified by direct code read (not re-cited from pass 6's prose)
+
+- **Locking (Pitfall #27):** `grant_service.py` — 3 `.with_for_update()`
+  sites (`:837`, `:869`, `:877`); `fundraising_service.py` — 6 (`:410`,
+  `:424`, `:447`, `:459`, `:476`, `:493`). `create_expenditure` locks the
+  budget item _before_ inserting the child row (`grant_service.py:720-728`,
+  with the deadlock-avoidance comment explaining why), matching GF-15's fix.
+- **Org-scoping (#14a/b/c):** `update_application`,
+  `create_expenditure`/`update_expenditure`, and every other write path
+  checked resolve their target through `get_application(id, organization_id)`
+  first and validate every client-supplied FK
+  (`_opportunity_in_org`/`_validate_application_fks`/
+  `_budget_item_in_application`/`_entity_in_org`) before storing or
+  recomputing from it. No gap introduced by the GF-9 fix (it only changed
+  which numeric type a total is accumulated in, never which org's rows a
+  query reaches).
+- **LIKE escaping (Pitfall #25):** `grant_service.py:105-109` (opportunity
+  search) and `fundraising_service.py:177-182` (donor search) both build the
+  pattern via `like_pattern(search)` and pass `escape=LIKE_ESCAPE_CHAR` on
+  every `.ilike()` call. Unchanged.
+- **CSV export (Pitfall #15):** still n/a — a repo-wide grep for
+  `csv\.(writer|DictWriter)\(` and `SafeCsvWriter` under this feature's three
+  backend files returns nothing. No export exists anywhere in this module.
+- **JSON-column mutation (Pitfall #12):** no `dict(obj.json_column)`
+  shallow-copy-then-mutate shape anywhere in the three files; every
+  `note_metadata={...}` site constructs a **new** `GrantNote` row rather than
+  mutating a persisted JSON column in place.
+- **Update paths (Pitfall #1):** all ten `update_*` methods route through
+  `apply_updates(instance, data, skip={"organization_id", "id"})`, confirmed
+  unchanged from GF-16's fix.
+
+### GF-9 split — the float-money third is fixed; the other two thirds are unchanged
+
+GF-9 was always one id covering three independent gaps (per
+`docs/module-audit/grants-fundraising.md`'s own text): float money math in
+reports, zero/unbounded donation and grant amounts, and donor-PII exposure to
+`fundraising.view`. This pass's delta closes only the first. Re-verified the
+other two directly against current code, not assumed from the module-audit
+doc's own "stand as before":
+
+- **Zero/unbounded amounts — still open.** Every money field in
+  `app/schemas/grant.py` (`amount`, `goal_amount`, `pledged_amount`,
+  `match_amount`, …) is `Field(..., ge=0)` or `Field(None, ge=0)` — rejects
+  negative, accepts `0`, no upper bound anywhere. Same as every prior pass.
+- **Donor-PII gate breadth — still open.** `list_donors`/`get_donor` return
+  full `DonorResponse` (name, email, lifetime total, dates) to any
+  `fundraising.view` holder, with no narrower read-only projection. Same as
+  every prior pass.
+
+**Doc-accuracy note, not a code finding:** several of this file's own earlier
+"Re-confirmed still open" lines (pass 3 at line 493, pass 4 at line 1573,
+pass 5 at line 1686, pass 6 at line 59-60/2034) describe GF-9 undifferentiated
+as "float money math in both report methods." Since the float third is now
+fixed, a future pass citing "GF-9 open" without qualification would be
+over-broad. Recorded here so the next pass cites the correct two-thirds
+rather than re-discovering which part of GF-9 is still live — the same shape
+as GF-25's own doc-accuracy correction two passes ago.
+
+### Re-confirmed still open (unchanged, per every prior pass)
+
+- **GF-7** (state-machine/overspend guards) — `update_application`
+  (`grant_service.py`) still applies any status transition via `apply_updates`
+  with no transition guard (confirmed by reading the full method, reproduced
+  above); `create_expenditure`/`update_expenditure` still have no check of
+  cumulative spend against `amount_awarded`/`amount_budgeted`
+  (`grant_service.py:881` still only recomputes `amount_remaining` as a
+  plain subtraction, never blocking or warning on a negative result).
+  Product decision, already in `KNOWN_LIMITATIONS.md`.
+- **GF-8** (`is_anonymous` not enforced) — `DonationBase`
+  (`app/schemas/grant.py:760-776`) still always declares `donor_name`/
+  `donor_email`, and neither `DonationResponse` nor the dashboard's
+  recent-donations list suppresses them when `is_anonymous=True`. No public
+  surface exists anywhere in this app that would read it (checked
+  `api/public/` directly), so this remains staff-only exposure. Product
+  decision, already in `KNOWN_LIMITATIONS.md`.
+- **GF-27a** (dashboard KPI multi-status aggregate vs. single-status link) —
+  `GrantsDashboardPage.tsx`'s KPI cards still link to
+  `/grants/applications?status=<one value>` while `get_dashboard_data()`
+  counts "Active Grants" as `active` **and** `reporting`. Unchanged,
+  product/filter-UI decision, already in `KNOWN_LIMITATIONS.md`.
+- **GF-33** (applications page still caps at 1,000, no real pagination UI) —
+  `GrantApplicationsPage.tsx:251` still requests `limit: 1000` with no
+  pagination control in either view. Unchanged, feature-gap decision, already
+  in `KNOWN_LIMITATIONS.md`.
+
+**No new findings.**
+
+### Schema & migration notes
+
+No migration written or needed this pass. Chain re-validated: 538 revisions,
+single head `8c4f2a6e1d93`, no duplicate ids — `grants`/`fundraising`-prefixed
+tables unchanged since pass 1.
+
+### Guard tests added
+
+None new. `TestGrantReportIsExact`/`TestFundraisingReportIsExact` (added by
+the GF-9 float fix itself, before this pass started) already cover the one
+closed class; every other invariant this pass re-verified already has a
+standing guard test or citation from a prior pass.
+
+### Completion gate (pass 7)
+
+| Check                                                        | Result                                           |
+| ------------------------------------------------------------ | ------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                | ✅ 0 violations                                  |
+| `black --check app/ tests/ alembic/`                         | ✅ 2027 files unchanged                          |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI-pinned) | ✅ clean                                         |
+| `python3 scripts/validate_migrations.py --strict`            | ✅ 538 revisions, single head                    |
+| `pytest tests/ -q -k "grant or fundraising"`                 | ✅ 718 passed, 1 pre-existing skip (up from 684) |
+| `python3 scripts/check_route_permissions.py --strict`        | ✅ 251 routes, 0 errors, 0 warnings              |
+| `cd frontend && npm run typecheck`                           | ✅ 0 errors                                      |
+| `cd frontend && npm run lint`                                | ✅ 0 errors, 0 warnings                          |
+
+No source file was modified by this pass itself — the one fixable item
+(GF-9's float half) had already landed via an unrelated commit before this
+pass began, and this pass's own diff is documentation-only
+(this file + `PROGRESS.md`).
 
 ---
 
