@@ -15,8 +15,10 @@ import { trainingService, userService } from '../services/api';
 import { reportExportService, documentService } from '../services/trainingServices';
 import type { TrainingAttachment } from '../services/trainingServices';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
-import { EmptyState } from '../components/ux';
-import { GraduationCap, Download, Paperclip, Upload, X } from 'lucide-react';
+import { EmptyState, PromptDialog } from '../components/ux';
+import { EditTrainingRecordModal } from '../components/training/EditTrainingRecordModal';
+import { useAuthStore } from '../stores/authStore';
+import { Ban, GraduationCap, Download, Paperclip, Pencil, Upload, X } from 'lucide-react';
 import { formatDate } from '../utils/dateFormatting';
 import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/certificationExpiry';
 import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
@@ -163,6 +165,28 @@ export const MemberTrainingHistoryPage: React.FC = () => {
 
   // Attachments
   const [attachmentRecord, setAttachmentRecord] = useState<TrainingRecord | null>(null);
+
+  // Officer corrections. The backend enforces training.manage; this only
+  // decides whether to offer the buttons.
+  const canManage = useAuthStore((state) => state.checkPermission('training.manage'));
+  const [editRecord, setEditRecord] = useState<TrainingRecord | null>(null);
+  const [voidTarget, setVoidTarget] = useState<TrainingRecord | null>(null);
+  const [voiding, setVoiding] = useState(false);
+
+  const handleVoid = async (reason: string) => {
+    if (!voidTarget) return;
+    try {
+      setVoiding(true);
+      await trainingService.voidRecord(voidTarget.id, reason);
+      toast.success('Training record voided');
+      setVoidTarget(null);
+      void fetchData();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to void training record'));
+    } finally {
+      setVoiding(false);
+    }
+  };
 
   const handleExport = async (format: 'csv' | 'pdf') => {
     if (!userId) return;
@@ -535,6 +559,14 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                     >
                       Files
                     </th>
+                    {canManage && (
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase print:hidden"
+                      >
+                        Actions
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-theme-surface-border divide-y">
@@ -577,19 +609,33 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                       </td>
                       <td data-label="Status" className="px-6 py-4">
                         <div className="flex flex-col gap-1">
-                          <span
-                            className={`inline-flex w-fit rounded-full px-2 py-1 text-xs font-medium ${getStatusColor(
-                              training.status
-                            )}`}
-                          >
-                            {training.status.replace('_', ' ')}
-                          </span>
-                          {isCertificationExpired(training.expiration_date, tz) && (
+                          {training.voided_at ? (
+                            <>
+                              <span className="inline-flex w-fit rounded-full bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+                                voided
+                              </span>
+                              {training.void_reason && (
+                                <span className="text-theme-text-secondary max-w-xs text-xs whitespace-pre-line">
+                                  Reason: {training.void_reason}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span
+                              className={`inline-flex w-fit rounded-full px-2 py-1 text-xs font-medium ${getStatusColor(
+                                training.status
+                              )}`}
+                            >
+                              {training.status.replace('_', ' ')}
+                            </span>
+                          )}
+                          {!training.voided_at && isCertificationExpired(training.expiration_date, tz) && (
                             <span className="inline-flex w-fit rounded-full bg-red-500/10 px-2 py-1 text-xs font-medium text-red-700 dark:bg-red-500/20 dark:text-red-400">
                               expired
                             </span>
                           )}
-                          {!isCertificationExpired(training.expiration_date, tz) &&
+                          {!training.voided_at &&
+                            !isCertificationExpired(training.expiration_date, tz) &&
                             isCertificationExpiringSoon(training.expiration_date, tz) && (
                               <span className="inline-flex w-fit rounded-full bg-yellow-500/10 px-2 py-1 text-xs font-medium text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">
                                 expiring soon
@@ -606,6 +652,32 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                           Files
                         </button>
                       </td>
+                      {canManage && (
+                        <td data-label="Actions" className="px-6 py-4 print:hidden">
+                          {/* A voided record is final: editing it could hand
+                              back credit the department removed. */}
+                          {!training.voided_at && (
+                            <div className="flex flex-wrap gap-1">
+                              <button
+                                onClick={() => setEditRecord(training)}
+                                aria-label={`Edit ${training.course_name}`}
+                                className="text-theme-text-muted hover:text-theme-text-primary inline-flex min-h-11 items-center gap-1.5 px-2 text-sm"
+                              >
+                                <Pencil className="h-4 w-4" aria-hidden="true" />
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => setVoidTarget(training)}
+                                aria-label={`Void ${training.course_name}`}
+                                className="inline-flex min-h-11 items-center gap-1.5 px-2 text-sm text-amber-800 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200"
+                              >
+                                <Ban className="h-4 w-4" aria-hidden="true" />
+                                Void
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -629,6 +701,44 @@ export const MemberTrainingHistoryPage: React.FC = () => {
           onClose={() => setAttachmentRecord(null)}
         />
       )}
+
+      {editRecord && (
+        <EditTrainingRecordModal
+          record={editRecord}
+          onClose={() => setEditRecord(null)}
+          onSaved={() => {
+            setEditRecord(null);
+            void fetchData();
+          }}
+        />
+      )}
+
+      <PromptDialog
+        isOpen={voidTarget !== null}
+        onClose={() => setVoidTarget(null)}
+        onSubmit={(reason) => void handleVoid(reason)}
+        title="Void training record"
+        message={
+          <>
+            <p>
+              <strong>{voidTarget?.course_name}</strong> will stop counting toward this member&apos;s hours and
+              requirements. It stays in their history, marked voided.
+            </p>
+            <p className="mt-2">
+              If it came from a training provider, later syncs and uploads of the same completion will not credit it
+              again.
+            </p>
+          </>
+        }
+        label="Reason"
+        hint="The member is emailed and can see this reason on the record."
+        multiline
+        required
+        confirmLabel="Void record"
+        cancelLabel="Keep it"
+        confirmVariant="warning"
+        loading={voiding}
+      />
     </div>
   );
 };

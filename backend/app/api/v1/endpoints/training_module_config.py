@@ -221,6 +221,8 @@ async def get_my_training_summary(
                     str(r.expiration_date) if r.expiration_date else None
                 ),
                 "instructor": r.instructor,
+                "voided_at": r.voided_at.isoformat() if r.voided_at else None,
+                "void_reason": r.void_reason,
             }
             for r in records
         ]

@@ -1224,9 +1224,19 @@ a submission archives its notifications.
 Approvals and records can be undone without hand-editing anyone's progress:
 
 - **Reverse an approval** — on an already-approved submission, reversing the approval **voids the training record it created**, takes back any pipeline credit it applied, and returns the submission to **pending review** so you can re-decide (reject it, or re-approve with corrected hours).
-- **Void a record** — a training record entered in error can be voided. It is marked **cancelled** (kept for the audit trail, never truly deleted) and any pipeline credit it fed is taken back off automatically. Because compliance only counts completed records, a voided record stops counting right away.
+- **Void a record** — a training record entered in error, or one a member should never have been credited for (a course they cheated on, say), can be voided with **Void** on the member's **Training History** page (`/members/:userId/training`). It is marked **cancelled** (kept for the audit trail, never truly deleted) and any pipeline credit it fed is taken back off automatically. Because compliance only counts completed records, a voided record stops counting right away.
+- **Edit a record** — **Edit** on the same page corrects the course name, training type, completion date, hours, credit hours, expiration date or certification number of any record, including one imported from a training provider.
 
 Both actions require `training.manage` and are recorded in the audit log.
+
+**Voiding and editing tell the member** _(2026-10-07)_:
+
+- **A void needs a reason.** The member is sent a bell notice and an email with the reason, and the record stays in their history (My Training and Training History) marked **voided**, with the reason under it. The email is a required kind — _Changes to your training record_ — so a member who has turned email off still receives it.
+- **A voided record is final.** It can't be edited back into credit; there is no Edit button on it and the server refuses the change.
+- **A void sticks through imports.** A record from a training provider keeps its provider ID (Target Solutions' Transcript ID) when voided, so a later API sync or report upload of the same completion links to the voided record instead of crediting it again. A genuinely new completion of the course — a retake — has a new ID and is credited normally.
+- **A void withdraws a qualification the record granted.** If the record's course grants a qualification (EMT, for example) and no other record supports it, the qualification is removed. This applies to reversing an approval too.
+- **An edit lists what changed.** When a value the member sees on the record changes, they get a bell notice and an email listing each change, before and after, with your note if you add one. An edit to something they don't see sends nothing.
+- Reversing an approval (above) also marks the record it created **voided** in the member's history.
 
 ---
 

@@ -522,10 +522,15 @@ reminders**.
 
 Entries made in error can be undone without hand-editing progress:
 
-- **Void a training record** (`DELETE /training/records/{id}`, `training.manage`)
-  marks the record cancelled — kept for audit, never hard-deleted — and un-applies
-  any pipeline credit it produced. The compliance engine only counts completed
-  records, so a voided one stops counting immediately.
+- **Void a training record**
+  (`DELETE /training/records/{id}?reason=…`, `training.manage`) marks the record
+  cancelled — kept for audit, never hard-deleted — and un-applies any pipeline
+  credit it produced. The compliance engine only counts completed records, so a
+  voided one stops counting immediately. Since 2026-10-07 the `reason` is
+  **required** (a call without one gets 422) and is stored on the record as
+  `void_reason`, shown to the member, and sent to them by bell and email. A
+  voided record can't be edited (`PATCH` returns 400), and a re-import of the same
+  provider completion links to it rather than crediting it again.
 - **Reverse an approval**
   (`POST /training/submissions/{id}/reverse-approval`, `training.manage`) voids the
   record the approval spawned, un-applies the credit keyed on both the submission

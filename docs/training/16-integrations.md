@@ -834,6 +834,12 @@ training record is never credited again. An upload and a sync for the same
 provider take turns rather than running over each other, and the database
 itself refuses a second entry with the same Transcript ID.
 
+**A voided completion stays voided.** If an officer voids a training record
+that came from Target Solutions — a course a member cheated on, say — the
+record keeps its Transcript ID, so every later sync or upload of that
+completion links to the voided record and credits nothing. See _Fixing a
+Mistaken Approval or Record_ in the Training guide.
+
 > **On upgrade:** if two staged entries already shared a Transcript ID, the
 > upgrade keeps one — the one already imported, else the oldest — and marks the
 > others **duplicate**, with the original ID noted on them. Nothing is deleted,

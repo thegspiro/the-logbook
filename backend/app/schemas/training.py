@@ -349,6 +349,11 @@ class TrainingRecordResponse(TrainingRecordBase, UTCResponseBase):
     # accepted on create or update, where a client could point a record at an
     # event it did not come from.
     source_event_id: Optional[UUID] = None
+    # Response only, set by the void endpoint. The reason is the member's to
+    # read: they are told of the void and see it on the record.
+    voided_at: Optional[datetime] = None
+    voided_by: Optional[UUID] = None
+    void_reason: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None

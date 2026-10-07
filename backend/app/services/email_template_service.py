@@ -637,6 +637,43 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             "description": "Link to the integrations screen, where courses are mapped",
         },
     ],
+    "training_record_voided": [
+        {"name": "member_name", "description": "The member whose record was voided"},
+        {"name": "course_name", "description": "The training the record was for"},
+        {"name": "officer_name", "description": "The officer who voided it"},
+        {"name": "void_reason", "description": "The officer's reason for the void"},
+        {
+            "name": "details_html",
+            "description": "Panel with the record's date and hours",
+        },
+        {
+            "name": "details_text",
+            "description": "Plain-text version of the details panel",
+        },
+        {"name": "training_url", "description": "Link to My Training"},
+    ],
+    "training_record_changed": [
+        {"name": "member_name", "description": "The member whose record changed"},
+        {"name": "course_name", "description": "The training the record is for"},
+        {"name": "officer_name", "description": "The officer who edited it"},
+        {
+            "name": "details_html",
+            "description": "Panel listing each changed value, before and after",
+        },
+        {
+            "name": "details_text",
+            "description": "Plain-text version of the changes panel",
+        },
+        {
+            "name": "notes_html",
+            "description": "The officer's note as a paragraph, empty if none",
+        },
+        {
+            "name": "change_note",
+            "description": "The officer's note as plain text, empty if none",
+        },
+        {"name": "training_url", "description": "Link to My Training"},
+    ],
     "equipment_request_update": [
         {"name": "member_name", "description": "Requesting member's name"},
         {"name": "item_name", "description": "The item the member asked for"},
@@ -1242,6 +1279,50 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             ),
         }
     ),
+    "training_record_voided": _sample(
+        {
+            "member_name": "John Doe",
+            "course_name": "HIPAA Privacy & Security Awareness",
+            "officer_name": "Captain Maria Lopez",
+            "void_reason": (
+                "The course was completed by someone other than the member."
+            ),
+            "details_html": (
+                '<table class="facts" role="presentation" cellpadding="0" '
+                'cellspacing="0"><tr><td class="fact">'
+                '<p class="fact-label">Completed</p>'
+                '<p class="fact-value">March 04, 2026</p></td>'
+                '<td class="fact"><p class="fact-label">Hours</p>'
+                '<p class="fact-value">1</p></td></tr></table>'
+            ),
+            "details_text": "Completed: March 04, 2026\nHours: 1",
+            "training_url": "https://example.org/training/my-training",
+        }
+    ),
+    "training_record_changed": _sample(
+        {
+            "member_name": "John Doe",
+            "course_name": "Hazmat Operations Refresher",
+            "officer_name": "Captain Maria Lopez",
+            "details_html": (
+                '<table class="facts" role="presentation" cellpadding="0" '
+                'cellspacing="0"><tr><td class="fact" colspan="2">'
+                '<p class="fact-label">Hours</p>'
+                '<p class="fact-value">8 &rarr; 4</p></td></tr></table>'
+            ),
+            "details_text": "Hours: 8 -> 4",
+            "notes_html": (
+                '<p style="white-space:pre-line;"><strong>From the training '
+                "officer:</strong> The provider credits this course at 4 "
+                "hours.</p>"
+            ),
+            "change_note": (
+                "From the training officer: The provider credits this course "
+                "at 4 hours."
+            ),
+            "training_url": "https://example.org/training/my-training",
+        }
+    ),
     "equipment_request_update": _sample(
         {
             "member_name": "John Doe",
@@ -1418,6 +1499,8 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     "suggestion_submitted": {"recipient_name": "full"},
     "equipment_request_update": {"member_name": "full"},
     "external_course_match": {"recipient_name": "full"},
+    "training_record_voided": {"member_name": "full"},
+    "training_record_changed": {"member_name": "full"},
     "shift_assignment": {"recipient_name": "full"},
     "shift_reminder": {"recipient_name": "first"},
     "storefront_order_confirmation": {
@@ -1521,6 +1604,8 @@ TEST_SAMPLE_PROSE_DATES: Dict[str, Dict[str, int]] = {
     "storefront_window_closing": {"window_extra_html": 2},
     "storefront_window_closed": {"window_extra_html": 30},
     "storefront_vendor_order_placed": {"window_extra_html": 30},
+    # The completion date of the record that was voided.
+    "training_record_voided": {"details_html": -30, "details_text": -30},
 }
 
 _PROSE_DATE = re.compile(
@@ -2428,6 +2513,73 @@ Map courses: {{mappings_url}}
 {{footer_text}}"""
 
 DEFAULT_EXTERNAL_COURSE_MATCH_SUBJECT = "New {{provider_name}} course version to map"
+
+# Sent to a member when an officer voids one of their training records — a
+# completion entered in error, or one the member cheated on. The record stays
+# in their history marked voided; the email says why, because a member who
+# only sees credit disappear has no way to question it.
+DEFAULT_TRAINING_RECORD_VOIDED_HTML = build_shell(
+    "Training Record Voided",
+    """        <p>Hello {{member_name}},</p>
+        <p>{{officer_name}} voided your training record for {{course_name}}.
+        It no longer counts toward your hours or requirements, and it stays
+        in your training history marked as voided.</p>
+        {{details_html}}
+        <p style="white-space:pre-line;"><strong>Reason:</strong> {{void_reason}}</p>
+        <p>If you think this is a mistake, contact your training officer.</p>
+""" + action("{{training_url}}", "View My Training"),
+    accent=ACCENT_AMBER,
+    chip="Training",
+)
+
+DEFAULT_TRAINING_RECORD_VOIDED_TEXT = """Training Record Voided
+
+Hello {{member_name}},
+
+{{officer_name}} voided your training record for {{course_name}}. It no longer
+counts toward your hours or requirements, and it stays in your training
+history marked as voided.
+
+{{details_text}}
+
+Reason: {{void_reason}}
+
+If you think this is a mistake, contact your training officer.
+
+View your training: {{training_url}}
+
+{{footer_text}}"""
+
+DEFAULT_TRAINING_RECORD_VOIDED_SUBJECT = "Training record voided: {{course_name}}"
+
+# Sent to a member when an officer edits one of their training records, with
+# each changed value before and after — the same notice a self-reported
+# submission approved with changes gives.
+DEFAULT_TRAINING_RECORD_CHANGED_HTML = build_shell(
+    "Training Record Updated",
+    """        <p>Hello {{member_name}},</p>
+        <p>{{officer_name}} updated your training record for {{course_name}}.</p>
+        {{details_html}}
+        {{notes_html}}
+""" + action("{{training_url}}", "View My Training"),
+    accent=ACCENT_BLUE,
+    chip="Training",
+)
+
+DEFAULT_TRAINING_RECORD_CHANGED_TEXT = """Training Record Updated
+
+Hello {{member_name}},
+
+{{officer_name}} updated your training record for {{course_name}}.
+
+{{details_text}}
+{{change_note}}
+
+View your training: {{training_url}}
+
+{{footer_text}}"""
+
+DEFAULT_TRAINING_RECORD_CHANGED_SUBJECT = "Training record updated: {{course_name}}"
 
 # Default ballot notification email
 DEFAULT_BALLOT_NOTIFICATION_HTML = build_shell(
@@ -4101,6 +4253,28 @@ class EmailTemplateService:
                 "Sent to training officers when a training provider sends a "
                 "course that looks like one already in the library, so it can "
                 "be mapped and members who completed it credited."
+            ),
+        },
+        {
+            "type": EmailTemplateType.TRAINING_RECORD_VOIDED,
+            "name": "Training Record Voided",
+            "subject": DEFAULT_TRAINING_RECORD_VOIDED_SUBJECT,
+            "html": DEFAULT_TRAINING_RECORD_VOIDED_HTML,
+            "text": DEFAULT_TRAINING_RECORD_VOIDED_TEXT,
+            "description": (
+                "Sent to a member when a training officer voids one of their "
+                "training records, with the officer's reason."
+            ),
+        },
+        {
+            "type": EmailTemplateType.TRAINING_RECORD_CHANGED,
+            "name": "Training Record Updated",
+            "subject": DEFAULT_TRAINING_RECORD_CHANGED_SUBJECT,
+            "html": DEFAULT_TRAINING_RECORD_CHANGED_HTML,
+            "text": DEFAULT_TRAINING_RECORD_CHANGED_TEXT,
+            "description": (
+                "Sent to a member when a training officer edits one of their "
+                "training records, listing each value that changed."
             ),
         },
         {

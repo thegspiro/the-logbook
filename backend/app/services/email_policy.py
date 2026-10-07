@@ -70,6 +70,7 @@ class EmailKind(str, enum.Enum):
     STORE_RECEIPTS = "store_receipts"
     SKILLS_TEST_RESULTS = "skills_test_results"
     OVERDUE_EQUIPMENT = "overdue_equipment"
+    TRAINING_RECORD_CHANGES = "training_record_changes"
 
     # Optional, about the member's own activity
     EVENT_REMINDERS = "event_reminders"
@@ -172,6 +173,19 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         audience=_M,
         includes=("Checked-out equipment past its return date",),
         rationale="Department property the member is responsible for.",
+    ),
+    EmailKind.TRAINING_RECORD_CHANGES: EmailPolicy(
+        label="Changes to your training record",
+        required=True,
+        audience=_M,
+        includes=(
+            "An officer voided one of your training records, and why",
+            "An officer edited one of your training records",
+        ),
+        rationale=(
+            "Changes to the member's official training record, which they "
+            "need to know about to question one."
+        ),
     ),
     EmailKind.EVENT_REMINDERS: EmailPolicy(
         label="Event reminders",

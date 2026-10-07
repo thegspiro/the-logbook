@@ -595,6 +595,10 @@ export interface TrainingRecord {
   external_record_id?: string;
   /** Set by the server when attendance finalize wrote this record. */
   source_event_id?: string | null;
+  /** Set when an officer voided the record; the reason is the member's to read. */
+  voided_at?: string | null;
+  voided_by?: string | null;
+  void_reason?: string | null;
   notes?: string;
   attachments?: string[];
   rank_at_completion?: string;
@@ -637,10 +641,11 @@ export interface TrainingRecordUpdate {
   category_id?: string | undefined;
   scheduled_date?: string;
   completion_date?: string;
-  expiration_date?: string | undefined;
+  /** `null` clears it: an update omits a key to leave the value alone. */
+  expiration_date?: string | null | undefined;
   hours_completed?: number;
-  credit_hours?: number;
-  certification_number?: string | undefined;
+  credit_hours?: number | null;
+  certification_number?: string | null | undefined;
   issuing_agency?: string | undefined;
   status?: TrainingStatus;
   score?: number;
@@ -2094,6 +2099,8 @@ export interface MyTrainingSummary {
     hours_completed: number;
     expiration_date: string | null;
     instructor?: string;
+    voided_at?: string | null;
+    void_reason?: string | null;
   }>;
   hours_summary?: {
     total_records: number;
