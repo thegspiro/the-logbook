@@ -1,5 +1,53 @@
 # Script currency
 
+## Flagged by the 2026-10-06 → 10-07 changes (PR #2965, #2967)
+
+Source: [CHANGE_AUDIT_2026-10-06_TO_10-07](../CHANGE_AUDIT_2026-10-06_TO_10-07.md).
+Every UI label below comes from the merged PR descriptions and the frontend routes;
+grep a label before it goes into a script. Rows are **Open** (not yet rewritten
+in-script) unless marked **Fixed**. Nothing was re-recorded.
+
+**Re-record or shoot new footage:** 03 (Security Alerts, Integration health, Claude connections, `.env` pass-through), 07 (admin-hours Review Rules, directory, Undo drop, medical screening), 05 / 16 (knowledge tests, Skill Evaluations, Department Readiness, cohort rooms), 06 (Pick up an open swap, knowledge test), 12 (elections ballot, seats, revised results), 15 (offline scoring).
+
+| Script      | Beat                            | Was                                                         | Now                                                                                                                                                                          |
+| ----------- | ------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **03**      | Server install / `.env`         | "Put your settings in `.env`" implied every setting applied | Every backend setting now reaches the container; review `.env` before upgrading (typos and production-check violations stop boot). Unraid template needs **ENCRYPTION_SALT** |
+| **03**      | Audit log integrity             | Single signing key, no mention of key rotation              | Rows record a key fingerprint; keep `SECRET_KEY` unchanged while pre-upgrade rows matter                                                                                     |
+| **03**      | Security monitoring (new beat)  | Alerts only listed                                          | `/admin/security-alerts`: acknowledge / resolve with a note; every export audited in Download activity                                                                       |
+| **03**      | Integrations (new beat)         | —                                                           | Integration detail page: sync history, last error, **Retry sync**; a failed run does not turn the integration off                                                            |
+| **03**      | Claude / MCP (new beat)         | MCP keys only                                               | Opt-in OAuth sign-in: consent page, a member's **Connections** page, admin client panel; tokens never exceed the member's own permissions                                    |
+| **03**      | Deployment (new beat)           | —                                                           | Managed RDS/ElastiCache override; back up `uploads` and `audit_archives` yourself                                                                                            |
+| **07**      | Admin hours                     | Self-approval not mentioned                                 | **Review Rules** tab: sole-officer self-approval; resync growth over 25% returns an entry to Pending Review                                                                  |
+| **07**      | Members directory               | Archived members listed                                     | Non-managers see Active members only, from a narrower directory; position names must be unique; the base Member position cannot be removed                                   |
+| **07**      | Dropping a member               | No way back                                                 | **Undo drop** within 7 days                                                                                                                                                  |
+| **05 / 16** | Knowledge tests (new beat)      | "Skills tests only"                                         | Online question bank, member-facing test, auto-grading, requirement progress on a pass                                                                                       |
+| **05 / 16** | Skill Evaluations (new beat)    | Skills defined in code/config                               | Training Admin › Setup › Skill Evaluations; evaluators by default, position or named member                                                                                  |
+| **05**      | Competency                      | Per-member view only                                        | **Department Readiness** heat-map; a cell equals that member's own view                                                                                                      |
+| **05**      | Cohorts (new beat)              | Cohort room fixed                                           | Pick the cohort's room, override per class, "Location already booked" warning                                                                                                |
+| **05**      | Compliance, SHIFTS requirements | "Shifts completed" counted training records                 | Counts finalized shift attendance (plus counted external shifts) over the requirement's window; zero target is no longer compliant.                                          |
+| **05**      | Programs                        | Linked requirement started at 0%                            | Reads the live compliance figure; officers cannot set or complete it                                                                                                         |
+| **05**      | Qualifications                  | Via training records only                                   | Enter directly on a profile or import by CSV (dry run first)                                                                                                                 |
+| **06**      | Open Swap card                  | "Stays yours until one picks it up" (officer approves)      | The first eligible member to **Pick up** takes it; officers can only deny; nobody is emailed                                                                                 |
+| **06**      | Knowledge tests (new beat)      | —                                                           | Take a test online; answers are not shown until submitted                                                                                                                    |
+| **07**      | Medical screening               | Member could not tell how a record was entered              | **Self-recorded** badge; Add Record has a Member/Prospect picker                                                                                                             |
+| **12**      | Ballot (rewrite)                | Separate in-app and emailed ballots                         | One ballot; positions-only elections can email ballots; proxy ballot names both members; refused on anonymous elections                                                      |
+| **12**      | Seats and results               | One winner per race; publish switch                         | **Seats per race**; results release on close; **Results revised** mark after corrections; receipts verified with POST                                                        |
+| **14**      | Roster / classes                | —                                                           | Cohort room beat (see 05)                                                                                                                                                    |
+| **15**      | Test screen offline             | "Needs a connection"                                        | Scores from a cached sheet offline; queue replays in order; Sign Out warns before deleting unsent evaluations                                                                |
+| **All**     | Desktop B-roll                  | 44px icon buttons and switches with a mouse                 | 36px icon buttons and 24px switches with a mouse; touch footage unchanged. Event card titles clamp; Create Event no longer scrolls sideways on a tablet                      |
+| **03 / 06** | Scheduling close-out (new beat) | Each unit logged its own calls                              | Tick a call another unit already logged so it is counted once; an oversized type breakdown is rejected                                                                       |
+| **03 / 06** | Crew seats                      | Built-in seats only                                         | A department's own seats can be filled when a rank, the Open Positions list, an open-to-all shift or the administrative flag grants them; unknown seat → `LB-SCHED-003`      |
+
+**Highest-value fix:** the `.env` beat in 03. Anyone following an older install
+video has settings in `.env` that never applied and will now.
+
+### Considered and found clean
+
+Scripts 01, 02, 08 – 11, 13 (and 04, apart from the desktop footage): nothing in their subject areas changed in this window
+apart from desktop-density footage (see **All**).
+
+---
+
 ## Flagged by the 2026-10-05 → 10-06 changes (PRs #2941–#2972)
 
 Pass over all seventeen scripts against `git log 01b1bc26..HEAD`. Every UI label below was grepped in the frontend before it was written into a script. Beats the window made wrong were rewritten in-script and marked **Fixed**; where only footage is out of date the row is **Open** (re-record / new footage needed); **Check** means a claim could not be verified from source.
