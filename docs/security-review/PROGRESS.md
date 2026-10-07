@@ -16,6 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2981](https://github.com/thegspiro/the-logbook/pull/2981)**: branch
+`claude/security-review-medical-supplies`, Feature 23 (Medical supplies),
+pass 13 (watchdog pickup — PR #2980, Feature 22, Grants & fundraising, had
+already merged ~73 minutes earlier with nothing started since). Real delta
+since pass 12 (`a9db9aae`, PR #2877) is one commit, `57e81e4d` (merged via
+PR #2918, outside the rotation), fixing MSUP-25 outright — re-verified here
+directly against current code. 0 fixes needed by this pass itself, 0 new
+findings. MSUP-4, MSUP-11, and MSUP-15 remain the only open, flagged items.
+Route surface re-enumerated (15/15, unchanged) with every permission string
+checked individually. Completion gate green (flake8/black/isort; migrations
+— 538 revisions, single head; 1205 scoped backend tests, up from 1194;
+frontend typecheck/lint clean). See the Log entry below for detail.
+
+<details>
+<summary>Superseded — prior Open PR note (bridge note recording PR #2980's
+merge before Feature 23 started; and, nested below, the pre-merge note for
+PR #2980 itself), preserved for history</summary>
+
 **None.** PR #2980 (Feature 22, Grants & fundraising, pass 7) merged clean
 via merge commit `021fecc6`. 0 fixes needed by that pass itself (the one
 fixable item had already landed before the pass began); the Log entry below
