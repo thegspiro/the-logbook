@@ -16,11 +16,23 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** Feature 20 (Compliance) review in progress (watchdog pickup — the
-dedicated `/loop 30m /security-review` session had no open PR/branch for
-this feature, and PR #2976 (Feature 19, Skills testing, pass 7) had already
-merged ~2 hours earlier with nothing started since, past this rotation's
-documented ~90-minute stall threshold).
+**PR [#2977](https://github.com/thegspiro/the-logbook/pull/2977)**: branch
+`claude/security-review-compliance`, Feature 20 (Compliance), pass 7
+(watchdog pickup — the dedicated `/loop 30m /security-review` session had
+no open PR/branch for this feature, and PR #2976 (Feature 19, Skills
+testing, pass 7) had already merged ~2 hours earlier with nothing started
+since, past this rotation's documented ~90-minute stall threshold).
+Real delta: thirteen non-merge commits touched five of the seven declared
+scope files since pass 6's merge (PR #2869). Three standing flags
+(CMP4-2, CMP4-3, CMP4-5) and CS-9 (monthly-report windowing) re-verified
+already fixed by other work; one new finding identified and already fixed
+before this pass began, given its own id (CS-8-b) rather than conflated
+with the unrelated, still-open original CS-8. 0 fixes needed by this pass
+itself. Route surface re-enumerated (20/20, unchanged). Completion gate
+green (flake8/black/isort, migrations — 538 revisions, single head;
+`check_route_permissions.py --strict` — 251 routes; 490 + 45 scoped backend
+tests; frontend typecheck/lint, 131 scoped frontend tests). See the Log
+entry below for detail.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 7, PR #2976, merged), preserved for history</summary>
