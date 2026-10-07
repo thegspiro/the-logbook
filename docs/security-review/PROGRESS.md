@@ -16,14 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2978](https://github.com/thegspiro/the-logbook/pull/2978)**: branch
+`claude/security-review-admin-hours`, Feature 21 (Admin hours), pass 7
+(watchdog pickup — PR #2977, Feature 20, had already merged with nothing
+started since). Real delta since pass 6 (`763098b22`, PR #2874) is one
+non-rotation commit, `a2d32fb41`, implementing the owner decision pass 6's
+own closing section already recorded (a per-org self-approval toggle and a
+resync-growth re-queue threshold) — reviewed in full against all seven
+checklist dimensions. Both of this rotation's two long-standing "confirmed
+open by design" items are now resolved; AH-16 (unbounded CSV export)
+remains correctly open. 0 fixes needed, 0 new findings. Route surface
+re-enumerated (30/30, up from 29 for the one new `GET
+/admin-hours/settings`). Completion gate green (flake8/black/isort,
+migrations — 538 revisions, single head; `check_route_permissions.py
+--strict` — 251 routes; 139 + 22 scoped backend tests; frontend
+typecheck/lint, 113 + 143 scoped frontend tests). See the Log entry below
+for detail.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 7, PR #2977, merged), preserved for history</summary>
+
 **None.** PR #2977 (Feature 20, Compliance, pass 7) merged clean. 0 fixes
 needed by that pass itself (three standing flags and one new finding were
 already fixed by other work); the Log entry below already records it in
-full, so there is nothing further to record here. Rotation row 20 stays
-✅. Next: Feature 21 (Admin hours).
-
-<details>
-<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 7, PR #2977, before it merged), preserved for history</summary>
+full, so there was nothing further to record there. Rotation row 20 stayed
+✅.
 
 **PR [#2977](https://github.com/thegspiro/the-logbook/pull/2977)**: branch
 `claude/security-review-compliance`, Feature 20 (Compliance), pass 7
