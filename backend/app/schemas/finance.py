@@ -208,6 +208,31 @@ class BudgetResponse(UTCResponseBase):
     updated_at: datetime
 
 
+class BudgetOptionResponse(BaseModel):
+    """A budget line as a request form offers it: a name and what is left.
+
+    Deliberately not ``BudgetResponse``. ``finance.request`` holders see this
+    and nothing more of the budget — the budgeted, spent and encumbered
+    figures stay behind ``finance.view``.
+    """
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    label: str
+    amount_remaining: Decimal
+
+
+class FiscalYearOptionResponse(BaseModel):
+    """A fiscal year a request can be raised against."""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    name: str
+    status: str
+
+
 class BudgetSummaryResponse(BaseModel):
     """Aggregated budget summary"""
 

@@ -36,6 +36,7 @@ from app.schemas.finance import (
     BudgetCategoryResponse,
     BudgetCategoryUpdate,
     BudgetCreate,
+    BudgetOptionResponse,
     BudgetResponse,
     BudgetSummaryResponse,
     BudgetUpdate,
@@ -59,6 +60,7 @@ from app.schemas.finance import (
     ExportRequest,
     FinanceDashboardResponse,
     FiscalYearCreate,
+    FiscalYearOptionResponse,
     FiscalYearResponse,
     FiscalYearUpdate,
     ManualDenyRequest,
@@ -84,6 +86,39 @@ router = APIRouter()
 
 
 # ============================================
+# Who sees and acts on which requests
+# ============================================
+# ``finance.request`` is held by every member. It opens the requester's side of
+# purchase requests, expense reports and check requests — raise, edit while
+# editable, submit, withdraw a draft, and read — and only for records the
+# caller raised. The OR-gates below therefore admit a baseline grant beside
+# the officer ones on purpose; the ownership scoping in each handler is what
+# keeps a member out of everybody else's requests (404, as if absent).
+
+
+def _sees_all_requests(user: User) -> bool:
+    """Org-wide read of purchase and check requests, as before finance.request."""
+    return user_has_permission(user, "finance.view") or user_has_permission(
+        user, "finance.manage"
+    )
+
+
+def _read_scope(user: User) -> Optional[str]:
+    """``None`` for an org-wide reader, else the caller's id to confine reads."""
+    return None if _sees_all_requests(user) else str(user.id)
+
+
+def _requester_scope(user: User) -> Optional[str]:
+    """``None`` when the caller may act on any request; else their own id.
+
+    Only ``finance.manage`` acts on other members' requests. A
+    ``finance.view`` holder reads the queue but, like any member, edits and
+    submits only what they raised themselves.
+    """
+    return None if user_has_permission(user, "finance.manage") else str(user.id)
+
+
+# ============================================
 # Fiscal Years
 # ============================================
 
@@ -98,6 +133,27 @@ async def list_fiscal_years(
     return await service.list_fiscal_years(
         str(current_user.organization_id), pagination
     )
+
+
+@router.get("/fiscal-years/options", response_model=list[FiscalYearOptionResponse])
+async def list_fiscal_year_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.view", "finance.manage")
+    ),
+):
+    """Active and draft fiscal years, for the request forms' picker.
+
+    **Requires permission: finance.request, finance.view or finance.manage**
+
+    Id, name and status only. The full fiscal-year list stays behind
+    the view grant, which is what the settings and budget pages use.
+    """
+    # Registered before `/fiscal-years/{fy_id}`: Starlette matches in
+    # registration order, and the by-id route would otherwise capture
+    # "options" as an id.
+    service = FinanceService(db)
+    return await service.list_fiscal_year_options(str(current_user.organization_id))
 
 
 @router.post("/fiscal-years", response_model=FiscalYearResponse, status_code=201)
@@ -354,6 +410,30 @@ async def get_budget_summary(
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.get("/budgets/options", response_model=list[BudgetOptionResponse])
+async def list_budget_options(
+    fiscal_year_id: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.view", "finance.manage")
+    ),
+):
+    """The budget lines of one fiscal year, as the request forms offer them.
+
+    **Requires permission: finance.request, finance.view or finance.manage**
+
+    Each line is a label (its category, plus its station when it has one)
+    and the amount remaining. That is all a member choosing a line needs, and
+    all they see: the budget pages themselves stay behind the view grant.
+    """
+    # Registered before `/budgets/{budget_id}` for the reason
+    # get_budget_summary gives.
+    service = FinanceService(db)
+    return await service.list_budget_options(
+        str(current_user.organization_id), fiscal_year_id
+    )
 
 
 @router.get("/budgets/{budget_id}", response_model=BudgetResponse)
@@ -914,11 +994,24 @@ async def list_purchase_requests(
     fiscal_year_id: Optional[str] = Query(None),
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view")),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.view", "finance.manage")
+    ),
 ):
+    """List purchase requests.
+
+    **Requires permission: finance.request, finance.view or finance.manage**
+
+    A caller without the view or manage grant sees only the requests they
+    raised themselves.
+    """
     service = FinanceService(db)
     return await service.list_purchase_requests(
-        str(current_user.organization_id), pagination, status, fiscal_year_id
+        str(current_user.organization_id),
+        pagination,
+        status,
+        fiscal_year_id,
+        restrict_to_user=_read_scope(current_user),
     )
 
 
@@ -930,8 +1023,14 @@ async def list_purchase_requests(
 async def create_purchase_request(
     data: PurchaseRequestCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.manage")),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
 ):
+    """Raise a purchase request, as the caller.
+
+    **Requires permission: finance.request or finance.manage**
+    """
     service = FinanceService(db)
     try:
         pr = await service.create_purchase_request(
@@ -995,10 +1094,23 @@ async def _with_approval_steps(
 async def get_purchase_request(
     pr_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view")),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.view", "finance.manage")
+    ),
 ):
+    """A purchase request, with its approval steps.
+
+    **Requires permission: finance.request, finance.view or finance.manage**
+
+    Another member's request is a 404 to a caller without the view or
+    manage grant.
+    """
     service = FinanceService(db)
-    pr = await service.get_purchase_request(pr_id, str(current_user.organization_id))
+    pr = await service.get_purchase_request(
+        pr_id,
+        str(current_user.organization_id),
+        restrict_to_user=_read_scope(current_user),
+    )
     if not pr:
         raise HTTPException(status_code=404, detail="Purchase request not found")
     return await _with_approval_steps(
@@ -1016,15 +1128,26 @@ async def update_purchase_request(
     pr_id: str,
     data: PurchaseRequestUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.manage")),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
 ):
+    """Edit a purchase request while it is still a draft or just submitted.
+
+    **Requires permission: finance.request or finance.manage**
+
+    Without the manage grant, only the caller's own request.
+    """
     service = FinanceService(db)
     try:
         return await service.update_purchase_request(
             pr_id,
             str(current_user.organization_id),
+            requester_id=_requester_scope(current_user),
             **data.model_dump(exclude_unset=True),
         )
+    except FinanceEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1040,12 +1163,22 @@ async def update_purchase_request(
 async def submit_purchase_request(
     pr_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.manage")),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
 ):
+    """Submit a draft purchase request for approval.
+
+    **Requires permission: finance.request or finance.manage**
+
+    Without the manage grant, only the caller's own request.
+    """
     service = FinanceService(db)
     try:
         pr = await service.submit_purchase_request(
-            pr_id, str(current_user.organization_id)
+            pr_id,
+            str(current_user.organization_id),
+            requester_id=_requester_scope(current_user),
         )
         await log_audit_event(
             db=db,
@@ -1057,6 +1190,8 @@ async def submit_purchase_request(
             username=current_user.username,
         )
         return pr
+    except FinanceEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1151,13 +1286,26 @@ async def mark_pr_paid(
 async def cancel_purchase_request(
     pr_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.manage")),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
 ):
+    """Cancel a purchase request.
+
+    **Requires permission: finance.request or finance.manage**
+
+    Without the manage grant this is the requester withdrawing their own
+    draft; anything further along is the finance office's to cancel.
+    """
     service = FinanceService(db)
     try:
         return await service.cancel_purchase_request(
-            pr_id, str(current_user.organization_id)
+            pr_id,
+            str(current_user.organization_id),
+            requester_id=_requester_scope(current_user),
         )
+    except FinanceEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1176,11 +1324,20 @@ async def list_expense_reports(
     status: Optional[str] = Query(None),
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view", "finance.manage")),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.view", "finance.manage")
+    ),
 ):
+    """List expense reports.
+
+    **Requires permission: finance.request, finance.view or finance.manage**
+
+    Everyone but a finance manager sees only their own.
+    """
     service = FinanceService(db)
     # A plain finance.view holder sees only their own reimbursement submissions;
-    # finance managers see the whole queue (FIN-5).
+    # finance managers see the whole queue (FIN-5). A finance.request holder
+    # gets the same own-only view.
     restrict = (
         None
         if user_has_permission(current_user, "finance.manage")
@@ -1202,8 +1359,14 @@ async def list_expense_reports(
 async def create_expense_report(
     data: ExpenseReportCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.manage")),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
 ):
+    """Raise an expense report, as the caller.
+
+    **Requires permission: finance.request or finance.manage**
+    """
     service = FinanceService(db)
     try:
         line_items_data = None
@@ -1229,8 +1392,16 @@ async def create_expense_report(
 async def get_expense_report(
     er_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view", "finance.manage")),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.view", "finance.manage")
+    ),
 ):
+    """An expense report, with its approval steps.
+
+    **Requires permission: finance.request, finance.view or finance.manage**
+
+    Another member's report is a 404 to anyone but a finance manager.
+    """
     service = FinanceService(db)
     restrict = (
         None
@@ -1257,15 +1428,26 @@ async def update_expense_report(
     er_id: str,
     data: ExpenseReportUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.manage")),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
 ):
+    """Edit an expense report while it is still a draft or just submitted.
+
+    **Requires permission: finance.request or finance.manage**
+
+    Without the manage grant, only the caller's own report.
+    """
     service = FinanceService(db)
     try:
         return await service.update_expense_report(
             er_id,
             str(current_user.organization_id),
+            requester_id=_requester_scope(current_user),
             **data.model_dump(exclude_unset=True),
         )
+    except FinanceEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1283,15 +1465,26 @@ async def add_expense_line_item(
     er_id: str,
     data: ExpenseLineItemCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.manage")),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
 ):
+    """Add a line item to a draft expense report.
+
+    **Requires permission: finance.request or finance.manage**
+
+    Without the manage grant, only to the caller's own report.
+    """
     service = FinanceService(db)
     try:
         return await service.add_expense_line_item(
             er_id,
             str(current_user.organization_id),
+            requester_id=_requester_scope(current_user),
             **data.model_dump(),
         )
+    except FinanceEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1307,13 +1500,25 @@ async def add_expense_line_item(
 async def submit_expense_report(
     er_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.manage")),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
 ):
+    """Submit a draft expense report for approval.
+
+    **Requires permission: finance.request or finance.manage**
+
+    Without the manage grant, only the caller's own report.
+    """
     service = FinanceService(db)
     try:
         return await service.submit_expense_report(
-            er_id, str(current_user.organization_id)
+            er_id,
+            str(current_user.organization_id),
+            requester_id=_requester_scope(current_user),
         )
+    except FinanceEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1371,11 +1576,23 @@ async def list_check_requests(
     status: Optional[str] = Query(None),
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view")),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.view", "finance.manage")
+    ),
 ):
+    """List check requests.
+
+    **Requires permission: finance.request, finance.view or finance.manage**
+
+    A caller without the view or manage grant sees only the requests they
+    raised themselves.
+    """
     service = FinanceService(db)
     return await service.list_check_requests(
-        str(current_user.organization_id), pagination, status
+        str(current_user.organization_id),
+        pagination,
+        status,
+        restrict_to_user=_read_scope(current_user),
     )
 
 
@@ -1387,8 +1604,14 @@ async def list_check_requests(
 async def create_check_request(
     data: CheckRequestCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.manage")),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
 ):
+    """Raise a check request, as the caller.
+
+    **Requires permission: finance.request or finance.manage**
+    """
     service = FinanceService(db)
     try:
         return await service.create_check_request(
@@ -1408,10 +1631,23 @@ async def create_check_request(
 async def get_check_request(
     cr_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view")),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.view", "finance.manage")
+    ),
 ):
+    """A check request, with its approval steps.
+
+    **Requires permission: finance.request, finance.view or finance.manage**
+
+    Another member's request is a 404 to a caller without the view or
+    manage grant.
+    """
     service = FinanceService(db)
-    cr = await service.get_check_request(cr_id, str(current_user.organization_id))
+    cr = await service.get_check_request(
+        cr_id,
+        str(current_user.organization_id),
+        restrict_to_user=_read_scope(current_user),
+    )
     if not cr:
         raise HTTPException(status_code=404, detail="Check request not found")
     return await _with_approval_steps(
@@ -1429,15 +1665,26 @@ async def update_check_request(
     cr_id: str,
     data: CheckRequestUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.manage")),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
 ):
+    """Edit a check request while it is still a draft or just submitted.
+
+    **Requires permission: finance.request or finance.manage**
+
+    Without the manage grant, only the caller's own request.
+    """
     service = FinanceService(db)
     try:
         return await service.update_check_request(
             cr_id,
             str(current_user.organization_id),
+            requester_id=_requester_scope(current_user),
             **data.model_dump(exclude_unset=True),
         )
+    except FinanceEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1453,13 +1700,25 @@ async def update_check_request(
 async def submit_check_request(
     cr_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.manage")),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
 ):
+    """Submit a draft check request for approval.
+
+    **Requires permission: finance.request or finance.manage**
+
+    Without the manage grant, only the caller's own request.
+    """
     service = FinanceService(db)
     try:
         return await service.submit_check_request(
-            cr_id, str(current_user.organization_id)
+            cr_id,
+            str(current_user.organization_id),
+            requester_id=_requester_scope(current_user),
         )
+    except FinanceEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:

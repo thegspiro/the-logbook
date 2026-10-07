@@ -13,7 +13,7 @@ from collections.abc import AsyncIterator
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from types import SimpleNamespace
-from typing import Optional
+from typing import NoReturn, Optional
 
 from loguru import logger
 from sqlalchemy import (
@@ -116,6 +116,20 @@ class BudgetLimitExceededError(Exception):
 
 class FinanceEntityNotFoundError(ValueError):
     """The request does not exist in the caller's organization (→ 404)."""
+
+
+def _raise_not_found(label: str, requester_id: Optional[str]) -> NoReturn:
+    """Refuse a missing request, the same way the detail read does for its caller.
+
+    A requester-scoped write (``requester_id`` set) answers 404 for another
+    member's request exactly as for one that does not exist, matching what
+    the detail endpoint shows them — a 400 here would confirm the id is real.
+    An org-wide caller keeps the plain ``ValueError`` (400) these writes have
+    always raised.
+    """
+    if requester_id is not None:
+        raise FinanceEntityNotFoundError(f"{label} not found")
+    raise ValueError(f"{label} not found")
 
 
 class ManualApprovalConflictError(ValueError):
@@ -430,6 +444,86 @@ class FinanceService:
             "percent_used": round(float(percent_used), 2),
             "category_breakdown": [],
         }
+
+    async def list_budget_options(self, org_id: str, fiscal_year_id: str) -> list[dict]:
+        """The budget lines a requester may charge, as a label and what is left.
+
+        The narrow read behind the request forms' budget picker. A member who
+        holds only ``finance.request`` chooses a line by name and sees the
+        remaining amount, nothing else: the budgeted, spent and encumbered
+        figures, notes and the summary stay behind ``finance.view``.
+
+        The label is the category name, plus the station when the line has
+        one. Two lines that would still read the same are numbered, so a
+        member never has to pick between identical entries.
+        """
+        result = await self.db.execute(
+            select(
+                Budget.id,
+                Budget.amount_budgeted,
+                Budget.amount_spent,
+                Budget.amount_encumbered,
+                BudgetCategory.name.label("category_name"),
+                Facility.name.label("station_name"),
+            )
+            .join(
+                BudgetCategory,
+                and_(
+                    BudgetCategory.id == Budget.category_id,
+                    BudgetCategory.organization_id == org_id,
+                ),
+            )
+            .outerjoin(
+                Facility,
+                and_(
+                    Facility.id == Budget.station_id,
+                    Facility.organization_id == org_id,
+                ),
+            )
+            .where(
+                Budget.organization_id == org_id,
+                Budget.fiscal_year_id == fiscal_year_id,
+            )
+            .order_by(BudgetCategory.name, Facility.name, Budget.id)
+        )
+        options = []
+        seen: dict[str, int] = {}
+        for row in result.all():
+            label = row.category_name
+            if row.station_name:
+                label = f"{label} ({row.station_name})"
+            seen[label] = seen.get(label, 0) + 1
+            if seen[label] > 1:
+                label = f"{label} #{seen[label]}"
+            options.append(
+                {
+                    "id": row.id,
+                    "label": label,
+                    "amount_remaining": row.amount_budgeted
+                    - row.amount_spent
+                    - row.amount_encumbered,
+                }
+            )
+        return options
+
+    async def list_fiscal_year_options(self, org_id: str) -> list[FiscalYear]:
+        """Fiscal years a request can still be raised against: active and draft.
+
+        Closed years are left out — nothing new should be charged to them —
+        and so is every field the settings page shows but a requester has no
+        use for.
+        """
+        result = await self.db.execute(
+            select(FiscalYear)
+            .where(
+                FiscalYear.organization_id == org_id,
+                FiscalYear.status.in_(
+                    [FiscalYearStatus.ACTIVE, FiscalYearStatus.DRAFT]
+                ),
+            )
+            .order_by(FiscalYear.start_date.desc(), FiscalYear.id)
+        )
+        return list(result.scalars().all())
 
     # ========================================
     # Approval Chains
@@ -2196,8 +2290,12 @@ class FinanceService:
         pagination: PaginationParams,
         status: Optional[str] = None,
         fiscal_year_id: Optional[str] = None,
+        restrict_to_user: Optional[str] = None,
     ) -> list[PurchaseRequest]:
         query = select(PurchaseRequest).where(PurchaseRequest.organization_id == org_id)
+        # A requester without finance.view sees only what they raised.
+        if restrict_to_user is not None:
+            query = query.where(PurchaseRequest.requested_by == restrict_to_user)
         if status:
             query = query.where(PurchaseRequest.status == status)
         if fiscal_year_id:
@@ -2211,7 +2309,11 @@ class FinanceService:
         return list(result.scalars().all())
 
     async def get_purchase_request(
-        self, pr_id: str, org_id: str, for_update: bool = False
+        self,
+        pr_id: str,
+        org_id: str,
+        for_update: bool = False,
+        restrict_to_user: Optional[str] = None,
     ) -> Optional[PurchaseRequest]:
         """A purchase request by id, org-scoped.
 
@@ -2219,11 +2321,16 @@ class FinanceService:
         an instance already in the session (``populate_existing``): a status
         check made off a stale identity-map copy would pass for a request a
         concurrent transaction has just moved on (CLAUDE.md Pitfall #27).
+
+        ``restrict_to_user`` confines the lookup to that member's own request,
+        so somebody else's reads exactly like one that does not exist.
         """
         query = select(PurchaseRequest).where(
             PurchaseRequest.id == pr_id,
             PurchaseRequest.organization_id == org_id,
         )
+        if restrict_to_user is not None:
+            query = query.where(PurchaseRequest.requested_by == restrict_to_user)
         if for_update:
             query = query.with_for_update().execution_options(populate_existing=True)
         result = await self.db.execute(query)
@@ -2247,11 +2354,13 @@ class FinanceService:
         return pr
 
     async def update_purchase_request(
-        self, pr_id: str, org_id: str, **kwargs
+        self, pr_id: str, org_id: str, requester_id: Optional[str] = None, **kwargs
     ) -> PurchaseRequest:
-        pr = await self.get_purchase_request(pr_id, org_id, for_update=True)
+        pr = await self.get_purchase_request(
+            pr_id, org_id, for_update=True, restrict_to_user=requester_id
+        )
         if not pr:
-            raise ValueError("Purchase request not found")
+            _raise_not_found("Purchase request", requester_id)
         if pr.status not in (
             PurchaseRequestStatus.DRAFT,
             PurchaseRequestStatus.SUBMITTED,
@@ -2263,10 +2372,14 @@ class FinanceService:
         await self.db.refresh(pr, ["updated_at"])
         return pr
 
-    async def submit_purchase_request(self, pr_id: str, org_id: str) -> PurchaseRequest:
-        pr = await self.get_purchase_request(pr_id, org_id, for_update=True)
+    async def submit_purchase_request(
+        self, pr_id: str, org_id: str, requester_id: Optional[str] = None
+    ) -> PurchaseRequest:
+        pr = await self.get_purchase_request(
+            pr_id, org_id, for_update=True, restrict_to_user=requester_id
+        )
         if not pr:
-            raise ValueError("Purchase request not found")
+            _raise_not_found("Purchase request", requester_id)
         if pr.status != PurchaseRequestStatus.DRAFT:
             raise ValueError("Only draft requests can be submitted")
 
@@ -2396,25 +2509,39 @@ class FinanceService:
         await self.db.refresh(pr, ["updated_at"])
         return pr
 
-    async def cancel_purchase_request(self, pr_id: str, org_id: str) -> PurchaseRequest:
+    async def cancel_purchase_request(
+        self, pr_id: str, org_id: str, requester_id: Optional[str] = None
+    ) -> PurchaseRequest:
+        """Cancel a purchase request.
+
+        ``requester_id`` is set when the caller is withdrawing their own
+        request rather than acting as a finance manager. A requester may only
+        withdraw a draft: once submitted the request has approval steps
+        waiting on other people and, past approval, an encumbrance against a
+        budget line — unwinding either is the finance office's call.
+        """
         # Locked read -- see mark_pr_paid: this is the request's other terminal
         # transition off the same status field, and the two must not race each
         # other (an unlocked cancel here reading a stale pre-payment snapshot
         # would flush a status=CANCELLED write over an already-committed PAID
         # request once its own lock clears).
-        result = await self.db.execute(
-            select(PurchaseRequest)
-            .where(
-                PurchaseRequest.id == pr_id,
-                PurchaseRequest.organization_id == org_id,
-            )
-            .with_for_update()
+        query = select(PurchaseRequest).where(
+            PurchaseRequest.id == pr_id,
+            PurchaseRequest.organization_id == org_id,
         )
+        if requester_id is not None:
+            query = query.where(PurchaseRequest.requested_by == requester_id)
+        result = await self.db.execute(query.with_for_update())
         pr = result.scalar_one_or_none()
         if not pr:
-            raise ValueError("Purchase request not found")
+            _raise_not_found("Purchase request", requester_id)
         if pr.status in (PurchaseRequestStatus.PAID,):
             raise ValueError("Paid requests cannot be cancelled")
+        if requester_id is not None and pr.status != PurchaseRequestStatus.DRAFT:
+            raise ValueError(
+                "You can withdraw your own request only while it is a draft; "
+                "ask the finance office to cancel a submitted request"
+            )
 
         # Release encumbrance if approved
         if pr.budget_id and pr.status in (
@@ -2528,11 +2655,13 @@ class FinanceService:
         return er
 
     async def update_expense_report(
-        self, er_id: str, org_id: str, **kwargs
+        self, er_id: str, org_id: str, requester_id: Optional[str] = None, **kwargs
     ) -> ExpenseReport:
-        er = await self.get_expense_report(er_id, org_id, for_update=True)
+        er = await self.get_expense_report(
+            er_id, org_id, restrict_to_user=requester_id, for_update=True
+        )
         if not er:
-            raise ValueError("Expense report not found")
+            _raise_not_found("Expense report", requester_id)
         if er.status not in (
             ExpenseReportStatus.DRAFT,
             ExpenseReportStatus.SUBMITTED,
@@ -2545,11 +2674,11 @@ class FinanceService:
         return er
 
     async def add_expense_line_item(
-        self, er_id: str, org_id: str, **kwargs
+        self, er_id: str, org_id: str, requester_id: Optional[str] = None, **kwargs
     ) -> ExpenseLineItem:
-        er = await self.get_expense_report(er_id, org_id)
+        er = await self.get_expense_report(er_id, org_id, restrict_to_user=requester_id)
         if not er:
-            raise ValueError("Expense report not found")
+            _raise_not_found("Expense report", requester_id)
         if er.status not in (ExpenseReportStatus.DRAFT,):
             raise ValueError("Can only add items to draft reports")
         await self._validate_finance_fks(org_id, kwargs)
@@ -2572,10 +2701,14 @@ class FinanceService:
         await self.db.refresh(item, ["created_at"])
         return item
 
-    async def submit_expense_report(self, er_id: str, org_id: str) -> ExpenseReport:
-        er = await self.get_expense_report(er_id, org_id, for_update=True)
+    async def submit_expense_report(
+        self, er_id: str, org_id: str, requester_id: Optional[str] = None
+    ) -> ExpenseReport:
+        er = await self.get_expense_report(
+            er_id, org_id, restrict_to_user=requester_id, for_update=True
+        )
         if not er:
-            raise ValueError("Expense report not found")
+            _raise_not_found("Expense report", requester_id)
         if er.status != ExpenseReportStatus.DRAFT:
             raise ValueError("Only draft reports can be submitted")
         if er.total_amount <= 0:
@@ -2663,8 +2796,12 @@ class FinanceService:
         org_id: str,
         pagination: PaginationParams,
         status: Optional[str] = None,
+        restrict_to_user: Optional[str] = None,
     ) -> list[CheckRequest]:
         query = select(CheckRequest).where(CheckRequest.organization_id == org_id)
+        # A requester without finance.view sees only what they raised.
+        if restrict_to_user is not None:
+            query = query.where(CheckRequest.requested_by == restrict_to_user)
         if status:
             query = query.where(CheckRequest.status == status)
         query = (
@@ -2676,7 +2813,11 @@ class FinanceService:
         return list(result.scalars().all())
 
     async def get_check_request(
-        self, cr_id: str, org_id: str, for_update: bool = False
+        self,
+        cr_id: str,
+        org_id: str,
+        for_update: bool = False,
+        restrict_to_user: Optional[str] = None,
     ) -> Optional[CheckRequest]:
         """A check request by id, org-scoped.
 
@@ -2684,11 +2825,16 @@ class FinanceService:
         an instance already in the session (``populate_existing``): a status
         check made off a stale identity-map copy would pass for a request a
         concurrent transaction has just moved on (CLAUDE.md Pitfall #27).
+
+        ``restrict_to_user`` confines the lookup to that member's own request,
+        so somebody else's reads exactly like one that does not exist.
         """
         query = select(CheckRequest).where(
             CheckRequest.id == cr_id,
             CheckRequest.organization_id == org_id,
         )
+        if restrict_to_user is not None:
+            query = query.where(CheckRequest.requested_by == restrict_to_user)
         if for_update:
             query = query.with_for_update().execution_options(populate_existing=True)
         result = await self.db.execute(query)
@@ -2711,11 +2857,13 @@ class FinanceService:
         return cr
 
     async def update_check_request(
-        self, cr_id: str, org_id: str, **kwargs
+        self, cr_id: str, org_id: str, requester_id: Optional[str] = None, **kwargs
     ) -> CheckRequest:
-        cr = await self.get_check_request(cr_id, org_id, for_update=True)
+        cr = await self.get_check_request(
+            cr_id, org_id, for_update=True, restrict_to_user=requester_id
+        )
         if not cr:
-            raise ValueError("Check request not found")
+            _raise_not_found("Check request", requester_id)
         if cr.status not in (
             CheckRequestStatus.DRAFT,
             CheckRequestStatus.SUBMITTED,
@@ -2727,10 +2875,14 @@ class FinanceService:
         await self.db.refresh(cr, ["updated_at"])
         return cr
 
-    async def submit_check_request(self, cr_id: str, org_id: str) -> CheckRequest:
-        cr = await self.get_check_request(cr_id, org_id, for_update=True)
+    async def submit_check_request(
+        self, cr_id: str, org_id: str, requester_id: Optional[str] = None
+    ) -> CheckRequest:
+        cr = await self.get_check_request(
+            cr_id, org_id, for_update=True, restrict_to_user=requester_id
+        )
         if not cr:
-            raise ValueError("Check request not found")
+            _raise_not_found("Check request", requester_id)
         if cr.status != CheckRequestStatus.DRAFT:
             raise ValueError("Only draft requests can be submitted")
 

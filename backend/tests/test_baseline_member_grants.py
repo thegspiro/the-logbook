@@ -224,3 +224,48 @@ def test_storefront_manage_is_not_a_baseline_grant():
     cost, order windows, every member's orders, and payment reconciliation.
     """
     assert "storefront.manage" not in _baseline_permissions()
+
+
+def test_raising_your_own_finance_requests_is_a_baseline_grant():
+    """Every member can ask for a purchase, a reimbursement or a check.
+
+    ``finance.request`` is the requester's side of the finance module and
+    nothing more: the endpoints confine a holder without ``finance.view`` /
+    ``finance.manage`` to the requests they raised themselves
+    (``tests/test_finance_member_requests.py``), so seeding it to everyone
+    discloses no other member's spending. Migration ``7db20aa49329`` writes it
+    to the stored Member rows of departments onboarded before it existed.
+    """
+    assert "finance.request" in DEFAULT_POSITIONS["member"]["permissions"]
+
+
+def test_finance_request_is_withdrawable_so_it_is_not_a_rank_default():
+    """A department that does not want members raising requests must be able
+    to say so, and it can only edit positions.
+
+    Rank defaults resolve at runtime from ``OPERATIONAL_RANKS`` and no screen
+    removes them, so a rank-seeded ``finance.request`` would hold for every
+    firefighter and EMT whatever the department decided. The Member position
+    alone carries it, and every member holds that position.
+    """
+    for registry, slug, field in (
+        (OPERATIONAL_RANKS, "firefighter", "default_permissions"),
+        (OPERATIONAL_RANKS, "emt", "default_permissions"),
+        (DEFAULT_POSITIONS, "firefighter", "permissions"),
+        (DEFAULT_POSITIONS, "emt", "permissions"),
+    ):
+        assert "finance.request" not in registry[slug][field], slug
+
+
+def test_the_finance_office_grants_are_not_baseline():
+    """Reading the whole queue and the budgets, and acting on other members'
+    requests, stays with the treasurer — the request grant is not a smaller
+    version of either."""
+    baseline = _baseline_permissions()
+    for permission in (
+        "finance.view",
+        "finance.manage",
+        "finance.approve",
+        "finance.configure_approvals",
+    ):
+        assert permission not in baseline, permission
