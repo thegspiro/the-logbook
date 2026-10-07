@@ -16,6 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2984](https://github.com/thegspiro/the-logbook/pull/2984)**: branch
+`claude/security-review-messaging-notifications`, Feature 25 (Messaging &
+notifications), pass 6 (watchdog pickup — PR #2983, Feature 24, Meetings &
+minutes, had already merged over an hour earlier with nothing started
+since, confirmed via `list_pull_requests` both before this iteration began
+and again before this PR was opened). Real delta since pass 5 (`cfeb21e34`)
+is one feature (W50-23, proxy-aware ballot mail notice, reviewed fresh
+against all seven dimensions and found clean) plus incidental
+preferred-name display-helper swaps that don't reach this feature's own
+HTML output. 0 fixes needed by this pass itself, 0 new findings. Every
+standing fix and every open flagged item re-verified unchanged. Route
+surface re-enumerated (51/51, unchanged). Completion gate green
+(flake8/black/isort clean; migrations — 538 revisions, single head; 1197
+scoped backend tests; frontend typecheck/lint clean). See the Log entry
+below for detail.
+
+<details>
+<summary>Superseded — prior Open PR note (bridge note recording PR #2983's merge before Feature 25 started; and, nested below, the pre-merge note for PR #2983 itself), preserved for history</summary>
+
 **None.** PR #2983 (Feature 24, Meetings & minutes, pass 6) merged clean
 (confirmed via `list_pull_requests` — not the row above, which was still
 narrating it as open; merged_at 2026-10-07T14:37:54Z). 0 fixes needed by
