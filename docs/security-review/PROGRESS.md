@@ -16,6 +16,37 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2983](https://github.com/thegspiro/the-logbook/pull/2983)**: branch
+`claude/security-review-meetings-minutes`, Feature 24 (Meetings & minutes),
+pass 6 (no watchdog pickup needed — PR #2981, Feature 23, Medical supplies,
+had already merged with nothing started since, confirmed via `gh api`
+before this iteration began). Real delta since pass 5 (`c23c100b4`, PR
+#2881) touched seven backend files and four frontend files; the one
+security-relevant change (MCP tool permission gating added repo-wide,
+closing a gap pass 5 had recorded as an unfiled observation) is
+independently guard-tested by the pre-existing `test_mcp_member_gating.py`.
+0 fixes needed by this pass itself, 0 new findings. MM-9 and MM-17 remain
+the only open, flagged items. Route surface re-enumerated (42/42,
+unchanged) with every permission string checked individually. Completion
+gate green (flake8/black/isort at CI's pins; migrations — 538 revisions,
+single head; 330 scoped backend tests, up from 289; frontend
+typecheck/lint clean, 37 scoped frontend tests, up from 26). See the Log
+entry below for detail.
+
+<details>
+<summary>Superseded — prior Open PR note (bridge note recording PR #2981's merge before Feature 24 started; and, nested below, the pre-merge note for PR #2981 itself), preserved for history</summary>
+
+**None.** PR #2981 (Feature 23, Medical supplies, pass 13) merged clean via
+merge commit `df5f0b3c`. 0 fixes needed by that pass itself (its one real
+fix, MSUP-25, had already landed via an out-of-rotation PR before the pass
+began); the Log entry below already records it in full, so there is nothing
+further to record here. Rotation row 23 → ✅.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 13, PR #2981, before it merged), preserved for history</summary>
+
 **PR [#2981](https://github.com/thegspiro/the-logbook/pull/2981)**: branch
 `claude/security-review-medical-supplies`, Feature 23 (Medical supplies),
 pass 13 (watchdog pickup — PR #2980, Feature 22, Grants & fundraising, had
@@ -28,6 +59,8 @@ Route surface re-enumerated (15/15, unchanged) with every permission string
 checked individually. Completion gate green (flake8/black/isort; migrations
 — 538 revisions, single head; 1205 scoped backend tests, up from 1194;
 frontend typecheck/lint clean). See the Log entry below for detail.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (bridge note recording PR #2980's
@@ -18169,7 +18202,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
@@ -18187,6 +18220,57 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-07 — Feature 24 (Meetings & minutes, pass 6) — 0 fixed, 0 new findings, 2 standing flagged items re-confirmed OPEN
+
+PR #2981 (Feature 23, Medical supplies, pass 13) had merged with no branch or
+PR started for the next feature since (confirmed via `gh api` — zero open
+`claude/security-review-*` PRs), so this iteration took Feature 24 (Meetings
+& minutes), the next `⬜` row, per Step 0/1.
+
+Real delta since pass 5 (`c23c100b4`, PR #2881, merged 2026-10-03) touched
+seven backend files and four frontend files, every one read in full and none
+introducing a new finding. The one security-relevant change is a closed gap,
+not a new one: `app/mcp/registry.py` made `permissions` a required keyword on
+every MCP tool registration repo-wide, and `app/mcp/tools/meetings.py`'s six
+meetings/minutes tools now each declare `("meetings.view", "minutes.view",
+"meetings.manage", "minutes.manage")` — matching this feature's own HTTP
+route convention and closing the gap pass 5 recorded as an unfiled
+observation ("not gated on any MCP-side permission concept at all").
+Verified enforced (not merely declared) by reading `logbook_tool`'s wrapper
+and by re-running the pre-existing `tests/test_mcp_member_gating.py`
+(12/12). Everything else — a repo-wide `User.full_name` → `.display_name`
+rename (re-verified the org-scoping filters it sits inside of at MM-14/
+MM-16's exact lines survive it), a meeting-date timezone fix in
+`create_from_meeting`, a new `meeting_id` field on the minutes list response
+(already readable via the detail endpoint; same org/`restricted` gates), and
+four frontend UX changes (`listAllMinutes()` pagination bounded at the
+backend's own `le=100` cap, a meeting→minutes link, a client-side hide of
+the self-approval button mirroring the server's existing
+`assert_different_person` check, and timezone-correct date formatting) — is
+correctness/UX work independently re-verified, not authored by this pass.
+
+Route surface re-enumerated fresh (42/42 unchanged, every `require_permission`
+cell identical to pass 4/5's table). MM-9 (`approve_meeting`/`update_meeting`
+— no state machine or separation of duties) and MM-17
+(`set_meeting_quorum_config` — no finalization guard on approved minutes)
+both re-verified still OPEN at their current lines, unchanged disposition —
+both still need a product decision before a mechanical fix is safe. No
+`KNOWN_LIMITATIONS.md` change needed (neither item has its own row there to
+update).
+
+Completion gate green: `flake8`/`black --check`/`isort --check-only` clean
+over `app/ tests/ alembic/` (CI's pinned 7.3.0/26.5.1/9.0.1); migrations —
+538 revisions, single head `8c4f2a6e1d93`; scoped backend tests (`-k
+"meeting or minute or quorum or attendance_dashboard"`) 330 passed, 1
+pre-existing skip (up from pass 5's 289); `tests/test_mcp_member_gating.py`
+12/12; frontend `npm run typecheck` 0 errors, `npm run lint` 0 errors/0
+warnings, `npx vitest run src/modules/minutes` 37 passed across 6 files (up
+from pass 5's 26/4). No source file under this feature's scope was changed
+by this pass — the diff is `docs/security-review/MM-24-meetings-minutes.md`
+and this tracker (plus the Step-0 edits recording PR #2981's merge, carried
+on this same branch per the rotation process). Rotation row 24 → ✅ (pending
+PR merge).
 
 ### 2026-10-07 — Feature 23 (Medical supplies, pass 13) — 1 standing finding (MSUP-25) closed out as fixed, 0 fixed by this pass, 0 new findings (watchdog pickup)
 
