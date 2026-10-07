@@ -30,6 +30,7 @@ import { usePendingSyncStore } from '../../stores/pendingSyncStore';
 import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
 import { fitNavItems } from './topNavigationOverflow';
 import { GRANTS_NAV_ITEMS } from './grantsNavigation';
+import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './financeNavigation';
 
 interface TopNavigationProps {
   departmentName: string;
@@ -241,6 +242,17 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
         ...(canReviewLegalDocuments ? [{ label: 'Legal Documents', path: '/governance/legal' }] : []),
       ],
     },
+    // See SideNavigation: the group is every member's way to their own requests.
+    ...(isModuleOn('finance')
+      ? [
+          {
+            label: 'Finance',
+            path: financeNavPath(checkPermission),
+            anyPermission: [...FINANCE_NAV_PERMISSIONS],
+            subItems: financeNavItems(checkPermission),
+          } as NavItem,
+        ]
+      : []),
     ...(isModuleOn('grants')
       ? [
           {

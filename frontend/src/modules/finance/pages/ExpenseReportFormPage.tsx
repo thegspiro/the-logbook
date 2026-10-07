@@ -13,6 +13,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
+import { useRequestFormOptions } from '../hooks/useRequestFormOptions';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
@@ -89,7 +90,10 @@ const FormSkeleton: React.FC = () => (
 const ExpenseReportFormPage: React.FC = () => {
   const navigate = useNavigate();
 
-  const { fiscalYears, isLoading, fetchFiscalYears, createExpenseReport } = useFinanceStore();
+  const { createExpenseReport } = useFinanceStore();
+  // The active and draft years, from the options endpoint a member holding
+  // only finance.request can read. Expense lines carry no budget here.
+  const { fiscalYears, fiscalYearsLoaded } = useRequestFormOptions(undefined);
 
   const [lineItems, setLineItems] = useState<LineItemEntry[]>([]);
   const [lineItemErrors, setLineItemErrors] = useState<Record<number, string>>({});
@@ -107,11 +111,6 @@ const ExpenseReportFormPage: React.FC = () => {
       fiscalYearId: '',
     },
   });
-
-  // Load reference data
-  useEffect(() => {
-    void fetchFiscalYears();
-  }, [fetchFiscalYears]);
 
   // Auto-select active fiscal year
   useEffect(() => {
@@ -212,7 +211,7 @@ const ExpenseReportFormPage: React.FC = () => {
     }
   };
 
-  if (isLoading && fiscalYears.length === 0) {
+  if (!fiscalYearsLoaded) {
     return (
       <div className="space-y-6">
         <Breadcrumbs />

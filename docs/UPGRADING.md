@@ -412,6 +412,40 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Every member can raise their own finance requests (2026-10-07)
+
+A new permission, **`finance.request`** — "Create, submit and track your own
+purchase requests, expense reports and check requests" — is **granted to every
+member** by this upgrade. Migration `7db20aa49329` adds it to each
+department's seeded **Member** position, which every member holds; a position
+your department created is not touched. Until now raising a request
+needed `finance.manage`, so only the Treasurer and the IT Manager could.
+
+What a member can do with it, and nothing more:
+
+- raise a purchase request, expense report or check request, edit it until it
+  is submitted, submit it, and withdraw it while it is still a draft;
+- see **only the requests they raised** — another member's is "not found";
+- pick a budget line by its name and the amount left on it, without seeing
+  the budget pages.
+
+Requests from members go through your approval chains like any other, and
+nobody can approve or pay their own. A new **Finance** entry appears in the
+navigation when the module is on; a member sees **My Purchase Requests**,
+**My Expense Reports** and **My Check Requests** under it.
+
+Two smaller changes come with it. A holder of `finance.view` alone still reads
+every purchase and check request but is no longer offered the New / Edit
+forms, which it could never save. And the Mark Ordered / Received / Paid,
+Issue Check and Void buttons are now shown only to `finance.manage` holders,
+who were the only people the server ever accepted them from.
+
+**If your department does not want members raising requests**, remove
+`finance.request` from the **Member** position on the positions screen. It is
+not a rank default, so that one edit withdraws it from everybody who holds it
+only through Member. Downgrading past this revision removes it from the seeded
+Member positions.
+
 ### Member badges carry a server-issued code; old badges keep scanning until you turn them off (2026-10-05)
 
 Migration `ad3b979746f1` adds `users.badge_code` and gives **every existing

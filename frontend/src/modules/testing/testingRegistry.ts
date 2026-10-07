@@ -30,6 +30,10 @@ import {
   MEMBERS_SETTINGS_VISIBILITY_GATE,
 } from '../membership/routes';
 
+/** The finance request routes' gates — see modules/finance/routes.tsx. */
+const FINANCE_REQUEST_READ_GATE = ['finance.request', 'finance.view', 'finance.manage'];
+const FINANCE_REQUEST_WRITE_GATE = ['finance.request', 'finance.manage'];
+
 export interface TestPageEntry {
   /** Route pattern exactly as declared in App.tsx or a module's routes.tsx. */
   path: string;
@@ -967,39 +971,64 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/finance', label: 'Finance dashboard', permission: 'finance.view', module: 'finance' },
       { path: '/finance/budgets', label: 'Budgets', permission: 'finance.view', module: 'finance' },
       { path: '/finance/budgets/:id', label: 'Budget detail', permission: 'finance.view', module: 'finance' },
-      { path: '/finance/purchase-requests', label: 'Purchase requests', permission: 'finance.view', module: 'finance' },
+      {
+        path: '/finance/purchase-requests',
+        label: 'Purchase requests',
+        anyPermission: FINANCE_REQUEST_READ_GATE,
+        module: 'finance',
+      },
       {
         path: '/finance/purchase-requests/new',
         label: 'New purchase request',
-        permission: 'finance.view',
+        anyPermission: FINANCE_REQUEST_WRITE_GATE,
         module: 'finance',
       },
       {
         path: '/finance/purchase-requests/:id',
         label: 'Purchase request detail',
-        permission: 'finance.view',
+        anyPermission: FINANCE_REQUEST_READ_GATE,
         module: 'finance',
       },
       {
         path: '/finance/purchase-requests/:id/edit',
         label: 'Edit purchase request',
-        permission: 'finance.view',
+        anyPermission: FINANCE_REQUEST_WRITE_GATE,
         module: 'finance',
       },
-      { path: '/finance/expenses', label: 'Expense reports', permission: 'finance.view', module: 'finance' },
-      { path: '/finance/expenses/new', label: 'New expense report', permission: 'finance.view', module: 'finance' },
-      { path: '/finance/expenses/:id', label: 'Expense report detail', permission: 'finance.view', module: 'finance' },
-      { path: '/finance/check-requests', label: 'Check requests', permission: 'finance.view', module: 'finance' },
+      {
+        path: '/finance/expenses',
+        label: 'Expense reports',
+        anyPermission: FINANCE_REQUEST_READ_GATE,
+        module: 'finance',
+      },
+      {
+        path: '/finance/expenses/new',
+        label: 'New expense report',
+        anyPermission: FINANCE_REQUEST_WRITE_GATE,
+        module: 'finance',
+      },
+      {
+        path: '/finance/expenses/:id',
+        label: 'Expense report detail',
+        anyPermission: FINANCE_REQUEST_READ_GATE,
+        module: 'finance',
+      },
+      {
+        path: '/finance/check-requests',
+        label: 'Check requests',
+        anyPermission: FINANCE_REQUEST_READ_GATE,
+        module: 'finance',
+      },
       {
         path: '/finance/check-requests/new',
         label: 'New check request',
-        permission: 'finance.view',
+        anyPermission: FINANCE_REQUEST_WRITE_GATE,
         module: 'finance',
       },
       {
         path: '/finance/check-requests/:id',
         label: 'Check request detail',
-        permission: 'finance.view',
+        anyPermission: FINANCE_REQUEST_READ_GATE,
         module: 'finance',
       },
       { path: '/finance/dues', label: 'Dues management', permission: 'finance.view', module: 'finance' },

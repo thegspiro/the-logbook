@@ -106,11 +106,23 @@ export const getFinanceRoutes = () => {
         }
       />
 
+      {/*
+        Purchase requests, expense reports and check requests are every
+        member's: finance.request raises and reads your own (the API confines
+        a holder without finance.view to what they raised), finance.view
+        reads the queue. Raising and editing need finance.request or
+        finance.manage — finance.view alone cannot save, so it is not offered
+        the form.
+      */}
       {/* Purchase Requests */}
       <Route
         path="/finance/purchase-requests"
         element={
-          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
+          <ProtectedRoute
+            requiredAnyPermission={['finance.request', 'finance.view', 'finance.manage']}
+            requiredModule="finance"
+            moduleLabel="Finance"
+          >
             <PurchaseRequestsPage />
           </ProtectedRoute>
         }
@@ -118,7 +130,11 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/purchase-requests/new"
         element={
-          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
+          <ProtectedRoute
+            requiredAnyPermission={['finance.request', 'finance.manage']}
+            requiredModule="finance"
+            moduleLabel="Finance"
+          >
             <PurchaseRequestFormPage />
           </ProtectedRoute>
         }
@@ -126,7 +142,11 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/purchase-requests/:id"
         element={
-          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
+          <ProtectedRoute
+            requiredAnyPermission={['finance.request', 'finance.view', 'finance.manage']}
+            requiredModule="finance"
+            moduleLabel="Finance"
+          >
             <PurchaseRequestDetailPage />
           </ProtectedRoute>
         }
@@ -134,7 +154,11 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/purchase-requests/:id/edit"
         element={
-          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
+          <ProtectedRoute
+            requiredAnyPermission={['finance.request', 'finance.manage']}
+            requiredModule="finance"
+            moduleLabel="Finance"
+          >
             <PurchaseRequestFormPage />
           </ProtectedRoute>
         }
@@ -144,7 +168,11 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/expenses"
         element={
-          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
+          <ProtectedRoute
+            requiredAnyPermission={['finance.request', 'finance.view', 'finance.manage']}
+            requiredModule="finance"
+            moduleLabel="Finance"
+          >
             <ExpenseReportsPage />
           </ProtectedRoute>
         }
@@ -152,7 +180,11 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/expenses/new"
         element={
-          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
+          <ProtectedRoute
+            requiredAnyPermission={['finance.request', 'finance.manage']}
+            requiredModule="finance"
+            moduleLabel="Finance"
+          >
             <ExpenseReportFormPage />
           </ProtectedRoute>
         }
@@ -160,7 +192,11 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/expenses/:id"
         element={
-          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
+          <ProtectedRoute
+            requiredAnyPermission={['finance.request', 'finance.view', 'finance.manage']}
+            requiredModule="finance"
+            moduleLabel="Finance"
+          >
             <ExpenseReportDetailPage />
           </ProtectedRoute>
         }
@@ -170,7 +206,11 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/check-requests"
         element={
-          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
+          <ProtectedRoute
+            requiredAnyPermission={['finance.request', 'finance.view', 'finance.manage']}
+            requiredModule="finance"
+            moduleLabel="Finance"
+          >
             <CheckRequestsPage />
           </ProtectedRoute>
         }
@@ -178,7 +218,11 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/check-requests/new"
         element={
-          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
+          <ProtectedRoute
+            requiredAnyPermission={['finance.request', 'finance.manage']}
+            requiredModule="finance"
+            moduleLabel="Finance"
+          >
             <CheckRequestFormPage />
           </ProtectedRoute>
         }
@@ -186,7 +230,11 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/check-requests/:id"
         element={
-          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
+          <ProtectedRoute
+            requiredAnyPermission={['finance.request', 'finance.view', 'finance.manage']}
+            requiredModule="finance"
+            moduleLabel="Finance"
+          >
             <CheckRequestDetailPage />
           </ProtectedRoute>
         }
