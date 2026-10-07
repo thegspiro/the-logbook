@@ -190,4 +190,13 @@ describe('RequirementModal', () => {
       expect(screen.getByText(/edit the newer copy instead/)).toBeInTheDocument();
     });
   });
+
+  it('can target policy acknowledgments, so an annual policy can be tracked', () => {
+    render(<RequirementModal categories={[]} onClose={vi.fn()} onSave={onSave} />);
+
+    expect(screen.getByRole('option', { name: 'Policy Acknowledgment' })).toHaveAttribute(
+      'value',
+      'policy_acknowledgment'
+    );
+  });
 });

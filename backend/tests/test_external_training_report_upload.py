@@ -23,7 +23,11 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from app.api.v1.endpoints import external_training as endpoints
-from app.api.v1.endpoints.external_training import upload_report
+from app.api.v1.endpoints.external_training import (
+    import_single_record,
+    upload_report,
+)
+from app.api.v1.endpoints.training import VALID_TRAINING_TYPES
 from app.models.training import (
     ExternalProviderType,
     ExternalTrainingImport,
@@ -33,6 +37,7 @@ from app.models.training import (
     TrainingType,
 )
 from app.models.user import Organization, User, UserStatus
+from app.schemas.training import ImportRecordRequest
 from app.services.external_training_service import (
     UPLOAD_SYNC_TYPE,
     ExternalTrainingSyncService,
@@ -63,6 +68,52 @@ def _row(employee_id, email, title, completed, transcript, hours="1"):
 MATCHED = _row("1001", "pat@dept.test", "Back Injury Prevention", "9/1/2026", "T-1")
 MATCHED_2 = _row("1001", "pat@dept.test", "Aquatic Emergencies", "9/5/2026", "T-2")
 UNMATCHED = _row("9999", "nobody@else.test", "Sepsis", "9/30/2026", "T-3")
+
+
+def _admin_row(employee_id, email, title, course_id, completed, at, transcript):
+    """An Admin row as the live report has it: no score, hours or assigner."""
+    return (
+        f"{employee_id},{email},{title},Admin,,{completed},,{completed},{at},,"
+        f"Completed,,,{course_id},{transcript},,,,"
+    )
+
+
+CONDUCT = _admin_row(
+    "1001",
+    "pat@dept.test",
+    "FCVFD Code of Conduct",
+    "1472902",
+    "9/25/2026",
+    "12:17 AM",
+    "A-1",
+)
+CONDUCT_AGAIN = _admin_row(
+    "1001",
+    "pat@dept.test",
+    "FCVFD Code of Conduct",
+    "1472902",
+    "9/25/2026",
+    "12:18 AM",
+    "A-2",
+)
+WHISTLEBLOWER = _admin_row(
+    "1001",
+    "pat@dept.test",
+    "FCVFD Whistleblower Policy",
+    "1462061",
+    "9/25/2026",
+    "12:21 AM",
+    "A-3",
+)
+CONDUCT_NEXT_YEAR = _admin_row(
+    "1001",
+    "pat@dept.test",
+    "FCVFD Code of Conduct",
+    "1472902",
+    "9/24/2027",
+    "9:00 AM",
+    "A-4",
+)
 
 
 def _report(*rows):
@@ -424,3 +475,149 @@ class TestStagingTakesTheProviderLock:
             )
             == []
         )
+
+
+@pytest.mark.integration
+class TestPolicyAcknowledgments:
+    async def test_admin_rows_are_policy_acknowledgments_with_no_hours(
+        self, db_session
+    ):
+        _, member, provider = await _setup(db_session)
+
+        await upload_report(
+            uuid.UUID(provider.id),
+            _upload(_report(MATCHED, WHISTLEBLOWER)),
+            db_session,
+            member,
+        )
+
+        by_id = {
+            r.external_record_id: r for r in await _records_for(db_session, provider)
+        }
+        assert by_id["A-3"].training_type == TrainingType.POLICY_ACKNOWLEDGMENT
+        assert by_id["A-3"].hours_completed == 0
+        assert by_id["T-1"].training_type == TrainingType.CONTINUING_EDUCATION
+
+    async def test_same_day_repeat_is_set_aside(self, db_session):
+        _, member, provider = await _setup(db_session)
+
+        response = await upload_report(
+            uuid.UUID(provider.id),
+            _upload(_report(CONDUCT, CONDUCT_AGAIN, WHISTLEBLOWER)),
+            db_session,
+            member,
+        )
+
+        assert response.training_records_created == 2
+        assert "1 same-day repeat acknowledgment(s) set aside" in response.message
+        assert [
+            r.external_record_id for r in await _records_for(db_session, provider)
+        ] == [
+            "A-1",
+            "A-3",
+        ]
+        repeat = await _staged(db_session, provider, "A-2")
+        assert repeat.import_status == "duplicate"
+        assert repeat.import_error == "Same-day repeat of acknowledgment A-1"
+
+    async def test_next_years_acknowledgment_is_kept(self, db_session):
+        _, member, provider = await _setup(db_session)
+
+        response = await upload_report(
+            uuid.UUID(provider.id),
+            _upload(_report(CONDUCT, CONDUCT_NEXT_YEAR)),
+            db_session,
+            member,
+        )
+
+        assert response.training_records_created == 2
+
+    async def test_same_day_repeat_across_two_uploads(self, db_session):
+        _, member, provider = await _setup(db_session)
+        await upload_report(
+            uuid.UUID(provider.id), _upload(_report(CONDUCT)), db_session, member
+        )
+
+        response = await upload_report(
+            uuid.UUID(provider.id),
+            _upload(_report(CONDUCT, CONDUCT_AGAIN)),
+            db_session,
+            member,
+        )
+
+        assert response.training_records_created == 0
+        assert (await _staged(db_session, provider, "A-2")).import_status == (
+            "duplicate"
+        )
+
+    async def test_course_completions_on_one_day_are_not_collapsed(self, db_session):
+        _, member, provider = await _setup(db_session)
+        twice = _row(
+            "1001", "pat@dept.test", "Back Injury Prevention", "9/1/2026", "T-9"
+        )
+
+        response = await upload_report(
+            uuid.UUID(provider.id),
+            _upload(_report(MATCHED, twice)),
+            db_session,
+            member,
+        )
+
+        assert response.training_records_created == 2
+
+    async def test_manual_import_button_uses_the_same_type(self, db_session):
+        _, member, provider = await _setup(db_session)
+        await upload_report(
+            uuid.UUID(provider.id),
+            _upload(
+                _report(
+                    _admin_row(
+                        "9999",
+                        "nobody@else.test",
+                        "FCVFD Code of Conduct",
+                        "1472902",
+                        "9/25/2026",
+                        "12:17 AM",
+                        "A-9",
+                    )
+                )
+            ),
+            db_session,
+            member,
+        )
+        staged = await _staged(db_session, provider, "A-9")
+
+        await import_single_record(
+            uuid.UUID(provider.id),
+            uuid.UUID(staged.id),
+            ImportRecordRequest(
+                external_import_id=uuid.UUID(staged.id), user_id=uuid.UUID(member.id)
+            ),
+            db_session,
+            member,
+        )
+
+        (record,) = await _records_for(db_session, provider)
+        assert record.training_type == TrainingType.POLICY_ACKNOWLEDGMENT
+
+
+@pytest.mark.unit
+class TestPolicyAcknowledgmentType:
+    @pytest.mark.parametrize("value", ["Admin", "admin", " ADMIN "])
+    def test_admin_assignment_type_maps_to_policy_acknowledgment(self, value):
+        assert (
+            ExternalTrainingSyncService._map_training_type({"Assignment Type": value})
+            == TrainingType.POLICY_ACKNOWLEDGMENT
+        )
+
+    def test_ts_course_is_not_an_acknowledgment(self):
+        assert (
+            ExternalTrainingSyncService._map_training_type(
+                {"Assignment Type": "TS Course"}
+            )
+            == TrainingType.CONTINUING_EDUCATION
+        )
+
+    def test_csv_import_accepts_the_new_type(self):
+        assert "policy_acknowledgment" in VALID_TRAINING_TYPES
+        assert VALID_TRAINING_TYPES == {t.value for t in TrainingType}

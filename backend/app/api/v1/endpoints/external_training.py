@@ -812,6 +812,10 @@ async def upload_report(
     parts = [f"{created} training record(s) added"]
     if sync_log.records_updated:
         parts.append(f"{sync_log.records_updated} already on file")
+    if sync_log.records_skipped:
+        parts.append(
+            f"{sync_log.records_skipped} same-day repeat acknowledgment(s) set aside"
+        )
     if awaiting:
         parts.append(f"{awaiting} waiting for a member match under Imports")
     if sync_log.records_failed:
@@ -1279,7 +1283,9 @@ async def import_single_record(
             user_id=str(import_request.user_id),
             course_name=ext_import.course_title,
             course_code=ext_import.course_code,
-            training_type="continuing_education",  # Default, could be mapped
+            training_type=ExternalTrainingSyncService._map_training_type(
+                ext_import.raw_data
+            ),
             completion_date=(
                 ext_import.completion_date.date()
                 if ext_import.completion_date
@@ -1287,6 +1293,9 @@ async def import_single_record(
             ),
             hours_completed=credited_hours(ext_import),
             credit_hours=ext_import.credit_hours,
+            # Lets a later sync or upload recognise this completion as done.
+            external_provider_id=ext_import.provider_id,
+            external_record_id=ext_import.external_record_id,
             status=TrainingStatus.COMPLETED,
             score=ext_import.score,
             passed=ext_import.passed,
@@ -1412,7 +1421,9 @@ async def bulk_import_records(
                 user_id=user_id,
                 course_name=ext_import.course_title,
                 course_code=ext_import.course_code,
-                training_type="continuing_education",
+                training_type=ExternalTrainingSyncService._map_training_type(
+                    ext_import.raw_data
+                ),
                 completion_date=(
                     ext_import.completion_date.date()
                     if ext_import.completion_date
@@ -1420,6 +1431,8 @@ async def bulk_import_records(
                 ),
                 hours_completed=credited_hours(ext_import),
                 credit_hours=ext_import.credit_hours,
+                external_provider_id=ext_import.provider_id,
+                external_record_id=ext_import.external_record_id,
                 status=TrainingStatus.COMPLETED,
                 score=ext_import.score,
                 passed=ext_import.passed,

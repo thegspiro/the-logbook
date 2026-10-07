@@ -688,13 +688,32 @@ cannot be matched yet is listed under **User Mappings**, and is matched
 automatically on a later sync once their email or membership number is on file
 — unless an officer has already set or cleared that mapping by hand.
 
+To map a member by hand, pick the member from the user's dropdown under
+**Mappings → Users** _(2026-10-04)_; their waiting completions move to that
+member immediately. Synced completions wait under **Imports** for an officer to
+import them, as for every provider.
+
 Credit hours come from the report's **Duration (hours)** column — the hours the
 course is accredited for — never from **Time Spent In Course**, which counts how
-long the member had it open. A row with no duration, such as an administrative
-acknowledgement, credits no hours. To map one by hand, pick the member from the user's
-dropdown under **Mappings → Users** _(2026-10-04)_; their waiting completions
-move to that member immediately. Synced completions wait under **Imports** for an officer
-to import them, as for every provider.
+long the member had it open. A row with no duration credits no hours.
+
+**Policy acknowledgments** _(2026-10-07)_. The report's **Assignment Type**
+separates Target Solutions' own courses (**TS Course**) from items your
+department authored (**Admin**) — the documents members must read and
+acknowledge, usually every year because a federal or local rule requires it,
+such as a whistleblower policy or a code of conduct. Admin rows are recorded
+with the training type **Policy Acknowledgment**, with no hours, so they stay
+apart from courses and appear in each member's training history under that
+type.
+
+A training requirement set to the type **Policy Acknowledgment** is met by an
+acknowledgment of _any_ policy — it cannot yet require one particular policy,
+such as the whistleblower policy, every year.
+
+Target Solutions records each acknowledgment click, so a member who opens the
+same policy twice in one day appears twice. The second one on the same day is
+kept under **Imports** marked **duplicate** and never becomes a training record.
+An acknowledgment on a later day — next year's reading — is recorded as usual.
 
 > **Screenshot needed:**
 > _[Training Admin → Setup → Integrations → add a Target Solutions provider: the form with **API Base URL** `https://app.targetsolutions.com/tsapp/api/`, **API Key** and **API Secret \*** filled with placeholder values, and under **Sync Settings** **Enable Auto-Sync** on, **Pull new completions** set to **Every hour** and **Daily 30-day review at** 02:00. Use a demo key, never a real one.]_

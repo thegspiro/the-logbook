@@ -53,6 +53,8 @@ install_httpx_url_redaction()
 REVIEW_SYNC_TYPE = "review"
 # A report an officer uploaded by hand, recorded in the same sync history.
 UPLOAD_SYNC_TYPE = "upload"
+TS_ASSIGNMENT_TYPE_COLUMN = "Assignment Type"
+TS_ADMIN_ASSIGNMENT_TYPE = "admin"
 REVIEW_LOOKBACK_DAYS = 30
 QUICK_PULL_MIN_LOOKBACK_DAYS = 1
 DEFAULT_TS_REVIEW_TIME = time(2, 0)
@@ -1478,8 +1480,64 @@ class ExternalTrainingSyncService:
         if record_data.get("external_category_id"):
             await self._find_or_create_category_mapping(provider, record_data)
 
+        repeated = await self._same_day_acknowledgment(provider, import_record)
+        if repeated:
+            # Kept for the record, but set aside so it is never imported.
+            import_record.import_status = "duplicate"
+            import_record.import_error = f"Same-day repeat of acknowledgment {repeated}"
+            self.db.add(import_record)
+            return "skipped"
+
         self.db.add(import_record)
         return "imported"
+
+    async def _same_day_acknowledgment(
+        self,
+        provider: ExternalTrainingProvider,
+        import_record: ExternalTrainingImport,
+    ) -> Optional[str]:
+        """The record id this policy acknowledgment repeats, if any.
+
+        A member who acknowledges the same policy twice on one day (Target
+        Solutions records each click) has acknowledged it once. A later day's
+        acknowledgment is a new one — next year's annual reading — and is
+        kept. Only policy acknowledgments collapse: two completions of a real
+        course on one day are two completions.
+        """
+        if (
+            self._map_training_type(import_record.raw_data)
+            != TrainingType.POLICY_ACKNOWLEDGMENT
+            or not import_record.external_user_id
+            or import_record.completion_date is None
+        ):
+            return None
+        same_item = (
+            ExternalTrainingImport.external_course_id
+            == import_record.external_course_id
+            if import_record.external_course_id
+            else ExternalTrainingImport.course_title == import_record.course_title
+        )
+        result = await self.db.execute(
+            select(ExternalTrainingImport.external_record_id)
+            .where(ExternalTrainingImport.provider_id == provider.id)
+            .where(
+                ExternalTrainingImport.external_user_id
+                == import_record.external_user_id
+            )
+            .where(same_item)
+            .where(
+                ExternalTrainingImport.completion_date == import_record.completion_date
+            )
+            .where(ExternalTrainingImport.import_status != "duplicate")
+            .where(
+                ExternalTrainingImport.external_record_id
+                != import_record.external_record_id
+            )
+            .limit(1)
+            .with_for_update()
+        )
+        repeated = result.scalar_one_or_none()
+        return str(repeated) if repeated is not None else None
 
     @staticmethod
     def _map_training_type(raw_data: Optional[Dict[str, Any]]) -> TrainingType:
@@ -1491,6 +1549,13 @@ class ExternalTrainingSyncService:
         """
         if not raw_data:
             return TrainingType.CONTINUING_EDUCATION
+
+        # Target Solutions' "Assignment Type" tells its own courses ("TS
+        # Course") from items a department authors itself ("Admin") — the
+        # policies members must read and acknowledge each year.
+        assignment_type = str(raw_data.get(TS_ASSIGNMENT_TYPE_COLUMN, "")).strip()
+        if assignment_type.lower() == TS_ADMIN_ASSIGNMENT_TYPE:
+            return TrainingType.POLICY_ACKNOWLEDGMENT
 
         type_str = (
             str(

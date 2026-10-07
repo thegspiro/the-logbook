@@ -234,6 +234,10 @@ const trainingTypeConfig: Record<TrainingType, { label: string; classes: string 
     label: 'Specialty',
     classes: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-400',
   },
+  policy_acknowledgment: {
+    label: 'Policy',
+    classes: 'bg-slate-100 text-slate-800 dark:bg-slate-500/20 dark:text-slate-300',
+  },
 };
 
 export const TrainingTypeBadge: React.FC<TrainingTypeBadgeProps> = ({ type, size = 'md' }) => {

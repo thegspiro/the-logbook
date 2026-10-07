@@ -91,7 +91,10 @@ class TrainingSubmissionCreate(BaseModel):
     course_code: Optional[str] = Field(None, max_length=50)
     training_type: str = Field(
         ...,
-        description="certification, continuing_education, skills_practice, orientation, refresher, specialty",
+        description=(
+            "certification, continuing_education, skills_practice, orientation, "
+            "refresher, specialty, policy_acknowledgment"
+        ),
     )
     description: Optional[str] = None
 

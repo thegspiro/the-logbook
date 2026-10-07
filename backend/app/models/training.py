@@ -51,6 +51,10 @@ class TrainingType(str, enum.Enum):
     ORIENTATION = "orientation"
     REFRESHER = "refresher"
     SPECIALTY = "specialty"
+    # A document a member must read and acknowledge, typically every year
+    # because a federal or local rule requires it (whistleblower protections,
+    # a code of conduct). It carries no training hours.
+    POLICY_ACKNOWLEDGMENT = "policy_acknowledgment"
 
 
 class RequirementFrequency(str, enum.Enum):

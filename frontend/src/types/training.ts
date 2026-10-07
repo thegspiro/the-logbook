@@ -6,7 +6,13 @@ import type { RequirementChangeScope } from '../constants/enums';
 import type { Event } from './event';
 
 export type TrainingType =
-  'certification' | 'continuing_education' | 'skills_practice' | 'orientation' | 'refresher' | 'specialty';
+  | 'certification'
+  | 'continuing_education'
+  | 'skills_practice'
+  | 'orientation'
+  | 'refresher'
+  | 'specialty'
+  | 'policy_acknowledgment';
 
 export type TrainingStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
 

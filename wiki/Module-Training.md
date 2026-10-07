@@ -556,15 +556,15 @@ MemberLeaveOfAbsence ──auto-link──> TrainingWaiver (unless exempt_from_t
 
 ### Key Enums
 
-| Enum                   | Values                                                                                           |
-| ---------------------- | ------------------------------------------------------------------------------------------------ |
-| `TrainingType`         | certification, continuing_education, skills_practice, orientation, refresher, specialty          |
-| `TrainingStatus`       | scheduled, in_progress, completed, cancelled, failed                                             |
-| `RequirementType`      | hours, courses, certification, shifts, calls, skills_evaluation, checklist, knowledge_test       |
-| `RequirementFrequency` | annual, biannual, quarterly, monthly, one_time                                                   |
-| `DueDateType`          | calendar_period, rolling, certification_period, fixed_date                                       |
-| `ProgramStructureType` | sequential _(retired from the pickers 2026-08-09; still a valid stored value)_, phases, flexible |
-| `EnrollmentStatus`     | active, completed, **expired** _(first actually written 2026-08-09)_, on_hold, withdrawn, failed |
+| Enum                   | Values                                                                                                         |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `TrainingType`         | certification, continuing_education, skills_practice, orientation, refresher, specialty, policy_acknowledgment |
+| `TrainingStatus`       | scheduled, in_progress, completed, cancelled, failed                                                           |
+| `RequirementType`      | hours, courses, certification, shifts, calls, skills_evaluation, checklist, knowledge_test                     |
+| `RequirementFrequency` | annual, biannual, quarterly, monthly, one_time                                                                 |
+| `DueDateType`          | calendar_period, rolling, certification_period, fixed_date                                                     |
+| `ProgramStructureType` | sequential _(retired from the pickers 2026-08-09; still a valid stored value)_, phases, flexible               |
+| `EnrollmentStatus`     | active, completed, **expired** _(first actually written 2026-08-09)_, on_hold, withdrawn, failed               |
 
 | `RequirementProgressStatus` | not_started, in_progress, completed, verified, waived |
 | `ProgressCreditSource` | training_session, shift_report, external_import, officer_apply |

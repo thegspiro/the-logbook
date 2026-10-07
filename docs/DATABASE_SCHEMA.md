@@ -9501,7 +9501,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `name` | VARCHAR(255) | no |  |  |  |
 | `code` | VARCHAR(50) | yes |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`) | no |  |  |  |
+| `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`, `policy_acknowledgment`) | no |  |  |  |
 | `duration_hours` | FLOAT | yes |  |  |  |
 | `credit_hours` | FLOAT | yes |  |  |  |
 | `prerequisites` | JSON | yes |  |  |  |
@@ -9670,7 +9670,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `category_id` | VARCHAR(36) | yes | FK, IDX |  | → `training_categories.id` ON DELETE SET NULL |
 | `course_name` | VARCHAR(255) | no |  |  |  |
 | `course_code` | VARCHAR(50) | yes |  |  |  |
-| `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`) | no |  |  |  |
+| `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`, `policy_acknowledgment`) | no |  |  |  |
 | `scheduled_date` | DATE | yes |  |  |  |
 | `completion_date` | DATE | yes | IDX |  |  |
 | `expiration_date` | DATE | yes | IDX |  |  |
@@ -9730,7 +9730,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `requirement_type` | ENUM(`hours`, `courses`, `certification`, `shifts`, `calls`, `skills_evaluation`, `checklist`, `knowledge_test`) | no | IDX |  |  |
-| `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`) | yes |  |  |  |
+| `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`, `policy_acknowledgment`) | yes |  |  |  |
 | `source` | ENUM(`department`, `state`, `national`) | no |  | `department` |  |
 | `registry_name` | VARCHAR(100) | yes |  |  |  |
 | `registry_code` | VARCHAR(50) | yes |  |  |  |
@@ -9799,7 +9799,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `requirement_id` | VARCHAR(36) | yes | FK |  | → `training_requirements.id` ON DELETE SET NULL |
 | `course_name` | VARCHAR(255) | no |  |  |  |
 | `course_code` | VARCHAR(50) | yes |  |  |  |
-| `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`) | no |  |  |  |
+| `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`, `policy_acknowledgment`) | no |  |  |  |
 | `credit_hours` | FLOAT | no |  |  |  |
 | `instructor` | VARCHAR(255) | yes |  |  |  |
 | `instructor_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
@@ -9842,7 +9842,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `submitted_by` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
 | `course_name` | VARCHAR(255) | no |  |  |  |
 | `course_code` | VARCHAR(50) | yes |  |  |  |
-| `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`) | no |  |  |  |
+| `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`, `policy_acknowledgment`) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `completion_date` | DATE | no | IDX |  |  |
 | `start_time` | TIME | yes |  |  |  |

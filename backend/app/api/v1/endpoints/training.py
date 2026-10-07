@@ -3377,14 +3377,7 @@ async def get_expiring_certifications_detailed(
     ]
 
 
-VALID_TRAINING_TYPES = {
-    "certification",
-    "continuing_education",
-    "skills_practice",
-    "orientation",
-    "refresher",
-    "specialty",
-}
+VALID_TRAINING_TYPES = {t.value for t in TrainingType}
 VALID_STATUSES = {"scheduled", "in_progress", "completed", "cancelled", "failed"}
 
 

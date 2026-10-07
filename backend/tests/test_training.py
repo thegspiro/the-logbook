@@ -83,7 +83,8 @@ class TestTrainingEnums:
         assert TrainingType.ORIENTATION.value == "orientation"
         assert TrainingType.REFRESHER.value == "refresher"
         assert TrainingType.SPECIALTY.value == "specialty"
-        assert len(TrainingType) == 6
+        assert TrainingType.POLICY_ACKNOWLEDGMENT.value == "policy_acknowledgment"
+        assert len(TrainingType) == 7
 
     def test_requirement_type_values(self):
         """Verify all RequirementType enum values"""
