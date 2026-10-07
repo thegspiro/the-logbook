@@ -52,6 +52,11 @@ REVIEW_LOOKBACK_DAYS = 30
 QUICK_PULL_MIN_LOOKBACK_DAYS = 1
 DEFAULT_TS_REVIEW_TIME = time(2, 0)
 
+# Providers whose user id is the department's own employee number, so a member
+# can be matched on membership_number when the email does not match. Target
+# Solutions reports it as "Employee ID".
+MEMBERSHIP_NUMBER_PROVIDERS = frozenset({ExternalProviderType.TARGET_SOLUTIONS})
+
 
 def parse_review_time(value: Any) -> Optional[time]:
     """Stored ``config.review_time`` ("HH:MM") as a ``time``, or None.
@@ -1071,6 +1076,10 @@ class ExternalTrainingSyncService:
             "external_username": "",
             "external_email": email,
             "external_name": "",
+            # Kept apart from external_user_id, which falls back to the email
+            # when the Employee ID is blank, so only a real ID is ever compared
+            # against membership numbers.
+            "external_employee_id": employee_id,
             "raw_data": row,
         }
 
@@ -1442,14 +1451,12 @@ class ExternalTrainingSyncService:
             if record_data.get("external_name"):
                 mapping.external_name = record_data["external_name"]
 
-            # Retry the email match on every sync until it lands, so a member
-            # whose email is added or corrected in the Logbook after the first
-            # sync is picked up. A mapping an officer has touched (mapped_by is
+            # Retry the match on every sync until it lands, so a member whose
+            # email or membership number is added or corrected in the Logbook
+            # after the first sync is picked up. A mapping an officer has touched (mapped_by is
             # set, including a deliberate un-map) is never overridden.
-            if not mapping.internal_user_id and not mapping.mapped_by and email:
-                user_id = await self._match_member_by_email(
-                    provider.organization_id, email
-                )
+            if not mapping.internal_user_id and not mapping.mapped_by:
+                user_id = await self._match_member(provider, record_data, email)
                 if user_id:
                     mapping.internal_user_id = user_id
                     mapping.is_mapped = True
@@ -1468,12 +1475,11 @@ class ExternalTrainingSyncService:
             auto_mapped=False,
         )
 
-        if email:
-            user_id = await self._match_member_by_email(provider.organization_id, email)
-            if user_id:
-                mapping.internal_user_id = user_id
-                mapping.is_mapped = True
-                mapping.auto_mapped = True
+        user_id = await self._match_member(provider, record_data, email)
+        if user_id:
+            mapping.internal_user_id = user_id
+            mapping.is_mapped = True
+            mapping.auto_mapped = True
 
         self.db.add(mapping)
         return mapping
@@ -1484,6 +1490,51 @@ class ExternalTrainingSyncService:
         if not isinstance(value, str):
             return ""
         return value.strip().lower()
+
+    async def _match_member(
+        self,
+        provider: ExternalTrainingProvider,
+        record_data: Dict[str, Any],
+        email: str,
+    ) -> Optional[str]:
+        """Email first, then (Target Solutions only) Employee ID.
+
+        The Employee ID is compared only for providers in
+        ``MEMBERSHIP_NUMBER_PROVIDERS``: other providers' user ids are their own
+        internal keys, and one that happened to equal a membership number would
+        attach a completion to the wrong member.
+        """
+        if email:
+            user_id = await self._match_member_by_email(provider.organization_id, email)
+            if user_id:
+                return user_id
+        if provider.provider_type in MEMBERSHIP_NUMBER_PROVIDERS:
+            employee_id = str(record_data.get("external_employee_id") or "").strip()
+            if employee_id:
+                return await self._match_member_by_membership_number(
+                    provider.organization_id, employee_id
+                )
+        return None
+
+    async def _match_member_by_membership_number(
+        self, organization_id: str, membership_number: str
+    ) -> Optional[str]:
+        """Return the id of the one live member in the org with this number.
+
+        Membership numbers are unique per org, but a deleted member is excluded
+        all the same, and more than one candidate maps nothing.
+        """
+        result = await self.db.execute(
+            select(User.id)
+            .where(User.organization_id == organization_id)
+            .where(func.trim(User.membership_number) == membership_number)
+            .where(User.deleted_at.is_(None))
+            .limit(2)
+        )
+        ids = list(result.scalars().all())
+        if len(ids) != 1:
+            return None
+        return str(ids[0])
 
     async def _match_member_by_email(
         self, organization_id: str, email: str
@@ -1504,7 +1555,7 @@ class ExternalTrainingSyncService:
         ids = list(result.scalars().all())
         if len(ids) != 1:
             return None
-        return ids[0]
+        return str(ids[0])
 
     async def _find_or_create_category_mapping(
         self,

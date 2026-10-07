@@ -681,10 +681,17 @@ officer sees.
 
 Each sync downloads the completions report for its date range. Members are
 matched by the report's **Email** column against their Logbook email (ignoring
-case and spaces; deleted members are skipped). A member who cannot be matched
-yet is listed under **User Mappings**, and is matched automatically on a later
-sync once their email is on file — unless an officer has already set or cleared
-that mapping by hand. To map one by hand, pick the member from the user's
+case and spaces; deleted members are skipped). When no email matches, the
+report's **Employee ID** is matched against the member's **Membership Number**
+_(2026-10-07)_, so keep the two numbers the same in both systems. A member who
+cannot be matched yet is listed under **User Mappings**, and is matched
+automatically on a later sync once their email or membership number is on file
+— unless an officer has already set or cleared that mapping by hand.
+
+Credit hours come from the report's **Duration (hours)** column — the hours the
+course is accredited for — never from **Time Spent In Course**, which counts how
+long the member had it open. A row with no duration, such as an administrative
+acknowledgement, credits no hours. To map one by hand, pick the member from the user's
 dropdown under **Mappings → Users** _(2026-10-04)_; their waiting completions
 move to that member immediately. Synced completions wait under **Imports** for an officer
 to import them, as for every provider.

@@ -528,12 +528,15 @@ async def _make_org(db_session) -> Organization:
     return org
 
 
-async def _make_user(db_session, org, email, deleted=False) -> User:
+async def _make_user(
+    db_session, org, email, deleted=False, membership_number=None
+) -> User:
     user = User(
         id=str(uuid.uuid4()),
         organization_id=org.id,
         username=f"u{uuid.uuid4().hex[:10]}",
         email=email,
+        membership_number=membership_number,
         first_name="Test",
         last_name="Member",
         password_hash="x",
@@ -545,12 +548,14 @@ async def _make_user(db_session, org, email, deleted=False) -> User:
     return user
 
 
-async def _make_provider(db_session, org) -> ExternalTrainingProvider:
+async def _make_provider(
+    db_session, org, provider_type=ExternalProviderType.TARGET_SOLUTIONS
+) -> ExternalTrainingProvider:
     provider = ExternalTrainingProvider(
         id=str(uuid.uuid4()),
         organization_id=org.id,
         name="Target Solutions",
-        provider_type=ExternalProviderType.TARGET_SOLUTIONS,
+        provider_type=provider_type,
         api_base_url=TS_BASE_URL,
     )
     db_session.add(provider)
@@ -705,6 +710,112 @@ class TestEmailMatching:
         row = await self._import_row(db_session, provider)
         assert row.user_id == member.id
         assert row.external_user_id == "jane.doe@dept.test"
+
+    async def test_unmatched_email_falls_back_to_membership_number(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_user(
+            db_session, org, "jdoe@personal.test", membership_number="E-501"
+        )
+        provider = await _make_provider(db_session, org)
+        log = await _make_sync_log(db_session, provider)
+
+        await self._process(db_session, provider, log, _row())
+
+        assert (await self._import_row(db_session, provider)).user_id == member.id
+        mapping = await self._mapping(db_session, provider)
+        assert mapping.internal_user_id == member.id
+        assert mapping.auto_mapped is True
+
+    async def test_email_match_wins_over_membership_number(self, db_session):
+        org = await _make_org(db_session)
+        by_email = await _make_user(db_session, org, "jane.doe@dept.test")
+        await _make_user(db_session, org, "other@dept.test", membership_number="E-501")
+        provider = await _make_provider(db_session, org)
+        log = await _make_sync_log(db_session, provider)
+
+        await self._process(db_session, provider, log, _row())
+
+        assert (await self._import_row(db_session, provider)).user_id == by_email.id
+
+    async def test_membership_number_never_matches_a_deleted_member(self, db_session):
+        org = await _make_org(db_session)
+        await _make_user(
+            db_session,
+            org,
+            "gone@dept.test",
+            deleted=True,
+            membership_number="E-501",
+        )
+        provider = await _make_provider(db_session, org)
+        log = await _make_sync_log(db_session, provider)
+
+        await self._process(db_session, provider, log, _row())
+
+        assert (await self._import_row(db_session, provider)).user_id is None
+
+    async def test_membership_number_is_scoped_to_the_org(self, db_session):
+        org = await _make_org(db_session)
+        other = await _make_org(db_session)
+        await _make_user(db_session, other, "else@dept.test", membership_number="E-501")
+        provider = await _make_provider(db_session, org)
+        log = await _make_sync_log(db_session, provider)
+
+        await self._process(db_session, provider, log, _row())
+
+        assert (await self._import_row(db_session, provider)).user_id is None
+
+    async def test_later_sync_matches_a_membership_number_added_later(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_user(db_session, org, "jdoe@personal.test")
+        provider = await _make_provider(db_session, org)
+        log = await _make_sync_log(db_session, provider)
+
+        await self._process(db_session, provider, log, _row())
+        assert (await self._import_row(db_session, provider)).user_id is None
+
+        await db_session.execute(
+            User.__table__.update()
+            .where(User.id == member.id)
+            .values(membership_number="E-501")
+        )
+        await self._process(db_session, provider, log, _row())
+
+        assert (await self._import_row(db_session, provider)).user_id == member.id
+
+    async def test_other_providers_never_match_on_membership_number(self, db_session):
+        # A Vector Solutions user id is Vector's own key; one that equals a
+        # membership number is a coincidence, not an identity.
+        org = await _make_org(db_session)
+        await _make_user(
+            db_session, org, "jdoe@personal.test", membership_number="E-501"
+        )
+        provider = await _make_provider(
+            db_session, org, provider_type=ExternalProviderType.VECTOR_SOLUTIONS
+        )
+        log = await _make_sync_log(db_session, provider)
+
+        await self._process(db_session, provider, log, _row())
+
+        assert (await self._import_row(db_session, provider)).user_id is None
+
+    async def test_blank_employee_id_never_compares_the_email_as_a_number(
+        self, db_session
+    ):
+        # With no Employee ID the email becomes the external user id; it must
+        # not be looked up as a membership number.
+        org = await _make_org(db_session)
+        await _make_user(
+            db_session,
+            org,
+            "someone@dept.test",
+            membership_number="jane.doe@dept.test",
+        )
+        provider = await _make_provider(db_session, org)
+        log = await _make_sync_log(db_session, provider)
+
+        await self._process(db_session, provider, log, _row(**{"Employee ID": ""}))
+
+        assert (await self._import_row(db_session, provider)).user_id is None
 
     async def test_resync_updates_the_same_transcript(self, db_session):
         org = await _make_org(db_session)
