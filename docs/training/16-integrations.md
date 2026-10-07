@@ -690,8 +690,13 @@ automatically on a later sync once their email or membership number is on file
 
 To map a member by hand, pick the member from the user's dropdown under
 **Mappings → Users** _(2026-10-04)_; their waiting completions move to that
-member immediately. Synced completions wait under **Imports** for an officer to
-import them, as for every provider.
+member immediately.
+
+**Matched completions are credited automatically** _(2026-10-07)_. A Target
+Solutions sync turns every completion whose member is matched into a training
+record straight away, the same as an upload; only completions nobody matches
+wait under **Imports**. When such a member is mapped later, their waiting
+completions are imported with **Import** or **Bulk Import**.
 
 Credit hours come from the report's **Duration (hours)** column — the hours the
 course is accredited for — never from **Time Spent In Course**, which counts how
@@ -785,11 +790,20 @@ training records already imported from it, so they become current at once.
 Unmapping takes the course back off those records. A record an officer linked
 to a different course by hand is left alone either way.
 
+**Categories come from the course.** Target Solutions sends no category, so an
+imported completion is filed under its mapped library course's category — the
+first of the course's categories that is still active. The order is: the
+category an officer picks when importing, then a category mapping, then the
+mapped course's category, then the **Bulk Import** default, then the provider's
+default category. Mapping a course also files its earlier records under the
+course's category, when they had none or only the provider's default; a
+category someone chose is kept.
+
 #### Uploading a report by hand _(2026-10-07)_
 
 A Target Solutions provider card always has **Upload Report**, whether or not
 the API key and secret are set and whether or not the last connection test
-passed. Use it when the API is not set up yet, is not answering, or to load
+passed. A provider that was deleted accepts no uploads, as it accepts no syncs. Use it when the API is not set up yet, is not answering, or to load
 history older than the 30-day review.
 
 1. In Target Solutions, run the Training Records API report link (or download
@@ -799,8 +813,8 @@ history older than the 30-day review.
    most).
 
 Completions whose member is matched — by email, then Employee ID — become
-training records immediately. Completions nobody matches wait under
-**Imports**, exactly as after a sync. The upload appears in the sync history as
+training records immediately, exactly as after a sync. Completions nobody
+matches wait under **Imports**. The upload appears in the sync history as
 an **upload**.
 
 **Nothing is recorded twice.** Every completion is identified by its

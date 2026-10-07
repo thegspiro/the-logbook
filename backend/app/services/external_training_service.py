@@ -37,6 +37,7 @@ from app.models.training import (
 )
 from app.models.user import User
 from app.services.external_course_mapping import (
+    course_category_id,
     find_or_create_course_mapping,
     mapped_course_id,
     notify_new_course_matches,
@@ -63,6 +64,10 @@ TS_ADMIN_ASSIGNMENT_TYPE = "admin"
 REVIEW_LOOKBACK_DAYS = 30
 QUICK_PULL_MIN_LOOKBACK_DAYS = 1
 DEFAULT_TS_REVIEW_TIME = time(2, 0)
+
+# Providers whose synced completions become training records without an
+# officer's review, once the member is matched.
+AUTO_CREDIT_PROVIDERS = frozenset({ExternalProviderType.TARGET_SOLUTIONS})
 
 # Providers whose user id is the department's own employee number, so a member
 # can be matched on membership_number when the email does not match. Target
@@ -458,6 +463,17 @@ class ExternalTrainingSyncService:
             sync_log.records_fetched = len(records)
 
             await self._stage_records(provider, sync_log, records)
+            # Target Solutions completions are credited as they arrive (owner
+            # decision, 2026-10-07): the Transcript ID keys them, so nothing is
+            # credited twice. Other providers keep the officer's review step.
+            if provider.provider_type in AUTO_CREDIT_PROVIDERS:
+                created, awaiting = await self.credit_matched_members(
+                    provider, sync_log
+                )
+                logger.info(
+                    f"Sync {sync_log.id}: {created} training record(s) credited, "
+                    f"{awaiting} completion(s) waiting for a member"
+                )
             sync_log.completed_at = datetime.now(timezone.utc)
 
             # Update provider sync timestamps
@@ -1853,17 +1869,30 @@ class ExternalTrainingSyncService:
         import_record: ExternalTrainingImport,
         user_id: Optional[str] = None,
         category_id: Optional[str] = None,
+        default_category_id: Optional[str] = None,
+        created_by: Optional[str] = None,
     ) -> Optional[TrainingRecord]:
         """
         Import a single external training record to create a TrainingRecord.
 
+        Every import path goes through here — sync, upload, and the officer's
+        Import and Bulk Import buttons — so a completion is credited the same
+        way whichever brought it in.
+
         Args:
             import_record: The external training import to process
             user_id: Override user ID (if not auto-mapped)
-            category_id: Override category ID (if not auto-mapped)
+            category_id: The officer's chosen category, which wins outright.
+                Callers verify it is in the organization.
+            default_category_id: A batch default, used only when neither the
+                provider's category mapping nor the mapped course gives one.
+                Callers verify it is in the organization.
+            created_by: The officer importing, if one is.
 
         Returns:
-            Created TrainingRecord
+            The created TrainingRecord, or None when nothing was created: no
+            member (``import_status`` becomes "failed") or the completion is
+            already a training record (it becomes "imported", linked to it).
         """
         # Determine user
         target_user_id = user_id or import_record.user_id
@@ -1896,7 +1925,17 @@ class ExternalTrainingSyncService:
             import_record.imported_at = datetime.now(timezone.utc)
             return None
 
-        # Determine category
+        target_course_id = await mapped_course_id(
+            self.db,
+            import_record.provider_id,
+            import_record.organization_id,
+            import_record.external_course_id,
+        )
+
+        # Determine category: the officer's choice, then the provider's
+        # category mapping, then the mapped library course's own category
+        # (Target Solutions sends no category, so for it this is usually what
+        # decides), then a batch default, then the provider's default.
         target_category_id = category_id
         if not target_category_id and import_record.external_category_id:
             # Look up category mapping
@@ -1911,6 +1950,13 @@ class ExternalTrainingSyncService:
             mapping = result.scalar_one_or_none()
             if mapping and mapping.internal_category_id:
                 target_category_id = mapping.internal_category_id
+
+        if not target_category_id and target_course_id:
+            target_category_id = await course_category_id(
+                self.db, target_course_id, import_record.organization_id
+            )
+        if not target_category_id:
+            target_category_id = default_category_id
 
         # If still no category, use provider default
         if not target_category_id:
@@ -1976,12 +2022,8 @@ class ExternalTrainingSyncService:
             passed=import_record.passed,
             status=TrainingStatus.COMPLETED,
             category_id=target_category_id,
-            course_id=await mapped_course_id(
-                self.db,
-                import_record.provider_id,
-                import_record.organization_id,
-                import_record.external_course_id,
-            ),
+            course_id=target_course_id,
+            created_by=created_by,
             external_provider_id=import_record.provider_id,
             external_record_id=import_record.external_record_id,
             notes=import_notes,
@@ -1996,7 +2038,9 @@ class ExternalTrainingSyncService:
 
         # Update import record
         import_record.training_record_id = training_record.id
+        import_record.user_id = target_user_id
         import_record.import_status = "imported"
+        import_record.import_error = None
         import_record.imported_at = datetime.now(timezone.utc)
 
         return training_record
@@ -2050,8 +2094,23 @@ class ExternalTrainingSyncService:
         await self.db.flush()
 
         await self._stage_records(provider, sync_log, records)
-        await self.db.flush()
+        created, awaiting_member = await self.credit_matched_members(provider, sync_log)
+        sync_log.completed_at = datetime.now(timezone.utc)
+        return sync_log, created, awaiting_member
 
+    async def credit_matched_members(
+        self,
+        provider: ExternalTrainingProvider,
+        sync_log: ExternalTrainingSyncLog,
+    ) -> Tuple[int, int]:
+        """Turn this run's matched completions into training records.
+
+        Runs after staging, for API sync and upload alike, so a completion is
+        credited the moment its member is known however it arrived. Rows with
+        no member wait under Imports. Returns (records created, rows waiting
+        for a member).
+        """
+        await self.db.flush()
         staged = (
             (
                 await self.db.execute(
@@ -2081,12 +2140,10 @@ class ExternalTrainingSyncService:
             training_record = await self.import_single_record(import_record)
             if training_record is not None:
                 created.append(training_record)
-        await self._feed_imported_records_to_pipelines(created)
+        await self.feed_imported_records_to_pipelines(created)
+        return len(created), awaiting_member
 
-        sync_log.completed_at = datetime.now(timezone.utc)
-        return sync_log, len(created), awaiting_member
-
-    async def _feed_imported_records_to_pipelines(self, records: list) -> None:
+    async def feed_imported_records_to_pipelines(self, records: list) -> None:
         """Advance category-linked pipeline requirements for each imported record.
         A failure on one record is logged and never blocks the rest."""
         if not records:

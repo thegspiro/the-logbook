@@ -20,6 +20,8 @@ from fastapi import HTTPException, UploadFile
 from sqlalchemy import select
 
 from app.api.v1.endpoints.external_training import (
+    bulk_import_records,
+    import_single_record,
     list_course_mappings,
     update_course_mapping,
     upload_report,
@@ -28,16 +30,22 @@ from app.models.training import (
     DueDateType,
     ExternalCourseMapping,
     ExternalProviderType,
+    ExternalTrainingImport,
     ExternalTrainingProvider,
     RequirementFrequency,
     RequirementType,
+    TrainingCategory,
     TrainingCourse,
     TrainingRecord,
     TrainingRequirement,
     TrainingType,
 )
 from app.models.user import Organization, Position, User, UserStatus
-from app.schemas.training import ExternalCourseMappingUpdate
+from app.schemas.training import (
+    BulkImportRequest,
+    ExternalCourseMappingUpdate,
+    ImportRecordRequest,
+)
 from app.services.email_service import EmailService
 from app.services.external_course_mapping import (
     SuggestionCandidates,
@@ -490,3 +498,154 @@ async def _status(db_session, ctx, requirement, transcript):
     await db_session.refresh(record)
     status, _, _ = evaluate_member_requirement(requirement, [record], date(2026, 10, 7))
     return status
+
+
+async def _category(db_session, ctx, name, active=True):
+    category = TrainingCategory(
+        id=str(uuid.uuid4()), organization_id=ctx.org.id, name=name, active=active
+    )
+    db_session.add(category)
+    await db_session.flush()
+    return category
+
+
+async def _staged(db_session, ctx, transcript):
+    return (
+        await db_session.execute(
+            select(ExternalTrainingImport).where(
+                ExternalTrainingImport.provider_id == ctx.provider.id,
+                ExternalTrainingImport.external_record_id == transcript,
+            )
+        )
+    ).scalar_one()
+
+
+@pytest.mark.integration
+class TestCategoryFollowsTheCourse:
+    async def test_import_is_filed_under_the_mapped_courses_category(self, db_session):
+        ctx = await _setup(db_session)
+        ems = await _category(db_session, ctx, "EMS Continuing Education")
+        ctx.hipaa.category_ids = [ems.id]
+        await _upload_report(db_session, ctx, _row("x@y.test", *HIPAA_2026, "T-0"))
+        await _map(
+            db_session, ctx, await _mapping(db_session, ctx, "3088740"), ctx.hipaa.id
+        )
+
+        await _upload_report(db_session, ctx, _row("pat@dept.test", *HIPAA_2026, "T-1"))
+
+        assert (await _record(db_session, ctx, "T-1")).category_id == ems.id
+
+    async def test_a_retired_category_is_skipped(self, db_session):
+        ctx = await _setup(db_session)
+        old = await _category(db_session, ctx, "Old EMS", active=False)
+        ems = await _category(db_session, ctx, "EMS")
+        ctx.hipaa.category_ids = [old.id, ems.id]
+        await _upload_report(db_session, ctx, _row("x@y.test", *HIPAA_2026, "T-0"))
+        await _map(
+            db_session, ctx, await _mapping(db_session, ctx, "3088740"), ctx.hipaa.id
+        )
+
+        await _upload_report(db_session, ctx, _row("pat@dept.test", *HIPAA_2026, "T-1"))
+
+        assert (await _record(db_session, ctx, "T-1")).category_id == ems.id
+
+    async def test_mapping_files_earlier_records_under_the_course_category(
+        self, db_session
+    ):
+        ctx = await _setup(db_session)
+        catch_all = await _category(db_session, ctx, "Imported")
+        ems = await _category(db_session, ctx, "EMS")
+        chosen = await _category(db_session, ctx, "Chosen by hand")
+        ctx.provider.default_category_id = catch_all.id
+        ctx.hipaa.category_ids = [ems.id]
+        await db_session.flush()
+        await _upload_report(
+            db_session,
+            ctx,
+            _row("pat@dept.test", *HIPAA_2027, "T-1"),
+            _row("pat@dept.test", *HIPAA_2027, "T-2", completed="9/29/2026"),
+        )
+        by_hand = await _record(db_session, ctx, "T-2")
+        by_hand.category_id = chosen.id
+        await db_session.flush()
+
+        await _map(
+            db_session, ctx, await _mapping(db_session, ctx, "4123987"), ctx.hipaa.id
+        )
+
+        default_filed = await _record(db_session, ctx, "T-1")
+        await db_session.refresh(default_filed)
+        await db_session.refresh(by_hand)
+        assert default_filed.category_id == ems.id
+        assert by_hand.category_id == chosen.id
+
+
+@pytest.mark.integration
+class TestImportButtonsShareTheImport:
+    async def test_import_honours_the_officers_category(self, db_session):
+        ctx = await _setup(db_session)
+        chosen = await _category(db_session, ctx, "Chosen")
+        await _upload_report(db_session, ctx, _row("x@y.test", *SEPSIS, "T-1"))
+        staged = await _staged(db_session, ctx, "T-1")
+
+        await import_single_record(
+            uuid.UUID(ctx.provider.id),
+            uuid.UUID(staged.id),
+            ImportRecordRequest(
+                external_import_id=uuid.UUID(staged.id),
+                user_id=uuid.UUID(ctx.member.id),
+                category_id=uuid.UUID(chosen.id),
+            ),
+            db_session,
+            ctx.officer,
+        )
+
+        record = await _record(db_session, ctx, "T-1")
+        assert record.category_id == chosen.id
+        assert record.user_id == ctx.member.id
+        assert record.created_by == ctx.officer.id
+        assert staged.user_id == ctx.member.id
+
+    async def test_import_refuses_another_orgs_category(self, db_session):
+        ctx = await _setup(db_session)
+        outsider = await _setup(db_session)
+        foreign = await _category(db_session, outsider, "Theirs")
+        await _upload_report(db_session, ctx, _row("x@y.test", *SEPSIS, "T-1"))
+        staged = await _staged(db_session, ctx, "T-1")
+
+        with pytest.raises(HTTPException) as exc:
+            await import_single_record(
+                uuid.UUID(ctx.provider.id),
+                uuid.UUID(staged.id),
+                ImportRecordRequest(
+                    external_import_id=uuid.UUID(staged.id),
+                    user_id=uuid.UUID(ctx.member.id),
+                    category_id=uuid.UUID(foreign.id),
+                ),
+                db_session,
+                ctx.officer,
+            )
+        assert exc.value.status_code == 400
+
+    async def test_bulk_import_uses_its_default_category(self, db_session):
+        ctx = await _setup(db_session)
+        batch = await _category(db_session, ctx, "Batch default")
+        await _upload_report(db_session, ctx, _row("x@y.test", *SEPSIS, "T-1"))
+        staged = await _staged(db_session, ctx, "T-1")
+        staged.user_id = ctx.member.id
+        await db_session.flush()
+
+        response = await bulk_import_records(
+            uuid.UUID(ctx.provider.id),
+            BulkImportRequest(
+                external_import_ids=[uuid.UUID(staged.id)],
+                default_category_id=uuid.UUID(batch.id),
+            ),
+            db_session,
+            ctx.officer,
+        )
+
+        assert response.imported == 1
+        record = await _record(db_session, ctx, "T-1")
+        assert record.category_id == batch.id
+        assert record.created_by == ctx.officer.id

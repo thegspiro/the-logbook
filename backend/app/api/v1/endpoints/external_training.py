@@ -38,8 +38,6 @@ from app.models.training import (
     SyncStatus,
     TrainingCategory,
     TrainingCourse,
-    TrainingRecord,
-    TrainingStatus,
 )
 from app.models.user import User
 from app.schemas.training import (
@@ -67,12 +65,8 @@ from app.services.external_course_mapping import (
     apply_course_mapping,
     completion_counts,
     load_suggestion_candidates,
-    mapped_course_id,
 )
-from app.services.external_training_service import (
-    ExternalTrainingSyncService,
-    credited_hours,
-)
+from app.services.external_training_service import ExternalTrainingSyncService
 from app.utils.email_providers import REDACTED_SECRET
 from app.utils.member_names import format_legal_name
 from app.utils.model_updates import apply_updates
@@ -936,7 +930,8 @@ async def upload_report(
     API sync has already brought in, or that is already a training record, is
     never added twice. Rows whose member is matched become training records
     immediately; the rest wait under Imports. Works without an API key or
-    secret, and whether or not the connection test passes.
+    secret, and whether or not the connection test passes; not for a provider
+    that was deleted (deactivated).
 
     **Authentication required**
     **Requires permission: training.manage**
@@ -945,11 +940,15 @@ async def upload_report(
         select(ExternalTrainingProvider)
         .where(ExternalTrainingProvider.id == str(provider_id))
         .where(ExternalTrainingProvider.organization_id == current_user.organization_id)
+        # A deleted provider is only deactivated; like sync, upload treats it
+        # as gone.
+        .where(ExternalTrainingProvider.active.is_(True))
     )
     provider = result.scalar_one_or_none()
     if not provider:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Provider not found or inactive",
         )
     if provider.provider_type != ExternalProviderType.TARGET_SOLUTIONS:
         raise HTTPException(
@@ -1482,69 +1481,28 @@ async def import_single_record(
             detail="Target user not found",
         )
 
-    try:
-        # Create internal training record
-        training_record = TrainingRecord(
-            organization_id=current_user.organization_id,
-            user_id=str(import_request.user_id),
-            course_name=ext_import.course_title,
-            course_code=ext_import.course_code,
-            training_type=ExternalTrainingSyncService._map_training_type(
-                ext_import.raw_data
-            ),
-            completion_date=(
-                ext_import.completion_date.date()
-                if ext_import.completion_date
-                else None
-            ),
-            hours_completed=credited_hours(ext_import),
-            credit_hours=ext_import.credit_hours,
-            # Lets a later sync or upload recognise this completion as done.
-            external_provider_id=ext_import.provider_id,
-            external_record_id=ext_import.external_record_id,
-            course_id=await mapped_course_id(
-                db,
-                ext_import.provider_id,
-                ext_import.organization_id,
-                ext_import.external_course_id,
-            ),
-            status=TrainingStatus.COMPLETED,
-            score=ext_import.score,
-            passed=ext_import.passed,
-            notes=f"Imported from external provider. External ID: {ext_import.external_record_id}",
-            created_by=current_user.id,
+    category_id = (
+        str(import_request.category_id) if import_request.category_id else None
+    )
+    if category_id and not await is_in_org(
+        db, TrainingCategory, category_id, current_user.organization_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Category not found"
         )
 
-        db.add(training_record)
-        await db.flush()
-
-        # Update import record
-        ext_import.training_record_id = training_record.id
-        ext_import.user_id = str(import_request.user_id)
-        ext_import.import_status = "imported"
-        ext_import.imported_at = datetime.now(timezone.utc)
-        ext_import.import_error = None
-
+    service = ExternalTrainingSyncService(db)
+    try:
+        training_record = await service.import_single_record(
+            ext_import,
+            user_id=str(import_request.user_id),
+            category_id=category_id,
+            created_by=str(current_user.id),
+        )
+        if training_record is not None:
+            await service.feed_imported_records_to_pipelines([training_record])
         await db.commit()
         await db.refresh(ext_import)
-
-        await log_audit_event(
-            db=db,
-            event_type="external_training_verified",
-            event_category="training",
-            severity="info",
-            event_data={
-                "import_id": str(import_id),
-                "provider_id": str(provider_id),
-                "training_record_id": str(training_record.id),
-                "course_title": ext_import.course_title,
-            },
-            user_id=str(current_user.id),
-            username=current_user.username,
-        )
-
-        return ext_import
-
     except Exception as e:
         logger.exception(f"Failed to import record for provider {provider_id}")
         await db.rollback()
@@ -1552,11 +1510,31 @@ async def import_single_record(
         ext_import.import_error = str(e)
         await db.commit()
         await db.refresh(ext_import)
-
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to import record. Check the provider configuration and try again.",
         )
+    finally:
+        await service.close()
+
+    await log_audit_event(
+        db=db,
+        event_type="external_training_verified",
+        event_category="training",
+        severity="info",
+        event_data={
+            "import_id": str(import_id),
+            "provider_id": str(provider_id),
+            "training_record_id": str(ext_import.training_record_id),
+            "course_title": ext_import.course_title,
+            # A completion already on file is linked, not created again.
+            "linked_existing_record": training_record is None,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return ext_import
 
 
 @router.post("/providers/{provider_id}/imports/bulk", response_model=BulkImportResponse)
@@ -1577,6 +1555,20 @@ async def bulk_import_records(
     failed = 0
     errors = []
 
+    default_category_id = (
+        str(bulk_request.default_category_id)
+        if bulk_request.default_category_id
+        else None
+    )
+    if default_category_id and not await is_in_org(
+        db, TrainingCategory, default_category_id, current_user.organization_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Category not found"
+        )
+
+    service = ExternalTrainingSyncService(db)
+    created_records: list = []
     for import_id in bulk_request.external_import_ids:
         result = await db.execute(
             select(ExternalTrainingImport)
@@ -1627,46 +1619,15 @@ async def bulk_import_records(
             continue
 
         try:
-            # Create training record
-            training_record = TrainingRecord(
-                organization_id=current_user.organization_id,
-                user_id=user_id,
-                course_name=ext_import.course_title,
-                course_code=ext_import.course_code,
-                training_type=ExternalTrainingSyncService._map_training_type(
-                    ext_import.raw_data
-                ),
-                completion_date=(
-                    ext_import.completion_date.date()
-                    if ext_import.completion_date
-                    else None
-                ),
-                hours_completed=credited_hours(ext_import),
-                credit_hours=ext_import.credit_hours,
-                external_provider_id=ext_import.provider_id,
-                external_record_id=ext_import.external_record_id,
-                course_id=await mapped_course_id(
-                    db,
-                    ext_import.provider_id,
-                    ext_import.organization_id,
-                    ext_import.external_course_id,
-                ),
-                status=TrainingStatus.COMPLETED,
-                score=ext_import.score,
-                passed=ext_import.passed,
-                notes=f"Imported from external provider. External ID: {ext_import.external_record_id}",
-                created_by=current_user.id,
-            )
-
-            db.add(training_record)
-            await db.flush()
-
-            ext_import.training_record_id = training_record.id
-            ext_import.user_id = user_id
-            ext_import.import_status = "imported"
-            ext_import.imported_at = datetime.now(timezone.utc)
-            ext_import.import_error = None
-
+            async with db.begin_nested():
+                training_record = await service.import_single_record(
+                    ext_import,
+                    user_id=str(user_id),
+                    default_category_id=default_category_id,
+                    created_by=str(current_user.id),
+                )
+            if training_record is not None:
+                created_records.append(training_record)
             imported += 1
 
         except Exception as e:
@@ -1676,6 +1637,10 @@ async def bulk_import_records(
             ext_import.import_status = "failed"
             ext_import.import_error = str(e)
 
+    try:
+        await service.feed_imported_records_to_pipelines(created_records)
+    finally:
+        await service.close()
     await db.commit()
 
     return BulkImportResponse(

@@ -15,6 +15,7 @@ import io
 import uuid
 from datetime import date
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
@@ -262,7 +263,7 @@ class TestNoDuplicates:
         provider.api_secret = "demo-secret"
         await db_session.flush()
 
-        # The API stages the completion and leaves it under Imports.
+        # The API credits the matched member straight away.
         service = ExternalTrainingSyncService(db_session)
         await service.http_client.aclose()
         service.http_client = httpx.AsyncClient(
@@ -278,7 +279,9 @@ class TestNoDuplicates:
             )
         finally:
             await service.close()
-        assert (await _staged(db_session, provider, "T-1")).import_status == ("pending")
+        assert (await _staged(db_session, provider, "T-1")).import_status == (
+            "imported"
+        )
 
         response = await upload_report(
             uuid.UUID(provider.id),
@@ -289,12 +292,71 @@ class TestNoDuplicates:
 
         assert response.new_rows == 1
         assert response.updated_rows == 1
-        assert response.training_records_created == 2
+        # T-1 is already a training record; only T-2 is new.
+        assert response.training_records_created == 1
         assert (
             await _count(db_session, ExternalTrainingImport, provider_id=provider.id)
             == 2
         )
         assert len(await _records_for(db_session, provider)) == 2
+
+    async def test_api_sync_credits_matched_members_and_holds_the_rest(
+        self, db_session
+    ):
+        _, member, provider = await _setup(db_session)
+        provider.api_key = "demo-key"
+        provider.api_secret = "demo-secret"
+        await db_session.flush()
+        service = ExternalTrainingSyncService(db_session)
+        await service.http_client.aclose()
+        service.http_client = httpx.AsyncClient(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(
+                    200, content=_report(MATCHED, UNMATCHED).encode("utf-8")
+                )
+            )
+        )
+        try:
+            log = await service.sync_training_records(
+                provider, from_date=date(2026, 9, 1), to_date=date(2026, 10, 1)
+            )
+        finally:
+            await service.close()
+
+        assert log.records_imported == 2
+        (record,) = await _records_for(db_session, provider)
+        assert record.user_id == member.id
+        assert record.external_record_id == "T-1"
+        assert (await _staged(db_session, provider, "T-3")).import_status == ("pending")
+
+    async def test_other_providers_keep_the_review_step(self, db_session):
+        _, member, provider = await _setup(
+            db_session, provider_type=ExternalProviderType.VECTOR_SOLUTIONS
+        )
+        service = ExternalTrainingSyncService(db_session)
+        record = service._normalize_target_solutions_record(
+            next(
+                iter(
+                    ExternalTrainingSyncService._parse_target_solutions_report(
+                        _report(MATCHED), {}
+                    )
+                )
+            )
+        )
+        try:
+            with patch.object(
+                service, "_fetch_external_records", AsyncMock(return_value=[record])
+            ):
+                await service.sync_training_records(
+                    provider, from_date=date(2026, 9, 1), to_date=date(2026, 10, 1)
+                )
+        finally:
+            await service.close()
+
+        staged = await _staged(db_session, provider, "T-1")
+        assert staged.user_id == member.id
+        assert staged.import_status == "pending"
+        assert await _records_for(db_session, provider) == []
 
     async def test_upload_then_api_sync(self, db_session):
         _, member, provider = await _setup(db_session)
@@ -385,6 +447,18 @@ class TestUploadIsRefused:
                 uuid.UUID(provider.id), _upload(_report(MATCHED)), db_session, outsider
             )
         assert exc.value.status_code == 404
+
+    async def test_a_deleted_provider_is_not_found(self, db_session):
+        _, member, provider = await _setup(db_session)
+        provider.active = False
+        await db_session.flush()
+
+        with pytest.raises(HTTPException) as exc:
+            await upload_report(
+                uuid.UUID(provider.id), _upload(_report(MATCHED)), db_session, member
+            )
+        assert exc.value.status_code == 404
+        assert "inactive" in exc.value.detail
 
     async def test_other_provider_types(self, db_session):
         _, member, provider = await _setup(

@@ -33,6 +33,7 @@ from app.models.training import (
     ExternalCourseMapping,
     ExternalTrainingImport,
     ExternalTrainingProvider,
+    TrainingCategory,
     TrainingCourse,
     TrainingRecord,
 )
@@ -199,6 +200,40 @@ async def mapped_course_id(
     return str(course_id) if course_id else None
 
 
+async def course_category_id(
+    db: AsyncSession, course_id: str, organization_id: str
+) -> Optional[str]:
+    """The category an import of this library course is filed under.
+
+    A course can count toward several categories; a training record holds
+    one, so it takes the first of the course's categories that is still an
+    active category in the organization.
+    """
+    category_ids = (
+        await db.execute(
+            select(TrainingCourse.category_ids)
+            .where(TrainingCourse.id == course_id)
+            .where(TrainingCourse.organization_id == organization_id)
+        )
+    ).scalar_one_or_none()
+    wanted = [str(c) for c in (category_ids or []) if c]
+    if not wanted:
+        return None
+    present = set(
+        (
+            await db.execute(
+                select(TrainingCategory.id)
+                .where(TrainingCategory.id.in_(wanted))
+                .where(TrainingCategory.organization_id == organization_id)
+                .where(TrainingCategory.active.is_(True))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return next((c for c in wanted if c in present), None)
+
+
 async def apply_course_mapping(
     db: AsyncSession,
     mapping: ExternalCourseMapping,
@@ -239,6 +274,36 @@ async def apply_course_mapping(
         .values(course_id=internal_course_id)
         .execution_options(synchronize_session=False)
     )
+
+    # The course's category follows it onto records that had none, or only
+    # the provider's catch-all default. A category an officer or a category
+    # mapping chose is kept. Unmapping leaves categories as they are.
+    if internal_course_id:
+        category_id = await course_category_id(
+            db, internal_course_id, mapping.organization_id
+        )
+        if category_id:
+            default_category_id = (
+                await db.execute(
+                    select(ExternalTrainingProvider.default_category_id).where(
+                        ExternalTrainingProvider.id == mapping.provider_id
+                    )
+                )
+            ).scalar_one_or_none()
+            replaceable = TrainingRecord.category_id.is_(None)
+            if default_category_id:
+                replaceable = replaceable | (
+                    TrainingRecord.category_id == default_category_id
+                )
+            await db.execute(
+                update(TrainingRecord)
+                .where(TrainingRecord.organization_id == mapping.organization_id)
+                .where(TrainingRecord.id.in_(imported_from_course))
+                .where(TrainingRecord.course_id == internal_course_id)
+                .where(replaceable)
+                .values(category_id=category_id)
+                .execution_options(synchronize_session=False)
+            )
     return int(result.rowcount or 0)
 
 
