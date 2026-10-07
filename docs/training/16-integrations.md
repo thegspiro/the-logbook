@@ -768,6 +768,17 @@ Details:
 
 #### Course mappings _(2026-10-07)_
 
+> **Warning:** importing completions does not make a requirement check the
+> right course. A requirement of type **Hours** filtered only by training type
+> is met by **any** imported course of that type. One department's first
+> Target Solutions import showed a member's annual HIPAA refresher as complete
+> on the strength of two CAPCE medical courses — Hematology and Sepsis — with no
+> HIPAA training at all. Before your first import, make every topic-specific
+> requirement (HIPAA, bloodborne pathogens, policy acknowledgments…) a
+> **Courses** requirement and map the provider's courses to it as described
+> below. See
+> [Never Use an Hours Requirement for a Required Topic](./02-training.md#never-use-an-hours-requirement-for-a-required-topic).
+
 Target Solutions gives each course a **Course ID**, and issues a new one when it
 publishes a new version — a new HIPAA video, a re-accredited CAPCE course, a
 revised policy. Requirements link to courses in **your library**, not to

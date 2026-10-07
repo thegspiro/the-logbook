@@ -836,6 +836,62 @@ compliance engine needs.
 > saving a requirement that would apply to nobody (it would silently disappear
 > from every member's compliance view).
 
+### Never Use an Hours Requirement for a Required Topic
+
+> **Warning — read this before creating any annual refresher.** An **Hours**
+> requirement counts **every** completed hour that matches its filters. If the
+> only filter is a training type such as _Continuing Education_ or _Refresher_,
+> then **any** course of that type satisfies it, whatever the course was
+> about. The member shows as compliant. The requirement is not met.
+
+**This has happened.** A department set up its annual _HIPAA Privacy &
+Security Awareness_ refresher as "1 hour of Continuing Education" — exactly
+what the built-in template used to create. It then imported its members'
+Target Solutions completions. A member who had taken two CAPCE medical courses,
+_Hematology_ and _Sepsis_, and **no HIPAA training at all**, showed the HIPAA
+refresher as complete: **2 of 1 hours**. Nothing on the screen looked wrong.
+Every member with an hour of medical CE would have read the same, and the
+department would have believed its HIPAA training obligation under 45 CFR
+164.530(b) was met when it was not. The mistake surfaces only when someone
+opens a member's record and asks _which_ courses met the requirement — or when
+an auditor does.
+
+**The rule:** when a law, a standard or your own policy names a **subject** —
+HIPAA, bloodborne pathogens, hazmat, harassment prevention, a code of conduct,
+whistleblower protections — the requirement must name the **course**, not an
+amount of time.
+
+| The rule says…                                         | Use                                                                                                                               |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| "Complete HIPAA training each year"                    | **Courses**, linked to your HIPAA course in the library                                                                           |
+| "Read and acknowledge the code of conduct annually"    | **Courses**, linked to that policy's library course                                                                               |
+| "36 hours of continuing education a year, any subject" | **Hours**, filtered by training type — here "any course counts" is the actual rule                                                |
+| "8 hours of hazmat refresher training"                 | **Courses** linked to a course of that length, or **Hours** scoped to a Hazmat **category** that holds nothing but hazmat courses |
+
+An Hours requirement is only safe for a topic when it is narrowed to a
+**training category** (or course) that contains nothing but that topic. A
+category such as _EMS_ or _Medical_ is not narrow enough.
+
+**Check your department now:**
+
+1. Open **Training Admin > Requirements** and look for any requirement whose
+   name is a subject (HIPAA, Bloodborne Pathogens, Hazmat, Harassment, Code of
+   Conduct…) but whose type badge reads **Hours**.
+2. A requirement created from the old HIPAA, Bloodborne Pathogens or Hazmat
+   templates shows a **yellow warning** on its card. Treat that warning as a
+   compliance finding, not a suggestion.
+3. Edit each one: change the type to **Courses** and pick the library course.
+   If the course isn't in the library yet, add it first.
+4. If the course comes from a training provider, map the provider's course to
+   that library course on the integration's **Courses** tab (see
+   [Training Integrations](./16-integrations.md#course-mappings-2026-10-07)), or
+   completions of it will not count.
+5. Open the compliance view for a few members and confirm the requirement is
+   now met by the right course — and unmet for anyone who never took it.
+
+Expect some members to drop out of compliance when you make this change. That
+is the point: they were never compliant, and the screen was hiding it.
+
 ### Picking Courses from the Library _(2026-08-07)_
 
 **Course** and **Certification** requirements now pick from the department's
@@ -935,13 +991,15 @@ department-defined rules.
 **Single-topic templates are Courses requirements** _(2026-10-07)_. HIPAA,
 Bloodborne Pathogens and Hazmat each mandate training on one subject, so their
 templates ask you to pick that course from the library and the form won't save
-until you do. They used to create hours requirements counting any hour of a
-training type, which any course of that type satisfied: two medical CE courses
-imported from Target Solutions met a member's HIPAA refresher. Requirements
-already created from the old templates are not changed — the card shows a
-warning until you edit one into a Courses requirement linked to the right
-course (or scope it to a category). When the provider releases a new version of
-that course, map it on the integration's **Courses** tab so it keeps counting.
+until you do. **They used to create Hours requirements that any course of the
+same training type satisfied** — see
+[Never Use an Hours Requirement for a Required Topic](#never-use-an-hours-requirement-for-a-required-topic)
+for what that did to one department's HIPAA compliance. Requirements already
+created from the old templates are **not** changed automatically: the card
+shows a warning until you edit it into a Courses requirement linked to the
+right course. Fix them; do not dismiss the warning. When the provider releases
+a new version of that course, map it on the integration's **Courses** tab so it
+keeps counting.
 
 ### Frequency and Due Dates
 

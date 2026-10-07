@@ -1596,6 +1596,13 @@ hours count toward that requirement's Airway section.
    based on national standards carry NFPA/NREMT/OSHA/HIPAA/FEMA source
    attribution automatically.
 
+> **Warning:** never model a topic-specific mandate (HIPAA, bloodborne
+> pathogens, a policy acknowledgment) as an **Hours** requirement filtered only
+> by training type — any course of that type will satisfy it. A department's
+> HIPAA refresher, built that way, was shown as met by two medical CE courses
+> and no HIPAA training. Link the requirement to the course instead. See
+> [Never Use an Hours Requirement for a Required Topic](./training/02-training.md#never-use-an-hours-requirement-for-a-required-topic).
+
 ### 2. Create Training Program
 
 #### Option A: Create from Scratch
