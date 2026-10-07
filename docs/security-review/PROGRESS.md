@@ -16,6 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2986](https://github.com/thegspiro/the-logbook/pull/2986)**: branch
+`claude/security-review-forms`, Feature 26 (Forms), pass 6 (watchdog pickup
+— PR #2984, Feature 25, Messaging & notifications, had already merged over
+an hour earlier with nothing started since, confirmed via
+`list_pull_requests` both before this iteration began and again before
+this PR was opened). Real delta since pass 5 (`e2ff2d544`) is three hunks
+from the unrelated preferred-name rollout (two escaped LIKE matchers plus
+`preferred_name`/`display_name` added to `search_members`'s response; an
+admin-only display fallback in `list_submissions` switched to
+`display_name` — checked against CLAUDE.md's signed-forms/consents
+carve-out and found correctly scoped to an "everyday screen") plus three
+CSS-only commits to `FormBuilder.tsx`. 0 fixes needed by this pass itself,
+0 new findings. Every standing fix and the one open flagged item (FORM-12)
+re-verified unchanged; BXC-1 still closed. Route count corrected from a
+stale "22" (carried since pass 1) to the actual 21. Completion gate green
+(flake8/black/isort clean; migrations — 538 revisions, single head; 656
+scoped backend tests; frontend typecheck/lint clean). See the Log entry
+below for detail.
+
+<details>
+<summary>Superseded — prior Open PR note (bridge note recording PR #2984's merge before Feature 26 started; and, nested below, the pre-merge note for PR #2984 itself), preserved for history</summary>
+
 **None.** PR #2984 (Feature 25, Messaging & notifications, pass 6) merged
 clean (confirmed via `list_pull_requests`; merged_at 2026-10-07T16:44:54Z).
 0 fixes needed by that pass itself; the Log entry below already records it
@@ -18164,6 +18186,8 @@ Next: 00 cross-cutting baseline (second full pass), once this PR merges.
 Merged (squash, `5a1f859c`). Codex round confirmed and fixed (see the
 Codex-round log entry above); the 14 original findings plus the 6 Codex
 findings are all resolved with no open items. Rotation row 33 -> done.
+
+</details>
 
 </details>
 
