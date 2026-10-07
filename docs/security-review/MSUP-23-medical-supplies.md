@@ -3,7 +3,102 @@
 **Prefix:** `MSUP` · **Iteration:** 23 · **Reviewed:** 2026-08-26 (pass 1, PR
 #1905), 2026-08-30 (pass 2, PR #2075; audit-trail follow-up, PR #2076),
 2026-09-06 (pass 3 through pass 10, all on PR #2301), 2026-09-11 (pass 11, PR
-#2489), 2026-10-03 (pass 12, this PR)
+#2489), 2026-10-03 (pass 12, PR #2877), 2026-10-07 (pass 13, this PR)
+
+## Pass 13 (2026-10-07) — 0 fixed by this pass, 0 new findings (watchdog pickup)
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session had
+merged Feature 22's pass 7 (PR #2980, Grants & fundraising) at 11:30 UTC and
+started nothing for Feature 23 in the 73 minutes since. Confirmed via
+`list_pull_requests` (state=open, empty) and `search_pull_requests`
+(`head:claude/security-review-`) that no security-review PR was open before
+this pass began.
+
+**Real delta since pass 12 (`a9db9aae`, PR #2877, merged 2026-10-03):** two
+commits touch `medical_supplies.py`/`inventory_service.py` by path, but only
+one is real content:
+
+- **`57e81e4d` (merged via PR #2918, "KNOWN_LIMITATIONS cleanup, open-entry
+  fixes, and owner decisions", 2026-10-05) fixes MSUP-25 outright** — the
+  owner-decision item pass 9/10 left flagged (every medical-domain write's
+  preflight-then-mutate TOCTOU, plus the maintenance-completion RETIRED
+  bypass). `InventoryService._items_in_domain_locked` now re-validates
+  domain membership under each mutation's own lock (`update_item`, `add_lot`,
+  `add_lots_bulk` — raising `ItemOutsideDomainError`, mapped to the route's
+  404 — `update_lot`, `delete_lot`), every medical route passes
+  `required_item_types=MEDICAL_ITEM_TYPES`, and `create_maintenance_record`/
+  `update_maintenance_record` now refuse a `condition_after` of RETIRED with
+  the same message `update_item` gives. Already recorded in place in this
+  doc's own Pass 9 section (MSUP-25's "Fixed 2026-10-05" callout) by that
+  same PR — re-verified here directly against current code rather than
+  trusted from that callout: `_items_in_domain_locked` (`inventory_service.py:
+7894-7939`) locks item rows in id order and reads each category with
+  `category_in_domain(..., for_update=True)`; all five medical routes
+  (`update_medical_item`, `add_medical_item_lot`, `receive_medical_delivery`,
+  `update_medical_lot`, `delete_medical_lot`) pass `MEDICAL_ITEM_TYPES`
+  through to the service; `_retires_via_maintenance` blocks both maintenance
+  write paths. `MSUP-25` is now ✅ FIXED, not open — this pass closes it out
+  of the "confirmed still open" list below.
+- **`959610c0` is not a real content change** — it is a parentless (root)
+  commit introducing both files in full, an artifact of this repository's
+  git history having been reshaped at some point rather than a genuine
+  edit landing on 2026-10-05. Confirmed via `git log -1 --format=%P`
+  (no parents) and that its diff is a pure addition of the files' entire
+  current contents with no overlap against the real history above it;
+  disregarded.
+
+No commits touched the module's frontend files
+(`frontend/src/modules/medical-supplies/`,
+`frontend/src/services/medicalSuppliesService.ts`) or the cross-feature
+surfaces pass 12 checked (`scheduled_tasks.py`'s alert audiences,
+`app/mcp/tools/writes.py`'s `create_reorder_request` domain guard) since pass
+12 — confirmed by `git log a9db9aae..origin/main` on each path, empty.
+
+**Re-verified directly against current code, not re-cited from pass 12's
+prose:**
+
+- **Route count and auth coverage: still 15/15.** Every route enumerated
+  individually (not spot-checked) — all 15 carry
+  `Depends(require_permission(...))`, still domain-first
+  (`inventory.view_medical`/`inventory.manage_medical` OR'd against the
+  broad `inventory.view`/`inventory.manage`), matching the router's own
+  module docstring and every prior pass.
+- **MSUP-4** (`get_expiring_lots` has no row cap) — still open, unchanged;
+  confirmed at its current signature (`inventory_service.py:8400-8406`), no
+  `limit`/pagination parameter.
+- **MSUP-11** (`list_lots` has no row cap) — still open, unchanged; confirmed
+  at its current signature (`inventory_service.py:7952-7965`).
+- **MSUP-15** (the general inventory `ItemFormModal.tsx`'s Quantity field has
+  no lot-stocked awareness) — still open, unchanged; confirmed
+  `frontend/src/modules/inventory/components/ItemFormModal.tsx` still has no
+  `is_lot_stocked`/`isLotStocked` reference, unlike this module's own
+  `MedicalItemFormModal.tsx` (pass 11 already confirmed that file is
+  lot-stocked-aware).
+- Domain pinning (`category_in_domain`/`item_in_domain`/`items_in_domain`/
+  `lot_in_domain`) still org-scoped on both sides of their joins and fail
+  closed.
+
+**No new findings.**
+
+### Completion gate (pass 13)
+
+| Check                                                 | Result                                                       |
+| ----------------------------------------------------- | ------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                         | ✅ clean                                                     |
+| `black --check app/ tests/ alembic/`                  | ✅ clean — 2027 files unchanged                              |
+| `isort --check-only app/ tests/ alembic/`             | ✅ clean                                                     |
+| `python3 scripts/validate_migrations.py --strict`     | ✅ 538 revisions, single head `8c4f2a6e1d93`                 |
+| `pytest tests/ -q -k "inventory or medical_supplies"` | ✅ 1205 passed, 1 pre-existing skip (up from pass 12's 1194) |
+| `cd frontend && npm run typecheck`                    | ✅ 0 errors                                                  |
+| `cd frontend && npm run lint`                         | ✅ 0 errors, 0 warnings                                      |
+
+No source file was modified by this pass itself — documentation-only
+re-verification (this section, and clearing MSUP-25 from the "confirmed
+still open" list).
+
+MSUP-4, MSUP-11, and MSUP-15 remain the only open, flagged items. MSUP-25 is
+now fixed (landed 2026-10-05, re-verified this pass). MSUP-1 through MSUP-27
+all re-verified intact.
 
 ## Pass 12 (2026-10-03) — 0 fixed by this pass, 0 new findings
 
