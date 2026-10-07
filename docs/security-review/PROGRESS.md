@@ -16,12 +16,33 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2983](https://github.com/thegspiro/the-logbook/pull/2983)**: branch
+`claude/security-review-meetings-minutes`, Feature 24 (Meetings & minutes),
+pass 6 (no watchdog pickup needed — PR #2981, Feature 23, Medical supplies,
+had already merged with nothing started since, confirmed via `gh api`
+before this iteration began). Real delta since pass 5 (`c23c100b4`, PR
+#2881) touched seven backend files and four frontend files; the one
+security-relevant change (MCP tool permission gating added repo-wide,
+closing a gap pass 5 had recorded as an unfiled observation) is
+independently guard-tested by the pre-existing `test_mcp_member_gating.py`.
+0 fixes needed by this pass itself, 0 new findings. MM-9 and MM-17 remain
+the only open, flagged items. Route surface re-enumerated (42/42,
+unchanged) with every permission string checked individually. Completion
+gate green (flake8/black/isort at CI's pins; migrations — 538 revisions,
+single head; 330 scoped backend tests, up from 289; frontend
+typecheck/lint clean, 37 scoped frontend tests, up from 26). See the Log
+entry below for detail.
+
+<details>
+<summary>Superseded — prior Open PR note (bridge note recording PR #2981's merge before Feature 24 started; and, nested below, the pre-merge note for PR #2981 itself), preserved for history</summary>
+
 **None.** PR #2981 (Feature 23, Medical supplies, pass 13) merged clean via
 merge commit `df5f0b3c`. 0 fixes needed by that pass itself (its one real
 fix, MSUP-25, had already landed via an out-of-rotation PR before the pass
 began); the Log entry below already records it in full, so there is nothing
-further to record here. Rotation row 23 → ✅. Next: Feature 24 (Meetings &
-minutes).
+further to record here. Rotation row 23 → ✅.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 13, PR #2981, before it merged), preserved for history</summary>
