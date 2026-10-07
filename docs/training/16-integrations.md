@@ -732,6 +732,24 @@ Details:
   daily at 02:00". Other providers show only "Every _N_h" and their form has a
   single **Sync Interval**, scheduled from the previous sync as before.
 
+#### When the connection test or a sync fails _(2026-10-07)_
+
+The message says what Target Solutions actually sent back. The same text
+appears after **Test Connection** and on a failed sync in the sync history.
+
+| Message begins                                         | What to check                                                                                                                          |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Target Solutions rejected the API key or secret        | Re-enter the key and secret from Target Solutions' API settings.                                                                       |
+| Target Solutions redirected the report request to …    | The message names where it pointed. A sign-in page means the key or secret was not accepted; anything else, check the base URL.        |
+| Target Solutions has no report API at this address     | Set **API Base URL** to `https://app.targetsolutions.com/tsapp/api/`.                                                                  |
+| Target Solutions returned a web page titled "…"        | The title is Target Solutions' own. Check the key and secret, and that the base URL is the API address rather than the website.        |
+| Target Solutions returned a file without the … columns | Target Solutions answered, but not with the completions report. The quoted first line is its own wording, often naming the problem.    |
+| Target Solutions had a server error                    | A problem on their side. Try again later; the next scheduled sync retries automatically.                                               |
+| did not respond within … seconds / Could not connect   | Target Solutions or the network is unreachable from the Logbook server. Check the base URL and that the server can reach the internet. |
+
+The key and secret are never shown in these messages, even when Target
+Solutions' own page or file repeats them.
+
 ---
 
 ## Monitoring Integration Health

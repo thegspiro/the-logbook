@@ -6,9 +6,12 @@ like Vector Solutions, Target Solutions, Lexipol, etc.
 """
 
 import csv
+import html
 import io
+import re
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -905,6 +908,8 @@ class ExternalTrainingSyncService:
     TS_REPORT_ACTION = "reports.buildReport"
     TS_REPORT_TYPE = "completionsall"
     TS_REQUIRED_COLUMNS = ("Employee ID", "Email")
+    TS_API_BASE_URL = "https://app.targetsolutions.com/tsapp/api/"
+    TS_QUOTE_MAX = 150
 
     def _target_solutions_params(
         self,
@@ -938,14 +943,54 @@ class ExternalTrainingSyncService:
         to officers.
         """
         url = join_endpoint(provider.api_base_url, "/")
-        response = await self.http_client.get(
-            url, params=params, headers={"Accept": "text/csv"}
-        )
-        if response.status_code in (401, 403):
-            raise ValueError("Target Solutions rejected the API key or secret")
-        if response.status_code != 200:
+        host = urlsplit(url).hostname or "the API base URL"
+        try:
+            response = await self.http_client.get(
+                url, params=params, headers={"Accept": "text/csv"}
+            )
+        except httpx.TimeoutException:
             raise ValueError(
-                f"Target Solutions report request failed (HTTP {response.status_code})"
+                f"Target Solutions ({host}) did not respond within "
+                f"{self.http_client.timeout.read:.0f} seconds. Try again later."
+            )
+        except httpx.ConnectError:
+            raise ValueError(
+                f"Could not connect to {host}. Check the API base URL, and that "
+                "this server can reach the internet."
+            )
+
+        status_code = response.status_code
+        if status_code in (401, 403):
+            raise ValueError(
+                f"Target Solutions rejected the API key or secret (HTTP {status_code})."
+            )
+        if 300 <= status_code < 400:
+            # Redirects are not followed; say where it pointed, minus the
+            # query string and any user:password, either of which can carry
+            # credentials.
+            location = response.headers.get("location", "")
+            target = urlsplit(location)
+            destination = f"{target.hostname or ''}{target.path}"
+            where = f" to {destination}" if destination else ""
+            raise ValueError(
+                f"Target Solutions redirected the report request{where} "
+                f"(HTTP {status_code}) instead of returning a report. Check the "
+                f"API key and secret, and that the API base URL is "
+                f"{self.TS_API_BASE_URL}"
+            )
+        if status_code == 404:
+            raise ValueError(
+                f"Target Solutions has no report API at this address (HTTP 404). "
+                f"The API base URL should be {self.TS_API_BASE_URL}"
+            )
+        if status_code >= 500:
+            raise ValueError(
+                f"Target Solutions had a server error (HTTP {status_code}). "
+                "The problem is on their side; try again later."
+            )
+        if status_code != 200:
+            raise ValueError(
+                f"Target Solutions report request failed (HTTP {status_code})."
             )
 
         body = response.content.decode("utf-8-sig", errors="replace")
@@ -965,10 +1010,7 @@ class ExternalTrainingSyncService:
         if not columns:
             # An invalid key comes back as a 200 with an error page rather
             # than a CSV, so the header row is the only reliable signal.
-            raise ValueError(
-                "Target Solutions did not return a completions report. "
-                "Check the API base URL, key and secret."
-            )
+            raise ValueError(self._ts_not_a_report_message(body, params))
         return [
             {
                 k: (cells[i].strip() if i < len(cells) else "")
@@ -978,6 +1020,45 @@ class ExternalTrainingSyncService:
             for cells in rows
             if any(v.strip() for v in cells)
         ]
+
+    @classmethod
+    def _ts_not_a_report_message(cls, body: str, params: Dict[str, str]) -> str:
+        """Describe a 200 response that holds no completions report.
+
+        Quotes what the response itself says (a web page's title, or a file's
+        first line) so the officer sees Target Solutions' own words rather
+        than a guess. The key and secret are scrubbed from the quote, since
+        an error page may echo the request back.
+        """
+
+        def quote(text: str) -> str:
+            text = " ".join(html.unescape(text).split())
+            for name in ("key", "secret"):
+                value = params.get(name)
+                if value:
+                    text = text.replace(value, "[REDACTED]")
+            text = redact_url_secrets(text)
+            if len(text) > cls.TS_QUOTE_MAX:
+                text = text[: cls.TS_QUOTE_MAX].rstrip() + "…"
+            return text
+
+        if re.search(r"<\s*(!doctype|html|head|body)\b", body[:2000], re.I):
+            title = re.search(r"<title[^>]*>(.*?)</title>", body, re.I | re.S)
+            titled = quote(title.group(1)) if title else ""
+            named = f' titled "{titled}"' if titled else ""
+            return (
+                f"Target Solutions returned a web page{named} instead of a "
+                "completions report. It does this when the API key or secret is "
+                "not accepted, or when the API base URL points at the website "
+                f"rather than the API ({cls.TS_API_BASE_URL})."
+            )
+
+        first_line = next((line for line in body.splitlines() if line.strip()), "")
+        missing = ", ".join(cls.TS_REQUIRED_COLUMNS)
+        return (
+            "Target Solutions returned a file without the completions report's "
+            f'columns ({missing}). It begins: "{quote(first_line)}"'
+        )
 
     async def _test_target_solutions_connection(
         self, provider: ExternalTrainingProvider

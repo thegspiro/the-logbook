@@ -104,14 +104,17 @@ def _ts_provider(api_key=TS_KEY, api_secret=TS_SECRET):
 
 
 class _Recorder:
-    def __init__(self, status=200, body=""):
+    def __init__(self, status=200, body="", headers=None):
         self.status = status
         self.body = body
+        self.headers = headers or {}
         self.requests: list[httpx.Request] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
-        return httpx.Response(self.status, content=self.body.encode("utf-8"))
+        return httpx.Response(
+            self.status, content=self.body.encode("utf-8"), headers=self.headers
+        )
 
 
 async def _service_with(recorder: _Recorder, db=None) -> ExternalTrainingSyncService:
@@ -247,7 +250,9 @@ class TestTrainingRecordsRequest:
     async def test_title_block_without_a_header_row_is_rejected(self):
         service = await _service_with(_Recorder(body=LIVE_PREAMBLE))
         try:
-            with pytest.raises(ValueError, match="did not return a completions"):
+            with pytest.raises(
+                ValueError, match="without the completions report's columns"
+            ):
                 await service._fetch_external_records(
                     _ts_provider(), date(2026, 9, 1), date(2026, 10, 1)
                 )
@@ -297,6 +302,130 @@ class TestTrainingRecordsRequest:
         finally:
             await service.close()
         assert recorder.requests == []
+
+
+async def _report_error(recorder) -> str:
+    service = await _service_with(recorder)
+    try:
+        with pytest.raises(ValueError, match="^Target Solutions") as exc:
+            await service._fetch_external_records(
+                _ts_provider(), date(2026, 9, 1), date(2026, 10, 1)
+            )
+    finally:
+        await service.close()
+    message = str(exc.value)
+    assert TS_KEY not in message
+    assert TS_SECRET not in message
+    return message
+
+
+@pytest.mark.unit
+class TestTrainingRecordsErrorMessages:
+    """Each failure says what actually came back, not one catch-all."""
+
+    @pytest.mark.parametrize("status", [401, 403])
+    async def test_rejected_credentials(self, status):
+        message = await _report_error(_Recorder(status=status))
+        assert "rejected the API key or secret" in message
+        assert f"HTTP {status}" in message
+
+    async def test_redirect_names_where_it_pointed_without_the_query(self):
+        message = await _report_error(
+            _Recorder(
+                status=302,
+                headers={
+                    "location": "https://app.targetsolutions.com/tsapp/login"
+                    f"?key={TS_KEY}&secret={TS_SECRET}"
+                },
+            )
+        )
+        assert "redirected the report request" in message
+        assert "to app.targetsolutions.com/tsapp/login" in message
+        assert "HTTP 302" in message
+        assert "?key" not in message
+
+    async def test_not_found_points_at_the_documented_base_url(self):
+        message = await _report_error(_Recorder(status=404))
+        assert "HTTP 404" in message
+        assert "https://app.targetsolutions.com/tsapp/api/" in message
+
+    async def test_server_error_is_called_theirs(self):
+        message = await _report_error(_Recorder(status=503))
+        assert "server error (HTTP 503)" in message
+        assert "try again later" in message
+
+    async def test_web_page_is_named_by_its_title(self):
+        body = (
+            "<!DOCTYPE html><html><head><title>Sign In &amp; Continue"
+            "</title></head><body>Please sign in</body></html>"
+        )
+        message = await _report_error(_Recorder(body=body))
+        assert 'returned a web page titled "Sign In & Continue"' in message
+        assert "Please sign in" not in message
+
+    async def test_web_page_title_never_echoes_the_credentials(self):
+        body = f"<html><title>Invalid key {TS_KEY} / {TS_SECRET}</title></html>"
+        message = await _report_error(_Recorder(body=body))
+        assert "Invalid key [REDACTED] / [REDACTED]" in message
+
+    async def test_untitled_web_page(self):
+        message = await _report_error(_Recorder(body="<html>Invalid key</html>"))
+        assert message.startswith("Target Solutions returned a web page instead")
+
+    async def test_other_file_quotes_its_first_line(self):
+        body = f"\nError: report type not enabled for key={TS_KEY}\nmore\n"
+        message = await _report_error(_Recorder(body=body))
+        assert "columns (Employee ID, Email)" in message
+        assert '"Error: report type not enabled for key=' in message
+        assert "more" not in message
+
+    async def test_long_first_line_is_cut_short(self):
+        message = await _report_error(_Recorder(body="x" * 1000))
+        assert "x" * 150 + "…" in message
+        assert "x" * 151 not in message
+
+    async def test_timeout(self):
+        def boom(request):
+            raise httpx.ReadTimeout("timed out", request=request)
+
+        service = ExternalTrainingSyncService(None)
+        await service.http_client.aclose()
+        service.http_client = httpx.AsyncClient(
+            transport=httpx.MockTransport(boom), timeout=30.0
+        )
+        try:
+            with pytest.raises(ValueError, match="did not respond within 30 seconds"):
+                await service._fetch_external_records(
+                    _ts_provider(), date(2026, 9, 1), date(2026, 10, 1)
+                )
+        finally:
+            await service.close()
+
+    async def test_connection_failure_names_the_host(self):
+        def boom(request):
+            raise httpx.ConnectError("name resolution failed", request=request)
+
+        service = ExternalTrainingSyncService(None)
+        await service.http_client.aclose()
+        service.http_client = httpx.AsyncClient(transport=httpx.MockTransport(boom))
+        try:
+            with pytest.raises(
+                ValueError, match="Could not connect to app.targetsolutions.com"
+            ):
+                await service._fetch_external_records(
+                    _ts_provider(), date(2026, 9, 1), date(2026, 10, 1)
+                )
+        finally:
+            await service.close()
+
+    async def test_connection_test_reports_the_same_message(self):
+        service = await _service_with(_Recorder(status=404))
+        try:
+            ok, message = await service.test_connection(_ts_provider())
+        finally:
+            await service.close()
+        assert ok is False
+        assert "no report API at this address (HTTP 404)" in message
 
 
 @pytest.mark.unit
