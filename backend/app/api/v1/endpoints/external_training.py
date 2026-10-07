@@ -48,7 +48,10 @@ from app.schemas.training import (
 )
 from app.schemas.training import SyncStatus as SyncStatusEnum
 from app.schemas.training import TestConnectionResponse
-from app.services.external_training_service import ExternalTrainingSyncService
+from app.services.external_training_service import (
+    ExternalTrainingSyncService,
+    credited_hours,
+)
 from app.utils.email_providers import REDACTED_SECRET
 from app.utils.member_names import format_legal_name
 from app.utils.model_updates import apply_updates
@@ -1149,7 +1152,8 @@ async def import_single_record(
                 if ext_import.completion_date
                 else None
             ),
-            hours_completed=(ext_import.duration_minutes or 0) / 60.0,
+            hours_completed=credited_hours(ext_import),
+            credit_hours=ext_import.credit_hours,
             status=TrainingStatus.COMPLETED,
             score=ext_import.score,
             passed=ext_import.passed,
@@ -1281,7 +1285,8 @@ async def bulk_import_records(
                     if ext_import.completion_date
                     else None
                 ),
-                hours_completed=(ext_import.duration_minutes or 0) / 60.0,
+                hours_completed=credited_hours(ext_import),
+                credit_hours=ext_import.credit_hours,
                 status=TrainingStatus.COMPLETED,
                 score=ext_import.score,
                 passed=ext_import.passed,

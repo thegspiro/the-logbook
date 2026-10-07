@@ -68,6 +68,22 @@ def parse_review_time(value: Any) -> Optional[time]:
         return None
 
 
+def credited_hours(import_record: ExternalTrainingImport) -> float:
+    """Hours a staged completion credits to the member's training record.
+
+    The provider's credit hours win: for Target Solutions that is the
+    report's "Duration (hours)", the hours the course is accredited for, and
+    never "Time Spent In Course", which counts however long the member had it
+    open. Minutes are the fallback for providers that report only a duration.
+    Every import path uses this, so a manual import credits what the
+    automatic one would.
+    """
+    credit = import_record.credit_hours
+    if credit and credit > 0:
+        return round(float(credit), 2)
+    return round(float(import_record.duration_minutes or 0) / 60.0, 2)
+
+
 def review_time_for(provider: ExternalTrainingProvider) -> Optional[time]:
     """The provider's daily review time; Target Solutions always has one."""
     configured = parse_review_time((provider.config or {}).get("review_time"))
@@ -1602,12 +1618,7 @@ class ExternalTrainingSyncService:
         notes_parts.append("Imported from external training provider")
         import_notes = ". ".join(notes_parts)
 
-        # Determine hours: prefer credit_hours from the provider (VS reports
-        # hours directly), fall back to converting duration_minutes.
-        if import_record.credit_hours and import_record.credit_hours > 0:
-            computed_hours = round(import_record.credit_hours, 2)
-        else:
-            computed_hours = round((import_record.duration_minutes or 0) / 60.0, 2)
+        computed_hours = credited_hours(import_record)
 
         # Determine training type from external data when available
         training_type = self._map_training_type(import_record.raw_data)
