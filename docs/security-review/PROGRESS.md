@@ -16,9 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR `claude/security-review-grants-fundraising`** (branch pushed; number
-recorded here once GitHub assigns it): Feature 22 (Grants & fundraising),
-pass 7 (watchdog pickup — PR #2978/#2979 (Feature 21, Admin hours, pass 7,
+**PR [#2980](https://github.com/thegspiro/the-logbook/pull/2980)**: branch
+`claude/security-review-grants-fundraising`, Feature 22 (Grants &
+fundraising), pass 7 (watchdog pickup — PR #2978/#2979 (Feature 21, Admin hours, pass 7,
 plus its own stuck test-flake fix) had both just merged with no branch or PR
 started for the next feature since). Real delta since pass 6 (`e070ce9c`, PR
 #2875) is one non-rotation commit, `93ffd7b6`, bundling GF-9's float-money
