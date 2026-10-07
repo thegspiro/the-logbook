@@ -16,6 +16,15 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #2977 (Feature 20, Compliance, pass 7) merged clean. 0 fixes
+needed by that pass itself (three standing flags and one new finding were
+already fixed by other work); the Log entry below already records it in
+full, so there is nothing further to record here. Rotation row 20 stays
+✅. Next: Feature 21 (Admin hours).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 7, PR #2977, before it merged), preserved for history</summary>
+
 **PR [#2977](https://github.com/thegspiro/the-logbook/pull/2977)**: branch
 `claude/security-review-compliance`, Feature 20 (Compliance), pass 7
 (watchdog pickup — the dedicated `/loop 30m /security-review` session had
@@ -33,6 +42,8 @@ green (flake8/black/isort, migrations — 538 revisions, single head;
 `check_route_permissions.py --strict` — 251 routes; 490 + 45 scoped backend
 tests; frontend typecheck/lint, 131 scoped frontend tests). See the Log
 entry below for detail.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 7, PR #2976, merged), preserved for history</summary>
@@ -18078,7 +18089,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
@@ -18099,6 +18110,69 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-07 — Feature 21 (Admin hours, pass 7) — one substantial non-rotation commit reviewed in full, 0 fixed, 0 flagged, two long-standing "open by design" items now resolved (watchdog pickup)
+
+Watchdog pickup. PR #2977 (Feature 20, Compliance, pass 7) had merged with no
+branch or PR started for the next feature since, so this iteration took
+Feature 21 (Admin hours), the next `⬜` row, from outside the dedicated
+`/loop 30m /security-review` session. No open `claude/security-review-*` PR
+existed (`list_pull_requests`, state `open`, returned none), confirming the
+rotation's Step 0.
+
+**The real delta since pass 6 (`763098b22`, PR #2874) is one commit,
+`a2d32fb41` — not a security-review-rotation commit.** It implements the
+owner decision pass 6's own closing section already recorded
+("Owner decision (2026-10-05): add the toggle and re-queue above a
+threshold"): a per-org `admin_hours.allow_self_approval` setting (default
+off) that conditions the AH-4 self-approval guard, and a
+`resync_requeue_growth_percent` (default 25) that returns an `APPROVED`
+event-attendance entry to Pending Review when a reopened event's correction
+grows it past the threshold into a length its category would not have
+auto-approved. Both of this rotation's two long-standing "confirmed open by
+design" items (the unconditional SoD guard; the resync-growth gap) are
+therefore **resolved**, not merely re-confirmed-open — verified by reading
+the new `app/utils/admin_hours_settings.py` and its three call sites
+directly against all seven checklist dimensions, not taken from the commit
+message or the doc's own prior claim. The write path
+(`PATCH /organization/settings`) is gated `settings.manage` /
+`organization.update_settings` — deliberately **not** `admin_hours.manage`,
+since that is the permission the toggle relaxes a control on. The one
+remaining named standing item, AH-16 (`export_entries_csv`
+unbounded/non-streaming), is unchanged and still correctly `Open (MED)` in
+`docs/KNOWN_LIMITATIONS.md`.
+
+Route surface re-enumerated from scratch: **30 routes** (was 29 — the one
+new `GET /admin-hours/settings`), 13 `get_current_user` + 17
+`require_permission("admin_hours.manage")`, no ungated route. The 15 named
+external backend callers and all `backend/alembic/versions/` migrations
+since pass 6 were re-swept by content grep; 11 of the 15 callers changed for
+unrelated reasons (none touching an admin-hours line), 38 new migrations,
+none touching either admin-hours table. 7 frontend files outside the
+module's own changed too, all unrelated feature work (member-drop undo,
+qualifications CSV import, skills-testing offline queue, compliance
+applicability, event-request reasons, preferred names, a card-utility
+styling sweep).
+
+0 fixes needed (the commit under review was already correct and
+already shipped with its own guard tests); 0 new findings; 0 items newly
+flagged. Full write-up:
+[`AH-21-admin-hours.md`](./AH-21-admin-hours.md) → **Pass 7**.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/`/`tests/`/`alembic/` — clean. `validate_migrations.py --strict` — 538
+revisions, single head. `pytest -k admin_hours` — 139 passed, 1 pre-existing
+skip. `test_org_scoping_ratchet.py` + `test_admin_hours_endpoint_permission_scope.py`
+— 22 passed. `check_route_permissions.py --strict` — 251 routes, 0
+errors/warnings. Frontend `npm run typecheck`/`npm run lint` — clean; the
+admin-hours module's full vitest suite (113 tests) plus the named guard-test
+files (`ReviewRulesTab.test.tsx`, `entryTimes.test.ts`,
+`moduleFetchIntegrity.test.ts`, `exportCsv.behavior.test.ts`,
+`apiCache.test.ts`, `createApiClient.test.ts` — 143 tests combined) — all
+passed.
+
+Rotation row 21 → ✅ (pending PR merge). Next: Feature 22 (Grants &
+fundraising) — stays `⬜` until its own iteration.
 
 ### 2026-10-07 — Feature 20 (Compliance, pass 7) — real delta (13 commits), 0 fixes needed by this pass itself, three standing flags confirmed closed, one new finding (already fixed) identified and separately labeled (watchdog pickup)
 

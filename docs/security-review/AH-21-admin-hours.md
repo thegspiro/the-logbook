@@ -1,6 +1,310 @@
 # Security Review — Admin Hours
 
-**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15 (pass 5), 2026-10-03 (pass 6) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), [#2481](https://github.com/thegspiro/the-logbook/pull/2481) (pass 4, merged), [#2585](https://github.com/thegspiro/the-logbook/pull/2585) (pass 5, merged), pass 6 (this PR)
+**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), [#2481](https://github.com/thegspiro/the-logbook/pull/2481) (pass 4, merged), [#2585](https://github.com/thegspiro/the-logbook/pull/2585) (pass 5, merged), [#2874](https://github.com/thegspiro/the-logbook/pull/2874) (pass 6, merged), pass 7 (this PR)
+
+## Pass 7 (2026-10-07) — 0 fixed, 0 flagged; one substantial non-rotation commit reviewed in full, both long-standing "confirmed open" items are now resolved
+
+**Not a zero-delta pass, and the delta is not from the rotation itself.**
+Per-file `git log 763098b22..HEAD` (`763098b22` is pass 6's merge, PR #2874;
+`HEAD` is `db6716d37`, PR #2977, this session's starting commit — confirmed
+with `git merge-base --is-ancestor 763098b22 db6716d37`) against the four
+declared backend files plus `app/utils/admin_hours_settings.py` (new this
+pass) finds exactly one commit:
+
+- **`a2d32fb41`** (2026-10-05, "feat(admin-hours): per-department
+  self-approval switch and resync re-queue (AH-21)") — **this implements the
+  owner decision this very doc's own "Owner decision (2026-10-05)" section
+  at the bottom already describes**, and the KNOWN_LIMITATIONS.md row this
+  doc cross-references already reads "✅ Resolved." It is not a
+  security-review-rotation commit (no `security-review` branch, no PR
+  authored by this rotation) — it is a direct feature commit implementing a
+  decision this rotation's own passes 1–6 had carried as "confirmed open by
+  design" every single pass. Read in full against all seven checklist
+  dimensions below, the same rigor as any other pass's real delta, precisely
+  because "the owner already decided and it's already documented as
+  resolved" is exactly the kind of claim a later pass would take on faith
+  rather than re-deriving — and because this closes two of the three items
+  this session's own task brief named as "standing open-by-design," which
+  needed verifying against the actual code, not the doc's own say-so.
+
+No other commit in the window touches any of the five files
+(`git diff --stat 763098b22..HEAD -- backend/app/api/v1/endpoints/admin_hours.py
+backend/app/services/admin_hours_service.py backend/app/models/admin_hours.py
+backend/app/schemas/admin_hours.py backend/app/utils/admin_hours_settings.py`
+shows only `a2d32fb41`'s own four touched files — `models/admin_hours.py` is
+byte-identical, confirming AH-16's unbounded CSV export and the model's two
+`ondelete="SET NULL"` columns are untouched).
+
+### `a2d32fb41` reviewed in full against all seven checklist dimensions
+
+**What it does** (from the code, not the commit message): a new
+`app/utils/admin_hours_settings.py` reads a two-key `admin_hours` section out
+of `Organization.settings` — `allow_self_approval` (bool, **only** a literal
+`True` turns it on; `admin_hours_review_settings_in` checks `isinstance(growth,
+bool)` before `isinstance(growth, int)` for the sibling field specifically so a
+stray `true` can't read as `1`) and `resync_requeue_growth_percent` (int,
+clamped to `0..1000`, defaulting to `25` on anything absent or malformed,
+including a `bool` — booleans are `int` subclasses in Python, and the reader
+explicitly excludes them before the range check). Three call sites consume it:
+
+1. **`approve_or_reject`** (`admin_hours_service.py:1083-1095`) — the
+   `assert_different_person` self-approval guard (AH-4, unconditional since
+   pass 1) now only fires `if ... and not (await
+load_admin_hours_review_settings(self.db, organization_id)).allow_self_approval`.
+   The settings read happens **after** the entry's own locking fetch
+   (`with_for_update()`, line 1070) and is keyed on the `organization_id`
+   parameter the endpoint already threads in as `str(current_user.organization_id)`
+   (`admin_hours.py:783`) — never a client-supplied value, so this is not a
+   new IDOR surface (checklist #3).
+2. **`bulk_approve`** (`admin_hours_service.py:1301-1307`) — same toggle,
+   read **lazily**: `allow_self: Optional[bool] = None` is only resolved the
+   first time a self-owned entry turns up in the sorted-id loop, so a batch
+   containing no self-owned entries costs no extra query (matching the
+   method's own existing "read only once needed" pattern this commit's
+   comment explicitly mirrors). This sits inside the loop that already holds
+   the member-row-then-entry-row lock order pass 3's findings 4/7 established
+   — the new read is a plain `SELECT` against `Organization.settings` with no
+   lock of its own, which cannot invert that order (it locks nothing).
+3. **`credit_event_attendance`**'s resync branch (`admin_hours_service.py:
+2007-2043`) — read lazily the same way (`growth_percent: Optional[int] =
+None`, resolved only once an `APPROVED` entry's `new_minutes` exceeds its
+   `approved_minutes`). `resync_growth_needs_review(approved_minutes,
+new_minutes, growth_percent)` is pure integer arithmetic
+   (`(new - approved) * 100 > approved * growth_percent`, avoiding a
+   float-division rounding trap) and the re-queue additionally requires
+   `_determine_post_clockout_status(category, new_minutes) ==
+AdminHoursEntryStatus.PENDING` — i.e., it only re-queues when the
+   **new** length genuinely would not have auto-approved, not merely
+   because it grew. Re-queuing clears `approved_by`/`approved_at` alongside
+   the status flip, so a re-queued entry doesn't carry a stale approver
+   stamp into its next review.
+
+**Checklist #1 (auth coverage) — the one new route.** `GET
+/admin-hours/settings` (`admin_hours.py:852-867`) is gated
+`Depends(require_permission("admin_hours.manage"))`, reads
+`str(current_user.organization_id)` (never a query/path param — there is
+none), and returns only the two resolved booleans/ints through
+`AdminHoursReviewSettingsResponse` — no secret, no other member's data.
+
+**Checklist #2 (authorization & role fit) — the write path is deliberately
+gated on a _different_ permission than the read.** The settings are written
+through the existing `PATCH /organization/settings`
+(`organizations.py:144-153`, `require_permission("settings.manage",
+"organization.update_settings")`) via a new `AdminHoursSettingsUpdate` schema
+field — **not** `admin_hours.manage`, confirmed by reading the endpoint
+directly, not inferred from the docstring's claim. This is the correct shape
+for a control that relaxes a check on the very permission-holders it
+constrains (CLAUDE.md's separation-of-duties framing): an `admin_hours.manage`
+holder can read the resolved rule (`GET /settings`) but cannot grant
+themselves self-approval — only someone with `settings.manage` can. The
+frontend's `ReviewRulesTab.tsx` mirrors this: `canEdit` gates the save
+controls on `checkPermission('settings.manage') ||
+checkPermission('organization.update_settings')`, and renders a read-only
+notice otherwise — client-side convenience only, the real enforcement is the
+backend permission check on the write endpoint, same as every other settings
+screen in this codebase.
+
+**Checklist #3 (tenant isolation).** Every one of the three new/changed read
+sites threads `organization_id` from a value the caller cannot override
+(`current_user.organization_id` at the route, or a parameter already
+resolved from one earlier in the same call chain) into
+`load_admin_hours_review_settings(db, organization_id)`, which filters
+`Organization.id == str(organization_id)` — a single-row-by-PK lookup scoped
+to the caller's own tenant, not a client-suppliable id. No new by-id query
+reads a different shape.
+
+**Checklist #4/#5 (injection, exposure).** No SQL string-building, no CSV, no
+HTML. The new response schema (`AdminHoursReviewSettingsResponse`) carries no
+secret and nothing PII-shaped. `AdminHoursSettingsUpdate` (the write schema)
+is `extra="allow"`, consistent with every sibling `*SettingsUpdate` schema in
+`organization.py` (`ApparatusSettingsUpdate`, `InventorySettingsUpdate`,
+etc.) — an unrecognized extra key is silently accepted into the stored JSON
+and never read back by anything, the same shape those siblings already have,
+not a new pattern this commit introduces.
+
+**Checklist #6 (abuse resistance).** Both lazy-read sites (`bulk_approve`,
+`credit_event_attendance`) are deliberately structured so the common case —
+no self-owned entry in the batch; no approved entry growing on resync — costs
+zero extra queries, confirmed by reading the `is None` guards directly. No
+unbounded loop, no new N+1 (`load_admin_hours_review_settings` issues exactly
+one `SELECT` per call site that actually needs it, not per row).
+
+**Checklist #7 (schema & migration) — no model or migration change at all.**
+The two settings live in the existing `Organization.settings` JSON column
+(`MutableDict.as_mutable(JSON)`), written through the pre-existing
+`OrganizationService.update_organization_settings`, which this commit does
+not touch. **Verified the Pitfall #12 (JSON shallow-copy) and Pitfall #20
+(JSON canonical-shape) concerns both still hold for this new section, by
+reading the generic merge path directly rather than assuming it from the
+settings' own simplicity:** `update_organization_settings`
+(`organization_service.py:415-470`) does `current_settings =
+copy.deepcopy(org.settings or {})` (full deep copy, not the shallow `dict()`
+Pitfall #12 warns about) and then `_deep_merge_settings(current_settings,
+settings_update)`, which recurses into a dict-valued key rather than
+replacing it wholesale (`organization_service.py:72-89`) — so
+`ReviewRulesTab.tsx`'s two independent single-field saves (`{
+allow_self_approval: … }` then, separately, `{
+resync_requeue_growth_percent: … }`) each merge into the existing
+`admin_hours` section instead of the second save wiping the first's value.
+Confirmed this isn't merely plausible-by-reading: Pydantic's
+`model_dump(exclude_unset=True)` on a request body containing only
+`{"admin_hours": {"allow_self_approval": true}}` recurses `exclude_unset`
+into the nested `AdminHoursSettingsUpdate` model too, so
+`resync_requeue_growth_percent` is genuinely absent from the dict handed to
+the merge, not merely `None` — the merge's dict-vs-non-dict branch at
+`organization_service.py:85` is what makes the _section_ merge rather than
+replace, and `exclude_unset` is what keeps the unset sibling field out of the
+`updates` dict in the first place; both have to hold for the two independent
+saves not to stomp each other, and both do.
+
+### One pre-existing interaction checked, not a finding
+
+The `WITHDRAWN` status (added pass 6, `73b87938f`) and this commit's new
+re-queue branch both touch `credit_event_attendance`'s resync path, so the
+interaction was checked directly rather than assumed clear because neither
+commit's diff mentions the other. The re-queue branch's condition requires
+`existing_entry.status == AdminHoursEntryStatus.APPROVED` — a `WITHDRAWN`
+entry fails that check and falls through to the unconditional
+`existing_entry.clock_in_at = ...` / `duration_minutes = new_minutes` lines
+below it, same as before this commit: a resync silently re-times a withdrawn
+attendance entry without touching its `WITHDRAWN` status. This is **not new
+behavior** — those unconditional update lines predate `a2d32fb41` (they are
+the pre-existing resync-in-place design pass 1 reviewed) — and a withdrawn
+entry does not count toward any member's hours total regardless of its
+recorded duration (confirmed: `get_summary`'s `base_filter`, line 1136-1141,
+only includes `APPROVED`/`PENDING`), so this is a data-hygiene quirk (a
+withdrawn claim's timestamps silently drift with the event's correction)
+rather than a security or over-crediting issue. Recorded here because the
+task brief for this pass asked for the interaction to be checked, not because
+it is a new or actionable finding.
+
+### Route inventory re-enumerated from scratch
+
+`grep -oE '@router\.(get|post|patch|delete|put)\("[^"]+"' admin_hours.py`
+(not trusted from pass 6's count): **30 routes** (was 29 — the one new `GET
+/settings`). 13 carry `Depends(get_current_user)`, 17 carry
+`Depends(require_permission("admin_hours.manage"))` — 13 + 17 = 30, no
+ungated route. Still exactly one gated permission string in this module (no
+`.view`/`.manage` mix to check for the XC-2 pattern); the new route uses the
+same string as the other 16 management routes.
+
+### Standing findings and fixes re-verified, each read at its current line
+
+- **AH-4 / per-org SoD toggle** — **no longer "open by design."** Resolved
+  by this pass's own subject commit, above. `assert_different_person` is now
+  conditional on `allow_self_approval`, default `False` (every existing
+  installation keeps the unconditional AH-4 guard on upgrade — confirmed by
+  reading `admin_hours_review_settings_in`'s default path, not merely citing
+  the commit message). `docs/KNOWN_LIMITATIONS.md`'s "Admin hours: no
+  per-org self-approval override..." row already reads "✅ Resolved (owner
+  decision 2026-10-05)" — re-read directly and confirmed accurate against
+  the code, not re-copied.
+- **`credit_event_attendance`'s resync growth gap** — **also no longer open.**
+  Same commit, same KNOWN_LIMITATIONS.md row. Re-verified the re-queue
+  condition requires both the growth-percent breach **and**
+  `_determine_post_clockout_status(...) == PENDING` (not merely "it grew"),
+  matching the row's own description.
+- **AH-16 (`export_entries_csv` unbounded/non-streaming) — still open,
+  unchanged.** `export_entries` (`admin_hours.py:896-936`, shifted from pass
+  6's 866-898 by the two routes added since) still builds the whole CSV in
+  memory via `SafeCsvWriter` wrapped in a single-chunk
+  `StreamingResponse(iter([csv_content]), ...)`. Still org-scoped, still
+  `SafeCsvWriter` (Pitfall #15) rather than raw `csv.writer`. Unchanged since
+  pass 4; `docs/KNOWN_LIMITATIONS.md`'s row for it is still "Open (MED...)" —
+  the one item of the task brief's three "standing open-by-design items"
+  that remains open, correctly.
+- **AH-7 through AH-14, AH21-1 through AH21-4, pass-3's six Codex findings,
+  pass-3's two follow-up findings, pass-4's AH-15, pass-5's AH-17, pass-6's
+  `73b87938f` member self-service review** — spot-read at their current
+  lines rather than re-derived: the target-user org filter in
+  `get_user_hours_compliance`, every `with_for_update()` site (now **17** —
+  the 14 pass 6 counted, unchanged, since this commit's own settings reads
+  take no lock), `apply_updates` in `update_category`, the quarterly-year
+  rejection, `user_has_permission` in `get_summary`/`get_user_hours_compliance`,
+  and the `MEMBER_EDITABLE_STATUSES`/`withdrawn`-status machinery are all
+  present, unmoved in substance, and not touched by `a2d32fb41`'s diff
+  (confirmed: `git diff 763098b22..HEAD -- admin_hours_service.py` shows only
+  the three call sites and the import line described above — nothing else in
+  the 1883-line file changed).
+
+### External callers and migrations, re-swept
+
+`git diff --stat 763098b22..HEAD` against each of the task brief's 15 named
+external backend callers finds non-zero diffs in 11 of them
+(`training_session_service.py`, `event_service.py`, `nfc_tag_service.py`,
+`reports_service.py`, `dashboard.py`, `compliance_officer_service.py`,
+`compliance_config_service.py`, `data_export_service.py`, `onboarding.py`,
+`security_middleware.py`, `permissions.py` — `scheduled_tasks.py`,
+`seed_admin_hours.py`, `org_template_registry.py`, and `reports.py` are
+byte-identical). Grepped every changed one for `admin_hours`/`AdminHours`
+content (not filename) and read every hit in context: the only two matches
+(`event_service.py`'s `from app.models.admin_hours import
+EVENT_TYPES_WITHOUT_ADMIN_HOURS` and `permissions.py`'s
+`ADMIN_HOURS_VIEW`/`ADMIN_HOURS_LOG` import lines) are both unchanged context
+lines inside hunks that touch unrelated code nearby (event_service.py's
+changed hunk starts several lines below the import; permissions.py's changed
+hunk adds an unrelated `TRAINING_VIEW_ANALYTICS` import) — confirmed by
+diffing with `git diff` (which marks added/removed lines with `+`/`-`) rather
+than a context-insensitive grep. Zero in-scope delta across all 15.
+
+`git diff --stat 763098b22..HEAD -- backend/alembic/versions/` shows **38**
+new migration files (538 total, up from pass 6's — not previously
+stated — count; see completion gate). Grepped the content of every one
+(case-insensitive, `admin_hours`/`AdminHours`/`event_hour_mapping`): zero
+matches. No migration in this window touches either admin-hours table.
+
+### Frontend, re-swept
+
+`a2d32fb41` added `frontend/src/modules/admin-hours/components/ReviewRulesTab.tsx`
+(+ its test), and extended `AdminHoursManagePage.tsx` (a new `'rules'` tab
+key), `services/api.ts` (`getReviewSettings()`), and `types/index.ts`
+(`AdminHoursReviewSettings`, camelCase matching the backend's `to_camel`
+alias generator on `admin_hours.py`'s schemas — confirmed by reading
+`_RESPONSE_CONFIG` directly). The tab is reachable only through
+`/admin-hours/manage`, itself gated `requiredPermission="admin_hours.manage"`
+(`modules/admin-hours/routes.tsx:54`) — consistent with the backend's `GET
+/settings` gate, so a caller who can't reach the page can't reach the read
+either way.
+
+**Six other frontend files changed in the 763098b22..HEAD window
+(`ComplianceRequirementsConfigPage.tsx`, `Dashboard.tsx`,
+`MemberProfilePage.tsx`, `events-settings/AttendanceSection.tsx`,
+`events-settings/types.ts`, `events-settings/PipelineSection.tsx`,
+`components/member-profile/AdminHoursSection.tsx` — 7, not 6; corrected
+while writing this section) — none from admin-hours work.** `git diff` on
+each, grepped for `admin_hours`/`AdminHours` content: `Dashboard.tsx`'s one
+hit is an unchanged import-line context row (the actual changed hunk is an
+unrelated "Not eligible" messaging feature); `AdminHoursSection.tsx`'s whole
+diff is a one-line Tailwind utility swap (`bg-theme-surface rounded-lg p-6
+shadow-sm backdrop-blur-xs` → `card p-6`, a card-utility styling sweep
+touching ten unrelated components in the same commit) with no logic change;
+the other five have zero `admin_hours`/`AdminHours` hits at all. All seven
+are unrelated feature work (member-drop undo, qualifications CSV import,
+skills-testing offline queue, compliance applicability, event-request
+reasons, preferred names) landing in files this doc tracks as outside
+consumers, not admin-hours changes.
+
+## Completion gate (pass 7)
+
+| Check                                                                                                                                                                                                       | Result                                                                                                           |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                               | ✅ clean                                                                                                         |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                        | ✅ 2027 files unchanged                                                                                          |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                   | ✅ clean                                                                                                         |
+| `python3.13 scripts/validate_migrations.py --strict`                                                                                                                                                        | ✅ 538 revisions, single head `8c4f2a6e1d93`                                                                     |
+| `pytest tests/ -q -k "admin_hours"`                                                                                                                                                                         | ✅ 139 passed, 1 pre-existing skip                                                                               |
+| `pytest tests/test_org_scoping_ratchet.py tests/test_admin_hours_endpoint_permission_scope.py`                                                                                                              | ✅ 22 passed                                                                                                     |
+| `python3.13 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                        | ✅ 251 routes checked, 0 errors, 0 warnings                                                                      |
+| `cd frontend && npm run typecheck`                                                                                                                                                                          | ✅ 0 errors                                                                                                      |
+| `cd frontend && npm run lint`                                                                                                                                                                               | ✅ 0 errors (max-warnings 10)                                                                                    |
+| `npx vitest run` — `ReviewRulesTab.test.tsx`, `entryTimes.test.ts`, `moduleFetchIntegrity.test.ts`, `exportCsv.behavior.test.ts`, `apiCache.test.ts`, `createApiClient.test.ts`, full `modules/admin-hours` | ✅ all passed (ReviewRulesTab 4/4; admin-hours module 113/113; the five named guard-test files 143/143 combined) |
+
+No source file was modified by this pass itself — `a2d32fb41` (reviewed
+above) already shipped with its own tests and completion gate before this
+session started; this pass's own gate is a re-verification, not a check of
+new code this pass wrote.
+
+---
 
 ## Pass 6 (2026-10-03) — 0 fixed by this pass, 0 new findings, substantial real delta reviewed
 
