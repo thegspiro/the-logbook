@@ -16,6 +16,9 @@ const mockDeleteProvider = vi.fn();
 const mockCreateProvider = vi.fn();
 const mockUpdateProvider = vi.fn();
 const mockUploadReport = vi.fn();
+const mockGetCourseMappings = vi.fn();
+const mockUpdateCourseMapping = vi.fn();
+const mockGetCourses = vi.fn();
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 
@@ -38,9 +41,12 @@ vi.mock('../services/api', () => ({
     createProvider: (...a: unknown[]) => mockCreateProvider(...a) as unknown,
     updateProvider: (...a: unknown[]) => mockUpdateProvider(...a) as unknown,
     uploadReport: (...a: unknown[]) => mockUploadReport(...a) as unknown,
+    getCourseMappings: (...a: unknown[]) => mockGetCourseMappings(...a) as unknown,
+    updateCourseMapping: (...a: unknown[]) => mockUpdateCourseMapping(...a) as unknown,
   },
   trainingService: {
     getCategories: (...a: unknown[]) => mockGetCategories(...a) as unknown,
+    getCourses: (...a: unknown[]) => mockGetCourses(...a) as unknown,
   },
   userService: {
     getUsers: (...a: unknown[]) => mockGetUsers(...a) as unknown,
@@ -85,6 +91,10 @@ beforeEach(() => {
   mockUpdateCategoryMapping.mockImplementation((_p: string, _m: string, updates: Record<string, unknown>) =>
     Promise.resolve({ ...unmapped, ...updates, is_mapped: true })
   );
+  mockGetCourseMappings.mockReset();
+  mockGetCourseMappings.mockResolvedValue([]);
+  mockGetCourses.mockReset();
+  mockGetCourses.mockResolvedValue([]);
 });
 
 const openMappings = async () => {
@@ -423,5 +433,96 @@ describe('ExternalTrainingPage — manual report upload', () => {
         'Upload failed: This file is not a Target Solutions completions report'
       )
     );
+  });
+});
+
+describe('ExternalTrainingPage — course mappings', () => {
+  const newVersion = {
+    id: 'cm-1',
+    provider_id: 'prov-1',
+    organization_id: 'org-1',
+    external_course_id: '4123987',
+    external_course_name: 'CAPCE HIPAA Awareness (4123987)',
+    internal_course_id: null,
+    internal_course_name: null,
+    is_mapped: false,
+    suggested_course_id: 'course-hipaa',
+    suggested_course_name: 'HIPAA Awareness',
+    members_completed: 3,
+  };
+  const library = [
+    { id: 'course-hipaa', organization_id: 'org-1', name: 'HIPAA Awareness', training_type: 'continuing_education' },
+    { id: 'course-sepsis', organization_id: 'org-1', name: 'Sepsis', training_type: 'continuing_education' },
+  ];
+
+  beforeEach(() => {
+    mockGetCourseMappings.mockReset();
+    mockGetCourseMappings.mockResolvedValue([newVersion]);
+    mockGetCourses.mockReset();
+    mockGetCourses.mockResolvedValue(library);
+    mockUpdateCourseMapping.mockReset();
+    mockUpdateCourseMapping.mockResolvedValue({
+      ...newVersion,
+      internal_course_id: 'course-hipaa',
+      internal_course_name: 'HIPAA Awareness',
+      is_mapped: true,
+      suggested_course_id: null,
+      suggested_course_name: null,
+      records_updated: 3,
+    });
+  });
+
+  const openCourses = async () => {
+    await openMappings();
+    await userEvent.click(await screen.findByRole('tab', { name: /Courses \(1 unmapped\)/ }));
+  };
+
+  it('shows the suggestion without applying it', async () => {
+    await openCourses();
+
+    expect(await screen.findByText(/likely a new version of it/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Library course for CAPCE HIPAA Awareness (4123987)')).toHaveValue('');
+    expect(screen.getByText(/3 members completed/)).toBeInTheDocument();
+    expect(mockUpdateCourseMapping).not.toHaveBeenCalled();
+  });
+
+  it('maps to the suggestion in one click and says how many records moved', async () => {
+    await openCourses();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Map to HIPAA Awareness' }));
+
+    expect(mockUpdateCourseMapping).toHaveBeenCalledWith('prov-1', 'cm-1', { internal_course_id: 'course-hipaa' });
+    await waitFor(() =>
+      expect(mockToastSuccess).toHaveBeenCalledWith(
+        '"CAPCE HIPAA Awareness (4123987)" now counts as HIPAA Awareness; 3 training records updated'
+      )
+    );
+    expect(screen.queryByRole('button', { name: 'Map to HIPAA Awareness' })).not.toBeInTheDocument();
+  });
+
+  it('lets the officer choose a different course than the suggestion', async () => {
+    await openCourses();
+
+    await userEvent.selectOptions(
+      await screen.findByLabelText('Library course for CAPCE HIPAA Awareness (4123987)'),
+      'course-sepsis'
+    );
+
+    expect(mockUpdateCourseMapping).toHaveBeenCalledWith('prov-1', 'cm-1', { internal_course_id: 'course-sepsis' });
+  });
+
+  it('sends an explicit null to unmap', async () => {
+    mockGetCourseMappings.mockResolvedValue([
+      { ...newVersion, internal_course_id: 'course-hipaa', internal_course_name: 'HIPAA Awareness', is_mapped: true },
+    ]);
+    await openMappings();
+    await userEvent.click(await screen.findByRole('tab', { name: /Courses \(0 unmapped\)/ }));
+
+    await userEvent.selectOptions(
+      await screen.findByLabelText('Library course for CAPCE HIPAA Awareness (4123987)'),
+      ''
+    );
+
+    expect(mockUpdateCourseMapping).toHaveBeenCalledWith('prov-1', 'cm-1', { internal_course_id: null });
   });
 });

@@ -1077,6 +1077,29 @@ class SyncResponse(BaseModel):
     records_failed: int = 0
 
 
+class ExternalCourseMappingUpdate(BaseModel):
+    """Map a provider course to a library course; an explicit null unmaps."""
+
+    internal_course_id: Optional[UUID] = None
+
+
+class ExternalCourseMappingResponse(BaseModel):
+    """A provider course id, the library course it maps to, and a suggestion"""
+
+    id: UUID
+    provider_id: UUID
+    organization_id: UUID
+    external_course_id: str
+    external_course_name: str
+    internal_course_id: Optional[UUID] = None
+    internal_course_name: Optional[str] = None
+    is_mapped: bool
+    suggested_course_id: Optional[UUID] = None
+    suggested_course_name: Optional[str] = None
+    members_completed: int = 0
+    records_updated: Optional[int] = None
+
+
 class ReportUploadResponse(BaseModel):
     """Result of uploading a provider's completions report by hand"""
 

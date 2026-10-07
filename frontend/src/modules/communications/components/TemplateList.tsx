@@ -79,6 +79,7 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
   application_withdrawn: { icon: FileX, label: 'Application Withdrawn', color: 'text-slate-500' },
   suggestion_submitted: { icon: Lightbulb, label: 'Suggestion Submitted', color: 'text-amber-600' },
   equipment_request_update: { icon: PackageCheck, label: 'Equipment Request Update', color: 'text-amber-600' },
+  external_course_match: { icon: GraduationCap, label: 'New Course Version to Map', color: 'text-purple-500' },
   series_end_reminder: { icon: CalendarRange, label: 'Series End Reminder', color: 'text-purple-400' },
   shift_assignment: { icon: CalendarCheck, label: 'Shift Assignment', color: 'text-green-600' },
   shift_decline: { icon: UserX, label: 'Shift Decline', color: 'text-red-400' },
@@ -148,7 +149,7 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
   {
     id: 'training',
     label: 'Training & Certifications',
-    types: ['training_approval', 'cert_expiration'],
+    types: ['training_approval', 'cert_expiration', 'external_course_match'],
   },
   {
     id: 'elections',

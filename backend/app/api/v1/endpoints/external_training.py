@@ -29,6 +29,7 @@ from app.core.security import encrypt_data
 from app.core.utils import safe_error_detail
 from app.models.training import (
     ExternalCategoryMapping,
+    ExternalCourseMapping,
     ExternalProviderType,
     ExternalTrainingImport,
     ExternalTrainingProvider,
@@ -36,6 +37,7 @@ from app.models.training import (
     ExternalUserMapping,
     SyncStatus,
     TrainingCategory,
+    TrainingCourse,
     TrainingRecord,
     TrainingStatus,
 )
@@ -45,6 +47,8 @@ from app.schemas.training import (
     BulkImportResponse,
     ExternalCategoryMappingResponse,
     ExternalCategoryMappingUpdate,
+    ExternalCourseMappingResponse,
+    ExternalCourseMappingUpdate,
     ExternalTrainingImportResponse,
     ExternalTrainingProviderCreate,
     ExternalTrainingProviderResponse,
@@ -59,6 +63,12 @@ from app.schemas.training import (
 )
 from app.schemas.training import SyncStatus as SyncStatusEnum
 from app.schemas.training import TestConnectionResponse
+from app.services.external_course_mapping import (
+    apply_course_mapping,
+    completion_counts,
+    load_suggestion_candidates,
+    mapped_course_id,
+)
 from app.services.external_training_service import (
     ExternalTrainingSyncService,
     credited_hours,
@@ -708,6 +718,201 @@ async def trigger_sync(
     )
 
 
+def _course_mapping_response(
+    mapping: ExternalCourseMapping,
+    courses: dict,
+    suggested,
+    members: int,
+    records_updated=None,
+) -> ExternalCourseMappingResponse:
+    internal = courses.get(str(mapping.internal_course_id))
+    return ExternalCourseMappingResponse(
+        id=mapping.id,
+        provider_id=mapping.provider_id,
+        organization_id=mapping.organization_id,
+        external_course_id=mapping.external_course_id,
+        external_course_name=mapping.external_course_name,
+        internal_course_id=mapping.internal_course_id,
+        internal_course_name=internal.name if internal else None,
+        is_mapped=bool(mapping.is_mapped),
+        suggested_course_id=suggested.id if suggested else None,
+        suggested_course_name=suggested.name if suggested else None,
+        members_completed=members,
+        records_updated=records_updated,
+    )
+
+
+async def _org_provider(db: AsyncSession, provider_id: UUID, organization_id):
+    provider = (
+        await db.execute(
+            select(ExternalTrainingProvider)
+            .where(ExternalTrainingProvider.id == str(provider_id))
+            .where(ExternalTrainingProvider.organization_id == str(organization_id))
+        )
+    ).scalar_one_or_none()
+    if not provider:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found"
+        )
+    return provider
+
+
+async def _all_org_courses(db: AsyncSession, organization_id) -> dict:
+    """Every library course in the org, retired ones included, by id.
+
+    A mapping can point at a course since retired, and its name should still
+    show rather than read as unmapped.
+    """
+    rows = await db.execute(
+        select(TrainingCourse).where(
+            TrainingCourse.organization_id == str(organization_id)
+        )
+    )
+    return {str(c.id): c for c in rows.scalars().all()}
+
+
+@router.get(
+    "/providers/{provider_id}/course-mappings",
+    response_model=list[ExternalCourseMappingResponse],
+)
+async def list_course_mappings(
+    provider_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    List a provider's course ids, the library course each maps to, and, for
+    unmapped ones, the library course it looks like.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    provider = await _org_provider(db, provider_id, current_user.organization_id)
+    mappings = (
+        (
+            await db.execute(
+                select(ExternalCourseMapping)
+                .where(ExternalCourseMapping.provider_id == provider.id)
+                .where(
+                    ExternalCourseMapping.organization_id
+                    == str(current_user.organization_id)
+                )
+                .order_by(
+                    ExternalCourseMapping.is_mapped,
+                    ExternalCourseMapping.external_course_name,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    courses = await _all_org_courses(db, current_user.organization_id)
+    candidates = await load_suggestion_candidates(db, provider)
+    counts = await completion_counts(db, provider.id, provider.organization_id)
+    return [
+        _course_mapping_response(
+            m,
+            courses,
+            (
+                None
+                if m.internal_course_id
+                else candidates.pick(m.external_course_id, m.external_course_name)
+            ),
+            counts.get(m.external_course_id, 0),
+        )
+        for m in mappings
+    ]
+
+
+@router.patch(
+    "/providers/{provider_id}/course-mappings/{mapping_id}",
+    response_model=ExternalCourseMappingResponse,
+)
+async def update_course_mapping(
+    provider_id: UUID,
+    mapping_id: UUID,
+    mapping_update: ExternalCourseMappingUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Map a provider course to a library course, or unmap it with an explicit
+    null. Training records already imported from the course move with it, so
+    members who completed a new version are credited as soon as it is mapped.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    provider = await _org_provider(db, provider_id, current_user.organization_id)
+    mapping = (
+        await db.execute(
+            select(ExternalCourseMapping)
+            .where(ExternalCourseMapping.id == str(mapping_id))
+            .where(ExternalCourseMapping.provider_id == provider.id)
+            .where(
+                ExternalCourseMapping.organization_id
+                == str(current_user.organization_id)
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if not mapping:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Course mapping not found"
+        )
+
+    records_updated = 0
+    if "internal_course_id" in mapping_update.model_fields_set:
+        internal_course_id = (
+            str(mapping_update.internal_course_id)
+            if mapping_update.internal_course_id
+            else None
+        )
+        if internal_course_id and not await is_in_org(
+            db, TrainingCourse, internal_course_id, current_user.organization_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Library course not found",
+            )
+        previous = mapping.internal_course_id
+        records_updated = await apply_course_mapping(
+            db, mapping, internal_course_id, str(current_user.id)
+        )
+        await db.commit()
+        await log_audit_event(
+            db=db,
+            event_type="external_training_course_mapped",
+            event_category="training",
+            severity="info",
+            event_data={
+                "provider_id": str(provider.id),
+                "external_course_id": mapping.external_course_id,
+                "previous_course_id": previous,
+                "internal_course_id": internal_course_id,
+                "training_records_updated": records_updated,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+    courses = await _all_org_courses(db, current_user.organization_id)
+    counts = await completion_counts(db, provider.id, provider.organization_id)
+    suggested = None
+    if not mapping.internal_course_id:
+        candidates = await load_suggestion_candidates(db, provider)
+        suggested = candidates.pick(
+            mapping.external_course_id, mapping.external_course_name
+        )
+    return _course_mapping_response(
+        mapping,
+        courses,
+        suggested,
+        counts.get(mapping.external_course_id, 0),
+        records_updated,
+    )
+
+
 # A completions report is a few kilobytes a month; this allows many years of
 # a large department's history in one file.
 MAX_REPORT_UPLOAD_BYTES = 25 * 1024 * 1024
@@ -778,6 +983,7 @@ async def upload_report(
             provider, content, str(current_user.id)
         )
         await db.commit()
+        await service.notify_course_matches(provider)
     except ValueError as e:
         await db.rollback()
         raise HTTPException(
@@ -1296,6 +1502,12 @@ async def import_single_record(
             # Lets a later sync or upload recognise this completion as done.
             external_provider_id=ext_import.provider_id,
             external_record_id=ext_import.external_record_id,
+            course_id=await mapped_course_id(
+                db,
+                ext_import.provider_id,
+                ext_import.organization_id,
+                ext_import.external_course_id,
+            ),
             status=TrainingStatus.COMPLETED,
             score=ext_import.score,
             passed=ext_import.passed,
@@ -1433,6 +1645,12 @@ async def bulk_import_records(
                 credit_hours=ext_import.credit_hours,
                 external_provider_id=ext_import.provider_id,
                 external_record_id=ext_import.external_record_id,
+                course_id=await mapped_course_id(
+                    db,
+                    ext_import.provider_id,
+                    ext_import.organization_id,
+                    ext_import.external_course_id,
+                ),
                 status=TrainingStatus.COMPLETED,
                 score=ext_import.score,
                 passed=ext_import.passed,

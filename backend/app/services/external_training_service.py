@@ -36,6 +36,11 @@ from app.models.training import (
     TrainingType,
 )
 from app.models.user import User
+from app.services.external_course_mapping import (
+    find_or_create_course_mapping,
+    mapped_course_id,
+    notify_new_course_matches,
+)
 from app.utils.org_timezone import resolve_scheduling_timezone
 from app.utils.ssrf_transport import SSRFSafeAsyncTransport, join_endpoint
 
@@ -150,6 +155,9 @@ class ExternalTrainingSyncService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        # Course mappings this run created, for the officer email sent once
+        # the run commits.
+        self.new_course_mapping_ids: List[str] = []
         self.http_client = httpx.AsyncClient(
             timeout=30.0,
             transport=SSRFSafeAsyncTransport(),
@@ -463,6 +471,7 @@ class ExternalTrainingSyncService:
                 )
 
             await self.db.commit()
+            await self.notify_course_matches(provider)
 
         except Exception as e:
             logger.exception(f"Sync failed for provider {provider.id}")
@@ -473,6 +482,22 @@ class ExternalTrainingSyncService:
             await self.db.commit()
 
         return sync_log
+
+    async def notify_course_matches(self, provider: ExternalTrainingProvider) -> None:
+        """Email officers about this run's new courses that match the library.
+
+        Runs after the staging commit and never undoes it: a mail failure is
+        logged, and the courses are still listed under Mappings.
+        """
+        ids, self.new_course_mapping_ids = self.new_course_mapping_ids, []
+        if not ids:
+            return
+        try:
+            await notify_new_course_matches(self.db, provider, ids)
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            logger.exception(f"Course-match email failed for provider {provider.id}")
 
     async def _lock_provider(self, provider: ExternalTrainingProvider) -> None:
         """Hold the provider row until this transaction commits.
@@ -1430,6 +1455,7 @@ class ExternalTrainingSyncService:
             )
             existing_import.raw_data = record_data.get("raw_data")
             existing_import.sync_log_id = sync_log_id
+            await self._track_course_mapping(provider, record_data)
 
             # A member who could not be matched on an earlier sync (email not yet
             # on file in the Logbook) is attached once the mapping resolves.
@@ -1476,6 +1502,8 @@ class ExternalTrainingSyncService:
             if user_mapping and user_mapping.internal_user_id:
                 import_record.user_id = user_mapping.internal_user_id
 
+        await self._track_course_mapping(provider, record_data)
+
         # Try to auto-map category
         if record_data.get("external_category_id"):
             await self._find_or_create_category_mapping(provider, record_data)
@@ -1490,6 +1518,22 @@ class ExternalTrainingSyncService:
 
         self.db.add(import_record)
         return "imported"
+
+    async def _track_course_mapping(
+        self, provider: ExternalTrainingProvider, record_data: Dict[str, Any]
+    ) -> None:
+        """Make sure the record's course id has a mapping row, noting new ones."""
+        external_course_id = record_data.get("external_course_id")
+        if not external_course_id:
+            return
+        mapping, created = await find_or_create_course_mapping(
+            self.db,
+            provider,
+            str(external_course_id),
+            record_data.get("course_title") or "",
+        )
+        if created:
+            self.new_course_mapping_ids.append(mapping.id)
 
     async def _same_day_acknowledgment(
         self,
@@ -1932,6 +1976,12 @@ class ExternalTrainingSyncService:
             passed=import_record.passed,
             status=TrainingStatus.COMPLETED,
             category_id=target_category_id,
+            course_id=await mapped_course_id(
+                self.db,
+                import_record.provider_id,
+                import_record.organization_id,
+                import_record.external_course_id,
+            ),
             external_provider_id=import_record.provider_id,
             external_record_id=import_record.external_record_id,
             notes=import_notes,

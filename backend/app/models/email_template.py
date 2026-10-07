@@ -63,6 +63,7 @@ class EmailTemplateType(str, enum.Enum):
     APPLICATION_WITHDRAWN = "application_withdrawn"
     SUGGESTION_SUBMITTED = "suggestion_submitted"
     EQUIPMENT_REQUEST_UPDATE = "equipment_request_update"
+    EXTERNAL_COURSE_MATCH = "external_course_match"
     CUSTOM = "custom"
 
 

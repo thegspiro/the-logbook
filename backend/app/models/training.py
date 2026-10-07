@@ -2730,6 +2730,11 @@ class ExternalTrainingProvider(Base):
         back_populates="provider",
         cascade="all, delete-orphan",
     )
+    course_mappings = relationship(
+        "ExternalCourseMapping",
+        back_populates="provider",
+        cascade="all, delete-orphan",
+    )
     sync_history = relationship(
         "ExternalTrainingSyncLog",
         back_populates="provider",
@@ -2817,6 +2822,73 @@ class ExternalCategoryMapping(Base):
 
     def __repr__(self):
         return f"<ExternalCategoryMapping(external={self.external_category_name}, internal_id={self.internal_category_id})>"
+
+
+class ExternalCourseMapping(Base):
+    """
+    Maps a provider's course id to a course in the department's library.
+
+    Target Solutions reissues a course under a new Course ID when it publishes
+    a new version (a new HIPAA video, a re-accredited CAPCE course). Requirements
+    link to the library course, never to a provider id, so mapping each version
+    here keeps one annual requirement satisfied by whichever version a member
+    took. Imports set ``TrainingRecord.course_id`` from this mapping.
+    """
+
+    __tablename__ = "external_course_mappings"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    provider_id = Column(
+        String(36),
+        ForeignKey("external_training_providers.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    external_course_id = Column(String(255), nullable=False)
+    external_course_name = Column(String(500), nullable=False)
+
+    internal_course_id = Column(
+        String(36),
+        ForeignKey("training_courses.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    is_mapped = Column(Boolean, default=False, nullable=False)
+    # When training officers were emailed about this course, so a later sync
+    # does not email them again.
+    notified_at = Column(DateTime(timezone=True), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    mapped_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    provider = relationship(
+        "ExternalTrainingProvider", back_populates="course_mappings"
+    )
+
+    __table_args__ = (
+        Index(
+            "idx_ext_course_mapping_external",
+            "provider_id",
+            "external_course_id",
+            unique=True,
+        ),
+        Index("idx_ext_course_mapping_internal", "internal_course_id"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<ExternalCourseMapping(external={self.external_course_id}, "
+            f"internal_id={self.internal_course_id})>"
+        )
 
 
 class ExternalUserMapping(Base):

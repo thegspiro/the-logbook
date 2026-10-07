@@ -51,6 +51,8 @@ import type {
   ComplianceSummary,
   ExternalCategoryMapping,
   ExternalCategoryMappingUpdate,
+  ExternalCourseMapping,
+  ExternalCourseMappingUpdate,
   ExternalTrainingImport,
   ExternalTrainingProvider,
   ExternalTrainingProviderCreate,
@@ -534,6 +536,33 @@ export const externalTrainingService = {
       `/training/external/providers/${providerId}/upload-report`,
       formData,
       { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  },
+
+  /**
+   * Get a provider's course ids, the library course each maps to, and a
+   * suggestion for the unmapped ones
+   */
+  async getCourseMappings(providerId: string): Promise<ExternalCourseMapping[]> {
+    const response = await api.get<ExternalCourseMapping[]>(
+      `/training/external/providers/${providerId}/course-mappings`
+    );
+    return response.data;
+  },
+
+  /**
+   * Map a provider course to a library course (null unmaps). Training records
+   * already imported from the course move with it.
+   */
+  async updateCourseMapping(
+    providerId: string,
+    mappingId: string,
+    updates: ExternalCourseMappingUpdate
+  ): Promise<ExternalCourseMapping> {
+    const response = await api.patch<ExternalCourseMapping>(
+      `/training/external/providers/${providerId}/course-mappings/${mappingId}`,
+      updates
     );
     return response.data;
   },

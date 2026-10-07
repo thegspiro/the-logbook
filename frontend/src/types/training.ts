@@ -1533,6 +1533,28 @@ export interface ExternalCategoryMappingUpdate {
   is_mapped?: boolean;
 }
 
+export interface ExternalCourseMapping {
+  id: string;
+  provider_id: string;
+  organization_id: string;
+  external_course_id: string;
+  external_course_name: string;
+  internal_course_id?: string | null;
+  internal_course_name?: string | null;
+  is_mapped: boolean;
+  // The library course this one looks like. Offered, never applied: the
+  // officer confirms every mapping.
+  suggested_course_id?: string | null;
+  suggested_course_name?: string | null;
+  members_completed: number;
+  // Set on an update: training records that moved with the mapping.
+  records_updated?: number | null;
+}
+
+export interface ExternalCourseMappingUpdate {
+  internal_course_id: string | null;
+}
+
 export interface ExternalUserMapping {
   id: string;
   provider_id: string;

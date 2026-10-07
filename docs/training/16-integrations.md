@@ -706,9 +706,10 @@ with the training type **Policy Acknowledgment**, with no hours, so they stay
 apart from courses and appear in each member's training history under that
 type.
 
-A training requirement set to the type **Policy Acknowledgment** is met by an
-acknowledgment of _any_ policy — it cannot yet require one particular policy,
-such as the whistleblower policy, every year.
+A training requirement set only to the type **Policy Acknowledgment** is met by
+an acknowledgment of _any_ policy. To require one particular policy every year,
+map it to a library course and link the requirement to that course — see
+**Course mappings** below.
 
 Target Solutions records each acknowledgment click, so a member who opens the
 same policy twice in one day appears twice. The second one on the same day is
@@ -750,6 +751,39 @@ Details:
 - The provider card's **Auto-Sync** line shows both, e.g. "Every 1h · review
   daily at 02:00". Other providers show only "Every _N_h" and their form has a
   single **Sync Interval**, scheduled from the previous sync as before.
+
+#### Course mappings _(2026-10-07)_
+
+Target Solutions gives each course a **Course ID**, and issues a new one when it
+publishes a new version — a new HIPAA video, a re-accredited CAPCE course, a
+revised policy. Requirements link to courses in **your library**, not to
+Target Solutions' IDs, so a new version never means editing a requirement:
+
+1. Create the course once in the library (for example **HIPAA Awareness**) and
+   link your annual requirement to it, with the requirement type **Courses**.
+2. Open the provider's **Mappings → Courses** tab and map each Target Solutions
+   course to its library course. Map every version to the same library course;
+   completing any one of them meets the requirement.
+
+Every course Target Solutions has sent appears on that tab, with how many
+members completed it. An unmapped course that looks like one already in your
+library — the same title once the ID in brackets and the "CAPCE" prefix are
+set aside, or an earlier version you mapped — shows the suggestion with a
+**Map to …** button. Nothing is mapped until an officer chooses; pick a
+different course from the list if the suggestion is wrong.
+
+**When a new version arrives**, everyone holding **training.manage** is emailed
+_New Course Version to Map_, naming the course and the library course it looks
+like. Each course is emailed about once. Officers who turned off **Training
+officer duties** emails under their notification preferences are not emailed.
+Courses that look like nothing in the library are listed on the tab without an
+email.
+
+**Mapping credits past completions.** Members who completed a new version
+before it was mapped read as not current until it is; mapping it updates the
+training records already imported from it, so they become current at once.
+Unmapping takes the course back off those records. A record an officer linked
+to a different course by hand is left alone either way.
 
 #### Uploading a report by hand _(2026-10-07)_
 
