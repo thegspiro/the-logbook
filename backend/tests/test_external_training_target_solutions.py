@@ -73,6 +73,23 @@ def _csv(*rows):
     return "\n".join([CSV_HEADER, *rows]) + "\n"
 
 
+# What the live report puts above the header row: a title block of report
+# metadata, each line padded with commas to the report's width. The live header
+# also ends with a Location column.
+LIVE_PREAMBLE = (
+    "Completions (via API),,,,,,,,,,,,,,,,,,\n"
+    "Report executed 10/07/2026,,,,,,,,,,,,,,,,,,\n"
+    "User Status: Active/Offline,,,,,,,,,,,,,,,,,,\n"
+    "Assignment Type: All Assignments,,,,,,,,,,,,,,,,,,\n"
+    "Completion Date Range: From 09/01/2026 To 10/01/2026,,,,,,,,,,,,,,,,,,\n"
+)
+LIVE_HEADER = CSV_HEADER + ",Location"
+
+
+def _live_csv(*rows):
+    return LIVE_PREAMBLE + "\n".join([LIVE_HEADER, *rows]) + "\n"
+
+
 def _ts_provider(api_key=TS_KEY, api_secret=TS_SECRET):
     return ExternalTrainingProvider(
         id="prov-1",
@@ -181,6 +198,62 @@ class TestTrainingRecordsRequest:
             await service.close()
         assert [r["external_record_id"] for r in records] == ["T-9001"]
 
+    async def test_reads_past_the_live_reports_title_block(self):
+        rows = [
+            # The live report's own shapes: unpadded m/d/yyyy dates, a 12-hour
+            # time, a quoted title with a comma, and an Admin assignment whose
+            # score is the word "Completed" and whose duration is blank.
+            "1001,member.one@dept.test,CAPCE Back Injury Prevention (2755653),"
+            'TS Course,"One, Member",9/1/2026,,9/1/2026,4:50 PM,43,95%,1,,'
+            "2755653,558932162,,1,,",
+            '1002,member.two@dept.test,"General First Aid, Part I",TS Course,'
+            '"Two, Member",9/24/2026,,9/24/2026,10:47 PM,4,90%,1,,3777,'
+            "561945159,,1,,",
+            "1002,member.two@dept.test,Code of Conduct,Admin,,9/24/2026,,"
+            "9/25/2026,12:17 AM,,Completed,,,1472902,561939704,,,,",
+        ]
+        recorder = _Recorder(body=_live_csv(*rows))
+        service = await _service_with(recorder)
+        try:
+            first, second, admin = await service._fetch_external_records(
+                _ts_provider(), date(2026, 9, 1), date(2026, 10, 1)
+            )
+        finally:
+            await service.close()
+
+        assert first["external_record_id"] == "558932162"
+        assert first["external_user_id"] == "1001"
+        assert first["external_email"] == "member.one@dept.test"
+        assert first["course_title"] == "CAPCE Back Injury Prevention (2755653)"
+        assert first["credit_hours"] == 1.0
+        assert first["score"] == 95.0
+        assert service._parse_date(first["completion_date"]).date() == date(2026, 9, 1)
+        assert second["course_title"] == "General First Aid, Part I"
+        assert admin["training_type"] == "Admin"
+        assert admin["score"] is None
+        assert admin["credit_hours"] is None
+        assert admin["raw_data"]["Location"] == ""
+
+    async def test_live_report_with_no_completions_is_no_records(self):
+        service = await _service_with(_Recorder(body=_live_csv()))
+        try:
+            records = await service._fetch_external_records(
+                _ts_provider(), date(2026, 9, 1), date(2026, 10, 1)
+            )
+        finally:
+            await service.close()
+        assert records == []
+
+    async def test_title_block_without_a_header_row_is_rejected(self):
+        service = await _service_with(_Recorder(body=LIVE_PREAMBLE))
+        try:
+            with pytest.raises(ValueError, match="did not return a completions"):
+                await service._fetch_external_records(
+                    _ts_provider(), date(2026, 9, 1), date(2026, 10, 1)
+                )
+        finally:
+            await service.close()
+
     async def test_empty_report_is_no_records(self):
         service = await _service_with(_Recorder(body=""))
         try:
@@ -240,6 +313,16 @@ class TestTrainingRecordsConnectionTest:
         params = dict(recorder.requests[0].url.params)
         assert "startDate" not in params
         assert "endDate" not in params
+
+    async def test_live_report_title_block_passes(self):
+        recorder = _Recorder(body=_live_csv())
+        service = await _service_with(recorder)
+        try:
+            ok, message = await service.test_connection(_ts_provider())
+        finally:
+            await service.close()
+        assert ok is True, message
+        assert "0 record" in message
 
     async def test_bad_credentials_fail_without_echoing_them(self):
         service = await _service_with(_Recorder(status=200, body="Invalid key"))

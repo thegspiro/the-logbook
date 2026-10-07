@@ -931,20 +931,31 @@ class ExternalTrainingSyncService:
         if not body.strip():
             return []
 
-        reader = csv.DictReader(io.StringIO(body))
-        columns = [(name or "").strip() for name in (reader.fieldnames or [])]
-        if not all(col in columns for col in self.TS_REQUIRED_COLUMNS):
+        # The live report opens with a title block ("Completions (via API)",
+        # "Report executed ...", the filters applied) before the header row,
+        # so the header is located rather than assumed to be the first line.
+        rows = csv.reader(io.StringIO(body))
+        columns: List[str] = []
+        for cells in rows:
+            stripped = [cell.strip() for cell in cells]
+            if all(col in stripped for col in self.TS_REQUIRED_COLUMNS):
+                columns = stripped
+                break
+        if not columns:
             # An invalid key comes back as a 200 with an error page rather
             # than a CSV, so the header row is the only reliable signal.
             raise ValueError(
                 "Target Solutions did not return a completions report. "
                 "Check the API base URL, key and secret."
             )
-        reader.fieldnames = columns
         return [
-            {k: (v or "").strip() for k, v in row.items() if k}
-            for row in reader
-            if any((v or "").strip() for v in row.values() if isinstance(v, str))
+            {
+                k: (cells[i].strip() if i < len(cells) else "")
+                for i, k in enumerate(columns)
+                if k
+            }
+            for cells in rows
+            if any(v.strip() for v in cells)
         ]
 
     async def _test_target_solutions_connection(
