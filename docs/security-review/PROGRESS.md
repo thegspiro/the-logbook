@@ -16,6 +16,15 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** Feature 20 (Compliance) review in progress (watchdog pickup — the
+dedicated `/loop 30m /security-review` session had no open PR/branch for
+this feature, and PR #2976 (Feature 19, Skills testing, pass 7) had already
+merged ~2 hours earlier with nothing started since, past this rotation's
+documented ~90-minute stall threshold).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 7, PR #2976, merged), preserved for history</summary>
+
 **PR [#2976](https://github.com/thegspiro/the-logbook/pull/2976)**: branch
 `claude/security-review-skills-testing`, Feature 19 (Skills
 testing), pass 7 (watchdog pickup — the dedicated `/loop 30m
@@ -42,6 +51,8 @@ Feature 17's scope. Completion gate green (flake8/black/isort, migrations —
 538 revisions, single head; `check_route_permissions.py --strict` — 251
 routes; 512 scoped backend tests, up from pass 6's 464; frontend
 typecheck/lint). See the Log entry below for detail.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 7, PR #2975, merged), preserved for history</summary>
@@ -18054,7 +18065,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
@@ -18076,6 +18087,83 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-07 — Feature 20 (Compliance, pass 7) — real delta (13 commits), 0 fixes needed by this pass itself, three standing flags confirmed closed, one new finding (already fixed) identified and separately labeled (watchdog pickup)
+
+Watchdog pickup. PR #2976 (Feature 19, Skills testing, pass 7) had merged
+roughly 2 hours earlier with no branch or PR started for the next feature
+since — past this rotation's documented ~90-minute stall threshold — so
+this iteration picked up Feature 20 (Compliance), the first `⬜` row, from
+outside the dedicated `/loop 30m /security-review` session.
+
+**Real delta since pass 6 (PR #2869, merge base `8f96e5c33`): thirteen
+non-merge commits** touched five of the seven declared scope files
+(`training_compliance.py`, `compliance_officer_service.py`,
+`compliance_config_service.py`, `compliance_officer.py`,
+`schemas/compliance_config.py`; `compliance_config.py` (endpoint) and
+`models/compliance_config.py` untouched). This repo's clone was shallow at
+the start of this iteration — the same recurring artifact passes 3/5/6 each
+noted — and `git log`'s path filter silently returned an incomplete commit
+list against it (one real commit shown where thirteen existed); a fresh
+`git fetch --unshallow` corrected it before any scope conclusion was drawn.
+
+**Three standing findings closed since pass 6, all re-verified against
+current code rather than re-cited from prior passes or trusted from a
+commit message:** CMP4-2 (`required_positions` now read by
+`requirement_applies_to_member`, both direct callers pass the new
+parameter), CMP4-3 and CMP4-5 (already recorded in the findings file's
+"Owner decisions applied" sections; re-verified here), and CS-9
+(a "monthly" report now actually covers its own calendar month instead of
+being the annual report under a different label — open across every prior
+pass since pass 4, now closed). **One new finding identified, already
+fixed before this pass began, given its own id to avoid conflating it with
+an unrelated standing item of the same name:** the commit that closed it
+cited "(CS-8)", but pass 1's CS-8 is attestation dual-control (no
+update/delete route), which is unrelated and still open by design. The new
+issue — attestations recorded whatever `compliance_percentage` an officer
+typed in, with no verification against the figure it was attesting to — is
+filed as **CS-8-b** and is fixed: the server now computes the figure itself
+at attestation time. Six further commits in the same delta (HOURS
+requirement counting-rule unification, BIANNUAL window, certification
+name-match legacy cutover with a guarded nullable-column migration,
+requirement grandfathering, shifts-completed counted from one shared
+shift-attendance definition, and bounding every department-wide grader's
+record load to each requirement's window) were each read in full: no new
+finding, org-scoping confirmed intact on every query touched, the one new
+migration correctly guarded and backfilled with a bound parameter.
+
+Route surface re-enumerated from scratch: 12 + 8 = 20/20 routes, every one
+gated by `Depends(require_permission(...))`, identical permission strings
+to every prior pass. CMP2-1 (notify settings stored, never read) and the
+original CS-8 (attestation immutability) re-confirmed open by design;
+"attestation history over-fetches globally" re-confirmed as an unchanged,
+documented availability gap, not a leak.
+
+**Environment note, not a finding:** this sandbox's database had run
+`alembic upgrade head` cleanly (538 revisions) but had never been booted
+through the application, so it was missing 12 columns across four tables
+that `main.py`'s `_add_missing_model_columns` startup repair backfills —
+the same class of gap TR-17 pass 7 documented. Running it once fixed three
+otherwise-unrelated test failures. Separately, this sandbox's bare
+`python3` resolves to a 3.11 install with no `alembic` package; invoking
+the `alembic` console script directly (its own shebang points at the
+correct 3.13 interpreter) rather than `python3 -m alembic` avoided it.
+
+Completion gate green: `flake8`/`black --check`/`isort --check-only` clean
+over `app/ tests/ alembic/`; `validate_migrations.py --strict` passed (538
+revisions, single head `8c4f2a6e1d93`); `check_route_permissions.py
+--strict` passed (251 routes, 0 errors/warnings); 490 scoped backend tests
+plus 45 in three additional shared-helper test files, all passed (1
+pre-existing optional-dependency skip); frontend `npm run typecheck` 0
+errors, `npm run lint` 0 errors, 131 compliance-scoped frontend tests
+passed.
+
+Findings doc: [`CMP-20-compliance.md`](./CMP-20-compliance.md)'s **Pass 7**
+section. No `KNOWN_LIMITATIONS.md` change needed — the owner-decision
+commits already updated or removed every entry this pass's findings touch
+(CMP4-2's entry was removed by its own fixing commit; CMP4-3/CMP4-5's
+entries already say ✅ fixed). Rotation row 20 → ✅ (pending PR merge).
+Next: Feature 21 (Admin hours).
 
 ### 2026-10-06 — Feature 19 (Skills testing, pass 7) — real delta (6 commits), 0 fixes needed, five standing flags confirmed closed, cross-feature scope gap flagged (watchdog pickup)
 
