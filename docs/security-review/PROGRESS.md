@@ -16,6 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2988](https://github.com/thegspiro/the-logbook/pull/2988)**: branch
+`claude/security-review-integrations`, Feature 27 (Integrations), pass 6
+(watchdog pickup — PR #2986, Feature 26, Forms, had already merged 74
+minutes earlier with nothing started since, confirmed via
+`list_pull_requests` both before this iteration began and again before
+this PR was opened). Real delta since pass 5 (`bf0a45a6`) is substantial
+but almost entirely already-reviewed hardening (SSRF DNS-rebinding
+pinning, a wall-clock request deadline, and Google Calendar's response-
+size/timeout bounds, all shipped 2026-10-05 and already recorded resolved
+in `KNOWN_LIMITATIONS.md`) plus two new, org-scoped services (integration
+health tracking, a PayPal reconciliation backfill) read in full this pass.
+`app/mcp/oauth.py` is out of this feature's declared scope and already has
+its own dedicated review (`MCPO-27-mcp-oauth-server.md`). 0 fixes needed by
+this pass itself, 0 new findings. Every standing finding re-verified
+unchanged; INT-11 still open. Completion gate green (flake8/black/isort
+clean; migrations — 541 revisions, single head; route check — 251 routes,
+0 errors; 4285 scoped backend tests; frontend typecheck/lint clean). See
+the Log entry below for detail.
+
+<details>
+<summary>Superseded — prior Open PR note (bridge note recording PR #2986's merge before Feature 27 started), preserved for history</summary>
+
 **None.** PR #2986 (Feature 26, Forms, pass 6) merged clean (confirmed via
 `list_pull_requests`; merged_at 2026-10-07T18:30:01Z). 0 fixes needed by
 that pass itself; the Log entry below already records it in full, so there
@@ -23,6 +45,8 @@ is nothing further to record here. Rotation row 26 → ✅. Watchdog pickup:
 74 minutes elapsed with no new branch or PR opened for Feature 27
 (Integrations) before this iteration began (confirmed via
 `list_pull_requests`, state=open, no match).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (bridge note recording PR #2984's merge before Feature 26 started; and, nested below, the pre-merge note for PR #2984 itself), preserved for history</summary>
