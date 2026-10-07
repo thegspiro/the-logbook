@@ -16,6 +16,33 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2981](https://github.com/thegspiro/the-logbook/pull/2981)**: branch
+`claude/security-review-medical-supplies`, Feature 23 (Medical supplies),
+pass 13 (watchdog pickup — PR #2980, Feature 22, Grants & fundraising, had
+already merged ~73 minutes earlier with nothing started since). Real delta
+since pass 12 (`a9db9aae`, PR #2877) is one commit, `57e81e4d` (merged via
+PR #2918, outside the rotation), fixing MSUP-25 outright — re-verified here
+directly against current code. 0 fixes needed by this pass itself, 0 new
+findings. MSUP-4, MSUP-11, and MSUP-15 remain the only open, flagged items.
+Route surface re-enumerated (15/15, unchanged) with every permission string
+checked individually. Completion gate green (flake8/black/isort; migrations
+— 538 revisions, single head; 1205 scoped backend tests, up from 1194;
+frontend typecheck/lint clean). See the Log entry below for detail.
+
+<details>
+<summary>Superseded — prior Open PR note (bridge note recording PR #2980's
+merge before Feature 23 started; and, nested below, the pre-merge note for
+PR #2980 itself), preserved for history</summary>
+
+**None.** PR #2980 (Feature 22, Grants & fundraising, pass 7) merged clean
+via merge commit `021fecc6`. 0 fixes needed by that pass itself (the one
+fixable item had already landed before the pass began); the Log entry below
+already records it in full, so there was nothing further to record there.
+Rotation row 22 stayed ✅.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 7, PR #2980, merged), preserved for history</summary>
+
 **PR [#2980](https://github.com/thegspiro/the-logbook/pull/2980)**: branch
 `claude/security-review-grants-fundraising`, Feature 22 (Grants &
 fundraising), pass 7 (watchdog pickup — PR #2978/#2979 (Feature 21, Admin hours, pass 7,
@@ -33,6 +60,8 @@ checked individually, not spot-checked. Completion gate green
 migrations — 538 revisions, single head; `check_route_permissions.py
 --strict` — 251 routes, 0 errors/warnings; 718 scoped backend tests, up from
 684; frontend typecheck/lint clean). See the Log entry below for detail.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 7, PR #2978, merged; plus its own stuck follow-up, PR #2979, merged), preserved for history</summary>
@@ -18139,7 +18168,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
@@ -18158,6 +18187,52 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-07 — Feature 23 (Medical supplies, pass 13) — 1 standing finding (MSUP-25) closed out as fixed, 0 fixed by this pass, 0 new findings (watchdog pickup)
+
+Watchdog pickup. PR #2980 (Feature 22, Grants & fundraising, pass 7) had
+merged at 11:30 UTC with no branch or PR started for the next feature in the
+73 minutes since. No open `claude/security-review-*` PR existed (confirmed
+via `list_pull_requests` and `search_pull_requests` before this iteration
+began), confirming Step 0, so this iteration took Feature 23 (Medical
+supplies), the next `⬜` row.
+
+The real delta since pass 12 (`a9db9aae`, PR #2877, merged 2026-10-03) on
+`medical_supplies.py`/`inventory_service.py` is one real commit — `57e81e4d`
+(merged via PR #2918, a dedicated "KNOWN_LIMITATIONS cleanup" PR outside the
+rotation, 2026-10-05) — which fixes MSUP-25 outright: every medical-domain
+write now re-validates domain membership under its own mutation's lock via
+the new `_items_in_domain_locked` helper, and both maintenance-completion
+paths refuse a `condition_after` of RETIRED. Re-verified directly against
+current code rather than trusted from that PR's own callout in this
+feature's findings doc. A second commit touching these files by path,
+`959610c0`, is a parentless root commit — a git-history artifact introducing
+both files whole, not a real edit — and was disregarded after confirming it
+has no parents and no overlap with the real history above it.
+
+Route surface re-enumerated (15/15, unchanged) with every permission string
+checked individually, not spot-checked — still domain-first
+(`inventory.view_medical`/`inventory.manage_medical` OR'd against the broad
+`inventory.view`/`inventory.manage`). MSUP-4, MSUP-11, and MSUP-15 re-
+confirmed open and unchanged at their current locations; MSUP-25 is now
+closed out as fixed (it had already landed, this pass's job was verifying
+and recording it). No KNOWN_LIMITATIONS.md change needed — MSUP-25 never had
+its own row there, and the one `docs/KNOWN_LIMITATIONS.md` reference to its
+fix (under the unrelated INV-16 entry) already correctly described it as
+"Narrowed," not open.
+
+Completion gate green: `flake8`/`black --check`/`isort --check-only` clean
+over `app/ tests/ alembic/`; `validate_migrations.py --strict` passed (538
+revisions, single head `8c4f2a6e1d93`); scoped backend tests (`-k
+"inventory or medical_supplies"`) 1205 passed, 1 pre-existing skip (up from
+pass 12's 1194); frontend `npm run typecheck` 0 errors, `npm run lint` 0
+errors/0 warnings. No source file was modified by this pass itself — the
+diff is `docs/security-review/MSUP-23-medical-supplies.md` (new Pass 13
+section) and this file (rotation row, Open PR section, this Log entry).
+
+Findings doc: [`MSUP-23-medical-supplies.md`](./MSUP-23-medical-supplies.md)'s
+**Pass 13** section. Rotation row 23 → ✅ (pending PR merge). Next: Feature
+24 (Meetings & minutes).
 
 ### 2026-10-07 — Feature 22 (Grants & fundraising, pass 7) — one non-rotation commit reviewed in full, 1 incidental fix re-verified (GF-9's float half), 0 fixed by this pass, 0 new findings (watchdog pickup)
 
