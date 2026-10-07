@@ -26,6 +26,7 @@ import {
   Trash2,
   Edit2,
   PlayCircle,
+  Upload,
 } from 'lucide-react';
 import { Tooltip } from '../components/ux';
 import { externalTrainingService, trainingService, userService } from '../services/api';
@@ -505,12 +506,14 @@ interface ProviderCardProps {
   onTestConnection: (id: string) => void;
   onSyncCategories: (id: string) => void;
   onSync: (id: string) => void;
+  onUploadReport: (id: string, file: File) => void;
   onEdit: (provider: ExternalTrainingProvider) => void;
   onDelete: (id: string) => void;
   onViewMappings: (id: string) => void;
   isTestingConnection: boolean;
   isSyncingCategories: boolean;
   isSyncing: boolean;
+  isUploading: boolean;
 }
 
 const ProviderCard: React.FC<ProviderCardProps> = ({
@@ -518,12 +521,14 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
   onTestConnection,
   onSyncCategories,
   onSync,
+  onUploadReport,
   onEdit,
   onDelete,
   onViewMappings,
   isTestingConnection,
   isSyncingCategories,
   isSyncing,
+  isUploading,
 }) => {
   const tz = useTimezone();
 
@@ -644,6 +649,35 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
           )}
           Sync Now
         </button>
+        {provider.provider_type === 'target_solutions' && (
+          // A completions report downloaded from Target Solutions, for when the
+          // API is not set up or not answering. It needs no key or secret.
+          <label
+            className={`bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary focus-within:ring-theme-focus-ring flex items-center gap-2 rounded-lg px-3 py-2 text-sm focus-within:ring-2 ${
+              isUploading ? 'pointer-events-none opacity-50' : 'cursor-pointer'
+            }`}
+          >
+            {isUploading ? (
+              <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Upload className="h-4 w-4" aria-hidden="true" />
+            )}
+            Upload Report
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              className="sr-only"
+              disabled={isUploading}
+              aria-label="Upload a Target Solutions completions report (CSV)"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                // Cleared so choosing the same file again still fires onChange.
+                e.target.value = '';
+                if (file) onUploadReport(provider.id, file);
+              }}
+            />
+          </label>
+        )}
         <button
           onClick={() => onViewMappings(provider.id)}
           className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
@@ -1222,6 +1256,7 @@ const ExternalTrainingPage: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [testingProvider, setTestingProvider] = useState<string | null>(null);
   const [syncingProvider, setSyncingProvider] = useState<string | null>(null);
+  const [uploadingProvider, setUploadingProvider] = useState<string | null>(null);
   const [editModal, setEditModal] = useState<{ isOpen: boolean; provider: ExternalTrainingProvider | null }>({
     isOpen: false,
     provider: null,
@@ -1293,6 +1328,19 @@ const ExternalTrainingPage: React.FC = () => {
       toast.error(`Sync failed: ${getErrorMessage(err)}`);
     } finally {
       setSyncingProvider(null);
+    }
+  };
+
+  const handleUploadReport = async (providerId: string, file: File) => {
+    setUploadingProvider(providerId);
+    try {
+      const result = await externalTrainingService.uploadReport(providerId, file);
+      toast.success(`Report uploaded: ${result.message}`);
+      void loadProviders();
+    } catch (err: unknown) {
+      toast.error(`Upload failed: ${getErrorMessage(err)}`);
+    } finally {
+      setUploadingProvider(null);
     }
   };
 
@@ -1428,6 +1476,9 @@ const ExternalTrainingPage: React.FC = () => {
                   onSync={(id) => {
                     void handleSync(id);
                   }}
+                  onUploadReport={(id, file) => {
+                    void handleUploadReport(id, file);
+                  }}
                   onEdit={handleEdit}
                   onDelete={(id) => {
                     void handleDelete(id);
@@ -1436,6 +1487,7 @@ const ExternalTrainingPage: React.FC = () => {
                   isTestingConnection={testingProvider === provider.id}
                   isSyncingCategories={syncingCategoriesProvider === provider.id}
                   isSyncing={syncingProvider === provider.id}
+                  isUploading={uploadingProvider === provider.id}
                 />
               ))
             )}

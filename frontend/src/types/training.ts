@@ -1609,6 +1609,18 @@ export interface SyncResponse {
   records_failed: number;
 }
 
+export interface ReportUploadResponse {
+  sync_log_id: string;
+  status: SyncStatus;
+  message: string;
+  rows_in_report: number;
+  new_rows: number;
+  updated_rows: number;
+  failed_rows: number;
+  training_records_created: number;
+  awaiting_member: number;
+}
+
 export interface TestConnectionResponse {
   success: boolean;
   message: string;

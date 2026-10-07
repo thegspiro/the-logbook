@@ -15,6 +15,16 @@ const mockGetUsers = vi.fn();
 const mockDeleteProvider = vi.fn();
 const mockCreateProvider = vi.fn();
 const mockUpdateProvider = vi.fn();
+const mockUploadReport = vi.fn();
+const mockToastSuccess = vi.fn();
+const mockToastError = vi.fn();
+
+vi.mock('react-hot-toast', () => ({
+  default: {
+    success: (...a: unknown[]) => mockToastSuccess(...a) as unknown,
+    error: (...a: unknown[]) => mockToastError(...a) as unknown,
+  },
+}));
 
 vi.mock('../services/api', () => ({
   externalTrainingService: {
@@ -27,6 +37,7 @@ vi.mock('../services/api', () => ({
     deleteProvider: (...a: unknown[]) => mockDeleteProvider(...a) as unknown,
     createProvider: (...a: unknown[]) => mockCreateProvider(...a) as unknown,
     updateProvider: (...a: unknown[]) => mockUpdateProvider(...a) as unknown,
+    uploadReport: (...a: unknown[]) => mockUploadReport(...a) as unknown,
   },
   trainingService: {
     getCategories: (...a: unknown[]) => mockGetCategories(...a) as unknown,
@@ -350,5 +361,67 @@ describe('ExternalTrainingPage — hourly pulls with a daily review', () => {
     renderWithRouter(<ExternalTrainingPage />);
 
     expect(await screen.findByText('Every 1h · review daily at 02:00')).toBeInTheDocument();
+  });
+});
+
+describe('ExternalTrainingPage — manual report upload', () => {
+  const targetSolutions = { ...provider, provider_type: 'target_solutions', name: 'Target Solutions' };
+  const report = new File(['Employee ID,Email\n'], 'report_completionsall.csv', { type: 'text/csv' });
+
+  beforeEach(() => {
+    mockUploadReport.mockReset();
+    mockUploadReport.mockResolvedValue({
+      sync_log_id: 'log-1',
+      status: 'completed',
+      message: '2 training record(s) added; 1 waiting for a member match under Imports',
+      rows_in_report: 3,
+      new_rows: 3,
+      updated_rows: 0,
+      failed_rows: 0,
+      training_records_created: 2,
+      awaiting_member: 1,
+    });
+  });
+
+  it('offers an upload on a Target Solutions provider, even with no key or secret', async () => {
+    mockGetProviders.mockResolvedValue([targetSolutions]);
+    renderWithRouter(<ExternalTrainingPage />);
+
+    expect(await screen.findByLabelText(/Upload a Target Solutions completions report/)).toBeInTheDocument();
+  });
+
+  it('offers no upload for other providers', async () => {
+    renderWithRouter(<ExternalTrainingPage />);
+
+    expect(await screen.findByRole('button', { name: /Sync Now/ })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Upload a Target Solutions completions report/)).not.toBeInTheDocument();
+  });
+
+  it('sends the chosen file and reports what it added', async () => {
+    mockGetProviders.mockResolvedValue([targetSolutions]);
+    renderWithRouter(<ExternalTrainingPage />);
+
+    await userEvent.upload(await screen.findByLabelText(/Upload a Target Solutions completions report/), report);
+
+    await waitFor(() => expect(mockUploadReport).toHaveBeenCalledWith('prov-1', report));
+    await waitFor(() =>
+      expect(mockToastSuccess).toHaveBeenCalledWith(
+        'Report uploaded: 2 training record(s) added; 1 waiting for a member match under Imports'
+      )
+    );
+  });
+
+  it("shows the server's reason when the file is refused", async () => {
+    mockGetProviders.mockResolvedValue([targetSolutions]);
+    mockUploadReport.mockRejectedValue(new Error('This file is not a Target Solutions completions report'));
+    renderWithRouter(<ExternalTrainingPage />);
+
+    await userEvent.upload(await screen.findByLabelText(/Upload a Target Solutions completions report/), report);
+
+    await waitFor(() =>
+      expect(mockToastError).toHaveBeenCalledWith(
+        'Upload failed: This file is not a Target Solutions completions report'
+      )
+    );
   });
 });

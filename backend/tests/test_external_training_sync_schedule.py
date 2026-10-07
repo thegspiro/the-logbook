@@ -169,6 +169,10 @@ class _Db:
     async def commit(self):
         pass
 
+    async def execute(self, statement):
+        # Staging locks the provider row first; nothing is read back from it.
+        return None
+
 
 def _recording_service(body: str, db=None):
     requests: list[httpx.Request] = []

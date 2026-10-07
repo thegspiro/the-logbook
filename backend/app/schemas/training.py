@@ -1077,6 +1077,20 @@ class SyncResponse(BaseModel):
     records_failed: int = 0
 
 
+class ReportUploadResponse(BaseModel):
+    """Result of uploading a provider's completions report by hand"""
+
+    sync_log_id: UUID
+    status: SyncStatus
+    message: str
+    rows_in_report: int
+    new_rows: int
+    updated_rows: int
+    failed_rows: int
+    training_records_created: int
+    awaiting_member: int
+
+
 class TestConnectionResponse(BaseModel):
     """Response after testing provider connection"""
 

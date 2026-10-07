@@ -51,6 +51,8 @@ install_httpx_url_redaction()
 # only looks forward from the last sync never sees. Re-fetched rows update in
 # place by Transcript ID, so the overlap never duplicates.
 REVIEW_SYNC_TYPE = "review"
+# A report an officer uploaded by hand, recorded in the same sync history.
+UPLOAD_SYNC_TYPE = "upload"
 REVIEW_LOOKBACK_DAYS = 30
 QUICK_PULL_MIN_LOOKBACK_DAYS = 1
 DEFAULT_TS_REVIEW_TIME = time(2, 0)
@@ -445,35 +447,7 @@ class ExternalTrainingSyncService:
             records = await self._fetch_external_records(provider, from_date, to_date)
             sync_log.records_fetched = len(records)
 
-            # Process each record
-            imported = 0
-            updated = 0
-            skipped = 0
-            failed = 0
-
-            for record_data in records:
-                try:
-                    result = await self._process_external_record(
-                        provider, sync_log.id, record_data
-                    )
-                    if result == "imported":
-                        imported += 1
-                    elif result == "updated":
-                        updated += 1
-                    elif result == "skipped":
-                        skipped += 1
-                except Exception as e:
-                    logger.error(f"Error processing record: {e}")
-                    failed += 1
-
-            # Update sync log
-            sync_log.records_imported = imported
-            sync_log.records_updated = updated
-            sync_log.records_skipped = skipped
-            sync_log.records_failed = failed
-            sync_log.status = (
-                SyncStatus.COMPLETED if failed == 0 else SyncStatus.PARTIAL
-            )
+            await self._stage_records(provider, sync_log, records)
             sync_log.completed_at = datetime.now(timezone.utc)
 
             # Update provider sync timestamps
@@ -497,6 +471,52 @@ class ExternalTrainingSyncService:
             await self.db.commit()
 
         return sync_log
+
+    async def _lock_provider(self, provider: ExternalTrainingProvider) -> None:
+        """Hold the provider row until this transaction commits.
+
+        A sync and a manual upload for the same provider stage the same
+        completions; taking turns on this row means the second one sees the
+        rows the first one wrote instead of inserting them again. The unique
+        index on (provider_id, external_record_id) is the backstop.
+        """
+        await self.db.execute(
+            select(ExternalTrainingProvider.id)
+            .where(ExternalTrainingProvider.id == provider.id)
+            .with_for_update()
+        )
+
+    async def _stage_records(
+        self,
+        provider: ExternalTrainingProvider,
+        sync_log: ExternalTrainingSyncLog,
+        records: List[Dict[str, Any]],
+    ) -> None:
+        """Stage fetched or uploaded records and total them on the sync log.
+
+        Takes the provider lock only now, after any network fetch, so a slow
+        provider never holds it.
+        """
+        await self._lock_provider(provider)
+        counts = {"imported": 0, "updated": 0, "skipped": 0}
+        failed = 0
+        for record_data in records:
+            try:
+                result = await self._process_external_record(
+                    provider, sync_log.id, record_data
+                )
+                if result in counts:
+                    counts[result] += 1
+            except Exception as e:
+                logger.error(f"Error processing record: {e}")
+                failed += 1
+
+        sync_log.records_fetched = len(records)
+        sync_log.records_imported = counts["imported"]
+        sync_log.records_updated = counts["updated"]
+        sync_log.records_skipped = counts["skipped"]
+        sync_log.records_failed = failed
+        sync_log.status = SyncStatus.COMPLETED if failed == 0 else SyncStatus.PARTIAL
 
     async def run_scheduled_sync(
         self, provider: ExternalTrainingProvider
@@ -994,6 +1014,18 @@ class ExternalTrainingSyncService:
             )
 
         body = response.content.decode("utf-8-sig", errors="replace")
+        return self._parse_target_solutions_report(body, params)
+
+    @classmethod
+    def _parse_target_solutions_report(
+        cls, body: str, params: Dict[str, str], uploaded: bool = False
+    ) -> List[Dict[str, str]]:
+        """Rows of a completions report, from the API or an uploaded file.
+
+        Both arrive as the same CSV, so both go through this one parser and
+        stage identical records — which is what lets a completion that comes
+        in both ways update one staged row instead of making two.
+        """
         if not body.strip():
             return []
 
@@ -1004,13 +1036,13 @@ class ExternalTrainingSyncService:
         columns: List[str] = []
         for cells in rows:
             stripped = [cell.strip() for cell in cells]
-            if all(col in stripped for col in self.TS_REQUIRED_COLUMNS):
+            if all(col in stripped for col in cls.TS_REQUIRED_COLUMNS):
                 columns = stripped
                 break
         if not columns:
             # An invalid key comes back as a 200 with an error page rather
             # than a CSV, so the header row is the only reliable signal.
-            raise ValueError(self._ts_not_a_report_message(body, params))
+            raise ValueError(cls._ts_not_a_report_message(body, params, uploaded))
         return [
             {
                 k: (cells[i].strip() if i < len(cells) else "")
@@ -1022,8 +1054,10 @@ class ExternalTrainingSyncService:
         ]
 
     @classmethod
-    def _ts_not_a_report_message(cls, body: str, params: Dict[str, str]) -> str:
-        """Describe a 200 response that holds no completions report.
+    def _ts_not_a_report_message(
+        cls, body: str, params: Dict[str, str], uploaded: bool = False
+    ) -> str:
+        """Describe a response or uploaded file that holds no completions report.
 
         Quotes what the response itself says (a web page's title, or a file's
         first line) so the officer sees Target Solutions' own words rather
@@ -1046,6 +1080,12 @@ class ExternalTrainingSyncService:
             title = re.search(r"<title[^>]*>(.*?)</title>", body, re.I | re.S)
             titled = quote(title.group(1)) if title else ""
             named = f' titled "{titled}"' if titled else ""
+            if uploaded:
+                return (
+                    f"This file is a web page{named}, not a Target Solutions "
+                    "completions report. Download the report as CSV and "
+                    "upload that file."
+                )
             return (
                 f"Target Solutions returned a web page{named} instead of a "
                 "completions report. It does this when the API key or secret is "
@@ -1055,6 +1095,11 @@ class ExternalTrainingSyncService:
 
         first_line = next((line for line in body.splitlines() if line.strip()), "")
         missing = ", ".join(cls.TS_REQUIRED_COLUMNS)
+        if uploaded:
+            return (
+                "This file is not a Target Solutions completions report: it has "
+                f'no {missing} columns. It begins: "{quote(first_line)}"'
+            )
         return (
             "Target Solutions returned a file without the completions report's "
             f'columns ({missing}). It begins: "{quote(first_line)}"'
@@ -1354,7 +1399,10 @@ class ExternalTrainingSyncService:
             if email_key:
                 record_data["external_user_id"] = email_key
 
-        # Check if record already exists
+        # A locking read, not a plain SELECT: under REPEATABLE READ a plain one
+        # answers from this transaction's first snapshot, which predates the
+        # provider lock, and would miss a row a concurrent sync or upload
+        # committed while this one waited for it.
         existing = await self.db.execute(
             select(ExternalTrainingImport)
             .where(ExternalTrainingImport.provider_id == provider.id)
@@ -1362,6 +1410,7 @@ class ExternalTrainingSyncService:
                 ExternalTrainingImport.external_record_id
                 == record_data["external_record_id"]
             )
+            .with_for_update()
         )
         existing_import = existing.scalar_one_or_none()
 
@@ -1695,7 +1744,7 @@ class ExternalTrainingSyncService:
         import_record: ExternalTrainingImport,
         user_id: Optional[str] = None,
         category_id: Optional[str] = None,
-    ) -> TrainingRecord:
+    ) -> Optional[TrainingRecord]:
         """
         Import a single external training record to create a TrainingRecord.
 
@@ -1712,6 +1761,30 @@ class ExternalTrainingSyncService:
         if not target_user_id:
             import_record.import_status = "failed"
             import_record.import_error = "No user mapping found"
+            return None
+
+        # The same provider record never becomes two training records. The
+        # staged row is unique per record, but a training record can already
+        # carry this record id from a staged row that no longer points at it
+        # (one the 2026-10-07 upgrade marked duplicate, say), so check the
+        # record table too and link to what is already there.
+        existing = (
+            await self.db.execute(
+                select(TrainingRecord)
+                .where(TrainingRecord.organization_id == import_record.organization_id)
+                .where(TrainingRecord.external_provider_id == import_record.provider_id)
+                .where(
+                    TrainingRecord.external_record_id
+                    == import_record.external_record_id
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            import_record.training_record_id = existing.id
+            import_record.import_status = "imported"
+            import_record.import_error = None
+            import_record.imported_at = datetime.now(timezone.utc)
             return None
 
         # Determine category
@@ -1812,6 +1885,91 @@ class ExternalTrainingSyncService:
         import_record.imported_at = datetime.now(timezone.utc)
 
         return training_record
+
+    async def upload_target_solutions_report(
+        self,
+        provider: ExternalTrainingProvider,
+        content: str,
+        user_id: str,
+    ) -> Tuple[ExternalTrainingSyncLog, int, int]:
+        """Stage an uploaded completions report and credit matched members.
+
+        The file is the same report the API returns, parsed and staged by the
+        same code, so each completion is keyed by its Transcript ID: one that
+        an API sync already staged is updated, never added again, and one that
+        is already a training record is never credited twice. Rows whose
+        member is matched become training records at once; the rest wait
+        under Imports for an officer, as they would after a sync.
+
+        Needs no API key or secret, so it works when the API cannot be used.
+
+        Returns the sync log, the number of training records created, and the
+        number of rows still waiting for a member.
+        """
+        if provider.provider_type != ExternalProviderType.TARGET_SOLUTIONS:
+            raise ValueError("Report upload is only available for Target Solutions")
+
+        rows = self._parse_target_solutions_report(content, {}, uploaded=True)
+        records = [
+            record
+            for record in map(self._normalize_target_solutions_record, rows)
+            if record is not None
+        ]
+        dates = [
+            parsed.date()
+            for parsed in (self._parse_date(r.get("completion_date")) for r in records)
+            if parsed is not None
+        ]
+
+        sync_log = ExternalTrainingSyncLog(
+            provider_id=provider.id,
+            organization_id=provider.organization_id,
+            sync_type=UPLOAD_SYNC_TYPE,
+            status=SyncStatus.IN_PROGRESS,
+            started_at=datetime.now(timezone.utc),
+            sync_from_date=min(dates) if dates else None,
+            sync_to_date=max(dates) if dates else None,
+            initiated_by=user_id,
+        )
+        self.db.add(sync_log)
+        await self.db.flush()
+
+        await self._stage_records(provider, sync_log, records)
+        await self.db.flush()
+
+        staged = (
+            (
+                await self.db.execute(
+                    select(ExternalTrainingImport)
+                    .where(ExternalTrainingImport.provider_id == provider.id)
+                    .where(
+                        ExternalTrainingImport.organization_id
+                        == provider.organization_id
+                    )
+                    .where(ExternalTrainingImport.sync_log_id == sync_log.id)
+                    # Only rows still waiting: never one an officer or the
+                    # dedup migration set aside as a duplicate.
+                    .where(
+                        ExternalTrainingImport.import_status.in_(["pending", "failed"])
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        created: List[TrainingRecord] = []
+        awaiting_member = 0
+        for import_record in staged:
+            if not import_record.user_id:
+                awaiting_member += 1
+                continue
+            training_record = await self.import_single_record(import_record)
+            if training_record is not None:
+                created.append(training_record)
+        await self._feed_imported_records_to_pipelines(created)
+
+        sync_log.completed_at = datetime.now(timezone.utc)
+        return sync_log, len(created), awaiting_member
 
     async def _feed_imported_records_to_pipelines(self, records: list) -> None:
         """Advance category-linked pipeline requirements for each imported record.

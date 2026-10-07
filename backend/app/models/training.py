@@ -3026,7 +3026,15 @@ class ExternalTrainingImport(Base):
 
     __table_args__ = (
         Index("idx_ext_import_provider", "provider_id", "import_status"),
-        Index("idx_ext_import_external", "provider_id", "external_record_id"),
+        # One staged row per provider record: sync and manual upload both
+        # key on it, and the index is what stops two concurrent runs from
+        # each inserting the same completion.
+        Index(
+            "idx_ext_import_external",
+            "provider_id",
+            "external_record_id",
+            unique=True,
+        ),
         Index("idx_ext_import_user", "user_id"),
     )
 

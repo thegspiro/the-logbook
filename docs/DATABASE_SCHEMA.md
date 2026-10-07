@@ -8414,7 +8414,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
-| `provider_id` | VARCHAR(36) | no | FK, IDX |  | → `external_training_providers.id` ON DELETE CASCADE |
+| `provider_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `external_training_providers.id` ON DELETE CASCADE |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `sync_log_id` | VARCHAR(36) | yes | FK, IDX |  | → `external_training_sync_logs.id` ON DELETE SET NULL |
 | `external_record_id` | VARCHAR(255) | no |  |  |  |
@@ -8441,7 +8441,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_ext_import_external` (`provider_id`, `external_record_id`)
+- UNIQUE `idx_ext_import_external` (`provider_id`, `external_record_id`)
 - `idx_ext_import_provider` (`provider_id`, `import_status`)
 - `idx_ext_import_user` (`user_id`)
 - `ix_external_training_imports_import_status` (`import_status`)

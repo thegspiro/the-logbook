@@ -732,6 +732,37 @@ Details:
   daily at 02:00". Other providers show only "Every _N_h" and their form has a
   single **Sync Interval**, scheduled from the previous sync as before.
 
+#### Uploading a report by hand _(2026-10-07)_
+
+A Target Solutions provider card always has **Upload Report**, whether or not
+the API key and secret are set and whether or not the last connection test
+passed. Use it when the API is not set up yet, is not answering, or to load
+history older than the 30-day review.
+
+1. In Target Solutions, run the Training Records API report link (or download
+   the completions report) and save it as a **CSV** file. The report's title
+   lines above the column headings are fine to leave in.
+2. On the provider card, choose **Upload Report** and pick the file (25 MB at
+   most).
+
+Completions whose member is matched — by email, then Employee ID — become
+training records immediately. Completions nobody matches wait under
+**Imports**, exactly as after a sync. The upload appears in the sync history as
+an **upload**.
+
+**Nothing is recorded twice.** Every completion is identified by its
+**Transcript ID**. Uploading the same file again, uploading a report that
+overlaps an API sync, or an API sync that later brings in a completion already
+uploaded each update the one existing entry. A completion that is already a
+training record is never credited again. An upload and a sync for the same
+provider take turns rather than running over each other, and the database
+itself refuses a second entry with the same Transcript ID.
+
+> **On upgrade:** if two staged entries already shared a Transcript ID, the
+> upgrade keeps one — the one already imported, else the oldest — and marks the
+> others **duplicate**, with the original ID noted on them. Nothing is deleted,
+> and no training record is changed.
+
 #### When the connection test or a sync fails _(2026-10-07)_
 
 The message says what Target Solutions actually sent back. The same text

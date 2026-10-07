@@ -8,7 +8,16 @@ and syncing training records from external platforms.
 from datetime import date, datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from loguru import logger
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +29,7 @@ from app.core.security import encrypt_data
 from app.core.utils import safe_error_detail
 from app.models.training import (
     ExternalCategoryMapping,
+    ExternalProviderType,
     ExternalTrainingImport,
     ExternalTrainingProvider,
     ExternalTrainingSyncLog,
@@ -43,6 +53,7 @@ from app.schemas.training import (
     ExternalUserMappingResponse,
     ExternalUserMappingUpdate,
     ImportRecordRequest,
+    ReportUploadResponse,
     SyncRequest,
     SyncResponse,
 )
@@ -56,6 +67,7 @@ from app.utils.email_providers import REDACTED_SECRET
 from app.utils.member_names import format_legal_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import is_in_org
+from app.utils.upload_limits import read_upload_limited
 from app.utils.url_validator import validate_integration_url
 
 router = APIRouter()
@@ -693,6 +705,127 @@ async def trigger_sync(
         records_fetched=0,
         records_imported=0,
         records_failed=0,
+    )
+
+
+# A completions report is a few kilobytes a month; this allows many years of
+# a large department's history in one file.
+MAX_REPORT_UPLOAD_BYTES = 25 * 1024 * 1024
+
+
+@router.post(
+    "/providers/{provider_id}/upload-report",
+    response_model=ReportUploadResponse,
+)
+async def upload_report(
+    provider_id: UUID,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Upload a Target Solutions completions report (CSV) by hand.
+
+    The same report the Training Records API returns, downloaded from Target
+    Solutions. Completions are keyed by Transcript ID, so a completion that an
+    API sync has already brought in, or that is already a training record, is
+    never added twice. Rows whose member is matched become training records
+    immediately; the rest wait under Imports. Works without an API key or
+    secret, and whether or not the connection test passes.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    result = await db.execute(
+        select(ExternalTrainingProvider)
+        .where(ExternalTrainingProvider.id == str(provider_id))
+        .where(ExternalTrainingProvider.organization_id == current_user.organization_id)
+    )
+    provider = result.scalar_one_or_none()
+    if not provider:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found"
+        )
+    if provider.provider_type != ExternalProviderType.TARGET_SOLUTIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Report upload is only available for Target Solutions",
+        )
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Upload the report as a .csv file",
+        )
+
+    try:
+        raw = await read_upload_limited(file, MAX_REPORT_UPLOAD_BYTES)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail="The report exceeds the 25 MB limit",
+        )
+    try:
+        content = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The file is not UTF-8 text. Download the report as CSV again.",
+        )
+
+    service = ExternalTrainingSyncService(db)
+    try:
+        sync_log, created, awaiting = await service.upload_target_solutions_report(
+            provider, content, str(current_user.id)
+        )
+        await db.commit()
+    except ValueError as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    except Exception as e:
+        await db.rollback()
+        logger.exception(f"Report upload failed for provider {provider_id}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
+    finally:
+        await service.close()
+
+    await log_audit_event(
+        db=db,
+        event_type="external_training_report_uploaded",
+        event_category="training",
+        severity="info",
+        event_data={
+            "provider_id": str(provider.id),
+            "sync_log_id": str(sync_log.id),
+            "rows_in_report": sync_log.records_fetched,
+            "training_records_created": created,
+            "awaiting_member": awaiting,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    parts = [f"{created} training record(s) added"]
+    if sync_log.records_updated:
+        parts.append(f"{sync_log.records_updated} already on file")
+    if awaiting:
+        parts.append(f"{awaiting} waiting for a member match under Imports")
+    if sync_log.records_failed:
+        parts.append(f"{sync_log.records_failed} row(s) could not be read")
+    return ReportUploadResponse(
+        sync_log_id=sync_log.id,
+        status=sync_log.status,
+        message="; ".join(parts),
+        rows_in_report=sync_log.records_fetched,
+        new_rows=sync_log.records_imported,
+        updated_rows=sync_log.records_updated,
+        failed_rows=sync_log.records_failed,
+        training_records_created=created,
+        awaiting_member=awaiting,
     )
 
 
