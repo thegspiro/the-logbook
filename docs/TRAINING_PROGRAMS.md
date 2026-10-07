@@ -1578,14 +1578,16 @@ hours count toward that requirement's Airway section.
    - **NFPA 1500 Occupational Safety Training** (8 hrs, annual, calendar period)
    - **NREMT EMT Recertification** (40 hrs, 24-month rolling period)
    - **CPR/BLS Certification** (certification, 24-month rolling period)
-   - **Hazmat Operations Refresher** (8 hrs, annual — OSHA 29 CFR 1910.120)
-   - **Bloodborne Pathogens Annual Refresher** (2 hrs, annual — OSHA 29 CFR 1910.1030)
-   - **HIPAA Privacy & Security Awareness** (1 hr, annual — 45 CFR 164.530(b))
+   - **Hazmat Operations Refresher** (course you link, annual — OSHA 29 CFR 1910.120)
+   - **Bloodborne Pathogens Annual Refresher** (course you link, annual — OSHA 29 CFR 1910.1030)
+   - **HIPAA Privacy & Security Awareness** (course you link, annual — 45 CFR 164.530(b))
    - **SCBA Fit Test & Respiratory Protection** (checklist, annual — OSHA 29 CFR 1910.134)
    - **NIMS/ICS Initial Certification** (ICS-100/200, IS-700/800 courses, one-time)
    - **New Member Orientation Checklist** (checklist, one-time, probationary members)
 3. Selecting a template opens the create form pre-filled — review and adjust
-   the hours, due date configuration, and assignment before saving. Templates
+   the hours, due date configuration, and assignment before saving. The
+   Hazmat, Bloodborne Pathogens and HIPAA templates are Courses requirements:
+   pick the department's course for that topic from the library. Templates
    based on national standards carry NFPA/NREMT/OSHA/HIPAA/FEMA source
    attribution automatically.
 

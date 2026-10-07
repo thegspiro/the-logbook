@@ -16,6 +16,7 @@ vi.mock('../services/api', () => ({
     createRequirement: (...args: unknown[]) => mockCreateRequirement(...args) as unknown,
     updateRequirement: vi.fn(),
     deleteRequirement: vi.fn(),
+    getCourses: vi.fn().mockResolvedValue([]),
   },
   trainingProgramService: {
     getRegistries: vi.fn().mockResolvedValue([]),
@@ -112,6 +113,56 @@ describe('TrainingRequirementsPage', () => {
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByLabelText(/^Name/)).toHaveValue('NREMT EMT Recertification');
     expect(within(dialog).getByLabelText(/Required Hours/)).toHaveValue(40);
+  });
+
+  it.each([
+    'HIPAA Privacy & Security Awareness',
+    'Bloodborne Pathogens Annual Refresher',
+    'Hazmat Operations Refresher',
+  ])('seeds the single-topic %s template as a Courses requirement', async (templateName) => {
+    // As an hours requirement scoped only by training type, any hour of that
+    // type satisfied it — two CAPCE medical courses met the HIPAA refresher.
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingRequirementsPage />);
+
+    await user.click(await screen.findByRole('button', { name: /use template/i }));
+    await user.click(screen.getByRole('button', { name: new RegExp(templateName, 'i') }));
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByLabelText(/^Requirement Type/)).toHaveValue('courses');
+    await user.click(within(dialog).getByRole('button', { name: 'Create Requirement' }));
+
+    expect(mockCreateRequirement).not.toHaveBeenCalled();
+    expect(vi.mocked(toast.error)).toHaveBeenCalledWith(
+      'Select at least one course from the library for a courses requirement'
+    );
+  });
+
+  it('shows the warning the backend reports for a requirement any hour can satisfy', async () => {
+    const warning =
+      'Any training hour of the selected type counts toward this requirement, not only HIPAA training. Edit it into a Courses requirement linked to your HIPAA course.';
+    mockGetRequirements.mockResolvedValue([
+      {
+        id: 'req-hipaa',
+        name: 'HIPAA Privacy & Security Awareness',
+        requirement_type: 'hours',
+        source: 'national',
+        registry_name: 'HIPAA',
+        registry_code: '45 CFR 164.530(b)',
+        training_type: 'continuing_education',
+        required_hours: 1,
+        frequency: 'annual',
+        applies_to_all: true,
+        active: true,
+        due_date_type: 'calendar_period',
+        config_warning: warning,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ]);
+    renderWithRouter(<TrainingRequirementsPage />);
+
+    expect(await screen.findByText(warning)).toBeInTheDocument();
   });
 
   it('labels a one-time requirement as One Time instead of showing a recurring cycle', async () => {

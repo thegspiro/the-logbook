@@ -920,9 +920,9 @@ Built-in templates:
 | NFPA 1500 Occupational Safety Training | NFPA 1500             | 8 hours, annual, calendar period                     |
 | NREMT EMT Recertification              | NREMT                 | 40 hours, 24-month rolling period                    |
 | CPR/BLS Certification                  | —                     | Certification, 24-month rolling period               |
-| Hazmat Operations Refresher            | OSHA 29 CFR 1910.120  | 8 hours, annual, calendar period                     |
-| Bloodborne Pathogens Annual Refresher  | OSHA 29 CFR 1910.1030 | 2 hours, annual, calendar period                     |
-| HIPAA Privacy & Security Awareness     | 45 CFR 164.530(b)     | 1 hour, annual, calendar period                      |
+| Hazmat Operations Refresher            | OSHA 29 CFR 1910.120  | Courses (link your hazmat course), annual            |
+| Bloodborne Pathogens Annual Refresher  | OSHA 29 CFR 1910.1030 | Courses (link your BBP course), annual               |
+| HIPAA Privacy & Security Awareness     | 45 CFR 164.530(b)     | Courses (link your HIPAA course), annual             |
 | SCBA Fit Test & Respiratory Protection | OSHA 29 CFR 1910.134  | Checklist (4 items), annual                          |
 | NIMS/ICS Initial Certification         | FEMA NIMS             | Courses (ICS-100, ICS-200, IS-700, IS-800), one-time |
 | New Member Orientation Checklist       | —                     | Checklist (5 items), one-time, probationary members  |
@@ -931,6 +931,17 @@ Templates tied to a national standard carry source attribution (NFPA, NREMT,
 OSHA, HIPAA, FEMA) with the standard or CFR citation as the registry code, so
 requirements created from them display a source badge instead of appearing as
 department-defined rules.
+
+**Single-topic templates are Courses requirements** _(2026-10-07)_. HIPAA,
+Bloodborne Pathogens and Hazmat each mandate training on one subject, so their
+templates ask you to pick that course from the library and the form won't save
+until you do. They used to create hours requirements counting any hour of a
+training type, which any course of that type satisfied: two medical CE courses
+imported from Target Solutions met a member's HIPAA refresher. Requirements
+already created from the old templates are not changed — the card shows a
+warning until you edit one into a Courses requirement linked to the right
+course (or scope it to a category). When the provider releases a new version of
+that course, map it on the integration's **Courses** tab so it keeps counting.
 
 ### Frequency and Due Dates
 

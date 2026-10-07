@@ -468,7 +468,39 @@ def requirement_config_warning(obj: object) -> Optional[str]:
             f"This {type_label} requirement can't be completed — {clause}. "
             "Members won't earn credit until it's fixed."
         )
-    return None
+    return _unscoped_topic_warning(obj, rtype)
+
+
+# Regulations that mandate training on one topic, keyed by the registry code
+# the built-in requirement templates stamp. Those templates once created these
+# as hours requirements of a bare training type, which an hour of anything of
+# that type satisfies: two CAPCE medical courses imported as continuing
+# education met "HIPAA Privacy & Security Awareness". The templates now create
+# Courses requirements; requirements already created from the old ones are
+# flagged rather than rewritten, because which library course is the HIPAA
+# course is the department's call.
+_SINGLE_TOPIC_REGISTRY_CODES = {
+    "45 CFR 164.530(b)": "HIPAA",
+    "29 CFR 1910.1030": "bloodborne pathogens",
+    "29 CFR 1910.120": "hazmat",
+}
+
+
+def _unscoped_topic_warning(obj: object, rtype: object) -> Optional[str]:
+    if rtype != RequirementType.HOURS:
+        return None
+    topic = _SINGLE_TOPIC_REGISTRY_CODES.get(getattr(obj, "registry_code", None))
+    if topic is None:
+        return None
+    # Either filter narrows what counts (hours_record_counts), so a requirement
+    # an officer already scoped to a category or course is left alone.
+    if getattr(obj, "category_ids", None) or getattr(obj, "required_courses", None):
+        return None
+    return (
+        f"Any training hour of the selected type counts toward this "
+        f"requirement, not only {topic} training. Edit it into a Courses "
+        f"requirement linked to your {topic} course."
+    )
 
 
 def grandfathering_error(
