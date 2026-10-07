@@ -67,7 +67,19 @@ DEFAULT_TS_REVIEW_TIME = time(2, 0)
 
 # Providers whose synced completions become training records without an
 # officer's review, once the member is matched.
-AUTO_CREDIT_PROVIDERS = frozenset({ExternalProviderType.TARGET_SOLUTIONS})
+AUTO_CREDIT_PROVIDERS = frozenset(
+    {
+        ExternalProviderType.TARGET_SOLUTIONS,
+        ExternalProviderType.VECTOR_SOLUTIONS,
+        ExternalProviderType.LEXIPOL,
+        ExternalProviderType.I_AM_RESPONDING,
+    }
+)
+
+
+def _is_blank(value: Any) -> bool:
+    return value is None or str(value).strip() in ("", "None")
+
 
 # Providers whose user id is the department's own employee number, so a member
 # can be matched on membership_number when the email does not match. Target
@@ -463,9 +475,10 @@ class ExternalTrainingSyncService:
             sync_log.records_fetched = len(records)
 
             await self._stage_records(provider, sync_log, records)
-            # Target Solutions completions are credited as they arrive (owner
-            # decision, 2026-10-07): the Transcript ID keys them, so nothing is
-            # credited twice. Other providers keep the officer's review step.
+            # Completions from the named providers are credited as they arrive
+            # (owner decision, 2026-10-07): each is keyed by its record id, so
+            # nothing is credited twice. A custom API keeps the officer's
+            # review step, since what its records hold is configured per site.
             if provider.provider_type in AUTO_CREDIT_PROVIDERS:
                 created, awaiting = await self.credit_matched_members(
                     provider, sync_log
@@ -1434,6 +1447,12 @@ class ExternalTrainingSyncService:
 
         Returns: "imported", "updated", or "skipped"
         """
+        # Normalizers build ids with str(record.get(...)), so a provider that
+        # sends null yields the text "None"; treat it as absent.
+        for key in ("external_record_id", "external_user_id", "external_course_id"):
+            if _is_blank(record_data.get(key)):
+                record_data[key] = ""
+
         # A record that carries an email but no provider user id still belongs
         # to someone: key the member by that email so it can be mapped (and
         # later bulk-imported, which looks mappings up by external_user_id).
@@ -1441,6 +1460,29 @@ class ExternalTrainingSyncService:
             email_key = self._normalize_email(record_data.get("external_email"))
             if email_key:
                 record_data["external_user_id"] = email_key
+
+        # Every completion needs its own key: staging is unique per record id,
+        # so records sharing a blank id would overwrite one another, and with
+        # automatic crediting the survivor would be credited while the rest
+        # vanished. Without a provider id, who + what + when identifies it, as
+        # Target Solutions' blank-Transcript-ID fallback does.
+        if not record_data.get("external_record_id"):
+            parts = [
+                str(record_data.get("external_user_id") or ""),
+                str(
+                    record_data.get("external_course_id")
+                    or record_data.get("course_title")
+                    or ""
+                ),
+                str(record_data.get("completion_date") or ""),
+            ]
+            if not parts[0] or not any(parts[1:]):
+                logger.warning(
+                    f"Skipped a {provider.provider_type} record with no id, "
+                    "member, course or date to identify it"
+                )
+                return "skipped"
+            record_data["external_record_id"] = "|".join(parts)[:255]
 
         # A locking read, not a plain SELECT: under REPEATABLE READ a plain one
         # answers from this transaction's first snapshot, which predates the

@@ -329,34 +329,103 @@ class TestNoDuplicates:
         assert record.external_record_id == "T-1"
         assert (await _staged(db_session, provider, "T-3")).import_status == ("pending")
 
-    async def test_other_providers_keep_the_review_step(self, db_session):
-        _, member, provider = await _setup(
-            db_session, provider_type=ExternalProviderType.VECTOR_SOLUTIONS
-        )
+    async def _sync_records(self, db_session, provider, records):
         service = ExternalTrainingSyncService(db_session)
-        record = service._normalize_target_solutions_record(
-            next(
-                iter(
-                    ExternalTrainingSyncService._parse_target_solutions_report(
-                        _report(MATCHED), {}
-                    )
-                )
-            )
-        )
         try:
             with patch.object(
-                service, "_fetch_external_records", AsyncMock(return_value=[record])
+                service, "_fetch_external_records", AsyncMock(return_value=records)
             ):
-                await service.sync_training_records(
+                return await service.sync_training_records(
                     provider, from_date=date(2026, 9, 1), to_date=date(2026, 10, 1)
                 )
         finally:
             await service.close()
 
+    @staticmethod
+    def _ts_record(row):
+        service = ExternalTrainingSyncService(None)
+        (parsed,) = ExternalTrainingSyncService._parse_target_solutions_report(
+            _report(row), {}
+        )
+        return service._normalize_target_solutions_record(parsed)
+
+    @pytest.mark.parametrize(
+        "provider_type",
+        [
+            ExternalProviderType.VECTOR_SOLUTIONS,
+            ExternalProviderType.LEXIPOL,
+            ExternalProviderType.I_AM_RESPONDING,
+        ],
+    )
+    async def test_named_providers_credit_matched_members(
+        self, db_session, provider_type
+    ):
+        _, member, provider = await _setup(db_session, provider_type=provider_type)
+
+        await self._sync_records(db_session, provider, [self._ts_record(MATCHED)])
+
+        (record,) = await _records_for(db_session, provider)
+        assert record.user_id == member.id
+        assert (await _staged(db_session, provider, "T-1")).import_status == (
+            "imported"
+        )
+
+    async def test_a_custom_api_keeps_the_review_step(self, db_session):
+        _, member, provider = await _setup(
+            db_session, provider_type=ExternalProviderType.CUSTOM_API
+        )
+
+        await self._sync_records(db_session, provider, [self._ts_record(MATCHED)])
+
         staged = await _staged(db_session, provider, "T-1")
         assert staged.user_id == member.id
         assert staged.import_status == "pending"
         assert await _records_for(db_session, provider) == []
+
+    async def test_completions_without_ids_are_not_merged(self, db_session):
+        _, member, provider = await _setup(
+            db_session, provider_type=ExternalProviderType.LEXIPOL
+        )
+        service = ExternalTrainingSyncService(None)
+        first, second = (
+            service._normalize_lexipol_record(
+                {
+                    "recordId": None,
+                    "memberId": None,
+                    "memberEmail": "pat@dept.test",
+                    "courseId": course,
+                    "courseTitle": title,
+                    "minutes": 60,
+                    "completedDate": "2026-09-15",
+                }
+            )
+            for course, title in (("L-1", "Ethics"), ("L-2", "Harassment"))
+        )
+        assert first["external_record_id"] == "None"
+
+        log = await self._sync_records(db_session, provider, [first, second])
+
+        assert log.records_imported == 2
+        records = await _records_for(db_session, provider)
+        assert sorted(r.course_name for r in records) == ["Ethics", "Harassment"]
+        assert {r.user_id for r in records} == {member.id}
+        assert all("None" not in r.external_record_id for r in records)
+
+    async def test_an_unidentifiable_completion_is_skipped(self, db_session):
+        _, _, provider = await _setup(
+            db_session, provider_type=ExternalProviderType.LEXIPOL
+        )
+        nothing = ExternalTrainingSyncService(None)._normalize_lexipol_record(
+            {"courseTitle": "Mystery"}
+        )
+
+        log = await self._sync_records(db_session, provider, [nothing])
+
+        assert log.records_skipped == 1
+        assert (
+            await _count(db_session, ExternalTrainingImport, provider_id=provider.id)
+            == 0
+        )
 
     async def test_upload_then_api_sync(self, db_session):
         _, member, provider = await _setup(db_session)
