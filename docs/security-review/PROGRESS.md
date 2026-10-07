@@ -16,6 +16,17 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #2986 (Feature 26, Forms, pass 6) merged clean (confirmed via
+`list_pull_requests`; merged_at 2026-10-07T18:30:01Z). 0 fixes needed by
+that pass itself; the Log entry below already records it in full, so there
+is nothing further to record here. Rotation row 26 → ✅. Watchdog pickup:
+74 minutes elapsed with no new branch or PR opened for Feature 27
+(Integrations) before this iteration began (confirmed via
+`list_pull_requests`, state=open, no match).
+
+<details>
+<summary>Superseded — prior Open PR note (bridge note recording PR #2984's merge before Feature 26 started; and, nested below, the pre-merge note for PR #2984 itself), preserved for history</summary>
+
 **PR [#2986](https://github.com/thegspiro/the-logbook/pull/2986)**: branch
 `claude/security-review-forms`, Feature 26 (Forms), pass 6 (watchdog pickup
 — PR #2984, Feature 25, Messaging & notifications, had already merged over
@@ -18269,7 +18280,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
@@ -18284,6 +18295,75 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-07 — Feature 27 (Integrations, pass 6) — real delta, mostly already-reviewed hardening, 0 new findings (watchdog pickup)
+
+Picked up by the scheduled watchdog: PR #2986 (Feature 26, Forms, pass 6)
+had merged 74 minutes earlier (18:30:01 UTC) with no new
+`claude/security-review-*` branch or PR opened for Feature 27. Confirmed
+via `list_pull_requests` (state=open) that no such PR existed, both before
+this iteration began and again before this PR was opened.
+
+Loaded prior art (five prior passes on this feature,
+[`INT-27-integrations.md`](./INT-27-integrations.md), `CHECKLIST.md`,
+`SEC-00-cross-cutting-baseline.md`, `docs/module-audit/integrations.md`,
+`docs/app-review/integrations.md`, and the dedicated
+[`MCPO-27-mcp-oauth-server.md`](./MCPO-27-mcp-oauth-server.md) threat-model
+review) before touching code. `git diff` against pass 5's merge commit
+(`bf0a45a6`, 2026-10-04) — not `git log`, which this file's own prior
+passes have repeatedly had to correct for a squashed-history artifact —
+showed a real, substantial delta: two new service files (`integration_
+health.py`, `paypal_backfill_service.py`), two new routes on
+`integrations.py` (sync history, Retry Sync), a new migration and model
+columns, and three independent hardening fixes to the shared HTTP client
+(`SSRFSafeAsyncTransport` DNS-rebinding pinning, a wall-clock request
+deadline, and response-size/timeout bounds added to the Google Calendar
+connector, which never went through that client at all).
+
+All three hardening fixes predate this pass (shipped 2026-10-05) and are
+**not new findings** — the DNS-pinning fix closes this file's own INT-1
+"narrowed, not closed" caveat and is already recorded in
+`KNOWN_LIMITATIONS.md` under SCH-10 (Scheduling's own rotation pass), and
+the Google Calendar hardening already correctly marks INT-9 "resolved" for
+its size-cap/timeout half. Re-verified both directly against the current
+code — confirmed the documentation matches reality — rather than trusting
+the citation on faith. The two new service files (integration health
+tracking and a PayPal reconciliation backfill) were read in full: sanitized
+error storage, bounded/pruned history (Pitfall #9), org-scoping throughout,
+and a Retry Sync endpoint whose row-lock-then-cooldown-check ordering
+avoids the stale-snapshot failure Pitfall #27 warns about, confirmed by
+direct read of the lock/transaction sequence rather than the docstring's
+own claim.
+
+**One real blocker, entirely environment setup on this watchdog's part, not
+a code defect:** the scoped backend test run first showed dozens of
+failures in files this feature does not own (`events.is_draft` missing,
+"an organization has already been created"). Root cause: the session-start
+hook's `alembic upgrade head` had failed before this session began (wrong
+interpreter invocation) and therefore skipped `repair_schema`, so the
+database was missing twelve `_add_missing_model_columns`-only columns; a
+second round of failures came from running several separate `pytest`
+invocations against the same, never-recreated database, which accumulated
+committed rows from tests not using the auto-rollback `db_session` fixture.
+Fixed by running `alembic upgrade head` with the correct interpreter, then
+`scripts/repair_schema.py`, then dropping and recreating the database for
+one clean, single-invocation run of the scoped suite — 4285 passed, 21
+skipped (environment-only), 0 failed. Recorded here in case a future
+watchdog iteration hits the same session-start symptom.
+
+Completion gate: flake8/black/isort clean over `app/ tests/ alembic/`;
+`validate_migrations.py --strict` passed (541 revisions, single head
+`95dbdfb6591d`); `check_route_permissions.py --strict` passed (251 routes,
+0 errors/warnings); scoped backend tests (`-k "integration or salesforce or
+calcom or documenso or paypal or webhook or connector or mcp_key or
+google_calendar"`) 4285 passed, 21 skipped (environment-only —
+`pywebpush`); frontend `npm run typecheck` 0 errors, `npm run lint` exit 0,
+0 warnings.
+
+Findings doc: [`INT-27-integrations.md`](./INT-27-integrations.md)'s
+**Pass 6** section. No `KNOWN_LIMITATIONS.md` change needed — both entries
+this pass touched (DNS rebinding, INT-9) were already current. Rotation
+row 27 → ✅ (pending PR merge). Next: Feature 28 (Security, audit & IP).
 
 ### 2026-10-07 — Feature 26 (Forms, pass 6) — 0 fixed, 0 new findings (watchdog pickup)
 
