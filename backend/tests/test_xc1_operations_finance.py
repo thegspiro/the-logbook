@@ -22,6 +22,13 @@ from app.api.v1.endpoints.inventory import (
     create_equipment_request,
     create_exposure_record,
 )
+from app.models.apparatus import (
+    Apparatus,
+    ApparatusEquipment,
+    ApparatusReportConfig,
+    ApparatusStatus,
+    ApparatusType,
+)
 from app.models.inventory import (
     EquipmentRequest,
     InventoryCategory,
@@ -30,11 +37,18 @@ from app.models.inventory import (
     NFPAExposureRecord,
 )
 from app.models.user import Organization, Position, User
+from app.schemas.apparatus import (
+    ApparatusEquipmentCreate,
+    ApparatusEquipmentUpdate,
+    ApparatusReportConfigCreate,
+    ApparatusReportConfigUpdate,
+)
 from app.schemas.inventory import (
     EquipmentRequestCreate,
     IssuanceAllowanceCreate,
     NFPAExposureRecordCreate,
 )
+from app.services.apparatus_service import ApparatusService
 
 pytestmark = [pytest.mark.integration]
 
@@ -104,6 +118,38 @@ async def _position(db, org: Organization) -> Position:
     db.add(position)
     await db.flush()
     return position
+
+
+async def _type_and_status(db, org_id):
+    apparatus_type = ApparatusType(
+        id=str(uuid.uuid4()),
+        organization_id=org_id,
+        name="Engine",
+        code=f"ENG{uuid.uuid4().hex[:4]}",
+    )
+    status = ApparatusStatus(
+        id=str(uuid.uuid4()),
+        organization_id=org_id,
+        name="In Service",
+        code=f"IS{uuid.uuid4().hex[:4]}",
+    )
+    db.add_all([apparatus_type, status])
+    await db.flush()
+    return apparatus_type, status
+
+
+async def _apparatus(db, org: Organization) -> Apparatus:
+    apparatus_type, status = await _type_and_status(db, org.id)
+    apparatus = Apparatus(
+        id=str(uuid.uuid4()),
+        organization_id=org.id,
+        unit_number=f"E-{uuid.uuid4().hex[:5]}",
+        apparatus_type_id=apparatus_type.id,
+        status_id=status.id,
+    )
+    db.add(apparatus)
+    await db.flush()
+    return apparatus
 
 
 async def _count(db, model, org_id: str) -> int:
@@ -272,3 +318,199 @@ class TestIssuanceAllowanceFks:
 
         allowance = await self._create(db_session, user, own.id)
         assert allowance.role_id is None
+
+
+# ---------------------------------------------------------------------------
+# Apparatus: equipment inventory_item_id
+# ---------------------------------------------------------------------------
+
+
+class TestApparatusEquipmentInventoryLink:
+    async def test_create_refuses_foreign_inventory_item(self, db_session):
+        mine = await _org(db_session, "Mine")
+        theirs = await _org(db_session, "Theirs")
+        user = await _user(db_session, mine)
+        apparatus = await _apparatus(db_session, mine)
+        foreign = await _item(db_session, theirs)
+
+        with pytest.raises(ValueError, match="Invalid inventory item"):
+            await ApparatusService(db_session).create_equipment(
+                ApparatusEquipmentCreate(
+                    apparatus_id=apparatus.id,
+                    inventory_item_id=foreign.id,
+                    name="Halligan",
+                ),
+                mine.id,
+                assigned_by=user.id,
+            )
+        assert await _count(db_session, ApparatusEquipment, mine.id) == 0
+
+    async def test_create_accepts_own_and_absent_inventory_item(self, db_session):
+        mine = await _org(db_session, "Mine")
+        user = await _user(db_session, mine)
+        apparatus = await _apparatus(db_session, mine)
+        own = await _item(db_session, mine)
+        service = ApparatusService(db_session)
+
+        linked = await service.create_equipment(
+            ApparatusEquipmentCreate(
+                apparatus_id=apparatus.id, inventory_item_id=own.id, name="Halligan"
+            ),
+            mine.id,
+            assigned_by=user.id,
+        )
+        unlinked = await service.create_equipment(
+            ApparatusEquipmentCreate(apparatus_id=apparatus.id, name="Axe"),
+            mine.id,
+            assigned_by=user.id,
+        )
+        assert linked.inventory_item_id == own.id
+        assert unlinked.inventory_item_id is None
+
+    async def test_update_refuses_foreign_and_keeps_old_link(self, db_session):
+        mine = await _org(db_session, "Mine")
+        theirs = await _org(db_session, "Theirs")
+        user = await _user(db_session, mine)
+        apparatus = await _apparatus(db_session, mine)
+        own = await _item(db_session, mine)
+        foreign = await _item(db_session, theirs)
+        service = ApparatusService(db_session)
+        equipment = await service.create_equipment(
+            ApparatusEquipmentCreate(
+                apparatus_id=apparatus.id, inventory_item_id=own.id, name="Halligan"
+            ),
+            mine.id,
+            assigned_by=user.id,
+        )
+
+        with pytest.raises(ValueError, match="Invalid inventory item"):
+            await service.update_equipment(
+                equipment.id,
+                ApparatusEquipmentUpdate(inventory_item_id=foreign.id),
+                mine.id,
+            )
+        await db_session.refresh(equipment)
+        assert equipment.inventory_item_id == own.id
+
+    async def test_update_accepts_own_and_clears_with_null(self, db_session):
+        mine = await _org(db_session, "Mine")
+        user = await _user(db_session, mine)
+        apparatus = await _apparatus(db_session, mine)
+        first = await _item(db_session, mine)
+        second = await _item(db_session, mine)
+        service = ApparatusService(db_session)
+        equipment = await service.create_equipment(
+            ApparatusEquipmentCreate(
+                apparatus_id=apparatus.id, inventory_item_id=first.id, name="Halligan"
+            ),
+            mine.id,
+            assigned_by=user.id,
+        )
+
+        moved = await service.update_equipment(
+            equipment.id,
+            ApparatusEquipmentUpdate(inventory_item_id=second.id),
+            mine.id,
+        )
+        assert moved.inventory_item_id == second.id
+
+        cleared = await service.update_equipment(
+            equipment.id, ApparatusEquipmentUpdate(inventory_item_id=None), mine.id
+        )
+        assert cleared.inventory_item_id is None
+
+
+# ---------------------------------------------------------------------------
+# Apparatus: report config include_* id arrays
+# ---------------------------------------------------------------------------
+
+
+class TestApparatusReportConfigIdLists:
+    async def test_create_refuses_foreign_apparatus(self, db_session):
+        mine = await _org(db_session, "Mine")
+        theirs = await _org(db_session, "Theirs")
+        own = await _apparatus(db_session, mine)
+        foreign = await _apparatus(db_session, theirs)
+
+        with pytest.raises(ValueError, match="Invalid apparatus"):
+            await ApparatusService(db_session).create_report_config(
+                ApparatusReportConfigCreate(
+                    name="Fleet",
+                    report_type="fleet_status",
+                    include_apparatus_ids=[own.id, foreign.id],
+                ),
+                mine.id,
+            )
+        assert await _count(db_session, ApparatusReportConfig, mine.id) == 0
+
+    async def test_create_refuses_foreign_type_and_status(self, db_session):
+        mine = await _org(db_session, "Mine")
+        theirs = await _org(db_session, "Theirs")
+        foreign_type, foreign_status = await _type_and_status(db_session, theirs.id)
+        service = ApparatusService(db_session)
+
+        with pytest.raises(ValueError, match="Invalid apparatus type"):
+            await service.create_report_config(
+                ApparatusReportConfigCreate(
+                    name="Fleet",
+                    report_type="fleet_status",
+                    include_type_ids=[foreign_type.id],
+                ),
+                mine.id,
+            )
+        with pytest.raises(ValueError, match="Invalid apparatus status"):
+            await service.create_report_config(
+                ApparatusReportConfigCreate(
+                    name="Fleet",
+                    report_type="fleet_status",
+                    include_status_ids=[foreign_status.id],
+                ),
+                mine.id,
+            )
+        assert await _count(db_session, ApparatusReportConfig, mine.id) == 0
+
+    async def test_create_accepts_own_and_system_rows(self, db_session):
+        mine = await _org(db_session, "Mine")
+        own = await _apparatus(db_session, mine)
+        own_type, own_status = await _type_and_status(db_session, mine.id)
+        system_type, system_status = await _type_and_status(db_session, None)
+
+        config = await ApparatusService(db_session).create_report_config(
+            ApparatusReportConfigCreate(
+                name="Fleet",
+                report_type="fleet_status",
+                include_apparatus_ids=[own.id],
+                include_type_ids=[own_type.id, system_type.id],
+                include_status_ids=[own_status.id, system_status.id],
+            ),
+            mine.id,
+        )
+        assert config.include_apparatus_ids == [own.id]
+        assert set(config.include_type_ids) == {own_type.id, system_type.id}
+
+    async def test_update_refuses_foreign_and_accepts_own(self, db_session):
+        mine = await _org(db_session, "Mine")
+        theirs = await _org(db_session, "Theirs")
+        own = await _apparatus(db_session, mine)
+        foreign = await _apparatus(db_session, theirs)
+        service = ApparatusService(db_session)
+        config = await service.create_report_config(
+            ApparatusReportConfigCreate(name="Fleet", report_type="fleet_status"),
+            mine.id,
+        )
+
+        with pytest.raises(ValueError, match="Invalid apparatus"):
+            await service.update_report_config(
+                config.id,
+                ApparatusReportConfigUpdate(include_apparatus_ids=[foreign.id]),
+                mine.id,
+            )
+        await db_session.refresh(config)
+        assert not config.include_apparatus_ids
+
+        updated = await service.update_report_config(
+            config.id,
+            ApparatusReportConfigUpdate(include_apparatus_ids=[own.id]),
+            mine.id,
+        )
+        assert updated.include_apparatus_ids == [own.id]
