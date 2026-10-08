@@ -160,7 +160,7 @@ export const CompetencyHeatmap: React.FC = () => {
               <tr>
                 <th
                   scope="col"
-                  className="text-theme-text-muted bg-theme-surface sticky left-0 text-left text-xs font-medium"
+                  className="text-theme-text-muted surface-opaque sticky left-0 text-left text-xs font-medium"
                 >
                   Member
                 </th>
@@ -180,7 +180,7 @@ export const CompetencyHeatmap: React.FC = () => {
                 <tr key={member.user_id}>
                   <th
                     scope="row"
-                    className="text-theme-text-primary bg-theme-surface sticky left-0 pr-2 text-left font-normal whitespace-nowrap"
+                    className="text-theme-text-primary surface-opaque sticky left-0 pr-2 text-left font-normal whitespace-nowrap"
                   >
                     {member.name}
                   </th>

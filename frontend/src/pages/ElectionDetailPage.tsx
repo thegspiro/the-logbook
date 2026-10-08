@@ -2269,7 +2269,7 @@ export const ElectionDetailPage: React.FC = () => {
                         ) : (
                           <div className="max-h-64 overflow-x-auto overflow-y-auto">
                             <table className="min-w-full text-sm" aria-label="Audit log entries">
-                              <thead className="bg-theme-surface-secondary sticky top-0">
+                              <thead className="surface-secondary-opaque sticky top-0">
                                 <tr>
                                   <th
                                     scope="col"
