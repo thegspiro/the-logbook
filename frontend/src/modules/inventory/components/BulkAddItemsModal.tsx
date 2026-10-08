@@ -173,7 +173,7 @@ const BulkAddItemsModal: React.FC<BulkAddItemsModalProps> = ({ isOpen, onClose, 
         {parsed.length > 0 && (
           <div className="border-theme-surface-border max-h-40 overflow-auto rounded-lg border">
             <table className="w-full text-sm">
-              <thead className="bg-theme-surface-secondary sticky top-0">
+              <thead className="bg-theme-surface-modal sticky top-0">
                 <tr>
                   <th scope="col" className="text-theme-text-secondary px-3 py-1.5 text-left text-xs">
                     Name

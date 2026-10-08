@@ -250,6 +250,14 @@ class BudgetCategory(Base):
     sort_order = Column(Integer, nullable=False, default=0)
     is_active = Column(Boolean, nullable=False, default=True)
     qb_account_name = Column(String(200), nullable=True)
+    # The position answerable for this category's lines. A line with no owner
+    # of its own inherits this one (app/services/finance_budget_ownership.py).
+    owner_position_id = Column(
+        String(36),
+        ForeignKey("positions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -262,6 +270,7 @@ class BudgetCategory(Base):
 
     # Relationships
     organization = relationship("Organization", foreign_keys=[organization_id])
+    owner_position = relationship("Position", foreign_keys=[owner_position_id])
     parent = relationship(
         "BudgetCategory",
         remote_side=[id],
@@ -307,6 +316,14 @@ class Budget(Base):
         ForeignKey("facilities.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # The line's own owner. NULL means "inherit the category's owner", not
+    # "no owner" — app/services/finance_budget_ownership.py resolves which.
+    owner_position_id = Column(
+        String(36),
+        ForeignKey("positions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_by = Column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
@@ -325,6 +342,7 @@ class Budget(Base):
     fiscal_year = relationship("FiscalYear", back_populates="budgets")
     category = relationship("BudgetCategory", foreign_keys=[category_id])
     station = relationship("Facility", foreign_keys=[station_id])
+    owner_position = relationship("Position", foreign_keys=[owner_position_id])
     creator = relationship("User", foreign_keys=[created_by])
 
     __table_args__ = (

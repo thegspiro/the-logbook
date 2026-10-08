@@ -17,7 +17,7 @@ later already carries the column from the model.
 The downgrade drops the column and the offset accounts stored in it.
 
 Revision ID: d429a803f847
-Revises: 7db20aa49329
+Revises: 1be4fbbc235d
 Create Date: 2026-10-08 14:42:37.386668
 
 """
@@ -29,7 +29,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "d429a803f847"
-down_revision: Union[str, None] = "7db20aa49329"
+down_revision: Union[str, None] = "1be4fbbc235d"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

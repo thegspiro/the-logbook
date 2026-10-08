@@ -2,14 +2,18 @@
  * Fiscal Year Settings Page
  *
  * Settings page for managing fiscal years (create, activate, lock)
- * and budget categories (CRUD).
+ * and budget categories (CRUD, including each category's owner position).
  */
 
 import React, { useEffect, useState } from 'react';
-import { Plus, AlertTriangle, Calendar, Lock, CheckCircle, Trash2, Tag } from 'lucide-react';
+import { Plus, AlertTriangle, Calendar, Lock, CheckCircle, Trash2, Tag, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { budgetCategoryService, fiscalYearService } from '../services/api';
+import { useBudgetFormOptions, withCurrent } from '../hooks/useBudgetFormOptions';
+import type { BudgetCategory } from '../types';
+import { blankToNull } from '@/utils/formValues';
+import { getErrorMessage } from '@/utils/errorHandling';
 import { SkeletonPage } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { ConfirmDialog } from '@/components/ux/ConfirmDialog';
@@ -134,22 +138,28 @@ const CreateFYModal: React.FC<CreateFYModalProps> = ({ open, onClose }) => {
 };
 
 // =============================================================================
-// Create Category Modal
+// Category Modal (create and edit)
 // =============================================================================
 
-interface CreateCategoryModalProps {
+interface CategoryModalProps {
   open: boolean;
   onClose: () => void;
-  onCreated: () => void;
+  onSaved: () => void;
+  /** The category being edited; absent to create one. */
+  category?: BudgetCategory | undefined;
 }
 
-const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({ open, onClose, onCreated }) => {
+const CategoryModal: React.FC<CategoryModalProps> = ({ open, onClose, onSaved, category }) => {
   // Before the `if (!open) return null` below — hooks may not sit after it.
   useOverlaySurface(open);
+  const { positions } = useBudgetFormOptions(open);
 
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
+  const [name, setName] = useState(category?.name ?? '');
+  const [description, setDescription] = useState(category?.description ?? '');
+  const [ownerPositionId, setOwnerPositionId] = useState(category?.ownerPositionId ?? '');
   const [submitting, setSubmitting] = useState(false);
+  const isEdit = Boolean(category);
+  const positionOptions = withCurrent(positions, category?.ownerPositionId, category?.ownerPositionName);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,20 +169,35 @@ const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({ open, onClose
     }
     setSubmitting(true);
     try {
-      const createData: Parameters<typeof budgetCategoryService.create>[0] = {
-        name: name.trim(),
-      };
-      if (description.trim()) {
-        createData.description = description.trim();
+      if (category) {
+        // Blanks go as null so a cleared description or owner is cleared
+        // rather than left behind (CLAUDE.md pitfall #1).
+        await budgetCategoryService.update(category.id, {
+          name: name.trim(),
+          description: blankToNull(description),
+          ownerPositionId: blankToNull(ownerPositionId),
+        });
+        toast.success('Category saved');
+      } else {
+        const createData: Parameters<typeof budgetCategoryService.create>[0] = {
+          name: name.trim(),
+        };
+        if (description.trim()) {
+          createData.description = description.trim();
+        }
+        if (ownerPositionId) {
+          createData.ownerPositionId = ownerPositionId;
+        }
+        await budgetCategoryService.create(createData);
+        toast.success('Category created');
+        setName('');
+        setDescription('');
+        setOwnerPositionId('');
       }
-      await budgetCategoryService.create(createData);
-      toast.success('Category created');
-      setName('');
-      setDescription('');
-      onCreated();
+      onSaved();
       onClose();
-    } catch {
-      toast.error('Failed to create category');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, isEdit ? 'Failed to save category' : 'Failed to create category'));
     } finally {
       setSubmitting(false);
     }
@@ -183,11 +208,16 @@ const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({ open, onClose
   return (
     <div className="modal-overlay z-50 flex items-center justify-center">
       <div className="card modal-panel-scroll mx-4 w-full max-w-md p-6 shadow-xl">
-        <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Create Budget Category</h3>
+        <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">
+          {isEdit ? 'Edit Budget Category' : 'Create Budget Category'}
+        </h3>
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
           <div>
-            <label className={labelClass}>Name</label>
+            <label htmlFor="category-name" className={labelClass}>
+              Name
+            </label>
             <input
+              id="category-name"
               type="text"
               className={inputClass}
               value={name}
@@ -196,14 +226,39 @@ const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({ open, onClose
             />
           </div>
           <div>
-            <label className={labelClass}>Description (optional)</label>
+            <label htmlFor="category-description" className={labelClass}>
+              Description (optional)
+            </label>
             <textarea
+              id="category-description"
               className={inputClass}
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What this category covers"
             />
+          </div>
+          <div>
+            <label htmlFor="category-owner" className={labelClass}>
+              Owner position (optional)
+            </label>
+            <select
+              id="category-owner"
+              className={inputClass}
+              value={ownerPositionId}
+              onChange={(e) => setOwnerPositionId(e.target.value)}
+              aria-describedby="category-owner-hint"
+            >
+              <option value="">No owner</option>
+              {positionOptions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            <p id="category-owner-hint" className="text-theme-text-secondary mt-1 text-xs">
+              Budget lines in this category without an owner of their own belong to this position.
+            </p>
           </div>
           <div className="flex items-center justify-end gap-3 pt-2">
             <button
@@ -218,7 +273,7 @@ const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({ open, onClose
               disabled={submitting}
               className="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
             >
-              {submitting ? 'Creating...' : 'Create'}
+              {isEdit ? (submitting ? 'Saving...' : 'Save') : submitting ? 'Creating...' : 'Create'}
             </button>
           </div>
         </form>
@@ -245,6 +300,7 @@ const FiscalYearSettingsPage: React.FC = () => {
 
   const [showCreateFY, setShowCreateFY] = useState(false);
   const [showCreateCategory, setShowCreateCategory] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<BudgetCategory | null>(null);
   const [lockingId, setLockingId] = useState<string | null>(null);
   const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
 
@@ -436,14 +492,26 @@ const FiscalYearSettingsPage: React.FC = () => {
                 <div>
                   <p className="text-theme-text-primary text-sm font-medium">{cat.name}</p>
                   {cat.description && <p className="text-theme-text-secondary text-xs">{cat.description}</p>}
+                  <p className="text-theme-text-secondary text-xs">Owner: {cat.ownerPositionName || 'No owner'}</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setDeletingCategoryId(cat.id)}
-                  className="text-theme-text-secondary rounded-lg p-1.5 hover:bg-red-50 hover:text-red-600"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setEditingCategory(cat)}
+                    aria-label={`Edit ${cat.name}`}
+                    className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary rounded-lg p-1.5"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeletingCategoryId(cat.id)}
+                    aria-label={`Delete ${cat.name}`}
+                    className="text-theme-text-secondary rounded-lg p-1.5 hover:bg-red-50 hover:text-red-600"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -452,11 +520,20 @@ const FiscalYearSettingsPage: React.FC = () => {
 
       {/* Modals */}
       <CreateFYModal open={showCreateFY} onClose={() => setShowCreateFY(false)} />
-      <CreateCategoryModal
+      <CategoryModal
         open={showCreateCategory}
         onClose={() => setShowCreateCategory(false)}
-        onCreated={() => void fetchBudgetCategories()}
+        onSaved={() => void fetchBudgetCategories()}
       />
+      {editingCategory && (
+        <CategoryModal
+          key={editingCategory.id}
+          open
+          category={editingCategory}
+          onClose={() => setEditingCategory(null)}
+          onSaved={() => void fetchBudgetCategories()}
+        />
+      )}
 
       {/* Lock Confirm */}
       <ConfirmDialog

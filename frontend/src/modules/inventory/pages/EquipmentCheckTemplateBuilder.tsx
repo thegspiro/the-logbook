@@ -4870,7 +4870,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       >
         <DialogPanel
           onClose={() => setDrawerOpen(false)}
-          className="bg-theme-surface border-theme-surface-border animate-slide-in-right h-full w-[440px] max-w-[92vw] overflow-y-auto rounded-none border-0 border-l px-5 py-5 shadow-2xl"
+          className="bg-theme-surface-modal border-theme-surface-border animate-slide-in-right h-full w-[440px] max-w-[92vw] overflow-y-auto rounded-none border-0 border-l px-5 py-5 shadow-2xl"
         >
           <div className="mb-1 flex items-start justify-between gap-3">
             <h2 id="template-details-title" className="text-theme-text-primary text-[17px] font-bold">
@@ -5310,7 +5310,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         ref={topBarRef}
         /* `mobile-header-inset` parks it below the fixed mobile header, which
            only exists under 768px — hence the md override back to the top. */
-        className="bg-theme-surface/95 border-theme-surface-border mobile-header-inset sticky z-30 border-b backdrop-blur md:top-0"
+        className="surface-opaque border-theme-surface-border mobile-header-inset sticky z-30 border-b md:top-0"
         style={{
           marginInline: 'calc(var(--page-gutter-inline) * -1)',
           marginTop: 'calc(var(--page-gutter-block) * -1)',
@@ -5905,7 +5905,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
              same z-index paints over the drawer's bottom — its theme, contrast
              and logout actions — while it is open. A page's own bar outranks
              page content and yields to the navigation. */
-          className="border-theme-surface-border bg-theme-surface/95 action-bar-safe fixed right-0 bottom-0 left-[var(--side-nav-width,0px)] z-30 border-t px-4 backdrop-blur-sm"
+          className="border-theme-surface-border surface-opaque action-bar-safe fixed right-0 bottom-0 left-[var(--side-nav-width,0px)] z-30 border-t px-4"
           aria-label="Checklist action bar"
         >
           <div className="mx-auto flex min-h-14 max-w-[1440px] items-center justify-between gap-3">
@@ -5990,7 +5990,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {stats.totalItems > 0 && !isLaptop && (
         <div
           ref={actionBarRef}
-          className="border-theme-surface-border bg-theme-surface/95 action-bar-safe fixed right-0 bottom-0 left-[var(--side-nav-width,0px)] z-30 border-t px-4 backdrop-blur-sm"
+          className="border-theme-surface-border surface-opaque action-bar-safe fixed right-0 bottom-0 left-[var(--side-nav-width,0px)] z-30 border-t px-4"
           aria-label="Checklist action bar"
         >
           <div className="flex min-h-11 items-center justify-between gap-4">
@@ -6166,7 +6166,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {/* Change Log Modal (admin only) */}
       {showChangelog && (
         <div className="modal-overlay z-50 flex items-center justify-center p-4">
-          <div className="modal-panel-scroll bg-theme-surface w-full max-w-2xl overflow-hidden rounded-lg shadow-xl">
+          <div className="modal-panel-scroll bg-theme-surface-modal w-full max-w-2xl overflow-hidden rounded-lg shadow-xl">
             <div className="border-theme-surface-border flex items-center justify-between border-b px-6 py-4">
               <h3 className="text-theme-text-primary text-lg font-semibold">
                 Change History{' '}
@@ -6266,7 +6266,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {/* CSV Preview Confirmation Modal */}
       {csvPreview && (
         <div className="modal-overlay z-50 flex items-center justify-center p-4">
-          <div className="modal-panel-scroll bg-theme-surface w-full max-w-2xl overflow-hidden rounded-lg shadow-xl">
+          <div className="modal-panel-scroll bg-theme-surface-modal w-full max-w-2xl overflow-hidden rounded-lg shadow-xl">
             <div className="border-theme-surface-border flex items-center justify-between border-b px-6 py-4">
               <h3 className="text-theme-text-primary text-lg font-semibold">
                 CSV Import Preview — {csvPreview.length} item(s)
@@ -6420,7 +6420,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               onClick={() => setShowPreview(false)}
-              className="bg-theme-surface text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary absolute top-2 right-2 z-10 flex h-11 w-11 items-center justify-center rounded-full shadow-lg transition-colors"
+              className="bg-theme-surface-modal text-theme-text-muted hover:text-theme-text-primary absolute top-2 right-2 z-10 flex h-11 w-11 items-center justify-center rounded-full shadow-lg transition-colors"
               aria-label="Close preview"
             >
               <X className="h-5 w-5" />

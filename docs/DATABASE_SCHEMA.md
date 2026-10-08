@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**296 tables · 4867 columns · 968 foreign keys**
+**296 tables · 4869 columns · 970 foreign keys**
 
 ---
 
@@ -253,8 +253,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`approval_chain_steps`](#approval_chain_steps) | `ApprovalChainStep` | 13 | A single step in an approval chain |
 | [`approval_chains`](#approval_chains) | `ApprovalChain` | 13 | Configurable approval chain template |
 | [`approval_step_records`](#approval_step_records) | `ApprovalStepRecord` | 13 | Tracks actual approval step progression for a specific entity |
-| [`budget_categories`](#budget_categories) | `BudgetCategory` | 10 | Budget category (hierarchical) |
-| [`budgets`](#budgets) | `Budget` | 12 | Budget line for a category within a fiscal year |
+| [`budget_categories`](#budget_categories) | `BudgetCategory` | 11 | Budget category (hierarchical) |
+| [`budgets`](#budgets) | `Budget` | 13 | Budget line for a category within a fiscal year |
 | [`check_requests`](#check_requests) | `CheckRequest` | 20 | Request to cut a check for payment |
 | [`dues_payments`](#dues_payments) | `DuesPayment` | 11 | A single payment received against a member's dues (FIN-6). |
 | [`dues_schedules`](#dues_schedules) | `DuesSchedule` | 15 | Schedule for dues collection |
@@ -3729,12 +3729,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `sort_order` | INTEGER | no |  | `0` |  |
 | `is_active` | BOOL | no |  | `True` |  |
 | `qb_account_name` | VARCHAR(200) | yes |  |  |  |
+| `owner_position_id` | VARCHAR(36) | yes | FK, IDX |  | → `positions.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
 **Indexes**
 
 - `ix_budget_categories_org_id` (`organization_id`)
+- `ix_budget_categories_owner_position_id` (`owner_position_id`)
 
 ### `budgets`
 
@@ -3753,6 +3755,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `amount_encumbered` | NUMERIC(12, 2) | no |  | `0` |  |
 | `notes` | TEXT | yes |  |  |  |
 | `station_id` | VARCHAR(36) | yes | FK |  | → `facilities.id` ON DELETE SET NULL |
+| `owner_position_id` | VARCHAR(36) | yes | FK, IDX |  | → `positions.id` ON DELETE SET NULL |
 | `created_by` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
@@ -3760,6 +3763,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `ix_budgets_org_fy_cat` (`organization_id`, `fiscal_year_id`, `category_id`)
+- `ix_budgets_owner_position_id` (`owner_position_id`)
 
 ### `check_requests`
 
@@ -11039,6 +11043,20 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `skill_tests` | `requirement_id` | SET NULL | yes |
 | `training_sessions` | `requirement_id` | SET NULL | yes |
 
+### → `positions` (9 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `budget_categories` | `owner_position_id` | SET NULL | yes |
+| `budgets` | `owner_position_id` | SET NULL | yes |
+| `issuance_allowances` | `role_id` | CASCADE | yes |
+| `org_chart_nodes` | `position_id` | SET NULL | yes |
+| `prospective_members` | `target_role_id` | SET NULL | yes |
+| `suggestion_box_reviewers` | `position_id` | CASCADE | yes |
+| `suggestion_box_watchers` | `position_id` | CASCADE | yes |
+| `suggestion_forwards` | `position_id` | CASCADE | yes |
+| `user_positions` | `position_id` | CASCADE | no |
+
 ### → `shifts` (9 references)
 
 | From table | Column | On delete | Nullable |
@@ -11130,18 +11148,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `issuance_allowances` | `category_id` | CASCADE | no |
 | `item_variant_groups` | `category_id` | SET NULL | yes |
 | `reorder_requests` | `category_id` | SET NULL | yes |
-
-### → `positions` (7 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `issuance_allowances` | `role_id` | CASCADE | yes |
-| `org_chart_nodes` | `position_id` | SET NULL | yes |
-| `prospective_members` | `target_role_id` | SET NULL | yes |
-| `suggestion_box_reviewers` | `position_id` | CASCADE | yes |
-| `suggestion_box_watchers` | `position_id` | CASCADE | yes |
-| `suggestion_forwards` | `position_id` | CASCADE | yes |
-| `user_positions` | `position_id` | CASCADE | no |
 
 ### → `storage_areas` (7 references)
 

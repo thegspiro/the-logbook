@@ -93,6 +93,7 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "parent_category_id": "cat-parent",
         "sort_order": 3,
         "qb_account_name": "6100 Apparatus",
+        "owner_position_id": "pos-1",
     },
     BudgetCategoryUpdate: {
         "name": "Apparatus",
@@ -101,6 +102,7 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "sort_order": 4,
         "is_active": False,
         "qb_account_name": "6100 Apparatus",
+        "owner_position_id": "pos-1",
     },
     BudgetCreate: {
         "fiscal_year_id": "fy-1",
@@ -108,11 +110,13 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "amount_budgeted": "1000.00",
         "notes": "n",
         "station_id": "st-1",
+        "owner_position_id": "pos-1",
     },
     BudgetUpdate: {
         "amount_budgeted": "900.00",
         "notes": "n",
         "station_id": "st-2",
+        "owner_position_id": "pos-2",
     },
     ApprovalChainStepCreate: dict(_STEP),
     ApprovalChainStepUpdate: dict(_STEP),
@@ -324,6 +328,9 @@ class TestUpdateSemanticsSurviveTheAlias:
             (ApprovalChainStepUpdate, "approverType", "approver_type"),
             (ExportMappingUpdate, "qbAccountNumber", "qb_account_number"),
             (BudgetCategoryUpdate, "parentCategoryId", "parent_category_id"),
+            (BudgetCategoryUpdate, "ownerPositionId", "owner_position_id"),
+            (BudgetUpdate, "ownerPositionId", "owner_position_id"),
+            (BudgetUpdate, "stationId", "station_id"),
         ],
     )
     def test_camelcase_null_clears_across_update_schemas(

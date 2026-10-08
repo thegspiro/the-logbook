@@ -308,7 +308,7 @@ export const KnowledgeTestAttemptPage: React.FC = () => {
               </li>
             ))}
           </ol>
-          <div className="action-bar-safe bg-theme-surface border-theme-surface-border sticky bottom-0 flex flex-wrap items-center justify-between gap-2 border-t py-3">
+          <div className="action-bar-safe surface-opaque border-theme-surface-border sticky bottom-0 flex flex-wrap items-center justify-between gap-2 border-t py-3">
             <span className="text-theme-text-muted text-sm" aria-live="polite">
               {
                 {

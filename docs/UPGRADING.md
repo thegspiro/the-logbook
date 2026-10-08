@@ -437,6 +437,33 @@ Credits, Description`. Each transaction is two lines (two per expense line on
 - A migration adds the nullable `finance_export_mappings.qb_offset_account_name`
   column. Its downgrade drops the column and the values stored in it.
 
+### Training provider imports credit members automatically (2026-10-08)
+
+A **Target Solutions** sync or report upload now credits matched members as it
+stages them; completions that match nobody wait under **Imports**. Vector
+Solutions, Lexipol, iAmResponding and Custom API keep the officer's review step
+until each is reviewed (the list is `AUTO_CREDIT_PROVIDERS` in
+`external_training_service.py`). The Import and Bulk Import buttons now honour
+the category and credit hours the officer chose.
+
+Five migrations land after head `8c4f2a6e1d93`, ending at `7db20aa49329`:
+
+- `9bb4af123ebc` makes `(provider_id, external_record_id)` unique on staged
+  imports. Existing duplicates are settled first and **nothing is deleted**: the
+  imported row (else the earliest) is kept; others get `#dup:<id>` on their
+  record id and, if never imported, status `duplicate`. The downgrade restores
+  them exactly.
+- `6cf89b44dc08` adds the `policy_acknowledgment` training type.
+- `95dbdfb6591d` creates `external_course_mappings`, seeded with unmapped rows;
+  nobody is emailed and nothing is mapped until an officer does it. Downgrading
+  loses the mappings.
+- `26ca07c56d0f` adds `voided_at`, `voided_by`, `void_reason` to training records.
+
+**Check after upgrading:** the HIPAA, Bloodborne Pathogens and Hazmat requirement
+templates now create **Courses** requirements. Existing requirements are not
+rewritten; an hours requirement with one of those codes and no category or course
+scope shows a warning on its card. Fix them in **Training Admin › Requirements**.
+
 ### Every member can raise their own finance requests (2026-10-07)
 
 A new permission, **`finance.request`** — "Create, submit and track your own

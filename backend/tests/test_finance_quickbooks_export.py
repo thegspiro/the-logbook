@@ -234,7 +234,7 @@ class TestBalancedJournalEntries:
             "Credits",
             "Description",
         ]
-        assert rows[1:] == [
+        assert rows[1:5] == [
             # The category's own account wins over its mapping's.
             *_entry(
                 "PR-2026-0001",
@@ -250,23 +250,30 @@ class TestBalancedJournalEntries:
                 "80.00",
                 "County Fuel Depot (check 1042)",
             ),
-            # One report is one entry, its lines charged to their own budget
-            # lines.
-            *_entry(
-                "ER-2026-0001",
-                "Conference travel",
-                "Training Expense",
-                "20.00",
-                "Registration",
-            ),
-            *_entry(
-                "ER-2026-0001",
-                "Conference travel",
-                "Vehicle Expense:Fuel",
-                "15.00",
-                "Shell: Gas",
-            ),
         ]
+        # One report is one entry, its lines charged to their own budget
+        # lines. Line items are ordered by their UUID, so the pairs may come in
+        # either order; each debit must still sit directly above its credit.
+        report_pairs = [rows[5:7], rows[7:9]]
+        assert sorted(report_pairs) == sorted(
+            [
+                _entry(
+                    "ER-2026-0001",
+                    "Conference travel",
+                    "Training Expense",
+                    "20.00",
+                    "Registration",
+                ),
+                _entry(
+                    "ER-2026-0001",
+                    "Conference travel",
+                    "Vehicle Expense:Fuel",
+                    "15.00",
+                    "Shell: Gas",
+                ),
+            ]
+        )
+        assert len(rows) == 9
 
         (log,) = await _logs(db_session, books["org_id"])
         assert (log.status, log.record_count) == ("successful", 4)

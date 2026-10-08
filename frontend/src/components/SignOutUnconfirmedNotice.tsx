@@ -30,7 +30,7 @@ export const SignOutUnconfirmedNotice: React.FC = () => {
   };
 
   return (
-    <div className="bg-theme-surface fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto p-4">
+    <div className="surface-opaque fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto p-4">
       <div
         role="alertdialog"
         aria-modal="true"
