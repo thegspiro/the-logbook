@@ -448,7 +448,7 @@ Pages:
 
 **QuickBooks Export:**
 
-- **`export_mappings`** table — id, organization_id, internal_category (budget_category name), qb_account_name, qb_account_number, mapping_type (EXPENSE, INCOME, ASSET), created_at, updated_at
+- **`export_mappings`** table — id, organization_id, internal_category (budget_category name), qb_account_name, qb_account_number, qb_offset_account_name _(2026-10-08)_, mapping_type (EXPENSE, INCOME, ASSET), created_at, updated_at
 - **`export_logs`** table — id, organization_id, export_type, date_range_start, date_range_end, record_count, file_format (CSV, IIF), exported_by, exported_at
 
 **Endpoints:**
@@ -459,7 +459,10 @@ Pages:
 
 Export format:
 
-- **CSV** (Phase 5 MVP): Date, Type, Num, Name, Memo, Account, Debit, Credit — standard QuickBooks import format. _(2026-09-25)_ **Date** is the department's calendar day: `paid_at` / `check_date` are converted through `resolve_scheduling_timezone` (the organization's timezone, `America/New_York` when unset) before formatting, so an evening payment no longer books on the next UTC day. The lookup runs inside the export's `try`, so a failure is recorded on the export log like any other interruption
+- **CSV — QuickBooks Online journal-entry import** _(2026-10-08)_. Columns `Journal No, Journal Date, Memo, Account Name, Debits, Credits, Description`, the names the QuickBooks Online **Journal Entries** importer maps by. Every transaction is a balanced entry: a debit to its budget category's account and an equal credit to the offset account it was paid from, both under the transaction's request number (`PR-…`, `CR-…`, `ER-…`, unique across types). An expense report is one entry with a pair of lines per line item, each charged to its own budget line. Paid purchase requests, issued check requests and paid expense reports are exported; dues are not (see `docs/KNOWN_LIMITATIONS.md`).
+  - **Accounts.** The debit account is the category's `qb_account_name`, or else the account on the export mapping whose `internal_category` matches the category name (trimmed, case-insensitive). The credit account is that mapping's `qb_offset_account_name`. Subaccounts are written `Parent:Child`, the way QuickBooks expects them.
+  - **Refusal.** If any transaction in the range has no budget line, or its category has no account, no offset account, or more than one matching mapping, the export is refused with a 400 naming the problems. Nothing is logged and no file is produced. A partial file would leave the books silently short, which is worse than no file.
+  - **Date** is the department's calendar day: `paid_at` / `check_date` are converted through `resolve_scheduling_timezone` (the organization's timezone, `America/New_York` when unset) before formatting, so an evening payment no longer books on the next UTC day. The lookup runs inside the export's `try`, so a failure is recorded on the export log like any other interruption
 - **IIF** (future): QuickBooks Desktop interchange format
 - Design the export service with a strategy pattern so adding QBO API later is straightforward
 

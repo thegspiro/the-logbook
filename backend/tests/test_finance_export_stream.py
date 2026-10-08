@@ -74,6 +74,19 @@ async def _consume(stream):
     return "".join([chunk async for chunk in stream])
 
 
+def _service(db, accounts=None):
+    """A service whose account resolution is stubbed.
+
+    Resolution has its own database-backed tests; these sequence ``execute``
+    side effects for the stream alone.
+    """
+    service = FinanceService(db)
+    service._resolve_export_accounts = AsyncMock(
+        return_value={"b": ("Supplies", "Checking")} if accounts is None else accounts
+    )
+    return service
+
+
 @pytest.mark.asyncio
 async def test_stream_is_batched_stable_safe_and_logged_successfully():
     paid = datetime(2026, 2, 1, tzinfo=timezone.utc)
@@ -81,6 +94,7 @@ async def test_stream_is_batched_stable_safe_and_logged_successfully():
         id="a",
         paid_at=paid,
         request_number="PR-1",
+        budget_id="b",
         vendor="=cmd",
         title='one, "quoted"',
         actual_amount=Decimal("1.00"),
@@ -90,6 +104,7 @@ async def test_stream_is_batched_stable_safe_and_logged_successfully():
         id="b",
         paid_at=paid,
         request_number="PR-2",
+        budget_id="b",
         vendor="normal",
         title="two",
         actual_amount=Decimal("2.00"),
@@ -99,6 +114,7 @@ async def test_stream_is_batched_stable_safe_and_logged_successfully():
         id="c",
         check_date=paid,
         request_number="CR-1",
+        budget_id="b",
         check_number=None,
         payee_name="payee",
         memo="memo",
@@ -107,15 +123,32 @@ async def test_stream_is_batched_stable_safe_and_logged_successfully():
     )
     # PR batches, terminating PR batch, check batch, terminating check batch.
     db = _db([2, 1, 0], [[first], [second], [], [check], []])
-    stream = await FinanceService(db).generate_export(
-        "org", "user", paid, paid, batch_size=1
-    )
+    stream = await _service(db).generate_export("org", "user", paid, paid, batch_size=1)
     content = await _consume(stream)
 
     rows = list(csv.reader(io.StringIO(content)))
-    assert [row[2] for row in rows[1:]] == ["PR-1", "PR-2", "CR-1"]
-    assert rows[1][3] == "'=cmd"
-    assert rows[1][4] == 'one, "quoted"'
+    assert rows[0] == [
+        "Journal No",
+        "Journal Date",
+        "Memo",
+        "Account Name",
+        "Debits",
+        "Credits",
+        "Description",
+    ]
+    # Two balancing lines per transaction, sharing its Journal No.
+    assert [row[0] for row in rows[1:]] == [
+        "PR-1",
+        "PR-1",
+        "PR-2",
+        "PR-2",
+        "CR-1",
+        "CR-1",
+    ]
+    assert rows[1][3:6] == ["Supplies", "1.00", ""]
+    assert rows[2][3:6] == ["Checking", "", "1.00"]
+    assert rows[1][6] == "'=cmd"
+    assert rows[1][2] == 'one, "quoted"'
     log = db.add.call_args.args[0]
     assert (log.status, log.record_count, log.error_message) == ("successful", 3, None)
     # The timezone lookup, then PR batches and check batches.
@@ -136,11 +169,12 @@ async def test_payment_dates_are_the_departments_calendar_day():
         actual_amount=Decimal("1.00"),
         estimated_amount=Decimal("1.00"),
     )
+    purchase.budget_id = "b"
     db = _db([1, 0, 0], [[purchase], [], []])
-    stream = await FinanceService(db).generate_export("org", "user", paid, paid)
+    stream = await _service(db).generate_export("org", "user", paid, paid)
     rows = list(csv.reader(io.StringIO(await _consume(stream))))
 
-    assert rows[1][0] == "01/31/2026"
+    assert rows[1][1] == rows[2][1] == "01/31/2026"
 
 
 @pytest.mark.asyncio
@@ -157,8 +191,8 @@ async def test_generator_failure_marks_log_failed_and_cleans_up():
     now = datetime(2026, 1, 1, tzinfo=timezone.utc)
     db = _db([1, 0, 0], [])
     db.execute.side_effect = RuntimeError("database disappeared")
-    stream = await FinanceService(db).generate_export("org", "user", now, now)
-    assert "Date" in await anext(stream)
+    stream = await _service(db).generate_export("org", "user", now, now)
+    assert "Journal No" in await anext(stream)
     with pytest.raises(RuntimeError, match="database disappeared"):
         await anext(stream)
 
@@ -173,10 +207,24 @@ async def test_generator_failure_marks_log_failed_and_cleans_up():
 async def test_client_closing_stream_does_not_create_success_log():
     now = datetime(2026, 1, 1, tzinfo=timezone.utc)
     db = _db([1, 0, 0], [])
-    stream = await FinanceService(db).generate_export("org", "user", now, now)
+    stream = await _service(db).generate_export("org", "user", now, now)
     await anext(stream)  # response header was sent, then the client disconnected
     await stream.aclose()
 
     log = db.add.call_args.args[0]
     assert (log.status, log.record_count) == ("failed", 0)
     db.rollback.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_unresolved_accounts_refuse_before_log_or_stream_creation():
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    db = _db([1, 0, 0], [])
+    service = FinanceService(db)
+    service._resolve_export_accounts = AsyncMock(
+        side_effect=ValueError("Set QuickBooks accounts before exporting")
+    )
+    with pytest.raises(ValueError, match="Set QuickBooks accounts"):
+        await service.generate_export("org", "user", now, now)
+    db.add.assert_not_called()
+    db.commit.assert_not_called()

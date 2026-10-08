@@ -1183,6 +1183,31 @@ check requests were all charged against the budgets and the panel still said
 Verified 2026-08-09 by counting non-test call sites for each store action and
 service method, and by reading the render bodies.
 
+## Finance — QuickBooks Export Gaps (2026-10-08)
+
+The transactions export is now a valid QuickBooks Online journal-entry import
+(see `docs/FINANCE_MODULE.md`, "QuickBooks Export"). Four gaps remain, and each
+needs a decision or a follow-up change rather than a fix inside that one:
+
+- **Accounts can only be set through the API.** The export refuses until every
+  exported budget category has an account and an offset account. That makes
+  the "QuickBooks export mapping" row in the table above more than a missing
+  screen: until a mapping screen exists, a treasurer can only configure the
+  export with `POST`/`PUT /finance/export/mappings` and
+  `PUT /finance/budget-categories/{id}`.
+- **Dues payments are not exported.** `DuesSchedule` and `DuesPayment` carry no
+  budget category, so the export has nothing to resolve an income account or a
+  deposit account from. Adding them needs a decision about where those two
+  accounts are configured.
+- **A subcategory does not inherit its parent's account.** Each category with
+  spending against it needs its own account or mapping.
+- **There is no live QuickBooks connection.** Posting entries and reading back
+  the chart of accounts, budgets and actuals needs the QuickBooks Online
+  Accounting API. That means an Intuit developer app, OAuth 2.0 with encrypted
+  per-organization tokens, and a background sync, and it is planned as its own
+  change. The API cannot create or edit QuickBooks budgets; it can only read
+  them, and QuickBooks budgets need QuickBooks Online Plus or higher.
+
 ## Finance — Nobody Could Approve Anything (2026-08-12, narrowed 2026-09-06)
 
 `finance.approve` and `finance.configure_approvals` gate nine endpoints — the

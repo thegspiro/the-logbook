@@ -1047,6 +1047,10 @@ class ExportMapping(Base):
     internal_category = Column(String(200), nullable=False)
     qb_account_name = Column(String(200), nullable=False)
     qb_account_number = Column(String(50), nullable=True)
+    # The balancing side of each journal entry: the account the money left
+    # (expenses) or arrived in. QuickBooks rejects an entry whose debits and
+    # credits differ, so a category without one cannot be exported.
+    qb_offset_account_name = Column(String(200), nullable=True)
     mapping_type = Column(
         SQLEnum(
             ExportMappingType,
