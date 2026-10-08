@@ -300,6 +300,7 @@ DELIBERATELY_UNGATED = {
     "/api/v1/security": "platform surface",
     "/api/v1/ip-security": "platform surface",
     "/api/v1/errors": "platform surface",
+    "/api/v1/system-notices": "platform surface",
     "/api/v1/platform-analytics": "platform surface",
     "/api/v1/scheduled": "platform task scheduling, unrelated to the Scheduling module",
     "/api/v1/dashboard": "spans modules; gates its own blocks one at a time",

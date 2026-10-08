@@ -8,6 +8,7 @@ Covers:
   - Full end-to-end lifecycle (draft -> publish -> RSVP -> check-in -> finalize)
 """
 
+import os
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -16,6 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.event import EventCreate, EventUpdate, RSVPCreate
+from app.services import file_storage_service
 from app.services.event_service import EventService
 
 pytestmark = [pytest.mark.integration]
@@ -249,9 +251,12 @@ class TestEventCRUD:
         attachment = {
             "id": "a1b2c3d4",
             "file_name": "agenda.pdf",
-            "file_path": (
-                f"/app/uploads/event-attachments/{org_id}/"
-                f"11111111-1111-1111-1111-111111111111/a1b2c3d4.pdf"
+            "file_path": os.path.join(
+                file_storage_service.UPLOADS_ROOT,
+                org_id,
+                "event-attachments",
+                "11111111-1111-1111-1111-111111111111",
+                "a1b2c3d4.pdf",
             ),
         }
 
