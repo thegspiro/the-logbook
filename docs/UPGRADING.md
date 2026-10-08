@@ -412,6 +412,36 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Uploaded files: tighter access, and email attachments move onto the uploads volume (2026-10-08)
+
+Phase 1 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).
+
+- **Email-template attachments now persist.** They were written to
+  `/app/storage/email_attachments`, which no compose file mounts, so every
+  container rebuild lost them and backups never included them. New uploads go
+  to `/app/uploads/email-attachments/<org_id>/`, and migration `2be075025403`
+  moves the files that still exist (copy, checksum, rename, then remove the
+  original; safe to re-run). **Attachments already lost to an earlier rebuild
+  cannot be recovered** — they still list on the template but are skipped when
+  the email is sent, exactly as before. Re-upload them. A file the migration
+  cannot move is logged (`Email attachment relocation …`) and stays sendable
+  from its old location.
+- **Event attachments need `events.view`** to list or download (or
+  `events.manage`), and a draft event's attachments are visible to organizers
+  only. Every seeded rank carries `events.view`, so only a member with a
+  custom position and no rank can lose access.
+- **Equipment-check photos** can only be added by the member who performed
+  the check, or by holders of `inventory.check_manage`.
+- **Training-record, self-reported certificate, applicant and document files**
+  are now served and deleted only from inside their own organization's
+  directory. Nothing moves; every file the application wrote is already there.
+- **Event and email-template uploads** whose extension disagrees with the
+  file's contents (a PDF named `.png`) are refused, and the stored type is the
+  detected one rather than the browser's claim.
+
+The migration's downgrade moves relocated email attachments back to the old,
+unpersisted path.
+
 ### The QuickBooks export is a journal-entry import, and needs accounts first (2026-10-08)
 
 `POST /finance/export/transactions` now produces a file QuickBooks Online's

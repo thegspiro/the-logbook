@@ -63,9 +63,11 @@ from app.services.email_template_service import (
 from app.services.email_test_records import real_record_context
 from app.services.notification_channels import SMS_ALERT_DETAILS, SMS_CONDITIONS
 from app.services.officer_service import OfficerService
+from app.utils import email_attachments as email_attachment_paths
 from app.utils.member_names import format_display_name, format_legal_name
-from app.utils.mime_validation import detect_mime_type
+from app.utils.mime_validation import detect_mime_type, extension_matches_mime
 from app.utils.org_scoping import assert_in_org
+from app.utils.upload_paths import safe_download_filename
 
 router = APIRouter()
 
@@ -719,8 +721,8 @@ async def upload_attachment(
     """
     Upload a file attachment for an email template.
 
-    Files are stored locally (or in MinIO when configured).
-    Max file size: 10MB.
+    Files are stored on the uploads volume under the organization's own
+    directory. Max file size: 10MB.
     """
     from sqlalchemy import select
 
@@ -820,10 +822,25 @@ async def upload_attachment(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"File content type '{detected_mime}' is not allowed.",
         )
+    # SEC: the stored extension is the uploader's, so it must agree with the
+    # content — otherwise a PDF named ``.png`` passes both allowlists
+    # independently and reaches recipients under a misleading extension.
+    if not extension_matches_mime(ext, detected_mime):
+        logger.warning(
+            "Email attachment rejected: extension '{}' does not match "
+            "detected MIME '{}'",
+            ext,
+            detected_mime,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File extension '{ext}' does not match the file's contents.",
+        )
 
-    # Store file with UUID name (prevents path traversal)
+    # Store file with UUID name (prevents path traversal), on the uploads
+    # volume so it survives a container rebuild and is included in backups.
     attachment_dir = os.path.join(
-        "storage", "email_attachments", current_user.organization_id
+        email_attachment_paths.EMAIL_ATTACHMENT_DIR, str(current_user.organization_id)
     )
     await asyncio.to_thread(os.makedirs, attachment_dir, exist_ok=True)
 
@@ -849,8 +866,9 @@ async def upload_attachment(
     attachment = EmailAttachment(
         id=file_id,
         template_id=template_id,
-        filename=file.filename or "attachment",
-        content_type=file.content_type or "application/octet-stream",
+        filename=safe_download_filename(file.filename, "attachment"),
+        # The detected type, never the browser's claim.
+        content_type=detected_mime,
         file_size=file_size,
         storage_path=storage_path,
         uploaded_by=current_user.id,
@@ -897,8 +915,8 @@ async def delete_attachment(
 
     # File first, row second, and a failed unlink is NOT swallowed.
     #
-    # The row is the only record that this file exists: nothing sweeps
-    # `storage/email_attachments`. So committing the delete first and then
+    # The row is the only record that this file exists: nothing sweeps the
+    # email attachment directory. So committing the delete first and then
     # discarding an unlink error turns a transient EACCES/EIO into a file that
     # survives forever with nothing pointing at it — and these are member-facing
     # attachments, so the bytes left behind can be exactly the sort of document
@@ -928,7 +946,19 @@ async def delete_attachment(
         except FileNotFoundError:
             pass
 
-    await asyncio.to_thread(_remove_file, storage_path)
+    # Only a path inside this organization's attachment storage is unlinked.
+    # Anything else is not this row's file to remove; the row still goes.
+    confined = email_attachment_paths.resolve_email_attachment_path(
+        storage_path, current_user.organization_id
+    )
+    if confined is None:
+        logger.warning(
+            "Not removing email attachment {}: stored path is outside the "
+            "organization's attachment storage",
+            attachment.id,
+        )
+    else:
+        await asyncio.to_thread(_remove_file, confined)
 
     await db.delete(attachment)
     await db.commit()

@@ -57,6 +57,7 @@ from app.services.malware_scan_service import (
 from app.services.training_submission_service import TrainingSubmissionService
 from app.utils.mime_validation import detect_mime_type
 from app.utils.upload_limits import read_upload_limited
+from app.utils.upload_paths import resolve_in_org, safe_download_filename
 
 router = APIRouter()
 
@@ -324,7 +325,11 @@ async def delete_submission(
             submission_id, current_user.organization_id
         )
         stored_paths = (
-            _confined_attachment_paths(submission.attachments) if submission else []
+            _confined_attachment_paths(
+                submission.attachments, submission.organization_id
+            )
+            if submission
+            else []
         )
 
         await service.delete_submission(
@@ -547,24 +552,25 @@ def _remove_quietly(path: str) -> None:
         pass
 
 
-def _confined_path(attachment) -> str | None:
-    """Real path of a stored attachment, or None if it escapes the root.
+def _confined_path(attachment, organization_id) -> str | None:
+    """Real path of a stored attachment, or None if it escapes the org's root.
 
-    file_path is server-generated, but the column is client-writable through
-    the create/update schemas — this is what keeps that from becoming an
-    arbitrary file read (or, on delete, an arbitrary unlink).
+    file_path is server-generated, but the column round-trips through JSON —
+    this is what keeps a tampered value from becoming an arbitrary file read
+    (or, on delete, an arbitrary unlink). Confined to the submission's *own
+    organization's* subtree: every organization's evidence sits under
+    SUBMISSION_ATTACHMENT_DIR, so a root-level check would still serve
+    another tenant's certificate.
     """
-    if not isinstance(attachment, dict) or not attachment.get("file_path"):
+    if not isinstance(attachment, dict):
         return None
-    real_path = os.path.realpath(attachment["file_path"])
-    attachment_root = os.path.realpath(SUBMISSION_ATTACHMENT_DIR)
-    if not real_path.startswith(attachment_root + os.sep):
-        return None
-    return real_path
+    return resolve_in_org(
+        attachment.get("file_path"), SUBMISSION_ATTACHMENT_DIR, organization_id
+    )
 
 
-def _confined_attachment_paths(attachments) -> list[str]:
-    paths = [_confined_path(a) for a in attachments or []]
+def _confined_attachment_paths(attachments, organization_id) -> list[str]:
+    paths = [_confined_path(a, organization_id) for a in attachments or []]
     return [path for path in paths if path]
 
 
@@ -682,7 +688,7 @@ async def _store_attachment_file(
     await asyncio.to_thread(_write_file, file_path, content)
 
     return {
-        "file_name": file.filename or stored_name,
+        "file_name": safe_download_filename(file.filename, stored_name),
         "file_path": file_path,
         "file_type": detected_mime,
         "file_size": len(content),
@@ -763,7 +769,7 @@ async def download_submission_attachment(
         raise HTTPException(status_code=404, detail="Attachment not found")
 
     attachment = attachments[index]
-    real_path = _confined_path(attachment)
+    real_path = _confined_path(attachment, submission.organization_id)
     if not real_path:
         raise HTTPException(status_code=404, detail="Attachment file not found")
 
@@ -773,7 +779,9 @@ async def download_submission_attachment(
     return FileResponse(
         real_path,
         media_type=attachment.get("file_type") or "application/octet-stream",
-        filename=attachment.get("file_name") or os.path.basename(real_path),
+        filename=safe_download_filename(
+            attachment.get("file_name"), os.path.basename(real_path)
+        ),
     )
 
 
@@ -821,6 +829,6 @@ async def delete_submission_attachment(
     flag_modified(submission, "attachments")
     await db.commit()
 
-    removed_path = _confined_path(removed)
+    removed_path = _confined_path(removed, submission.organization_id)
     if removed_path:
         await asyncio.to_thread(_remove_quietly, removed_path)

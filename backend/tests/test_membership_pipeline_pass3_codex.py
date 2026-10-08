@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.election import Election, ElectionStatus
 from app.models.forms import Form
 from app.models.membership_pipeline import ProspectElectionPackage
+from app.services import membership_pipeline_service
 from app.services.membership_pipeline_service import (
     ELECTION_PACKAGE_CALLER_STATUSES,
     ELECTION_PACKAGE_SYSTEM_STATUSES,
@@ -105,16 +106,15 @@ async def _document(
     db_session, prospect_id, file_path, *, file_name="doc.pdf", uploaded_by=None
 ):
     """Insert a ``ProspectDocument`` row directly, bypassing
-    ``add_prospect_document``'s ``/app/uploads`` path-traversal guard.
+    ``add_prospect_document``.
 
-    That guard hardcodes ``/app/uploads`` (the docker-compose mount point)
-    with no monkeypatch seam, and only ``.resolve()``s the path -- it never
-    requires the directory to exist. The delete-path tests below only need a
-    real, writable file on disk (for ``os.path.exists``/``os.remove``) at
-    whatever path the DB row happens to record; they aren't exercising the
-    upload guard, so going straight to the DB with a ``tmp_path`` location
-    keeps the test portable across environments (CI's runner has no ``/app``
-    to write under, unlike the docker-compose container this guard assumes)."""
+    The delete-path tests below only need a real, writable file on disk (for
+    ``os.path.exists``/``os.remove``) at the path the row records; they aren't
+    exercising the upload path. Delete only unlinks inside
+    ``<PROSPECT_DOCUMENT_DIR>/<org_id>/``, so each test points that root at
+    ``tmp_path`` and stores its file under the org's subdirectory -- which
+    also keeps the test portable (CI's runner has no ``/app`` to write
+    under)."""
     from app.models.membership_pipeline import ProspectDocument
 
     doc = ProspectDocument(
@@ -531,14 +531,18 @@ class TestElectionPackageAssignmentLocking:
 class TestDocumentDeletionDoesNotOrphanTheFile:
 
     async def test_delete_removes_the_file_and_the_row(
-        self, db_session: AsyncSession, org_and_admin, tmp_path
+        self, db_session: AsyncSession, org_and_admin, tmp_path, monkeypatch
     ):
         org_id, admin_id = org_and_admin
         svc = MembershipPipelineService(db_session)
         pipeline, _ = await _pipeline_with_steps(svc, org_id)
         prospect = await _prospect(svc, org_id, pipeline.id)
 
-        stored = tmp_path / "doc.pdf"
+        stored = tmp_path / org_id / "doc.pdf"
+        stored.parent.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(
+            membership_pipeline_service, "PROSPECT_DOCUMENT_DIR", str(tmp_path)
+        )
         stored.write_bytes(b"pdf bytes")
 
         doc = await _document(db_session, prospect.id, stored, uploaded_by=admin_id)
@@ -560,7 +564,11 @@ class TestDocumentDeletionDoesNotOrphanTheFile:
         pipeline, _ = await _pipeline_with_steps(svc, org_id)
         prospect = await _prospect(svc, org_id, pipeline.id)
 
-        stored = tmp_path / "doc.pdf"
+        stored = tmp_path / org_id / "doc.pdf"
+        stored.parent.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(
+            membership_pipeline_service, "PROSPECT_DOCUMENT_DIR", str(tmp_path)
+        )
         stored.write_bytes(b"pdf bytes")
 
         doc = await _document(db_session, prospect.id, stored, uploaded_by=admin_id)
@@ -586,7 +594,7 @@ class TestDocumentDeletionDoesNotOrphanTheFile:
         assert stored.exists()
 
     async def test_delete_of_an_already_missing_file_still_succeeds(
-        self, db_session: AsyncSession, org_and_admin, tmp_path
+        self, db_session: AsyncSession, org_and_admin, tmp_path, monkeypatch
     ):
         """A file already removed by some earlier partial failure is not an
         error -- there is nothing left to remove, and the metadata row
@@ -596,7 +604,11 @@ class TestDocumentDeletionDoesNotOrphanTheFile:
         pipeline, _ = await _pipeline_with_steps(svc, org_id)
         prospect = await _prospect(svc, org_id, pipeline.id)
 
-        stored = tmp_path / "gone.pdf"
+        stored = tmp_path / org_id / "gone.pdf"
+        stored.parent.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(
+            membership_pipeline_service, "PROSPECT_DOCUMENT_DIR", str(tmp_path)
+        )
         stored.write_bytes(b"x")
 
         doc = await _document(

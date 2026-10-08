@@ -98,8 +98,10 @@ from app.schemas.membership_pipeline import (
     TransferProspectRequest,
     TransferProspectResponse,
 )
+from app.services import membership_pipeline_service
 from app.services.email_service import welcome_email_can_send
 from app.services.membership_pipeline_service import MembershipPipelineService
+from app.utils.upload_paths import safe_download_filename
 
 # Applied router-wide, not per route: every endpoint that takes a
 # {prospect_id} path parameter — including ones added later — must refuse to
@@ -1920,7 +1922,7 @@ async def get_prospect_activity(
 # Files are stored under {org_id}/{prospect_id}/ within the uploads volume
 # (mounted at /app/uploads in docker-compose), mirroring the event-attachments
 # layout so storage is grouped per individual and walkable per organization.
-PROSPECT_DOCUMENT_DIR = "/app/uploads/prospect-documents"
+# The root is owned by the service, which confines every path to it.
 MAX_PROSPECT_DOCUMENT_SIZE = 50 * 1024 * 1024  # 50 MB — matches the frontend limit
 
 # Allowed document types mapped to their canonical extension. The MIME type is
@@ -2027,7 +2029,9 @@ async def add_prospect_document(
     # extension (never the user-supplied name) avoids collisions and
     # double-extension attacks (e.g. resume.pdf.exe).
     prospect_dir = os.path.join(
-        PROSPECT_DOCUMENT_DIR, str(current_user.organization_id), str(prospect_id)
+        membership_pipeline_service.PROSPECT_DOCUMENT_DIR,
+        str(current_user.organization_id),
+        str(prospect_id),
     )
     await asyncio.to_thread(os.makedirs, prospect_dir, exist_ok=True)
     stored_path = os.path.join(prospect_dir, f"{uuid_lib.uuid4().hex}{ext}")
@@ -2044,7 +2048,9 @@ async def add_prospect_document(
             prospect_id=str(prospect_id),
             organization_id=current_user.organization_id,
             document_type=document_type,
-            file_name=file.filename or os.path.basename(stored_path),
+            file_name=safe_download_filename(
+                file.filename, os.path.basename(stored_path)
+            ),
             file_path=stored_path,
             file_size=len(content),
             mime_type=detected_mime,
@@ -2091,17 +2097,18 @@ async def download_prospect_document(
             status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
         )
 
-    # Defence-in-depth: ensure the stored path resolves inside the uploads
-    # directory before serving it, in case the DB value is ever tampered with.
-    resolved_path = os.path.realpath(doc.file_path)
-    allowed_base = os.path.realpath(PROSPECT_DOCUMENT_DIR)
-    if (
-        not resolved_path.startswith(allowed_base + os.sep)
-        and resolved_path != allowed_base
-    ):
+    # Defence-in-depth: ensure the stored path resolves inside *this
+    # organization's* applicant-document subtree before serving it, in case
+    # the DB value is ever tampered with. The shared root is not a boundary:
+    # every organization's applicants are stored beneath it.
+    resolved_path = membership_pipeline_service.prospect_document_path(
+        doc.file_path, current_user.organization_id
+    )
+    if resolved_path is None:
         logger.warning(
-            f"Path traversal attempt blocked for prospect document {document_id}: "
-            f"{doc.file_path} resolved to {resolved_path}"
+            f"Blocked out-of-org prospect document read for {document_id}: "
+            f"{doc.file_path} is outside the storage of org "
+            f"{current_user.organization_id}"
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
@@ -2115,7 +2122,7 @@ async def download_prospect_document(
 
     return FileResponse(
         path=resolved_path,
-        filename=doc.file_name or "download",
+        filename=safe_download_filename(doc.file_name),
         media_type=doc.mime_type or "application/octet-stream",
     )
 

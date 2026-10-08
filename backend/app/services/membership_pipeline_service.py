@@ -72,10 +72,30 @@ from app.utils.prospect_fields import (
     REQUIRED_PROSPECT_FIELDS as _SHARED_REQUIRED_FIELDS,
 )
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
+from app.utils.upload_paths import resolve_in_org
 
 # The tab on every email the pipeline sends an applicant. One constant so the
 # three senders cannot drift apart, and so the stage editor's preview
 # (AutomatedEmailConfig.tsx) has one wording to mirror.
+# Applicant documents are stored under ``<PROSPECT_DOCUMENT_DIR>/<org_id>/
+# <prospect_id>/`` (the uploads volume is mounted at /app/uploads). Every path
+# this service writes, removes or serves is confined to the owning
+# organization's subtree; see ``prospect_document_path``.
+PROSPECT_DOCUMENT_DIR = "/app/uploads/prospect-documents"
+
+
+def prospect_document_path(file_path: Any, organization_id: Any) -> Optional[str]:
+    """Real path of a stored applicant document, confined to its org's subtree.
+
+    Read at call time so a test can point PROSPECT_DOCUMENT_DIR at a
+    temporary directory. Returns None for anything outside
+    ``<PROSPECT_DOCUMENT_DIR>/<organization_id>/`` — including another
+    organization's directory under the same root, which a root-level check
+    would accept.
+    """
+    return resolve_in_org(file_path, PROSPECT_DOCUMENT_DIR, organization_id)
+
+
 _APPLICATION_UPDATE_CHIP = "Application update"
 
 
@@ -6242,9 +6262,16 @@ class MembershipPipelineService:
         import os
 
         for stored_path in paths:
-            if stored_path and os.path.exists(stored_path):
+            confined = prospect_document_path(stored_path, organization_id)
+            if stored_path and confined is None:
+                logger.warning(
+                    "Purge is not removing a prospect document whose stored "
+                    f"path is outside organization {organization_id}'s storage"
+                )
+                continue
+            if confined and os.path.exists(confined):
                 try:
-                    await asyncio.to_thread(os.remove, stored_path)
+                    await asyncio.to_thread(os.remove, confined)
                 except OSError as exc:
                     logger.error(
                         f"Failed to remove prospect document file {stored_path}: {exc}"
@@ -6310,20 +6337,14 @@ class MembershipPipelineService:
             if not any(str(s.id) == str(step_id) for s in steps):
                 raise ValueError("Step does not belong to this prospect's pipeline")
 
-        # Validate file_path: must resolve to a location under the uploads
-        # volume (mounted at /app/uploads in docker-compose) to prevent path
-        # traversal via symlinks or unicode tricks.
-        from pathlib import Path
-
-        base_dir = Path("/app/uploads").resolve()
-        resolved = Path(file_path).resolve()
-        if (
-            not str(resolved).startswith(str(base_dir) + os.sep)
-            and resolved != base_dir
-        ):
+        # Validate file_path: must resolve inside this organization's own
+        # applicant-document subtree. The whole uploads volume is not a safe
+        # boundary — it holds every module's files for every organization.
+        resolved = prospect_document_path(file_path, organization_id)
+        if resolved is None:
             raise ValueError(
-                "Invalid file_path: must be under /app/uploads and may not "
-                "contain path traversal"
+                "Invalid file_path: must be inside this organization's "
+                "applicant document storage"
             )
 
         # Sanitise file_name to prevent path injection through the file name
@@ -6335,7 +6356,7 @@ class MembershipPipelineService:
             step_id=step_id,
             document_type=document_type,
             file_name=safe_file_name,
-            file_path=str(resolved),
+            file_path=resolved,
             file_size=file_size,
             mime_type=mime_type,
             uploaded_by=uploaded_by,
@@ -6395,16 +6416,25 @@ class MembershipPipelineService:
         # raise rather than be swallowed: the DB row is the only record that
         # this PII-carrying file still needs cleaning up, so it must survive
         # a failed removal for a retry instead of being deleted alongside it.
+        #
+        # A stored path outside this organization's subtree is never unlinked:
+        # the row goes, the foreign file stays where it is.
         stored_path = doc.file_path
         if stored_path:
             import os
 
-            if os.path.exists(stored_path):
+            confined = prospect_document_path(stored_path, organization_id)
+            if confined is None:
+                logger.warning(
+                    f"Not removing prospect document {document_id}: stored path "
+                    f"is outside organization {organization_id}'s storage"
+                )
+            elif os.path.exists(confined):
                 try:
-                    await asyncio.to_thread(os.remove, stored_path)
+                    await asyncio.to_thread(os.remove, confined)
                 except OSError as exc:
                     logger.error(
-                        f"Failed to remove prospect document file {stored_path}: {exc}"
+                        f"Failed to remove prospect document file {confined}: {exc}"
                     )
                     raise ValueError(
                         "Could not delete the document file; please try again"

@@ -106,6 +106,7 @@ class TestReadSideRefusesAnAlreadyStoredForeignPath:
         event = SimpleNamespace(
             id=str(uuid4()),
             organization_id=caller_org,
+            is_draft=False,
             attachments=[
                 {
                     "id": "att-1",

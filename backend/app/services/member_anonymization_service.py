@@ -68,6 +68,7 @@ from app.models.user import (
     User,
     UserStatus,
 )
+from app.services.membership_pipeline_service import prospect_document_path
 
 _DEPARTED_STATUSES = {
     UserStatus.DROPPED_VOLUNTARY,
@@ -363,9 +364,15 @@ class MemberAnonymizationService:
                 )
             )
             for doc in docs_result.scalars().all():
-                if doc.file_path:
+                # Only ever unlink inside this organization's own applicant
+                # storage — a tampered stored path must not turn anonymization
+                # into a delete of some other file on the volume.
+                confined = prospect_document_path(
+                    doc.file_path, prospect.organization_id
+                )
+                if confined:
                     try:
-                        os.remove(doc.file_path)
+                        os.remove(confined)
                     except OSError:
                         pass  # already gone or unreachable — the row still goes
             await self.db.execute(

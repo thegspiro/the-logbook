@@ -481,13 +481,29 @@ class TestAttachmentRoot:
         )
 
     def test_a_path_outside_the_root_is_never_returned(self):
-        assert training_submissions._confined_path({"file_path": "/etc/passwd"}) is None
-        assert training_submissions._confined_path("legacy-string") is None
+        org = "org-1"
+        assert (
+            training_submissions._confined_path({"file_path": "/etc/passwd"}, org)
+            is None
+        )
+        assert training_submissions._confined_path("legacy-string", org) is None
         assert (
             training_submissions._confined_attachment_paths(
-                [{"file_path": "/etc/passwd"}, None]
+                [{"file_path": "/etc/passwd"}, None], org
             )
             == []
+        )
+
+    def test_another_orgs_evidence_is_never_returned(self):
+        """Every organization's evidence shares SUBMISSION_ATTACHMENT_DIR, so a
+        root-level check would hand one tenant another tenant's certificate."""
+        root = training_submissions.SUBMISSION_ATTACHMENT_DIR
+        theirs = {"file_path": os.path.join(root, "org-2", "cert.pdf")}
+        ours = {"file_path": os.path.join(root, "org-1", "cert.pdf")}
+
+        assert training_submissions._confined_path(theirs, "org-1") is None
+        assert training_submissions._confined_path(ours, "org-1") == os.path.realpath(
+            ours["file_path"]
         )
 
 
@@ -497,9 +513,11 @@ class TestDeletingASubmission:
         monkeypatch.setattr(
             training_submissions, "SUBMISSION_ATTACHMENT_DIR", str(tmp_path)
         )
-        stored = tmp_path / "cert.pdf"
+        submission = _submission(attachments=[])
+        stored = tmp_path / str(submission.organization_id) / "cert.pdf"
+        stored.parent.mkdir(parents=True)
         stored.write_bytes(b"%PDF")
-        submission = _submission(attachments=[{"file_path": str(stored)}])
+        submission.attachments = [{"file_path": str(stored)}]
 
         service = SimpleNamespace(
             get_submission=AsyncMock(return_value=submission),

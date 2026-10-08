@@ -44,6 +44,7 @@ from app.utils.org_timezone import (
     today_in,
 )
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
+from app.utils.upload_paths import resolve_in_org
 
 # Permissions that grant leadership-level access to all folders
 LEADERSHIP_PERMISSIONS = {"documents.manage", "members.manage", "*"}
@@ -831,10 +832,18 @@ class DocumentsService:
         await self.db.commit()
 
         # Best-effort file cleanup — a missing file is not an error, and the DB
-        # rows are already gone.
+        # rows are already gone. Only paths inside this organization's upload
+        # subtree are ever unlinked (same boundary as the download, DOC-24).
         for file_path in file_paths:
+            confined = resolve_in_org(file_path, self.UPLOAD_DIR, organization_id)
+            if confined is None:
+                logger.warning(
+                    "Not removing a backing file outside the organization's "
+                    f"upload storage for deleted folder {folder_id}"
+                )
+                continue
             try:
-                await asyncio.to_thread(os.remove, file_path)
+                await asyncio.to_thread(os.remove, confined)
             except OSError:
                 logger.warning(
                     "Could not remove backing file for a document in deleted "
@@ -1269,9 +1278,17 @@ class DocumentsService:
         # Remove the backing file so a delete doesn't leave the (potentially
         # sensitive) upload orphaned on disk. Best-effort — a missing file is
         # not an error, and the DB row is already gone.
-        if file_path:
+        # Only paths inside this organization's upload subtree are ever
+        # unlinked (same boundary as the download, DOC-24).
+        confined = resolve_in_org(file_path, self.UPLOAD_DIR, organization_id)
+        if file_path and confined is None:
+            logger.warning(
+                f"Not removing backing file for deleted document {document_id}: "
+                "stored path is outside the organization's upload storage"
+            )
+        elif confined:
             try:
-                await asyncio.to_thread(os.remove, file_path)
+                await asyncio.to_thread(os.remove, confined)
             except OSError:
                 logger.warning(
                     f"Could not remove backing file for deleted document "

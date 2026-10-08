@@ -117,7 +117,8 @@ from app.services.notifications_service import NotificationsService
 from app.utils.contact_visibility import load_contact_policy
 from app.utils.event_attachments import ATTACHMENT_UPLOAD_DIR as attachment_upload_dir
 from app.utils.event_attachments import is_path_in_org
-from app.utils.mime_validation import detect_mime_type
+from app.utils.mime_validation import detect_mime_type, extension_matches_mime
+from app.utils.upload_paths import safe_download_filename
 
 router = APIRouter()
 
@@ -2979,6 +2980,19 @@ async def upload_event_attachment(
             detail=f"File content type '{detected_mime}' not allowed.",
             error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
         )
+    # SEC: the stored extension comes from the uploader's filename, so it must
+    # agree with the content. Without this a PDF named ``.png`` passes both
+    # allowlists independently and is stored under a misleading extension.
+    if not extension_matches_mime(ext, detected_mime):
+        logger.warning(
+            f"Event attachment rejected: extension '{ext}' does not match "
+            f"detected MIME '{detected_mime}'"
+        )
+        raise CodedHTTPException(
+            status_code=400,
+            detail=f"File extension '{ext}' does not match the file's contents.",
+            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
+        )
 
     # Save file
     org_dir = os.path.join(
@@ -3000,10 +3014,12 @@ async def upload_event_attachment(
     attachments.append(
         {
             "id": uuid_lib.uuid4().hex,
-            "file_name": file.filename or unique_name,
+            "file_name": safe_download_filename(file.filename, unique_name),
             "file_path": file_path,
             "file_size": len(content),
-            "file_type": file.content_type,
+            # The detected type, never the browser's claim: this is served
+            # back as the download's Content-Type.
+            "file_type": detected_mime,
             "description": description,
             "uploaded_by": str(current_user.id),
             "uploaded_at": datetime.now(dt_timezone.utc).isoformat(),
@@ -3021,16 +3037,15 @@ async def upload_event_attachment(
     )
 
 
-@router.get("/{event_id}/attachments")
-async def list_event_attachments(
-    event_id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    List all attachments for an event
+async def _load_event_for_attachment_read(
+    db: AsyncSession, event_id: UUID, current_user: User
+) -> Event:
+    """Fetch an event whose attachments the caller may read.
 
-    **Authentication required**
+    Attachment reads need ``events.view`` (or ``events.manage``) — being
+    signed in is not enough. A draft is unpublished, so its attachments are
+    for organizers only; a member who guessed the id gets the same 404 as for
+    an event that does not exist rather than a 403 confirming it does.
     """
     result = await db.execute(
         select(Event)
@@ -3038,10 +3053,25 @@ async def list_event_attachments(
         .where(Event.organization_id == str(current_user.organization_id))
     )
     event = result.scalar_one_or_none()
-
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+    if event.is_draft and not user_has_permission(current_user, "events.manage"):
+        raise HTTPException(status_code=404, detail="Event not found")
+    return event
 
+
+@router.get("/{event_id}/attachments")
+async def list_event_attachments(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.view", "events.manage")),
+):
+    """
+    List all attachments for an event
+
+    **Requires permission: events.view or events.manage**
+    """
+    event = await _load_event_for_attachment_read(db, event_id, current_user)
     return event.attachments or []
 
 
@@ -3050,22 +3080,14 @@ async def download_event_attachment(
     event_id: UUID,
     attachment_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("events.view", "events.manage")),
 ):
     """
     Download a specific event attachment
 
-    **Authentication required**
+    **Requires permission: events.view or events.manage**
     """
-    result = await db.execute(
-        select(Event)
-        .where(Event.id == str(event_id))
-        .where(Event.organization_id == str(current_user.organization_id))
-    )
-    event = result.scalar_one_or_none()
-
-    if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
+    event = await _load_event_for_attachment_read(db, event_id, current_user)
 
     attachments = event.attachments or []
     attachment = next((a for a in attachments if a.get("id") == attachment_id), None)
@@ -3093,10 +3115,20 @@ async def download_event_attachment(
     if not os.path.exists(resolved_path):
         raise HTTPException(status_code=404, detail="Attachment file not found on disk")
 
+    # The attachments column is also writable through the generic event
+    # create/update payloads, so a stored file_type is only trusted when it is
+    # a type this endpoint would have accepted on upload. Anything else is
+    # served as an opaque download.
+    stored_type = attachment.get("file_type")
+    media_type = (
+        stored_type
+        if stored_type in ALLOWED_ATTACHMENT_MIME_TYPES
+        else "application/octet-stream"
+    )
     return FileResponse(
         path=resolved_path,
-        filename=attachment.get("file_name", "download"),
-        media_type=attachment.get("file_type", "application/octet-stream"),
+        filename=safe_download_filename(attachment.get("file_name")),
+        media_type=media_type,
     )
 
 
