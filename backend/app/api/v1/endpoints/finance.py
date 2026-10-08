@@ -41,6 +41,10 @@ from app.schemas.finance import (
     BudgetCategoryUpdate,
     BudgetCreate,
     BudgetOptionResponse,
+    BudgetRequestCreate,
+    BudgetRequestDecision,
+    BudgetRequestResponse,
+    BudgetRequestUpdate,
     BudgetResponse,
     BudgetSummaryResponse,
     BudgetTransactionPageResponse,
@@ -74,18 +78,25 @@ from app.schemas.finance import (
     MemberDuesResponse,
     MemberDuesUnwaive,
     MemberDuesWaive,
+    MyBudgetRequestLinesResponse,
     MyBudgetResponse,
     MyBudgetsSummaryResponse,
     PendingApprovalResponse,
     PurchaseRequestCreate,
     PurchaseRequestResponse,
     PurchaseRequestUpdate,
+    StartFromLastYearResponse,
     UnroutedApprovalResponse,
 )
 from app.services.finance_approver_matching import ApproverMismatchError
 from app.services.finance_budget_ownership import (
     user_owns_any_budget,
     user_owns_budget,
+)
+from app.services.finance_budget_request_service import (
+    BudgetRequestConflictError,
+    BudgetRequestForbiddenError,
+    FinanceBudgetRequestService,
 )
 from app.services.finance_service import (
     BudgetLimitExceededError,
@@ -165,9 +176,9 @@ async def list_fiscal_years(
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
-    return await service.list_fiscal_years(
-        str(current_user.organization_id), pagination
-    )
+    org_id = str(current_user.organization_id)
+    years = await service.list_fiscal_years(org_id, pagination)
+    return await FinanceBudgetRequestService(db).fiscal_year_rows(years, org_id)
 
 
 @router.get("/fiscal-years/options", response_model=list[FiscalYearOptionResponse])
@@ -188,7 +199,9 @@ async def list_fiscal_year_options(
     # registration order, and the by-id route would otherwise capture
     # "options" as an id.
     service = FinanceService(db)
-    return await service.list_fiscal_year_options(str(current_user.organization_id))
+    org_id = str(current_user.organization_id)
+    years = await service.list_fiscal_year_options(org_id)
+    return await FinanceBudgetRequestService(db).fiscal_year_rows(years, org_id)
 
 
 @router.post("/fiscal-years", response_model=FiscalYearResponse, status_code=201)
@@ -213,7 +226,9 @@ async def create_fiscal_year(
             user_id=str(current_user.id),
             username=current_user.username,
         )
-        return fy
+        return await FinanceBudgetRequestService(db).fiscal_year_row(
+            fy, str(current_user.organization_id)
+        )
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -229,10 +244,11 @@ async def get_fiscal_year(
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
-    fy = await service.get_fiscal_year(fy_id, str(current_user.organization_id))
+    org_id = str(current_user.organization_id)
+    fy = await service.get_fiscal_year(fy_id, org_id)
     if not fy:
         raise HTTPException(status_code=404, detail="Fiscal year not found")
-    return fy
+    return await FinanceBudgetRequestService(db).fiscal_year_row(fy, org_id)
 
 
 @router.put("/fiscal-years/{fy_id}", response_model=FiscalYearResponse)
@@ -242,13 +258,35 @@ async def update_fiscal_year(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.manage")),
 ):
+    """Rename a fiscal year, move its dates, or set its request deadline.
+
+    **Requires permission: finance.manage**
+
+    ``requestDeadline`` (a date, or null to clear it) is accepted only while
+    the year is a draft; owners' budget requests close after that day on the
+    department's calendar.
+    """
     service = FinanceService(db)
+    org_id = str(current_user.organization_id)
+    updates = data.model_dump(exclude_unset=True)
     try:
-        return await service.update_fiscal_year(
-            fy_id,
-            str(current_user.organization_id),
-            **data.model_dump(exclude_unset=True),
-        )
+        fy = await service.update_fiscal_year(fy_id, org_id, **updates)
+        if "request_deadline" in updates:
+            deadline = updates["request_deadline"]
+            await log_audit_event(
+                db=db,
+                event_type="finance.fiscal_year_request_deadline_set",
+                event_category="finance",
+                severity="info",
+                event_data={
+                    "fiscal_year_id": fy_id,
+                    "request_deadline": deadline.isoformat() if deadline else None,
+                },
+                user_id=str(current_user.id),
+                username=current_user.username,
+                organization_id=org_id,
+            )
+        return await FinanceBudgetRequestService(db).fiscal_year_row(fy, org_id)
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -277,7 +315,9 @@ async def activate_fiscal_year(
             user_id=str(current_user.id),
             username=current_user.username,
         )
-        return fy
+        return await FinanceBudgetRequestService(db).fiscal_year_row(
+            fy, str(current_user.organization_id)
+        )
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -293,10 +333,63 @@ async def lock_fiscal_year(
     current_user: User = Depends(require_permission("finance.manage")),
 ):
     service = FinanceService(db)
+    org_id = str(current_user.organization_id)
     try:
-        return await service.lock_fiscal_year(fy_id, str(current_user.organization_id))
+        fy = await service.lock_fiscal_year(fy_id, org_id)
+        return await FinanceBudgetRequestService(db).fiscal_year_row(fy, org_id)
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.post(
+    "/fiscal-years/{draft_id}/start-from/{source_id}",
+    response_model=StartFromLastYearResponse,
+)
+async def start_fiscal_year_from(
+    draft_id: str,
+    source_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """Copy another fiscal year's budget lines into a draft year.
+
+    **Requires permission: finance.manage**
+
+    Each copied line keeps its category, station, its own owner position and
+    notes, and starts at the source line's current budget, which the
+    Treasurer then edits. Spent and committed start at zero; amendments are
+    not copied. A category and station that already have a line in the draft
+    are skipped, so a second run copies nothing. Only into a draft year that
+    is not locked; either year in another department is 404.
+    """
+    service = FinanceBudgetRequestService(db)
+    org_id = str(current_user.organization_id)
+    try:
+        result = await service.start_from(
+            draft_id, source_id, org_id, str(current_user.id)
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.fiscal_year_started_from",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "fiscal_year_id": draft_id,
+                "source_fiscal_year_id": source_id,
+                "created": result["created"],
+                "skipped": result["skipped"],
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=org_id,
+        )
+        return {"created": result["created"], "skipped": result["skipped"]}
+    except FinanceEntityNotFoundError:
+        raise HTTPException(status_code=404, detail="Fiscal year not found")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -707,6 +800,313 @@ async def list_budget_transactions(
         )
     except FinanceEntityNotFoundError:
         raise HTTPException(status_code=404, detail="Budget not found")
+
+
+# ============================================
+# Budget Requests (next year's amounts)
+# ============================================
+# Any signed-in member may call these; what they reach is decided by
+# ownership (finance_budget_ownership, CLAUDE.md pitfall #29): the lines whose
+# owner position they hold, and proposals for positions they hold.
+# finance.manage sees and acts on every request and alone decides them. A
+# request the caller may not see is 404, as #2991 does for another member's
+# purchase request.
+
+
+def _is_finance_manager(user: User) -> bool:
+    return user_has_permission(user, "finance.manage")
+
+
+def _budget_request_error(e: Exception) -> HTTPException:
+    if isinstance(e, FinanceEntityNotFoundError):
+        return HTTPException(status_code=404, detail=str(e))
+    if isinstance(e, BudgetRequestForbiddenError):
+        return HTTPException(status_code=403, detail=str(e))
+    if isinstance(e, BudgetRequestConflictError):
+        return HTTPException(status_code=409, detail=str(e))
+    if isinstance(e, BudgetLimitExceededError):
+        return HTTPException(status_code=409, detail=str(e))
+    if isinstance(e, ValueError):
+        return HTTPException(status_code=400, detail=safe_error_detail(e))
+    return HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+async def _audit_budget_request(
+    db: AsyncSession, user: User, event_type: str, request, **extra
+) -> None:
+    await log_audit_event(
+        db=db,
+        event_type=event_type,
+        event_category="finance",
+        severity="info",
+        event_data={
+            "budget_request_id": request.id,
+            "fiscal_year_id": request.fiscal_year_id,
+            "budget_id": request.budget_id,
+            "status": getattr(request.status, "value", request.status),
+            **extra,
+        },
+        user_id=str(user.id),
+        username=user.username,
+        organization_id=str(user.organization_id),
+    )
+
+
+@router.get("/budget-requests", response_model=list[BudgetRequestResponse])
+async def list_budget_requests(
+    fiscal_year_id: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Budget requests, newest first, optionally for one year or status.
+
+    **Authentication required** — no permission: ``finance.manage`` sees every
+    request; anyone else sees requests for lines they own, proposals for
+    positions they hold, and requests they submitted.
+    """
+    service = FinanceBudgetRequestService(db)
+    try:
+        return await service.list_requests(
+            str(current_user.organization_id),
+            str(current_user.id),
+            _is_finance_manager(current_user),
+            fiscal_year_id,
+            status,
+        )
+    except Exception as e:
+        raise _budget_request_error(e)
+
+
+@router.get("/budget-requests/my-lines", response_model=MyBudgetRequestLinesResponse)
+async def list_my_budget_request_lines(
+    fiscal_year_id: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The caller's budget lines in one fiscal year, each with its request.
+
+    **Authentication required** — no permission: the lines are the ones whose
+    effective owner position the caller holds. Also returns the year's
+    deadline and whether requests are open, so the owner's screen needs one
+    call. A year in another department is 404.
+    """
+    # Registered before `/budget-requests/{request_id}`, which would
+    # otherwise capture "my-lines" as an id.
+    service = FinanceBudgetRequestService(db)
+    try:
+        return await service.my_lines(
+            fiscal_year_id, str(current_user.organization_id), str(current_user.id)
+        )
+    except FinanceEntityNotFoundError:
+        raise HTTPException(status_code=404, detail="Fiscal year not found")
+
+
+@router.post("/budget-requests", response_model=BudgetRequestResponse, status_code=201)
+async def create_budget_request(
+    data: BudgetRequestCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Propose next year's amount for a budget line, as a draft.
+
+    **Authentication required** — no permission: the caller must hold the
+    line's owner position (``budgetId``), or the position a new line is
+    proposed for (``categoryId``/``stationId`` with ``ownerPositionId``).
+    ``finance.manage`` may create one on anyone's behalf. Only for a draft
+    fiscal year, and for owners only until its request deadline. A second
+    live request for the same line is 409.
+    """
+    service = FinanceBudgetRequestService(db)
+    try:
+        request = await service.create_request(
+            str(current_user.organization_id),
+            str(current_user.id),
+            _is_finance_manager(current_user),
+            **data.model_dump(),
+        )
+        await _audit_budget_request(
+            db,
+            current_user,
+            "finance.budget_request_created",
+            request,
+            requested_amount=str(request.requested_amount),
+        )
+        return (await service.describe([request], str(current_user.organization_id)))[0]
+    except Exception as e:
+        raise _budget_request_error(e)
+
+
+@router.get("/budget-requests/{request_id}", response_model=BudgetRequestResponse)
+async def get_budget_request(
+    request_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """One budget request.
+
+    **Authentication required** — no permission: visible on the same terms as
+    the list; any other request, and one in another department, is 404.
+    """
+    service = FinanceBudgetRequestService(db)
+    try:
+        return await service.get_request(
+            request_id,
+            str(current_user.organization_id),
+            str(current_user.id),
+            _is_finance_manager(current_user),
+        )
+    except Exception as e:
+        raise _budget_request_error(e)
+
+
+@router.put("/budget-requests/{request_id}", response_model=BudgetRequestResponse)
+async def update_budget_request(
+    request_id: str,
+    data: BudgetRequestUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Change a draft or submitted request's amount or justification.
+
+    **Authentication required** — no permission: the line's owner, while
+    requests are open, or ``finance.manage`` while the year is a draft.
+    """
+    service = FinanceBudgetRequestService(db)
+    org_id = str(current_user.organization_id)
+    try:
+        request = await service.update_request(
+            request_id,
+            org_id,
+            str(current_user.id),
+            _is_finance_manager(current_user),
+            **data.model_dump(exclude_unset=True),
+        )
+        return (await service.describe([request], org_id))[0]
+    except Exception as e:
+        raise _budget_request_error(e)
+
+
+@router.post(
+    "/budget-requests/{request_id}/submit", response_model=BudgetRequestResponse
+)
+async def submit_budget_request(
+    request_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Send a draft request to the Treasurer.
+
+    **Authentication required** — no permission: the line's owner, while
+    requests are open, or ``finance.manage``.
+    """
+    service = FinanceBudgetRequestService(db)
+    org_id = str(current_user.organization_id)
+    try:
+        request = await service.submit_request(
+            request_id, org_id, str(current_user.id), _is_finance_manager(current_user)
+        )
+        await _audit_budget_request(
+            db,
+            current_user,
+            "finance.budget_request_submitted",
+            request,
+            requested_amount=str(request.requested_amount),
+        )
+        return (await service.describe([request], org_id))[0]
+    except Exception as e:
+        raise _budget_request_error(e)
+
+
+@router.post(
+    "/budget-requests/{request_id}/withdraw", response_model=BudgetRequestResponse
+)
+async def withdraw_budget_request(
+    request_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Take a submitted request back to draft.
+
+    **Authentication required** — no permission: the line's owner, while
+    requests are open, or ``finance.manage``.
+    """
+    service = FinanceBudgetRequestService(db)
+    org_id = str(current_user.organization_id)
+    try:
+        request = await service.withdraw_request(
+            request_id, org_id, str(current_user.id), _is_finance_manager(current_user)
+        )
+        return (await service.describe([request], org_id))[0]
+    except Exception as e:
+        raise _budget_request_error(e)
+
+
+@router.delete("/budget-requests/{request_id}", status_code=204)
+async def delete_budget_request(
+    request_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a draft request.
+
+    **Authentication required** — no permission: the line's owner, while
+    requests are open, or ``finance.manage``. A submitted request is
+    withdrawn first; a decided one stays as the record.
+    """
+    service = FinanceBudgetRequestService(db)
+    try:
+        await service.delete_request(
+            request_id,
+            str(current_user.organization_id),
+            str(current_user.id),
+            _is_finance_manager(current_user),
+        )
+    except Exception as e:
+        raise _budget_request_error(e)
+
+
+@router.post(
+    "/budget-requests/{request_id}/decide", response_model=BudgetRequestResponse
+)
+async def decide_budget_request(
+    request_id: str,
+    data: BudgetRequestDecision,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """Approve, adjust (with a note) or decline a submitted budget request.
+
+    **Requires permission: finance.manage**
+
+    Approving or adjusting writes the approved amount into the draft-year
+    line, creating it first for a proposed new line. A decision can be
+    changed while the year is still a draft and is final once it is active
+    or locked. An amount below what the line has already spent or committed
+    is 409.
+    """
+    service = FinanceBudgetRequestService(db)
+    org_id = str(current_user.organization_id)
+    try:
+        request = await service.decide_request(
+            request_id, org_id, str(current_user.id), **data.model_dump()
+        )
+        await _audit_budget_request(
+            db,
+            current_user,
+            "finance.budget_request_decided",
+            request,
+            decision=data.decision,
+            requested_amount=str(request.requested_amount),
+            approved_amount=(
+                str(request.approved_amount)
+                if request.approved_amount is not None
+                else None
+            ),
+        )
+        return (await service.describe([request], org_id))[0]
+    except Exception as e:
+        raise _budget_request_error(e)
 
 
 # ============================================

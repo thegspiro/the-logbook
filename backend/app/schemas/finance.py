@@ -96,6 +96,9 @@ class FiscalYearUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
+    # The last day line owners may make budget requests, on the department's
+    # calendar. Settable only on a draft year; an explicit null clears it.
+    request_deadline: Optional[date] = None
 
 
 class FiscalYearResponse(UTCResponseBase):
@@ -110,9 +113,22 @@ class FiscalYearResponse(UTCResponseBase):
     end_date: datetime
     status: str
     is_locked: bool
+    request_deadline: Optional[date] = None
+    # A draft year whose deadline (if any) has not passed in the org's
+    # timezone — FinanceBudgetRequestService.requests_open decides it.
+    requests_open: bool = False
     created_by: str
     created_at: datetime
     updated_at: datetime
+
+
+class StartFromLastYearResponse(BaseModel):
+    """What "Start from last year" did: lines copied, and lines already there."""
+
+    model_config = _RESPONSE_CONFIG
+
+    created: int
+    skipped: int
 
 
 # ============================================
@@ -375,6 +391,8 @@ class FiscalYearOptionResponse(BaseModel):
     id: str
     name: str
     status: str
+    request_deadline: Optional[date] = None
+    requests_open: bool = False
 
 
 class BudgetSummaryResponse(BaseModel):
@@ -388,6 +406,178 @@ class BudgetSummaryResponse(BaseModel):
     total_remaining: Decimal
     percent_used: float
     category_breakdown: list[dict] = []
+
+
+# ============================================
+# Budget Request Schemas
+# ============================================
+
+_BUDGET_REQUEST_DECISIONS = {"approve", "adjust", "decline"}
+
+
+def _strip_or_none(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+class BudgetRequestCreate(BaseModel):
+    """Propose next year's amount for a budget line.
+
+    Either ``budget_id`` names a line in the draft year, or ``category_id``
+    (with an optional ``station_id``) describes a line that does not exist
+    yet, owned by ``owner_position_id``. The service decides which, and who
+    may make it.
+    """
+
+    model_config = _REQUEST_CONFIG
+
+    fiscal_year_id: str
+    budget_id: Optional[str] = None
+    category_id: Optional[str] = None
+    station_id: Optional[str] = None
+    owner_position_id: Optional[str] = None
+    # max_digits=12 with two places is the Numeric(12, 2) column's own limit.
+    requested_amount: Decimal = Field(..., ge=0, max_digits=12, decimal_places=2)
+    justification: str = Field(..., max_length=4000)
+
+    @field_validator("justification")
+    @classmethod
+    def _justification_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+
+class BudgetRequestUpdate(BaseModel):
+    """Change a draft or submitted request's amount or justification.
+
+    Dumped with ``exclude_unset``: an omitted key leaves the field alone.
+    """
+
+    model_config = _REQUEST_CONFIG
+
+    requested_amount: Optional[Decimal] = Field(
+        None, ge=0, max_digits=12, decimal_places=2
+    )
+    justification: Optional[str] = Field(None, max_length=4000)
+
+    @field_validator("justification")
+    @classmethod
+    def _justification_not_blank(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+
+class BudgetRequestDecision(BaseModel):
+    """The Treasurer's decision: approve as asked, adjust with a note, decline.
+
+    ``adjust`` needs the amount approved and a note saying why; ``decline``
+    needs a note. A blank note counts as none.
+    """
+
+    model_config = _REQUEST_CONFIG
+
+    decision: str
+    approved_amount: Optional[Decimal] = Field(
+        None, ge=0, max_digits=12, decimal_places=2
+    )
+    decision_note: Optional[str] = Field(None, max_length=4000)
+
+    _check_decision = field_validator("decision")(
+        _enum_check(_BUDGET_REQUEST_DECISIONS, "decision")
+    )
+
+    @field_validator("decision_note")
+    @classmethod
+    def _blank_note_is_none(cls, value: Optional[str]) -> Optional[str]:
+        return _strip_or_none(value)
+
+    @model_validator(mode="after")
+    def _decision_needs_what_it_needs(self):
+        if self.decision == "adjust":
+            if self.approved_amount is None:
+                raise ValueError("An adjusted request needs the amount approved.")
+            if not self.decision_note:
+                raise ValueError("Say why the amount was adjusted.")
+        if self.decision == "decline" and not self.decision_note:
+            raise ValueError("Say why the request was declined.")
+        return self
+
+
+class BudgetRequestResponse(UTCResponseBase):
+    """One budget request, as the owner's and the Treasurer's screens show it.
+
+    ``line_label`` is "Category · Station" (or the category alone).
+    ``owner_position_*`` is the line's effective owner when the request is
+    for an existing line, else the position named on the proposal.
+    ``last_year_*`` are the ACTIVE year's figures for the same category and
+    station — "this year" seen from the draft year being planned — and are
+    null when there is no such line.
+    """
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    organization_id: str
+    fiscal_year_id: str
+    fiscal_year_name: Optional[str] = None
+    budget_id: Optional[str] = None
+    category_id: Optional[str] = None
+    category_name: Optional[str] = None
+    station_id: Optional[str] = None
+    station_name: Optional[str] = None
+    line_label: str
+    is_proposed_line: bool
+    owner_position_id: Optional[str] = None
+    owner_position_name: Optional[str] = None
+    requested_amount: Decimal
+    approved_amount: Optional[Decimal] = None
+    status: str
+    justification: str
+    decision_note: Optional[str] = None
+    submitted_by: Optional[str] = None
+    submitted_by_name: Optional[str] = None
+    submitted_at: Optional[datetime] = None
+    decided_by: Optional[str] = None
+    decided_by_name: Optional[str] = None
+    decided_at: Optional[datetime] = None
+    last_year_fiscal_year_name: Optional[str] = None
+    last_year_budgeted: Optional[Decimal] = None
+    last_year_spent: Optional[Decimal] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class MyBudgetRequestLineResponse(BaseModel):
+    """A draft-year line the caller owns, with its request if there is one.
+
+    ``request`` is the line's current (not declined) request, else its most
+    recent declined one, else null.
+    """
+
+    model_config = _RESPONSE_CONFIG
+
+    budget: BudgetResponse
+    request: Optional[BudgetRequestResponse] = None
+    last_year_fiscal_year_name: Optional[str] = None
+    last_year_budgeted: Optional[Decimal] = None
+    last_year_spent: Optional[Decimal] = None
+
+
+class MyBudgetRequestLinesResponse(BaseModel):
+    """Everything the owner's request screen needs for one draft year."""
+
+    model_config = _RESPONSE_CONFIG
+
+    fiscal_year: FiscalYearOptionResponse
+    lines: list[MyBudgetRequestLineResponse]
 
 
 # ============================================
