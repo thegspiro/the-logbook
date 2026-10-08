@@ -1864,6 +1864,14 @@ Trainees see a personal stats card at the top of their **About me** view:
 
 ### Visibility Configuration
 
+_(2026-10-08)_ The **Member Visibility Settings** panel on My Training is laid
+out as one bordered card per group, two columns on a wide screen (Officer
+Observations and Skills-Test Results share a column; the shift-report settings
+follow in the same style). While any change is unsaved, a bar pinned to the
+bottom of the window shows "N unsaved changes" and the **Save** button, so a
+change made near the top no longer needs a scroll to find Save. Nothing about
+what each setting does has changed.
+
 Training officers can control what trainees see via **Training Module Configuration**:
 
 | Setting                      | Controls                                                                                 |
