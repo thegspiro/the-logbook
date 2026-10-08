@@ -457,7 +457,6 @@ If you want to store backups in S3:
 3. Configure in `.env`:
 
 ```bash
-STORAGE_TYPE=s3
 AWS_S3_BUCKET=your-org-logbook-backups
 AWS_REGION=us-east-1
 # If using IAM role (recommended), leave these blank:
@@ -558,8 +557,8 @@ half of its job:
 The sidecar also archived two Docker volumes on the EC2 instance, and nothing
 else backs them up now:
 
-- `uploads` — documents, photos and attachments, unless `STORAGE_TYPE=s3`
-  already keeps them in S3;
+- `uploads` — documents, photos and attachments (always written to local disk
+  under `/app/uploads`; there is no S3 upload storage);
 - `audit_archives` — audit rows exported before a retention purge. They are
   the **only** remaining copy of that history once the purge has run.
 
