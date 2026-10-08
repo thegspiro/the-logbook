@@ -10,12 +10,15 @@ year", because an owner sees their lines in every year, closed ones included
 
 This module is the one definition of that rule (CLAUDE.md pitfall #29). The
 budget list and detail responses report it through
-``effective_owner_position_id``; the owner's own "My budgets" view will ask
-``owned_budgets_query`` / ``user_owns_budget`` the same question rather than
-re-deriving it.
+``effective_owner_position_id``; the owner's own "My budgets" view
+(``GET /finance/my-budgets``), the navigation's ``ownsAny`` signal and the
+owner's read access to a line's detail, amendments and transactions all ask
+``owned_budgets_query`` / ``user_owns_budget`` / ``user_owns_any_budget`` the
+same question rather than re-deriving it.
 
-Ownership grants no write: only ``finance.manage`` sets amounts, owners and
-stations. What an owner may *see* is decided by the caller of this module.
+Ownership grants no write: only ``finance.manage`` sets amounts, owners,
+stations and amendments. What an owner may *see* is decided by the caller of
+this module (``_authorize_budget_view`` in the finance endpoints).
 """
 
 from typing import Any, Optional
@@ -124,6 +127,23 @@ async def user_owns_budget(
         owned_budgets_query(organization_id, user_id)
         .with_only_columns(Budget.id)
         .where(Budget.id == str(budget_id))
+    )
+    result = await db.execute(query)
+    return result.first() is not None
+
+
+async def user_owns_any_budget(
+    db: AsyncSession, organization_id: str, user_id: str
+) -> bool:
+    """True when ``user_id`` owns at least one line, in any fiscal year.
+
+    One indexed ``LIMIT 1`` probe — cheap enough for the navigation to ask once
+    per session without loading the lines themselves.
+    """
+    query = (
+        owned_budgets_query(organization_id, user_id)
+        .with_only_columns(Budget.id)
+        .limit(1)
     )
     result = await db.execute(query)
     return result.first() is not None

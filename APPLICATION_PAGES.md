@@ -1191,7 +1191,8 @@ lot's number or expiration date require `inventory.check_manage` or
 | ------------------------------------- | -------------------------- | ----------------------------------------------------- |
 | `/finance`                            | Finance Dashboard          | `finance.view`                                        |
 | `/finance/budgets`                    | Budgets                    | `finance.view`                                        |
-| `/finance/budgets/:id`                | Budget Detail              | `finance.view`                                        |
+| `/finance/budgets/:id`                | Budget Detail              | Authenticated                                         |
+| `/finance/my-budgets`                 | My Budgets                 | Authenticated                                         |
 | `/finance/purchase-requests`          | Purchase Requests          | `finance.request`, `finance.view` or `finance.manage` |
 | `/finance/purchase-requests/new`      | New Purchase Request       | `finance.request` or `finance.manage`                 |
 | `/finance/purchase-requests/:id`      | Purchase Request Detail    | `finance.request`, `finance.view` or `finance.manage` |
@@ -1207,6 +1208,16 @@ lot's number or expiration date require `inventory.check_manage` or
 | `/finance/settings`                   | Finance Settings           | `finance.manage`                                      |
 | `/finance/settings/approval-chains`   | Approval Chains            | `finance.configure_approvals`                         |
 | `/finance/approvals/:token`           | Tokenized Approval Landing | Token-based                                           |
+
+> **Budget-line owners read their own lines** _(2026-10-08)_. A budget line
+> is owned by a position (or inherits its category's). `/finance/my-budgets`
+> lists the lines whose owner position the signed-in member holds, in every
+> fiscal year, and is empty for everyone else; the navigation offers it only
+> to a member who owns at least one. `/finance/budgets/:id` needs only a
+> session because ownership is not a permission: the API serves the line, its
+> amendments and its transactions to `finance.view` or the line's owner, and
+> a 404 — shown as "Budget not found" — to anyone else. An owner reads only:
+> Edit and Add amendment stay `finance.manage`.
 
 > **Every member raises their own requests** _(2026-10-07)_. `finance.request`
 > is seeded to every member. It opens the purchase request, expense report and

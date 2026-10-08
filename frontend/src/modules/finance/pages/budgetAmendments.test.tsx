@@ -35,11 +35,14 @@ vi.mock('@/stores/authStore', () => ({
     selector({ checkPermission: (p) => granted.has(p), user: { id: 'u-me' } }),
 }));
 
+const getBudget = vi.fn();
 const updateBudget = vi.fn();
 const listAmendments = vi.fn();
 const addAmendment = vi.fn();
 vi.mock('../services/api', () => ({
   budgetService: {
+    get: (...args: unknown[]) => getBudget(...args) as unknown,
+    listTransactions: () => Promise.resolve({ items: [], total: 0, limit: 25, offset: 0 }),
     update: (...args: unknown[]) => updateBudget(...args) as unknown,
     listAmendments: (...args: unknown[]) => listAmendments(...args) as unknown,
     addAmendment: (...args: unknown[]) => addAmendment(...args) as unknown,
@@ -81,6 +84,7 @@ const line = (overrides: Partial<Budget>): Budget => ({
   organizationId: 'org',
   fiscalYearId: 'fy-open',
   categoryId: 'cat-gear',
+  categoryName: 'Gear',
   amountBudgeted: '1050.00',
   amountSpent: '100.00',
   amountEncumbered: '0.00',
@@ -134,7 +138,8 @@ const amendments: BudgetAmendment[] = [
 
 const fetchBudgets = vi.fn();
 
-const openLine = (id: string) =>
+/** Render the detail page and wait for the line, which it fetches by id. */
+const openLine = async (id: string) => {
   render(
     <MemoryRouter initialEntries={[`/finance/budgets/${id}`]}>
       <Routes>
@@ -142,12 +147,15 @@ const openLine = (id: string) =>
       </Routes>
     </MemoryRouter>
   );
+  await screen.findByRole('heading', { name: 'Gear' });
+};
 
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC' }).format(new Date());
 
 beforeEach(() => {
   vi.clearAllMocks();
-  for (const mock of [updateBudget, listAmendments, addAmendment]) mock.mockReset();
+  for (const mock of [getBudget, updateBudget, listAmendments, addAmendment]) mock.mockReset();
+  getBudget.mockImplementation((id: string) => Promise.resolve(budgets.find((b) => b.id === id)));
   listAmendments.mockImplementation((id: string) => Promise.resolve(id === 'b-amended' ? amendments : []));
   granted = new Set(['finance.view', 'finance.manage']);
   storeState = {
@@ -164,7 +172,7 @@ beforeEach(() => {
 
 describe('Budget detail — original and current budget', () => {
   it('shows the original, the current and the amendments total when amended', async () => {
-    openLine('b-amended');
+    await openLine('b-amended');
 
     const terms = screen.getAllByRole('term').map((t) => t.textContent);
     const values = screen.getAllByRole('definition').map((d) => d.textContent);
@@ -176,7 +184,7 @@ describe('Budget detail — original and current budget', () => {
   });
 
   it('shows a plain "Budgeted" figure for a line never amended', async () => {
-    openLine('b-plain');
+    await openLine('b-plain');
 
     expect(screen.queryByText('Original budget')).not.toBeInTheDocument();
     expect(screen.getByText('Budgeted')).toBeInTheDocument();
@@ -187,7 +195,7 @@ describe('Budget detail — original and current budget', () => {
 describe('Budget detail — amendments list', () => {
   it('lists each amendment with its approval, reason and who entered it', async () => {
     granted = new Set(['finance.view']);
-    openLine('b-amended');
+    await openLine('b-amended');
 
     const list = await screen.findByRole('list', { name: 'Amendments' });
     const items = within(list).getAllByRole('listitem');
@@ -202,19 +210,19 @@ describe('Budget detail — amendments list', () => {
 });
 
 describe('Budget detail — Add amendment', () => {
-  it('is offered to a finance manager in an open year', () => {
-    openLine('b-amended');
+  it('is offered to a finance manager in an open year', async () => {
+    await openLine('b-amended');
     expect(screen.getByRole('button', { name: 'Add amendment' })).toBeInTheDocument();
   });
 
-  it('is hidden from a viewer', () => {
+  it('is hidden from a viewer', async () => {
     granted = new Set(['finance.view']);
-    openLine('b-amended');
+    await openLine('b-amended');
     expect(screen.queryByRole('button', { name: 'Add amendment' })).not.toBeInTheDocument();
   });
 
-  it('is hidden when the fiscal year is locked', () => {
-    openLine('b-locked');
+  it('is hidden when the fiscal year is locked', async () => {
+    await openLine('b-locked');
     expect(screen.queryByRole('button', { name: 'Add amendment' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
   });
@@ -222,7 +230,7 @@ describe('Budget detail — Add amendment', () => {
   it('records an amendment with every field, then re-fetches the line and its amendments', async () => {
     const user = userEvent.setup();
     addAmendment.mockResolvedValue({ amendment: amendments[0], budget: budgets[0] });
-    openLine('b-plain');
+    await openLine('b-plain');
     await waitFor(() => expect(listAmendments).toHaveBeenCalledTimes(1));
 
     await user.click(screen.getByRole('button', { name: 'Add amendment' }));
@@ -245,14 +253,14 @@ describe('Budget detail — Add amendment', () => {
       })
     );
     expect(toastSuccess).toHaveBeenCalledWith('Amendment recorded');
-    await waitFor(() => expect(fetchBudgets).toHaveBeenCalled());
+    await waitFor(() => expect(getBudget).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(listAmendments).toHaveBeenCalledTimes(2));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('refuses a missing amount, reason and approver without calling the API', async () => {
     const user = userEvent.setup();
-    openLine('b-plain');
+    await openLine('b-plain');
 
     await user.click(screen.getByRole('button', { name: 'Add amendment' }));
     const dialog = await screen.findByRole('dialog');
@@ -267,7 +275,7 @@ describe('Budget detail — Add amendment', () => {
 
   it('refuses a zero amount and a future date', async () => {
     const user = userEvent.setup();
-    openLine('b-plain');
+    await openLine('b-plain');
 
     await user.click(screen.getByRole('button', { name: 'Add amendment' }));
     const dialog = await screen.findByRole('dialog');
@@ -300,7 +308,7 @@ describe('Budget detail — Add amendment', () => {
         data: { detail: 'This fiscal year is locked. Budget amounts can no longer be changed or amended.' },
       },
     });
-    openLine('b-plain');
+    await openLine('b-plain');
 
     await user.click(screen.getByRole('button', { name: 'Add amendment' }));
     const dialog = await screen.findByRole('dialog');
@@ -322,7 +330,7 @@ describe('Edit dialog in a locked year', () => {
   it('makes the amount read-only and leaves it out of the save', async () => {
     const user = userEvent.setup();
     updateBudget.mockResolvedValue(budgets[2]);
-    openLine('b-locked');
+    await openLine('b-locked');
 
     await user.click(screen.getByRole('button', { name: 'Edit' }));
     const dialog = await screen.findByRole('dialog');
@@ -344,7 +352,7 @@ describe('Edit dialog in a locked year', () => {
 
   it('keeps the amount editable in an open year', async () => {
     const user = userEvent.setup();
-    openLine('b-plain');
+    await openLine('b-plain');
 
     await user.click(screen.getByRole('button', { name: 'Edit' }));
     const dialog = await screen.findByRole('dialog');

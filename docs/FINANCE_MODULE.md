@@ -52,8 +52,8 @@ A member owns a line when they hold its effective owner position — org-scoped
 at every join, active members only, and **in every fiscal year**, closed ones
 included (`owned_budgets_query`, `owned_budget_ids`, `user_owns_budget`). Owning
 a line grants no write: only `finance.manage` sets amounts, owners and stations.
-What an owner may _see_ of their lines is the follow-up "My budgets" work and is
-not exposed yet.
+What an owner may _see_ of their lines is described under
+[My Budgets](#my-budgets-the-owners-view-and-the-transaction-list-2026-10-08).
 
 **API** (camelCase both ways; request schemas use `_REQUEST_CONFIG`):
 
@@ -66,8 +66,8 @@ not exposed yet.
   clears it; a cleared owner falls back to the category's. An update does not
   move a line to another fiscal year or category. Lowering the amount below
   spent + encumbered is 409 _Insufficient available budget_.
-- `GET /finance/budgets[?station_id=]` and `GET /finance/budgets/{id}`
-  (`finance.view`) — each row adds `stationId`, `stationName`,
+- `GET /finance/budgets[?station_id=]` (`finance.view`) and
+  `GET /finance/budgets/{id}` (`finance.view` or the line's owner) — each row adds `stationId`, `stationName`,
   `ownerPositionId`, `ownerPositionName`, `effectiveOwnerPositionId`,
   `effectiveOwnerPositionName` and `ownerInherited`, from one org-scoped join
   rather than a query per row.
@@ -130,8 +130,8 @@ deleted — they are the record of what was approved.
   future date, a locked year, or a total past the column's limit are 400; a
   line in another department is 404. Returns `{amendment, budget}` (201).
   Audited as `finance.budget_amended`.
-- `GET /finance/budgets/{id}/amendments` (`finance.view`, the line's own gate)
-  — newest first, each with `enteredByName`. Another department's line is 404.
+- `GET /finance/budgets/{id}/amendments` (`finance.view` or the line's owner,
+  the line's own gate) — newest first, each with `enteredByName`. Another department's line is 404.
 - Every budget response, list and detail, adds `originalAmount`,
   `amendmentsTotal` and `amendmentCount`, from one grouped subquery joined into
   the existing query rather than a query per row.
@@ -143,6 +143,84 @@ when), and offers **Add amendment** to a manager unless the year is locked
 (`AmendmentDialog`). The Budgets list marks an amended line "(amended)". In a
 locked year the Edit dialog shows the amount read-only with "This fiscal year
 is locked." and leaves it out of the save.
+
+## My Budgets: the owner's view, and the transaction list _(2026-10-08)_
+
+**Who reads a line.** `GET /finance/budgets/{id}`, `…/amendments` and
+`…/transactions` admit `finance.view` **or** the line's owner — the member who
+holds its effective owner position (`user_owns_budget`; the rule is
+`finance_budget_ownership.py` and nothing re-derives it). One body helper,
+`_authorize_budget_view` in `endpoints/finance.py`, applies it to all three, and
+`scripts/check_endpoint_permissions.py` knows it as a body authorizer (as with
+the scheduling module's shift-officer check), so the docstrings' "finance.view"
+is checked against it. Anyone else — a member who owns nothing, the category's
+owner on a line whose own owner overrides it, a member whose account is no
+longer active, and every other department — gets **404**, the same answer #2991
+gives for another member's request, so a line id is no existence oracle.
+Ownership opens **reads only**: `PUT /finance/budgets/{id}` and
+`POST …/amendments` stay `finance.manage` (403 to an owner), and the org-wide
+`GET /finance/budgets` list stays `finance.view`. Access only widened, for
+owners; nothing existing callers could do changed, so there is no
+`UPGRADING.md` entry.
+
+**API** (camelCase):
+
+- `GET /finance/my-budgets[?fiscal_year_id=]` (any signed-in member) — the
+  caller's lines in every fiscal year, newest year first
+  (`owned_budgets_query`), empty — not 403 — for a member who owns nothing.
+  Each row is the budget detail row plus `amountRemaining` (budget − spent −
+  encumbered) and `percentUsed` (spent + encumbered over the current budget, one
+  decimal). Budget rows everywhere now also carry `categoryName`,
+  `fiscalYearName` and `fiscalYearStatus`, so a reader without the category and
+  fiscal-year lists can label a line.
+- `GET /finance/my-budgets/summary` (any signed-in member) — `{ownsAny}`, one
+  `LIMIT 1` probe (`user_owns_any_budget`). The navigation asks it once per
+  signed-in member (`useOwnsBudgets`) rather than on every page, and adding a
+  field to the auth payload instead would have put a finance query into every
+  sign-in and refresh. An owner assigned mid-session sees the entry after a
+  reload, or at once on opening `/finance/my-budgets`.
+- `GET /finance/budgets/{id}/transactions?limit=&offset=` (`finance.view` or the
+  owner; `limit` 1–100, default 25) — `{items, total, limit, offset}`, newest
+  first. Each item: `kind` (`purchase_request` / `check_request` /
+  `expense_report`), `entityId`, `number` (PR-/CR-/ER-), `description`,
+  `counterparty` (vendor, payee or merchant), `requesterName`, `status`,
+  `amount`, `effect` and `occurredAt`. No payee address, check number or
+  payment method.
+
+**What the transaction list counts.** Exactly what `_mutate_budget` counted
+against the line, from the same `budget_id` its callers pass, so the listed
+`spent` rows add up to `amountSpent` and the `encumbered` rows to
+`amountEncumbered`:
+
+| Record                       | Status listed                 | Effect                                         | Date        |
+| ---------------------------- | ----------------------------- | ---------------------------------------------- | ----------- |
+| Purchase request             | approved / ordered / received | `encumbered`, the estimate                     | approved at |
+| Purchase request             | paid                          | `spent`, the actual amount (else the estimate) | paid at     |
+| Check request                | issued                        | `spent`                                        | check date  |
+| Check request                | voided                        | `none` — reversed by `void_check`, shown so    | check date  |
+| Expense report **line item** | report paid                   | `spent`, the item's amount, on the item's line | paid at     |
+
+Excluded because they never moved the totals: drafts, submitted, pending,
+denied and cancelled records (a request cancelled after approval had its
+encumbrance released). The only way the sum can differ from the stored totals
+is `_mutate_budget`'s floor at zero clipping a release larger than the balance.
+
+**Screens.** _Finance › My Budgets_ (`/finance/my-budgets`, any signed-in
+member, Finance module on) groups the caller's lines by fiscal year — the
+current year, then drafts, then closed years — each card naming the category
+and station, the owner ("… (from category)" when inherited), the current
+budget (and the original once amended), **Spent**, **Committed** (the
+encumbered amount), **Remaining** and a progress bar, linking to the line. With
+no lines it explains that a line appears once the Treasurer makes the member's
+position its owner. The Finance navigation offers **My Budgets** to anyone who
+owns a line — a Treasurer included — and to nobody who would find it empty.
+`/finance/budgets/:id` now needs only a session (the API decides) and loads the
+line by id instead of finding it in the budget list, which an owner cannot
+fetch; for an owner it is read-only (no Edit, no Add amendment) and links back
+to My Budgets. Its **Transaction History** is the paginated list above; a row
+links to its request only for a viewer who may open it (`finance.view` for
+purchase and check requests, `finance.manage` for expense reports). The detail
+page now labels encumbered money **Committed**.
 
 ## Context
 

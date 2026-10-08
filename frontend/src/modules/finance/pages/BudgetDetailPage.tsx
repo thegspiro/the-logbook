@@ -1,27 +1,35 @@
 /**
  * Budget Detail Page
  *
- * Displays detailed information for a single budget including
- * budget info header, its amendments and a transaction history placeholder.
- * A `finance.manage` holder edits the line and records amendments from here.
+ * Displays detailed information for a single budget line: the info header,
+ * its amendments and the transactions that moved its totals. A
+ * `finance.manage` holder edits the line and records amendments from here.
+ *
+ * Opens to `finance.view` and to the line's owner (the member holding its
+ * owner position, or its category's), read-only for the owner. The line is
+ * loaded by id — `GET /finance/budgets/{id}`, which applies that rule and is a
+ * 404 to anyone else — rather than found in the budget list, which an owner
+ * without `finance.view` cannot fetch.
  *
  * An amendment is extra money leadership approved for the line. The backend
  * raises `amountBudgeted` by it and reports the original (`originalAmount`);
  * this page shows both rather than working either out (CLAUDE.md pitfall #29).
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router';
-import { ArrowLeft, AlertTriangle, DollarSign, FileText, Pencil, Plus } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, DollarSign, Pencil, Plus } from 'lucide-react';
 import { useFinanceStore } from '../store/financeStore';
 import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
+import { useAuthStore } from '@/stores/authStore';
 import { BudgetFormDialog } from '../components/BudgetFormDialog';
 import { AmendmentDialog } from '../components/AmendmentDialog';
+import { BudgetTransactionList } from '../components/BudgetTransactionList';
 import { budgetService } from '../services/api';
 import { budgetOwnerLabel } from '../utils/budgetOwnership';
 import { formatCurrency, formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { formatDate, formatDateTime } from '@/utils/dateFormatting';
-import { getErrorMessage } from '@/utils/errorHandling';
+import { getErrorMessage, toAppError } from '@/utils/errorHandling';
 import { useTimezone } from '@/hooks/useTimezone';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
@@ -114,7 +122,7 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({ budget, categoryName, actio
           <p className="text-xl font-bold text-blue-600">{formatCurrencyWhole(Number(budget.amountSpent))}</p>
         </div>
         <div>
-          <p className="text-theme-text-secondary text-sm">Encumbered</p>
+          <p className="text-theme-text-secondary text-sm">Committed</p>
           <p className="text-xl font-bold text-yellow-600">{formatCurrencyWhole(Number(budget.amountEncumbered))}</p>
         </div>
         <div>
@@ -146,7 +154,7 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({ budget, categoryName, actio
           </span>
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-2 w-2 rounded-full bg-yellow-400" />
-            Encumbered
+            Committed
           </span>
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-2 w-2 rounded-full bg-gray-200 dark:bg-gray-600" />
@@ -245,22 +253,37 @@ const DetailSkeleton: React.FC = () => (
 
 const BudgetDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const {
-    budgets,
-    budgetCategories,
-    fiscalYears,
-    isLoading,
-    error,
-    fetchBudgets,
-    fetchBudgetCategories,
-    fetchFiscalYears,
-  } = useFinanceStore();
-  const { canManage } = useFinanceRequestAccess();
+  const { budgetCategories, fiscalYears, fetchBudgetCategories, fetchFiscalYears } = useFinanceStore();
+  const { canManage, seesAllRequests, seesAllExpenseReports } = useFinanceRequestAccess();
+  // finance.view lists every line; without it the member reached this line as
+  // its owner, so the way back is their own list.
+  const seesAllBudgets = useAuthStore((s) => s.checkPermission('finance.view'));
+  const [budget, setBudget] = useState<Budget | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [amending, setAmending] = useState(false);
   const [amendments, setAmendments] = useState<BudgetAmendment[]>([]);
   const [amendmentsLoading, setAmendmentsLoading] = useState(false);
   const [amendmentsError, setAmendmentsError] = useState<string | null>(null);
+  // Bumped after an edit or amendment so the transaction list re-reads too.
+  const [revision, setRevision] = useState(0);
+
+  const loadBudget = useCallback(async () => {
+    if (!id) return;
+    setLoading(true);
+    try {
+      setBudget(await budgetService.get(id));
+      setLoadError(null);
+    } catch (err: unknown) {
+      setBudget(null);
+      // A 404 is the API's answer for a line that is not there or not the
+      // caller's to read; anything else is a failure worth naming.
+      setLoadError(toAppError(err).status === 404 ? null : getErrorMessage(err, 'Could not load the budget line'));
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
 
   const loadAmendments = useCallback(async () => {
     if (!id) return;
@@ -276,40 +299,51 @@ const BudgetDetailPage: React.FC = () => {
   }, [id]);
 
   useEffect(() => {
+    void loadBudget();
+  }, [loadBudget]);
+
+  useEffect(() => {
     void loadAmendments();
   }, [loadAmendments]);
 
   useEffect(() => {
-    void fetchBudgets();
+    // The edit dialog names the line's fiscal year and category; only a
+    // finance manager opens it, and only they can list either.
+    if (!canManage) return;
+    void fetchFiscalYears();
     void fetchBudgetCategories();
-  }, [fetchBudgets, fetchBudgetCategories]);
+  }, [canManage, fetchFiscalYears, fetchBudgetCategories]);
 
-  useEffect(() => {
-    // The edit dialog names the line's fiscal year.
-    if (canManage) void fetchFiscalYears();
-  }, [canManage, fetchFiscalYears]);
+  const reload = () => {
+    // Re-fetch rather than splice the response in (CLAUDE.md pitfall #11).
+    void loadBudget();
+    void loadAmendments();
+    setRevision((r) => r + 1);
+  };
 
-  const budget = useMemo(() => budgets.find((b) => b.id === id), [budgets, id]);
+  const backLink = seesAllBudgets ? (
+    <Link
+      to="/finance/budgets"
+      className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
+    >
+      <ArrowLeft className="h-4 w-4" />
+      Back to Budgets
+    </Link>
+  ) : (
+    <Link
+      to="/finance/my-budgets"
+      className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
+    >
+      <ArrowLeft className="h-4 w-4" />
+      Back to My Budgets
+    </Link>
+  );
 
-  const categoryName = useMemo(() => {
-    if (!budget) return 'Unknown';
-    return budgetCategories.find((c) => c.id === budget.categoryId)?.name ?? 'Unknown';
-  }, [budget, budgetCategories]);
-
-  // A locked year takes no amendments; the backend refuses one regardless.
-  const yearLocked = Boolean(budget && fiscalYears.some((fy) => fy.id === budget.fiscalYearId && fy.isLocked));
-
-  if (isLoading && !budget) {
+  if (loading && !budget) {
     return (
       <div className="space-y-6">
         <Breadcrumbs />
-        <Link
-          to="/finance/budgets"
-          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Budgets
-        </Link>
+        {backLink}
         <DetailSkeleton />
       </div>
     );
@@ -319,22 +353,30 @@ const BudgetDetailPage: React.FC = () => {
     return (
       <div className="space-y-6">
         <Breadcrumbs />
-        <Link
-          to="/finance/budgets"
-          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Budgets
-        </Link>
-        <EmptyState
-          headingLevel={1}
-          icon={DollarSign}
-          title="Budget not found"
-          description="The budget you are looking for does not exist or has been removed."
-        />
+        {backLink}
+        {loadError ? (
+          <div
+            role="alert"
+            className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400"
+          >
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <p>{loadError}</p>
+          </div>
+        ) : (
+          <EmptyState
+            headingLevel={1}
+            icon={DollarSign}
+            title="Budget not found"
+            description="The budget you are looking for does not exist, has been removed, or is not one of yours."
+          />
+        )}
       </div>
     );
   }
+
+  const categoryName = budget.categoryName || 'Unknown category';
+  // A locked year takes no amendments; the backend refuses one regardless.
+  const yearLocked = fiscalYears.some((fy) => fy.id === budget.fiscalYearId && fy.isLocked);
 
   return (
     <div className="space-y-6">
@@ -342,22 +384,7 @@ const BudgetDetailPage: React.FC = () => {
           here the trail showed while the budget was fetching and disappeared
           when it loaded. */}
       <Breadcrumbs />
-      {/* Back link */}
-      <Link
-        to="/finance/budgets"
-        className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Budgets
-      </Link>
-
-      {/* Error */}
-      {error && (
-        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          <p>{error}</p>
-        </div>
-      )}
+      {backLink}
 
       {/* Budget Info Header */}
       <BudgetInfoCard
@@ -396,9 +423,7 @@ const BudgetDetailPage: React.FC = () => {
           onClose={() => setAmending(false)}
           onSaved={() => {
             setAmending(false);
-            // Re-fetch both rather than splice the response in (CLAUDE.md pitfall #11).
-            void fetchBudgets();
-            void loadAmendments();
+            reload();
           }}
         />
       )}
@@ -411,24 +436,19 @@ const BudgetDetailPage: React.FC = () => {
           onClose={() => setEditing(false)}
           onSaved={() => {
             setEditing(false);
-            // Re-fetch rather than splice the response in (CLAUDE.md pitfall #11).
-            void fetchBudgets();
+            reload();
           }}
         />
       )}
 
       <AmendmentList amendments={amendments} loading={amendmentsLoading} error={amendmentsError} />
 
-      {/* Transaction History Placeholder */}
-      <div className="card p-6">
-        <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Transaction History</h3>
-        <EmptyState
-          headingLevel={4}
-          icon={FileText}
-          title="Not available yet"
-          description="Individual transactions for this budget aren't listed here yet."
-        />
-      </div>
+      <BudgetTransactionList
+        budgetId={budget.id}
+        revision={revision}
+        linkRequests={seesAllRequests}
+        linkExpenseReports={seesAllExpenseReports}
+      />
     </div>
   );
 };

@@ -17,6 +17,7 @@ const FinanceDashboardPage = lazyWithRetry(() => import('./pages/FinanceDashboar
 // Budgets
 const BudgetsPage = lazyWithRetry(() => import('./pages/BudgetsPage'));
 const BudgetDetailPage = lazyWithRetry(() => import('./pages/BudgetDetailPage'));
+const MyBudgetsPage = lazyWithRetry(() => import('./pages/MyBudgetsPage'));
 
 // Settings
 const FiscalYearSettingsPage = lazyWithRetry(() => import('./pages/FiscalYearSettingsPage'));
@@ -65,11 +66,26 @@ export const getFinanceRoutes = () => {
           </ProtectedRoute>
         }
       />
+      {/*
+        A budget line opens to finance.view and to the member who owns it
+        (holds its owner position, or its category's). Ownership is not a
+        permission, so the route asks only for a session and the API decides:
+        anyone else gets a 404, which the page shows as "Budget not found".
+        My Budgets lists the caller's own lines and is empty for everyone else.
+      */}
       <Route
         path="/finance/budgets/:id"
         element={
-          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
+          <ProtectedRoute requiredModule="finance" moduleLabel="Finance">
             <BudgetDetailPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/finance/my-budgets"
+        element={
+          <ProtectedRoute requiredModule="finance" moduleLabel="Finance">
+            <MyBudgetsPage />
           </ProtectedRoute>
         }
       />

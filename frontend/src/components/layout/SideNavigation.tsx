@@ -70,6 +70,7 @@ import { usePendingSyncStore } from '../../stores/pendingSyncStore';
 import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
 import { GRANTS_NAV_ITEMS } from './grantsNavigation';
 import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './financeNavigation';
+import { useOwnsBudgets } from '../../modules/finance/hooks/useOwnsBudgets';
 
 interface SideNavigationProps {
   departmentName: string;
@@ -128,6 +129,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
   const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
   const { isConnected } = useConnectedIntegrations({ enabled: !modulesLoading && isModuleOn('integrations') });
   const isNfcCardsOn = isConnected(NFC_ID_CARDS_INTEGRATION);
+  const ownsBudgets = useOwnsBudgets(currentUser?.id, !modulesLoading && isModuleOn('finance'));
 
   // The mobile bottom bar's "More" button asks us to open the drawer.
   useEffect(() => {
@@ -429,7 +431,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             path: financeNavPath(checkPermission),
             icon: Wallet,
             anyPermission: [...FINANCE_NAV_PERMISSIONS],
-            subItems: financeNavItems(checkPermission).map((item) => ({ ...item, icon: Wallet })),
+            subItems: financeNavItems(checkPermission, { ownsBudgets }).map((item) => ({ ...item, icon: Wallet })),
           } as NavItem,
         ]
       : []),

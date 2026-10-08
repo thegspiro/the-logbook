@@ -36,6 +36,7 @@ vi.mock('@/stores/authStore', () => ({
     selector({ checkPermission: (p) => granted.has(p), user: { id: 'u-me' } }),
 }));
 
+const getBudget = vi.fn();
 const createBudget = vi.fn();
 const updateBudget = vi.fn();
 const createCategory = vi.fn();
@@ -44,6 +45,8 @@ const positionOptions = vi.fn();
 const stationOptions = vi.fn();
 vi.mock('../services/api', () => ({
   budgetService: {
+    get: (...args: unknown[]) => getBudget(...args) as unknown,
+    listTransactions: () => Promise.resolve({ items: [], total: 0, limit: 25, offset: 0 }),
     create: (...args: unknown[]) => createBudget(...args) as unknown,
     update: (...args: unknown[]) => updateBudget(...args) as unknown,
     listAmendments: () => Promise.resolve([]),
@@ -94,6 +97,7 @@ const line = (overrides: Partial<Budget>): Budget => ({
   organizationId: 'org',
   fiscalYearId: 'fy-active',
   categoryId: 'cat-training',
+  categoryName: 'Training',
   amountBudgeted: '2000.00',
   amountSpent: '500.00',
   amountEncumbered: '250.00',
@@ -135,7 +139,7 @@ const budgets = [
     effectiveOwnerPositionId: 'pos-chief',
     effectiveOwnerPositionName: 'Chief',
   }),
-  line({ id: 'b-gear', categoryId: 'cat-gear', amountBudgeted: '800.00' }),
+  line({ id: 'b-gear', categoryId: 'cat-gear', categoryName: 'Gear', amountBudgeted: '800.00' }),
 ];
 
 const fetchBudgets = vi.fn();
@@ -153,9 +157,18 @@ const renderAt = (path: string, pattern: string, Page: React.FC) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
-  for (const mock of [createBudget, updateBudget, createCategory, updateCategory, positionOptions, stationOptions]) {
+  for (const mock of [
+    getBudget,
+    createBudget,
+    updateBudget,
+    createCategory,
+    updateCategory,
+    positionOptions,
+    stationOptions,
+  ]) {
     mock.mockReset();
   }
+  getBudget.mockImplementation((id: string) => Promise.resolve(budgets.find((b) => b.id === id)));
   positionOptions.mockResolvedValue([
     { id: 'pos-chief', name: 'Chief' },
     { id: 'pos-Training Officer', name: 'Training Officer' },
@@ -298,11 +311,16 @@ describe('BudgetsPage', () => {
 // =============================================================================
 
 describe('BudgetDetailPage', () => {
-  const openChief = () => renderAt('/finance/budgets/b-chief', '/finance/budgets/:id', BudgetDetailPage);
+  /** The page fetches the line by id; wait for it to arrive. */
+  const openDetail = async (id: string) => {
+    renderAt(`/finance/budgets/${id}`, '/finance/budgets/:id', BudgetDetailPage);
+    await screen.findByRole('heading', { name: 'Training' });
+  };
+  const openChief = () => openDetail('b-chief');
 
-  it('shows the station and owner', () => {
+  it('shows the station and owner', async () => {
     granted = new Set(['finance.view']);
-    renderAt('/finance/budgets/b-training', '/finance/budgets/:id', BudgetDetailPage);
+    await openDetail('b-training');
 
     expect(screen.getByText('Department-wide')).toBeInTheDocument();
     expect(screen.getByText('Training Officer (from category)')).toBeInTheDocument();
@@ -312,9 +330,9 @@ describe('BudgetDetailPage', () => {
   it('edits with every field, sending null for a cleared owner and station', async () => {
     const user = userEvent.setup();
     updateBudget.mockResolvedValue(line({ id: 'b-chief' }));
-    openChief();
+    await openChief();
     expect(screen.getByText('Station 2')).toBeInTheDocument();
-    fetchBudgets.mockClear();
+    getBudget.mockClear();
 
     await user.click(screen.getByRole('button', { name: 'Edit' }));
     const dialog = await screen.findByRole('dialog');
@@ -336,7 +354,8 @@ describe('BudgetDetailPage', () => {
         ownerPositionId: null,
       })
     );
-    await waitFor(() => expect(fetchBudgets).toHaveBeenCalled());
+    // Re-fetched by id rather than spliced in (CLAUDE.md pitfall #11).
+    await waitFor(() => expect(getBudget).toHaveBeenCalledWith('b-chief'));
   });
 
   it("shows the API's message when the amount is refused", async () => {
@@ -346,7 +365,7 @@ describe('BudgetDetailPage', () => {
       message: 'Request failed with status code 409',
       response: { status: 409, data: { detail: 'Insufficient available budget' } },
     });
-    renderAt('/finance/budgets/b-training', '/finance/budgets/:id', BudgetDetailPage);
+    await openDetail('b-training');
 
     await user.click(screen.getByRole('button', { name: 'Edit' }));
     const dialog = await screen.findByRole('dialog');

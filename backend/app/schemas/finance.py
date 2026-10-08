@@ -214,6 +214,11 @@ class BudgetResponse(UTCResponseBase):
     amount_spent: Decimal
     amount_encumbered: Decimal
     notes: Optional[str] = None
+    # Names of the line's category and fiscal year, so a reader who cannot
+    # list either (an owner without finance.view) can still label the line.
+    category_name: Optional[str] = None
+    fiscal_year_name: Optional[str] = None
+    fiscal_year_status: Optional[str] = None
     station_id: Optional[str] = None
     station_name: Optional[str] = None
     # The line's own owner; None when it has none (and may inherit).
@@ -231,6 +236,61 @@ class BudgetResponse(UTCResponseBase):
     created_by: str
     created_at: datetime
     updated_at: datetime
+
+
+class MyBudgetResponse(BudgetResponse):
+    """A line the caller owns, as "My budgets" shows it.
+
+    The budget detail row plus the two figures the owner's page reports
+    rather than works out: what is left, and the share used (spent plus
+    committed — the encumbered amount — over the current budget).
+    """
+
+    amount_remaining: Decimal
+    percent_used: float
+
+
+class MyBudgetsSummaryResponse(BaseModel):
+    """Whether the caller owns any budget line, for the navigation."""
+
+    model_config = _RESPONSE_CONFIG
+
+    owns_any: bool
+
+
+class BudgetTransactionResponse(UTCResponseBase):
+    """One record that moved a budget line's spent or encumbered total.
+
+    ``effect`` is ``spent``, ``encumbered`` or ``none`` (a voided check, listed
+    because it was once spent and was reversed). ``entity_id`` is the purchase
+    request, check request or expense report the row came from; ``id`` is the
+    row itself (an expense report contributes one row per line item).
+    """
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    kind: str
+    entity_id: str
+    number: str
+    description: Optional[str] = None
+    counterparty: Optional[str] = None
+    requester_name: Optional[str] = None
+    status: str
+    amount: Decimal
+    effect: str
+    occurred_at: Optional[datetime] = None
+
+
+class BudgetTransactionPageResponse(BaseModel):
+    """A page of a line's transactions, newest first."""
+
+    model_config = _RESPONSE_CONFIG
+
+    items: list[BudgetTransactionResponse]
+    total: int
+    limit: int
+    offset: int
 
 
 class BudgetAmendmentCreate(BaseModel):

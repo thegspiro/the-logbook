@@ -970,7 +970,18 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
     pages: [
       { path: '/finance', label: 'Finance dashboard', permission: 'finance.view', module: 'finance' },
       { path: '/finance/budgets', label: 'Budgets', permission: 'finance.view', module: 'finance' },
-      { path: '/finance/budgets/:id', label: 'Budget detail', permission: 'finance.view', module: 'finance' },
+      {
+        path: '/finance/budgets/:id',
+        label: 'Budget detail',
+        note: 'finance.view, or the member who owns the line (read-only); anyone else gets "Budget not found"',
+        module: 'finance',
+      },
+      {
+        path: '/finance/my-budgets',
+        label: 'My budgets',
+        note: 'The budget lines whose owner position the member holds; empty for everyone else',
+        module: 'finance',
+      },
       {
         path: '/finance/purchase-requests',
         label: 'Purchase requests',

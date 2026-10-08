@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
     PaginationParams,
+    get_current_user,
     require_permission,
     user_has_permission,
 )
@@ -42,6 +43,7 @@ from app.schemas.finance import (
     BudgetOptionResponse,
     BudgetResponse,
     BudgetSummaryResponse,
+    BudgetTransactionPageResponse,
     BudgetUpdate,
     CheckRequestCreate,
     CheckRequestResponse,
@@ -72,6 +74,8 @@ from app.schemas.finance import (
     MemberDuesResponse,
     MemberDuesUnwaive,
     MemberDuesWaive,
+    MyBudgetResponse,
+    MyBudgetsSummaryResponse,
     PendingApprovalResponse,
     PurchaseRequestCreate,
     PurchaseRequestResponse,
@@ -79,6 +83,10 @@ from app.schemas.finance import (
     UnroutedApprovalResponse,
 )
 from app.services.finance_approver_matching import ApproverMismatchError
+from app.services.finance_budget_ownership import (
+    user_owns_any_budget,
+    user_owns_budget,
+)
 from app.services.finance_service import (
     BudgetLimitExceededError,
     FinanceEntityNotFoundError,
@@ -120,6 +128,29 @@ def _requester_scope(user: User) -> Optional[str]:
     submits only what they raised themselves.
     """
     return None if user_has_permission(user, "finance.manage") else str(user.id)
+
+
+async def _authorize_budget_view(db: AsyncSession, user: User, budget_id: str) -> None:
+    """Admit ``finance.view``, or the member who owns this budget line.
+
+    A line's owner (the holder of its effective owner position, CLAUDE.md
+    pitfall #29: ``user_owns_budget`` is the rule) reads that line — its
+    detail, amendments and transactions — without the org-wide view grant.
+    Anyone else is told the line does not exist (404), as #2991 does for
+    another member's request, so the route is no oracle for which ids are
+    real. Ownership opens reads only: every write stays behind
+    ``finance.manage``.
+
+    A body check rather than a dependency because it needs the line id, in
+    the manner of the scheduling module's ``_authorize_shift_management``.
+    """
+    if user_has_permission(user, "finance.view"):
+        return
+    if await user_owns_budget(
+        db, str(user.organization_id), str(user.id), str(budget_id)
+    ):
+        return
+    raise HTTPException(status_code=404, detail="Budget not found")
 
 
 # ============================================
@@ -481,12 +512,57 @@ async def list_budget_options(
     )
 
 
+@router.get("/my-budgets", response_model=list[MyBudgetResponse])
+async def list_my_budgets(
+    fiscal_year_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The budget lines the caller owns, in every fiscal year, newest first.
+
+    **Authentication required** — no permission: the rows are confined to
+    the lines whose effective owner position the caller holds
+    (``owned_budgets_query``), so a member who owns nothing gets an empty
+    list, not a 403. ``fiscal_year_id`` narrows it to one year.
+    """
+    service = FinanceService(db)
+    return await service.list_my_budgets(
+        str(current_user.organization_id), str(current_user.id), fiscal_year_id
+    )
+
+
+@router.get("/my-budgets/summary", response_model=MyBudgetsSummaryResponse)
+async def get_my_budgets_summary(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Whether the caller owns any budget line, for the Finance navigation.
+
+    **Authentication required** — no permission; it answers only about the
+    caller. One ``LIMIT 1`` probe, so the navigation can ask it once per
+    session instead of loading the lines.
+    """
+    return {
+        "owns_any": await user_owns_any_budget(
+            db, str(current_user.organization_id), str(current_user.id)
+        )
+    }
+
+
 @router.get("/budgets/{budget_id}", response_model=BudgetResponse)
 async def get_budget(
     budget_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view")),
+    current_user: User = Depends(get_current_user),
 ):
+    """One budget line, with its station, owner and amendment totals.
+
+    **Requires permission: finance.view** — or ownership of this line.
+
+    The line's owner reads it without the view grant (``_authorize_budget_view``);
+    anyone else, and a line in another department, is 404.
+    """
+    await _authorize_budget_view(db, current_user, budget_id)
     service = FinanceService(db)
     budget = await service.get_budget_detail(
         budget_id, str(current_user.organization_id)
@@ -583,18 +659,51 @@ async def add_budget_amendment(
 async def list_budget_amendments(
     budget_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view")),
+    current_user: User = Depends(get_current_user),
 ):
     """A budget line's amendments, newest first, with who entered each.
 
-    **Requires permission: finance.view**
+    **Requires permission: finance.view** — or ownership of this line.
 
-    The same gate as the line itself. A line in another department is 404.
+    The same gate as the line itself (``_authorize_budget_view``). A line in
+    another department, or one the caller neither views nor owns, is 404.
     """
+    await _authorize_budget_view(db, current_user, budget_id)
     service = FinanceService(db)
     try:
         return await service.list_budget_amendments(
             budget_id, str(current_user.organization_id)
+        )
+    except FinanceEntityNotFoundError:
+        raise HTTPException(status_code=404, detail="Budget not found")
+
+
+@router.get(
+    "/budgets/{budget_id}/transactions",
+    response_model=BudgetTransactionPageResponse,
+)
+async def list_budget_transactions(
+    budget_id: str,
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """What moved a budget line's spent and committed totals, newest first.
+
+    **Requires permission: finance.view** — or ownership of this line.
+
+    Approved and paid purchase requests, issued and voided check requests,
+    and paid expense-report line items charged to the line, each with its
+    requester's name and its effect (spent, encumbered, or none for a
+    voided check). Paginated with ``limit``/``offset``; ``total`` counts
+    every row. Same gate as the line (``_authorize_budget_view``).
+    """
+    await _authorize_budget_view(db, current_user, budget_id)
+    service = FinanceService(db)
+    try:
+        return await service.list_budget_transactions(
+            budget_id, str(current_user.organization_id), limit, offset
         )
     except FinanceEntityNotFoundError:
         raise HTTPException(status_code=404, detail="Budget not found")

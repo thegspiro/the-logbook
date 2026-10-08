@@ -18,7 +18,9 @@ from typing import NoReturn, Optional
 from loguru import logger
 from sqlalchemy import (
     Integer,
+    String,
     and_,
+    case,
     cast,
     exists,
     func,
@@ -76,7 +78,7 @@ from app.services.finance_approver_matching import (
     normalize_approver_type,
     user_matches_step,
 )
-from app.services.finance_budget_ownership import resolve_owner
+from app.services.finance_budget_ownership import owned_budgets_query, resolve_owner
 from app.services.separation_of_duties import (
     SeparationOfDutiesError,
     assert_different_person,
@@ -501,6 +503,10 @@ class FinanceService:
             select(
                 Budget,
                 BudgetCategory.owner_position_id.label("category_owner_id"),
+                BudgetCategory.name.label("category_name"),
+                FiscalYear.name.label("fiscal_year_name"),
+                FiscalYear.status.label("fiscal_year_status"),
+                FiscalYear.start_date.label("fiscal_year_start_date"),
                 Facility.name.label("station_name"),
                 line_owner.name.label("line_owner_name"),
                 category_owner.name.label("category_owner_name"),
@@ -513,6 +519,13 @@ class FinanceService:
                 and_(
                     BudgetCategory.id == Budget.category_id,
                     BudgetCategory.organization_id == org_id,
+                ),
+            )
+            .outerjoin(
+                FiscalYear,
+                and_(
+                    FiscalYear.id == Budget.fiscal_year_id,
+                    FiscalYear.organization_id == org_id,
                 ),
             )
             .outerjoin(
@@ -563,7 +576,17 @@ class FinanceService:
         effective_id, inherited = resolve_owner(
             budget.owner_position_id, row.category_owner_id
         )
+        fiscal_year_status = row.fiscal_year_status
         data.update(
+            # Named here so a reader without the category and fiscal-year
+            # lists (a line's owner, who holds no finance.view) can label it.
+            category_name=row.category_name,
+            fiscal_year_name=row.fiscal_year_name,
+            fiscal_year_status=(
+                fiscal_year_status.value
+                if isinstance(fiscal_year_status, FiscalYearStatus)
+                else fiscal_year_status
+            ),
             station_name=row.station_name,
             owner_position_name=row.line_owner_name,
             effective_owner_position_id=effective_id,
@@ -602,6 +625,229 @@ class FinanceService:
         )
         row = result.first()
         return self._budget_row(row) if row else None
+
+    async def list_my_budgets(
+        self, org_id: str, user_id: str, fiscal_year_id: Optional[str] = None
+    ) -> list[dict]:
+        """The lines ``user_id`` owns, every fiscal year, newest year first.
+
+        Which lines those are is ``owned_budgets_query``'s answer, not a second
+        rule (CLAUDE.md pitfall #29). Each row is the budget pages' detail row
+        plus what is left and how much is used, so the owner's page reports
+        the figures rather than working them out.
+        """
+        owned_ids = owned_budgets_query(org_id, user_id).with_only_columns(Budget.id)
+        query = self._budget_detail_query(org_id).where(Budget.id.in_(owned_ids))
+        if fiscal_year_id:
+            query = query.where(Budget.fiscal_year_id == fiscal_year_id)
+        query = query.order_by(
+            FiscalYear.start_date.desc(),
+            BudgetCategory.name,
+            Facility.name,
+            Budget.id,
+        )
+        result = await self.db.execute(query)
+        rows = []
+        for row in result.all():
+            data = self._budget_row(row)
+            budgeted = Decimal(data["amount_budgeted"] or 0)
+            used = Decimal(data["amount_spent"] or 0) + Decimal(
+                data["amount_encumbered"] or 0
+            )
+            data["amount_remaining"] = budgeted - used
+            data["percent_used"] = (
+                round(float(used / budgeted * 100), 1) if budgeted > 0 else 0.0
+            )
+            rows.append(data)
+        return rows
+
+    async def list_budget_transactions(
+        self, budget_id: str, org_id: str, limit: int, offset: int
+    ) -> dict:
+        """What moved a line's spent and encumbered totals, newest first.
+
+        One row per record that ``_mutate_budget`` counted against this line,
+        taken from the same ``budget_id`` its callers pass it, so the listed
+        figures add up to the line's totals:
+
+        * a purchase request **approved / ordered / received** encumbers its
+          estimate (``_finalize_approval``); once **paid** the estimate is
+          released and the actual amount (else the estimate) is spent
+          (``mark_pr_paid``);
+        * a check request **issued** is spent (``issue_check``); a **voided**
+          one is listed with effect ``none`` because ``void_check`` reversed it;
+        * an expense report's line items charged to this line are spent once
+          the report is **paid** (``mark_expense_paid``) — the line item's own
+          ``budget_id``, not the report's.
+
+        Excluded because they never touched the totals: drafts, submitted,
+        pending, denied, and cancelled records (a request cancelled after
+        approval had its encumbrance released). The one way the sum can differ
+        from the stored totals is ``_mutate_budget``'s floor at zero, which a
+        release larger than the balance would have clipped.
+
+        Only the requester's name is joined — no payee address, check number
+        or payment method.
+
+        Raises ``FinanceEntityNotFoundError`` for a line that is not the org's.
+        """
+        if await self.get_budget(budget_id, org_id) is None:
+            raise FinanceEntityNotFoundError("Budget not found")
+
+        def requester_join(column):
+            return and_(User.id == column, User.organization_id == org_id)
+
+        pr_paid = PurchaseRequest.status == PurchaseRequestStatus.PAID
+        purchases = (
+            select(
+                PurchaseRequest.id.label("row_id"),
+                literal("purchase_request").label("kind"),
+                PurchaseRequest.id.label("entity_id"),
+                PurchaseRequest.request_number.label("number"),
+                PurchaseRequest.title.label("description"),
+                PurchaseRequest.vendor.label("counterparty"),
+                PurchaseRequest.requested_by.label("requester_id"),
+                User.first_name,
+                User.last_name,
+                User.preferred_name,
+                User.username,
+                cast(PurchaseRequest.status, String(30)).label("status"),
+                case(
+                    (
+                        pr_paid,
+                        func.coalesce(
+                            PurchaseRequest.actual_amount,
+                            PurchaseRequest.estimated_amount,
+                        ),
+                    ),
+                    else_=PurchaseRequest.estimated_amount,
+                ).label("amount"),
+                case((pr_paid, literal("spent")), else_=literal("encumbered")).label(
+                    "effect"
+                ),
+                case(
+                    (pr_paid, PurchaseRequest.paid_at),
+                    else_=func.coalesce(
+                        PurchaseRequest.approved_at, PurchaseRequest.created_at
+                    ),
+                ).label("occurred_at"),
+            )
+            .outerjoin(User, requester_join(PurchaseRequest.requested_by))
+            .where(
+                PurchaseRequest.organization_id == org_id,
+                PurchaseRequest.budget_id == budget_id,
+                PurchaseRequest.status.in_(
+                    [
+                        PurchaseRequestStatus.APPROVED,
+                        PurchaseRequestStatus.ORDERED,
+                        PurchaseRequestStatus.RECEIVED,
+                        PurchaseRequestStatus.PAID,
+                    ]
+                ),
+            )
+        )
+        checks = (
+            select(
+                CheckRequest.id.label("row_id"),
+                literal("check_request").label("kind"),
+                CheckRequest.id.label("entity_id"),
+                CheckRequest.request_number.label("number"),
+                func.coalesce(CheckRequest.memo, CheckRequest.purpose).label(
+                    "description"
+                ),
+                CheckRequest.payee_name.label("counterparty"),
+                CheckRequest.requested_by.label("requester_id"),
+                User.first_name,
+                User.last_name,
+                User.preferred_name,
+                User.username,
+                cast(CheckRequest.status, String(30)).label("status"),
+                CheckRequest.amount.label("amount"),
+                case(
+                    (
+                        CheckRequest.status == CheckRequestStatus.ISSUED,
+                        literal("spent"),
+                    ),
+                    else_=literal("none"),
+                ).label("effect"),
+                func.coalesce(CheckRequest.check_date, CheckRequest.updated_at).label(
+                    "occurred_at"
+                ),
+            )
+            .outerjoin(User, requester_join(CheckRequest.requested_by))
+            .where(
+                CheckRequest.organization_id == org_id,
+                CheckRequest.budget_id == budget_id,
+                CheckRequest.status.in_(
+                    [CheckRequestStatus.ISSUED, CheckRequestStatus.VOIDED]
+                ),
+            )
+        )
+        expenses = (
+            select(
+                ExpenseLineItem.id.label("row_id"),
+                literal("expense_report").label("kind"),
+                ExpenseReport.id.label("entity_id"),
+                ExpenseReport.report_number.label("number"),
+                ExpenseLineItem.description.label("description"),
+                ExpenseLineItem.merchant.label("counterparty"),
+                ExpenseReport.submitted_by.label("requester_id"),
+                User.first_name,
+                User.last_name,
+                User.preferred_name,
+                User.username,
+                cast(ExpenseReport.status, String(30)).label("status"),
+                ExpenseLineItem.amount.label("amount"),
+                literal("spent").label("effect"),
+                func.coalesce(ExpenseReport.paid_at, ExpenseReport.updated_at).label(
+                    "occurred_at"
+                ),
+            )
+            .join(
+                ExpenseReport,
+                and_(
+                    ExpenseReport.id == ExpenseLineItem.expense_report_id,
+                    ExpenseReport.organization_id == org_id,
+                ),
+            )
+            .outerjoin(User, requester_join(ExpenseReport.submitted_by))
+            .where(
+                ExpenseLineItem.budget_id == budget_id,
+                ExpenseReport.status == ExpenseReportStatus.PAID,
+            )
+        )
+        movements = union_all(purchases, checks, expenses).subquery()
+
+        total = (
+            await self.db.execute(select(func.count()).select_from(movements))
+        ).scalar_one()
+        result = await self.db.execute(
+            select(movements)
+            .order_by(movements.c.occurred_at.desc(), movements.c.row_id.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        items = []
+        for row in result.all():
+            name = format_display_name(
+                row.first_name, row.last_name, row.preferred_name
+            )
+            items.append(
+                {
+                    "id": row.row_id,
+                    "kind": row.kind,
+                    "entity_id": row.entity_id,
+                    "number": row.number,
+                    "description": row.description,
+                    "counterparty": row.counterparty,
+                    "requester_name": name or row.username or None,
+                    "status": row.status,
+                    "amount": row.amount,
+                    "effect": row.effect,
+                    "occurred_at": row.occurred_at,
+                }
+            )
+        return {"items": items, "total": total, "limit": limit, "offset": offset}
 
     async def get_budget(self, budget_id: str, org_id: str) -> Optional[Budget]:
         result = await self.db.execute(

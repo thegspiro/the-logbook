@@ -75,6 +75,7 @@ does not want members raising requests removes `finance.request` from the
 | `/finance`                            | Finance Dashboard                  |
 | `/finance/budgets`                    | Budget list                        |
 | `/finance/budgets/:id`                | Budget detail                      |
+| `/finance/my-budgets`                 | My Budgets (lines you own)         |
 | `/finance/settings`                   | Fiscal years and budget categories |
 | `/finance/settings/approval-chains`   | Approval chain builder             |
 | `/finance/approvals`                  | Approvals (`finance.approve`)      |
@@ -341,24 +342,46 @@ Ownership covers a line in every fiscal year, past ones included. Only
 `finance.manage` sets amounts, owners and stations; owning a line never lets a
 member change its amount.
 
-> **Not yet built (2026-10-08).** Owners do not yet have a view of their own
-> lines; ownership is shown on the Budgets list and detail pages to
-> `finance.view` holders. The owner's own "My budgets" view follows.
+### My Budgets (for budget-line owners)
+
+If your position owns a budget line — say you are the Training Officer and
+the Treasurer made that position the owner of the Training category — open
+**Finance > My Budgets** (`/finance/my-budgets`). The menu shows the entry
+only once you own at least one line; you do not need `finance.view`.
+
+- Your lines are grouped by fiscal year: the current year first, then next
+  year's draft, then closed years. You keep seeing a line in past years.
+- Each line shows its category and station, the owner position ("(from
+  category)" when the line inherits it), the current budget (and the original
+  once amended), **Spent**, **Committed**, **Remaining** and a bar.
+  **Committed** is money approved for purchases that have not been paid yet —
+  the "encumbered" amount.
+- Tap a line to open its detail page: the figures, its amendments and its
+  **Transaction History**. You can read everything there but change nothing —
+  the amount, owner, station and amendments stay with the Treasurer
+  (`finance.manage`).
+- No lines? A line appears once the Treasurer makes your position its owner,
+  on the line or on its category.
+
+Only lines you own open for you; any other line's address answers "Budget not
+found".
 
 ### Viewing Budget Details
 
-Click on any budget in the list to view its detail page at `/finance/budgets/:id`. The detail page shows:
+Click on any budget in the list (or, as an owner, on **My Budgets**) to view its detail page at `/finance/budgets/:id`. The detail page shows:
 
 - Budget amount and category
-- Visual breakdown of spent, encumbered, and remaining amounts (progress bar)
-- List of all purchase requests, expense reports, and check requests charged against this budget
+- Visual breakdown of spent, committed (encumbered), and remaining amounts (progress bar)
+- **Transaction History** — newest first, 25 to a page: approved and paid
+  purchase requests, issued checks (a voided check stays listed as
+  "Reversed"), and paid expense-report items charged to this line, each with
+  its date, number, vendor or payee, requester, status, amount and whether it
+  is **Spent** or **Committed**. The Spent rows add up to the Spent figure
+  above, and the Committed rows to the Committed figure
 - Budget utilization percentage
 
-> **Corrected 2026-08-12.** The page and its stacked progress bar are real,
-> but neither half of what this placeholder asks for can be shown.
->
-> The **transaction table** is an unconditional `<EmptyState>` stub — there is
-> no fetch behind it and no code path that ever displays a row.
+> **Updated 2026-10-08.** The transaction table used to be a stub that always
+> said "No transactions yet"; it now lists the real records.
 >
 > The **bar reads 0% until something is approved**, because spend and
 > encumbrance accrue only on approval.
@@ -371,8 +394,7 @@ Click on any budget in the list to view its detail page at `/finance/budgets/:id
 > to departments that already onboarded. What remains is a configuration
 > matter: a department whose only approver is the Treasurer still cannot clear
 > a request the Treasurer raised, so a chain that must survive that needs a
-> second approver step. Both the stub table and the approval history are
-> recorded in
+> second approver step. The approval history is recorded in
 > [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#finance--nobody-could-approve-anything-2026-08-12-narrowed-2026-09-06).
 
 ### Budget Summary

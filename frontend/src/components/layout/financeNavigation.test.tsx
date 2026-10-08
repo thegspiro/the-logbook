@@ -6,6 +6,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 import { TopNavigation } from './TopNavigation';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
@@ -13,6 +14,13 @@ import { financeNavItems } from './financeNavigation';
 
 let granted = new Set<string>();
 let financeModuleOn = true;
+let ownsBudgets = false;
+
+// Ownership is the backend's answer (GET /finance/my-budgets/summary); the
+// hook's own fetching is covered in useOwnsBudgets.test.ts.
+vi.mock('../../modules/finance/hooks/useOwnsBudgets', () => ({
+  useOwnsBudgets: () => ownsBudgets,
+}));
 
 vi.mock('../../contexts/ThemeContext', () => ({
   useTheme: () => ({ theme: 'light', setTheme: vi.fn() }),
@@ -50,9 +58,15 @@ const openMobileMenu = () => {
   });
 };
 
-const visible = (permissions: string[]) => {
+/** The mobile menu's Finance group — the last of the two Finance toggles (desktop first). */
+const expandMobileFinance = async () => {
+  const toggles = screen.getAllByRole('button', { name: /Finance/, expanded: false });
+  await userEvent.setup().click(toggles[toggles.length - 1] ?? document.body);
+};
+
+const visible = (permissions: string[], owns = false) => {
   const has = (p: string) => permissions.includes(p);
-  return financeNavItems(has)
+  return financeNavItems(has, { ownsBudgets: owns })
     .filter((item) => item.anyPermission.some(has))
     .map((item) => item.label);
 };
@@ -61,6 +75,7 @@ describe('Finance navigation', () => {
   beforeEach(() => {
     granted = new Set();
     financeModuleOn = true;
+    ownsBudgets = false;
   });
 
   it('is offered to every member who can raise a request', () => {
@@ -83,6 +98,37 @@ describe('Finance navigation', () => {
 
   it('shows a member their own three lists and nothing that would refuse them', () => {
     expect(visible(['finance.request'])).toEqual(['My Purchase Requests', 'My Expense Reports', 'My Check Requests']);
+  });
+
+  it('offers My Budgets to a member who owns a budget line', () => {
+    expect(visible(['finance.request'], true)).toEqual([
+      'My Budgets',
+      'My Purchase Requests',
+      'My Expense Reports',
+      'My Check Requests',
+    ]);
+  });
+
+  it('offers My Budgets to a treasurer only when they own a line too', () => {
+    const treasurer = ['finance.request', 'finance.view', 'finance.manage'];
+    expect(visible(treasurer)).not.toContain('My Budgets');
+    expect(visible(treasurer, true)).toContain('My Budgets');
+  });
+
+  it('links an owner to their budgets from the menu', async () => {
+    granted = new Set(['finance.request']);
+    ownsBudgets = true;
+    openMobileMenu();
+    await expandMobileFinance();
+    expect(screen.getByRole('link', { name: 'My Budgets' })).toHaveAttribute('href', '/finance/my-budgets');
+  });
+
+  it('does not offer My Budgets to a member who owns nothing', async () => {
+    granted = new Set(['finance.request']);
+    openMobileMenu();
+    await expandMobileFinance();
+    expect(screen.getByRole('link', { name: 'My Purchase Requests' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'My Budgets' })).not.toBeInTheDocument();
   });
 
   it('shows the treasurer the department’s queues', () => {

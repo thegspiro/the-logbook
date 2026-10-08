@@ -72,6 +72,8 @@ BODY_AUTHORIZERS = {
     "_authorize_assignment_management",
     "_authorize_handoff_access",
     "_authorize_test_write",
+    # finance.view, or the member who owns the budget line (finance.py).
+    "_authorize_budget_view",
 }
 
 # Two spellings are in use across the codebase and BOTH must be recognised:

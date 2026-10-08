@@ -458,12 +458,20 @@ class TestTheFinanceOfficeKeepsItsActions:
         async with _client(db_session, dept["alice"]) as alice:
             for url in (
                 "/finance/budgets",
-                f"/finance/budgets/{dept['budgets']['training']}",
                 f"/finance/budgets/summary?fiscal_year_id={dept['fy_id']}",
                 "/finance/fiscal-years",
                 "/finance/dashboard",
             ):
                 assert (await alice.get(url)).status_code == 403, url
+            # One line by id opens to its owner too, so to a member who does
+            # not own it the line simply does not exist (test_finance_my_budgets).
+            line = dept["budgets"]["training"]
+            for url in (
+                f"/finance/budgets/{line}",
+                f"/finance/budgets/{line}/amendments",
+                f"/finance/budgets/{line}/transactions",
+            ):
+                assert (await alice.get(url)).status_code == 404, url
 
 
 class TestTheFormOptions:
