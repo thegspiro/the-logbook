@@ -6,7 +6,7 @@ training summary, event attendance, and compliance reports.
 """
 
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Set, Tuple
 from uuid import UUID
 
 from sqlalchemy import case, func, select
@@ -146,8 +146,17 @@ class ReportsService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         filters: Optional[Dict[str, Any]] = None,
+        hidden_prospect_ids: Optional[Set[str]] = None,
     ) -> Dict[str, Any]:
-        """Generate a report based on type"""
+        """Generate a report based on type.
+
+        ``hidden_prospect_ids`` is the caller's own prospective-membership
+        record id(s) (see ``app.api.prospect_privacy``) — only
+        ``pipeline_overview`` takes it, since it is the only report that
+        lists individual prospect records. Every other generator ignores it;
+        passing it unconditionally here (rather than threading it through all
+        thirteen signatures) keeps that asymmetry in one place.
+        """
         generators = {
             "member_roster": self._generate_member_roster,
             "training_summary": self._generate_training_summary,
@@ -168,6 +177,14 @@ class ReportsService:
         if not generator:
             return {"error": f"Unknown report type: {report_type}"}
 
+        if report_type == "pipeline_overview":
+            return await generator(
+                organization_id,
+                start_date,
+                end_date,
+                filters,
+                hidden_prospect_ids=hidden_prospect_ids,
+            )
         return await generator(organization_id, start_date, end_date, filters)
 
     # ============================================
@@ -1948,6 +1965,7 @@ class ReportsService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         filters: Optional[Dict[str, Any]] = None,
+        hidden_prospect_ids: Optional[Set[str]] = None,
     ) -> Dict[str, Any]:
         """
         Generate a pipeline overview report with configurable stage grouping.
@@ -1955,6 +1973,14 @@ class ReportsService:
         Filters:
           - pipeline_id: specific pipeline (uses default if omitted)
           - stage_groups: ad-hoc override for grouping config
+
+        ``hidden_prospect_ids`` excludes the caller's own prospective-
+        membership record, the same way every list/aggregate route in
+        ``membership_pipeline.py`` does via ``get_hidden_prospect_ids``
+        (RPT-29 pass 8): this report lists individual prospects by name and
+        email, and an elected officer who once applied through this same
+        pipeline must not see their own application surface here, matching
+        ``app.api.prospect_privacy``'s router-wide guarantee.
         """
         from app.models.membership_pipeline import (
             MembershipPipeline,
@@ -2050,6 +2076,8 @@ class ReportsService:
                 ProspectiveMember.created_at
                 <= datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
             )
+        if hidden_prospect_ids:
+            prospect_conditions.append(ProspectiveMember.id.notin_(hidden_prospect_ids))
 
         prospects_query = select(ProspectiveMember).where(*prospect_conditions)
         prospects_result = await self.db.execute(prospects_query)
