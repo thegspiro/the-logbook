@@ -390,8 +390,6 @@ async def create_member(
     # Auto-generate membership number if not provided and auto-generation is on
     membership_number = user_data.membership_number
     if not membership_number:
-        from app.services.organization_service import OrganizationService
-
         org_service = OrganizationService(db)
         membership_number = await org_service.generate_next_membership_id(
             current_user.organization_id
