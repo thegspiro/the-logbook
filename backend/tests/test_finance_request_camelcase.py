@@ -238,12 +238,14 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "internal_category": "Apparatus",
         "qb_account_name": "6100 Apparatus",
         "qb_account_number": "6100",
+        "qb_offset_account_name": "1000 Operating Checking",
         "mapping_type": "expense",
     },
     ExportMappingUpdate: {
         "internal_category": "Apparatus",
         "qb_account_name": "6100 Apparatus",
         "qb_account_number": "6100",
+        "qb_offset_account_name": "1000 Operating Checking",
         "mapping_type": "expense",
     },
     ExportRequest: {

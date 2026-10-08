@@ -1,7 +1,7 @@
 """Add budget_amendments: logged increases to a budget line.
 
 Revision ID: ca564ba5a9ad
-Revises: 1be4fbbc235d
+Revises: d429a803f847
 Create Date: 2026-10-08 15:18:00.000000
 
 When leadership approves extra money for a budget line, the Treasurer records
@@ -36,7 +36,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "ca564ba5a9ad"
-down_revision: Union[str, None] = "1be4fbbc235d"
+down_revision: Union[str, None] = "d429a803f847"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

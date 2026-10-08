@@ -4,6 +4,8 @@
 
 Welcome to the training documentation for The Logbook. These guides are designed to help new users learn the system and serve as a reference for experienced users.
 
+**New to the app's vocabulary?** The [Glossary](./GLOSSARY.md) explains the words The Logbook uses, such as _position_, _permission_ and _module_, and spells out abbreviations such as MFA, NFPA and EVOC.
+
 > **Maintainers:** See the [training materials review and screenshot plan](./TRAINING_MATERIALS_REVIEW.md)
 > for the current learning-design recommendations, screenshot priorities, and
 > image acceptance checklist.

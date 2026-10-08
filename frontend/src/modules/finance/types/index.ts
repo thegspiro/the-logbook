@@ -657,6 +657,7 @@ export interface ExportMapping {
   internalCategory: string;
   qbAccountName: string;
   qbAccountNumber?: string;
+  qbOffsetAccountName?: string;
   mappingType: string;
   createdAt: string;
   updatedAt: string;

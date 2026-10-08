@@ -2884,7 +2884,7 @@ look there.
 
 ## August 12–14, 2026 update
 
-The dashboard's My Updates feed is described under [Dashboard Notification Management](#dashboard-notification-management), the calendar-year admin-hours summary under [The Admin Hours summary](#the-admin-hours-summary), and the archiving of a notification once its action is done under [Notification Cards](./00-getting-started.md#notification-cards-2026-03-26). Operator upgrade notes are in [UPGRADING.md](../UPGRADING.md).
+The dashboard's My Updates feed is described under [Dashboard Notification Management](#dashboard-notification-management), the calendar-year admin-hours summary under [The Admin Hours summary](#the-admin-hours-summary), and the archiving of a notification once its action is done under [Notification Cards](./00-getting-started.md#notification-cards). Operator upgrade notes are in [UPGRADING.md](../UPGRADING.md).
 
 ## August 19–23, 2026 update — Governance → Legal Documents
 
