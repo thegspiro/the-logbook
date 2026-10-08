@@ -168,6 +168,10 @@ export const MaintenanceRecordModal: React.FC<MaintenanceRecordModalProps> = ({
       size="lg"
     >
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+        <p className="text-theme-text-secondary text-sm">
+          For work already done, tick Mark as completed and set the Completed Date. For upcoming work, leave it unticked
+          and set a Due Date; it then counts toward Maintenance Due on the fleet page as the date approaches.
+        </p>
         {/* Type & Status */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
@@ -331,7 +335,13 @@ export const MaintenanceRecordModal: React.FC<MaintenanceRecordModalProps> = ({
           </div>
         </div>
 
-        {/* Next Due */}
+        {/* Next Due. Only an open record's due_date feeds the Maintenance Due
+            count (ApparatusService.get_maintenance_due); these fields stay on
+            this record, so a newcomer expecting a reminder from them is told. */}
+        <p className="text-theme-text-muted text-sm">
+          The Next Due fields are kept on this record. They do not add the next service to Maintenance Due; for that,
+          add a separate record with a Due Date.
+        </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
             <label className={labelClass}>Next Due Date</label>

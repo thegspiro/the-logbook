@@ -8,7 +8,7 @@
 import React from 'react';
 import { Truck, Gauge, DollarSign, Clock, Calendar, Shield } from 'lucide-react';
 import { ApparatusTypeBadge } from './ApparatusTypeBadge';
-import type { Apparatus, ApparatusType } from '../types';
+import { FUEL_TYPE_LABELS, type Apparatus, type ApparatusType } from '../types';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { formatDate, formatNumber } from '../../../utils/dateFormatting';
 
@@ -91,8 +91,8 @@ export const ApparatusOverviewTab: React.FC<ApparatusOverviewTabProps> = ({
             </div>
             <div>
               <p className="text-theme-text-muted text-xs uppercase">Fuel Type</p>
-              <p className="text-theme-text-primary capitalize">
-                {currentApparatus.fuelType?.replace('_', ' ') || '-'}
+              <p className="text-theme-text-primary">
+                {currentApparatus.fuelType ? FUEL_TYPE_LABELS[currentApparatus.fuelType] : '-'}
               </p>
             </div>
             <div>

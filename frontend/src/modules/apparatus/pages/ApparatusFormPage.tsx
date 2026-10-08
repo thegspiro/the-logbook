@@ -16,6 +16,7 @@ import { ensureShiftSettingsLoaded } from '@/modules/scheduling/services/shiftSe
 import { useApparatusStore } from '../store/apparatusStore';
 import { apparatusService, evocLevelService } from '../services/api';
 import { useApparatusNfpaSettings } from '../hooks/useApparatusNfpaSettings';
+import { FUEL_TYPE_LABELS } from '../types';
 import type { ApparatusCreate, ApparatusUpdate, EvocLevel, FuelType } from '../types';
 
 /** Columns the server stores as NOT NULL; an emptied one is refused by
@@ -394,6 +395,11 @@ export const ApparatusFormPage: React.FC = () => {
           }}
           className="space-y-8"
         >
+          {!isEditing && (
+            <p className="text-theme-text-secondary text-sm">
+              Only the fields marked * are needed to start. Everything else can be filled in later with Edit.
+            </p>
+          )}
           {/* Basic Information */}
           <div className="card p-6">
             <h2 className="text-theme-text-primary mb-6 font-bold">Basic Information</h2>
@@ -798,7 +804,7 @@ export const ApparatusFormPage: React.FC = () => {
                   <option value="">Select Fuel Type</option>
                   {fuelTypes.map((ft) => (
                     <option key={ft} value={ft}>
-                      {ft.charAt(0).toUpperCase() + ft.slice(1)}
+                      {FUEL_TYPE_LABELS[ft]}
                     </option>
                   ))}
                 </select>
@@ -1109,12 +1115,19 @@ export const ApparatusFormPage: React.FC = () => {
                   name="nfpaTrackingEnabled"
                   checked={formData.nfpaTrackingEnabled}
                   onChange={handleChange}
+                  aria-describedby="nfpaTrackingEnabled-help"
                   className="form-checkbox"
                 />
                 <label htmlFor="nfpaTrackingEnabled" className="text-theme-text-secondary ml-2">
                   Enable NFPA compliance tracking
                 </label>
               </div>
+              {/* Tracking is chosen per vehicle and stored off by default, so the
+                  department switch being on does not by itself add the tab. */}
+              <p id="nfpaTrackingEnabled-help" className="text-theme-text-muted mt-2 text-sm">
+                Adds an NFPA tab to this apparatus for its NFPA 1911 tests, such as the annual pump test. Each apparatus
+                is turned on separately; leave it off for vehicles NFPA 1911 does not cover.
+              </p>
             </div>
           )}
 

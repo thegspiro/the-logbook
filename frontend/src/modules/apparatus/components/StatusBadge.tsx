@@ -88,16 +88,18 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' })
   const IconComponent = status.icon ? getApparatusIcon(status.icon) : null;
 
   if (status.color) {
+    // The colour is the department's (seeded as Tailwind -500 shades), so it
+    // tints the badge and its icon but never the text: green-500 lettering on
+    // its own tint measures 1.95:1, under the 4.5:1 AA floor.
     return (
       <span
-        className={`${sizeClasses} inline-flex items-center gap-1 rounded-sm border font-semibold`}
+        className={`${sizeClasses} text-theme-text-primary inline-flex items-center gap-1 rounded-sm border font-semibold`}
         style={{
           backgroundColor: `${status.color}20`,
-          color: status.color,
           borderColor: `${status.color}50`,
         }}
       >
-        {IconComponent && <IconComponent className="h-3 w-3" />}
+        {IconComponent && <IconComponent className="h-3 w-3" style={{ color: status.color }} aria-hidden="true" />}
         {status.name.toUpperCase()}
       </span>
     );

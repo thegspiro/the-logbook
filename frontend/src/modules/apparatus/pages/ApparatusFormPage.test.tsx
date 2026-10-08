@@ -256,3 +256,37 @@ describe('ApparatusFormPage NFPA tracking checkbox', () => {
     expect(screen.getByLabelText('Enable NFPA compliance tracking')).toBeInTheDocument();
   });
 });
+
+describe('ApparatusFormPage newcomer guidance', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    ranksState = { ranks: [], loading: false };
+    localStorage.setItem('has_session', 'true');
+  });
+
+  afterEach(() => {
+    nfpaDepartmentEnabled = false;
+  });
+
+  it('says only the starred fields are needed when adding', () => {
+    renderWithRouter(<ApparatusFormPage />);
+    expect(screen.getByText(/Only the fields marked \* are needed to start/)).toBeInTheDocument();
+  });
+
+  // The department switch reads "on", but each vehicle is opted in separately
+  // and stored off, so a new unit showed no NFPA tab with nothing saying why.
+  it('describes the NFPA checkbox as a per-apparatus choice', () => {
+    nfpaDepartmentEnabled = true;
+    renderWithRouter(<ApparatusFormPage />);
+    expect(screen.getByLabelText('Enable NFPA compliance tracking')).toHaveAccessibleDescription(
+      /Each apparatus is turned on separately/
+    );
+  });
+
+  it('labels compressed natural gas as CNG', () => {
+    renderWithRouter(<ApparatusFormPage />);
+    const fuel = screen.getByRole('combobox', { name: 'Fuel Type' });
+    expect(within(fuel).getByRole('option', { name: 'CNG' })).toBeInTheDocument();
+    expect(within(fuel).queryByRole('option', { name: 'Cng' })).not.toBeInTheDocument();
+  });
+});
