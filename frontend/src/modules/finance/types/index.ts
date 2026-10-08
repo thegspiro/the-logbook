@@ -210,6 +210,13 @@ export interface FiscalYear {
   endDate: string;
   status: FiscalYearStatus;
   isLocked: boolean;
+  /**
+   * The last day line owners may make budget requests (`YYYY-MM-DD`, the
+   * department's calendar). Only a draft year carries one.
+   */
+  requestDeadline?: string | null;
+  /** Draft, unlocked, and the deadline (if any) not yet passed — backend-decided. */
+  requestsOpen?: boolean;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -401,6 +408,115 @@ export interface FiscalYearOption {
   id: string;
   name: string;
   status: FiscalYearStatus;
+  requestDeadline?: string | null;
+  requestsOpen?: boolean;
+}
+
+/** `PUT /finance/fiscal-years/{id}`. A `null` deadline clears it (CLAUDE.md pitfall #1). */
+export interface FiscalYearUpdatePayload {
+  name?: string;
+  startDate?: string;
+  endDate?: string;
+  requestDeadline?: string | null;
+}
+
+/** What "Start from last year" did: lines copied, and lines the draft already had. */
+export interface StartFromLastYearResult {
+  created: number;
+  skipped: number;
+}
+
+// =============================================================================
+// Budget requests (next year's amounts, proposed by line owners)
+// =============================================================================
+
+export const BudgetRequestStatus = {
+  DRAFT: 'draft',
+  SUBMITTED: 'submitted',
+  APPROVED: 'approved',
+  ADJUSTED: 'adjusted',
+  DECLINED: 'declined',
+} as const;
+export type BudgetRequestStatus = (typeof BudgetRequestStatus)[keyof typeof BudgetRequestStatus];
+
+export const BudgetRequestDecisionKind = {
+  APPROVE: 'approve',
+  ADJUST: 'adjust',
+  DECLINE: 'decline',
+} as const;
+export type BudgetRequestDecisionKind = (typeof BudgetRequestDecisionKind)[keyof typeof BudgetRequestDecisionKind];
+
+export interface BudgetRequest {
+  id: string;
+  organizationId: string;
+  fiscalYearId: string;
+  fiscalYearName?: string | null;
+  /** The draft-year line; set on a proposal once it is approved. */
+  budgetId?: string | null;
+  categoryId?: string | null;
+  categoryName?: string | null;
+  stationId?: string | null;
+  stationName?: string | null;
+  /** "Category · Station", or the category alone. */
+  lineLabel: string;
+  /** True when the request proposed a line that did not exist. */
+  isProposedLine: boolean;
+  ownerPositionId?: string | null;
+  ownerPositionName?: string | null;
+  requestedAmount: MonetaryAmount;
+  approvedAmount?: MonetaryAmount | null;
+  status: BudgetRequestStatus;
+  justification: string;
+  decisionNote?: string | null;
+  submittedBy?: string | null;
+  submittedByName?: string | null;
+  submittedAt?: string | null;
+  decidedBy?: string | null;
+  decidedByName?: string | null;
+  decidedAt?: string | null;
+  /** The active year's figures for the same category and station ("this year"). */
+  lastYearFiscalYearName?: string | null;
+  lastYearBudgeted?: MonetaryAmount | null;
+  lastYearSpent?: MonetaryAmount | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Either `budgetId`, or `categoryId` (+ `stationId`) and `ownerPositionId` for a new line. */
+export interface BudgetRequestCreatePayload {
+  fiscalYearId: string;
+  budgetId?: string | undefined;
+  categoryId?: string | undefined;
+  stationId?: string | undefined;
+  ownerPositionId?: string | undefined;
+  requestedAmount: MonetaryAmount;
+  justification: string;
+}
+
+export interface BudgetRequestUpdatePayload {
+  requestedAmount?: MonetaryAmount;
+  justification?: string;
+}
+
+/** `adjust` needs `approvedAmount` and `decisionNote`; `decline` needs `decisionNote`. */
+export interface BudgetRequestDecisionPayload {
+  decision: BudgetRequestDecisionKind;
+  approvedAmount?: MonetaryAmount | undefined;
+  decisionNote?: string | undefined;
+}
+
+export interface MyBudgetRequestLine {
+  budget: Budget;
+  request: BudgetRequest | null;
+  lastYearFiscalYearName?: string | null;
+  lastYearBudgeted?: MonetaryAmount | null;
+  lastYearSpent?: MonetaryAmount | null;
+}
+
+/** `GET /finance/budget-requests/my-lines` — one call for the owner's screen. */
+export interface MyBudgetRequestLines {
+  fiscalYear: FiscalYearOption;
+  lines: MyBudgetRequestLine[];
 }
 
 export interface BudgetSummary {

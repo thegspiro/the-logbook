@@ -13,6 +13,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import type { Budget, BudgetCategory, FiscalYear } from '../types';
+import { ConfirmProvider } from '@/contexts/ConfirmContext';
 
 let storeState: Record<string, unknown> = {};
 vi.mock('../store/financeStore', () => ({
@@ -146,12 +147,16 @@ const fetchBudgets = vi.fn();
 const fetchBudgetCategories = vi.fn();
 const fetchFiscalYears = vi.fn();
 
+// ConfirmProvider is part of the app shell; the settings page asks for a
+// confirmation before "Start from last year".
 const renderAt = (path: string, pattern: string, Page: React.FC) =>
   render(
     <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path={pattern} element={<Page />} />
-      </Routes>
+      <ConfirmProvider>
+        <Routes>
+          <Route path={pattern} element={<Page />} />
+        </Routes>
+      </ConfirmProvider>
     </MemoryRouter>
   );
 
