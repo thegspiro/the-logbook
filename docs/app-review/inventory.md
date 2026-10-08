@@ -12,7 +12,10 @@
 `services/inventory_service.py` (11,627 L), `schemas/inventory.py` (2,909 L) —
 ~22k lines, the largest module in the repo
 **Frontend:** none changed this pass
-**Docs:** no `docs/INVENTORY.md`
+**Docs:** at review time, `wiki/Module-Inventory.md` (1,472 lines: vocabulary,
+pages, endpoint paths, change history) and `wiki/Inventory-NFC-Tags.md` — but no
+structured reference under `docs/`. Closed 2026-10-08 by
+`docs/INVENTORY_MODULE.md`
 
 ### Scope — read this before reading "verified good"
 
@@ -140,15 +143,32 @@ process correction in Documentation gaps.
    `alembic upgrade head && repair_schema.py`. The entry now says to rebuild
    before reading such a failure as a finding. Without it the next reviewer
    loses the same time, or worse, reports phantom findings.
-2. **Still no `docs/INVENTORY.md`** — 148 routes, two permission strings, pool
-   vs individual vs lot tracking, issuance allowances, departure clearance,
-   write-offs, NFC and kiosk, documented only in docstrings and the wiki's nav
-   tables. Same gap as apparatus (AP2 pass 5) and, as there, a pass of its own.
+2. **No structured reference under `docs/`** — 148 routes, two permission
+   strings, pool vs individual vs lot tracking, issuance allowances, departure
+   clearance, write-offs, NFC and kiosk had no single place stating their shapes
+   and gates. Same gap as apparatus (AP2 pass 5).
+
+   > **Correction (2026-10-08).** This item originally said the module was
+   > "documented only in docstrings and the wiki's nav tables", and named the
+   > missing file `docs/INVENTORY.md`. Both were wrong.
+   > **[wiki/Module-Inventory.md](../../wiki/Module-Inventory.md)** — 1,472 lines
+   > including a 434-line endpoint section — existed throughout, and this pass
+   > did not look for it; the house convention is `<NAME>_MODULE.md`. The real
+   > gap was the absence of a _structured_ reference, now
+   > `docs/INVENTORY_MODULE.md`, which cross-links the
+   > wiki page and deliberately defers to it for the exhaustive path list rather
+   > than creating a second copy to go stale. Several modules carry both by
+   > design — `docs/SCHEDULING_MODULE.md` and `wiki/Module-Scheduling.md` are
+   > the precedent.
 
 ### Future development
 
-1. **`docs/INVENTORY.md`** — see above. The two largest modules in the repo both
-   lack a feature doc, which is now a pattern rather than an oversight.
+1. ~~**A structured reference for this module.**~~ **Closed 2026-10-08** —
+   `docs/INVENTORY_MODULE.md`, alongside
+   `docs/APPARATUS_MODULE.md` for the other large module.
+   `docs/FEATURE_DOC_COVERAGE.md` now tracks which
+   of the 36 reviewed features still lack one, so the question stops being
+   re-answered per pass.
 2. **The unreviewed surface has no business-logic verdict** — lots/ledger, NFC,
    kiosk, labels, import/export, impact planner, vendors. Each is a plausible
    focused iteration; the lots ledger is the highest-value one, since it is the

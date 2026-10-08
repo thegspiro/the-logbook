@@ -2902,8 +2902,12 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   false positives, so the AST comparison is the check worth keeping).
   **No new code defects**, said plainly: four passes, a follow-up and a security
   rotation have worked this module hard, and the two dimensions most likely to
-  still hide something came back clean under exhaustive checks. Open doc gap: no
-  `docs/INVENTORY.md` — the two largest modules in the repo both lack a feature
-  doc, now a pattern rather than an oversight. Gate: flake8 0 · black 1,425
+  still hide something came back clean under exhaustive checks. Doc gap recorded
+  at the time, **closed 2026-10-08** by `docs/INVENTORY_MODULE.md`: this module
+  had no structured reference under `docs/`, and neither did apparatus. (The
+  entry originally said "no `docs/INVENTORY.md`" and that the module was
+  documented only in docstrings and the wiki's nav tables — both wrong: the
+  convention is `<NAME>_MODULE.md`, and a 1,472-line `wiki/Module-Inventory.md`
+  existed throughout. See the correction in inventory.md.) Gate: flake8 0 · black 1,425
   unchanged · isort clean · tsc 0 · eslint 0 · docs links 0 broken · backend
   **1,169 passed**. See inventory.md → Pass 5. Next: B4 facilities.
