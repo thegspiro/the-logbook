@@ -2,6 +2,11 @@
 
 The Apparatus module manages department vehicles, equipment assignments, maintenance tracking, and crew positions. It offers both a full module and a lightweight "Basic" alternative.
 
+> **Structured reference:** data models, the full endpoint-and-permission
+> tables, data flows, edge cases and troubleshooting live in
+> [docs/APPARATUS_MODULE.md](../docs/APPARATUS_MODULE.md). This page carries
+> the feature narrative and the dated change history.
+
 ---
 
 ## Key Features

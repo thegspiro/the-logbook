@@ -13,8 +13,9 @@
 `evoc_level_service.py` (475 L — was 329), `schemas/apparatus.py` (1,967 L),
 `driver_exception_service.py`
 **Frontend:** none changed this pass
-**Docs:** no `docs/APPARATUS.md`; `wiki/API-Reference.md` covers the module at
-the nav/permission level
+**Docs:** at review time, `wiki/Module-Apparatus.md` (feature narrative + change
+history) and `wiki/API-Reference.md`'s nav table — but no structured reference
+under `docs/`. Closed 2026-10-08 by `docs/APPARATUS_MODULE.md`
 
 ### Scope
 
@@ -222,17 +223,32 @@ Four corrected this pass, all of them claims that had rotted:
    when the fix landed and the body never was. Body rewritten to record both the
    fix and the original reasoning, which is what produced `assert_in_org`.
 
-Still missing, not created here: there is **no `docs/APPARATUS.md`**. 88
-endpoints, two permission strings of its own plus six it shares, the EVOC
-ladder, the maintenance lifecycle and the driver-exception workflow are
-documented only in docstrings and `wiki/API-Reference.md`'s nav table. Writing
-it is a pass of its own, not a side-effect of this one.
+Still missing at the time of this pass: no structured reference under `docs/`.
+88 endpoints, two permission strings of its own plus six it shares, the EVOC
+ladder, the maintenance lifecycle and the driver-exception workflow had no
+single place stating their shapes and gates. Writing it is a pass of its own,
+not a side-effect of this one.
+
+> **Correction (2026-10-08).** This paragraph originally said the module was
+> "documented only in docstrings and `wiki/API-Reference.md`'s nav table". That
+> was wrong: **[wiki/Module-Apparatus.md](../../wiki/Module-Apparatus.md)** —
+> 465 lines of feature narrative and dated change history — existed throughout,
+> and this pass did not look for it. The gap was narrower than stated: no
+> _structured reference_ (data models, endpoint-and-permission tables, flows,
+> edge cases), which is what
+> [docs/APPARATUS_MODULE.md](../APPARATUS_MODULE.md) now provides, cross-linked
+> with the wiki page. Several modules in this repository carry both, by design —
+> `docs/SCHEDULING_MODULE.md` and `wiki/Module-Scheduling.md` are the
+> precedent.
 
 ### Future development
 
 1. **AP2-4's decision** (above) — fail closed, or give `shifts.apparatus_id` a
    real FK. The second option is the better fix and the more invasive one.
-2. **`docs/APPARATUS.md` does not exist.** The largest module in the repo by
+2. ~~**No feature doc exists.**~~ **Closed 2026-10-08** by
+   [docs/APPARATUS_MODULE.md](../APPARATUS_MODULE.md) — note the house convention
+   is `<NAME>_MODULE.md`, which this pass named wrongly as `docs/APPARATUS.md`.
+   The largest module in the repo by
    endpoint count has no feature doc.
 3. **The maintenance interval fields are declared but unscheduled.**
    `ApparatusMaintenanceType` carries `default_interval_value`,

@@ -1,5 +1,11 @@
 # Inventory Module
 
+> **Structured reference:** data shapes, the route groups with their gates,
+> the self-scoping rules, invariants, edge cases and troubleshooting live in
+> [docs/INVENTORY_MODULE.md](../docs/INVENTORY_MODULE.md). This page carries
+> the exhaustive endpoint paths, per-page walkthroughs and the dated change
+> history.
+
 ## Quartermaster vocabulary _(settled 2026-08-26)_
 
 The module used several names for the same operations. The canonical set now
