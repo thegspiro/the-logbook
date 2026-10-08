@@ -56,3 +56,25 @@ in [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) under _Queued by the Octob
 | One ballot, proxy ballots, seats per race, Results revised, results released on close                                                            | [14 — Elections](./14-elections.md)                                              |
 | Integration health page; Claude connections                                                                                                      | [16 — Integrations](./16-integrations.md)                                        |
 | Smaller icon buttons and switches with a mouse; longer titles                                                                                    | Layout only; see the _Existing images_ table in SCREENSHOT_CURRENCY              |
+
+---
+
+# October 7–8, 2026 workflow updates
+
+Index for the third window. Audit:
+[`docs/CHANGE_AUDIT_2026-10-07_TO_10-08.md`](../CHANGE_AUDIT_2026-10-07_TO_10-08.md).
+**Before upgrading,** read the `docs/UPGRADING.md` entries _Every member can raise
+their own finance requests (2026-10-07)_ and _Training provider imports credit
+members automatically (2026-10-08)_. Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) under _Queued by the October
+7 – 8 documentation pass_; nothing has been re-captured.
+
+| Topic                                                                                                                                      | Now in                                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| Members raise their own purchase requests, expense reports and check requests; Finance navigation; budget-line picker                      | [11 — Finance](./11-finance.md)                                              |
+| Target Solutions: Upload Report, automatic crediting, Employee ID matching, Duration credit hours, policy acknowledgments, course mappings | [16 — Integrations](./16-integrations.md), [02 — Training](./02-training.md) |
+| Void or edit a member's training record; the member is told                                                                                | [02 — Training](./02-training.md) (Void a record)                            |
+| HIPAA / Bloodborne / Hazmat requirement templates are Courses requirements; warning on old ones                                            | [02 — Training](./02-training.md)                                            |
+| Apparatus first-run guidance, Maintenance dates, Equipment tab note, CNG label, readable badges                                            | [06 — Apparatus & Facilities](./06-apparatus-facilities.md)                  |
+| Member Visibility Settings in cards with a pinned Save bar; opaque menus in dark mode                                                      | [02 — Training](./02-training.md) (Visibility Configuration)                 |
+| Add Member with a membership number no longer fails                                                                                        | [01 — Membership](./01-membership.md) (no workflow change)                   |

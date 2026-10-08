@@ -463,3 +463,18 @@ Equipment checklist changes from the same window (W46: the builder offers only
 Apparatus-module units, a failure needs a note, the failure-log total, and the
 Quartermaster's `inventory.check_manage`) are in
 [Inventory → September 24 – October 4, 2026](Module-Inventory#september-24--october-4-2026).
+
+---
+
+## First-time guidance _(2026-10-08)_
+
+An empty fleet reads **No apparatus yet** and explains what a record is for (a
+search with no match still reads **No Apparatus Found**). The Add form says only
+the fields marked \* are needed to start; the NFPA checkbox is per vehicle and off
+by default even when the department switch is on; fuel type reads **CNG**. The
+list-row wrench opens the **Maintenance** tab and the row **Archive** button is
+gone (archive from the apparatus page, which asks for a disposal method). The
+maintenance form explains which date to use, and that **Next Due** fields do not
+feed **Maintenance Due**. The Equipment tab notes that crew shift checks come from
+a separately built checklist and links to the builder. Status and type badges tint
+the badge but use the theme's primary text colour for contrast.

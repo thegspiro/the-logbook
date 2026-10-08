@@ -1,5 +1,28 @@
 # Script currency
 
+## Flagged by the 2026-10-07 → 10-08 changes (PRs #2985–#2996)
+
+Source: [CHANGE_AUDIT_2026-10-07_TO_10-08](../CHANGE_AUDIT_2026-10-07_TO_10-08.md).
+Labels come from the merged PRs and the frontend source; grep a label before it
+goes into a script. Rows are **Open** (not yet rewritten in-script). Nothing was
+re-recorded.
+
+**Re-record or shoot new footage:** 16 and 05 (provider imports, void/edit
+notices, requirement templates), 03 and 08 (member finance requests), 04 / 03 if
+they show the apparatus list.
+
+| Script                                     | Beat                                  | Was                                              | Now                                                                                                                                                                                                                         |
+| ------------------------------------------ | ------------------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **16** (line ~469, training platforms)     | Target Solutions import               | Sync stages completions; an officer imports each | Sync **and** a new **Upload Report** credit matched members automatically; unmatched wait under Imports. Other providers keep the review step. Members also match by Employee ID; hours come from Duration (hours)          |
+| **16**                                     | Mappings (new beat)                   | Category mapping only                            | **Courses** tab: map a new Course ID to the library course so a requirement stays met by any version; suggested match, one-click **Map**, "New Course Version to Map" email                                                 |
+| **16**                                     | Policy acknowledgments (new beat)     | Admin items landed as Continuing Education       | Own type, **Policy Acknowledgment**                                                                                                                                                                                         |
+| **05** (line ~506–517)                     | Void a record                         | "Marked cancelled … mistakes are easy to undo"   | Void **needs a reason**; the member is emailed and sees it; a void is final (cannot be edited back); it removes a granted qualification. **Edit** is new and also notifies the member. Re-shoot the Training History screen |
+| **05** (line ~227)                         | Requirement templates                 | HIPAA, Bloodborne Pathogens, Hazmat as hours     | They create **Courses** requirements; link the department course before saving; old hours requirements show a warning                                                                                                       |
+| **03** (line ~1528) and **08** (line ~772) | Finance                               | Treasurer / IT Manager raise requests            | Every member raises their own (**My Purchase Requests**, **My Expense Reports**, **My Check Requests**); a **Finance** group in the navigation; budget lines show amount remaining                                          |
+| **03 / 04**                                | Apparatus list (if shown)             | Row wrench "View", row Archive                   | Wrench opens **Maintenance**; Archive is on the apparatus page; empty fleet says **No apparatus yet**; fuel label **CNG**                                                                                                   |
+| **05 / 16**                                | Member Visibility Settings (if shown) | One long list of full-width rows                 | Bordered group cards in two columns; pinned bar with the unsaved count and **Save**                                                                                                                                         |
+| **All**                                    | Dark-mode menus                       | Training Admin **More** menu translucent         | Opaque surface                                                                                                                                                                                                              |
+
 ## Flagged by the 2026-10-06 → 10-07 changes (PR #2965, #2967)
 
 Source: [CHANGE_AUDIT_2026-10-06_TO_10-07](../CHANGE_AUDIT_2026-10-06_TO_10-07.md).

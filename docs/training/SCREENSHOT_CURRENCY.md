@@ -1,5 +1,51 @@
 # Screenshot currency
 
+## Queued by the October 7 – 8 documentation pass, 2026-10-08
+
+Covers PRs #2981–#2996. Audit:
+[CHANGE_AUDIT_2026-10-07_TO_10-08](../CHANGE_AUDIT_2026-10-07_TO_10-08.md). **Nothing
+has been captured** (the capture stack does not run in this environment). Run
+`status_report.py` after adding inline placeholders to refresh
+[SCREENSHOT_STATUS.md](./SCREENSHOT_STATUS.md).
+
+**What the seeded demo cannot produce yet:** a Target Solutions provider with an
+uploaded report and unmapped courses, a voided record with its reason, and a
+member who holds only `finance.request`. Use a throwaway demo provider; never
+capture a real key, secret or Transcript ID.
+
+### New screens (no image exists)
+
+| Guide | Section | Capture brief |
+| ----- | ------- | ------------- |
+| 06-apparatus-facilities.md | A first-time fleet | `/apparatus` on an empty department: **No apparatus yet** with its explanation and **Add Apparatus** |
+| 06-apparatus-facilities.md | A first-time fleet | Add Apparatus: "Only the fields marked * are needed to start", the NFPA checkbox with its help text, Fuel Type list showing **CNG** |
+| 06-apparatus-facilities.md | Equipment Tracking | Equipment tab with the "separate checklist" note and **Build equipment checklists** link (as a holder of `inventory.check_manage`) |
+| 06-apparatus-facilities.md | Logging Maintenance | Maintenance record form with the which-date sentence and the Next Due note |
+| 02-training.md | Void a record | Member Training History: **Void** dialog with the required reason; a voided record with its reason; **Edit** dialog (training.manage) |
+| 02-training.md | Void a record | My Training as the member: voided record marked **voided** with the reason under it |
+| 02-training.md | Member Visibility Settings | The card layout in two columns with the pinned "N unsaved changes" bar and **Save** |
+| 11-finance.md | Member requests | A member's **My Purchase Requests** list with **New**, the Finance navigation group, and the budget-line picker ("Training — $1,250.00 remaining") |
+| 16-integrations.md | Upload Report | Target Solutions provider card with **Upload Report**, and the result summary |
+| 16-integrations.md | Course mappings | Mappings › **Courses** tab: a course with a suggested library match and **Map**; a mapped course |
+| 16-integrations.md | Policy acknowledgments | A staged Admin item shown as **Policy Acknowledgment** |
+| 08-admin-reports.md or 17 (email) | Training record emails | _Training Record Voided_ and _Training Record Updated_ in Email Templates, plus the sent email at 390px |
+| 08-admin-reports.md or 17 (email) | New Course Version to Map | The training-officer email |
+
+### Existing images to replace or check
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `06-*` apparatus list rows | **REPLACE** | Row **Archive** removed; the wrench opens Maintenance; badge text colour changed |
+| `06-*` Add Apparatus and `06-03-apparatus-detail.png` | **REPLACE** | Intro line, NFPA help text, CNG label; status and type badges |
+| `06-04-apparatus-maintenance-tab.png`, `06-06-apparatus-equipment-tab.png` | **REPLACE** | New guidance text above the lists and form |
+| `02-*` Member Visibility Settings | **REPLACE** | Grouped cards, two columns, pinned Save bar |
+| `02-*` Training Admin **More** menu and equipment-check builder menus in dark mode | **REPLACE** | Opaque surface |
+| `02-*` requirement template picker (HIPAA, Bloodborne, Hazmat) and any requirement card for them | **CHECK** | Now Courses requirements; the old ones can show a warning |
+| `02-*` / `16-*` Training History with Void | **REPLACE** | Reason, voided marker, Edit button |
+| `16-*` provider cards, Imports and Mappings | **REPLACE** | Upload Report, Courses tab, auto-credited rows |
+| `11-*` finance lists, forms and the navigation | **REPLACE** | "My …" titles for members, Finance nav group, options-based pickers |
+| Any email-templates list shot | **CHECK** | Three new required or system templates (voided, updated, course match) |
+
 ## Queued by the October 6 – 7 documentation pass, 2026-10-07
 
 Covers PR #2965 (owner-decision docket), #2967 (desktop density) and the review
