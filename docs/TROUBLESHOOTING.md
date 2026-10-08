@@ -5436,6 +5436,38 @@ Expected: 10 system folders (SOPs, Policies, Forms & Templates, Reports, Trainin
 - On the event requests screen the same refusal shows only as "Failed to postpone request.", or as a generic failure on schedule.
 - Shifting or cancelling a cohort's classes is not atomic: classes before the finalized one stay moved or cancelled while the request reports the refusal. See [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md), "Events — Attendance-Lock Refusals".
 
+### A member who was at an event has no check-in
+
+**Symptoms**: A member attended but their phone died, they had no signal, or nobody put the QR code up, so the event shows them as absent.
+
+**Solution**: Once the event's check-in has closed, the member opens the event and presses **I was there** ("Were you at this event but never checked in?"), says why there is no check-in and, optionally, when they arrived and left. The organizer and alternate are notified; they — or anyone holding `events.manage` — confirm the times on the event's **Attendance Requests** card and approve, or decline with a reason. The approved times are credited when attendance is finalized, like any **Edit Times** correction. An event manager can still record the member directly instead: **Check In** on the event (the **Check In Members** dialog), then **Edit Times** on their row to set the real times.
+
+### "I was there" does not appear on an event
+
+**Cause**: The server decides whether a member may ask, and the page shows the button only when it says yes. It says no when:
+
+- check-in for the event is **still open** — the member should check in instead. A "window" event keeps accepting check-ins for its after-end minutes, so the button appears only once those pass;
+- the event ended **more than 30 days ago**;
+- the event is **cancelled** or a **draft**;
+- the member is **already recorded as present**, including an officer's back-filled check-in time;
+- the member **already asked**. There is one request per member per event, and a declined request is final, so the page shows the earlier request's outcome instead.
+
+**Solution**: For a case the request cannot cover (more than 30 days, or a declined request that was wrong), an event manager records the attendance directly with **Check In** and **Edit Times** — reopening attendance first if it is finalized.
+
+### Approve is greyed out on an attendance request
+
+**Symptoms**: The **Attendance Requests** card says "Attendance is finalized. Reopen attendance to approve a request; declining still works.", and **Approve** cannot be pressed (the API answers 409).
+
+**Cause**: Approving changes the hours the finalized event already credited, so it waits behind the attendance lock like every other attendance correction.
+
+**Solution**: Someone holding `events.reopen_attendance` presses **Reopen Attendance**, the request is approved, and attendance is finalized again so the new attendance is credited.
+
+### Nobody is acting on attendance requests
+
+**Cause**: A request notifies the event's **organizer** and **alternate** in-app and by email. When neither can take it (both have left, or the only one set is the member asking), it goes to the position chosen for that event type under **Manage Events → Event settings → Attendance → Attendance requests** (default **Secretary**), then the `secretary` position, then every `events.manage` holder. Email follows each recipient's **Event officer duties** preference, so someone who switched that off sees the request only in the notification bell and on the event page.
+
+**Solution**: Check the event's **Organized by** row, and **Transfer event** to someone active if the organizer has moved on — open requests move with it. Anyone holding `events.manage` can also decide a request from the event page.
+
 ---
 
 ## Locations & Kiosk Display
