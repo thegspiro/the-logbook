@@ -18365,7 +18365,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
@@ -18377,6 +18377,74 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-08 — Feature 30 (Onboarding, pass 6) — 1 HIGH fix (unlocked single-org race), 0 new findings otherwise
+
+Confirmed via `list_pull_requests` (state=open) that no `claude/security-review-*`
+PR existed before starting: PR #2994 (Feature 29, Reports & analytics, pass 8)
+had already merged with nothing started since. Rotation row 30 was the first
+`⬜`.
+
+Read all three prior findings files (`ONB-30-onboarding.md`,
+`ONB2-30-onboarding.md`, `ONB3-30-onboarding.md`, covering passes 1–5) and
+`KNOWN_LIMITATIONS.md`'s onboarding rows before any code. Diff since pass 5's
+merge (`82f06f4c`, PR #2898) was small and scoped to this feature's own files
+(`onboarding.py` +62/-22, a docstring fix in `services/onboarding.py`) plus
+unrelated Authentik-SSO frontend work that happened to touch `LoginPage.tsx`
+(a call site of this feature's `/status` route). All 24 routes
+re-enumerated directly from source; every file not touched by the diff
+confirmed byte-identical to pass 5's reviewed version.
+
+**One real finding, HIGH, fixed:** `create_organization`'s single-org guard
+(`services/onboarding.py`) was an unlocked read-then-write — the identical bug
+class ONB3-30-3 found and fixed one call below in `create_system_owner`
+(pass 4), and the shape ONBOARD-7 fixed for `onboarding_status` itself
+(CLAUDE.md pitfall #27). Two concurrent, pre-authentication callers to
+`POST /organization`/`POST /session/organization` both read "no organization
+exists" and both created one — reproduced against a real database, 8/8 runs,
+2/2 successes before the fix. Worse than a wasted row: `create_system_owner`'s
+own org lookup is "first active org by `created_at`," so an attacker whose
+organization sorts first can have the real operator's own, correctly-filled
+System Owner submission land on the attacker's organization instead of the
+one the operator just described. Fixed with the same remediation as
+ONB3-30-3: lock the `onboarding_status` singleton row before the existence
+check, and make the existence check itself a locking read (REPEATABLE READ
+otherwise answers a losing caller's plain SELECT from its own stale
+snapshot). Verified 8/8 → exactly 1 success after the fix. Guard test added:
+`tests/test_onboarding_organization_race.py`, mirroring
+`test_onboarding_owner_race.py`'s two-connection pattern plus source-level
+lock assertions; verified to fail with the fix reverted and pass restored.
+
+**Independently landed and re-verified fixed, not by this pass:** the ONB-8
+audit-durability residual every prior pass (2–5) left open — `reset_initiated`
+sharing a transaction with `/reset`'s deletes — is now closed on `main`
+(`_audit_reset_durably`, a separate, independently-committed session that
+runs and commits before any delete, with the reset itself refused if that
+durable write fails). No KNOWN_LIMITATIONS.md row tracked this residual
+separately, so there was nothing to update there.
+
+**Every other prior-pass finding re-verified unchanged:** ONB-7 (role editor
+accepts client-controlled permissions/priority/system-flag on new roles,
+OPEN, product decision), ONB2-30-8 (sliding 30-minute session TTL with no
+absolute cap, OPEN, policy decision), ONB-30-3 (self-hosted SMTP test has no
+SSRF/private-network protection, OPEN, policy decision — blocking private IPs
+would break the legitimate on-premises-relay deployment this app's audience
+uses), the duplicate-`role.id`-causes-500 gap, and the cosmetic
+`POST /organization` missing-`except Exception` gap. One documentation-only
+correction: pass 5's route table mislabeled `POST /organization`'s auth
+dependency as "none" — the code has required `validate_session` since at
+least pass 2; no behavior change, noted in `ONB4-30-onboarding.md`.
+
+Completion gate: `flake8`/`black`/`isort` clean on all changed files;
+`validate_migrations.py --strict` clean (543 revisions, single head);
+`pytest -k "onboard or org_template or template_service"` 262 passed
+(up from 255); the new race test's 3 cases verified to fail pre-fix and pass
+post-fix; full backend suite (`pytest tests/`) 17,384 passed, 21 skipped
+(all pre-existing environment-only skips), 0 failures; `npm run typecheck`
+0 errors; `npm run lint` 0 errors, 0 warnings.
+
+Findings file: `docs/security-review/ONB4-30-onboarding.md`. Rotation row 30
+→ ✅ (pending PR merge). Next: Feature 31 (Scheduled tasks).
 
 ### 2026-10-08 — Feature 29 (Reports & analytics, pass 8) — 1 real finding fixed (pipeline_overview self-exposure), 0 new findings otherwise
 

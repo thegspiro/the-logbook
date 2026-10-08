@@ -605,8 +605,31 @@ class OnboardingService:
         # a second org outright: a leaked/replayed in-progress session could
         # otherwise create several (each with its own default roles), and
         # downstream "first active org" logic would silently pick one and strand
-        # the rest.
-        any_org = await self.db.execute(select(Organization.id).limit(1))
+        # the rest -- including create_system_owner's own "first active org"
+        # lookup, so a second, attacker-created org that wins the race could
+        # receive the real operator's System Owner account instead of its own.
+        #
+        # This was a plain read-then-write with nothing serializing it -- the
+        # exact shape ONB3-30-3 found and fixed one call below, in
+        # create_system_owner (CLAUDE.md pitfall #27: "a capacity check is a
+        # read-then-write and needs the row locked"). Reproduced against a
+        # real database: two concurrent /organization calls both read "no
+        # organization exists" and both created one -- 2/2 succeeded, two
+        # rows in `organizations`. There is no Organization row to lock yet
+        # (the conflicting row does not exist until the loser has already
+        # lost), so onboarding_status is the parent to lock instead -- exactly
+        # one row from /start onward (ONBOARD-7's unique constraint), and
+        # always present by the time this method can be reached at all (the
+        # session required to call it is only mintable after /start has
+        # created it). The existence check must then be a locking read too,
+        # not a plain one: under InnoDB's default REPEATABLE READ, a loser
+        # that already took its own snapshot would still see zero
+        # organizations after winning the onboarding_status lock, and would
+        # create a second one anyway.
+        await self.db.execute(select(OnboardingStatus).with_for_update())
+        any_org = await self.db.execute(
+            select(Organization.id).limit(1).with_for_update()
+        )
         if any_org.scalar_one_or_none() is not None:
             raise ValueError("An organization has already been created")
 
