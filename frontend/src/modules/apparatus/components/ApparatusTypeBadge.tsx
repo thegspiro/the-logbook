@@ -90,16 +90,19 @@ export const ApparatusTypeBadge: React.FC<ApparatusTypeBadgeProps> = ({ type, si
   const IconComponent = type.icon ? getApparatusIcon(type.icon) : null;
 
   if (type.color) {
+    // Same rule as StatusBadge: the department's colour tints the badge and
+    // icon, never the text, which seeded -500 shades leave under AA contrast.
     return (
       <span
-        className={`${sizeClasses} inline-flex items-center gap-1 rounded-sm border font-semibold`}
+        className={`${sizeClasses} text-theme-text-primary inline-flex items-center gap-1 rounded-sm border font-semibold`}
         style={{
           backgroundColor: `${type.color}20`,
-          color: type.color,
           borderColor: `${type.color}50`,
         }}
       >
-        {showIcon && IconComponent && <IconComponent className="h-3 w-3" />}
+        {showIcon && IconComponent && (
+          <IconComponent className="h-3 w-3" style={{ color: type.color }} aria-hidden="true" />
+        )}
         {type.name}
       </span>
     );

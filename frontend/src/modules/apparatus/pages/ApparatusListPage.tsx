@@ -14,7 +14,6 @@ import {
   Eye,
   Printer,
   Edit,
-  Archive,
   ChevronLeft,
   ChevronRight,
   AlertTriangle,
@@ -38,6 +37,9 @@ export const ApparatusListPage: React.FC = () => {
   const [filterType, setFilterType] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [showArchived, setShowArchived] = useState(false);
+  // An empty list under a search or filter says nothing about whether the
+  // department has any apparatus, so it must not read as a first-run screen.
+  const isNarrowed = Boolean(searchQuery || filterType || filterStatus || showArchived);
   const checkPermission = useAuthStore((state) => state.checkPermission);
   const canManage = checkPermission('apparatus.manage');
   const canCreate = canManage || checkPermission('apparatus.create');
@@ -333,15 +335,17 @@ export const ApparatusListPage: React.FC = () => {
         ) : apparatusList.length === 0 ? (
           <div className="card p-12 text-center">
             <Truck className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
-            <h3 className="text-theme-text-primary mb-2 text-xl font-bold">No Apparatus Found</h3>
+            <h3 className="text-theme-text-primary mb-2 text-xl font-bold">
+              {isNarrowed ? 'No Apparatus Found' : 'No apparatus yet'}
+            </h3>
             <p className="text-theme-text-secondary mb-6">
-              {searchQuery || filterType || filterStatus
+              {isNarrowed
                 ? 'No apparatus match your search or filters. Change or clear them to see more.'
                 : canCreate
-                  ? 'Add your first apparatus to start tracking it.'
+                  ? 'Add each vehicle your department runs, such as an engine, ladder or ambulance. Its record keeps its status, maintenance, fuel, drivers and expiration dates in one place, and its crew seats fill in on new shifts.'
                   : 'No apparatus have been added yet.'}
             </p>
-            {canCreate && !searchQuery && !filterType && !filterStatus && (
+            {canCreate && !isNarrowed && (
               <button
                 onClick={() => void navigate('/apparatus/new')}
                 className="btn-primary mx-auto flex items-center space-x-2 px-6 py-3"
@@ -509,23 +513,16 @@ export const ApparatusListPage: React.FC = () => {
                                   <Edit className="h-4 w-4" aria-hidden="true" />
                                 </button>
                               )}
+                              {/* Archiving asks for a disposal method, so it lives in
+                                  the form on the apparatus page, not on this row. */}
                               {canManage && (
                                 <button
-                                  onClick={() => void navigate(`/apparatus/${apparatus.id}`)}
+                                  onClick={() => void navigate(`/apparatus/${apparatus.id}?tab=maintenance`)}
                                   className="hidden min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-yellow-700 transition-colors hover:bg-yellow-500/10 hover:text-yellow-700 sm:inline-flex dark:text-yellow-400 dark:hover:text-yellow-300"
-                                  title="View Details"
-                                  aria-label={`View ${apparatus.unitNumber}`}
+                                  title="Maintenance"
+                                  aria-label={`Maintenance for ${apparatus.unitNumber}`}
                                 >
                                   <Wrench className="h-4 w-4" aria-hidden="true" />
-                                </button>
-                              )}
-                              {canManage && !apparatus.isArchived && (
-                                <button
-                                  onClick={() => void navigate(`/apparatus/${apparatus.id}`)}
-                                  className="text-theme-text-muted hover:text-theme-text-secondary hover:bg-theme-surface-secondary hidden min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 transition-colors sm:inline-flex"
-                                  title="Archive"
-                                >
-                                  <Archive className="h-4 w-4" />
                                 </button>
                               )}
                             </div>

@@ -34,6 +34,16 @@ export type DefaultApparatusStatus =
 
 export type FuelType = 'gasoline' | 'diesel' | 'electric' | 'hybrid' | 'propane' | 'cng' | 'other';
 
+export const FUEL_TYPE_LABELS: Record<FuelType, string> = {
+  gasoline: 'Gasoline',
+  diesel: 'Diesel',
+  electric: 'Electric',
+  hybrid: 'Hybrid',
+  propane: 'Propane',
+  cng: 'CNG',
+  other: 'Other',
+};
+
 export type CustomFieldType =
   'text' | 'number' | 'decimal' | 'date' | 'datetime' | 'boolean' | 'select' | 'multi_select' | 'url' | 'email';
 

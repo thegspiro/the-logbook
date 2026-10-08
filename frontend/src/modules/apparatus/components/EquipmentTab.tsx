@@ -6,11 +6,13 @@
  */
 
 import React, { useState } from 'react';
+import { Link } from 'react-router';
 import { Package, MapPin, Pencil, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { ApparatusEquipment } from '../types';
 import { apparatusEquipmentService } from '../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { useAuthStore } from '../../../stores/authStore';
 import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
 import { EquipmentModal } from './EquipmentModal';
 
@@ -25,6 +27,8 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({ equipment, loadingTa
   const [showModal, setShowModal] = useState(false);
   const [editEquipment, setEditEquipment] = useState<ApparatusEquipment | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ApparatusEquipment | null>(null);
+  // Matches the gate on /inventory/admin/checklists.
+  const canManageChecklists = useAuthStore((state) => state.checkPermission('inventory.check_manage'));
 
   const handleAdd = () => {
     setEditEquipment(null);
@@ -60,6 +64,20 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({ equipment, loadingTa
             Add Equipment
           </button>
         </div>
+        {/* The two lists are separate records: nothing here feeds a checklist,
+            and a newcomer reasonably assumes it does. */}
+        <p className="text-theme-text-secondary mb-4 text-sm">
+          This list records what the apparatus carries. Crews check equipment at the start of a shift from an equipment
+          checklist, which is built separately.{' '}
+          {canManageChecklists && (
+            <Link
+              to="/inventory/admin/checklists"
+              className="mobile-touch-target font-medium text-red-800 hover:underline dark:text-red-300"
+            >
+              Build equipment checklists →
+            </Link>
+          )}
+        </p>
         {loadingTab ? (
           <div className="py-8 text-center">
             <div className="border-theme-text-primary mx-auto h-8 w-8 animate-spin rounded-full border-b-2"></div>
