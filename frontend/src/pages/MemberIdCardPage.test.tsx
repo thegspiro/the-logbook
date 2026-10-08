@@ -342,7 +342,12 @@ describe('MemberIdCardPage', () => {
       expect(await screen.findByTestId('barcode-container')).toBeInTheDocument();
       expect(screen.getByTestId('barcode')).toBeInTheDocument();
       expect(screen.getByTestId('badge-code')).toHaveTextContent(BADGE);
-      expect(vi.mocked(JsBarcode)).toHaveBeenCalledWith(expect.anything(), BADGE, expect.any(Object));
+      // JsBarcode is drawn from a passive effect that runs after the commit
+      // that put the badge text on screen, so a loaded runner can reach this
+      // line before the effect has fired.
+      await waitFor(() => {
+        expect(vi.mocked(JsBarcode)).toHaveBeenCalledWith(expect.anything(), BADGE, expect.any(Object));
+      });
       expect(vi.mocked(JsBarcode)).not.toHaveBeenCalledWith(expect.anything(), 'FD-0042', expect.anything());
     });
 
