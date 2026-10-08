@@ -1,49 +1,57 @@
 # Getting Started with The Logbook
 
-Welcome to The Logbook, a comprehensive department management platform built for fire departments and emergency services organizations. This guide will walk you through your first login, navigating the interface, and understanding how the system is organized.
+The Logbook is your department's website for training, shifts, events,
+equipment and messages. This guide shows you how to sign in, find your way
+around, and set up your own account.
 
 ## Lesson at a Glance
 
-|                    |                                                                 |
-| ------------------ | --------------------------------------------------------------- |
-| **Audience**       | Every new member                                                |
-| **Permissions**    | An active member account; no officer permissions required       |
-| **Prerequisites**  | Your department URL and welcome email or single sign-on account |
-| **Essential path** | About 15 minutes                                                |
-| **Full guide**     | About 30–45 minutes                                             |
-| **Last verified**  | 2026-08-11                                                      |
-| **Owner**          | Department IT manager or onboarding coordinator                 |
+|                     |                                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Who this is for** | Every new member                                                                                       |
+| **What you need**   | Your department's Logbook web address, and your welcome email or your work Google or Microsoft account |
+| **Permissions**     | None. Any active member can do everything in this guide                                                |
+| **Essential path**  | About 15 minutes                                                                                       |
+| **Full guide**      | About 30–45 minutes                                                                                    |
+| **Last verified**   | 2026-10-08                                                                                             |
+| **Owner**           | Your department's IT manager or onboarding coordinator                                                 |
 
-By the end of the essential path, you can:
+When you finish the essential path, you will be able to:
 
-- sign in securely and recover from the most common access problems;
-- identify the navigation, dashboard, notifications, and account areas;
-- update the contact and security information you control; and
-- find help when a module or action is unavailable.
+- sign in safely, and fix the most common sign-in problems;
+- find the menu, your dashboard, your notifications and your account;
+- update your own contact and security details; and
+- know who to ask when something is missing.
 
-> **Practice safely:** You can complete this lesson in your normal account. Do
-> not change department-owned fields, acknowledge a real alert merely for
-> practice, or share passwords, MFA codes, recovery codes, or calendar links.
+> **Practice safely.** You can work through this guide in your own account.
+> Do not change department information, do not dismiss a real alert just to
+> practice, and never share your password, your sign-in codes or your calendar
+> link.
+
+**New to these words?** The [Glossary](./GLOSSARY.md) explains the terms this
+app uses, such as _position_, _permission_ and _module_, and spells out
+abbreviations such as MFA and QR.
 
 ### 15-Minute Essential Path
 
-1. [Sign in](#first-login) and, if prompted, [change your temporary password](#changing-your-password).
-2. [Orient yourself to the interface](#understanding-the-interface) and [sidebar](#navigation-sidebar).
-3. Review [your dashboard](#your-dashboard), including one notification, upcoming shift, or event.
-4. Open [Account Settings](#account-settings) and verify your contact and security information.
-5. Bookmark [Getting Help](#getting-help) so you know what to do if access is missing.
+1. [Sign in](#first-login). If asked, [change your temporary password](#changing-your-password).
+2. Learn the [parts of the screen](#understanding-the-interface) and the [menu](#navigation-sidebar).
+3. Look at [your dashboard](#your-dashboard). Open one notification, shift or event.
+4. Open [My Account](#account-settings) and check your phone, email and security settings.
+5. Bookmark [Getting Help](#getting-help) so you know what to do if something is missing.
 
-### Try It: First-Day Readiness Check
+### Try It: First-Day Check
 
-- **Starting state:** Sign in with your own member account.
-- **Task:** Without following the numbered instructions above, locate your next
-  scheduled item, find the page where you would change your password, and
-  identify who can help if a module is missing.
-- **Success:** You can name the scheduled item (or confirm that none is shown),
-  reach the Password tab without changing anything, and explain that an
-  administrator controls module availability.
-- **Variation:** If you see **Not Authorized**, what should you do instead of
-  repeatedly retrying the action?
+- **Start:** Sign in with your own account.
+- **Task:** Without following the steps above, find your next scheduled shift
+  or event, find where you would change your password, and work out who to ask
+  if a part of the app is missing.
+- **You've succeeded when:** you can name your next scheduled item (or see that
+  there isn't one), you reach the **Password** tab without changing anything,
+  and you know that an administrator decides which parts of the app are turned
+  on.
+- **Extra question:** If you see **Access Denied**, what should you do instead
+  of trying again and again?
 
 ---
 
@@ -56,570 +64,579 @@ By the end of the essential path, you can:
 5. [Navigation Sidebar](#navigation-sidebar)
 6. [Your Dashboard](#your-dashboard)
 7. [Account Settings](#account-settings)
-8. [Getting Help](#getting-help)
+8. [Sign-In and Session Problems](#sign-in-and-session-problems)
+9. [Getting Help](#getting-help)
+10. [Realistic Example: Your First Day](#realistic-example-your-first-day-on-the-logbook)
+11. [If You Learned an Older Version](#if-you-learned-an-older-version)
 
 ---
 
 ## First Login
 
-When your department administrator creates your account, you will receive a welcome email with your login credentials. Your initial password is temporary and must be changed on first login.
+When your administrator creates your account, you get a welcome email with
+your username and a temporary password. You must change that password the
+first time you sign in.
 
-1. Open your browser and navigate to your department's Logbook URL.
-2. Enter the **username** and **password** provided to you.
-3. Click **Sign In**.
+1. Open your web browser and go to your department's Logbook address.
+2. Enter the **username** and **password** from your email.
+3. Select **Sign In**.
 
-If you were sent to sign in from a link — a bookmarked filtered list, or a page
-with a section anchor — you are returned to exactly that address after signing
-in, query and anchor included _(2026-09-27; it used to drop everything after
-the path)_.
-
-After several failed attempts the page counts down before you can try again —
-_"Too many failed attempts. Try again in N seconds."_ — and the number is the
-server's own wait _(2026-09-27)_. It used to show a few seconds while the
-server was refusing for a full minute, so trying again on the screen's word was
-refused again.
+If you followed a link to a particular page, The Logbook takes you back to that
+exact page once you have signed in.
 
 ![The Logbook login page with username and password fields](./images/00-01-login-page.png)
 
-**[SCREENSHOT — CHECK `00-01-login-page.png`.** The page itself is unchanged; replace only if the frame shows a lockout or session-expired message, whose wording changed on 2026-09-29.**]**
+**If you type the wrong password several times,** the **Sign In** button
+changes to **Wait 2s** and counts down before you can try again. The wait gets
+longer with each wrong try. The message reads, for example: _"Too many failed
+attempts. Try again in 4 seconds."_ When the countdown ends, you can try again.
 
-> **Hint:** If you did not receive a welcome email, contact your department's IT Manager or the person who set up the system. They can resend your credentials or reset your password from the admin panel.
+> **Didn't get a welcome email?** Ask your department's IT manager or the
+> person who set up The Logbook. They can send it again or reset your
+> password.
 
 ---
 
 ## Signing in with Google or Microsoft
 
-If your administrator has enabled single sign-on, the login page shows **Google** and/or **Microsoft** buttons under an "Or continue with" divider. These let you sign in with your existing work account instead of typing your Logbook password.
+Your department may let you sign in with your work Google or Microsoft account
+instead of a Logbook password. This is called _single sign-on_. If it is turned
+on, the sign-in page shows **Google** and/or **Microsoft** buttons under
+"Or continue with".
 
-1. On the login page, click **Google** or **Microsoft** under "Or continue with".
-2. Complete the sign-in on the provider's page (and approve access if prompted).
-3. You are returned to The Logbook and taken to your dashboard.
+1. Select **Google** or **Microsoft**.
+2. Sign in on the Google or Microsoft page. Approve access if it asks.
+3. You come back to The Logbook and see your dashboard.
 
 ![Login page with Google and Microsoft single sign-on choices](./images/00-21-login-sso-options.png)
 
-> **Hint:** Single sign-on links to an account that already exists. The email on your Google or Microsoft account must match a member account your administrator has already created — signing in this way will not create a new account.
+**Your account must already exist.** Signing in with Google or Microsoft does
+not create a new Logbook account. The email address on your Google or
+Microsoft account must match an account your administrator has already set up.
 
-> **Two-factor still applies** _(2026-08-12)_. If you have two-factor
-> authentication enabled on your Logbook account, signing in with Google or
-> Microsoft brings you back to the login page's **authentication code** step —
-> enter the 6-digit code from your authenticator app (or a recovery code)
-> exactly as you would after a password. Google or Microsoft verifying you is
-> not a substitute for your second factor; you are not signed in until the code
-> is accepted. The challenge expires after 5 minutes — past that, start the
-> sign-in again.
+**Your sign-in code is still needed.** If you have turned on two-step sign-in
+(see [Account Settings](#account-settings)), you still enter the 6-digit code
+from your phone after Google or Microsoft lets you in. You can use one of your
+recovery codes instead. You have 5 minutes to enter it; after that, start
+again.
 
 ![The login page's two-factor step — the 6-digit code field and the Use a recovery code link](./images/00-23-login-two-factor.png)
 
-> **Troubleshooting:** If your account is not recognized you are returned to the login page with a message such as "No account matches that Google email. Contact your administrator for access." Other messages cover an account from a domain that is not allowed, an account already linked to a different user, or an unverified email address. In every case, contact your administrator.
+**If it doesn't work,** you come back to the sign-in page with a message such
+as _"No account matches that email. Contact your administrator for access."_
+Other messages say the email's domain isn't allowed, the account is already
+linked to someone else, or the account has no email address. Whatever the
+message, contact your administrator.
 
 ---
 
 ## Changing Your Password
 
-After your first login, you will be prompted to change your temporary password. Your new password must meet the department's security policy.
+The first time you sign in, The Logbook takes you straight to the
+**Password** tab of **My Account**. A yellow box says _"Password change
+required"_. You cannot use the rest of the app until you have set a new
+password.
 
-1. Enter your **current (temporary) password**.
-2. Enter your **new password** twice to confirm.
-3. Click **Change Password**.
+1. Enter your **current password** (the temporary one from your email).
+2. Enter your **new password** twice.
+3. Select **Change Password**.
 
 ![The change password form with its three fields and the strength requirements](./images/00-19-change-password.png)
 
-**[SCREENSHOT — REPLACE `00-19-change-password.png`.** The requirements list is visible before typing and now has seven rules — "At least 12 characters", the four character classes, "No runs like 123 or abc" and "No character three times in a row".**]**
+**Password rules.** The form lists every rule and ticks each one as you type.
+The **Change Password** button stays greyed out until every rule has a tick.
+Your new password needs:
 
-**Password Requirements:**
+- at least 12 characters (your department may ask for more);
+- an uppercase letter, a lowercase letter, a number and a special character
+  such as `!` or `#`;
+- no runs like `123` or `abc`; and
+- no character three times in a row, such as `aaa`.
 
-The form lists every rule from the moment it opens, and ticks each one as you
-type _(2026-09-28: it used to appear only once you started typing, said "8
-characters", and left out two rules the server enforces)_:
+You also cannot reuse any of your last 12 passwords, and very common
+passwords are refused even if they pass every rule.
 
-- At least 12 characters (your department may require more)
-- One uppercase letter, one lowercase letter, one number, one special character
-- No runs like 123 or abc
-- No character three times in a row
-- Cannot reuse recent passwords
+For example, `password123` fails four rules: it is too short, and it has no
+uppercase letter, no special character and a run (`123`). A password such as
+`Ladder!Truck-Seven` passes them all.
 
-Changing your password **signs you out everywhere**, including this browser.
-The sign-in page then says so: _"Your password was changed, and you have been
-signed out everywhere. Sign in with your new password."_ — before 2026-09-28 it
-said nothing, which looked like an error. Sessions also time out after a period
-of inactivity set by your department; the sign-in page then reads _"You were
-signed out after a period of inactivity. Sign in again."_
-
-> **Troubleshooting:** If your password change fails, ensure it meets all displayed requirements. If you are locked out after too many failed attempts, wait for the lockout period to expire or contact your administrator.
-
----
+**Changing your password signs you out everywhere,** on every device,
+including the one you are using. The sign-in page then says: _"Your password
+was changed, and you have been signed out everywhere. Sign in with your new
+password."_ This is expected, not an error. Sign in again with your new
+password.
 
 > **Screenshot needed:**
 > _[Throwaway demo member (never a real member) at /login, immediately after changing the password on My Account → Password: the sign-in page showing the green notice "Your password was changed, and you have been signed out everywhere. Sign in with your new password." Leave the username and password fields empty.]_
 
+**Your department may also require two-step sign-in.** If it does, The Logbook
+takes you to the **Security** tab after you change your password, so you can
+set it up. See [Account Settings](#account-settings).
+
+---
+
 ## Understanding the Interface
 
-The Logbook uses a sidebar navigation layout by default. Your department can
-switch everyone to a top bar instead, under **Settings → General → Profile →
-Navigation Layout**; the choice applies to every member from their next page
-load. On a screen too narrow for every menu group, the top bar keeps the ones
-that fit and puts the rest under **More** at its right-hand end, in the same
-order. The main areas of the screen are:
+Most screens have three parts:
 
-1. **Sidebar (Left)** - Navigation menu for all modules
-2. **Main Content Area (Center)** - The active page you are working on
-3. **Header/Breadcrumb (Top)** - Shows your current location and provides context actions
+1. **The menu (left side).** Links to every part of the app you can use.
+2. **The main area (centre).** The page you are working on.
+3. **The header (top).** Shows where you are, and buttons for that page.
 
 ![Dashboard showing the sidebar navigation, main content, and header](./images/00-04-dashboard-overview.png)
+
+Your department can choose to show the menu as a **bar across the top** of the
+screen instead. If the top bar runs out of room, the menu groups that don't
+fit move under **More** at its right-hand end.
 
 > **Screenshot needed:**
 > _[Administrator (all modules on) at /dashboard, 1280×900 viewport, with Navigation Layout set to Top bar: the More dropdown open at the right-hand end of the top bar, showing at least one overflowed group under its own label with separators between groups. The page must not scroll sideways.]_
 
-### Confirmations look like the app, not like the browser _(2026-08-09)_
+### When the app asks "Are you sure?"
 
-When The Logbook asks you to confirm something — deleting a record, discarding
-unsaved changes, ending a session — it now uses its **own dialog**, styled like
-the rest of the app, rather than the grey browser box that used to appear at the
-top of the screen.
+Before something that can't easily be undone, such as deleting a record or
+leaving a page with unsaved changes, The Logbook asks you to confirm.
 
-Two practical differences:
-
-- **The buttons say what they do.** "Keep it" and "Delete", "Stay here" and
-  "Discard changes", "Leave it running" and "End session" — rather than OK and
-  Cancel, where which one was which depended on reading the question carefully.
-- **The message has room to tell you the consequence.** Deactivating an
-  administrative-hours category leaves already-logged hours alone; force-ending a
-  session moves the entry to pending review rather than throwing it away; leaving
-  a checklist keeps your draft. The dialogs say so now.
-
-> **If you had "prevent this page from creating further dialogs" ticked, unstick
-> it.** Some browsers offer that checkbox on repeated pop-ups, and until this
-> change ticking it made confirmations **silently do nothing** — the app could not
-> tell a suppressed dialog from you pressing Cancel. That failure mode is gone,
-> but the browser setting may still be remembered from before.
+- **The buttons say what they do.** For example, **Keep it** and **Delete**,
+  or **Stay here** and **Discard changes**. There is no guessing which of
+  "OK" and "Cancel" is which.
+- **The message tells you what will happen.** For example, it tells you that
+  leaving a checklist keeps your draft.
 
 ![An in-app confirmation dialog with its consequence sentence and named buttons](./images/00-14-confirm-dialog.png)
 
+### Closing a pop-up window
+
+A pop-up window (a _dialog_) closes only when you press **Escape** on your
+keyboard or select the **X** in its top corner. Clicking or tapping outside it
+does nothing.
+
+This protects your work. Most pop-ups here are forms, and The Logbook does not
+save a half-finished form. An accidental click beside the window would
+otherwise throw away everything you had typed.
+
+A few small pop-ups that hold nothing you could lose do close when you click
+outside them: the search box (the _command palette_), the equipment-check
+"jump to" lists, the checklist picker and the "before publishing" panel. Menus
+and drop-down lists also close when you click away.
+
 ---
-
-### Dialogs close on Escape or the X, not on a click beside them _(2026-09-13)_
-
-Clicking in the margin around an open dialog does nothing. Use **Escape** or the
-**X** in the dialog's header.
-
-This changed deliberately, and in the direction that loses less. A dialog here is
-usually a form — adding an inventory item, filing a request, editing a template —
-and nothing in the application drafts what you have typed. A click in the gutter
-used to close the dialog and discard the form: no confirmation, no undo, and on
-reopening, a blank box. That click is also far more often a slip than an
-intention; a text selection that starts inside the panel and ends outside it
-lands in exactly the same place.
-
-Five things still close when you click away, because none of them holds anything
-you could lose: the **command palette**, the two equipment-check **jump sheets**,
-the **checklist picker**, and the **before publishing** sheet. Menus and
-dropdowns are unaffected — closing on an outside click is how a menu is meant to
-behave.
-
-**If your department trains new members from a recording**, a take that closes a
-dialog by clicking beside it no longer matches the application.
 
 ## Navigation Sidebar
 
-The sidebar is organized into sections based on your role. Not all sections are visible to every member -- what you see depends on your assigned positions and permissions.
+The menu shows only what you are allowed to use. What you see depends on your
+_positions_ (jobs such as Training Officer) and the parts of the app your
+department has turned on. Two members can see different menus, and that is
+normal.
 
-### Member-Facing Section
+### Links Every Member Sees
 
-These links are available to all active members:
+**Training**, **Operations** and **Governance** are groups. Select one to open
+its list of pages.
 
-Three of them are **groups** that expand when you click them, rather than links
-of their own — Training, Operations and Governance:
+| Menu item            | What it's for                                                                                                                                              |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Dashboard**        | Your home page, with your hours and what's coming up                                                                                                       |
+| **Learning Center**  | Short how-to tasks: open one, do it, tick it off                                                                                                           |
+| **Members**          | The department's member list and member profiles                                                                                                           |
+| **Events**           | Upcoming and past department events                                                                                                                        |
+| **Documents**        | Shared files, such as SOPs and policies                                                                                                                    |
+| **Training** ▾       | My Training, Submit Training, Course Library, Programs, Skills Testing                                                                                     |
+| **Admin Hours**      | Log hours spent on department administration (if your department uses it)                                                                                  |
+| **Shift Scheduling** | The duty roster, your shifts and open shifts                                                                                                               |
+| **Operations** ▾     | My Issued Gear, My Checklists, Apparatus Inventory, and — if your position allows — Inventory, Medical Supplies, Fleet Readiness, Apparatus and Facilities |
+| **Governance** ▾     | Org Chart, Elections, Minutes, Action Items, Legal Documents                                                                                               |
+| **Notifications**    | Your inbox. The number beside it is how many you haven't read                                                                                              |
+| **Messages**         | Department messages and announcements                                                                                                                      |
+| **Suggestions**      | Send an idea, question or concern to one of your department's suggestion boxes, and follow up on ones you sent                                             |
+| **My Account**       | Your own settings: details, password, security, emergency contacts, appearance and notifications                                                           |
+| **My ID Card**       | Your digital member ID card, with its QR code and barcode                                                                                                  |
 
-| Menu Item            | Description                                                                                                                                                                                              |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Dashboard**        | Your home page with quick stats and upcoming items                                                                                                                                                       |
-| **Learning Center**  | Short task-based paths through the app — open a task, do it, tick it off                                                                                                                                 |
-| **Members**          | Department roster and member profiles                                                                                                                                                                    |
-| **Events**           | Upcoming and past department events                                                                                                                                                                      |
-| **Documents**        | Shared files, SOPs, and policies                                                                                                                                                                         |
-| **Training** ▾       | My Training, Submit Training, Course Library, Programs, Skills Testing                                                                                                                                   |
-| **Admin Hours**      | Log administrative work hours (if module enabled)                                                                                                                                                        |
-| **Shift Scheduling** | Duty roster, your shifts, and open shifts                                                                                                                                                                |
-| **Operations** ▾     | My Issued Gear, My Checklists, Apparatus Inventory, and — if your position grants them — Inventory, Medical Supplies, Fleet Readiness, Apparatus and Facilities (Department Store is its own item above) |
-| **Governance** ▾     | Org Chart, Elections, Minutes, Action Items, Legal Documents                                                                                                                                             |
-| **Notifications**    | Your inbox, with an unread count on the item itself                                                                                                                                                      |
-| **Messages**         | Department messages and announcements                                                                                                                                                                    |
-| **Suggestions**      | Send an idea, question or concern to one of your department's suggestion boxes, and follow your own submissions                                                                                          |
-| **My Account**       | Your own settings — account, password, security, emergency contacts, appearance, notifications                                                                                                           |
-| **My ID Card**       | Your digital member ID, with its QR code and barcode                                                                                                                                                     |
-
-Which of the grouped items appear depends on the modules your department has
-enabled: a department not running elections has no Elections link under
-Governance, and so on.
+If your department doesn't use a part of the app, its link is not shown. For
+example, a department that doesn't hold elections has no **Elections** link.
 
 ![The navigation sidebar with the member-facing sections expanded](./images/00-15-sidebar-member.png)
 
 ![An ordinary member's view: the Suggestions item in the sidebar just below Messages, and the Suggestions page open on its Submit tab with the Training ideas box chosen and its description showing — no Review tab](./images/20-15-suggestions-sidebar-submit.png)
 
-### Administration Section
+### The Administration Section
 
-If you have administrative permissions (officers, IT Manager, etc.), you will see an additional **Administration** section below the member links:
+Officers and administrators also see an **Administration** section below the
+member links. Each person sees only the parts their position allows.
 
-| Menu Item                   | Description                                                                                   |
-| --------------------------- | --------------------------------------------------------------------------------------------- |
-| **Department Setup**        | Guided checklist for initial configuration                                                    |
-| **Members** ▾               | Prospective, Pipeline Settings, Member Management, Scan Member ID, Waivers, Medical Screening |
-| **Manage Events**           | Create events, view analytics, event settings                                                 |
-| **Training Admin**          | Review submissions, manage requirements, compliance                                           |
-| **Scheduling Admin**        | Shift planning, platoons, positions, scheduling reports and settings (`scheduling.manage`)    |
-| **Inventory Admin**         | Manage gear and uniform items, equipment checklists, view member issued equipment             |
-| **Store Admin**             | Storefront products, order windows, and fulfilment — opens the **Department Store** console   |
-| **Admin Hours**             | Review and approve administrative hours                                                       |
-| **Forms & Comms** ▾         | Email Templates, Messages, Suggestion Boxes, Photo Use Consent, Forms, Integrations           |
-| **Reports**                 | Generate department reports                                                                   |
-| **Organization Settings** ▾ | Organization settings, roles, public portal                                                   |
+| Menu item                   | What it's for                                                                                                                   |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **Department Setup**        | A step-by-step checklist for setting up the department                                                                          |
+| **Members** ▾               | Prospective (applicants), Pipeline Settings, Member Management, Scan Member ID, Waivers, Medical Screening                      |
+| **Manage Events**           | Create events, see event reports and change event settings                                                                      |
+| **Training Admin**          | Review training submissions, manage requirements and check who is up to date                                                    |
+| **Scheduling Admin**        | Plan shifts, platoons and positions; scheduling reports and settings                                                            |
+| **Inventory Admin**         | Manage gear, uniforms and equipment checklists; see what each member has been issued                                            |
+| **Store Admin**             | The department store: products, order windows and handing out orders                                                            |
+| **Admin Hours**             | Review and approve administrative hours                                                                                         |
+| **Forms & Comms** ▾         | Email Templates, Messages, Suggestion Boxes, Photo Use Consent, Forms, Integrations                                             |
+| **Reports**                 | Department reports                                                                                                              |
+| **Organization Settings** ▾ | Organization (department-wide settings), Role Management (positions and their permissions), Public Portal (your public website) |
 
 ![The sidebar scrolled to its Administration section with the admin-only links](./images/00-16-sidebar-admin.png)
 
-### Personal Section
+### Your Own Links
 
-Below the member-facing pages and above the Administration section, you will find:
+Between the member links and the Administration section you will find:
 
-- **My Account** (`/account`) - Your personal profile, password, appearance, and notification settings
-- **Theme** - Switch between light and dark mode (also available in My Account > Appearance)
-- **Sign Out** - Log out of the system
+- **My Account**: your own details, password, appearance and notification
+  settings;
+- **Theme**: switch between light and dark (also under **My Account →
+  Appearance**); and
+- **Sign Out**.
 
-> **Note:** My Account is accessible to all users and is separate from the Organization Settings, which are only visible to administrators.
+**My Account** is about you. **Organization Settings** is about the whole
+department, and only administrators see it.
 
 ---
 
 ## Your Dashboard
 
-The dashboard is your landing page after login. It provides an at-a-glance view of what matters most:
+The dashboard is the first page you see after signing in. It has two tabs:
 
-- **Quick Stats** - Total members, active members, upcoming events, training compliance
-- **Your Hours** - Four cards: **Total Hours** plus the three things it adds up — **Training**, **Standby**, and **Administrative**. Every one of them is **month-to-date**, and each card says what it counts underneath the number
-- **Upcoming Events** - The next few scheduled events
-- **Upcoming Shifts** - Your next assigned shifts
-- **Next 30 Days** - Upcoming shifts, including open ones. An open shift your rank can take offers **Sign Up**; one it cannot says **Not eligible** up front instead of refusing you after you tap (see [Scheduling](./03-scheduling.md))
-- **Recent Activity** - Latest actions across the department
-- **Needs you** - Anything you are on the hook for, including a department message that asks you to **Acknowledge** it (the button is on the row)
-- **My Updates** - One feed holding both department messages and your own notifications, with an unread count. Pinned messages come first, then persistent ones (badged **Persistent**), then everything else newest first. Five rows show; **Older Items** opens your full inbox. A message you have read drops off on the next load, except a persistent one, which stays until a manager clears it with the ✕ (regular members do not see that control). Every department message also reaches you by email, urgent ones by text too; your full message history lives on the **Messages** page (megaphone icon)
-- **Scheduling Operations** (on the **My Department** view, for members with `scheduling.manage` when Scheduling is enabled) - Seven staffing tiles: Today's Staffing, Future Coverage Gaps, Open Slots, Pending Changes, Incomplete Closeouts, Workload Balance and Special Operations. Each tile opens the schedule already filtered to what it counted, and each keeps its own window, station and platoon settings for you
+- **Personal**: your own gear, hours, training, shifts and anything waiting on
+  you. Everyone has this tab.
+- **My Department**: department-wide totals and links for running the
+  department. Only officers and administrators have this tab.
+
+The two tabs never mix. Nothing on **Personal** is someone else's, and nothing
+on **My Department** is shown as yours.
+
+![The dashboard's personal tab: the member's own attention items, shifts, hours and issued gear, under a tab strip whose other tab is the leadership view](./images/00-24-dashboard-my-department.png)
+
+![The same dashboard on its department-wide tab: department-wide scheduling and asset cards, with none of the member's own equipment on screen](./images/00-25-dashboard-organization.png)
+
+### What's on the dashboard
+
+Which of these you see depends on your positions and on the parts of the app
+your department uses.
+
+- **Your hours.** Four cards: **Total Hours**, and the three things it adds up:
+  **Training**, **Standby** and **Administrative**. All four count from the
+  first of this month, in your department's time zone. Under each number, the
+  card says what it counts. Your all-time training hours are on **My
+  Training**.
+- **Quick stats.** Total and active members, upcoming events and training
+  compliance (see below).
+- **Upcoming events** and **upcoming shifts.** What's next for you.
+- **Next 30 days.** Upcoming shifts, including open ones. If you are allowed
+  to take an open shift, it shows **Sign Up**. If you aren't, it shows **Not
+  eligible** straight away, so you don't find out only after you tap. See
+  [Scheduling](./03-scheduling.md).
+- **Recent activity.** The latest things done across the department.
+- **Needs you.** Anything waiting for you to act. For example, a department
+  message that asks you to confirm you have read it has an **Acknowledge**
+  button here. An officer who must sign off on an applicant sees _"(name) is
+  waiting on your sign-off"_ with a **Review** button.
+- **My Updates.** Department messages and your notifications in one list, with
+  a count of unread items. Pinned messages come first, then _persistent_
+  messages (ones that stay until an officer removes them), then the newest.
+  Five show at a time; **Older Items** opens your full inbox. A message you
+  have read disappears the next time the page loads, unless it is persistent.
+  Every department message is also emailed to you, and urgent ones are texted
+  too. Your full message history is on the **Messages** page.
+- **Scheduling Operations** (officers who manage scheduling, on the **My
+  Department** tab). Seven tiles: Today's Staffing, Future Coverage Gaps, Open
+  Slots, Pending Changes, Incomplete Closeouts, Workload Balance and Special
+  Operations. Select a tile to open the schedule already filtered to what it
+  counted.
 
 ![Dashboard stats cards, notifications, upcoming events, and upcoming shifts](./images/00-07-dashboard-panels.png)
 
 > **Screenshot needed:**
 > _[Fire Chief (or another officer holding a role named on a Multi-Signer Approval stage, with an applicant waiting at that stage) at /dashboard: clip to the Needs you panel showing "<Name> is waiting on your sign-off" with the stage name beneath and the Review button. Use a demo applicant, not a real person.]_
 
-**[SCREENSHOT — REPLACE `00-04-dashboard-overview.png` and
-`00-07-dashboard-panels.png`.** The scheduling tiles are new. **Caption which
-permissions the capturing account held** — what a reader sees depends on their
-own grants.**]**
-
-> **Training Compliance is all-or-nothing, and that is why it reads 0%**
-> _(2026-08-13)_. The card counts the share of active members who satisfy
-> **every** active training requirement — not the share of requirements met, and
-> nothing to do with the hours figure printed beneath it. A department with 36
-> active requirements will show 0% until somebody clears all 36, even with
-> hundreds of hours logged, and a member short on one requirement counts the
-> same as a member short on all of them.
+> **Why does Training Compliance say 0%?** This card shows how many active
+> members have finished **every** active training requirement. It does not
+> show how many requirements have been met, and it has nothing to do with
+> hours. If your department has 36 requirements, the card shows 0% until
+> someone has finished all 36, even if members have logged hundreds of hours.
+> Someone missing one requirement counts the same as someone missing all of
+> them.
 >
-> Read it as "how many people are finished", not "how are we doing". For
-> anything finer-grained, use the compliance matrix under **Training Admin**,
-> which reports per-requirement rather than per-member.
+> Read it as "how many people are completely finished". To see progress
+> requirement by requirement, officers can use the compliance matrix in
+> **Training Admin**.
 
-> **Hint:** The dashboard is personalized. Officers and administrators see additional summary cards with department-wide metrics. Regular members see their own upcoming items and assignments.
+### Notification Cards
 
-> **Your hours may look lower than before (2026-08-01).** The Total Hours card
-> has always said "This month", but only Standby was actually month-scoped —
-> Training and Administrative were lifetime totals, so the total was two
-> all-time numbers added to one monthly one. All three are now month-to-date,
-> which is what the card claims. Your lifetime training hours have not changed
-> and are still on **My Training**.
->
-> Each card now names its own source: Training counts completed courses,
-> Standby counts shifts worked, Administrative counts time clocked in — all
-> for the current month, in your department's timezone.
+Each notification is a card. Select a card to open it and read the details.
 
-### Notification Cards (2026-03-26)
-
-Dashboard notifications now use expandable cards:
-
-- Click to expand and see full notification details
-- Pinned notifications appear first
-- Notifications are marked as read when you collapse the card (not when you expand it)
-- An expanded card shows a context-aware action button, then **Pin** (or
-  **Unpin**, once pinned):
-  - Shift notifications → "View Shift"
-  - Event notifications → "View Event"
-  - Training notifications → "View Training"
-  - Shift swap requests → "Review Swap"
-  - Anything else → "View Details"
-
-A shift reminder that arrives inside its equipment-check window adds a second
-button, **Start Checklist**; a post-shift validation notice adds **File
-Report**. Clicking a shift notification takes you directly to the scheduling
-page with the correct tab and shift selected.
+- **A card counts as read when you close it again,** not when you open it. If
+  you open a card and then leave the page without closing it, it stays unread.
+  Following the link on a card also marks it read.
+- **Pinned cards stay at the top.** An open card has a **Pin** button
+  (**Unpin** once it's pinned).
+- **Most cards have a button that takes you to the right place:** **View
+  Shift**, **View Event**, **View Training**, **Review Swap** or **View
+  Details**. A shift reminder that arrives while its equipment check is open
+  also has **Start Checklist**. A request to report on a shift you worked also
+  has **File Report**.
+- **Some cards have no button.** They only have details to read, and **Pin**.
+- **Several unread notifications of the same kind are grouped** into one stack,
+  for example "3 attendance validations". Select the stack to see each one, or
+  select **Mark all read**.
 
 ![The notifications inbox — a shift assignment pinned and expanded to its details, View Shift button and Unpin control, the rest collapsed to a summary line](./images/00-22-notification-card-expanded.png)
 
-> **Not every notification has a button _(2026-08-12)_.** The action button is
-> built from the destination stored on the notification, so a notification
-> saved without one expands to its detail text and the Pin control alone. Event
-> reminders, recurring-series warnings, action-item reminders and event-update
-> notices were all being saved that way and now carry their destination.
-
-A notification that asks you to do something is archived once that thing is
-done. Finalizing an event's attendance archives that event's "validate
-attendance" prompt, and finalizing a shift archives that shift's post-shift
-validation prompt. Only the notification tied to that same event or shift goes;
-unrelated notifications stay where they are.
+**A notification that asks you to do something goes away once it's done.** For
+example, an officer gets a "validate attendance" notification when an event
+ends. Once that officer finalizes the event's attendance, the notification for
+that event is archived. Notifications about anything else stay.
 
 ![The notification inbox with an unread 'Validate attendance' prompt for a just-ended event, beside an unrelated shift-assignment notification](./images/19-31-notification-before-action.png)
 
 ![The same inbox after finalizing the event's attendance: the validation prompt gone, the unrelated shift-assignment notification still there](./images/19-32-notification-after-action.png)
 
-> **Edge case:** If you expand a notification card to read it but navigate away before collapsing, the notification remains unread.
-
----
-
 > **Screenshot needed:**
 > _[Admin at /notifications?tab=inbox, with everything unpinned first: at least two unread notifications of one category (for example two attendance-validation prompts from ended events) collapsed into a stack showing "N attendance validations", "Latest: …", the "N unread" badge and Mark all read, beside ordinary single cards. Then a second capture of the same stack expanded to its individual cards. Do not press Mark all read.]_
 
+---
+
 ## Account Settings
 
-To update your personal settings, click **My Account** in the sidebar. This takes you to `/account`, which is separate from the organization settings.
+To change your own settings, select **My Account** in the menu. The page has
+six tabs: **Account**, **Password**, **Security**, **Emergency Contacts**,
+**Appearance** and **Notifications**. Here you can:
 
-From here you can:
+- update your **email** and **phone numbers**;
+- choose which **notifications** you get by email and text message;
+- change your **password**;
+- turn on **two-step sign-in**, also called multi-factor authentication or
+  MFA (on the **Security** tab);
+- make your **privacy choices**: whether your photo may be used, whether you
+  appear on the public member list, and whether you get text messages;
+- **download your data**: a copy of everything The Logbook stores about you;
+- see your **positions and permissions**; and
+- choose the two tabs on your **phone's bottom bar** (**Appearance → Phone
+  navigation bar**). Your choice follows you to every device you sign in on.
 
-- Update your **email** and **phone number**
-- Set your **notification preferences** (email, urgent text messages, event reminders, training alerts)
-- Change your **password**
-- Set up **two-factor authentication**
-- Make your **privacy choices** — photo use, public roster listing, and SMS notifications _(2026-07-31)_
-- **Download your data** — a complete export of everything the system stores about you _(2026-07-31)_
-- View your **assigned roles and permissions**
-- Choose the two tabs on your **phone's bottom bar** (**Appearance → Phone navigation bar**) _(2026-10-02)_ — saved to your account, so they follow you to every device
-
-> **A phone number has to look like one** _(2026-10-05)_. Phone and mobile
-> accept digits, spaces, dashes, dots, brackets, a leading `+` and an
-> extension (`703-555-0101 ext 4`), with 7 to 15 digits — so a number from
-> across a border or a desk line with an extension both work, and text such as
-> "call me maybe" is refused with a message saying what is expected. A number
-> saved before this rule is left as it is: you can save the rest of your
-> profile without touching it, and the rule applies when you change it.
+Some details on the **Account** tab, such as your membership number, rank and
+station, are greyed out. Only an officer can change those.
 
 ![Account Settings on its Account tab — the tab row leads to password, security, emergency contacts, appearance and notifications](./images/00-09-account-settings.png)
 
-**[SCREENSHOT — REPLACE `00-09-account-settings.png`.** The page title reads **My Account** (was User Settings), and the Appearance tab's description reads "Theme and phone navigation bar".**]**
+**Phone numbers.** Use digits, with spaces, dashes, dots or brackets if you
+like, and a `+` at the start for an international number. A number needs 7 to
+15 digits. You can add an extension, such as `703-555-0101 ext 4`. Words such
+as "call me" are refused, with a message showing what to enter. A number saved
+before these rules were added is kept as it is until you change it.
 
-> **Privacy note:** Privacy choices and the data export live on the
-> **Security** tab. Nothing under Privacy Choices is required for membership,
-> and a choice you have never answered is treated as a "no" — the department
-> never reads your silence as permission. Full detail:
-> [Privacy & Your Data](./17-privacy-data-rights.md).
-
----
+**Two-step sign-in (MFA).** After your password, you also enter a 6-digit code
+from an app on your phone, such as Google Authenticator or Authy. This keeps
+your account safe even if someone learns your password. When you turn it on,
+you get a set of **recovery codes**. Each one works once, if you ever lose
+your phone. Save them somewhere safe and private.
 
 > **Screenshot needed:**
 > _[A throwaway demo member created for the capture (never a real member) at /account?tab=security, right after Verify & enable: the "Save your recovery codes" panel with the code grid, Copy codes and Done. The codes are secrets: use a disposable account and regenerate or blur them afterwards; do not capture the QR code or the manual key.]_
 
-## Login & Session Edge Cases
+> **Your privacy choices.** Privacy choices and the data download are on the
+> **Security** tab. None of them is required to be a member. If you have never
+> answered a question, The Logbook treats it as "no". It never takes silence
+> as permission. More detail: [Privacy & Your Data](./17-privacy-data-rights.md).
 
-| Scenario                                | What Happens                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Too many failed login attempts          | After 5 failed attempts in a row (your department's operator can change the number), the server locks the account for 15 minutes (also configurable). While it is locked, the sign-in page still says only "Incorrect username or password" — the same as a wrong password — unless the operator has chosen to reveal lockouts. Separately, after 5 failures in the same browser tab the **Sign in** button reads **Wait Ns** and counts down: 2 seconds, doubling with each further failure up to 5 minutes. |
-| Forgot password, requested reset twice  | Only the first request sends an email. Subsequent requests within 30 minutes return a success message but no email is sent — this is an anti-enumeration security measure. Wait 30 minutes or use the first email link.                                                                                                                                                                                                                                                                                       |
-| Session expires while working           | Your access token expires after 30 minutes of inactivity. The system automatically refreshes it in the background. If the refresh fails, you are redirected to the login page.                                                                                                                                                                                                                                                                                                                                |
-| Sign-out could not be confirmed         | If the server does not confirm a sign-out, the app tries three times, then covers the screen with _"Sign-out could not be confirmed"_: the session may still be usable from this browser, so close every window of it, especially on a shared computer. **Try signing out again** clears the notice once the server confirms. A reload does not bring back an ordinary sign-in screen first. _(2026-10-05)_                                                                                                   |
-| Two tabs refreshed at the same moment   | Used to be read as a stolen session and signed you out everywhere. One tab now wins quietly and the other carries on; you stay signed in. (A refresh that arrives after the first has finished still counts as a replay and ends your sessions.) _(2026-10-05)_                                                                                                                                                                                                                                               |
-| Multiple tabs open                      | Keep the number of open tabs reasonable. If your session refreshes simultaneously in multiple tabs, a race condition can log you out of all tabs. Refreshing the page resolves this.                                                                                                                                                                                                                                                                                                                          |
-| Admin changed your role while logged in | The server enforces the new permissions immediately. However, menu items and buttons may not update until you refresh the page.                                                                                                                                                                                                                                                                                                                                                                               |
-| "Too many requests" error               | Rate limiting is active. Wait for the duration shown in the error message before trying again.                                                                                                                                                                                                                                                                                                                                                                                                                |
+---
+
+## Sign-In and Session Problems
+
+| What happened                                        | What it means, and what to do                                                                                                                                                                                                                                                                                                                                  |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| I typed the wrong password several times             | After 5 wrong tries in a row, your account is locked for 15 minutes. (Your department can change both numbers.) While it is locked, the message still says only _"Incorrect username or password"_, even when the password is right. Wait 15 minutes, use **Forgot Password?**, or ask your IT manager to reset your password, which also unlocks the account. |
+| I asked for a password reset twice                   | Only the first request sends an email. For the next 30 minutes, more requests show the same "check your email" message but send nothing. Use the link in the first email, or wait 30 minutes.                                                                                                                                                                  |
+| A warning says my session will expire in 60 seconds  | You haven't used The Logbook for a while (15 minutes, unless your department set a different time). Move the mouse or press a key to stay signed in. If you don't, you are signed out and the sign-in page says _"You were signed out after a period of inactivity. Sign in again."_                                                                           |
+| I was sent to the sign-in page while working         | The Logbook renews your sign-in quietly in the background while you work. If that renewal fails, you are sent to the sign-in page. Sign in again. Anything you had not saved is lost.                                                                                                                                                                          |
+| "Sign-out could not be confirmed"                    | The Logbook tried to sign you out three times and could not confirm it. You may still be signed in on this browser. Close every window of the browser, especially on a shared computer. **Try signing out again** removes the notice once sign-out works.                                                                                                      |
+| I have The Logbook open in several tabs              | This is fine. You stay signed in on all of them.                                                                                                                                                                                                                                                                                                               |
+| An officer changed my position while I was signed in | Your new permissions apply straight away. The menu and buttons may not change until you reload the page.                                                                                                                                                                                                                                                       |
+| "Too many requests"                                  | You did the same thing many times very quickly. Wait for the time shown in the message, then try again.                                                                                                                                                                                                                                                        |
 
 ---
 
 ## Getting Help
 
-- **Forgot your password?** Use the "Forgot Password?" link on the login page. You will receive a reset link by email; the confirmation tells you how long it lasts — **30 minutes** (the page used to say an hour). If no email arrives, wait 30 minutes and try again (a cooldown prevents duplicate emails). If your department signs in through Google or Microsoft, the page says **No Reset Link Was Sent** and gives the reason, instead of telling you to check your email for a link that was never sent. Every page in this flow now leads **Back to sign in**, and a finished reset says **Password Changed** with a **Sign In Now** button.
-- **Locked out?** If the correct password keeps being refused after several failed attempts, the account is probably locked — the message will not say so. Wait 15 minutes (unless your department set a different period) and try once more, reset it yourself with "Forgot Password?", or ask your IT Manager to reset your password, which also clears the lock.
-- **Missing a module?** Some modules may be disabled by your department. Contact your administrator to enable them.
-- **Permission denied?** If you see a "Not Authorized" message, the action requires a role you have not been assigned. Contact your officer or IT Manager.
-- **Something looks wrong?** Your department may have an error monitoring dashboard (Settings > Error Monitor) where administrators can review issues.
+- **Forgot your password?** Select **Forgot Password?** on the sign-in page.
+  You get an email with a reset link that works for **30 minutes**. When the
+  reset is done, the page says **Password Changed**; select **Sign In Now**.
+  The page shows **No Reset Link Was Sent** instead in two cases: your
+  department signs in through Google or Microsoft (reset your password with
+  them), or your department has turned off reset emails (ask an administrator
+  to reset it).
+- **Locked out?** If your correct password keeps being refused, your account
+  is probably locked. The message won't say so. See the first row of
+  [Sign-In and Session Problems](#sign-in-and-session-problems).
+- **Something missing from the menu?** Your department may not use that part
+  of the app, or your position may not include it. Ask your administrator.
+- **"Access Denied"?** The page says _"You do not have the required
+  permissions to access this page."_ Your position doesn't include this page.
+  Select **Return to Dashboard**. If you think you need it, ask your officer or
+  IT manager. Trying again won't help.
+- **Something looks wrong?** Tell your IT manager what you were doing and what
+  you saw. Administrators can see the app's error reports under **Settings →
+  Error Monitor**.
 
 ---
 
 ## Realistic Example: Your First Day on The Logbook
 
-Follow **FF Jake Thompson**, a new member at Oakville Fire Department who just received his login credentials.
+Follow **FF Jake Thompson**, a new member at Oakville Fire Department, on the
+day he gets his welcome email.
 
 ### Part 1: First Login
 
-Jake opens the department's Logbook URL on his laptop and enters the email and temporary password from his welcome email. He clicks **Sign In** and the system immediately prompts him: "You must change your password."
+Jake opens the Logbook address on his laptop. He enters the username and
+temporary password from his email and selects **Sign In**. The Logbook opens
+the **Password** tab of **My Account**, with a yellow box: _"Password change
+required"_.
 
-Jake sets a new password. The department requires passwords to be at least 12 characters with uppercase, lowercase, a number, and a special character. Jake first tries `password123` — the form rejects it with a clear message: "Password must be at least 12 characters and include an uppercase letter, a lowercase letter, a number, and a special character." He enters a compliant password and clicks **Change Password**.
+He types `password123` as his new password. The rules list ticks only some
+rules: it is too short, and it has no uppercase letter, no special character
+and a run of `123`. The **Change Password** button stays greyed out. He tries
+`Ladder!Truck-Seven` instead, every rule gets a tick, and he selects **Change
+Password**.
 
-Because Oakville FD requires multi-factor authentication, Jake is redirected to MFA setup. He scans the displayed QR code with his authenticator app (Google Authenticator, Authy, etc.), enters the 6-digit code from the app, and the system confirms MFA is enabled. Jake is shown a set of recovery codes and told to save them in a safe place.
+The Logbook signs him out, as it does after every password change. He signs in
+again with his new password.
 
-> **Edge case:** If Jake loses his recovery codes later and is locked out, he must contact his department administrator. An admin can reset MFA from the Members Admin panel, allowing Jake to re-enroll.
+Oakville requires two-step sign-in, so The Logbook opens the **Security** tab.
+Jake scans the QR code with the authenticator app on his phone, types the
+6-digit code the app shows, and turns it on. He saves his recovery codes in his
+password manager.
+
+> **What if Jake loses his phone and his recovery codes?** He can't sign in by
+> himself. He contacts his administrator, who can reset his two-step sign-in so
+> he can set it up again.
 
 ### Part 2: Dashboard Orientation
 
-After completing setup, the dashboard loads with personalized widgets:
+Jake's **Personal** dashboard shows:
 
-- **Hours this month** — four figures across the top: total, training, standby and administrative
-- **My Updates** — department messages and his notifications in one feed with
-  an unread count: pinned messages first, then persistent standing notices,
-  then the newest, five at a time with **Older Items** for the rest
-- **My Upcoming Shifts** — his next five shifts with dates, times, and the officer on each
-- **Open Shifts** — shifts he can sign up for. **Five at a time**, with a line
-  underneath saying how many more there are in the next 30 days; **View
-  Schedule** opens the lot
-- **Upcoming Events** — events in the next 30 days, each showing his RSVP
-- **Recent Activity**, **My ID Card** and **My Issued Gear** — his last few
-  actions, a shortcut to his barcode, and what he has been issued
+- **Hours this month**: total, training, standby and administrative;
+- **My Updates**: department messages and his notifications, pinned ones first;
+- **My Upcoming Shifts**: his next five shifts, with dates, times and the
+  officer on each;
+- **Open Shifts**: five shifts he can sign up for, with a line saying how many
+  more there are in the next 30 days. **View Schedule** shows them all;
+- **Upcoming Events**: events in the next 30 days, each with his RSVP; and
+- **Recent Activity**, **My ID Card** and **My Issued Gear**.
 
-> **Edge case:** If Jake hasn't been assigned to a platoon yet, the "My Upcoming Shifts" widget shows "No upcoming shifts" and the "Open Shifts" widget may still display shifts he can volunteer for.
+> **What if Jake hasn't been given a platoon yet?** **My Upcoming Shifts**
+> says "No upcoming shifts". **Open Shifts** can still list shifts he can
+> volunteer for.
 
 ![A member's dashboard with its hours, messages, shift, event and equipment panels](./images/00-20-member-dashboard.png)
 
-### Part 3: Completing Your Profile
+### Part 3: Completing His Profile
 
-Jake navigates to **My Account** in the sidebar. The page is a row of tabs —
-**Account**, **Password**, **Security**, **Emergency Contacts**, **Appearance**,
-**Notifications** — and he uses two of them:
+Jake opens **My Account** and uses two tabs:
 
-- **Account** — enters his phone and mobile numbers and his home address.
-  Membership number, rank and station are shown here but greyed out: only a
-  Membership Coordinator can change those, from the Members admin page.
-- **Emergency Contacts** — adds his spouse's name, relationship and number.
+- **Account**: he enters his phone numbers and home address. His membership
+  number, rank and station are greyed out; only a membership coordinator can
+  change them.
+- **Emergency Contacts**: he adds his spouse's name, relationship and phone
+  number.
 
-**The profile photo is not on this page.** It is uploaded from his **Member
-Profile**, reached from the Members directory — which is also where he sees his
-department information: rank (Probationary), station (Station 1), and
-membership number.
+**His profile photo is not on this page.** He adds it on his **Member
+Profile**, which he reaches from the **Members** list. That page also shows
+his rank (Probationary), station (Station 1) and membership number.
 
-> **Edge case:** Jake tries to upload a 15MB photo. The upload is rejected with a message: "Maximum file size is 5MB." He resizes the image on his phone and re-uploads successfully.
+> **What if the photo is too big?** Jake picks a 15 MB photo. The Logbook
+> refuses it: _"Image must be under 5MB."_ He makes the photo smaller on his
+> phone and uploads it again.
 
 ![Account settings on its Account tab, with contact, department and address fields](./images/00-17-account-settings.png)
 
-### Part 4: Installing the Mobile App
+### Part 4: Adding The Logbook to His Phone
 
-Jake opens the Logbook URL on his phone's browser (Chrome on Android). A banner appears at the bottom of the screen: "Add The Logbook to Home screen." Jake taps **Install** and the Logbook icon appears on his home screen.
+Jake opens the Logbook address in Chrome on his Android phone. A banner offers
+to add The Logbook to his home screen. He taps **Install**, and a Logbook icon
+appears on his home screen. When he opens it, The Logbook fills the whole
+screen, like any other app.
 
-He opens the app from the home screen icon. The app launches in full-screen standalone mode — no browser toolbar, no address bar. It looks and feels like a native app.
-
-> **Edge case:** Jake's colleague uses Firefox on Android. No install banner appears automatically. He must tap the three-dot browser menu and select "Add to Home screen" manually. On iOS, only Safari supports PWA installation.
+> **Different phones work differently.** Firefox on Android shows no banner:
+> open the browser's menu (three dots) and choose **Add to Home screen**. On an
+> iPhone or iPad, use Safari. See [Mobile & PWA Usage](./10-mobile-pwa.md) for
+> the steps on each phone.
 
 ### Part 5: First Actions
 
-Back on his laptop, Jake takes his first actions in the system:
+Back on his laptop, Jake:
 
-1. **RSVPs to an upcoming training event** — navigates to Events, finds "Q3 Ladder Operations Drill," clicks RSVP, selects "Going," and sets dietary preference to "None" and accessibility needs to "None"
-2. **Checks training program progress** — navigates to Training and sees his Phase 1 requirements listed with completion status (all currently incomplete)
-3. **Views assigned gear** — navigates to My Issued Gear under Inventory and sees his PPE items (helmet, turnout coat, turnout pants, boots, gloves) each with an assigned barcode
-4. **Manages notifications** — taps the bell icon in the header, reads a notification about an upcoming drill, and marks it as read by collapsing the card
+1. **Signs up for a drill.** In **Events**, he finds "Q3 Ladder Operations
+   Drill", selects **RSVP**, chooses **Going**, and enters "None" for dietary
+   and accessibility needs.
+2. **Checks his training.** In **Training**, he sees his Phase 1 requirements.
+   None are finished yet.
+3. **Checks his gear.** In **Operations → My Issued Gear**, he sees his helmet,
+   turnout coat, turnout pants, boots and gloves, each with its own barcode.
+4. **Reads a notification.** He opens a notification about an upcoming drill,
+   then closes it, which marks it read.
 
-> **Edge case:** Jake navigates to **Training Admin** in the sidebar. The page loads with a "You don't have permission to view this page" message. Training Admin features are restricted to officers and administrators — regular members access their own training records through the member-facing Training section.
+> **What if Jake opens Training Admin?** He sees **Access Denied**: _"You do
+> not have the required permissions to access this page."_ Training Admin is
+> for training officers. Jake's own training records are under **Training** in
+> the member links.
 
 ![The RSVP modal with its attendance choice, dietary and accessibility fields](./images/00-18-rsvp-modal.png)
 
 ---
 
-**Next:** [Membership Management](./01-membership.md)
+## If You Learned an Older Version
 
-## Personal and My Department dashboard views (August 14, 2026)
+If you are following older notes, a recording or an SOP, some things have
+moved or been renamed.
 
-The dashboard separates the signed-in member's own information from the
-leadership view. The two tabs are labelled **Personal** and **My Department**.
-Personal keeps your equipment, hours, training and attention items; authorized
-leaders can switch to My Department for department-wide operational cards and
-management links. This prevents department totals or another member's equipment
-from being presented as the viewer's own data.
-
-> **Renamed August 24, 2026.** These tabs read **My Department** and
-> **Organization** until that date, and the two captures below still show the
-> old strip. The leadership tab's URL moved to `?tab=department`; the former
-> `?tab=organization` and `?tab=overview` links keep working. "My Account" in
-> the sidebar is a different destination — your profile and password at
-> `/account` — and was deliberately not reused here.
-
-**Edge cases:** members without an organization-level permission do not see the
-My Department tab; conditional cards remain absent when their module or data is
-unavailable; management links require their specific permission even when the
-summary card is visible; switching tabs must not mix cached personal and
-department-wide responses.
-
-![The dashboard's personal tab: the member's own attention items, shifts, hours and issued gear, under a tab strip whose other tab is the leadership view](./images/00-24-dashboard-my-department.png)
-
-![The same dashboard on its department-wide tab: department-wide scheduling and asset cards, with none of the member's own equipment on screen](./images/00-25-dashboard-organization.png)
-
-_The boundary is the tab. Everything in the first frame is Dana's own —
-her gear, her hours, her outstanding items. Everything in the second is the
-department's, and none of it is attributed to her. Nothing appears in both._
-
-## What moved in the navigation _(August 31 – September 6, 2026)_
-
-If you are following an older walkthrough, four things are in different places.
-
-| Looking for                                                                 | It is now                                                                              |
-| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Equipment checks (was a tab on the Scheduling page)                         | **Operations → My Checklists** for members; **Fleet Readiness** beside it for officers |
-| Scheduling settings, templates, patterns, reports, platoons, qualifications | **Administration → Scheduling** (`/scheduling/admin`)                                  |
-| Gear Admin                                                                  | **Inventory Admin** — the same place, renamed                                          |
-| The Department Store console                                                | Inside Inventory Admin, at `/inventory/admin/store`                                    |
-
-> **⚠️ Old links land on the wrong page, not on an error.** Fourteen addresses
-> stop resolving with no redirect. Thirteen land on the dashboard, and
-> `/scheduling?tab=equipment-checks` opens Scheduling on its Schedule tab — so a
-> bookmark or an SOP link appears to work and simply shows you the wrong page.
-> The full before/after tables are in the upgrade notes for the
-> [equipment checklists](../UPGRADING.md#equipment-checklists-moved-to-inventory-eight-addresses-and-three-permissions-renamed-2026-08-31)
-> and for
-> [scheduling administration](../UPGRADING.md#scheduling-administration-moved-and-six-addresses-stop-working-2026-09-05).
+| Looking for                                                    | It is now                                                                               |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Equipment checks (a tab on the Scheduling page)                | **Operations → My Checklists** for members; **Fleet Readiness** next to it for officers |
+| Scheduling settings, templates, patterns, reports and platoons | **Administration → Scheduling Admin**                                                   |
+| Gear Admin                                                     | **Inventory Admin** (the same place, renamed)                                           |
+| The Department Store console                                   | Inside **Inventory Admin**                                                              |
+| Dashboard tabs **My Department** and **Organization**          | **Personal** and **My Department**                                                      |
+| **User Settings**                                              | **My Account**                                                                          |
+| The **Settings** tab on a phone's bottom bar                   | Opens **My Account**, not the department's settings                                     |
 
 ![The sidebar as an officer, clipped to the navigation: Operations expanded to My Issued Gear, Inventory, Medical Supplies, My Checklists, Fleet Readiness, Apparatus Inventory, Apparatus and Facilities, and below it the Administration section with Scheduling Admin and Inventory Admin](./images/00-26-sidebar-officer-operations.png)
 
-### On a phone
+> **⚠️ Old links open the wrong page, not an error.** Fourteen old addresses
+> now go to the dashboard, or to the wrong tab of Scheduling. A bookmark or a
+> link in an SOP can look as if it worked while showing you the wrong page. If
+> a link lands somewhere unexpected, find the page from the menu and update
+> your bookmark. Administrators: the full list of old and new addresses is in
+> the upgrade notes for
+> [equipment checklists](../UPGRADING.md#equipment-checklists-moved-to-inventory-eight-addresses-and-three-permissions-renamed-2026-08-31)
+> and
+> [scheduling administration](../UPGRADING.md#scheduling-administration-moved-and-six-addresses-stop-working-2026-09-05).
 
-The centre of the bottom bar is now an **Add** button — Quick Add, covering the
-things a member logs most often. The bar keeps five items and the configurable
-slots go from three to two. _(Corrected 2026-10-02: no screen could ever save a
-layout, so there was none to keep; since that date you choose the two tabs on
-**My Account → Appearance**, and the **Settings** tab opens your own account
-rather than Organization Settings.)_
+Other changes you may notice:
 
-### Some pages show members less than they used to
+- **Members no longer see Reports or the Apparatus pages by default.** This is
+  intended. An administrator can give either back to a position. (The simpler
+  **Apparatus Basic** page, shown when the Apparatus part of the app is off,
+  is still open to everyone.) Administrators: see the
+  [upgrade note](../UPGRADING.md#six-upgrade-steps-take-permissions-away-2026-09-05).
+- **On a phone, the middle of the bottom bar is an Add button** for the things
+  members log most often. You choose the two other tabs on **My Account →
+  Appearance**; see
+  [Mobile & PWA Usage](./10-mobile-pwa.md#choose-your-own-bottom-bar-tabs-2026-10-02).
+- **On a phone, the menu shows when there is more below it,** with a fade at
+  the bottom and a **More** arrow you can tap.
+- **Times are your department's.** Emails, PDFs and spreadsheet downloads show
+  times in your department's time zone. Anything that counts days, such as a
+  certificate expiring or "today" on the dashboard, uses your department's
+  date.
+- **Hours are this month only.** The training and administrative hours on the
+  dashboard used to be all-time totals. All four hour cards now count this
+  month only, so the numbers may look lower. Your all-time training hours are
+  still on **My Training**.
+- **On a tablet,** lists of cards show two columns, and edit and delete
+  buttons are always visible because a touch screen can't hover.
 
-Two grants were revoked from the seeded rank-and-file positions in this window,
-so a member account will not see:
+---
 
-- **Administration → Reports** (`reports.view`)
-- **The Apparatus pages** (`apparatus.view`) — the lightweight Apparatus Basic
-  page, shown when the Apparatus module is off, is unaffected and stays open to
-  everyone
-
-That is the intended state, not a fault. An administrator can re-grant either on
-the positions screen. See the
-[upgrade note](../UPGRADING.md#six-upgrade-steps-take-permissions-away-2026-09-05)
-for why those grants were there in the first place.
-
-## What changed in the interface _(September 24 – October 4, 2026)_
-
-- **Top bar → More.** If your department uses the **Top bar** layout, menu
-  groups that do not fit on your screen move under **More** at its right-hand
-  end, in the same order, separated by dividers so a link after a group is not
-  read as one of its pages.
-- **On a phone, the navigation drawer shows when there is more below** — a
-  fade at the bottom edge and a **More** chevron you can tap to scroll. The
-  desktop sidebar has a permanent scrollbar instead.
-- **Choose your phone's bottom-bar tabs** on **My Account → Appearance**; see
-  [Mobile & PWA](./10-mobile-pwa.md#choose-your-own-bottom-bar-tabs-2026-10-02).
-- **My Account** is titled **My Account** on the page as well as in the menu
-  (it said User Settings), and its messages say what happened —
-  _"Profile saved"_, _"Emergency contacts saved"_.
-- **Dates and times are your department's.** Emails, PDFs and CSV downloads
-  now show times in the department's timezone rather than UTC, and anything
-  that counts days — a certificate expiring, a training deadline, "today" on
-  the dashboard — uses the department's date, which no longer runs a day ahead
-  in the evening.
-- **Layout:** selected toggle buttons are the primary red everywhere; radio
-  buttons and checkboxes no longer squash into ovals; and on a tablet, card
-  lists use two roomy columns and the edit/delete buttons that appear on hover
-  are always shown, since a touch screen cannot hover.
+**Next:** [Membership Management](./01-membership.md)

@@ -1,5 +1,22 @@
 # Screenshot currency
 
+## Moved out of 00-getting-started.md by the plain-language rewrite, 2026-10-08
+
+The guide no longer carries inline `[SCREENSHOT — REPLACE/CHECK …]` notes: a
+member reading it was reading instructions meant for whoever captures the
+images. The notes it carried are kept here, unchanged in substance. Its
+`> **Screenshot needed:**` placeholders stay in the guide, because
+`status_report.py` and `apply_placeholders.py` find them there. Image file
+names and alt text are unchanged, so `manifest.mjs` entries still match.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `00-01-login-page.png` | **CHECK** | The page is unchanged; replace only if the frame shows a lockout or session-expired message, whose wording changed on 2026-09-29 |
+| `00-19-change-password.png` | **REPLACE** | The requirements list is visible before typing and has seven rules: "At least 12 characters", the four character classes, "No runs like 123 or abc" and "No character three times in a row" |
+| `00-04-dashboard-overview.png`, `00-07-dashboard-panels.png` | **REPLACE** | The Scheduling Operations tiles are new. Caption which permissions the capturing account held — what a reader sees depends on their own grants |
+| `00-09-account-settings.png` | **REPLACE** | The page title reads **My Account** (was User Settings), and the Appearance tab's description reads "Theme and phone navigation bar" |
+| `00-24-dashboard-my-department.png`, `00-25-dashboard-organization.png` | **REPLACE** | Both still show the pre-2026-08-24 tab strip (**My Department** / **Organization**); the tabs now read **Personal** / **My Department** |
+
 ## Queued by the October 7 – 8 documentation pass, 2026-10-08
 
 Covers PRs #2981–#2996. Audit:
