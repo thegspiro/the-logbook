@@ -92,6 +92,58 @@ owner and offers **Edit** to a manager; both open `BudgetFormDialog`.
 _Finance › Settings_ gives each category an owner-position picker on create and
 a new edit dialog.
 
+## Budget amendments _(2026-10-08)_
+
+When leadership approves extra money for a budget line, the Treasurer records it
+as an **amendment** rather than editing the amount: each one is a logged
+increase carrying the amount added (> 0), a reason, who approved it (free text,
+e.g. "Board vote 10/7"), the approval date (not in the future, on the
+department's calendar via `resolve_org_today`), who entered it and when. Table
+`budget_amendments`, migration `ca564ba5a9ad`, model `BudgetAmendment`.
+
+**Original vs current.** `budgets.amount_budgeted` stays the live ceiling the
+spend checks enforce, so they did not change. Adding an amendment, in one
+transaction, locks the line (`SELECT … FOR UPDATE`, the same locking read
+`update_budget` uses — CLAUDE.md pitfall #27), checks the year is not locked,
+inserts the amendment and raises `amount_budgeted` by its amount. The
+**original** budget is computed, never stored: `amount_budgeted` minus the sum
+of the line's amendments (`FinanceService._budget_row`). A direct edit of the
+amount therefore moves the original by the same amount.
+
+**Fiscal years.** Allowed in draft, active and closed years; refused in a
+**locked** one (400 "This fiscal year is locked…"). Locking also freezes a plain
+`PUT /finance/budgets/{id}` that _changes_ `amountBudgeted` (same 400). Sending
+the unchanged amount, or `notes`, `stationId` and `ownerPositionId`, still
+saves: those describe the line and move no money, so they stay editable. The
+lock flag is read under a share lock, so neither path slips in beside a
+`lock_fiscal_year` that is landing.
+
+A request refused earlier for lack of funds is **not** reprocessed and no email
+goes out; the member resubmits (owner decision). Amendments cannot be edited or
+deleted — they are the record of what was approved.
+
+**API** (camelCase both ways):
+
+- `POST /finance/budgets/{id}/amendments` (`finance.manage`) — `amount`
+  (2 dp, at most the column's 9,999,999,999.99), `reason` (≤ 2000), `approvedBy`
+  (≤ 200), `approvedOn` (date). Blank text and a non-positive amount are 422; a
+  future date, a locked year, or a total past the column's limit are 400; a
+  line in another department is 404. Returns `{amendment, budget}` (201).
+  Audited as `finance.budget_amended`.
+- `GET /finance/budgets/{id}/amendments` (`finance.view`, the line's own gate)
+  — newest first, each with `enteredByName`. Another department's line is 404.
+- Every budget response, list and detail, adds `originalAmount`,
+  `amendmentsTotal` and `amendmentCount`, from one grouped subquery joined into
+  the existing query rather than a query per row.
+
+**Screens.** The budget detail page shows **Original budget**, **Current
+budget** and **Amendments: +$X (n)** once a line has been amended, lists the
+amendments (approval date, amount, approved by, reason, who entered it and
+when), and offers **Add amendment** to a manager unless the year is locked
+(`AmendmentDialog`). The Budgets list marks an amended line "(amended)". In a
+locked year the Edit dialog shows the amount read-only with "This fiscal year
+is locked." and leaves it out of the save.
+
 ## Context
 
 Fire departments need internal financial workflows (budgets, purchase approvals, dues, expense reimbursements) but most use external accounting software like QuickBooks for actual bookkeeping. This module fills the gap: it provides the **internal operational finance workflows** that QuickBooks doesn't handle, with export capabilities to feed data into external accounting tools.

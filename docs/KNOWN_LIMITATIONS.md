@@ -1191,6 +1191,24 @@ above, and budget-line owners cannot yet see "their" lines anywhere: ownership
 is stored, resolved and shown to `finance.view` holders, but the owner's own
 view is the next step of that work.
 
+## Finance — A Mistaken Budget Amendment Cannot Be Corrected (2026-10-08)
+
+A budget amendment (`budget_amendments`, `POST /finance/budgets/{id}/amendments`)
+is the record of extra money leadership approved, so there is deliberately no
+endpoint or screen to edit or delete one. The consequence is that a typo — $2,500
+entered for $250 — stays on the line's amendment list for good.
+
+The workaround is to edit the line's amount back down (while its fiscal year is
+not locked). That restores the right **current** budget, but the **original**
+budget is derived as current minus the amendments, so it drops by the same
+amount and the line then reads as if it started lower. Nothing records that the
+edit was a correction. In a locked year there is no workaround at all.
+
+**Owner decision needed:** whether a correction should be a reversing amendment
+(a negative entry with its own reason and approval, keeping the record whole),
+a void flag on the original row, or neither. Either is a follow-up; this pass
+recorded increases only, as approved.
+
 ## Finance — Nobody Could Approve Anything (2026-08-12, narrowed 2026-09-06)
 
 `finance.approve` and `finance.configure_approvals` gate nine endpoints — the
