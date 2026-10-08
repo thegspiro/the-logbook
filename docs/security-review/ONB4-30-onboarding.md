@@ -7,6 +7,15 @@ app-review B25 (4 passes), security-review pass 1 — PR #1913 + follow-up
 #2898 (`docs/security-review/ONB3-30-onboarding.md`)) · **Reviewed:**
 2026-10-08
 
+**Two independent sessions reviewed this feature concurrently** (the
+rotation's Step 0 check for an open `claude/security-review-*` PR raced: both
+found none at the moment each started). Rather than open a second,
+duplicate PR for the same rotation slot, the second session's work — a
+distinct, non-overlapping finding (ONB4-30-2 below, in `onboarding.py`'s
+`/reset` route; the first session's own finding is in `services/onboarding.py`'s
+`create_organization`) — is folded into this same PR and this same findings
+file as an addendum, keeping "one security-review PR at a time" true.
+
 **Backend:** `backend/app/api/v1/onboarding.py` (2,913 L, 24 unauthenticated
 bootstrap routes), `backend/app/services/onboarding.py` (1,732 L),
 `backend/app/models/onboarding.py`, `backend/app/utils/onboarding_security.py`,
@@ -250,6 +259,81 @@ real MySQL, 2 connections) plus `TestTheLockIsDeclared`'s two source-level
 assertions (the parent-row lock and the locking-read existence check are each
 present in `create_organization`'s source).
 
+### ONB4-30-2 — LOW — the ONB-8 audit-durability fix could itself report a false "nothing was deleted" if only the _completion_ log write failed — ✅ FIXED (second session's addendum)
+
+**What:** the ONB-8 audit-durability fix this file's own "Verified good"
+section above describes (`_audit_reset_durably`, already on `main` before
+this pass) introduced one new failure path of its own. `/reset`'s deletes
+are committed (`await db.commit()`) and are at that point irreversible, and
+only _then_ does the route log `onboarding.reset_completed` — on the
+request's own `db` session, with no `try`/`except` around it. If that
+specific log write raised (the prior write, `reset_initiated`, having
+already succeeded earlier in the same request), the exception fell into the
+route's outer `except Exception` handler, which (a) calls `await
+db.rollback()` — a no-op by that point, since the deletes already
+committed — (b) writes a **new** `onboarding.reset_failed` entry via
+`_audit_reset_durably` whose message reads "Onboarding reset failed -
+nothing was deleted", which would be false, and (c) returns a 500 to the
+caller for a destructive action that, in fact, had already fully succeeded.
+
+**Where:** `backend/app/api/v1/onboarding.py`, `reset_onboarding`, the
+unguarded `log_audit_event(... event_type="onboarding.reset_completed" ...)`
+call immediately after `await db.commit()`.
+
+**Why this is new, not a regression of anything pass 1-5 reviewed:** the
+code this bug lives in did not exist before the ONB-8 fix landed — pass 5's
+`/reset` had no `reset_failed` durable write at all, so there was no
+mechanism by which a late-stage logging failure could produce a _false_
+"nothing was deleted" record. This is a narrow correctness gap introduced by
+closing the older one, not a regression.
+
+**Failure scenario:** an operator (authenticated as the System Owner, as
+`_require_owner_authority` requires) calls `POST /onboarding/reset` during a
+legitimate re-provisioning. The seven deletes execute and commit — the org,
+every user, every role, everything is gone, durably. The subsequent
+`log_audit_event` call for `reset_completed` then hits a transient failure
+(e.g. a dropped connection on `db`, a real possibility immediately after a
+large multi-table delete+commit on the same connection). The operator
+receives a 500 "Failed to reset onboarding," and the audit trail now shows
+`reset_initiated` followed by `reset_failed` ("nothing was deleted") — both
+wrong: the operator would reasonably retry a reset they believe failed
+(harmless here, since `/reset` is idempotent against an empty database), but
+an incident responder reading the audit log afterward would be told,
+falsely, that the tenant's data still exists.
+
+**Impact:** LOW. Does not bypass any auth/authz check, does not affect
+_what_ gets deleted or _who_ can trigger it, and the practical blast radius
+is confined to a misleading log entry plus one spurious 500 response for an
+action that already succeeded. Flagged as a finding rather than dismissed
+because an inaccurate audit trail is exactly the asset the ONB-8 fix exists
+to protect, and the scenario is real wall-clock behavior, not a
+hypothetical.
+
+**Fix:** wrapped the `reset_completed` log call in its own `try`/`except`
+that logs-and-continues on failure, so a failure to record completion
+(a) never falls into the generic failure branch, (b) never produces a
+`reset_failed` entry for a reset that in fact succeeded, and (c) never turns
+an already-successful destructive action into a 500 for the caller. The
+success response is returned either way, because the only thing that
+actually happened — the delete — already happened and is accurately
+reflected by that response regardless of whether this one log line landed.
+
+**Verification:** a new test,
+`test_completion_log_failure_does_not_report_a_false_reset_failed`
+(`tests/test_onboarding_reset_cookies.py`), patches `log_audit_event` to
+raise specifically on the `reset_completed` call (letting `reset_initiated`
+succeed, matching the real ordering) and asserts the response is still
+`200`, `db.rollback` is never awaited, and no `reset_failed` event is
+written. Verified to **fail** against the code before this fix (raises
+`HTTPException: 500`, confirmed by running it with the fix reverted via
+`git stash`) and to **pass** with the fix applied. The existing
+`test_a_failed_reset_is_recorded_durably_too` (a genuine delete failure,
+which must still reach the `reset_failed` path) continues to pass
+unchanged, confirming the fix narrows the exception handling rather than
+suppressing it.
+
+**Guard test added:** `tests/test_onboarding_reset_cookies.py::test_completion_log_failure_does_not_report_a_false_reset_failed`.
+
 ## Re-verification of prior findings (all hold, no regressions, except where noted above)
 
 - **ONB-7** — `save_session_roles` still accepts client-supplied
@@ -307,18 +391,35 @@ test_two_concurrent_callers_produce_exactly_one_organization` (integration,
   real MySQL, two independently-committing connections via
   `asyncio.gather`). All three verified to fail against the pre-fix code and
   pass against the fixed code.
+- `tests/test_onboarding_reset_cookies.py::test_completion_log_failure_does_not_report_a_false_reset_failed`
+  (ONB4-30-2, added by the second session's addendum) — asserts a failure
+  logging `reset_completed` (after the deletes have already committed)
+  still returns `200`, never calls `db.rollback`, and never writes a
+  `reset_failed` entry. Verified to fail against the pre-fix code (`git
+stash`) and pass restored; the pre-existing
+  `test_a_failed_reset_is_recorded_durably_too` (a genuine delete failure)
+  continues to pass unchanged.
 
 ## Completion gate
 
-| Check                                                                                                                                                                   | Result                                                                                                                                                                             |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `python3.13 -m flake8 app/ tests/ alembic/` (bare `flake8` on this sandbox's `PATH` omits `flake8-pytest-style`; CI matches `python3.13 -m flake8` — see pass 4's note) | ✅ 0 violations                                                                                                                                                                    |
-| `python3.13 -m black --check app/ tests/ alembic/`                                                                                                                      | ✅ clean (after formatting the new test file; 2,043 files unchanged)                                                                                                               |
-| `python3.13 -m isort --check-only app/ tests/ alembic/` (9.0.1, CI-pinned)                                                                                              | ✅ clean                                                                                                                                                                           |
-| `python3.13 scripts/validate_migrations.py --strict`                                                                                                                    | ✅ 543 revisions, single head `7db20aa49329`                                                                                                                                       |
-| `pytest tests/ -q -k "onboard or org_template or template_service"`                                                                                                     | ✅ 262 passed, 1 skipped (pywebpush, env-only) — up from pass 5's 255 (new: 3 tests in `test_onboarding_organization_race.py`)                                                     |
-| `pytest tests/test_onboarding_organization_race.py -v`                                                                                                                  | ✅ 3 passed                                                                                                                                                                        |
-| Guard-test reintroduction check (fix reverted via `git stash`)                                                                                                          | ✅ fails as expected (2/2 organization-creation successes, not 1; both source-level guards fail) with the fix removed; passes restored                                             |
-| `pytest tests/` (full suite)                                                                                                                                            | ✅ 17,384 passed, 21 skipped (all pre-existing, environment-only: optional `pywebpush`, opt-in API-contract suite, Docker daemon/registry unavailable in this sandbox), 0 failures |
-| `npm run typecheck` (frontend, aliased 7.0.2 compiler, `tsc-native.mjs`)                                                                                                | ✅ 0 errors                                                                                                                                                                        |
-| `npm run lint` (frontend, `--max-warnings 10`)                                                                                                                          | ✅ 0 errors, 0 warnings                                                                                                                                                            |
+| Check                                                                                                                                                                   | Result                                                                                                                                                                                              |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `python3.13 -m flake8 app/ tests/ alembic/` (bare `flake8` on this sandbox's `PATH` omits `flake8-pytest-style`; CI matches `python3.13 -m flake8` — see pass 4's note) | ✅ 0 violations                                                                                                                                                                                     |
+| `python3.13 -m black --check app/ tests/ alembic/`                                                                                                                      | ✅ clean (after formatting the new test files; 2,043 files unchanged)                                                                                                                               |
+| `python3.13 -m isort --check-only app/ tests/ alembic/` (9.0.1, CI-pinned)                                                                                              | ✅ clean                                                                                                                                                                                            |
+| `python3.13 scripts/validate_migrations.py --strict`                                                                                                                    | ✅ 543 revisions, single head `7db20aa49329`                                                                                                                                                        |
+| `pytest tests/ -q -k "onboard or org_template or template_service"`                                                                                                     | ✅ 263 passed, 1 skipped (pywebpush, env-only) — up from pass 5's 255 (new: 3 tests in `test_onboarding_organization_race.py`, 1 in `test_onboarding_reset_cookies.py`)                             |
+| `pytest tests/test_onboarding_organization_race.py tests/test_onboarding_reset_cookies.py -v`                                                                           | ✅ 9 passed                                                                                                                                                                                         |
+| Guard-test reintroduction check (both fixes reverted via `git stash`)                                                                                                   | ✅ both fail as expected (2/2 organization-creation successes, not 1, both source-level guards fail; the completion-log test raises `HTTPException: 500`) with the fixes removed; all pass restored |
+| `npm run typecheck` (frontend, aliased 7.0.2 compiler, `tsc-native.mjs`)                                                                                                | ✅ 0 errors                                                                                                                                                                                         |
+| `npm run lint` (frontend, `--max-warnings 10`)                                                                                                                          | ✅ 0 errors, 0 warnings                                                                                                                                                                             |
+
+**Addendum note:** `pytest tests/ -q -k "onboarding"` (this feature's own
+narrower scope, used by the second session) — 241 passed, 1 skipped. The
+full-suite row above (17,384 passed) is the first session's own run,
+recorded before the addendum landed; the addendum's own new test was
+confirmed passing individually and within both scoped runs above, and
+touches no file the full-suite run exercised differently (`onboarding.py`'s
+`/reset` route and a new, independent test file), so it was not considered
+necessary to re-run the full 17k-test suite for one additional,
+narrowly-scoped test.

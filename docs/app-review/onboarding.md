@@ -135,10 +135,14 @@ legitimately reads those back to resume before completion. **2 tests added**
   System Owner exists, the caller must be authenticated as that exact owner
   (via `find_system_owner`) or the request 403s. Verified against current
   code 2026-08-27 (security-review feature 30).
-- **Audit durability — still 🚩 FLAGGED.** The `reset_initiated` audit event is
-  written in the same transaction as the deletes, so a failed reset rolls it
-  back; it should commit to a durable sink first. A transaction-boundary
-  change deferred for care.
+- **✅ Audit durability FIXED (landed between security-review passes 5 and 6
+  of feature 30, confirmed 2026-10-08).** `reset_initiated` now commits via
+  `_audit_reset_durably`, a session of its own, before any delete runs; a
+  failed reset can no longer roll back the record of its own attempt. See
+  `docs/security-review/ONB4-30-onboarding.md` for the full write-up and
+  `tests/test_onboarding_reset_audit_db.py` for the guard test. That same
+  fix's own narrow completion-logging gap (ONB4-30-2) is also fixed — see
+  the same file.
 - **✅ Template mass-assignment fragility FIXED (2026-08-27, security-review
   feature 30).** `template_service.create_template`/`update_template` now
   strip `organization_id`/`created_by` defensively and route updates through
@@ -174,9 +178,7 @@ durability sub-point stand.
 
 ## Future development
 
-1. **ONB-8** — commit the reset-initiated audit to a durable sink before the
-   deletes (transaction-boundary change, still open).
-2. **ONB-7** — clamp/allowlist the onboarding role editor's permission/priority/
+1. **ONB-7** — clamp/allowlist the onboarding role editor's permission/priority/
    system-flag inputs.
 
 ## Completion gate

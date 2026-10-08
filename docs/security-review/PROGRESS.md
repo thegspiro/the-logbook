@@ -44,6 +44,22 @@ backend suite 17,384 passed, 21 skipped, 0 failed; frontend typecheck/lint
 clean). See the Log entry below and
 `docs/security-review/ONB4-30-onboarding.md` for detail.
 
+**Addendum (same PR, folded in rather than opening a competing one):** a
+second session's Step 0 check also found no open `claude/security-review-*`
+PR at essentially the same moment and independently reviewed this same
+feature, landing a second, non-overlapping finding — **ONB4-30-2 (LOW,
+fixed):** the ONB-8 audit-durability fix itself had one narrow gap — a
+failure logging `reset_completed` (after `/reset`'s deletes already commit)
+fell into the generic failure branch and could write a **false**
+`reset_failed`/"nothing was deleted" entry for a reset that had, in fact,
+fully succeeded. Fixed with a scoped log-and-continue `try`/`except`; guard
+test added (`test_onboarding_reset_cookies.py::
+test_completion_log_failure_does_not_report_a_false_reset_failed`), verified
+to fail pre-fix and pass restored. Per this rotation's own "one PR at a
+time" rule, this is folded into PR #2996 and `ONB4-30-onboarding.md` as an
+addendum rather than opened as a second, competing PR. See the Log entry
+below for detail.
+
 <details>
 <summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 8, PR #2994, merged, nothing further to record), preserved for history</summary>
 
@@ -18457,6 +18473,63 @@ post-fix; full backend suite (`pytest tests/`) 17,384 passed, 21 skipped
 
 Findings file: `docs/security-review/ONB4-30-onboarding.md`. Rotation row 30
 → ✅ (pending PR merge). Next: Feature 31 (Scheduled tasks).
+
+### 2026-10-08 — Feature 30 (Onboarding, pass 6) addendum — a second session's independent review, folded into the same PR, 1 LOW fix
+
+A second session's own Step 0 check (`search_pull_requests`,
+`is:open head:claude/security-review-`) also found no open
+`claude/security-review-*` PR, at essentially the same moment as the
+session that logged the entry directly above — a genuine race, not a stale
+read on either side (both sessions' local `git branch -r` / search results
+predate either push). Rather than open a second, competing PR for the same
+rotation slot (which the rotation's own "one PR at a time" rule exists to
+prevent), this session's work is folded into PR #2996 and
+`ONB4-30-onboarding.md` as an addendum, once the race was discovered at
+push time (`git push` rejected, non-fast-forward, revealing the other
+session's already-pushed branch).
+
+This session's own review independently covered the same ground (all 24
+routes, every prior-pass finding) and reached the same conclusions on
+everything already documented above, with one addition neither this file's
+own prior passes nor the other session's fresh full read of `onboarding.py`
+caught: **ONB4-30-2 (LOW, fixed).** The ONB-8 audit-durability fix (already
+on `main` before either session started, confirmed independently by both)
+left one narrow gap of its own — `/reset`'s `reset_completed` log write
+(after the deletes already commit, so they are irreversible) had no
+`try`/`except` of its own. A failure logging just that one event would fall
+into the route's generic failure branch, which rolls back a
+no-longer-rollback-able transaction, writes a **false**
+`onboarding.reset_failed`/"nothing was deleted" entry via the very helper
+the audit-durability fix just added, and returns a 500 for a destructive
+action that had, in fact, already fully succeeded. Fixed by wrapping only
+that one log call in a scoped log-and-continue `try`/`except`, so a
+completion-log failure can never produce a false failure record or an
+inaccurate 500 for an action that already succeeded. Guard test added
+(`tests/test_onboarding_reset_cookies.py::
+test_completion_log_failure_does_not_report_a_false_reset_failed`),
+verified to fail against the pre-fix code (`git stash`) and pass restored;
+the pre-existing `test_a_failed_reset_is_recorded_durably_too` (a genuine
+delete failure, which must still reach `reset_failed`) continues to pass
+unchanged. Also corrected in this same commit: `docs/app-review/onboarding.md`
+was stale (it still described the ONB-8 audit-durability residual as open
+after the code had already fixed it; `docs/module-audit/onboarding.md` had
+already been corrected).
+
+Completion gate, re-run on the combined branch (both sessions' fixes
+together): `python3.13 -m flake8`/`black --check`/`isort --check-only`
+clean over `app/ tests/ alembic/` (7.3.0/26.5.1/9.0.1, CI's exact pins);
+`validate_migrations.py --strict` passed (543 revisions, single head
+`7db20aa49329`); `pytest tests/ -q -k "onboard or org_template or
+template_service"` 263 passed, 1 skipped (`pywebpush`, env-only);
+`pytest tests/test_onboarding_organization_race.py
+tests/test_onboarding_reset_cookies.py -v` 9 passed; frontend `npm run
+typecheck` 0 errors, `npm run lint` 0 errors/0 warnings. No
+`KNOWN_LIMITATIONS.md` change needed — the one new finding was fixed, not
+flagged.
+
+Findings file: `docs/security-review/ONB4-30-onboarding.md`'s **ONB4-30-2**
+addendum section. Rotation row 30 stays ✅ (unchanged by this addendum).
+Next: Feature 31 (Scheduled tasks) — unchanged.
 
 ### 2026-10-08 — Feature 29 (Reports & analytics, pass 8) — 1 real finding fixed (pipeline_overview self-exposure), 0 new findings otherwise
 
