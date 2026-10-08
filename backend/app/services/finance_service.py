@@ -62,7 +62,7 @@ from app.models.finance import (
     PurchaseRequest,
     PurchaseRequestStatus,
 )
-from app.models.user import User
+from app.models.user import Position, User
 from app.services.finance_approver_matching import (
     FINANCE_APPROVE,
     ApproverDecision,
@@ -75,6 +75,7 @@ from app.services.finance_approver_matching import (
     normalize_approver_type,
     user_matches_step,
 )
+from app.services.finance_budget_ownership import resolve_owner
 from app.services.separation_of_duties import (
     SeparationOfDutiesError,
     assert_different_person,
@@ -298,6 +299,54 @@ class FinanceService:
         )
         return list(result.scalars().all())
 
+    def _category_detail_query(self, org_id: str):
+        """Categories with their owner position's name, in one query.
+
+        The position join is org-scoped as well as the category, so a stored
+        id that somehow names another org's position never surfaces its name.
+        """
+        return (
+            select(BudgetCategory, Position.name.label("owner_position_name"))
+            .outerjoin(
+                Position,
+                and_(
+                    Position.id == BudgetCategory.owner_position_id,
+                    Position.organization_id == org_id,
+                ),
+            )
+            .where(BudgetCategory.organization_id == org_id)
+        )
+
+    @staticmethod
+    def _category_row(category: BudgetCategory, owner_position_name) -> dict:
+        row = {
+            column.key: getattr(category, column.key)
+            for column in BudgetCategory.__table__.columns
+        }
+        row["owner_position_name"] = owner_position_name
+        return row
+
+    async def list_budget_category_details(
+        self, org_id: str, pagination: PaginationParams
+    ) -> list[dict]:
+        """``list_budget_categories`` plus each category's owner position name."""
+        result = await self.db.execute(
+            self._category_detail_query(org_id)
+            .order_by(BudgetCategory.sort_order, BudgetCategory.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
+        )
+        return [self._category_row(cat, name) for cat, name in result.all()]
+
+    async def get_budget_category_detail(
+        self, cat_id: str, org_id: str
+    ) -> Optional[dict]:
+        result = await self.db.execute(
+            self._category_detail_query(org_id).where(BudgetCategory.id == cat_id)
+        )
+        row = result.first()
+        return self._category_row(row[0], row[1]) if row else None
+
     async def get_budget_category(
         self, cat_id: str, org_id: str
     ) -> Optional[BudgetCategory]:
@@ -345,6 +394,21 @@ class FinanceService:
                 org_id,
                 label="Parent category",
             )
+        await self._validate_owner_position(org_id, data)
+
+    async def _validate_owner_position(self, org_id: str, data: dict) -> None:
+        """Reject an ``owner_position_id`` that is not a position in the org.
+
+        Pitfall 14c: the key is ``ondelete="SET NULL"``, so a foreign position
+        would both leak its name back through the response join (were that
+        join not org-scoped) and let the other org's deletion silently unown
+        this org's line. Absent or null is fine — null clears the owner.
+        """
+        owner_position_id = data.get("owner_position_id")
+        if owner_position_id:
+            await assert_in_org(
+                self.db, Position, owner_position_id, org_id, label="Owner position"
+            )
 
     async def delete_budget_category(self, cat_id: str, org_id: str) -> None:
         cat = await self.get_budget_category(cat_id, org_id)
@@ -363,17 +427,119 @@ class FinanceService:
         pagination: PaginationParams,
         fiscal_year_id: Optional[str] = None,
         category_id: Optional[str] = None,
+        station_id: Optional[str] = None,
     ) -> list[Budget]:
         query = select(Budget).where(Budget.organization_id == org_id)
         if fiscal_year_id:
             query = query.where(Budget.fiscal_year_id == fiscal_year_id)
         if category_id:
             query = query.where(Budget.category_id == category_id)
+        if station_id:
+            query = query.where(Budget.station_id == station_id)
         query = (
             query.order_by(Budget.id).offset(pagination.skip).limit(pagination.limit)
         )
         result = await self.db.execute(query)
         return list(result.scalars().all())
+
+    def _budget_detail_query(self, org_id: str):
+        """Budget lines with their station and owner names, in one query.
+
+        Every joined table is constrained to the org, so a stored id that
+        names another org's row resolves to no name rather than to theirs.
+        The station name is the facility name ``list_budget_options`` labels
+        the line with, so the two never disagree.
+        """
+        line_owner = aliased(Position)
+        category_owner = aliased(Position)
+        return (
+            select(
+                Budget,
+                BudgetCategory.owner_position_id.label("category_owner_id"),
+                Facility.name.label("station_name"),
+                line_owner.name.label("line_owner_name"),
+                category_owner.name.label("category_owner_name"),
+            )
+            .outerjoin(
+                BudgetCategory,
+                and_(
+                    BudgetCategory.id == Budget.category_id,
+                    BudgetCategory.organization_id == org_id,
+                ),
+            )
+            .outerjoin(
+                Facility,
+                and_(
+                    Facility.id == Budget.station_id,
+                    Facility.organization_id == org_id,
+                ),
+            )
+            .outerjoin(
+                line_owner,
+                and_(
+                    line_owner.id == Budget.owner_position_id,
+                    line_owner.organization_id == org_id,
+                ),
+            )
+            .outerjoin(
+                category_owner,
+                and_(
+                    category_owner.id == BudgetCategory.owner_position_id,
+                    category_owner.organization_id == org_id,
+                ),
+            )
+            .where(Budget.organization_id == org_id)
+        )
+
+    @staticmethod
+    def _budget_row(row) -> dict:
+        budget = row[0]
+        data = {
+            column.key: getattr(budget, column.key)
+            for column in Budget.__table__.columns
+        }
+        effective_id, inherited = resolve_owner(
+            budget.owner_position_id, row.category_owner_id
+        )
+        data.update(
+            station_name=row.station_name,
+            owner_position_name=row.line_owner_name,
+            effective_owner_position_id=effective_id,
+            effective_owner_position_name=(
+                row.category_owner_name if inherited else row.line_owner_name
+            ),
+            owner_inherited=inherited,
+        )
+        return data
+
+    async def list_budget_details(
+        self,
+        org_id: str,
+        pagination: PaginationParams,
+        fiscal_year_id: Optional[str] = None,
+        category_id: Optional[str] = None,
+        station_id: Optional[str] = None,
+    ) -> list[dict]:
+        """``list_budgets`` with station and owner names, for the budget pages."""
+        query = self._budget_detail_query(org_id)
+        if fiscal_year_id:
+            query = query.where(Budget.fiscal_year_id == fiscal_year_id)
+        if category_id:
+            query = query.where(Budget.category_id == category_id)
+        if station_id:
+            query = query.where(Budget.station_id == station_id)
+        query = (
+            query.order_by(Budget.id).offset(pagination.skip).limit(pagination.limit)
+        )
+        result = await self.db.execute(query)
+        return [self._budget_row(row) for row in result.all()]
+
+    async def get_budget_detail(self, budget_id: str, org_id: str) -> Optional[dict]:
+        result = await self.db.execute(
+            self._budget_detail_query(org_id).where(Budget.id == budget_id)
+        )
+        row = result.first()
+        return self._budget_row(row) if row else None
 
     async def get_budget(self, budget_id: str, org_id: str) -> Optional[Budget]:
         result = await self.db.execute(
@@ -386,6 +552,15 @@ class FinanceService:
 
     async def create_budget(self, org_id: str, created_by: str, **kwargs) -> Budget:
         await self._validate_finance_fks(org_id, kwargs)
+        await self._validate_owner_position(org_id, kwargs)
+        fiscal_year = await self.get_fiscal_year(kwargs.get("fiscal_year_id"), org_id)
+        if fiscal_year is not None and fiscal_year.status == FiscalYearStatus.CLOSED:
+            # Draft and Active years take budgets; a closed year is settled
+            # history (docs/training/11-finance.md, "Creating a Budget").
+            raise ValueError(
+                "This fiscal year is closed. Budget lines can only be added to "
+                "a draft or active fiscal year."
+            )
         budget = Budget(organization_id=org_id, created_by=created_by, **kwargs)
         self.db.add(budget)
         await self.db.flush()
@@ -394,6 +569,7 @@ class FinanceService:
 
     async def update_budget(self, budget_id: str, org_id: str, **kwargs) -> Budget:
         await self._validate_finance_fks(org_id, kwargs)
+        await self._validate_owner_position(org_id, kwargs)
         # amount_budgeted changes the ceiling _mutate_budget enforces, so this
         # read must be the same locking read that ceiling check uses -- a
         # plain read here would let a reduction race a concurrent spend/
@@ -505,6 +681,30 @@ class FinanceService:
                 }
             )
         return options
+
+    async def list_position_options(self, org_id: str) -> list[dict]:
+        """Every position in the org as id + name, for the owner pickers."""
+        result = await self.db.execute(
+            select(Position.id, Position.name)
+            .where(Position.organization_id == org_id)
+            .order_by(Position.name, Position.id)
+        )
+        return [{"id": row.id, "name": row.name} for row in result.all()]
+
+    async def list_station_options(self, org_id: str) -> list[dict]:
+        """The org's facilities that are not archived, as id + name.
+
+        The name is the one ``list_budget_options`` puts in a line's label.
+        """
+        result = await self.db.execute(
+            select(Facility.id, Facility.name)
+            .where(
+                Facility.organization_id == org_id,
+                Facility.is_archived.is_(False),
+            )
+            .order_by(Facility.name, Facility.id)
+        )
+        return [{"id": row.id, "name": row.name} for row in result.all()]
 
     async def list_fiscal_year_options(self, org_id: str) -> list[FiscalYear]:
         """Fiscal years a request can still be raised against: active and draft.

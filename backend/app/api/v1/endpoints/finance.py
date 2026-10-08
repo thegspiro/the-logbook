@@ -59,6 +59,7 @@ from app.schemas.finance import (
     ExportMappingUpdate,
     ExportRequest,
     FinanceDashboardResponse,
+    FinanceNamedOptionResponse,
     FiscalYearCreate,
     FiscalYearOptionResponse,
     FiscalYearResponse,
@@ -280,7 +281,7 @@ async def list_budget_categories(
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
-    return await service.list_budget_categories(
+    return await service.list_budget_category_details(
         str(current_user.organization_id), pagination
     )
 
@@ -296,11 +297,10 @@ async def create_budget_category(
     current_user: User = Depends(require_permission("finance.manage")),
 ):
     service = FinanceService(db)
+    org_id = str(current_user.organization_id)
     try:
-        return await service.create_budget_category(
-            str(current_user.organization_id),
-            **data.model_dump(),
-        )
+        category = await service.create_budget_category(org_id, **data.model_dump())
+        return await service.get_budget_category_detail(category.id, org_id)
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -317,12 +317,12 @@ async def update_budget_category(
     current_user: User = Depends(require_permission("finance.manage")),
 ):
     service = FinanceService(db)
+    org_id = str(current_user.organization_id)
     try:
-        return await service.update_budget_category(
-            cat_id,
-            str(current_user.organization_id),
-            **data.model_dump(exclude_unset=True),
+        category = await service.update_budget_category(
+            cat_id, org_id, **data.model_dump(exclude_unset=True)
         )
+        return await service.get_budget_category_detail(category.id, org_id)
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -349,6 +349,43 @@ async def delete_budget_category(
 
 
 # ============================================
+# Budget form options
+# ============================================
+
+
+@router.get("/position-options", response_model=list[FinanceNamedOptionResponse])
+async def list_position_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """The department's positions, as the budget owner pickers offer them.
+
+    **Requires permission: finance.manage**
+
+    An id and a name and nothing else — not the position's permissions or
+    members — because the Treasurer assigning an owner may not hold the
+    position-administration grants ``/roles`` asks for.
+    """
+    service = FinanceService(db)
+    return await service.list_position_options(str(current_user.organization_id))
+
+
+@router.get("/station-options", response_model=list[FinanceNamedOptionResponse])
+async def list_station_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """The department's facilities that are not archived, for the station picker.
+
+    **Requires permission: finance.manage**
+
+    An id and the name budget lines are labelled with, nothing more.
+    """
+    service = FinanceService(db)
+    return await service.list_station_options(str(current_user.organization_id))
+
+
+# ============================================
 # Budgets
 # ============================================
 
@@ -357,13 +394,18 @@ async def delete_budget_category(
 async def list_budgets(
     fiscal_year_id: Optional[str] = Query(None),
     category_id: Optional[str] = Query(None),
+    station_id: Optional[str] = Query(None),
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
-    return await service.list_budgets(
-        str(current_user.organization_id), pagination, fiscal_year_id, category_id
+    return await service.list_budget_details(
+        str(current_user.organization_id),
+        pagination,
+        fiscal_year_id,
+        category_id,
+        station_id,
     )
 
 
@@ -374,12 +416,12 @@ async def create_budget(
     current_user: User = Depends(require_permission("finance.manage")),
 ):
     service = FinanceService(db)
+    org_id = str(current_user.organization_id)
     try:
-        return await service.create_budget(
-            str(current_user.organization_id),
-            str(current_user.id),
-            **data.model_dump(),
+        budget = await service.create_budget(
+            org_id, str(current_user.id), **data.model_dump()
         )
+        return await service.get_budget_detail(budget.id, org_id)
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -443,7 +485,9 @@ async def get_budget(
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
-    budget = await service.get_budget(budget_id, str(current_user.organization_id))
+    budget = await service.get_budget_detail(
+        budget_id, str(current_user.organization_id)
+    )
     if not budget:
         raise HTTPException(status_code=404, detail="Budget not found")
     return budget
@@ -457,12 +501,12 @@ async def update_budget(
     current_user: User = Depends(require_permission("finance.manage")),
 ):
     service = FinanceService(db)
+    org_id = str(current_user.organization_id)
     try:
-        return await service.update_budget(
-            budget_id,
-            str(current_user.organization_id),
-            **data.model_dump(exclude_unset=True),
+        budget = await service.update_budget(
+            budget_id, org_id, **data.model_dump(exclude_unset=True)
         )
+        return await service.get_budget_detail(budget.id, org_id)
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:

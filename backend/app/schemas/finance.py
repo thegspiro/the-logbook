@@ -130,6 +130,7 @@ class BudgetCategoryCreate(BaseModel):
     parent_category_id: Optional[str] = None
     sort_order: int = 0
     qb_account_name: Optional[str] = None
+    owner_position_id: Optional[str] = None
 
 
 class BudgetCategoryUpdate(BaseModel):
@@ -143,6 +144,8 @@ class BudgetCategoryUpdate(BaseModel):
     sort_order: Optional[int] = None
     is_active: Optional[bool] = None
     qb_account_name: Optional[str] = None
+    # Omitted leaves the owner alone; an explicit null clears it.
+    owner_position_id: Optional[str] = None
 
 
 class BudgetCategoryResponse(UTCResponseBase):
@@ -158,6 +161,8 @@ class BudgetCategoryResponse(UTCResponseBase):
     sort_order: int
     is_active: bool
     qb_account_name: Optional[str] = None
+    owner_position_id: Optional[str] = None
+    owner_position_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -177,16 +182,23 @@ class BudgetCreate(BaseModel):
     amount_budgeted: Decimal = Field(..., ge=0, decimal_places=2)
     notes: Optional[str] = None
     station_id: Optional[str] = None
+    # None: the line inherits its category's owner.
+    owner_position_id: Optional[str] = None
 
 
 class BudgetUpdate(BaseModel):
-    """Update a budget line"""
+    """Update a budget line.
+
+    Dumped with ``exclude_unset``: an omitted key leaves the field alone and
+    an explicit null clears it (a cleared owner falls back to the category's).
+    """
 
     model_config = _REQUEST_CONFIG
 
     amount_budgeted: Optional[Decimal] = Field(None, ge=0, decimal_places=2)
     notes: Optional[str] = None
     station_id: Optional[str] = None
+    owner_position_id: Optional[str] = None
 
 
 class BudgetResponse(UTCResponseBase):
@@ -203,9 +215,26 @@ class BudgetResponse(UTCResponseBase):
     amount_encumbered: Decimal
     notes: Optional[str] = None
     station_id: Optional[str] = None
+    station_name: Optional[str] = None
+    # The line's own owner; None when it has none (and may inherit).
+    owner_position_id: Optional[str] = None
+    owner_position_name: Optional[str] = None
+    # Who actually owns the line: its own owner, else its category's.
+    effective_owner_position_id: Optional[str] = None
+    effective_owner_position_name: Optional[str] = None
+    owner_inherited: bool = False
     created_by: str
     created_at: datetime
     updated_at: datetime
+
+
+class FinanceNamedOptionResponse(BaseModel):
+    """An id and a name, for the budget form's position and station pickers."""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    name: str
 
 
 class BudgetOptionResponse(BaseModel):
