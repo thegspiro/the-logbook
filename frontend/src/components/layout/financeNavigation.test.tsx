@@ -15,11 +15,13 @@ import { financeNavItems } from './financeNavigation';
 let granted = new Set<string>();
 let financeModuleOn = true;
 let ownsBudgets = false;
+let plansNextYear = false;
 
 // Ownership is the backend's answer (GET /finance/my-budgets/summary); the
 // hook's own fetching is covered in useOwnsBudgets.test.ts.
 vi.mock('../../modules/finance/hooks/useOwnsBudgets', () => ({
   useOwnsBudgets: () => ownsBudgets,
+  usePlansNextYear: () => plansNextYear,
 }));
 
 vi.mock('../../contexts/ThemeContext', () => ({
@@ -64,9 +66,9 @@ const expandMobileFinance = async () => {
   await userEvent.setup().click(toggles[toggles.length - 1] ?? document.body);
 };
 
-const visible = (permissions: string[], owns = false) => {
+const visible = (permissions: string[], owns = false, plans = false) => {
   const has = (p: string) => permissions.includes(p);
-  return financeNavItems(has, { ownsBudgets: owns })
+  return financeNavItems(has, { ownsBudgets: owns, plansNextYear: plans })
     .filter((item) => item.anyPermission.some(has))
     .map((item) => item.label);
 };
@@ -76,6 +78,7 @@ describe('Finance navigation', () => {
     granted = new Set();
     financeModuleOn = true;
     ownsBudgets = false;
+    plansNextYear = false;
   });
 
   it('is offered to every member who can raise a request', () => {
@@ -134,10 +137,47 @@ describe('Finance navigation', () => {
   it('shows the treasurer the department’s queues', () => {
     expect(visible(['finance.request', 'finance.view', 'finance.manage', 'finance.approve'])).toEqual([
       'Dashboard',
+      'Budget requests',
       'Purchase Requests',
       'Expense Reports',
       'Check Requests',
       'Approvals',
     ]);
+  });
+
+  it("offers Next year's budget only to a member planning one", () => {
+    expect(visible(['finance.request'], true, false)).not.toContain("Next year's budget");
+    expect(visible(['finance.request'], true, true)).toEqual([
+      'My Budgets',
+      "Next year's budget",
+      'My Purchase Requests',
+      'My Expense Reports',
+      'My Check Requests',
+    ]);
+  });
+
+  it('offers the budget request review only to finance.manage', () => {
+    expect(visible(['finance.request', 'finance.view'])).not.toContain('Budget requests');
+    expect(visible(['finance.manage'])).toContain('Budget requests');
+  });
+
+  it("links a planning owner to next year's budget from the menu", async () => {
+    granted = new Set(['finance.request']);
+    plansNextYear = true;
+    openMobileMenu();
+    await expandMobileFinance();
+    expect(screen.getByRole('link', { name: "Next year's budget" })).toHaveAttribute(
+      'href',
+      '/finance/budget-requests'
+    );
+  });
+
+  it("does not offer Next year's budget to a member with nothing to plan", async () => {
+    granted = new Set(['finance.request']);
+    ownsBudgets = true;
+    openMobileMenu();
+    await expandMobileFinance();
+    expect(screen.getByRole('link', { name: 'My Budgets' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: "Next year's budget" })).not.toBeInTheDocument();
   });
 });

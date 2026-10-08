@@ -16,6 +16,10 @@
  * the page empty, the way the request lists are offered only to those who
  * may open them. Its route needs only a session; the entry carries the
  * group's gate because it lives inside the group.
+ *
+ * "Next year's budget" is decided the same way, on `plansNextYear` (the member
+ * owns a line in a draft fiscal year or has a budget request for one). The
+ * Treasurer's "Budget requests" review screen is `finance.manage`'s.
  */
 import { FINANCE_REQUEST_READ_PERMISSIONS } from '../../modules/finance/hooks/useFinanceRequestAccess';
 
@@ -35,7 +39,7 @@ export const FINANCE_NAV_PERMISSIONS = FINANCE_REQUEST_READ_PERMISSIONS;
  */
 export function financeNavItems(
   checkPermission: (permission: string) => boolean,
-  options: { ownsBudgets?: boolean } = {}
+  options: { ownsBudgets?: boolean; plansNextYear?: boolean } = {}
 ): FinanceNavItem[] {
   const canManage = checkPermission('finance.manage');
   const seesAllRequests = canManage || checkPermission('finance.view');
@@ -45,6 +49,10 @@ export function financeNavItems(
     ...(options.ownsBudgets
       ? [{ label: 'My Budgets', path: '/finance/my-budgets', anyPermission: [...FINANCE_NAV_PERMISSIONS] }]
       : []),
+    ...(options.plansNextYear
+      ? [{ label: "Next year's budget", path: '/finance/budget-requests', anyPermission: [...FINANCE_NAV_PERMISSIONS] }]
+      : []),
+    { label: 'Budget requests', path: '/finance/budget-requests/review', anyPermission: ['finance.manage'] },
     {
       label: mine('Purchase Requests', 'My Purchase Requests', seesAllRequests),
       path: '/finance/purchase-requests',

@@ -1193,6 +1193,8 @@ lot's number or expiration date require `inventory.check_manage` or
 | `/finance/budgets`                    | Budgets                    | `finance.view`                                        |
 | `/finance/budgets/:id`                | Budget Detail              | Authenticated                                         |
 | `/finance/my-budgets`                 | My Budgets                 | Authenticated                                         |
+| `/finance/budget-requests`            | Next Year's Budget         | Authenticated                                         |
+| `/finance/budget-requests/review`     | Budget Requests (review)   | `finance.manage`                                      |
 | `/finance/purchase-requests`          | Purchase Requests          | `finance.request`, `finance.view` or `finance.manage` |
 | `/finance/purchase-requests/new`      | New Purchase Request       | `finance.request` or `finance.manage`                 |
 | `/finance/purchase-requests/:id`      | Purchase Request Detail    | `finance.request`, `finance.view` or `finance.manage` |
@@ -1208,6 +1210,17 @@ lot's number or expiration date require `inventory.check_manage` or
 | `/finance/settings`                   | Finance Settings           | `finance.manage`                                      |
 | `/finance/settings/approval-chains`   | Approval Chains            | `finance.configure_approvals`                         |
 | `/finance/approvals/:token`           | Tokenized Approval Landing | Token-based                                           |
+
+> **Next year's budget requests** _(2026-10-08)_. `/finance/budget-requests`
+> is a line owner's screen for proposing next year's amounts: it lists the
+> draft-year lines whose owner position the member holds, each with this
+> year's budget and spending, its request and the Treasurer's decision, and
+> the year's request deadline. Like My Budgets it needs only a session — the
+> API decides what is the member's — and the navigation offers it only to a
+> member who owns a draft-year line or has a request. The Treasurer reviews
+> and decides at `/finance/budget-requests/review` (`finance.manage`, the
+> decide endpoint's gate), also linked from a draft year's row in Finance
+> Settings.
 
 > **Budget-line owners read their own lines** _(2026-10-08)_. A budget line
 > is owned by a position (or inherits its category's). `/finance/my-budgets`

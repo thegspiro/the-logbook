@@ -18,6 +18,8 @@ const FinanceDashboardPage = lazyWithRetry(() => import('./pages/FinanceDashboar
 const BudgetsPage = lazyWithRetry(() => import('./pages/BudgetsPage'));
 const BudgetDetailPage = lazyWithRetry(() => import('./pages/BudgetDetailPage'));
 const MyBudgetsPage = lazyWithRetry(() => import('./pages/MyBudgetsPage'));
+const BudgetRequestsPage = lazyWithRetry(() => import('./pages/BudgetRequestsPage'));
+const BudgetRequestReviewPage = lazyWithRetry(() => import('./pages/BudgetRequestReviewPage'));
 
 // Settings
 const FiscalYearSettingsPage = lazyWithRetry(() => import('./pages/FiscalYearSettingsPage'));
@@ -86,6 +88,28 @@ export const getFinanceRoutes = () => {
         element={
           <ProtectedRoute requiredModule="finance" moduleLabel="Finance">
             <MyBudgetsPage />
+          </ProtectedRoute>
+        }
+      />
+      {/*
+        Next year's budget requests. The owner's screen needs only a session,
+        like My Budgets: what a member may request is their ownership of a
+        line, which the API decides. The Treasurer's review is finance.manage,
+        the gate the decide endpoint enforces.
+      */}
+      <Route
+        path="/finance/budget-requests"
+        element={
+          <ProtectedRoute requiredModule="finance" moduleLabel="Finance">
+            <BudgetRequestsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/finance/budget-requests/review"
+        element={
+          <ProtectedRoute requiredPermission="finance.manage" requiredModule="finance" moduleLabel="Finance">
+            <BudgetRequestReviewPage />
           </ProtectedRoute>
         }
       />

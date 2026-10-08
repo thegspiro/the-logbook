@@ -26,6 +26,7 @@ import type {
   BudgetRequest,
   BudgetRequestCreatePayload,
   BudgetRequestDecisionPayload,
+  BudgetRequestProposalOptions,
   BudgetRequestStatus,
   BudgetRequestUpdatePayload,
   BudgetSummary,
@@ -239,6 +240,16 @@ export const budgetRequestService = {
       params: { fiscal_year_id: fiscalYearId },
     });
     return response.data;
+  },
+
+  /** The positions the caller holds, and the categories and stations, for a proposal. */
+  async proposalOptions(): Promise<BudgetRequestProposalOptions> {
+    const response = await api.get<BudgetRequestProposalOptions>('/finance/budget-requests/proposal-options');
+    return {
+      positions: asArray(response.data.positions),
+      categories: asArray(response.data.categories),
+      stations: asArray(response.data.stations),
+    };
   },
 
   async get(id: string): Promise<BudgetRequest> {

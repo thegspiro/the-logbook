@@ -115,6 +115,9 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   // An ancestor only because the public tokenized approval page sits beneath
   // it; gated like the in-app Approvals route.
   '/finance/approvals': { permissions: ['finance.approve'] },
+  // An ancestor of the Treasurer's review; the owner's screen needs only a
+  // session, like My Budgets.
+  '/finance/budget-requests': {},
   '/finance/budgets': { permissions: ['finance.view'] },
   '/finance/check-requests': { permissions: ['finance.request', 'finance.view', 'finance.manage'] },
   // Registered for its label: the segment is "expenses" while the page's own

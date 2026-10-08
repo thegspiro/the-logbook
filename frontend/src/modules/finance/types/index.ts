@@ -293,6 +293,11 @@ export interface MyBudget extends Budget {
 export interface MyBudgetsSummary {
   /** The member owns at least one budget line, in any fiscal year. */
   ownsAny: boolean;
+  /**
+   * The member owns a line in a draft fiscal year, or has a budget request for
+   * one — the "Next year's budget" navigation entry's signal.
+   */
+  plansNextYear?: boolean;
 }
 
 /** What moved a line's totals: a purchase request, check request or expense item. */
@@ -511,6 +516,17 @@ export interface MyBudgetRequestLine {
   lastYearFiscalYearName?: string | null;
   lastYearBudgeted?: MonetaryAmount | null;
   lastYearSpent?: MonetaryAmount | null;
+}
+
+/**
+ * `GET /finance/budget-requests/proposal-options` — what "Propose a new line"
+ * may offer. The positions are only those the member holds; all three lists
+ * are empty for a member who holds none.
+ */
+export interface BudgetRequestProposalOptions {
+  positions: FinanceNamedOption[];
+  categories: FinanceNamedOption[];
+  stations: FinanceNamedOption[];
 }
 
 /** `GET /finance/budget-requests/my-lines` — one call for the owner's screen. */

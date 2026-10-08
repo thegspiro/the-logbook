@@ -11,11 +11,11 @@ vi.mock('../services/api', () => ({
   budgetService: { mySummary: (...args: unknown[]) => mySummary(...args) as unknown },
 }));
 
-import { useOwnsBudgets, useOwnsBudgetsStore } from './useOwnsBudgets';
+import { useOwnsBudgets, useOwnsBudgetsStore, usePlansNextYear } from './useOwnsBudgets';
 
 beforeEach(() => {
   mySummary.mockReset();
-  useOwnsBudgetsStore.setState({ userId: null, ownsAny: false, loading: false });
+  useOwnsBudgetsStore.setState({ userId: null, ownsAny: false, plansNextYear: false, loading: false });
 });
 
 describe('useOwnsBudgets', () => {
@@ -52,5 +52,30 @@ describe('useOwnsBudgets', () => {
 
     await waitFor(() => expect(useOwnsBudgetsStore.getState().userId).toBe('u-1'));
     expect(result.current).toBe(false);
+  });
+});
+
+describe('usePlansNextYear', () => {
+  it('reads the same summary call as useOwnsBudgets', async () => {
+    mySummary.mockResolvedValue({ ownsAny: true, plansNextYear: true });
+    const owns = renderHook(() => useOwnsBudgets('u-1', true));
+    const plans = renderHook(() => usePlansNextYear('u-1', true));
+
+    await waitFor(() => expect(plans.result.current).toBe(true));
+    expect(owns.result.current).toBe(true);
+    expect(mySummary).toHaveBeenCalledTimes(1);
+  });
+
+  it('is false for an owner with nothing in a draft year', async () => {
+    mySummary.mockResolvedValue({ ownsAny: true, plansNextYear: false });
+    const { result } = renderHook(() => usePlansNextYear('u-1', true));
+    await waitFor(() => expect(useOwnsBudgetsStore.getState().userId).toBe('u-1'));
+    expect(result.current).toBe(false);
+  });
+
+  it('takes what the request screen found', () => {
+    useOwnsBudgetsStore.setState({ userId: 'u-1', ownsAny: true, plansNextYear: false, loading: false });
+    useOwnsBudgetsStore.getState().rememberPlans('u-1', true);
+    expect(useOwnsBudgetsStore.getState()).toMatchObject({ ownsAny: true, plansNextYear: true });
   });
 });

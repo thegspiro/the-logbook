@@ -11,6 +11,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import { Plus, AlertTriangle, Calendar, Lock, CheckCircle, Trash2, Tag, Pencil, Copy } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
@@ -444,6 +445,12 @@ const RequestWindow: React.FC<{ fy: FiscalYear }> = ({ fy }) => (
     >
       {fy.requestsOpen ? 'Requests open' : 'Requests closed'}
     </span>
+    <Link
+      to="/finance/budget-requests/review"
+      className="font-medium text-red-700 underline-offset-2 hover:underline dark:text-red-400"
+    >
+      Review requests
+    </Link>
   </p>
 );
 

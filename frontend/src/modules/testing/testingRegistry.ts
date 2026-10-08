@@ -983,6 +983,18 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'finance',
       },
       {
+        path: '/finance/budget-requests',
+        label: "Next year's budget",
+        note: "A line owner's requests for a draft fiscal year's lines, and new-line proposals; empty for everyone else",
+        module: 'finance',
+      },
+      {
+        path: '/finance/budget-requests/review',
+        label: 'Budget requests (review)',
+        permission: 'finance.manage',
+        module: 'finance',
+      },
+      {
         path: '/finance/purchase-requests',
         label: 'Purchase requests',
         anyPermission: FINANCE_REQUEST_READ_GATE,

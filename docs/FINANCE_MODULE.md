@@ -230,12 +230,14 @@ owner — the member holding its owner position, the line's own else its
 category's (`finance_budget_ownership.py`, the one definition, pitfall #29) —
 proposes an amount. The Treasurer approves it as asked, adjusts it with a note,
 or declines it (owner decisions, 2026-10-08). Owners already see previous years
-on My Budgets. This is step 3a: the API and the Treasurer's two settings
-controls. The owners' request screen, the Treasurer's review screen and the
-reminder emails are step 3b (see
-[KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md#finance--budget-requests-have-an-api-but-no-screens-yet-2026-10-08)).
-The code is `app/services/finance_budget_request_service.py`; the schema change
-is revision `9effb8790488` (`fiscal_years.request_deadline`, `budget_requests`).
+on My Budgets. Step 3a was the API and the Treasurer's two settings controls;
+step 3b added the owners' request screen, the Treasurer's review screen and the
+emails (see [Screens (3b)](#screens-3b) and
+[Budget request emails](#budget-request-emails) below). The code is
+`app/services/finance_budget_request_service.py` and
+`app/services/finance_budget_request_notifications.py`; the schema change is
+revision `9effb8790488` (`fiscal_years.request_deadline`, `budget_requests`).
+Step 3b needed no schema change.
 
 **Start from last year** — `POST /finance/fiscal-years/{draftId}/start-from/{sourceId}`
 (`finance.manage`) → `{created, skipped}`. Only into a draft year that is not
@@ -360,6 +362,108 @@ No new route.
 behaviour, so there is no `UPGRADING.md` entry. On an installation whose
 finance tables were built by `create_all`, the migration adds both; on an empty
 database it skips both and `create_all` builds them from the models.
+
+### Screens (3b)
+
+**Next year's budget** — `/finance/budget-requests`, any signed-in member,
+Finance module on (the route needs only a session, like My Budgets: what is
+the member's is the API's answer). One call, `my-lines`, plus the request list
+for proposals. Picked over `/finance/my-budgets/next-year` because the screen
+is about requests, it sits beside the API it drives, and the review screen
+nests under it.
+
+- A year picker when more than one draft year exists (otherwise the one).
+- The deadline, prominently: _"Requests close {date}"_, _"No deadline set"_,
+  or _"Requests are closed"_ with _"The deadline for {year} was {date}.
+  Requests can be read but no longer changed."_ — from `requestsOpen` and
+  `requestDeadline`, formatted with `formatCalendarDate`.
+- A card per owned draft-year line: category · station, the owner position,
+  **Budgeted {this year}** and **Spent {this year}** (the active year's
+  figures, "No line" when it has none), **Requested**, **Approved** (or
+  "Declined"), the status badge and the Treasurer's note. While requests are
+  open: **Request an amount** (no request, or the last one was declined —
+  **Request again**), **Submit** / **Edit** / **Delete draft** on a draft,
+  **Edit** / **Withdraw** on a submitted one. Withdraw and Delete confirm
+  first (`useConfirm`). Nothing is offered once requests close or the request
+  is decided.
+- **Propose a new line** (while open, and only for a member who holds a
+  position): category, station (optional, "Department-wide"), and **For your
+  position** — only the positions the member holds, from
+  `GET /finance/budget-requests/proposal-options`. Proposals are listed under
+  **New lines you proposed** with the same actions.
+- Dialogs are `Modal` (no outside-click close), `form-*` controls. A create
+  leaves a blank station out (`|| undefined`); an edit sends both fields it
+  owns. Every action re-fetches the screen (pitfall #11); the API's refusal is
+  the toast.
+- The navigation's **Next year's budget** entry is offered to a member who owns
+  a line in a draft year or has a request for one — `plansNextYear` on
+  `GET /finance/my-budgets/summary` (two `LIMIT 1` probes, asked once per
+  session alongside `ownsAny`).
+
+**Budget requests (review)** — `/finance/budget-requests/review`,
+`finance.manage` (the decide endpoint's gate). Linked from the Finance
+navigation for managers and from a draft year's row in Finance Settings
+(**Review requests**).
+
+- Year picker (draft years), the deadline and **Owners can still change
+  requests** / **Closed to owners**, a status filter (default **Submitted**)
+  whose options carry counts, and a count per status.
+- A table (`rwd-table`, cards on a phone): budget line ("New line" for a
+  proposal), owner position, submitted by and when, this year budgeted and
+  spent, requested, approved, status. A totals row adds up what is shown:
+  requested, this year budgeted, approved (summed in cents).
+- **Review** (submitted) or **Change** (decided) opens the decision dialog: who
+  asked for what and when, this year's figures, the justification, and
+  **Approve as requested** / **Approve a different amount** (amount and note
+  required) / **Decline** (note required). The API's refusal is shown in its
+  own words; the list is fetched again after a decision. Drafts are listed but
+  not decided (the API refuses).
+
+**`GET /finance/budget-requests/proposal-options`** — authenticated, no
+permission: `{positions, categories, stations}`, ids and names. Positions are
+only those the caller holds (`held_positions_query`); categories are the
+department's active ones and stations its unarchived facilities; all three are
+empty for a caller holding no position, who could not propose anything.
+
+### Budget request emails
+
+All four are **email only** (pitfall #18: administrative notices, not in
+`SmsAlert`; no bell entry, as nothing in Finance has one). Recipients are
+resolved inside the department through the ownership resolver (pitfall #29),
+active members only. A send that fails is logged and dropped — it never fails
+the action. Two new optional email kinds, on by default, govern them
+(`email_policy.py`): **Next year's budget requests** (`budget_requests`,
+members) and **Treasurer duties** (`finance_duties`, officers).
+
+| Trigger                                                   | Recipients                                                                                                 | Subject                                                                         | Kind              |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------- |
+| A request is submitted                                    | Active `finance.manage` holders (wildcards count), not the submitter                                       | `Budget request to review: {line} ({amount})`                                   | `finance_duties`  |
+| A request is approved / adjusted / declined               | The submitter and the active holders of the owning position (line's own, else category's), not the decider | `Budget request approved: {line}` · `… adjusted: {line}` · `… declined: {line}` | `budget_requests` |
+| A deadline is set on a draft year while requests are open | Active holders of every position owning a line in that year, once each                                     | `Budget requests for {year} are open until {date}`                              | `budget_requests` |
+| The deadline is changed (still open)                      | As above                                                                                                   | `Budget request deadline for {year} changed to {date}`                          | `budget_requests` |
+| Scheduled: 7 days and 1 day before the deadline           | Those owners with at least one line in the year no request was submitted for                               | `Reminder: budget requests for {year} close {date}`                             | `budget_requests` |
+
+Clearing a deadline, saving the same date again, or setting one already past
+sends nothing. The decision email carries the approved amount and the note;
+the submitted email carries this year's figures and the justification; all
+link to the owner's or the review screen. User text is escaped.
+
+**The reminder** is the `budget_request_reminders` scheduled task (daily, in
+the in-process scheduler, so no operator action is needed; cron `10 8 * * *`
+where an external scheduler is used), iterating departments through
+`_for_each_org` so one department's failure is logged and the next still runs.
+For each draft, unlocked year whose deadline is today or later it picks the
+most urgent reminder whose window has begun — the 7-day one from seven days
+before, the 1-day one from the day before — so a run missed while the server
+was down still goes out on the next one. **Idempotency** is a sent-log: each
+reminder and each requests-open email is recorded as an email-channel
+`NotificationLog` row (categories `budget_request_reminder` /
+`budget_request_window`, metadata naming the year, the deadline and the
+offset). A member already recorded for that year, deadline and offset is not
+sent it again, and a member sent the requests-open email inside a reminder's
+window is not sent that reminder. Moving the deadline starts a fresh set. The
+offsets are constants (see
+[KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md#finance--budget-request-reminders-go-out-7-days-and-1-day-before-for-every-department-2026-10-08)).
 
 ## Context
 
