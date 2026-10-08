@@ -16,6 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3005](https://github.com/thegspiro/the-logbook/pull/3005)**: branch
+`claude/security-review-scheduled-tasks`, Feature 31 (Scheduled tasks),
+pass 6 (watchdog pickup — the dedicated `/loop 30m /security-review` session
+had no open PR/branch for this feature, and PR #2996 (Feature 30, Onboarding,
+pass 6) had already merged ~3 hours earlier with nothing started since, past
+this rotation's documented ~90-minute stall threshold). No application code
+changes: one real commit since pass 5 added four new scheduled tasks
+(PayPal capture backfill, self-report attachment retention, expired-session
+reaping, expired-password notices), all reviewed fresh and verified good,
+plus the already-merged CRON-40 fix (PR #2901). Two previously-flagged
+findings (CRON2-31-12, CRON-31-7) turned out already fixed by the same
+delta, not by this pass. Completion gate green (flake8/black/isort,
+migrations — 543 revisions, single head; registry sync 51/51; 291 scoped
+backend tests; frontend typecheck/lint). See the Log entry below and
+`docs/security-review/CRON6-31-scheduled-tasks.md` for detail.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 6, PR #2996, merged, nothing further to record), preserved for history</summary>
+
 **PR [#2996](https://github.com/thegspiro/the-logbook/pull/2996)**: branch
 `claude/security-review-onboarding`, Feature 30 (Onboarding), pass 6
 (confirmed via `list_pull_requests`/`gh api`, state=open, that no
@@ -59,6 +78,8 @@ to fail pre-fix and pass restored. Per this rotation's own "one PR at a
 time" rule, this is folded into PR #2996 and `ONB4-30-onboarding.md` as an
 addendum rather than opened as a second, competing PR. See the Log entry
 below for detail.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 8, PR #2994, merged, nothing further to record), preserved for history</summary>
@@ -18394,7 +18415,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
@@ -18405,6 +18426,73 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-08 — Feature 31 (Scheduled tasks, pass 6) — 0 fixed by this pass, 0 new findings; two standing flags confirmed independently fixed (watchdog pickup)
+
+Watchdog pickup: PR #2996 (Feature 30, Onboarding, pass 6) merged 2026-10-08
+10:53 UTC. By 13:46 UTC — past this rotation's documented ~90-minute stall
+threshold — no `claude/security-review-*` PR or branch existed for Feature
+31 (confirmed via `search_pull_requests`, `is:open head:claude/security-
+review-`, and `git branch -r`). The dedicated `/loop 30m /security-review`
+session was not running. This iteration picked up the next `⬜` row from
+outside that loop.
+
+**CRON-40 (HIGH, flagged open by pass 5) is already fixed, independently of
+this pass.** PR #2901 ("fix(scheduler): renew the worker claim only while it
+is still ours") merged 2026-10-04 17:22 UTC, closing the exact gap pass 5's
+findings file pointed to as an unmerged branch. Re-verified directly against
+current `main.py` and the new `app/core/background_claim.py`: renewal is now
+a compare-and-swap against the stored PID, both loops stand down to a
+claim-waiting state rather than exiting, the task loop renews mid-batch, and
+shutdown releases only the claim this worker holds. `docs/app-review/
+scheduled-tasks.md` and `KNOWN_LIMITATIONS.md` already show it ✅ Resolved.
+
+**Real delta since pass 5 (PR #2899, merged 2026-10-04): one commit,
+`ffc8daee`** (landed alongside unrelated member-profile work, read in full
+regardless of its own title) touches `scheduled_tasks.py` (+524/−105) and
+`main.py` (+155/−49, all the CRON-40 fix above plus one unrelated router
+registration out of scope). Four new tasks reviewed fresh against all seven
+checklist dimensions: `run_paypal_capture_backfill` (per-integration,
+org-joined, ids read before the loop to avoid a lazy-load-after-rollback),
+`run_self_report_attachment_retention` (delegates to new
+`self_report_attachment_retention.py`, 268 L — path-confined file deletion
+prevents a client-writable `file_path` from deleting outside the org's own
+upload directory, locking read, correct JSON-mutation and unlink-then-update
+ordering), `run_reap_expired_sessions` (correctly unscoped — a cross-tenant
+maintenance delete with no read exposure), and `run_notify_expired_passwords`
+(org-joined, per-member commit). All verified good.
+
+**Two previously-flagged findings turned out already fixed by this same
+delta, not by this pass:** **CRON2-31-12** (`run_action_item_reminders`'s
+two branches now join to `Organization` and filter `.active.isnot(False)`,
+with an explicit in-code citation of the finding — never mirrored into
+`KNOWN_LIMITATIONS.md`, so nothing to update there) and **CRON-31-7** (the
+end-of-shift summary now tracks `in_app_ok`/`email_ok` per member and only
+marks a member delivered when a channel that was actually due actually
+succeeded — already recorded as settled in `KNOWN_LIMITATIONS.md`'s
+CRON-31-7/8 entry). Every other standing item re-confirmed unchanged:
+CRON2-31-13 (no audit trail on admin-hours auto-close), CRON-31-8 (event
+reminders stamp a due interval sent with zero recipients), CRON4-31-2 (no
+per-task lock on manual trigger), and the sibling app-review track's CRON-4
+(raw exception strings to the `system.run_tasks` caller) — `scheduled.py`
+itself has zero diff since pass 4.
+
+Route surface unchanged (2/2). Registry sync 51/51 (up from pass 5's 47 —
+exactly the four new tasks), verified by direct `set(SCHEDULE) ==
+set(TASK_RUNNERS)` import, not by reading dict literals.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+`app/ tests/ alembic/` (7.3.0/26.5.1/9.0.1, CI's exact pins);
+`validate_migrations.py --strict` passed (543 revisions, single head
+`7db20aa49329`, no new migration this pass); scoped backend tests (21
+pre-existing scheduled-task/cron files + 4 new-task test files) 291 passed,
+0 failed; frontend `npm run typecheck` 0 errors, `npm run lint` 0 errors/0
+warnings (no frontend files touched).
+
+Findings file: [`CRON6-31-scheduled-tasks.md`](./CRON6-31-scheduled-tasks.md).
+No `KNOWN_LIMITATIONS.md` change needed — both findings that closed were
+either never recorded there or already recorded as resolved. Rotation row 31
+→ ✅ (pending PR merge). Next: Feature 32 (Locations & kiosk).
 
 ### 2026-10-08 — Feature 30 (Onboarding, pass 6) — 1 HIGH fix (unlocked single-org race), 0 new findings otherwise
 
