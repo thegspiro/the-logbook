@@ -222,6 +222,145 @@ links to its request only for a viewer who may open it (`finance.view` for
 purchase and check requests, `finance.manage` for expense reports). The detail
 page now labels encumbered money **Committed**.
 
+## Next-year planning: start from last year, the request deadline, and budget requests _(2026-10-08)_
+
+Next year's budget is built in a **draft** fiscal year. The Treasurer
+(`finance.manage`) seeds it from this year, sets a deadline, and each line's
+owner — the member holding its owner position, the line's own else its
+category's (`finance_budget_ownership.py`, the one definition, pitfall #29) —
+proposes an amount. The Treasurer approves it as asked, adjusts it with a note,
+or declines it (owner decisions, 2026-10-08). Owners already see previous years
+on My Budgets. This is step 3a: the API and the Treasurer's two settings
+controls. The owners' request screen, the Treasurer's review screen and the
+reminder emails are step 3b (see
+[KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md#finance--budget-requests-have-an-api-but-no-screens-yet-2026-10-08)).
+The code is `app/services/finance_budget_request_service.py`; the schema change
+is revision `9effb8790488` (`fiscal_years.request_deadline`, `budget_requests`).
+
+**Start from last year** — `POST /finance/fiscal-years/{draftId}/start-from/{sourceId}`
+(`finance.manage`) → `{created, skipped}`. Only into a draft year that is not
+locked; the source is any other year of the department (normally the active
+one); another department's year is 404 either way. Each source line becomes a
+draft line with the same category, station, notes and **own** owner position —
+a category's owner is not copied onto the line, it keeps arriving through the
+category — and `amountBudgeted` equal to the source line's **current** budget
+(amendments included) as a starting point the Treasurer edits. Spent and
+committed start at zero; amendments are not copied. A category + station that
+already has a line in the draft is skipped, so a second run creates nothing.
+The draft year's row is locked for the run, so two runs cannot both copy.
+Audited as `finance.fiscal_year_started_from`.
+
+**The request deadline** — `fiscal_years.request_deadline` (a date, nullable),
+set or cleared (`null`) through the existing `PUT /finance/fiscal-years/{id}`
+as `requestDeadline`, and only while the year is a draft (400 otherwise; an
+unchanged value sent with another edit is not a change). It is a calendar day
+on the department's calendar: requests stay open **through the end of that day
+in the organization's timezone** (`resolve_org_today`). Every fiscal-year
+response — the list, the detail, create/update/activate/lock and
+`/fiscal-years/options` — carries `requestDeadline` and a computed
+`requestsOpen`: the year is a draft, not locked, and either has no deadline or
+today ≤ deadline. That one function (`requests_open`) is what the API enforces
+with, so the flag and the refusal cannot disagree. Audited as
+`finance.fiscal_year_request_deadline_set`.
+
+**Budget requests** — table `budget_requests`. A request is for an existing
+draft-year line (`budgetId`), or proposes a line that does not exist yet
+(`categoryId`, optional `stationId`, and the `ownerPositionId` that will own it).
+Amounts are `Numeric(12, 2)`, ≥ 0; `justification` is required.
+
+| Status      | Who moves it there                          | From                    |
+| ----------- | ------------------------------------------- | ----------------------- |
+| `draft`     | create; **withdraw** (owner or Treasurer)   | — / `submitted`         |
+| `submitted` | **submit** (owner or Treasurer)             | `draft`                 |
+| `approved`  | **decide** `approve` — approved = requested | `submitted`, or decided |
+| `adjusted`  | **decide** `adjust` — an amount and a note  | `submitted`, or decided |
+| `declined`  | **decide** `decline` — a note, no amount    | `submitted`, or decided |
+
+- **Who may make, edit, submit, withdraw or delete one.** For a line: a member
+  who owns it (`user_owns_budget`). For a proposal: a member who holds the named
+  position, in the department and active (`user_holds_position`). Anyone else
+  is 403; `finance.manage` may act on anyone's behalf. Owners may change a
+  request only while it is `draft` or `submitted` and while `requestsOpen`;
+  after the deadline they get 400 _"The request deadline for {year} has
+  passed."_ — the Treasurer is not held to the deadline. Delete is for drafts
+  only (withdraw a submitted one first); a decided request stays as the record.
+- **One live request per line.** A second request for the same line (or the
+  same proposed category + station) that is not declined is 409; so is a
+  proposal for a category + station that already has a draft-year line —
+  request against that line instead. The check is a locking read behind the
+  fiscal year's row lock (pitfall #27).
+- **Deciding** (`finance.manage` only). `approve` and `adjust` write the
+  approved amount into the draft-year line under the same locking read
+  `update_budget` uses, refused (409) below what the line has already spent or
+  committed; for a proposal the line is created first — its category, station
+  and the proposal's position as the line's own owner — and linked
+  (`budgetId`). A decision may be changed while the year is still a draft (the
+  amount is written again); once the year is active or locked, no decision is
+  made or changed. A draft request is not decided — it must be submitted
+  (the Treasurer can submit it on the owner's behalf).
+- **Who sees which.** `finance.manage` sees every request. Anyone else sees
+  requests for lines they own, proposals for positions they hold, and requests
+  they submitted; any other request, and every other department's, is 404.
+- **Audit.** `finance.budget_request_created`, `…_submitted`, `…_decided`.
+
+**API** (camelCase bodies and responses):
+
+| Method & path                                             | Who                                                     | Notes                                                                               |
+| --------------------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `GET /finance/budget-requests?fiscal_year_id=&status=`    | any signed-in member, scoped as above                   | newest first; bad `status` is 400                                                   |
+| `GET /finance/budget-requests/my-lines?fiscal_year_id=`   | any signed-in member                                    | `{fiscalYear, lines: [{budget, request, lastYear…}]}` — the owner screen's one call |
+| `GET /finance/budget-requests/{id}`                       | as the list                                             | 404 when not visible                                                                |
+| `POST /finance/budget-requests`                           | the line's owner / position holder, or `finance.manage` | creates a `draft`                                                                   |
+| `PUT /finance/budget-requests/{id}`                       | owner while open, or `finance.manage`                   | `requestedAmount`, `justification`                                                  |
+| `POST /finance/budget-requests/{id}/submit` · `/withdraw` | owner while open, or `finance.manage`                   |                                                                                     |
+| `DELETE /finance/budget-requests/{id}`                    | owner while open, or `finance.manage`                   | drafts only                                                                         |
+| `POST /finance/budget-requests/{id}/decide`               | `finance.manage`                                        | `{decision: approve\|adjust\|decline, approvedAmount?, decisionNote?}`              |
+
+Each request row carries `lineLabel` ("Category · Station"), `isProposedLine`,
+the owner position's id and name (the line's effective owner for a line
+request), `requestedAmount`, `approvedAmount`, `status`, `justification`,
+`decisionNote`, `submittedByName`/`submittedAt`, `decidedByName`/`decidedAt`,
+and the comparison **`lastYearBudgeted` / `lastYearSpent`** (with
+`lastYearFiscalYearName`): the **active** year's figures for the same category
+and station — "this year", seen from the draft being planned — summed if the
+active year has more than one such line, and null when it has none.
+`my-lines` returns the draft-year lines the caller owns (`list_my_budgets`'s
+rows), each with its live request (else its most recent declined one, else
+null) and the same comparison, plus the year's `requestDeadline` and
+`requestsOpen`.
+
+**Design decisions taken for this step** (the owner may overrule any):
+
+1. Start from last year copies only a line's **own** owner; inheritance from the
+   category carries on through the category.
+2. The carried-forward amount is the source line's **current** budget
+   (amendments included), not its original.
+3. Once a draft year is **activated or locked, decisions are final** — first
+   decisions included; money in an active year changes through amendments.
+4. **Declining an approved request leaves the line's amount as it is.** The
+   Treasurer edits the draft line directly; the decision does not try to
+   reconstruct what the line held before.
+5. A proposal duplicating a category + station that already has a line is
+   refused rather than merged into that line.
+6. The Treasurer is not bound by the deadline, may create requests on an
+   owner's behalf, and may make a proposal without naming a position (the new
+   line then inherits its category's owner).
+7. The deadline day is inclusive, and "today" is the department's.
+
+**Screens (3a).** _Finance › Settings_: a draft year's row shows _"Requests close
+{date}"_ (or _"No request deadline"_) and a **Requests open / Requests closed**
+badge, and below it **Start from last year** (choose the year, defaulting to
+the active one, then **Copy lines**; a confirmation names both years; the toast
+reads _"{n} lines copied, {m} already there"_) and **Request deadline** (a date,
+**Save deadline**, **Clear deadline**, which sends `null`). Types and
+`budgetRequestService` for the request API are in the finance module for 3b.
+No new route.
+
+**Upgrading.** A new nullable column and a new table; nothing existing changes
+behaviour, so there is no `UPGRADING.md` entry. On an installation whose
+finance tables were built by `create_all`, the migration adds both; on an empty
+database it skips both and `create_all` builds them from the models.
+
 ## Context
 
 Fire departments need internal financial workflows (budgets, purchase approvals, dues, expense reimbursements) but most use external accounting software like QuickBooks for actual bookkeeping. This module fills the gap: it provides the **internal operational finance workflows** that QuickBooks doesn't handle, with export capabilities to feed data into external accounting tools.

@@ -505,8 +505,17 @@ class TestTheFormOptions:
         assert resp.status_code == 200, resp.text
         rows = resp.json()
         assert {r["id"] for r in rows} == {dept["fy_id"]}
-        assert set(rows[0]) == {"id", "name", "status"}
+        # The budget-request deadline rides along so an owner can see when
+        # requests close; nothing about the year's money does.
+        assert set(rows[0]) == {
+            "id",
+            "name",
+            "status",
+            "requestDeadline",
+            "requestsOpen",
+        }
         assert rows[0]["status"] == "active"
+        assert rows[0]["requestsOpen"] is False
 
     async def test_another_departments_lines_are_not_offered(self, db_session, dept):
         other_org = await _org(db_session, "other")

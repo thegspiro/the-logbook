@@ -167,6 +167,29 @@ Locking transitions the fiscal year to **Closed** status and sets the `isLocked`
 
 > **Hint:** Create and set up your new fiscal year (including budgets) in Draft status before the current one ends. When the new period begins, activate it. This ensures a seamless transition with no gap in financial tracking.
 
+### Planning Next Year (Treasurer)
+
+Next year's budget is built in a **Draft** fiscal year. With `finance.manage`, open **Finance > Settings**; under a draft year you will find two controls.
+
+**1. Start from last year.** Rather than adding every line by hand:
+
+1. Under the draft year, pick the year to copy from in **Start from last year** (it defaults to the active year).
+2. Click **Copy lines**, then **Copy lines** again in the confirmation.
+3. The message tells you how many lines were copied and how many the draft already had (for example _"12 lines copied, 2 already there"_).
+
+Each copy keeps the line's category, station, notes and its own owner position, and starts at the line's **current** budget (amendments included), with nothing spent. Treat that amount as a starting point and edit it. A category and station the draft already has is left alone, so running it again copies nothing new. Lines whose owner comes from their category keep getting it from the category.
+
+**2. Set the request deadline.** Budget-line owners propose next year's amounts for their lines until this date:
+
+1. Under the draft year, choose a date in **Request deadline**.
+2. Click **Save deadline**. To remove it, click **Clear deadline**.
+
+The year's row then reads _"Requests close {date}"_ with a **Requests open** or **Requests closed** badge. Requests stay open through the **end of that day in your department's time zone**. After it, owners can no longer make, change, submit or withdraw a request (they see _"The request deadline for {year} has passed."_); you can still enter or change them on their behalf. A deadline can only be set while the year is a draft.
+
+**3. Decide the requests.** Each request is approved as asked, adjusted to a different amount (a note saying why is required), or declined (a note is required). Approving or adjusting writes the amount into the draft year's line — or, for a proposed new line, creates it. You can change a decision while the year is still a draft; once you activate it, decisions are final and the budget changes through amendments. The screens for owners to make requests and for you to review them are coming in a follow-up release; until then requests are made through the API.
+
+> **Hint:** A sensible order is: create the draft year, **Start from last year**, adjust the lines you already know, set the deadline, let owners request, decide, then **Activate** the year when it begins.
+
 ### Edge Cases
 
 | Scenario                                                | Behavior                                                                                                                                 |
@@ -174,6 +197,8 @@ Locking transitions the fiscal year to **Closed** status and sets the `isLocked`
 | Activating a fiscal year when another is already active | The previously active fiscal year is automatically set to Closed status                                                                  |
 | Submitting a request with no active fiscal year         | The request form will not allow submission -- the fiscal year dropdown will be empty                                                     |
 | Editing a locked fiscal year                            | Not permitted -- the system rejects modifications with "Fiscal year is locked and cannot be modified"                                    |
+| Setting a request deadline on an active or closed year  | Not permitted -- "The request deadline can only be set while the fiscal year is a draft."                                                |
+| Copying lines into an active year                       | Not permitted -- **Start from last year** only copies into a draft year that is not locked                                               |
 | Deleting a fiscal year with existing budgets            | Not permitted -- budgets cascade with the fiscal year, but the application blocks deletion of fiscal years that have associated requests |
 
 ---

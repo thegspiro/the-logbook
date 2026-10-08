@@ -23,6 +23,11 @@ import type {
   BudgetCategoryUpdatePayload,
   BudgetCreatePayload,
   BudgetOption,
+  BudgetRequest,
+  BudgetRequestCreatePayload,
+  BudgetRequestDecisionPayload,
+  BudgetRequestStatus,
+  BudgetRequestUpdatePayload,
   BudgetSummary,
   BudgetTransactionPage,
   BudgetUpdatePayload,
@@ -34,13 +39,16 @@ import type {
   FinanceDashboard,
   FiscalYear,
   FiscalYearOption,
+  FiscalYearUpdatePayload,
   FinanceNamedOption,
   MemberDues,
   MyBudget,
+  MyBudgetRequestLines,
   MyBudgetsSummary,
   PendingApproval,
   PurchaseRequest,
   MonetaryAmount,
+  StartFromLastYearResult,
   UnroutedApproval,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
@@ -73,8 +81,14 @@ export const fiscalYearService = {
     return response.data;
   },
 
-  async update(id: string, data: Partial<FiscalYear>): Promise<FiscalYear> {
+  async update(id: string, data: FiscalYearUpdatePayload): Promise<FiscalYear> {
     const response = await api.put<FiscalYear>(`/finance/fiscal-years/${id}`, data);
+    return response.data;
+  },
+
+  /** Copy another year's lines into the draft year `draftId` (finance.manage). */
+  async startFrom(draftId: string, sourceId: string): Promise<StartFromLastYearResult> {
+    const response = await api.post<StartFromLastYearResult>(`/finance/fiscal-years/${draftId}/start-from/${sourceId}`);
     return response.data;
   },
 
@@ -202,6 +216,63 @@ export const budgetService = {
     const response = await api.get<BudgetSummary>('/finance/budgets/summary', {
       params: { fiscal_year_id: fiscalYearId },
     });
+    return response.data;
+  },
+};
+
+// =============================================================================
+// Budget requests (next year's amounts)
+// =============================================================================
+
+export const budgetRequestService = {
+  /** finance.manage sees every request; anyone else, their own lines' and positions'. */
+  async list(params?: { fiscalYearId?: string; status?: BudgetRequestStatus }): Promise<BudgetRequest[]> {
+    const response = await api.get<BudgetRequest[]>('/finance/budget-requests', {
+      params: { fiscal_year_id: params?.fiscalYearId, status: params?.status },
+    });
+    return asArray(response.data);
+  },
+
+  /** The caller's lines in one year, each with its request, plus the year's deadline. */
+  async myLines(fiscalYearId: string): Promise<MyBudgetRequestLines> {
+    const response = await api.get<MyBudgetRequestLines>('/finance/budget-requests/my-lines', {
+      params: { fiscal_year_id: fiscalYearId },
+    });
+    return response.data;
+  },
+
+  async get(id: string): Promise<BudgetRequest> {
+    const response = await api.get<BudgetRequest>(`/finance/budget-requests/${id}`);
+    return response.data;
+  },
+
+  async create(data: BudgetRequestCreatePayload): Promise<BudgetRequest> {
+    const response = await api.post<BudgetRequest>('/finance/budget-requests', data);
+    return response.data;
+  },
+
+  async update(id: string, data: BudgetRequestUpdatePayload): Promise<BudgetRequest> {
+    const response = await api.put<BudgetRequest>(`/finance/budget-requests/${id}`, data);
+    return response.data;
+  },
+
+  async submit(id: string): Promise<BudgetRequest> {
+    const response = await api.post<BudgetRequest>(`/finance/budget-requests/${id}/submit`);
+    return response.data;
+  },
+
+  async withdraw(id: string): Promise<BudgetRequest> {
+    const response = await api.post<BudgetRequest>(`/finance/budget-requests/${id}/withdraw`);
+    return response.data;
+  },
+
+  async delete(id: string): Promise<void> {
+    await api.delete(`/finance/budget-requests/${id}`);
+  },
+
+  /** finance.manage only. */
+  async decide(id: string, data: BudgetRequestDecisionPayload): Promise<BudgetRequest> {
+    const response = await api.post<BudgetRequest>(`/finance/budget-requests/${id}/decide`, data);
     return response.data;
   },
 };

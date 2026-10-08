@@ -30,6 +30,9 @@ from app.schemas.finance import (
     BudgetCategoryCreate,
     BudgetCategoryUpdate,
     BudgetCreate,
+    BudgetRequestCreate,
+    BudgetRequestDecision,
+    BudgetRequestUpdate,
     BudgetUpdate,
     CheckRequestCreate,
     CheckRequestUpdate,
@@ -87,6 +90,7 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "name": "FY2026b",
         "start_date": "2026-01-02T00:00:00Z",
         "end_date": "2026-12-30T00:00:00Z",
+        "request_deadline": "2026-11-15",
     },
     BudgetCategoryCreate: {
         "name": "Apparatus",
@@ -124,6 +128,24 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "reason": "Hose replacement",
         "approved_by": "Board vote 10/7",
         "approved_on": "2026-10-07",
+    },
+    BudgetRequestCreate: {
+        "fiscal_year_id": "fy-2",
+        "budget_id": "budget-1",
+        "category_id": "cat-1",
+        "station_id": "st-1",
+        "owner_position_id": "pos-1",
+        "requested_amount": "2400.00",
+        "justification": "Two more academy seats",
+    },
+    BudgetRequestUpdate: {
+        "requested_amount": "2500.00",
+        "justification": "Three seats",
+    },
+    BudgetRequestDecision: {
+        "decision": "adjust",
+        "approved_amount": "2000.00",
+        "decision_note": "Hold at this year's level",
     },
     ApprovalChainStepCreate: dict(_STEP),
     ApprovalChainStepUpdate: dict(_STEP),
@@ -338,6 +360,7 @@ class TestUpdateSemanticsSurviveTheAlias:
             (BudgetCategoryUpdate, "ownerPositionId", "owner_position_id"),
             (BudgetUpdate, "ownerPositionId", "owner_position_id"),
             (BudgetUpdate, "stationId", "station_id"),
+            (FiscalYearUpdate, "requestDeadline", "request_deadline"),
         ],
     )
     def test_camelcase_null_clears_across_update_schemas(

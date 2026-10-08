@@ -147,3 +147,41 @@ async def user_owns_any_budget(
     )
     result = await db.execute(query)
     return result.first() is not None
+
+
+def held_positions_query(organization_id: str, user_id: str) -> Select:
+    """Select the ids of the positions ``user_id`` holds, in the org.
+
+    The same chain ``owned_budgets_query`` walks from a line's owner to its
+    holders — position in the org, member in the org and active — asked from
+    the member's end. A budget request for a line that does not exist yet is
+    owned by the position named on it, so this is how "may this member act
+    for that position" is answered (``user_holds_position``).
+    """
+    return (
+        select(Position.id)
+        .join(user_positions, user_positions.c.position_id == Position.id)
+        .join(
+            User,
+            and_(
+                User.id == user_positions.c.user_id,
+                User.organization_id == organization_id,
+            ),
+        )
+        .where(
+            Position.organization_id == organization_id,
+            User.id == str(user_id),
+            User.is_active,
+        )
+    )
+
+
+async def user_holds_position(
+    db: AsyncSession, organization_id: str, user_id: str, position_id: str
+) -> bool:
+    """True when ``user_id`` is an active member holding ``position_id``."""
+    query = held_positions_query(organization_id, user_id).where(
+        Position.id == str(position_id)
+    )
+    result = await db.execute(query.limit(1))
+    return result.first() is not None

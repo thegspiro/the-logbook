@@ -3,21 +3,27 @@
  *
  * Settings page for managing fiscal years (create, activate, lock)
  * and budget categories (CRUD, including each category's owner position).
+ *
+ * A draft year also carries next-year planning: "Start from last year" (copy
+ * another year's lines in as a starting point) and the request deadline line
+ * owners' budget requests close on. Whether requests are open is the
+ * backend's answer (`requestsOpen`), not worked out here.
  */
 
 import React, { useEffect, useState } from 'react';
-import { Plus, AlertTriangle, Calendar, Lock, CheckCircle, Trash2, Tag, Pencil } from 'lucide-react';
+import { Plus, AlertTriangle, Calendar, Lock, CheckCircle, Trash2, Tag, Pencil, Copy } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { budgetCategoryService, fiscalYearService } from '../services/api';
 import { useBudgetFormOptions, withCurrent } from '../hooks/useBudgetFormOptions';
-import type { BudgetCategory } from '../types';
+import type { BudgetCategory, FiscalYear } from '../types';
 import { blankToNull } from '@/utils/formValues';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { SkeletonPage } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { ConfirmDialog } from '@/components/ux/ConfirmDialog';
-import { formatDate } from '@/utils/dateFormatting';
+import { formatCalendarDate, formatDate } from '@/utils/dateFormatting';
+import { useConfirm } from '@/contexts/ConfirmContext';
 import { useTimezone } from '@/hooks/useTimezone';
 import { useOverlaySurface } from '../../../hooks/useOverlaySurface';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
@@ -283,6 +289,165 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ open, onClose, onSaved, c
 };
 
 // =============================================================================
+// Next-year planning (draft years only)
+// =============================================================================
+
+interface NextYearPlanningProps {
+  fy: FiscalYear;
+  /** The other fiscal years, any of which can be copied from. */
+  sources: FiscalYear[];
+  onChanged: () => void;
+}
+
+const NextYearPlanning: React.FC<NextYearPlanningProps> = ({ fy, sources, onChanged }) => {
+  const { confirm } = useConfirm();
+  const defaultSource = sources.find((s) => s.status === 'active') ?? sources[0];
+  const [sourceId, setSourceId] = useState(defaultSource?.id ?? '');
+  const [deadline, setDeadline] = useState(fy.requestDeadline ?? '');
+  const [copying, setCopying] = useState(false);
+  const [savingDeadline, setSavingDeadline] = useState(false);
+  const sourceSelectId = `start-from-${fy.id}`;
+  const deadlineInputId = `request-deadline-${fy.id}`;
+
+  const handleStartFrom = async () => {
+    const source = sources.find((s) => s.id === sourceId);
+    if (!source) return;
+    const confirmed = await confirm({
+      title: 'Start from last year',
+      message: `Copy every budget line from ${source.name} into ${fy.name}? Each copy starts at that line's current budget, with nothing spent, and you can change it afterwards. Lines ${fy.name} already has are left as they are.`,
+      confirmLabel: 'Copy lines',
+      cancelLabel: 'Not now',
+      variant: 'info',
+    });
+    if (!confirmed) return;
+    setCopying(true);
+    try {
+      const result = await fiscalYearService.startFrom(fy.id, source.id);
+      toast.success(
+        `${result.created} ${result.created === 1 ? 'line' : 'lines'} copied, ${result.skipped} already there`
+      );
+      onChanged();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to copy budget lines'));
+    } finally {
+      setCopying(false);
+    }
+  };
+
+  const saveDeadline = async (value: string) => {
+    setSavingDeadline(true);
+    try {
+      // An emptied field goes as null so the deadline is actually cleared
+      // (CLAUDE.md pitfall #1).
+      const requestDeadline = blankToNull(value);
+      await fiscalYearService.update(fy.id, { requestDeadline });
+      setDeadline(value);
+      toast.success(requestDeadline ? 'Request deadline saved' : 'Request deadline cleared');
+      onChanged();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save the request deadline'));
+    } finally {
+      setSavingDeadline(false);
+    }
+  };
+
+  return (
+    <div className="bg-theme-surface-secondary mt-3 grid gap-4 rounded-lg p-3 sm:grid-cols-2">
+      <div>
+        <label htmlFor={sourceSelectId} className={labelClass}>
+          Start from last year
+        </label>
+        {sources.length === 0 ? (
+          <p className="text-theme-text-secondary text-xs">There is no other fiscal year to copy from.</p>
+        ) : (
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <select
+              id={sourceSelectId}
+              className={inputClass}
+              value={sourceId}
+              onChange={(e) => setSourceId(e.target.value)}
+              aria-describedby={`${sourceSelectId}-hint`}
+            >
+              {sources.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => void handleStartFrom()}
+              disabled={copying || !sourceId}
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              {copying ? 'Copying...' : 'Copy lines'}
+            </button>
+          </div>
+        )}
+        <p id={`${sourceSelectId}-hint`} className="text-theme-text-secondary mt-1 text-xs">
+          Copies each line's category, station, owner and notes, starting at its current budget.
+        </p>
+      </div>
+      <div>
+        <label htmlFor={deadlineInputId} className={labelClass}>
+          Request deadline
+        </label>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input
+            id={deadlineInputId}
+            type="date"
+            className={inputClass}
+            value={deadline}
+            onChange={(e) => setDeadline(e.target.value)}
+            aria-describedby={`${deadlineInputId}-hint`}
+          />
+          <button
+            type="button"
+            onClick={() => void saveDeadline(deadline)}
+            disabled={savingDeadline || deadline === (fy.requestDeadline ?? '')}
+            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+          >
+            Save deadline
+          </button>
+          {fy.requestDeadline && (
+            <button
+              type="button"
+              onClick={() => void saveDeadline('')}
+              disabled={savingDeadline}
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+            >
+              Clear deadline
+            </button>
+          )}
+        </div>
+        <p id={`${deadlineInputId}-hint`} className="text-theme-text-secondary mt-1 text-xs">
+          Line owners can make and change budget requests through the end of this day.
+        </p>
+      </div>
+    </div>
+  );
+};
+
+/** The draft year's deadline and whether requests are open, as the row shows it. */
+const RequestWindow: React.FC<{ fy: FiscalYear }> = ({ fy }) => (
+  <p className="text-theme-text-secondary mt-0.5 flex flex-wrap items-center gap-2 text-xs">
+    <span>
+      {fy.requestDeadline ? `Requests close ${formatCalendarDate(fy.requestDeadline)}` : 'No request deadline'}
+    </span>
+    <span
+      className={`inline-flex rounded-full px-2 py-0.5 font-medium ${
+        fy.requestsOpen
+          ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
+          : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
+      }`}
+    >
+      {fy.requestsOpen ? 'Requests open' : 'Requests closed'}
+    </span>
+  </p>
+);
+
+// =============================================================================
 // Main Page Component
 // =============================================================================
 
@@ -409,43 +574,54 @@ const FiscalYearSettingsPage: React.FC = () => {
         ) : (
           <div className="divide-theme-surface-border divide-y">
             {fiscalYears.map((fy) => (
-              <div key={fy.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-theme-text-primary text-sm font-medium">{fy.name}</span>
-                    <span
-                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[fy.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
-                    >
-                      {STATUS_LABELS[fy.status] ?? fy.status}
-                    </span>
-                    {fy.isLocked && <Lock className="text-theme-text-secondary h-3.5 w-3.5" />}
+              <div key={fy.id} className="py-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-theme-text-primary text-sm font-medium">{fy.name}</span>
+                      <span
+                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[fy.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
+                      >
+                        {STATUS_LABELS[fy.status] ?? fy.status}
+                      </span>
+                      {fy.isLocked && <Lock className="text-theme-text-secondary h-3.5 w-3.5" />}
+                    </div>
+                    <p className="text-theme-text-secondary mt-0.5 text-xs">
+                      {formatDate(fy.startDate, tz)} - {formatDate(fy.endDate, tz)}
+                    </p>
+                    {fy.status === 'draft' && <RequestWindow fy={fy} />}
                   </div>
-                  <p className="text-theme-text-secondary mt-0.5 text-xs">
-                    {formatDate(fy.startDate, tz)} - {formatDate(fy.endDate, tz)}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    {fy.status === 'draft' && (
+                      <button
+                        type="button"
+                        onClick={() => void handleActivate(fy.id)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
+                      >
+                        <CheckCircle className="h-3.5 w-3.5" />
+                        Activate
+                      </button>
+                    )}
+                    {!fy.isLocked && fy.status !== 'draft' && (
+                      <button
+                        type="button"
+                        onClick={() => setLockingId(fy.id)}
+                        className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium"
+                      >
+                        <Lock className="h-3.5 w-3.5" />
+                        Lock
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {fy.status === 'draft' && (
-                    <button
-                      type="button"
-                      onClick={() => void handleActivate(fy.id)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
-                    >
-                      <CheckCircle className="h-3.5 w-3.5" />
-                      Activate
-                    </button>
-                  )}
-                  {!fy.isLocked && fy.status !== 'draft' && (
-                    <button
-                      type="button"
-                      onClick={() => setLockingId(fy.id)}
-                      className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium"
-                    >
-                      <Lock className="h-3.5 w-3.5" />
-                      Lock
-                    </button>
-                  )}
-                </div>
+                {fy.status === 'draft' && !fy.isLocked && (
+                  <NextYearPlanning
+                    key={fy.requestDeadline ?? ''}
+                    fy={fy}
+                    sources={fiscalYears.filter((other) => other.id !== fy.id)}
+                    onChanged={() => void fetchFiscalYears()}
+                  />
+                )}
               </div>
             ))}
           </div>

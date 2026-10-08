@@ -271,6 +271,19 @@ class FinanceService:
             raise ValueError("Fiscal year not found")
         if fy.is_locked:
             raise ValueError("Fiscal year is locked and cannot be modified")
+        if (
+            "request_deadline" in kwargs
+            and kwargs["request_deadline"] != fy.request_deadline
+            and fy.status != FiscalYearStatus.DRAFT
+        ):
+            # Requests are made only for a draft year, so a deadline on any
+            # other is a switch nothing reads (CLAUDE.md pitfall #19). An
+            # unchanged value is not a change, so a form that sends every
+            # field it owns still saves.
+            raise ValueError(
+                "The request deadline can only be set while the fiscal year "
+                "is a draft."
+            )
         apply_updates(fy, kwargs)
         await self.db.flush()
         await self.db.refresh(fy, ["updated_at"])

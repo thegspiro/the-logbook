@@ -44,6 +44,21 @@ class FiscalYearStatus(str, enum.Enum):
     CLOSED = "closed"
 
 
+class BudgetRequestStatus(str, enum.Enum):
+    """Where a line owner's request for next year's money stands.
+
+    ``draft`` and ``submitted`` belong to the owner (edit, submit, withdraw);
+    the other three are the Treasurer's decision. ``adjusted`` is an approval
+    for a different amount than was asked, and always carries a note.
+    """
+
+    DRAFT = "draft"
+    SUBMITTED = "submitted"
+    APPROVED = "approved"
+    ADJUSTED = "adjusted"
+    DECLINED = "declined"
+
+
 class PurchaseRequestStatus(str, enum.Enum):
     """Status of a purchase request"""
 
@@ -207,6 +222,10 @@ class FiscalYear(Base):
         default=FiscalYearStatus.DRAFT,
     )
     is_locked = Column(Boolean, nullable=False, default=False)
+    # The last day line owners may propose amounts for this (draft) year, on
+    # the department's calendar: requests stay open through the end of that
+    # day in the org's timezone. NULL means no deadline.
+    request_deadline = Column(Date, nullable=True)
     created_by = Column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
@@ -411,6 +430,90 @@ class BudgetAmendment(Base):
     organization = relationship("Organization", foreign_keys=[organization_id])
     budget = relationship("Budget", back_populates="amendments")
     creator = relationship("User", foreign_keys=[created_by])
+
+
+class BudgetRequest(Base):
+    """A line owner's proposed amount for a budget line in a draft year.
+
+    Either ``budget_id`` names the draft-year line the request is for, or —
+    for a line that does not exist yet — ``category_id`` and ``station_id``
+    describe the proposed line and ``owner_position_id`` the position that
+    will own it. Approving a proposal creates the line and links it here.
+
+    Who may make one is the ownership rule in
+    ``app/services/finance_budget_ownership.py``; the lifecycle is
+    ``app/services/finance_budget_request_service.py``.
+    """
+
+    __tablename__ = "budget_requests"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    fiscal_year_id = Column(
+        String(36),
+        ForeignKey("fiscal_years.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # SET NULL throughout: removing a line, category, station, position or
+    # member must neither be blocked by nor delete the record of what was
+    # asked for and decided.
+    budget_id = Column(
+        String(36),
+        ForeignKey("budgets.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    category_id = Column(
+        String(36),
+        ForeignKey("budget_categories.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    station_id = Column(
+        String(36),
+        ForeignKey("facilities.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    owner_position_id = Column(
+        String(36),
+        ForeignKey("positions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    requested_amount = Column(Numeric(12, 2), nullable=False)
+    justification = Column(Text, nullable=False)
+    status = Column(
+        SQLEnum(
+            BudgetRequestStatus,
+            values_callable=lambda x: [e.value for e in x],
+        ),
+        nullable=False,
+        default=BudgetRequestStatus.DRAFT,
+    )
+    approved_amount = Column(Numeric(12, 2), nullable=True)
+    decision_note = Column(Text, nullable=True)
+    submitted_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    submitted_at = Column(DateTime(timezone=True), nullable=True)
+    decided_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    decided_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
 
 # ============================================
