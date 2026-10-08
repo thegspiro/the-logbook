@@ -2852,8 +2852,10 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   `CHANGELOG.md`; CHECKLIST.md's no-DB claim (the one that caused the deferral);
   pass 4's stale `assert_in_org` count; and `module-audit/apparatus.md`'s AP-1,
   whose heading said FIXED while its body still said "not auto-fixed".
-  Flagged for later: no `docs/APPARATUS.md` exists for the repo's largest module
-  by endpoint count, and `ApparatusMaintenanceType`'s four `default_interval_*`
+  Flagged for later: no feature doc exists for the repo's largest module
+  by endpoint count (**closed 2026-10-08** — `docs/APPARATUS_MODULE.md`; this
+  entry originally named it `docs/APPARATUS.md`, but the house convention is
+  `<NAME>_MODULE.md`), and `ApparatusMaintenanceType`'s four `default_interval_*`
   columns have no reader — completing an annual pump test schedules nothing
   (pitfall #19's shape, but plausibly deliberate, so recorded rather than
   called a bug). Gate: flake8 0 · black 1,370 unchanged · tsc 0 · eslint (no
