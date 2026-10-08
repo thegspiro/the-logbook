@@ -8,6 +8,14 @@
  * the gate of the route it opens (a nav gate is a subset of its route's), so a
  * member holding only `finance.request` sees their three request lists and
  * nothing that would answer Access Denied.
+ *
+ * "My Budgets" is the one entry a permission cannot decide: it lists the
+ * budget lines whose owner position the member holds, so it is offered on
+ * `ownsBudgets` (the backend's answer, `useOwnsBudgets`) — to a Treasurer who
+ * owns a line as much as to a Training Officer, and to nobody who would find
+ * the page empty, the way the request lists are offered only to those who
+ * may open them. Its route needs only a session; the entry carries the
+ * group's gate because it lives inside the group.
  */
 import { FINANCE_REQUEST_READ_PERMISSIONS } from '../../modules/finance/hooks/useFinanceRequestAccess';
 
@@ -25,12 +33,18 @@ export const FINANCE_NAV_PERMISSIONS = FINANCE_REQUEST_READ_PERMISSIONS;
  * without the org-wide read is shown only their own requests, so the entry
  * says "My …" — the same title the page itself carries.
  */
-export function financeNavItems(checkPermission: (permission: string) => boolean): FinanceNavItem[] {
+export function financeNavItems(
+  checkPermission: (permission: string) => boolean,
+  options: { ownsBudgets?: boolean } = {}
+): FinanceNavItem[] {
   const canManage = checkPermission('finance.manage');
   const seesAllRequests = canManage || checkPermission('finance.view');
   const mine = (all: string, own: string, seesAll: boolean) => (seesAll ? all : own);
   return [
     { label: 'Dashboard', path: '/finance', anyPermission: ['finance.view'] },
+    ...(options.ownsBudgets
+      ? [{ label: 'My Budgets', path: '/finance/my-budgets', anyPermission: [...FINANCE_NAV_PERMISSIONS] }]
+      : []),
     {
       label: mine('Purchase Requests', 'My Purchase Requests', seesAllRequests),
       path: '/finance/purchase-requests',

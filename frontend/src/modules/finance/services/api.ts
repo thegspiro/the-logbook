@@ -24,6 +24,7 @@ import type {
   BudgetCreatePayload,
   BudgetOption,
   BudgetSummary,
+  BudgetTransactionPage,
   BudgetUpdatePayload,
   CheckRequest,
   DuesSchedule,
@@ -35,6 +36,8 @@ import type {
   FiscalYearOption,
   FinanceNamedOption,
   MemberDues,
+  MyBudget,
+  MyBudgetsSummary,
   PendingApproval,
   PurchaseRequest,
   MonetaryAmount,
@@ -164,6 +167,29 @@ export const budgetService = {
   async listAmendments(id: string): Promise<BudgetAmendment[]> {
     const response = await api.get<BudgetAmendment[]>(`/finance/budgets/${id}/amendments`);
     return asArray(response.data);
+  },
+
+  /**
+   * What moved the line's spent and committed totals, newest first. Open to
+   * `finance.view` and to the line's owner, like `get` and `listAmendments`.
+   */
+  async listTransactions(id: string, params: { limit: number; offset: number }): Promise<BudgetTransactionPage> {
+    const response = await api.get<BudgetTransactionPage>(`/finance/budgets/${id}/transactions`, { params });
+    return { ...response.data, items: asArray(response.data.items) };
+  },
+
+  /** The lines the signed-in member owns, every fiscal year, newest first. */
+  async listMine(params?: { fiscalYearId?: string }): Promise<MyBudget[]> {
+    const response = await api.get<MyBudget[]>('/finance/my-budgets', {
+      params: { fiscal_year_id: params?.fiscalYearId },
+    });
+    return asArray(response.data);
+  },
+
+  /** Whether the signed-in member owns any line — the navigation's signal. */
+  async mySummary(): Promise<MyBudgetsSummary> {
+    const response = await api.get<MyBudgetsSummary>('/finance/my-budgets/summary');
+    return response.data;
   },
 
   /** Record extra money approved for a line; raises its budget by the amount. */

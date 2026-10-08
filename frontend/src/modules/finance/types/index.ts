@@ -240,6 +240,13 @@ export interface Budget {
   amountSpent: MonetaryAmount;
   amountEncumbered: MonetaryAmount;
   notes?: string;
+  /**
+   * The category's and fiscal year's names, sent with the line so a reader
+   * who cannot list either (a line's owner without `finance.view`) can label it.
+   */
+  categoryName?: string | null;
+  fiscalYearName?: string | null;
+  fiscalYearStatus?: FiscalYearStatus | null;
   stationId?: string | null;
   /** The facility name — the same one the request forms label the line with. */
   stationName?: string | null;
@@ -262,6 +269,53 @@ export interface Budget {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * A line the signed-in member owns, as "My budgets" lists it. The backend
+ * decides which lines those are (`finance_budget_ownership.py`) and reports
+ * what is left and the share used; the page shows them, it does not re-derive
+ * them (CLAUDE.md pitfall #29).
+ */
+export interface MyBudget extends Budget {
+  amountRemaining: MonetaryAmount;
+  /** Spent plus committed (encumbered), over the current budget, in percent. */
+  percentUsed: number;
+}
+
+export interface MyBudgetsSummary {
+  /** The member owns at least one budget line, in any fiscal year. */
+  ownsAny: boolean;
+}
+
+/** What moved a line's totals: a purchase request, check request or expense item. */
+export type BudgetTransactionKind = 'purchase_request' | 'check_request' | 'expense_report';
+
+/** `none` is a voided check — once spent, since reversed. */
+export type BudgetTransactionEffect = 'spent' | 'encumbered' | 'none';
+
+export interface BudgetTransaction {
+  /** The row: the request itself, or an expense report's line item. */
+  id: string;
+  kind: BudgetTransactionKind;
+  /** The purchase request, check request or expense report it came from. */
+  entityId: string;
+  number: string;
+  description?: string | null;
+  /** Vendor, payee or merchant. */
+  counterparty?: string | null;
+  requesterName?: string | null;
+  status: string;
+  amount: MonetaryAmount;
+  effect: BudgetTransactionEffect;
+  occurredAt?: string | null;
+}
+
+export interface BudgetTransactionPage {
+  items: BudgetTransaction[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 /** Extra money leadership approved for a budget line — an audit record. */

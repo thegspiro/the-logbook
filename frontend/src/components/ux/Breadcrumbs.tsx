@@ -140,6 +140,7 @@ const PATH_LABELS: Record<string, string> = {
   // Finance module
   finance: 'Finance',
   budgets: 'Budgets',
+  'my-budgets': 'My Budgets',
   expenses: 'Expenses',
   'check-requests': 'Check Requests',
   'purchase-requests': 'Purchase Requests',
