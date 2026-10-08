@@ -116,12 +116,15 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   // it; gated like the in-app Approvals route.
   '/finance/approvals': { permissions: ['finance.approve'] },
   '/finance/budgets': { permissions: ['finance.view'] },
-  '/finance/check-requests': { permissions: ['finance.view'] },
+  '/finance/check-requests': { permissions: ['finance.request', 'finance.view', 'finance.manage'] },
   // Registered for its label: the segment is "expenses" while the page's own
   // heading, the detail page's back link and the testing registry all call it
   // Expense Reports.
-  '/finance/expenses': { label: 'Expense Reports', permissions: ['finance.view'] },
-  '/finance/purchase-requests': { permissions: ['finance.view'] },
+  '/finance/expenses': {
+    label: 'Expense Reports',
+    permissions: ['finance.request', 'finance.view', 'finance.manage'],
+  },
+  '/finance/purchase-requests': { permissions: ['finance.request', 'finance.view', 'finance.manage'] },
   '/finance/settings': { permissions: ['finance.manage'] },
   '/grants/applications': { permissions: ['fundraising.view'] },
   '/inventory/admin/checklists': { permissions: ['inventory.check_manage'] },

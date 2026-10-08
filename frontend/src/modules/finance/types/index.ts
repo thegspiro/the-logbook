@@ -243,6 +243,24 @@ export interface Budget {
   updatedAt: string;
 }
 
+/**
+ * A budget line as the request forms offer it — `GET /finance/budgets/options`.
+ * All a member holding only `finance.request` sees of a budget.
+ */
+export interface BudgetOption {
+  id: string;
+  /** Category name, plus the station when the line has one. */
+  label: string;
+  amountRemaining: MonetaryAmount;
+}
+
+/** An active or draft fiscal year — `GET /finance/fiscal-years/options`. */
+export interface FiscalYearOption {
+  id: string;
+  name: string;
+  status: FiscalYearStatus;
+}
+
 export interface BudgetSummary {
   totalBudgeted: MonetaryAmount;
   totalSpent: MonetaryAmount;

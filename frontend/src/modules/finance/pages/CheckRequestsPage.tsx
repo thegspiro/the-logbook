@@ -8,6 +8,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { Plus, FileCheck, AlertTriangle, Search, X } from 'lucide-react';
 import { useFinanceStore } from '../store/financeStore';
+import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { SkeletonPage } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
@@ -47,6 +48,12 @@ const CheckRequestsPage: React.FC = () => {
   const tz = useTimezone();
   const navigate = useNavigate();
   const { checkRequests, isLoading, error, fetchCheckRequests } = useFinanceStore();
+  const access = useFinanceRequestAccess();
+  // A member without the org-wide read sees only what they raised, so the
+  // page says so rather than presenting their own list as the department's.
+  const seesAll = access.seesAllRequests;
+  const pageTitle = seesAll ? 'Check Requests' : 'My Check Requests';
+  const pageSubtitle = seesAll ? 'Request and track checks for vendors and payees' : 'Checks you have requested';
 
   const [statusFilter, setStatusFilter] = useState('');
   const [searchText, setSearchText] = useState('');
@@ -71,8 +78,8 @@ const CheckRequestsPage: React.FC = () => {
       <div className="space-y-6">
         <Breadcrumbs />
         <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold">Check Requests</h1>
-          <p className="text-theme-text-secondary mt-1 text-sm">Request and track checks for vendors and payees</p>
+          <h1 className="text-theme-text-primary text-2xl font-bold">{pageTitle}</h1>
+          <p className="text-theme-text-secondary mt-1 text-sm">{pageSubtitle}</p>
         </div>
         <SkeletonPage rows={6} showStats={false} />
       </div>
@@ -86,17 +93,19 @@ const CheckRequestsPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold">Check Requests</h1>
-          <p className="text-theme-text-secondary mt-1 text-sm">Request and track checks for vendors and payees</p>
+          <h1 className="text-theme-text-primary text-2xl font-bold">{pageTitle}</h1>
+          <p className="text-theme-text-secondary mt-1 text-sm">{pageSubtitle}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => void navigate('/finance/check-requests/new')}
-          className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
-        >
-          <Plus className="h-4 w-4" />
-          New Check Request
-        </button>
+        {access.canRaise && (
+          <button
+            type="button"
+            onClick={() => void navigate('/finance/check-requests/new')}
+            className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
+          >
+            <Plus className="h-4 w-4" />
+            New Check Request
+          </button>
+        )}
       </div>
 
       {/* Error */}
@@ -159,10 +168,12 @@ const CheckRequestsPage: React.FC = () => {
           description={
             searchText || statusFilter
               ? 'Try adjusting your search or filters.'
-              : 'Create your first check request to get started.'
+              : access.canRaise
+                ? 'Create your first check request to get started.'
+                : 'No check requests have been raised yet.'
           }
           actions={
-            !searchText && !statusFilter
+            !searchText && !statusFilter && access.canRaise
               ? [
                   {
                     label: 'New Check Request',

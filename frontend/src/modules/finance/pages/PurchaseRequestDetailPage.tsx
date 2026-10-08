@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
+import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
 import { purchaseRequestService } from '../services/api';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { Skeleton } from '@/components/ux/Skeleton';
@@ -198,6 +199,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
     fetchPurchaseRequest,
     submitPurchaseRequest,
   } = useFinanceStore();
+  const access = useFinanceRequestAccess();
 
   useEffect(() => {
     if (id) {
@@ -296,12 +298,21 @@ const PurchaseRequestDetailPage: React.FC = () => {
     );
   }
 
-  const canEdit = pr.status === PurchaseRequestStatus.DRAFT;
-  const canSubmit = pr.status === PurchaseRequestStatus.DRAFT;
-  const canMarkOrdered = pr.status === PurchaseRequestStatus.APPROVED;
-  const canMarkReceived = pr.status === PurchaseRequestStatus.ORDERED;
-  const canMarkPaid = pr.status === PurchaseRequestStatus.RECEIVED;
-  const canCancel = pr.status !== PurchaseRequestStatus.PAID && pr.status !== PurchaseRequestStatus.CANCELLED;
+  // Each button is offered only to someone the endpoint behind it will
+  // accept: the requester's own actions to the requester (or the finance
+  // office), the order/receive/pay steps to finance.manage alone.
+  const isRequester = access.canActAsRequester(pr.requestedBy);
+  const isDraft = pr.status === PurchaseRequestStatus.DRAFT;
+  const canEdit = isDraft && isRequester;
+  const canSubmit = isDraft && isRequester;
+  const canMarkOrdered = access.canManage && pr.status === PurchaseRequestStatus.APPROVED;
+  const canMarkReceived = access.canManage && pr.status === PurchaseRequestStatus.ORDERED;
+  const canMarkPaid = access.canManage && pr.status === PurchaseRequestStatus.RECEIVED;
+  // A requester may withdraw only a draft; past that it is the finance
+  // office's to cancel (FinanceService.cancel_purchase_request).
+  const canCancel = access.canManage
+    ? pr.status !== PurchaseRequestStatus.PAID && pr.status !== PurchaseRequestStatus.CANCELLED
+    : isDraft && isRequester;
 
   return (
     <div className="space-y-6">

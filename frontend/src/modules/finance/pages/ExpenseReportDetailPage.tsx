@@ -10,6 +10,7 @@ import { useParams, Link } from 'react-router';
 import { ArrowLeft, AlertTriangle, Receipt, Send, CheckCircle, Clock, XCircle, Ban } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
+import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
@@ -74,6 +75,7 @@ const ExpenseReportDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { busy, run } = useSubmitGuard();
   const { selectedExpenseReport: er, isLoading, error, fetchExpenseReport, submitExpenseReport } = useFinanceStore();
+  const access = useFinanceRequestAccess();
 
   useEffect(() => {
     if (id) {
@@ -128,7 +130,8 @@ const ExpenseReportDetailPage: React.FC = () => {
     );
   }
 
-  const canSubmit = er.status === ExpenseReportStatus.DRAFT;
+  // Submitting is the requester's action (or the finance office's).
+  const canSubmit = er.status === ExpenseReportStatus.DRAFT && access.canActAsRequester(er.submittedBy);
 
   return (
     <div className="space-y-6">

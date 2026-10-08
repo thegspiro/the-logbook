@@ -1187,26 +1187,37 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Finance _(documented 2026-08-10)_
 
-| URL                                   | Page                       | Permission                    |
-| ------------------------------------- | -------------------------- | ----------------------------- |
-| `/finance`                            | Finance Dashboard          | `finance.view`                |
-| `/finance/budgets`                    | Budgets                    | `finance.view`                |
-| `/finance/budgets/:id`                | Budget Detail              | `finance.view`                |
-| `/finance/purchase-requests`          | Purchase Requests          | `finance.view`                |
-| `/finance/purchase-requests/new`      | New Purchase Request       | `finance.view`                |
-| `/finance/purchase-requests/:id`      | Purchase Request Detail    | `finance.view`                |
-| `/finance/purchase-requests/:id/edit` | Edit Purchase Request      | `finance.view`                |
-| `/finance/expenses`                   | Expense Reports            | `finance.view`                |
-| `/finance/expenses/new`               | New Expense Report         | `finance.view`                |
-| `/finance/expenses/:id`               | Expense Report Detail      | `finance.view`                |
-| `/finance/check-requests`             | Check Requests             | `finance.view`                |
-| `/finance/check-requests/new`         | New Check Request          | `finance.view`                |
-| `/finance/check-requests/:id`         | Check Request Detail       | `finance.view`                |
-| `/finance/dues`                       | Dues                       | `finance.view`                |
-| `/finance/approvals`                  | Approvals                  | `finance.approve`             |
-| `/finance/settings`                   | Finance Settings           | `finance.manage`              |
-| `/finance/settings/approval-chains`   | Approval Chains            | `finance.configure_approvals` |
-| `/finance/approvals/:token`           | Tokenized Approval Landing | Token-based                   |
+| URL                                   | Page                       | Permission                                            |
+| ------------------------------------- | -------------------------- | ----------------------------------------------------- |
+| `/finance`                            | Finance Dashboard          | `finance.view`                                        |
+| `/finance/budgets`                    | Budgets                    | `finance.view`                                        |
+| `/finance/budgets/:id`                | Budget Detail              | `finance.view`                                        |
+| `/finance/purchase-requests`          | Purchase Requests          | `finance.request`, `finance.view` or `finance.manage` |
+| `/finance/purchase-requests/new`      | New Purchase Request       | `finance.request` or `finance.manage`                 |
+| `/finance/purchase-requests/:id`      | Purchase Request Detail    | `finance.request`, `finance.view` or `finance.manage` |
+| `/finance/purchase-requests/:id/edit` | Edit Purchase Request      | `finance.request` or `finance.manage`                 |
+| `/finance/expenses`                   | Expense Reports            | `finance.request`, `finance.view` or `finance.manage` |
+| `/finance/expenses/new`               | New Expense Report         | `finance.request` or `finance.manage`                 |
+| `/finance/expenses/:id`               | Expense Report Detail      | `finance.request`, `finance.view` or `finance.manage` |
+| `/finance/check-requests`             | Check Requests             | `finance.request`, `finance.view` or `finance.manage` |
+| `/finance/check-requests/new`         | New Check Request          | `finance.request` or `finance.manage`                 |
+| `/finance/check-requests/:id`         | Check Request Detail       | `finance.request`, `finance.view` or `finance.manage` |
+| `/finance/dues`                       | Dues                       | `finance.view`                                        |
+| `/finance/approvals`                  | Approvals                  | `finance.approve`                                     |
+| `/finance/settings`                   | Finance Settings           | `finance.manage`                                      |
+| `/finance/settings/approval-chains`   | Approval Chains            | `finance.configure_approvals`                         |
+| `/finance/approvals/:token`           | Tokenized Approval Landing | Token-based                                           |
+
+> **Every member raises their own requests** _(2026-10-07)_. `finance.request`
+> is seeded to every member. It opens the purchase request, expense report and
+> check request pages for the requests the member raised — the API confines a
+> holder without `finance.view` / `finance.manage` to their own records, and
+> another member's is a 404. The lists read **My Purchase Requests** (and so on)
+> for them, and the forms pick a budget line from
+> `GET /finance/budgets/options`, which returns a label and the amount
+> remaining and nothing else. `finance.view` alone keeps its org-wide read of
+> the purchase and check request queues but is no longer offered the New / Edit
+> forms, which it could never save.
 
 > **Separation of duties on money out** _(2026-08-09)_. The member who
 > **disburses** may not be the member the record is **about**. Enforced

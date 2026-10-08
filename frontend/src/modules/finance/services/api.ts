@@ -17,6 +17,7 @@ import type {
   ApproverCoverageRow,
   Budget,
   BudgetCategory,
+  BudgetOption,
   BudgetSummary,
   CheckRequest,
   DuesSchedule,
@@ -25,6 +26,7 @@ import type {
   ExpenseReport,
   FinanceDashboard,
   FiscalYear,
+  FiscalYearOption,
   MemberDues,
   PendingApproval,
   PurchaseRequest,
@@ -42,6 +44,12 @@ const api = createApiClient();
 export const fiscalYearService = {
   async list(): Promise<FiscalYear[]> {
     const response = await api.get<FiscalYear[]>('/finance/fiscal-years');
+    return asArray(response.data);
+  },
+
+  /** Active and draft years, for the request forms. Open to `finance.request`. */
+  async options(): Promise<FiscalYearOption[]> {
+    const response = await api.get<FiscalYearOption[]>('/finance/fiscal-years/options');
     return asArray(response.data);
   },
 
@@ -113,6 +121,17 @@ export const budgetService = {
         fiscal_year_id: params?.fiscalYearId,
         category_id: params?.categoryId,
       },
+    });
+    return asArray(response.data);
+  },
+
+  /**
+   * A fiscal year's budget lines as label + amount remaining, for the request
+   * forms. Open to `finance.request`, unlike the rest of this service.
+   */
+  async options(fiscalYearId: string): Promise<BudgetOption[]> {
+    const response = await api.get<BudgetOption[]>('/finance/budgets/options', {
+      params: { fiscal_year_id: fiscalYearId },
     });
     return asArray(response.data);
   },

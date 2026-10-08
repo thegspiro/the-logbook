@@ -4,7 +4,35 @@
 >
 > **Availability**: Controlled per organization at runtime via the organization's settings (`enabled_modules`), configured in Organization/Admin Settings. The API routers register unconditionally.
 >
-> **Permissions**: `finance.view`, `finance.manage`, `finance.approve`, `finance.configure_approvals`
+> **Permissions**: `finance.request`, `finance.view`, `finance.manage`, `finance.approve`, `finance.configure_approvals`
+
+## Who may do what with a request _(2026-10-07)_
+
+`finance.request` is seeded to **every member** through the `member` position, which every
+member holds (migration `7db20aa49329` carries it to departments onboarded
+earlier). It is deliberately not a rank default: a rank's grants resolve at
+runtime and cannot be withdrawn, while a department that does not want members
+raising requests can remove it from the Member position. It is the requester's side of purchase
+requests, expense reports and check requests, and it is confined to the
+caller's own records: the endpoints scope reads to `requested_by` /
+`submitted_by` and refuse another member's record with **404**, exactly as for
+an id that does not exist.
+
+| Action                                                                         | Gate                                                  | Scope without `finance.manage`                                                                              |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| List / read purchase and check requests                                        | `finance.request`, `finance.view` or `finance.manage` | own only, unless the caller holds `finance.view`                                                            |
+| List / read expense reports                                                    | `finance.request`, `finance.view` or `finance.manage` | own only — including for `finance.view` (FIN-5)                                                             |
+| Create, edit (draft / submitted), submit; add an expense line                  | `finance.request` or `finance.manage`                 | own only; `finance.view` alone cannot write                                                                 |
+| Cancel a purchase request                                                      | `finance.request` or `finance.manage`                 | own **draft** only — a submitted request has approval steps and possibly an encumbrance; the office cancels |
+| Mark ordered / received / paid, mark an expense paid, issue / void             | `finance.manage`                                      | —                                                                                                           |
+| `GET /finance/budgets/options?fiscal_year_id=` — id, label, amount left        | `finance.request`, `finance.view` or `finance.manage` | org-scoped; the label is the category, plus the station when set, numbered if two still read the same       |
+| `GET /finance/fiscal-years/options` — active and draft years: id, name, status | `finance.request`, `finance.view` or `finance.manage` | org-scoped                                                                                                  |
+| Budgets, budget summary, fiscal-year list, dashboard, dues                     | unchanged (`finance.view` and up)                     | —                                                                                                           |
+
+Approval chains, separation of duties and the named-approver enforcement are
+unchanged: a member's request goes through the same chain as anyone else's, and
+nobody approves or pays their own. `tests/test_finance_member_requests.py` pins
+all of the above over HTTP.
 
 ## Context
 
@@ -65,6 +93,7 @@ Enums:
 **Permissions** (add to `backend/app/core/permissions.py`):
 
 - New category: `FINANCE = "finance"`
+- `finance.request` — Create, submit and track your own purchase requests, expense reports and check requests (every member; see **Who may do what with a request** above)
 - `finance.view` — View financial data, budgets
 - `finance.manage` — Manage budgets, fiscal years, categories
 - `finance.approve` — Approve purchase requests, expenses, check requests (used as a fallback approver type when no chain is configured)

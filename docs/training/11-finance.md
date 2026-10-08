@@ -30,21 +30,32 @@ The Finance module is an optional module that must be enabled by your department
 
 | Role                                            | What They Do                                                                                                    |
 | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| **All members**                                 | Submit purchase requests, expense reports, and check requests; view their own dues status                       |
-| **Officers with `finance.view`**                | View budgets, financial dashboards, and dues management                                                         |
+| **All members** (`finance.request`)             | Raise, submit and track their own purchase requests, expense reports, and check requests                        |
+| **Officers with `finance.view`**                | View budgets, financial dashboards, dues, and every member's purchase and check requests                        |
 | **Officers with `finance.manage`**              | Create and edit budgets, fiscal years, and budget categories; mark payments; manage dues schedules; run exports |
 | **Officers with `finance.approve`**             | Approve or deny purchase requests, expense reports, and check requests                                          |
 | **Officers with `finance.configure_approvals`** | Set up and manage approval chains and their steps                                                               |
 
-The seeded **Treasurer** position holds all four finance permissions, so a new
-department's Treasurer can build the approval chain and act on it. Nobody can
-approve their own request, whatever they hold.
+The seeded **Treasurer** position holds all four officer finance permissions, so
+a new department's Treasurer can build the approval chain and act on it. Nobody
+can approve or pay their own request, whatever they hold.
+
+Every member holds `finance.request`, which is what lets them raise their own
+requests. A member who holds nothing else sees **Finance > My Purchase
+Requests**, **My Expense Reports** and **My Check Requests** — only the
+requests they raised, never anyone else's — and picks a budget line by its name
+and the amount left on it ("Training — $1,250.00 remaining"), without seeing
+the budget pages. They can edit a request until they submit it and withdraw a
+draft; once submitted, only the finance office can cancel it. A department that
+does not want members raising requests removes `finance.request` from the
+**Member** position.
 
 ### Permissions
 
 | Permission                    | Description                                                                                                                 |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `finance.view`                | View financial data including budgets, reports, and dues; create and submit your own requests                               |
+| `finance.request`             | Create, submit and track your own purchase requests, expense reports and check requests. Held by every member               |
+| `finance.view`                | View financial data including budgets, reports, and dues, and read every member's purchase and check requests (not create)  |
 | `finance.manage`              | Create and edit budgets, fiscal years, categories; mark payments on requests; manage dues schedules; run QuickBooks exports |
 | `finance.approve`             | Approve or deny submitted requests in the approval workflow                                                                 |
 | `finance.configure_approvals` | Create, edit, and delete approval chains and configure approval steps                                                       |
@@ -688,7 +699,7 @@ Purchase request numbers are auto-generated in the format **PR-YYYY-0001**, wher
 
 ### Creating a Purchase Request
 
-**Required Permission:** `finance.view`
+**Required Permission:** `finance.request` (every member) or `finance.manage`
 
 1. Navigate to **Finance > Purchase Requests**.
 2. Click **New Purchase Request** (or go directly to `/finance/purchase-requests/new`).
@@ -799,7 +810,7 @@ Expense report numbers are auto-generated in the format **ER-YYYY-0001**, where 
 
 ### Creating an Expense Report
 
-**Required Permission:** `finance.view`
+**Required Permission:** `finance.request` (every member) or `finance.manage`
 
 1. Navigate to **Finance > Expenses**.
 2. Click **New Expense Report** (or go directly to `/finance/expenses/new`).
@@ -928,7 +939,7 @@ Check request numbers are auto-generated in the format **CK-YYYY-0001**, where Y
 
 ### Creating a Check Request
 
-**Required Permission:** `finance.view`
+**Required Permission:** `finance.request` (every member) or `finance.manage`
 
 1. Navigate to **Finance > Check Requests**.
 2. Click **New Check Request** (or go directly to `/finance/check-requests/new`).

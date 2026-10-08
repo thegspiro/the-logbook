@@ -48,6 +48,7 @@ import {
   Stethoscope,
   Store,
   HandCoins,
+  Wallet,
 } from 'lucide-react';
 import { Sun, Moon, Monitor, Contrast, WifiOff, RefreshCw, Loader2 } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
@@ -68,6 +69,7 @@ import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
 import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
 import { GRANTS_NAV_ITEMS } from './grantsNavigation';
+import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './financeNavigation';
 
 interface SideNavigationProps {
   departmentName: string;
@@ -418,6 +420,19 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
           : []),
       ],
     },
+    // Every member holds finance.request, so the group is how they reach their
+    // own purchase requests, expense reports and check requests.
+    ...(isModuleOn('finance')
+      ? [
+          {
+            label: 'Finance',
+            path: financeNavPath(checkPermission),
+            icon: Wallet,
+            anyPermission: [...FINANCE_NAV_PERMISSIONS],
+            subItems: financeNavItems(checkPermission).map((item) => ({ ...item, icon: Wallet })),
+          } as NavItem,
+        ]
+      : []),
     // Every grants route requires `fundraising.view` as well as the module, so
     // the entry carries the same gate (a nav gate is a subset of its route's).
     ...(isModuleOn('grants')
