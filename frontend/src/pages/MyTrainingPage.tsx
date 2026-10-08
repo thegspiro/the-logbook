@@ -93,7 +93,10 @@ const Section: React.FC<{
 }> = ({ title, icon: Icon, children, defaultOpen = true }) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="card-secondary overflow-hidden">
+    // overflow-clip, not overflow-hidden: hidden makes this card a scroll
+    // container, which pins the settings save bar to the card instead of the
+    // viewport and so stops it sticking.
+    <div className="card-secondary overflow-clip">
       <button
         onClick={() => setOpen(!open)}
         aria-expanded={open}
@@ -113,6 +116,17 @@ const Section: React.FC<{
     </div>
   );
 };
+
+// ==================== Settings Card ====================
+
+const SettingsCard: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+  <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-lg border">
+    <h4 className="text-theme-text-primary border-theme-surface-border border-b px-4 py-2.5 text-sm font-semibold">
+      {title}
+    </h4>
+    {children}
+  </div>
+);
 
 // ==================== Config Editor (Officers Only) ====================
 
@@ -216,6 +230,8 @@ const VISIBILITY_FIELDS: Array<{ key: keyof TMConfig; label: string; description
   },
 ];
 
+const RIGHT_COLUMN_GROUPS = new Set(['Officer Observations']);
+
 const SKILLS_DISCLOSURE_OPTIONS = [
   { value: 'full', label: 'Full results — scores and examiner notes' },
   { value: 'scores', label: 'Scores only — pass/fail and points, no written notes' },
@@ -278,227 +294,250 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave, canManageTr
 
   const currentScaleType = getStringValue('rating_scale_type') || 'stars';
 
-  return (
-    <div className="space-y-6">
-      <p className="text-theme-text-muted text-sm">
-        Control what training data members can see on their personal training page. Officers and administrators always
-        see the full dataset regardless of these settings. Withheld fields are left out of the API response, not merely
-        hidden on screen, and the member export honours them too.
-      </p>
+  const changeCount = Object.keys(draft).length;
+  const leftGroups = groups.filter((g) => !RIGHT_COLUMN_GROUPS.has(g));
+  const rightGroups = groups.filter((g) => RIGHT_COLUMN_GROUPS.has(g));
 
-      {groups.map((group) => (
-        <div key={group}>
-          <h4 className="text-theme-text-secondary mb-3 text-sm font-semibold">{group}</h4>
-          <div className="space-y-2">
-            {VISIBILITY_FIELDS.filter((f) => f.group === group).map((field) => (
-              <label
-                key={field.key}
-                className="bg-theme-surface hover:bg-theme-surface-hover flex cursor-pointer items-center justify-between rounded-lg p-3 transition-colors"
-              >
-                <div>
-                  <p className="text-theme-text-primary text-sm font-medium">{field.label}</p>
-                  <p className="text-theme-text-muted text-xs">{field.description}</p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={getCurrentValue(field.key)}
-                  onChange={(e) => setDraft({ ...draft, [field.key]: e.target.checked })}
-                  className="form-checkbox"
-                />
-              </label>
-            ))}
-          </div>
-        </div>
-      ))}
-
-      {/* Skills-test results — the department default. Individual templates and
-          tests may override both settings; this is what applies when they
-          don't. */}
-      <div>
-        <h3 className="text-theme-text-primary mb-3 text-sm font-semibold tracking-wide uppercase">
-          Skills-Test Results
-        </h3>
-        <div className="space-y-3">
-          <div className="bg-theme-surface rounded-lg p-3">
-            <p className="text-theme-text-primary mb-1 text-sm font-medium">What the member sees</p>
-            <p className="text-theme-text-muted mb-2 text-xs">
-              Examiner notes are often candid working notes for the training file rather than feedback written for the
-              member to read. Officers always see everything.
-            </p>
-            <select
-              value={getStringValue('skills_result_disclosure') || 'full'}
-              onChange={(e) => setDraft({ ...draft, skills_result_disclosure: e.target.value })}
-              className="form-input text-sm"
-            >
-              {SKILLS_DISCLOSURE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {getStringValue('skills_result_disclosure') !== 'none' && (
-            <div className="bg-theme-surface rounded-lg p-3">
-              <p className="text-theme-text-primary mb-1 text-sm font-medium">When they see it</p>
-              <p className="text-theme-text-muted mb-2 text-xs">
-                Requiring a release lets an officer review the scorecard, or deliver a failure in person, before the
-                member reads it. Practice attempts are never held back.
-              </p>
-              <select
-                value={getStringValue('skills_result_release') || 'on_completion'}
-                onChange={(e) => setDraft({ ...draft, skills_result_release: e.target.value })}
-                className="form-input text-sm"
-              >
-                {SKILLS_RELEASE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+  const renderGroup = (group: string) => (
+    <SettingsCard key={group} title={group}>
+      <div className="divide-theme-surface-border divide-y">
+        {VISIBILITY_FIELDS.filter((f) => f.group === group).map((field) => (
+          <label
+            key={field.key}
+            className="hover:bg-theme-surface-hover flex cursor-pointer items-center justify-between gap-4 px-4 py-3 transition-colors"
+          >
+            <div className="min-w-0">
+              <p className="text-theme-text-primary text-sm font-medium">{field.label}</p>
+              <p className="text-theme-text-muted text-xs">{field.description}</p>
             </div>
-          )}
-        </div>
+            <input
+              type="checkbox"
+              checked={getCurrentValue(field.key)}
+              onChange={(e) => setDraft({ ...draft, [field.key]: e.target.checked })}
+              className="form-checkbox shrink-0"
+            />
+          </label>
+        ))}
       </div>
+    </SettingsCard>
+  );
 
-      {/* The shift-report half of this panel needs `training.manage`;
-          `training.configure` alone is refused for these fields by the
-          backend, so a Membership Coordinator is shown the disclosure
-          settings they own and not controls that would only 403. */}
-      {canManageTraining && (
-        <>
-          {/* These last two groups are not visibility settings — they configure
-            the officer's shift-report form and the review it goes through.
-            They stay here rather than moving wholesale to Scheduling →
-            Shift Reports because that screen is gated on `scheduling.manage`,
-            which a training officer need not hold; presenting them under their
-            own heading is what stops them reading as things members can see. */}
-          <div className="border-theme-surface-border border-t pt-6">
-            <h3 className="text-theme-text-primary text-sm font-semibold tracking-wide uppercase">
-              Shift Report Configuration
-            </h3>
-            <p className="text-theme-text-muted mt-1 text-sm">
-              These change the report form officers fill in and who signs it off — not what members see. The same
-              settings appear under Scheduling → Shift Reports.
-            </p>
-          </div>
+  return (
+    <div className="space-y-8">
+      <section className="space-y-4">
+        <div>
+          <h3 className="text-theme-text-primary text-sm font-semibold tracking-wide uppercase">
+            What Members Can See
+          </h3>
+          <p className="text-theme-text-muted mt-1 max-w-3xl text-sm">
+            Control what training data members can see on their personal training page. Officers and administrators
+            always see the full dataset regardless of these settings. Withheld fields are left out of the API response,
+            not merely hidden on screen, and the member export honours them too.
+          </p>
+        </div>
 
-          {/* Report Review Workflow */}
-          <div>
-            <h4 className="text-theme-text-secondary mb-3 text-sm font-semibold">Report Review Workflow</h4>
-            <div className="space-y-3">
-              <label className="bg-theme-surface hover:bg-theme-surface-hover flex cursor-pointer items-center justify-between rounded-lg p-3 transition-colors">
-                <div>
-                  <p className="text-theme-text-primary text-sm font-medium">Require Review Before Visibility</p>
-                  <p className="text-theme-text-muted text-xs">
-                    Reports must be reviewed and approved before trainees can see them
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={getCurrentValue('report_review_required')}
-                  onChange={(e) => setDraft({ ...draft, report_review_required: e.target.checked })}
-                  className="form-checkbox"
-                />
-              </label>
+        {/* Two explicit stacks rather than a grid or CSS columns: the groups
+            run from one setting to five, so a grid row stretches every card
+            to its tallest neighbour and CSS columns balance unpredictably.
+            Officer Observations and the skills-test card are the two tall
+            ones, so they share a column and the short groups fill the other. */}
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          <div className="space-y-4">{leftGroups.map(renderGroup)}</div>
+          <div className="space-y-4">
+            {rightGroups.map(renderGroup)}
 
-              {getCurrentValue('report_review_required') && (
-                <div className="bg-theme-surface rounded-lg p-3">
-                  <p className="text-theme-text-primary mb-1 text-sm font-medium">Review Role</p>
+            {/* Skills-test results — the department default. Individual templates and
+              tests may override both settings; this is what applies when they
+              don't. */}
+            <SettingsCard title="Skills-Test Results">
+              <div className="divide-theme-surface-border divide-y">
+                <div className="px-4 py-3">
+                  <p className="text-theme-text-primary mb-1 text-sm font-medium">What the member sees</p>
                   <p className="text-theme-text-muted mb-2 text-xs">
-                    Who should review reports before they are visible to trainees?
+                    Examiner notes are often candid working notes for the training file rather than feedback written for
+                    the member to read. Officers always see everything.
                   </p>
                   <select
-                    value={getStringValue('report_review_role') || 'training_officer'}
-                    onChange={(e) => setDraft({ ...draft, report_review_role: e.target.value })}
+                    value={getStringValue('skills_result_disclosure') || 'full'}
+                    onChange={(e) => setDraft({ ...draft, skills_result_disclosure: e.target.value })}
                     className="form-input text-sm"
                   >
-                    {REVIEW_ROLE_OPTIONS.map((opt) => (
+                    {SKILLS_DISCLOSURE_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
                       </option>
                     ))}
                   </select>
                 </div>
-              )}
-            </div>
-          </div>
 
-          {/* Rating Scale Configuration */}
-          <div>
-            <h4 className="text-theme-text-secondary mb-3 text-sm font-semibold">Rating Scale</h4>
-            <div className="space-y-3">
-              <div className="bg-theme-surface rounded-lg p-3">
-                <p className="text-theme-text-primary mb-1 text-sm font-medium">Rating Label</p>
-                <p className="text-theme-text-muted mb-2 text-xs">
-                  How the rating field is labeled to officers (e.g. &quot;Performance Rating&quot;, &quot;Skills
-                  Assessment&quot;)
-                </p>
-                <input
-                  type="text"
-                  value={getStringValue('rating_label') || 'Performance Rating'}
-                  onChange={(e) => setDraft({ ...draft, rating_label: e.target.value })}
-                  placeholder="Performance Rating"
-                  className="form-input text-sm"
-                />
-              </div>
-
-              <div className="bg-theme-surface rounded-lg p-3">
-                <p className="text-theme-text-primary mb-1 text-sm font-medium">Scale Type</p>
-                <p className="text-theme-text-muted mb-2 text-xs">How the rating is displayed</p>
-                <select
-                  value={currentScaleType}
-                  onChange={(e) => {
-                    const newDraft: Partial<TMConfig> = { ...draft, rating_scale_type: e.target.value };
-                    // Set default labels when switching to competency
-                    if (e.target.value === 'competency') {
-                      newDraft.rating_scale_labels = DEFAULT_COMPETENCY_LABELS;
-                    }
-                    setDraft(newDraft);
-                  }}
-                  className="form-input text-sm"
-                >
-                  {RATING_SCALE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {(currentScaleType === 'competency' || currentScaleType === 'custom') && (
-                <div className="bg-theme-surface rounded-lg p-3">
-                  <p className="text-theme-text-primary mb-1 text-sm font-medium">Scale Labels</p>
-                  <p className="text-theme-text-muted mb-2 text-xs">Define labels for each level (1-5)</p>
-                  <div className="space-y-2">
-                    {[1, 2, 3, 4, 5].map((level) => {
-                      const labels = getLabelsValue();
-                      return (
-                        <div key={level} className="flex items-center gap-2">
-                          <span className="text-theme-text-muted w-6 text-center font-mono text-sm">{level}</span>
-                          <input
-                            type="text"
-                            value={labels[String(level)] || ''}
-                            onChange={(e) => {
-                              const updated = { ...getLabelsValue(), [String(level)]: e.target.value };
-                              setDraft({ ...draft, rating_scale_labels: updated });
-                            }}
-                            placeholder={DEFAULT_COMPETENCY_LABELS[String(level)]}
-                            className="form-input-sm flex-1"
-                          />
-                        </div>
-                      );
-                    })}
+                {getStringValue('skills_result_disclosure') !== 'none' && (
+                  <div className="px-4 py-3">
+                    <p className="text-theme-text-primary mb-1 text-sm font-medium">When they see it</p>
+                    <p className="text-theme-text-muted mb-2 text-xs">
+                      Requiring a release lets an officer review the scorecard, or deliver a failure in person, before
+                      the member reads it. Practice attempts are never held back.
+                    </p>
+                    <select
+                      value={getStringValue('skills_result_release') || 'on_completion'}
+                      onChange={(e) => setDraft({ ...draft, skills_result_release: e.target.value })}
+                      className="form-input text-sm"
+                    >
+                      {SKILLS_RELEASE_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            </SettingsCard>
           </div>
-        </>
+        </div>
+      </section>
+
+      {/* The shift-report half of this panel needs `training.manage`;
+          `training.configure` alone is refused for these fields by the
+          backend, so a Membership Coordinator is shown the disclosure
+          settings they own and not controls that would only 403. */}
+      {canManageTraining && (
+        // These last two groups are not visibility settings — they configure
+        // the officer's shift-report form and the review it goes through.
+        // They stay here rather than moving wholesale to Scheduling →
+        // Shift Reports because that screen is gated on `scheduling.manage`,
+        // which a training officer need not hold; presenting them under their
+        // own heading is what stops them reading as things members can see.
+        <section className="border-theme-surface-border space-y-4 border-t pt-6">
+          <div>
+            <h3 className="text-theme-text-primary text-sm font-semibold tracking-wide uppercase">
+              Shift Report Configuration
+            </h3>
+            <p className="text-theme-text-muted mt-1 max-w-3xl text-sm">
+              These change the report form officers fill in and who signs it off — not what members see. The same
+              settings appear under Scheduling → Shift Reports.
+            </p>
+          </div>
+
+          <div className="grid items-start gap-4 lg:grid-cols-2">
+            <SettingsCard title="Report Review Workflow">
+              <div className="divide-theme-surface-border divide-y">
+                <label className="hover:bg-theme-surface-hover flex cursor-pointer items-center justify-between gap-4 px-4 py-3 transition-colors">
+                  <div className="min-w-0">
+                    <p className="text-theme-text-primary text-sm font-medium">Require Review Before Visibility</p>
+                    <p className="text-theme-text-muted text-xs">
+                      Reports must be reviewed and approved before trainees can see them
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={getCurrentValue('report_review_required')}
+                    onChange={(e) => setDraft({ ...draft, report_review_required: e.target.checked })}
+                    className="form-checkbox shrink-0"
+                  />
+                </label>
+
+                {getCurrentValue('report_review_required') && (
+                  <div className="px-4 py-3">
+                    <p className="text-theme-text-primary mb-1 text-sm font-medium">Review Role</p>
+                    <p className="text-theme-text-muted mb-2 text-xs">
+                      Who should review reports before they are visible to trainees?
+                    </p>
+                    <select
+                      value={getStringValue('report_review_role') || 'training_officer'}
+                      onChange={(e) => setDraft({ ...draft, report_review_role: e.target.value })}
+                      className="form-input text-sm"
+                    >
+                      {REVIEW_ROLE_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            </SettingsCard>
+
+            <SettingsCard title="Rating Scale">
+              <div className="divide-theme-surface-border divide-y">
+                <div className="px-4 py-3">
+                  <p className="text-theme-text-primary mb-1 text-sm font-medium">Rating Label</p>
+                  <p className="text-theme-text-muted mb-2 text-xs">
+                    How the rating field is labeled to officers (e.g. &quot;Performance Rating&quot;, &quot;Skills
+                    Assessment&quot;)
+                  </p>
+                  <input
+                    type="text"
+                    value={getStringValue('rating_label') || 'Performance Rating'}
+                    onChange={(e) => setDraft({ ...draft, rating_label: e.target.value })}
+                    placeholder="Performance Rating"
+                    className="form-input text-sm"
+                  />
+                </div>
+
+                <div className="px-4 py-3">
+                  <p className="text-theme-text-primary mb-1 text-sm font-medium">Scale Type</p>
+                  <p className="text-theme-text-muted mb-2 text-xs">How the rating is displayed</p>
+                  <select
+                    value={currentScaleType}
+                    onChange={(e) => {
+                      const newDraft: Partial<TMConfig> = { ...draft, rating_scale_type: e.target.value };
+                      // Set default labels when switching to competency
+                      if (e.target.value === 'competency') {
+                        newDraft.rating_scale_labels = DEFAULT_COMPETENCY_LABELS;
+                      }
+                      setDraft(newDraft);
+                    }}
+                    className="form-input text-sm"
+                  >
+                    {RATING_SCALE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {(currentScaleType === 'competency' || currentScaleType === 'custom') && (
+                  <div className="px-4 py-3">
+                    <p className="text-theme-text-primary mb-1 text-sm font-medium">Scale Labels</p>
+                    <p className="text-theme-text-muted mb-2 text-xs">Define labels for each level (1-5)</p>
+                    <div className="space-y-2">
+                      {[1, 2, 3, 4, 5].map((level) => {
+                        const labels = getLabelsValue();
+                        return (
+                          <div key={level} className="flex items-center gap-2">
+                            <span className="text-theme-text-muted w-6 text-center font-mono text-sm">{level}</span>
+                            <input
+                              type="text"
+                              value={labels[String(level)] || ''}
+                              onChange={(e) => {
+                                const updated = { ...getLabelsValue(), [String(level)]: e.target.value };
+                                setDraft({ ...draft, rating_scale_labels: updated });
+                              }}
+                              placeholder={DEFAULT_COMPETENCY_LABELS[String(level)]}
+                              className="form-input-sm flex-1"
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </SettingsCard>
+          </div>
+        </section>
       )}
 
-      {Object.keys(draft).length > 0 && (
-        <div className="flex justify-end">
+      {/* Sticky so a change made at the top of the panel can be saved without
+          scrolling to the bottom to find out a button has appeared. The offset
+          clears the mobile bottom nav, which would otherwise paint over it. */}
+      {changeCount > 0 && (
+        <div className="popover-panel sticky bottom-[calc(var(--bottom-nav-height,0px)+0.75rem)] z-10 flex items-center justify-between gap-3 px-4 py-3">
+          <p className="text-theme-text-secondary text-sm" role="status">
+            {changeCount} unsaved change{changeCount > 1 ? 's' : ''}
+          </p>
           <button
             onClick={() => {
               void handleSave();
@@ -506,9 +545,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave, canManageTr
             disabled={saving}
             className="btn-primary text-sm font-medium disabled:opacity-60"
           >
-            {saving
-              ? 'Saving...'
-              : `Save ${Object.keys(draft).length} Change${Object.keys(draft).length > 1 ? 's' : ''}`}
+            {saving ? 'Saving...' : `Save ${changeCount} Change${changeCount > 1 ? 's' : ''}`}
           </button>
         </div>
       )}
