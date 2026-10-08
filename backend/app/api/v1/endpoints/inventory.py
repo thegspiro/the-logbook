@@ -202,6 +202,7 @@ from app.services.inventory_service import InventoryService, is_pool_without_sto
 from app.services.label_printer_service import LabelPrinterService
 from app.services.label_service import UNSET, LabelService
 from app.services.organization_service import OrganizationService
+from app.services.upload_scanning import reject_if_malicious
 from app.utils import label_renderer
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import resolve_org_today
@@ -1558,6 +1559,13 @@ async def import_items_csv(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Failed to read the uploaded file.",
         )
+    # Parsed in memory and never stored, but a file entering the platform all
+    # the same: scanned before it is parsed. Outside the try above, whose
+    # catch-all would turn a malware refusal or a retryable scanner outage
+    # into a generic 400.
+    await reject_if_malicious(
+        db, raw, upload_kind="inventory_import", detected_mime=None, user=current_user
+    )
 
     reader = csv.DictReader(io.StringIO(content))
     if not reader.fieldnames:

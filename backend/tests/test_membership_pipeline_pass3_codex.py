@@ -36,7 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.election import Election, ElectionStatus
 from app.models.forms import Form
 from app.models.membership_pipeline import ProspectElectionPackage
-from app.services import membership_pipeline_service
+from app.services import file_storage_service
 from app.services.membership_pipeline_service import (
     ELECTION_PACKAGE_CALLER_STATUSES,
     ELECTION_PACKAGE_SYSTEM_STATUSES,
@@ -110,9 +110,9 @@ async def _document(
 
     The delete-path tests below only need a real, writable file on disk (for
     ``os.path.exists``/``os.remove``) at the path the row records; they aren't
-    exercising the upload path. Delete only unlinks inside
-    ``<PROSPECT_DOCUMENT_DIR>/<org_id>/``, so each test points that root at
-    ``tmp_path`` and stores its file under the org's subdirectory -- which
+    exercising the upload path. Delete only unlinks inside the org's
+    applicants area, ``<UPLOADS_ROOT>/<org_id>/applicants/``, so each test
+    points that root at ``tmp_path`` and stores its file there -- which
     also keeps the test portable (CI's runner has no ``/app`` to write
     under)."""
     from app.models.membership_pipeline import ProspectDocument
@@ -538,11 +538,9 @@ class TestDocumentDeletionDoesNotOrphanTheFile:
         pipeline, _ = await _pipeline_with_steps(svc, org_id)
         prospect = await _prospect(svc, org_id, pipeline.id)
 
-        stored = tmp_path / org_id / "doc.pdf"
+        stored = tmp_path / org_id / "applicants" / str(prospect.id) / "doc.pdf"
         stored.parent.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr(
-            membership_pipeline_service, "PROSPECT_DOCUMENT_DIR", str(tmp_path)
-        )
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         stored.write_bytes(b"pdf bytes")
 
         doc = await _document(db_session, prospect.id, stored, uploaded_by=admin_id)
@@ -564,11 +562,9 @@ class TestDocumentDeletionDoesNotOrphanTheFile:
         pipeline, _ = await _pipeline_with_steps(svc, org_id)
         prospect = await _prospect(svc, org_id, pipeline.id)
 
-        stored = tmp_path / org_id / "doc.pdf"
+        stored = tmp_path / org_id / "applicants" / str(prospect.id) / "doc.pdf"
         stored.parent.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr(
-            membership_pipeline_service, "PROSPECT_DOCUMENT_DIR", str(tmp_path)
-        )
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         stored.write_bytes(b"pdf bytes")
 
         doc = await _document(db_session, prospect.id, stored, uploaded_by=admin_id)
@@ -604,11 +600,9 @@ class TestDocumentDeletionDoesNotOrphanTheFile:
         pipeline, _ = await _pipeline_with_steps(svc, org_id)
         prospect = await _prospect(svc, org_id, pipeline.id)
 
-        stored = tmp_path / org_id / "gone.pdf"
+        stored = tmp_path / org_id / "applicants" / str(prospect.id) / "gone.pdf"
         stored.parent.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr(
-            membership_pipeline_service, "PROSPECT_DOCUMENT_DIR", str(tmp_path)
-        )
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         stored.write_bytes(b"x")
 
         doc = await _document(

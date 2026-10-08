@@ -5,16 +5,16 @@ Every module that writes uploads lays them out as
 module root alone is not enough: every organization's files live under that
 root, so a root-level check still accepts a path pointing at *another*
 organization's subdirectory. The events (EV-17) and documents (DOC-24) fixes
-established the per-org rule; this module is the shared form of it, so the
-remaining modules apply the same check instead of each re-deriving a weaker
-one.
+established the per-org rule; this module is the shared form of it.
+``FileStorageService.resolve`` applies it to each area's legacy
+``<root>/<organization_id>/`` tree, alongside its own org-first layout.
 
 The check runs on reads **and** deletes. A delete that trusts a stored path is
 an arbitrary unlink, which is the same defect in the destructive direction.
 """
 
 import os
-from typing import Any, Iterable, Optional
+from typing import Any, Optional
 
 # Characters that never belong in a filename offered to a browser. Path
 # separators would let a stored name suggest a directory; control characters
@@ -58,17 +58,6 @@ def resolve_in_org(
     resolved = os.path.realpath(file_path)
     if resolved.startswith(root + os.sep):
         return resolved
-    return None
-
-
-def resolve_in_any_org_root(
-    file_path: Any, base_dirs: Iterable[str], organization_id: Any
-) -> Optional[str]:
-    """``resolve_in_org`` against several module roots; first match wins."""
-    for base_dir in base_dirs:
-        resolved = resolve_in_org(file_path, base_dir, organization_id)
-        if resolved:
-            return resolved
     return None
 
 

@@ -350,10 +350,12 @@ services:
       # Direct label printing stays off until printer IPs/CIDRs are approved
       LABEL_PRINTER_ALLOWED_NETWORKS: ${LABEL_PRINTER_ALLOWED_NETWORKS:-}
 
-      # Malware scanning of uploaded certificates. This file has no clamav
-      # service, so enabling it needs a clamd you run yourself; enabled and
-      # unreachable refuses uploads rather than storing them unscanned.
-      CLAMAV_ENABLED: ${CLAMAV_ENABLED:-false}
+      # Malware scanning of every uploaded file. On by default, against the
+      # `clamav` service below; enabled + unreachable refuses uploads
+      # (retryable 503) rather than storing them unscanned. Setting it to
+      # false accepts files UNSCANNED and puts a standing warning in front of
+      # administrators.
+      CLAMAV_ENABLED: ${CLAMAV_ENABLED:-true}
       CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
       CLAMAV_PORT: ${CLAMAV_PORT:-3310}
       CLAMAV_TIMEOUT_SECONDS: ${CLAMAV_TIMEOUT_SECONDS:-30}
@@ -459,6 +461,48 @@ services:
     networks:
       - logbook-internal
 
+  # ClamAV - malware scanning (required); same service as the pre-built
+  # stack in docker-compose-unraid.yml. Every upload is scanned here before it
+  # is stored. Budget roughly 1.5-3 GB of RAM; first start takes a few
+  # minutes, and uploads are refused with a retryable error until it is
+  # healthy. Its port stays on the internal network.
+  clamav:
+    # The Debian-based build of the official image: the same release from the
+    # same upstream (Cisco-Talos/clamav-docker), but published for amd64,
+    # arm64 and ppc64le where clamav/clamav is amd64-only — so a Raspberry Pi
+    # or Graviton host pulls it too. Its entrypoint re-owns /var/lib/clamav on
+    # every start, so a volume first written by the Alpine image still works.
+    image: clamav/clamav-debian:1.4.3
+    container_name: logbook-clamav
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      # clamd refuses a stream longer than StreamMaxLength (25M by default),
+      # which the backend treats as "no verdict" and refuses the upload. The
+      # largest accepted upload is 50 MB and the request body cap is 60 MB.
+      CLAMD_CONF_StreamMaxLength: 60M
+    volumes:
+      # Docker-managed rather than an appdata path: the image's own clamav
+      # user must own it, which a share with nobody:users ownership is not.
+      - clamav_data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 300s
+    networks:
+      - logbook-internal
+
 networks:
   logbook-internal:
     driver: bridge
@@ -466,3 +510,5 @@ networks:
 volumes:
   mysql_data:
   redis_data:
+  # ClamAV signature database.
+  clamav_data:

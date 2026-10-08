@@ -7,11 +7,9 @@ step progression, and transfer to full membership.
 
 import asyncio
 import os
-import uuid as uuid_lib
 from datetime import datetime, timezone
 from uuid import UUID
 
-import magic
 from fastapi import (
     APIRouter,
     Depends,
@@ -46,7 +44,6 @@ from app.api.v1.endpoints.users import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.security_middleware import get_client_ip
 from app.core.utils import handle_service_errors, safe_error_detail
 from app.models.event import Event
@@ -100,8 +97,14 @@ from app.schemas.membership_pipeline import (
 )
 from app.services import membership_pipeline_service
 from app.services.email_service import welcome_email_can_send
+from app.services.file_storage_service import (
+    FileRules,
+    FileStorageService,
+    StorageArea,
+)
 from app.services.membership_pipeline_service import MembershipPipelineService
-from app.utils.upload_paths import safe_download_filename
+from app.utils import download_names
+from app.utils.org_timezone import resolve_scheduling_timezone
 
 # Applied router-wide, not per route: every endpoint that takes a
 # {prospect_id} path parameter — including ones added later — must refuse to
@@ -1922,20 +1925,23 @@ async def get_prospect_activity(
 # Files are stored under {org_id}/{prospect_id}/ within the uploads volume
 # (mounted at /app/uploads in docker-compose), mirroring the event-attachments
 # layout so storage is grouped per individual and walkable per organization.
-# The root is owned by the service, which confines every path to it.
-MAX_PROSPECT_DOCUMENT_SIZE = 50 * 1024 * 1024  # 50 MB — matches the frontend limit
-
-# Allowed document types mapped to their canonical extension. The MIME type is
-# validated via magic bytes (not the HTTP Content-Type header) to prevent
-# content-type spoofing.
-PROSPECT_DOCUMENT_MIME_EXTENSIONS = {
-    "application/pdf": ".pdf",
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-    "image/gif": ".gif",
-    "application/msword": ".doc",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
-}
+# Validated, malware-scanned and stored by FileStorageService; the service
+# confines every later read and delete to the organization's applicant area.
+PROSPECT_DOCUMENT_RULES = FileRules(
+    allowed_types={
+        "application/pdf": ".pdf",
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/gif": ".gif",
+        "application/msword": ".doc",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": (
+            ".docx"
+        ),
+    },
+    # Matches the frontend limit.
+    max_bytes=50 * 1024 * 1024,
+    description="PDF, Word, JPEG, PNG, GIF",
+)
 
 
 def _remove_prospect_document_file(path: str) -> None:
@@ -1994,53 +2000,19 @@ async def add_prospect_document(
 
     **Requires permission: members.manage or prospective_members.manage**
     """
-    content = await file.read()
-    if not content:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty."
-        )
-    if len(content) > MAX_PROSPECT_DOCUMENT_SIZE:
-        raise CodedHTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File too large. Maximum size is 50MB.",
-            error_code=ErrorCode.UPLD_TOO_LARGE,
-        )
-
-    # Validate the real content via magic bytes, not the client-supplied type.
-    detected_mime = magic.from_buffer(content[:2048], mime=True)
-    ext = PROSPECT_DOCUMENT_MIME_EXTENSIONS.get(detected_mime)
-    if ext is None:
-        logger.warning(
-            f"Prospect document rejected: detected MIME '{detected_mime}' "
-            f"(claimed: '{file.content_type}') for file '{file.filename}'"
-        )
-        raise CodedHTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"File type not allowed. Detected type: {detected_mime}. "
-                "Allowed: PDF, Word, JPEG, PNG, GIF."
-            ),
-            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
-        )
-
-    # Scope storage by org then prospect (mirrors event-attachments) so each
-    # individual's files are grouped and the whole org is walkable for
-    # accounting, export, or purge. Random UUID filename with a MIME-derived
-    # extension (never the user-supplied name) avoids collisions and
-    # double-extension attacks (e.g. resume.pdf.exe).
-    prospect_dir = os.path.join(
-        membership_pipeline_service.PROSPECT_DOCUMENT_DIR,
-        str(current_user.organization_id),
-        str(prospect_id),
+    # Grouped per applicant under the organization (``<org>/applicants/
+    # <prospect_id>/``) so each individual's files can be found, exported or
+    # purged together.
+    stored = await FileStorageService(db).store_upload(
+        file,
+        organization_id=current_user.organization_id,
+        area=StorageArea.APPLICANTS,
+        rules=PROSPECT_DOCUMENT_RULES,
+        user=current_user,
+        record_id=prospect_id,
+        upload_kind="applicant_document",
     )
-    await asyncio.to_thread(os.makedirs, prospect_dir, exist_ok=True)
-    stored_path = os.path.join(prospect_dir, f"{uuid_lib.uuid4().hex}{ext}")
-
-    def _write_file(path: str, data: bytes) -> None:
-        with open(path, "wb") as fh:
-            fh.write(data)
-
-    await asyncio.to_thread(_write_file, stored_path, content)
+    stored_path = stored.path
 
     service = MembershipPipelineService(db)
     try:
@@ -2048,12 +2020,10 @@ async def add_prospect_document(
             prospect_id=str(prospect_id),
             organization_id=current_user.organization_id,
             document_type=document_type,
-            file_name=safe_download_filename(
-                file.filename, os.path.basename(stored_path)
-            ),
+            file_name=stored.original_name,
             file_path=stored_path,
-            file_size=len(content),
-            mime_type=detected_mime,
+            file_size=stored.size,
+            mime_type=stored.mime_type,
             step_id=str(step_id) if step_id else None,
             uploaded_by=current_user.id,
         )
@@ -2120,9 +2090,23 @@ async def download_prospect_document(
             detail="Document file not found on disk",
         )
 
+    prospect = await service.get_prospect(
+        str(prospect_id), current_user.organization_id
+    )
+    extension = download_names.stored_extension(resolved_path)
+    tz = await resolve_scheduling_timezone(db, current_user.organization_id)
     return FileResponse(
         path=resolved_path,
-        filename=safe_download_filename(doc.file_name),
+        filename=download_names.descriptive_filename(
+            download_names.local_day(doc.created_at, tz),
+            download_names.member_name_part(
+                getattr(prospect, "first_name", None),
+                getattr(prospect, "last_name", None),
+            ),
+            doc.document_type,
+            extension=extension,
+            fallback=download_names.original_stem(doc.file_name) or "document",
+        ),
         media_type=doc.mime_type or "application/octet-stream",
     )
 

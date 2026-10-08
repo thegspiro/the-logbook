@@ -200,11 +200,12 @@ services:
       # Direct printing is disabled unless the operator approves printer
       # addresses/CIDRs (for example 192.168.50.10/32).
       LABEL_PRINTER_ALLOWED_NETWORKS: ${LABEL_PRINTER_ALLOWED_NETWORKS:-}
-      # Malware scanning of uploaded self-report certificates. Off unless set;
-      # turning it on needs a reachable clamd — the `clamav` service below
-      # (profile with-clamav) or one of your own. Enabled + unreachable
-      # refuses uploads rather than storing them unscanned.
-      CLAMAV_ENABLED: ${CLAMAV_ENABLED:-false}
+      # Malware scanning of every uploaded file. On by default, against the
+      # `clamav` service below; enabled + unreachable refuses uploads
+      # (retryable 503) rather than storing them unscanned. Setting it to
+      # false accepts files UNSCANNED and puts a standing warning in front of
+      # administrators — see docs/FILE_STORAGE_HARDENING.md before doing so.
+      CLAMAV_ENABLED: ${CLAMAV_ENABLED:-true}
       CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
       CLAMAV_PORT: ${CLAMAV_PORT:-3310}
       CLAMAV_TIMEOUT_SECONDS: ${CLAMAV_TIMEOUT_SECONDS:-30}
@@ -573,14 +574,19 @@ services:
       - with-s3
 
   # ClamAV (Optional - malware scanning of uploaded certificates)
-  # Start with: docker compose --profile with-clamav up -d
-  # and set CLAMAV_ENABLED=true in .env. The backend does not depend_on this
-  # service (a dependency on a profiled service breaks stacks that leave the
-  # profile off); until clamd reports healthy, scanned uploads are refused
-  # with a retryable 503. First start loads signatures and can take a few
-  # minutes; clamd holds them in memory, so budget roughly 1.5-3 GB of RAM.
+  # Required: every upload is scanned here before it is stored. Started by a
+  # plain `docker compose up -d`. The backend does not depend_on it, so the
+  # application comes up while clamd is still loading; until clamd reports
+  # healthy, uploads are refused with a retryable 503. First start downloads
+  # signatures and can take a few minutes; clamd holds them in memory, so
+  # budget roughly 1.5-3 GB of RAM.
   clamav:
-    image: clamav/clamav:1.4.3
+    # The Debian-based build of the official image: the same release from the
+    # same upstream (Cisco-Talos/clamav-docker), but published for amd64,
+    # arm64 and ppc64le where clamav/clamav is amd64-only — so a Raspberry Pi
+    # or Graviton host pulls it too. Its entrypoint re-owns /var/lib/clamav on
+    # every start, so a volume first written by the Alpine image still works.
+    image: clamav/clamav-debian:1.4.3
     container_name: intranet-clamav
     restart: unless-stopped
     # SEC: Harden container. The image's init starts as root, prepares its
@@ -610,10 +616,13 @@ services:
       timeout: 10s
       retries: 3
       start_period: 300s
+    environment:
+      # clamd refuses a stream longer than StreamMaxLength (25M by default)
+      # and the backend treats that as "no verdict", refusing the upload. The
+      # largest accepted upload is 50 MB and the request body cap is 60 MB.
+      CLAMD_CONF_StreamMaxLength: 60M
     networks:
       - intranet-network
-    profiles:
-      - with-clamav
 
   # Mailhog (Email testing in development)
   mailhog:

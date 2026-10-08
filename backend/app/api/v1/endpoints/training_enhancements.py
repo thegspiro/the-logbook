@@ -18,7 +18,6 @@ from app.api.dependencies import (
     require_permission,
 )
 from app.core.database import get_db
-from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import safe_error_detail
 from app.schemas.training_enhancements import (
     CompetencyHeatmapResponse,
@@ -43,6 +42,12 @@ from app.schemas.training_enhancements import (
     XAPIBatchResponse,
     XAPIStatementCreate,
     XAPIStatementResponse,
+)
+from app.services import file_storage_service as file_storage
+from app.services.file_storage_service import (
+    FileRules,
+    FileStorageService,
+    StorageArea,
 )
 from app.services.training_enhancement_service import (
     CompetencyService,
@@ -718,19 +723,24 @@ async def get_compliance_forecast(
 # ============================================
 
 
-# Certificates/documents attached to a training record. MIME type is verified
-# from the file's magic bytes (not the client-supplied Content-Type).
-TRAINING_ATTACHMENT_DIR = "/app/uploads/training_attachments"
-ALLOWED_ATTACHMENT_MIME = {
-    "application/pdf": ".pdf",
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-    "image/gif": ".gif",
-    "image/webp": ".webp",
-    "application/msword": ".doc",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
-}
-MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
+# Certificates/documents attached to a training record. Validated, malware-
+# scanned and stored by FileStorageService under the organization's
+# training-records area.
+RECORD_ATTACHMENT_RULES = FileRules(
+    allowed_types={
+        "application/pdf": ".pdf",
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/gif": ".gif",
+        "image/webp": ".webp",
+        "application/msword": ".doc",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": (
+            ".docx"
+        ),
+    },
+    max_bytes=25 * 1024 * 1024,
+    description="PDF, Word, or image files",
+)
 
 
 async def _load_record_for_attachment(db: AsyncSession, record_id: str, current_user):
@@ -772,54 +782,27 @@ async def upload_record_attachment(
 ):
     """Upload and store a document/certificate for a training record."""
     import asyncio
-    import os
-    import uuid as uuid_lib
 
-    import magic
     from sqlalchemy.orm.attributes import flag_modified
-
-    from app.utils.upload_paths import safe_download_filename
 
     record = await _load_record_for_attachment(db, record_id, current_user)
 
-    content = await file.read()
-    if len(content) > MAX_ATTACHMENT_BYTES:
-        raise CodedHTTPException(
-            status_code=400,
-            detail="File too large. Maximum size is 25MB.",
-            error_code=ErrorCode.UPLD_TOO_LARGE,
-        )
-
-    detected_mime = magic.from_buffer(content[:2048], mime=True)
-    ext = ALLOWED_ATTACHMENT_MIME.get(detected_mime)
-    if not ext:
-        raise CodedHTTPException(
-            status_code=400,
-            detail=(
-                f"File type not allowed (detected: {detected_mime}). "
-                "Allowed: PDF, Word, or image files."
-            ),
-            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
-        )
-
-    org_dir = os.path.join(TRAINING_ATTACHMENT_DIR, str(current_user.organization_id))
-    await asyncio.to_thread(os.makedirs, org_dir, exist_ok=True)
-    # Use a server-generated name + magic-derived extension to prevent
-    # double-extension attacks (e.g. cert.pdf.exe).
-    stored_name = f"{uuid_lib.uuid4().hex}{ext}"
-    file_path = os.path.join(org_dir, stored_name)
-
-    def _write_file(path: str, data: bytes) -> None:
-        with open(path, "wb") as f:
-            f.write(data)
-
-    await asyncio.to_thread(_write_file, file_path, content)
+    stored = await FileStorageService(db).store_upload(
+        file,
+        organization_id=current_user.organization_id,
+        area=StorageArea.TRAINING_RECORDS,
+        rules=RECORD_ATTACHMENT_RULES,
+        user=current_user,
+        record_id=record.id,
+        upload_kind="training_record_attachment",
+    )
+    file_path = stored.path
 
     attachment = {
-        "file_name": safe_download_filename(file.filename, stored_name),
+        "file_name": stored.original_name,
         "file_path": file_path,
-        "file_type": detected_mime,
-        "file_size": len(content),
+        "file_type": stored.mime_type,
+        "file_size": stored.size,
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
         "uploaded_by": str(current_user.id),
     }
@@ -899,21 +882,19 @@ async def download_record_attachment(
     if not isinstance(attachment, dict) or not attachment.get("file_path"):
         raise HTTPException(status_code=404, detail="Attachment file unavailable")
 
-    from app.services.self_report_attachment_retention import (
-        submission_attachment_root,
-    )
-    from app.utils.upload_paths import resolve_in_any_org_root, safe_download_filename
+    from app.utils import download_names
 
-    # Confine the stored path to *this record's organization's* subtree.
-    # file_path round-trips through a JSON column, and confining to the shared
-    # TRAINING_ATTACHMENT_DIR root would still serve a path pointing at another
-    # organization's directory beneath it. Two roots, because approving a
-    # self-reported submission copies its attachment dicts onto the record
-    # verbatim, so an approved certificate lives under the submission tree.
-    real_path = resolve_in_any_org_root(
+    # Confine the stored path to *this record's organization*. file_path
+    # round-trips through a JSON column, and a root-level check would still
+    # serve a path pointing at another organization's directory. Two areas,
+    # because approving a self-reported submission copies its attachment dicts
+    # onto the record verbatim, so an approved certificate lives in the
+    # self-reports area.
+    real_path = file_storage.resolve(
         attachment["file_path"],
-        (TRAINING_ATTACHMENT_DIR, submission_attachment_root()),
         record.organization_id,
+        StorageArea.TRAINING_RECORDS,
+        StorageArea.SELF_REPORTS,
     )
     if not real_path:
         raise HTTPException(status_code=404, detail="Attachment file not found")
@@ -921,10 +902,18 @@ async def download_record_attachment(
     if not os.path.isfile(real_path):
         raise HTTPException(status_code=404, detail="Attachment file not found")
 
+    filename = download_names.descriptive_filename(
+        record.completion_date,
+        await download_names.member_name_for(
+            db, record.user_id, record.organization_id
+        ),
+        record.course_name,
+        extension=download_names.stored_extension(real_path),
+        fallback=download_names.original_stem(attachment.get("file_name"))
+        or "certificate",
+    )
     return FileResponse(
         real_path,
         media_type=attachment.get("file_type") or "application/octet-stream",
-        filename=safe_download_filename(
-            attachment.get("file_name"), os.path.basename(real_path)
-        ),
+        filename=filename,
     )

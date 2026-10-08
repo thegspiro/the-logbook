@@ -1,7 +1,7 @@
 """Deleting an email attachment must not lose the file silently.
 
 The `email_attachments` row is the only record that the file on disk exists —
-nothing sweeps `storage/email_attachments`, and there is no orphan-cleanup task
+nothing sweeps the organization's email-attachments area, and there is no orphan-cleanup task
 anywhere in the repository. That makes the order of the two operations, and what
 happens to a failed unlink, a correctness question rather than a style one.
 
@@ -25,18 +25,18 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.api.v1.endpoints.email_templates import delete_attachment
-from app.utils import email_attachments
+from app.services import file_storage_service
 
 
 @pytest.fixture(autouse=True)
 def _attachment_storage(tmp_path, monkeypatch):
-    """Attachments live under ``<EMAIL_ATTACHMENT_DIR>/<org_id>/``; delete only
-    ever unlinks inside the caller's own organization's directory."""
-    monkeypatch.setattr(email_attachments, "EMAIL_ATTACHMENT_DIR", str(tmp_path))
+    """Attachments live under ``<UPLOADS_ROOT>/<org_id>/email-attachments/``;
+    delete only ever unlinks inside the caller's own organization's area."""
+    monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
 
 
 def _attachment(tmp_path):
-    path = tmp_path / "org-1" / "attachment.pdf"
+    path = tmp_path / "org-1" / "email-attachments" / "tpl-1" / "attachment.pdf"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(b"%PDF-1.4 member document")
     return SimpleNamespace(

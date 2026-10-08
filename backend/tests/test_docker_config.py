@@ -421,27 +421,40 @@ class TestBaseComposeReachesProductionGates:
         )
 
 
-class TestOptionalClamavService:
-    """ClamAV is opt-in: a stack that does not ask for it must not change.
+class TestRequiredClamavService:
+    """ClamAV is required: a plain ``docker compose up -d`` starts it.
 
-    The backend's CLAMAV_* settings must also be reachable from .env — the
-    environment block is a whitelist, so a flag missing from it would make
-    "I enabled scanning" silently untrue.
+    Every upload is scanned before it is stored (docs/FILE_STORAGE_HARDENING.md,
+    decisions 8, 11 and 14), so every compose file an installation can be
+    started from must run clamd and turn scanning on by default. Operators can
+    still set CLAMAV_ENABLED=false, which accepts files unscanned behind a
+    standing warning — so the flag must be reachable from .env: the
+    environment block is a whitelist, and a flag missing from it would make
+    either choice silently untrue.
     """
 
     @pytest.fixture(
-        autouse=True, params=["docker-compose.yml", "unraid/docker-compose-unraid.yml"]
+        autouse=True,
+        params=[
+            "docker-compose.yml",
+            "unraid/docker-compose-unraid.yml",
+            "unraid/docker-compose-build-from-source.yml",
+        ],
     )
     def _setup(self, request):
         self.compose = yaml.safe_load(_read(ROOT_DIR / request.param))
         self.clamav = self.compose["services"]["clamav"]
 
-    def test_service_is_behind_an_opt_in_profile(self):
-        assert self.clamav.get("profiles") == ["with-clamav"]
+    def test_service_starts_without_a_profile(self):
+        assert "profiles" not in self.clamav
 
-    def test_image_is_the_official_one_with_a_pinned_tag(self):
+    def test_image_is_the_official_multi_arch_one_with_a_pinned_tag(self):
+        """clamav/clamav is published for amd64 only; now that the service is
+        required, an ARM host pulling it would take ``docker compose up`` down
+        with it. The installer does not layer docker-compose.arm.yml, so the
+        base files themselves must name the multi-arch build."""
         image, _, tag = self.clamav["image"].partition(":")
-        assert image == "clamav/clamav"
+        assert image == "clamav/clamav-debian"
         assert re.fullmatch(r"\d+\.\d+\.\d+", tag), tag
 
     def test_has_a_healthcheck(self):
@@ -455,9 +468,18 @@ class TestOptionalClamavService:
     def test_clamd_port_is_not_published(self):
         assert "ports" not in self.clamav
 
+    def test_stream_limit_covers_the_largest_upload(self):
+        """clamd's default StreamMaxLength is 25M; a 50 MB document would get
+        no verdict and be refused. The image applies CLAMD_CONF_* variables to
+        clamd.conf at start."""
+        limit = self.clamav["environment"]["CLAMD_CONF_StreamMaxLength"]
+        assert re.fullmatch(r"(\d+)M", limit), limit
+        assert int(limit[:-1]) >= 60
+
     def test_backend_does_not_depend_on_it(self):
-        # depends_on a profiled service breaks every stack that leaves the
-        # profile off.
+        # clamd takes minutes to load signatures on first start; the
+        # application must come up meanwhile and refuse uploads with a
+        # retryable 503 rather than wait for it.
         assert "clamav" not in (
             self.compose["services"]["backend"].get("depends_on") or {}
         )
@@ -465,7 +487,7 @@ class TestOptionalClamavService:
     @pytest.mark.parametrize(
         ("setting", "default"),
         [
-            ("CLAMAV_ENABLED", "false"),
+            ("CLAMAV_ENABLED", "true"),
             ("CLAMAV_HOST", "clamav"),
             ("CLAMAV_PORT", "3310"),
             ("CLAMAV_TIMEOUT_SECONDS", "30"),
@@ -649,7 +671,9 @@ class TestExternalServicesOverride:
                 else:
                     merged.setdefault(name, [])
         default = {name for name, profiles in merged.items() if not profiles}
-        assert default == {"backend", "frontend", "nginx"}
+        # clamav stays local: there is no managed malware scanner to point at,
+        # and every upload must be scanned before it is stored.
+        assert default == {"backend", "frontend", "nginx", "clamav"}
         assert all(merged[name] == [profile] for name in ("mysql", "redis", "backup"))
 
     def test_frontend_and_nginx_are_untouched(self):

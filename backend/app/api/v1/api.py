@@ -83,6 +83,7 @@ from app.api.v1.endpoints import (
     station_documents,
     storefront,
     suggestions,
+    system_notices,
     testing_checklist,
     training,
     training_enhancements,
@@ -179,6 +180,9 @@ api_router.include_router(
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 api_router.include_router(admin_hub.router, prefix="/admin-hub", tags=["admin-hub"])
+api_router.include_router(
+    system_notices.router, prefix="/system-notices", tags=["system-notices"]
+)
 api_router.include_router(
     training.router,
     prefix="/training",

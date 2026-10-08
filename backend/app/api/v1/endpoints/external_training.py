@@ -67,6 +67,7 @@ from app.services.external_course_mapping import (
     load_suggestion_candidates,
 )
 from app.services.external_training_service import ExternalTrainingSyncService
+from app.services.upload_scanning import reject_if_malicious
 from app.utils.email_providers import REDACTED_SECRET
 from app.utils.member_names import format_legal_name
 from app.utils.model_updates import apply_updates
@@ -963,6 +964,15 @@ async def upload_report(
 
     try:
         raw = await read_upload_limited(file, MAX_REPORT_UPLOAD_BYTES)
+        # Parsed in memory and never stored, but a file entering the
+        # platform all the same: scanned before it is read.
+        await reject_if_malicious(
+            db,
+            raw,
+            upload_kind="external_training_report",
+            detected_mime=None,
+            user=current_user,
+        )
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,

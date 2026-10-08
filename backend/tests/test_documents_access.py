@@ -48,6 +48,7 @@ from app.schemas.documents import (
     DocumentFolderUpdate,
     DocumentUpdate,
 )
+from app.services import file_storage_service
 from app.services.documents_service import (
     DocumentsService,
     _get_user_permissions,
@@ -990,15 +991,15 @@ class TestDownloadDocument:
     at all. ``download_document`` must apply the same folder ACL
     ``get_document`` does, must never serve a document with no (or a
     tampered) file on disk, and must confine a resolved path to the
-    *caller's own org* subdirectory -- not the shared ``UPLOAD_DIR`` root
+    *caller's own org* subdirectory -- not the shared uploads root
     (ported from #1827, DOC-24 finding).
 
-    Files are written under ``UPLOAD_DIR/<organization_id>``, matching how
-    ``upload_document`` actually lays them out on disk (see its own
-    ``org_dir = os.path.join(UPLOAD_DIR, str(current_user.organization_id))``)
-    -- the containment check is scoped to that per-org subdirectory, not the
-    shared root, so a fixture that wrote straight into ``tmp_path`` would
-    pass a check real uploads could never satisfy.
+    Files are written under ``<UPLOADS_ROOT>/<organization_id>/documents/``,
+    matching how ``upload_document`` actually lays them out on disk
+    (``FileStorageService`` with ``StorageArea.DOCUMENTS``) -- the containment
+    check is scoped to that per-org area, not the shared root, so a fixture
+    that wrote straight into ``tmp_path`` would pass a check real uploads
+    could never satisfy.
     """
 
     async def _org_and_folder(self, db_session, slug, **folder_kwargs):
@@ -1011,7 +1012,7 @@ class TestDownloadDocument:
         return org, folder
 
     def _stored_file(self, upload_dir, org, name="stored.pdf"):
-        org_dir = upload_dir / str(org.id)
+        org_dir = upload_dir / str(org.id) / "documents"
         org_dir.mkdir(parents=True, exist_ok=True)
         file_path = org_dir / name
         file_path.write_bytes(b"%PDF-1.4 test")
@@ -1026,7 +1027,7 @@ class TestDownloadDocument:
     async def test_accessible_document_downloads(
         self, db_session, tmp_path, monkeypatch
     ):
-        monkeypatch.setattr("app.api.v1.endpoints.documents.UPLOAD_DIR", str(tmp_path))
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         org, folder = await self._org_and_folder(db_session, "fcvfd-dl-1")
         file_path = self._stored_file(tmp_path, org)
         document = Document(
@@ -1050,7 +1051,7 @@ class TestDownloadDocument:
     ):
         # Matches get_document: existence of a restricted document is never
         # confirmed to a caller who cannot see it.
-        monkeypatch.setattr("app.api.v1.endpoints.documents.UPLOAD_DIR", str(tmp_path))
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         org, folder = await self._org_and_folder(
             db_session, "fcvfd-dl-2", visibility=FolderVisibility.LEADERSHIP
         )
@@ -1078,7 +1079,7 @@ class TestDownloadDocument:
         # A published-minutes/property-return style document carries
         # content_html and no file_path at all -- there is nothing to
         # download, ever, for this row (matches Document.has_file == False).
-        monkeypatch.setattr("app.api.v1.endpoints.documents.UPLOAD_DIR", str(tmp_path))
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         org, folder = await self._org_and_folder(db_session, "fcvfd-dl-3")
         document = Document(
             organization_id=org.id,
@@ -1100,9 +1101,9 @@ class TestDownloadDocument:
     async def test_missing_file_on_disk_is_a_404(
         self, db_session, tmp_path, monkeypatch
     ):
-        monkeypatch.setattr("app.api.v1.endpoints.documents.UPLOAD_DIR", str(tmp_path))
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         org, folder = await self._org_and_folder(db_session, "fcvfd-dl-4")
-        org_dir = tmp_path / str(org.id)
+        org_dir = tmp_path / str(org.id) / "documents"
         org_dir.mkdir(parents=True, exist_ok=True)
         document = Document(
             organization_id=org.id,
@@ -1124,14 +1125,12 @@ class TestDownloadDocument:
     async def test_path_outside_upload_dir_is_rejected(
         self, db_session, tmp_path, monkeypatch
     ):
-        # Defence-in-depth: a tampered file_path outside UPLOAD_DIR entirely
+        # Defence-in-depth: a tampered file_path outside the uploads root
         # must not be served even if the row and the file both genuinely
         # exist.
         upload_dir = tmp_path / "uploads"
         upload_dir.mkdir()
-        monkeypatch.setattr(
-            "app.api.v1.endpoints.documents.UPLOAD_DIR", str(upload_dir)
-        )
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(upload_dir))
         outside_file = tmp_path / "outside.pdf"
         outside_file.write_bytes(b"%PDF-1.4 test")
         org, folder = await self._org_and_folder(db_session, "fcvfd-dl-5")
@@ -1156,11 +1155,11 @@ class TestDownloadDocument:
         self, db_session, tmp_path, monkeypatch
     ):
         # DOC-24 (Codex finding on #1827): every org's files live under the
-        # same UPLOAD_DIR root, so a root-level containment check would
+        # same uploads root, so a root-level containment check would
         # accept a tampered file_path pointing at a *different* org's own
         # subdirectory and leak that org's document. Containment must be
         # scoped to the caller's own org subdirectory.
-        monkeypatch.setattr("app.api.v1.endpoints.documents.UPLOAD_DIR", str(tmp_path))
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         org, folder = await self._org_and_folder(db_session, "fcvfd-dl-6")
         other_org, _ = await self._org_and_folder(db_session, "fcvfd-dl-7")
         other_orgs_file = self._stored_file(tmp_path, other_org, name="theirs.pdf")
@@ -2323,7 +2322,7 @@ class TestFolderWriteTierPermission:
         caller (``documents.manage`` + ``facilities.view_sensitive``, no
         facilities write grant) could still upload straight into a sensitive
         facility folder."""
-        monkeypatch.setattr("app.api.v1.endpoints.documents.UPLOAD_DIR", str(tmp_path))
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         org, root, _other, _document = await self._org_with_sensitive_tree(
             db_session, "fcvfd-wt-10"
         )
@@ -2345,7 +2344,7 @@ class TestFolderWriteTierPermission:
     async def test_write_permission_can_upload_into_the_folder(
         self, db_session, tmp_path, monkeypatch
     ):
-        monkeypatch.setattr("app.api.v1.endpoints.documents.UPLOAD_DIR", str(tmp_path))
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         org, root, _other, _document = await self._org_with_sensitive_tree(
             db_session, "fcvfd-wt-11"
         )

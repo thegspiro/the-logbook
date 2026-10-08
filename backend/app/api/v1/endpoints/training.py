@@ -108,6 +108,7 @@ from app.services.training_record_notices import (
 )
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import fetch_org_waivers, fetch_user_waivers
+from app.services.upload_scanning import reject_if_malicious
 from app.utils.org_scoping import assert_all_in_org
 from app.utils.org_timezone import resolve_org_today
 from app.utils.upload_limits import read_upload_limited
@@ -2224,12 +2225,19 @@ async def parse_historical_import(
     # Read and decode CSV
     try:
         contents = await read_upload_limited(file, MAX_TRAINING_CSV_BYTES)
-        decoded = contents.decode("utf-8-sig")  # Handle BOM
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail="CSV file exceeds the 10MB limit.",
+        # Parsed in memory and never stored, but a file entering the
+        # platform all the same: scanned before it is read.
+        await reject_if_malicious(
+            db,
+            contents,
+            upload_kind="training_history_import",
+            detected_mime=None,
+            user=current_user,
         )
+        decoded = contents.decode("utf-8-sig")  # Handle BOM
+    # UnicodeDecodeError first: it is a ValueError subclass, so with the
+    # oversize handler first a non-UTF-8 file was reported as "exceeds the
+    # 10MB limit" and never reached the Latin-1 fallback.
     except UnicodeDecodeError:
         try:
             decoded = contents.decode("latin-1")
@@ -2238,6 +2246,11 @@ async def parse_historical_import(
                 status_code=400,
                 detail="Unable to decode file. Please use UTF-8 encoding.",
             )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail="CSV file exceeds the 10MB limit.",
+        )
 
     reader = csv.DictReader(io.StringIO(decoded))
     if not reader.fieldnames:
@@ -3468,6 +3481,15 @@ async def import_training_csv(
 
     try:
         content = await read_upload_limited(file, MAX_TRAINING_CSV_BYTES)
+        # Parsed in memory and never stored, but a file entering the
+        # platform all the same: scanned before it is read.
+        await reject_if_malicious(
+            db,
+            content,
+            upload_kind="training_record_import",
+            detected_mime=None,
+            user=current_user,
+        )
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,

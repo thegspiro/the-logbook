@@ -555,6 +555,9 @@ const routes = ({
     () => ({ members: [], period_start: '2026-08-01', period_end: '2026-08-20', total_members: 0 }),
   ],
   ['**/api/v1/ranks**', () => []],
+  // The admin banner in the app shell maps over this list; none is the state
+  // of a scanned installation.
+  ['**/api/v1/system-notices', () => []],
   // The rank ladder under Members Administration reads these. Without them the
   // catch-all above fulfils both with `{}`, and the section maps over it.
   ['**/api/v1/operational-ranks', () => []],

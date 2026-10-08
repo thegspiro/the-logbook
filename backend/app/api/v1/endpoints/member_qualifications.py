@@ -35,6 +35,7 @@ from app.services.qualification_service import (
     QualificationService,
     qualification_label,
 )
+from app.services.upload_scanning import reject_if_malicious
 from app.utils.org_timezone import resolve_org_today
 from app.utils.upload_limits import read_upload_limited
 
@@ -222,6 +223,15 @@ async def import_member_qualifications(
         raise HTTPException(status_code=400, detail="Only CSV files are accepted")
     try:
         contents = await read_upload_limited(file, MAX_QUALIFICATION_CSV_BYTES)
+        # Parsed in memory and never stored, but a file entering the
+        # platform all the same: scanned before it is read.
+        await reject_if_malicious(
+            db,
+            contents,
+            upload_kind="member_qualification_import",
+            detected_mime=None,
+            user=current_user,
+        )
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,

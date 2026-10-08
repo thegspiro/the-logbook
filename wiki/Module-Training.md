@@ -1619,11 +1619,11 @@ after the magic-byte check and **before anything is written to disk**.
 | clamd unreachable/slow/err | `503` + `Retry-After: 60`, `LB-UPLD-005` | no      | — (logged at ERROR)                                        |
 | Scanning disabled          | as before; clamd never called            | yes     | —                                                          |
 
-The outage row **fails closed** — an inferred decision the owner can reverse:
-the operator opted in to scanning, and accepting unscanned files whenever the
-scanner is down is the state an attacker wants (the same reasoning as CAPTCHA).
-The bundled daemon is the `clamav` compose service under the `with-clamav`
-profile; see
+The outage row **fails closed** (owner's decision): accepting unscanned files
+whenever the scanner is down is the state an attacker wants (the same reasoning
+as CAPTCHA). Scanning is on by default since 2026-10-08 and covers every upload
+path, not only certificates; the bundled daemon is the `clamav` service every
+compose file starts. See
 [Security Configuration](Configuration-Security#malware-scanning-of-uploads).
 Files already stored before scanning was enabled are not rescanned.
 

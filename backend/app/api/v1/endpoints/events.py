@@ -4,7 +4,6 @@ Event API Endpoints
 Endpoints for event management including events, RSVPs, and attendance tracking.
 """
 
-import asyncio
 import copy
 import os
 import uuid as uuid_lib
@@ -108,17 +107,22 @@ from app.services.event_service import (
     attendance_lock_reason,
     resolve_attendee_visibility,
 )
+from app.services.file_storage_service import (
+    FileRules,
+    FileStorageService,
+    StorageArea,
+)
 from app.services.guest_check_in_service import GuestCheckInService
 from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
 )
 from app.services.membership_pipeline_service import MembershipPipelineService
 from app.services.notifications_service import NotificationsService
+from app.services.upload_scanning import reject_if_malicious
+from app.utils import download_names
 from app.utils.contact_visibility import load_contact_policy
-from app.utils.event_attachments import ATTACHMENT_UPLOAD_DIR as attachment_upload_dir
 from app.utils.event_attachments import is_path_in_org
-from app.utils.mime_validation import detect_mime_type, extension_matches_mime
-from app.utils.upload_paths import safe_download_filename
+from app.utils.org_timezone import resolve_scheduling_timezone
 
 router = APIRouter()
 
@@ -2880,41 +2884,51 @@ async def create_recurring_event(
 # Event Attachment Endpoints
 # ============================================
 
-# Re-exported from app.utils.event_attachments, which owns the constant so the
-# service layer can validate client-supplied attachment paths against it
-# without importing this endpoint module.
-ATTACHMENT_UPLOAD_DIR = attachment_upload_dir
-ALLOWED_EXTENSIONS = {
-    ".pdf",
-    ".doc",
-    ".docx",
-    ".xls",
-    ".xlsx",
-    ".ppt",
-    ".pptx",
-    ".txt",
-    ".csv",
-    ".jpg",
-    ".jpeg",
-    ".png",
-    ".gif",
-}
-# SEC: MIME types validated via magic bytes to prevent extension spoofing
-ALLOWED_ATTACHMENT_MIME_TYPES = {
-    "application/pdf",
-    "application/msword",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.ms-excel",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/vnd.ms-powerpoint",
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "text/plain",
-    "text/csv",
-    "image/jpeg",
-    "image/png",
-    "image/gif",
-}
-MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024  # 25MB
+# Readahead materials and other files attached to an event. The uploader's
+# extension is kept when it agrees with the detected content (a CSV stays
+# .csv though libmagic reports text/plain), so the allowlist is per extension
+# as well as per detected type.
+EVENT_ATTACHMENT_RULES = FileRules(
+    allowed_types={
+        "application/pdf": ".pdf",
+        "application/msword": ".doc",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": (
+            ".docx"
+        ),
+        "application/vnd.ms-excel": ".xls",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+        "application/vnd.ms-powerpoint": ".ppt",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation": (
+            ".pptx"
+        ),
+        "text/plain": ".txt",
+        "text/csv": ".csv",
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/gif": ".gif",
+    },
+    max_bytes=25 * 1024 * 1024,
+    description="PDF, Office documents, text, CSV, or images",
+    keep_consistent_extension=True,
+    allowed_extensions=frozenset(
+        {
+            ".pdf",
+            ".doc",
+            ".docx",
+            ".xls",
+            ".xlsx",
+            ".ppt",
+            ".pptx",
+            ".txt",
+            ".csv",
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".gif",
+        }
+    ),
+)
+ALLOWED_ATTACHMENT_MIME_TYPES = frozenset(EVENT_ATTACHMENT_RULES.allowed_types)
 
 
 @router.post("/{event_id}/attachments", response_model=AttachmentUploadResponse)
@@ -2942,84 +2956,27 @@ async def upload_event_attachment(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    # Validate file extension
-    ext = os.path.splitext(file.filename or "")[1].lower()
-    if ext not in ALLOWED_EXTENSIONS:
-        raise CodedHTTPException(
-            status_code=400,
-            detail=f"File type '{ext}' not allowed. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
-            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
-        )
-
-    # Read and validate size
-    content = await file.read()
-    if len(content) > MAX_ATTACHMENT_SIZE:
-        raise CodedHTTPException(
-            status_code=400,
-            detail="File too large. Maximum size is 25MB.",
-            error_code=ErrorCode.UPLD_TOO_LARGE,
-        )
-
-    # SEC: Validate actual file content via magic bytes, not just extension
-    try:
-        detected_mime = detect_mime_type(content)
-    except RuntimeError:
-        logger.error("Event attachment validation unavailable: libmagic missing")
-        raise CodedHTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Attachment validation is temporarily unavailable.",
-            error_code=ErrorCode.UPLD_VALIDATION_UNAVAILABLE,
-        )
-    if detected_mime not in ALLOWED_ATTACHMENT_MIME_TYPES:
-        logger.warning(
-            f"Event attachment rejected: detected MIME '{detected_mime}' "
-            f"(claimed: '{file.content_type}') for file '{file.filename}'"
-        )
-        raise CodedHTTPException(
-            status_code=400,
-            detail=f"File content type '{detected_mime}' not allowed.",
-            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
-        )
-    # SEC: the stored extension comes from the uploader's filename, so it must
-    # agree with the content. Without this a PDF named ``.png`` passes both
-    # allowlists independently and is stored under a misleading extension.
-    if not extension_matches_mime(ext, detected_mime):
-        logger.warning(
-            f"Event attachment rejected: extension '{ext}' does not match "
-            f"detected MIME '{detected_mime}'"
-        )
-        raise CodedHTTPException(
-            status_code=400,
-            detail=f"File extension '{ext}' does not match the file's contents.",
-            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
-        )
-
-    # Save file
-    org_dir = os.path.join(
-        ATTACHMENT_UPLOAD_DIR, str(current_user.organization_id), str(event_id)
+    stored = await FileStorageService(db).store_upload(
+        file,
+        organization_id=current_user.organization_id,
+        area=StorageArea.EVENT_ATTACHMENTS,
+        rules=EVENT_ATTACHMENT_RULES,
+        user=current_user,
+        record_id=event_id,
+        upload_kind="event_attachment",
     )
-    await asyncio.to_thread(os.makedirs, org_dir, exist_ok=True)
-
-    unique_name = f"{uuid_lib.uuid4().hex}{ext}"
-    file_path = os.path.join(org_dir, unique_name)
-
-    def _write_file(path: str, data: bytes) -> None:
-        with open(path, "wb") as f:
-            f.write(data)
-
-    await asyncio.to_thread(_write_file, file_path, content)
 
     # Update event attachments list (deep copy to ensure SQLAlchemy detects the change)
     attachments = copy.deepcopy(event.attachments or [])
     attachments.append(
         {
             "id": uuid_lib.uuid4().hex,
-            "file_name": safe_download_filename(file.filename, unique_name),
-            "file_path": file_path,
-            "file_size": len(content),
+            "file_name": stored.original_name,
+            "file_path": stored.path,
+            "file_size": stored.size,
             # The detected type, never the browser's claim: this is served
             # back as the download's Content-Type.
-            "file_type": detected_mime,
+            "file_type": stored.mime_type,
             "description": description,
             "uploaded_by": str(current_user.id),
             "uploaded_at": datetime.now(dt_timezone.utc).isoformat(),
@@ -3098,8 +3055,8 @@ async def download_event_attachment(
     file_path = attachment["file_path"]
 
     # SEC (EV-17): confine the resolved path to *this org's own* attachment
-    # subtree, not the shared ATTACHMENT_UPLOAD_DIR root. Every org's uploads
-    # live under that root, so a root-level check still serves a tampered or
+    # storage, not a shared root. Every org's uploads live under one root, so
+    # a root-level check still serves a tampered or
     # injected file_path that points at another organization's subdirectory —
     # and the generic event create/update payloads can carry attachment
     # dictionaries. Same fix, and same reasoning, as DOC-24 in documents.py.
@@ -3125,9 +3082,17 @@ async def download_event_attachment(
         if stored_type in ALLOWED_ATTACHMENT_MIME_TYPES
         else "application/octet-stream"
     )
+    extension = download_names.stored_extension(resolved_path)
+    tz = await resolve_scheduling_timezone(db, current_user.organization_id)
     return FileResponse(
         path=resolved_path,
-        filename=safe_download_filename(attachment.get("file_name")),
+        filename=download_names.descriptive_filename(
+            download_names.local_day(event.start_datetime, tz),
+            event.title,
+            download_names.original_stem(attachment.get("file_name")),
+            extension=extension,
+            fallback="event-attachment",
+        ),
         media_type=media_type,
     )
 
@@ -3747,6 +3712,11 @@ async def import_events_csv(
             error_code=ErrorCode.UPLD_TOO_LARGE,
         )
 
+    # Parsed in memory and never stored, but a file entering the platform all
+    # the same: scanned before it is read.
+    await reject_if_malicious(
+        db, contents, upload_kind="event_import", detected_mime=None, user=current_user
+    )
     try:
         rows = EventService.parse_csv_file(contents)
     except Exception as e:

@@ -201,12 +201,12 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-noreply@example.com}
 
-      # Malware scanning of uploaded self-report certificates (Optional).
-      # Start the `clamav` service below with
-      #   docker compose --profile with-clamav up -d
-      # and set CLAMAV_ENABLED=true in .env. Enabled + unreachable refuses
-      # uploads (retryable 503) rather than storing them unscanned.
-      CLAMAV_ENABLED: ${CLAMAV_ENABLED:-false}
+      # Malware scanning of every uploaded file. On by default, against the
+      # `clamav` service below; enabled + unreachable refuses uploads
+      # (retryable 503) rather than storing them unscanned. Setting it to
+      # false accepts files UNSCANNED and puts a standing warning in front of
+      # administrators.
+      CLAMAV_ENABLED: ${CLAMAV_ENABLED:-true}
       CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
       CLAMAV_PORT: ${CLAMAV_PORT:-3310}
       CLAMAV_TIMEOUT_SECONDS: ${CLAMAV_TIMEOUT_SECONDS:-30}
@@ -557,13 +557,19 @@ services:
       - logbook-internal
 
   # ============================================
-  # ClamAV - malware scanning (Optional, profile with-clamav)
+  # ClamAV - malware scanning (required)
   # ============================================
-  # Not started unless the profile is enabled. Loads its signature database
-  # into memory — budget roughly 1.5-3 GB of RAM — and takes a few minutes
-  # to become healthy on first start. Its port stays on the internal network.
+  # Every upload is scanned here before it is stored. Loads its signature
+  # database into memory — budget roughly 1.5-3 GB of RAM — and takes a few
+  # minutes to become healthy on first start; uploads are refused with a
+  # retryable error until it is. Its port stays on the internal network.
   clamav:
-    image: clamav/clamav:1.4.3
+    # The Debian-based build of the official image: the same release from the
+    # same upstream (Cisco-Talos/clamav-docker), but published for amd64,
+    # arm64 and ppc64le where clamav/clamav is amd64-only — so a Raspberry Pi
+    # or Graviton host pulls it too. Its entrypoint re-owns /var/lib/clamav on
+    # every start, so a volume first written by the Alpine image still works.
+    image: clamav/clamav-debian:1.4.3
     container_name: logbook-clamav
     restart: unless-stopped
     cap_drop:
@@ -586,10 +592,13 @@ services:
       timeout: 10s
       retries: 3
       start_period: 300s
+    environment:
+      # clamd refuses a stream longer than StreamMaxLength (25M by default),
+      # which the backend treats as "no verdict" and refuses the upload. The
+      # largest accepted upload is 50 MB and the request body cap is 60 MB.
+      CLAMD_CONF_StreamMaxLength: 60M
     networks:
       - logbook-internal
-    profiles:
-      - with-clamav
 
 # ============================================
 # Networks
@@ -602,7 +611,7 @@ networks:
 # Volumes
 # ============================================
 volumes:
-  # ClamAV signature database (only used by the with-clamav profile).
+  # ClamAV signature database.
   clamav_data:
     driver: local
   # Alternative to host paths — uncomment if you prefer Docker-managed

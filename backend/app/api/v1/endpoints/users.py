@@ -86,6 +86,7 @@ from app.services.operational_rank_service import (
 )
 from app.services.organization_service import OrganizationService
 from app.services.security_monitoring import report_privilege_escalation_attempt
+from app.services.upload_scanning import reject_if_malicious
 from app.services.user_deletion_service import (
     find_hard_delete_blockers,
     release_user_references,
@@ -2658,6 +2659,16 @@ async def upload_photo(
             detail=f"Invalid file type. Allowed: JPEG, PNG, WebP. Detected: {detected_mime}",
             error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
         )
+
+    # Scanned as uploaded, before re-encoding (which would otherwise be the
+    # only thing standing between a crafted file and the image decoder).
+    await reject_if_malicious(
+        db,
+        contents,
+        upload_kind="member_photo",
+        detected_mime=detected_mime,
+        user=current_user,
+    )
 
     # Optimize image: resize, strip EXIF, convert to WebP (smaller files)
     try:

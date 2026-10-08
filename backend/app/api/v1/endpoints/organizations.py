@@ -54,13 +54,13 @@ from app.schemas.organization import (
 from app.services.branding_service import reset_branding_cache
 from app.services.org_template_service import OrgTemplateService
 from app.services.organization_service import OrganizationService
+from app.services.upload_scanning import scan_and_validate_logo
 from app.utils.email_providers import (
     EMAIL_SECRET_FIELDS,
     REDACTED_SECRET,
     connection_identity,
     normalize_stored_platform,
 )
-from app.utils.image_validator import validate_logo_image
 
 router = APIRouter()
 
@@ -1559,8 +1559,10 @@ async def update_organization_profile(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Upload the logo as a PNG or JPEG file rather than a link.",
             )
-        # Pillow decodes and re-encodes up to 5 MB here; off the event loop.
-        update_data["logo"] = await asyncio.to_thread(validate_logo_image, new_logo)
+        # Scanned, then decoded and re-encoded by Pillow off the event loop.
+        update_data["logo"] = await scan_and_validate_logo(
+            db, new_logo, user=current_user
+        )
 
     for field, value in update_data.items():
         setattr(org, field, value)

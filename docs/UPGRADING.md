@@ -412,6 +412,59 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Every upload is malware-scanned, and the scanner starts with the stack (2026-10-08)
+
+Phase 2 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).
+
+- **A ClamAV container now starts with everything else.** `docker compose up
+-d` pulls `clamav/clamav-debian:1.4.3` (multi-arch — ARM hosts included) and
+  `CLAMAV_ENABLED` now defaults to `true`. **Budget roughly 1.5–3 GB of extra
+  RAM.** On first start clamd spends a few minutes downloading signatures;
+  until it is healthy, **uploads are refused** with a retryable 503
+  (`LB-UPLD-005`). The rest of the application works meanwhile.
+- **If the scanner is not running, uploads are refused** — by design (fail
+  closed). That bites a deployment built from its own compose file or run with
+  `--scale clamav=0`: add the `clamav` service, or point `CLAMAV_HOST` at a
+  clamd you run, with `StreamMaxLength` of at least 60M.
+- **A `.env` that already says `CLAMAV_ENABLED=false` keeps scanning off** —
+  the upgrade does not override it. Files are then accepted unscanned, and you
+  will see a `WARNING: CLAMAV_ENABLED is false` line in the startup log and in
+  `python -m app.preflight`, and every administrator with `settings.manage`
+  sees a red notice in the app until it is turned back on.
+- **Small hosts.** The `minimal` profile's floor is now about 3 GB: ClamAV is
+  required on every profile, and on a 1–2 GB host it is killed for memory,
+  after which uploads are refused. The installer warns below 3 GB.
+- **Scanning now covers every upload**, not just self-reported certificates:
+  documents, all attachments, applicant files, email-template attachments,
+  suggestion screenshots, member photos, logos, storefront and equipment-check
+  photos, and every CSV import. Files already stored are not rescanned.
+- **New uploads use a new folder layout**:
+  `/app/uploads/<organization_id>/<area>/<record_id>/<uuid><ext>`. Existing
+  files keep working where they are. To move them, run (dry run first — it
+  changes nothing without `--apply`):
+
+  ```bash
+  docker exec -it intranet-backend python scripts/relocate_uploads.py
+  docker exec -it intranet-backend python scripts/relocate_uploads.py --apply
+  # check the app, then delete the old copies:
+  docker exec -it intranet-backend python scripts/relocate_uploads.py \
+      --finalize /app/uploads/.relocation/relocation-<stamp>.json
+  ```
+
+  `--apply` copies and checksum-verifies every file and keeps the originals;
+  `--rollback <manifest>` undoes it until you finalize. Disk use doubles for
+  the moved files until `--finalize`.
+
+- **Downloads have descriptive names**, built from the record:
+  `2026-10-08_Smith-John_EMT-Recertification.pdf` for a training certificate
+  (member name, last name first), the event date and title for an event
+  attachment, the date and name for a document. Emailed template attachments
+  reach recipients under the name they were uploaded with, not a UUID.
+- **Smaller behaviour changes:** an email-template attachment that is too large
+  is now refused with 400 rather than 413, like every other upload; a training
+  history CSV that is not UTF-8 is decoded as Latin-1 as intended instead of
+  being reported as "exceeds the 10MB limit".
+
 ### Uploaded files: tighter access, and email attachments move onto the uploads volume (2026-10-08)
 
 Phase 1 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).

@@ -30,7 +30,7 @@ from app.models.suggestion import (
 )
 from app.models.user import User
 from app.schemas.suggestion import SuggestionBoxWrite
-from app.services import suggestion_service
+from app.services import file_storage_service
 from app.services.suggestion_service import (
     SuggestionService,
     anonymous_timestamp,
@@ -167,7 +167,7 @@ async def _submit(db, box, user_id, anonymous=False, screenshots=()):
 
 @pytest.fixture
 def upload_dir(tmp_path, monkeypatch):
-    monkeypatch.setattr(suggestion_service, "SUGGESTION_ATTACHMENT_DIR", str(tmp_path))
+    monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
     return tmp_path
 
 
@@ -225,6 +225,9 @@ class TestAnonymousSubmissionsStoreNoAuthor:
             )
         ).scalar_one()
         assert attachment.file_name == "screenshot-1.webp"
+        assert Path(attachment.file_path).parent == (
+            upload_dir / str(dept["org"]) / "suggestions" / str(row.id)
+        )
         stamp = anonymous_timestamp(datetime.now(timezone.utc)).timestamp()
         assert os.stat(attachment.file_path).st_mtime == pytest.approx(stamp, abs=1)
 
