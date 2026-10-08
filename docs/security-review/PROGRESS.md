@@ -16,32 +16,44 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#2994](https://github.com/thegspiro/the-logbook/pull/2994)**: branch
-`claude/security-review-reports-analytics`, Feature 29 (Reports &
-analytics), pass 8 (confirmed via `list_pull_requests`, state=open, that no
-`claude/security-review-*` PR existed before starting — PR #2990, Feature
-28, Security/audit & IP, had already merged with nothing started since).
-Real delta since the last pass (`RPT5-29-reports-analytics.md`'s "Pass 7",
-PR #2897, `6c422896`, 2026-10-04) is zero — the one intervening commit
-touching this feature's ten files is a shallow-clone history-boundary
-artifact with no real diff, the same shape prior passes documented
-(`f8fdd1a`, `0430faa0`, …). A full fresh read (not a diff review, since
-there was no real diff) of all five endpoint files and five services found
-**1 real fix**: `_generate_pipeline_overview` (the "Pipeline Overview"
-report) never excluded the caller's own prospective-membership record, the
-one lister in this org that didn't — every other list/aggregate route in
-`membership_pipeline.py` and `labels.py`'s prospect-label routes already
-apply `get_hidden_prospect_ids` for exactly this reason. Fixed by threading
-`hidden_prospect_ids` through `ReportsService.generate_report` into
-`_generate_pipeline_overview` only; 4 new guard tests. All other prior-pass
-findings (`RPT2-29-2`, `LBL-29-2`/`4`, `RPT-5c`/`6`/`7`, `DASH-2`,
-`RPT5-29-1`/`5`) re-verified unchanged, none re-litigated. Route surface
-re-enumerated: 30 routes, all correctly gated (unchanged count). Completion
-gate green (flake8/black/isort clean against CI's pinned versions;
-migrations — 543 revisions, single head; full backend unit suite 13446
-passed, 1 skipped, 0 failed; frontend typecheck/lint clean). See the Log
-entry below and `docs/security-review/RPT6-29-reports-analytics.md` for
-detail.
+**PR [#2996](https://github.com/thegspiro/the-logbook/pull/2996)**: branch
+`claude/security-review-onboarding`, Feature 30 (Onboarding), pass 6
+(confirmed via `list_pull_requests`/`gh api`, state=open, that no
+`claude/security-review-*` PR existed before starting — PR #2994, Feature
+29, Reports & analytics, had already merged with nothing started since).
+**1 real finding, HIGH, fixed:** `OnboardingService.create_organization`'s
+single-org guard was an unlocked read-then-write — the same bug class
+ONB3-30-3 already fixed one call below, in `create_system_owner`. Two
+concurrent, pre-authentication callers to `POST /organization`/`POST
+/session/organization` both read "no organization exists" and both created
+one (reproduced against a real database, 8/8 → 2/2 successes before the
+fix); worse than a wasted row, since `create_system_owner`'s own "first
+active org by `created_at`" lookup means an attacker whose organization wins
+the race can have the real operator's own System Owner submission land on
+the attacker's organization instead of the one they described. Fixed with
+the same remediation as ONB3-30-3 (lock the `onboarding_status` singleton
+row, make the existence check itself a locking read); verified 8/8 → exactly
+1 success after the fix; guard test added
+(`tests/test_onboarding_organization_race.py`). Also re-verified: the ONB-8
+audit-durability residual every prior pass (2–5) left open is now closed on
+`main`, independently of this pass. Every other prior-pass finding (ONB-7,
+ONB2-30-8, ONB-30-3, duplicate-role-id 500, the cosmetic `/organization`
+except-Exception gap) re-verified unchanged. Completion gate green
+(flake8/black/isort clean; migrations — 543 revisions, single head; full
+backend suite 17,384 passed, 21 skipped, 0 failed; frontend typecheck/lint
+clean). See the Log entry below and
+`docs/security-review/ONB4-30-onboarding.md` for detail.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 8, PR #2994, merged, nothing further to record), preserved for history</summary>
+
+**None.** PR #2994 (Feature 29, Reports & analytics, pass 8) merged clean
+(confirmed via `list_commits` showing merge commit `b40475bd` on `main`). 0
+fixes needed beyond this row's own description above; the Log entry below
+already records it in full, so there is nothing further to record here.
+Rotation row 29 → ✅.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 28, Security/audit & IP, pass 6, PR #2990, merged, nothing further to record), preserved for history</summary>
