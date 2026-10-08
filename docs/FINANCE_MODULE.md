@@ -34,6 +34,64 @@ unchanged: a member's request goes through the same chain as anyone else's, and
 nobody approves or pays their own. `tests/test_finance_member_requests.py` pins
 all of the above over HTTP.
 
+## Budget-line owners, stations, and the Create/Edit Budget screen _(2026-10-08)_
+
+**Ownership is by position.** A budget line (`budgets.owner_position_id`) and
+a budget category (`budget_categories.owner_position_id`) may each name a
+position; both are nullable, `ON DELETE SET NULL`, and added by migration
+`1be4fbbc235d`. The rule, defined once in
+`backend/app/services/finance_budget_ownership.py`:
+
+| Line's own owner | Category's owner | Effective owner   | `ownerInherited` |
+| ---------------- | ---------------- | ----------------- | ---------------- |
+| set              | any              | the line's        | `false`          |
+| none             | set              | the category's    | `true`           |
+| none             | none             | none ("No owner") | `false`          |
+
+A member owns a line when they hold its effective owner position — org-scoped
+at every join, active members only, and **in every fiscal year**, closed ones
+included (`owned_budgets_query`, `owned_budget_ids`, `user_owns_budget`). Owning
+a line grants no write: only `finance.manage` sets amounts, owners and stations.
+What an owner may _see_ of their lines is the follow-up "My budgets" work and is
+not exposed yet.
+
+**API** (camelCase both ways; request schemas use `_REQUEST_CONFIG`):
+
+- `POST /finance/budgets` (`finance.manage`) — `fiscalYearId`, `categoryId`,
+  `amountBudgeted`, optional `notes`, `stationId`, `ownerPositionId`. A
+  **closed** fiscal year is refused with 400 "This fiscal year is closed…";
+  draft and active years take lines.
+- `PUT /finance/budgets/{id}` (`finance.manage`) — `amountBudgeted`, `notes`,
+  `stationId`, `ownerPositionId`. Omitted leaves a field alone and `null`
+  clears it; a cleared owner falls back to the category's. An update does not
+  move a line to another fiscal year or category. Lowering the amount below
+  spent + encumbered is 409 _Insufficient available budget_.
+- `GET /finance/budgets[?station_id=]` and `GET /finance/budgets/{id}`
+  (`finance.view`) — each row adds `stationId`, `stationName`,
+  `ownerPositionId`, `ownerPositionName`, `effectiveOwnerPositionId`,
+  `effectiveOwnerPositionName` and `ownerInherited`, from one org-scoped join
+  rather than a query per row.
+- `POST`/`PUT /finance/budget-categories` (`finance.manage`) — optional
+  `ownerPositionId` with the same omit / null semantics; responses add
+  `ownerPositionId` and `ownerPositionName`.
+- `GET /finance/position-options` (`finance.manage`) — the org's positions as
+  `{id, name}`. Not `/roles`, whose grants a Treasurer may not hold.
+- `GET /finance/station-options` (`finance.manage`) — the org's unarchived
+  facilities as `{id, name}`. The name is the one
+  `GET /finance/budgets/options` puts in a line's label.
+
+A station or owner position from another department is refused with 400
+(`assert_in_org`, CLAUDE.md pitfall #14c). Nothing enforces one line per fiscal
+year, category and station: two lines for the same pair are permitted, as the
+training guide says, and the options endpoint numbers them apart.
+
+**Screens.** _Finance › Budgets_ gains **Add budget line** (manage only), a
+**Station** filter, and **Station** and **Owner** columns ("Training Officer
+(from category)" when inherited). The budget detail page shows station and
+owner and offers **Edit** to a manager; both open `BudgetFormDialog`.
+_Finance › Settings_ gives each category an owner-position picker on create and
+a new edit dialog.
+
 ## Context
 
 Fire departments need internal financial workflows (budgets, purchase approvals, dues, expense reimbursements) but most use external accounting software like QuickBooks for actual bookkeeping. This module fills the gap: it provides the **internal operational finance workflows** that QuickBooks doesn't handle, with export capabilities to feed data into external accounting tools.
