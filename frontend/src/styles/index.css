@@ -1103,6 +1103,26 @@
   @apply bg-theme-surface-modal border-theme-surface-border rounded-lg border shadow-lg;
 }
 
+@utility surface-opaque {
+  /* `bg-theme-surface`, made opaque, for anything that has to occlude what
+     scrolls beneath it: a pinned action bar, a sticky column, a full-screen
+     cover. In dark mode the surface tokens are translucent white (white/6),
+     so a sticky element painted with one shows the content sliding under it.
+     This lays the same tint over the opaque page canvas (`--color-theme-bg`),
+     which is what the translucent token looks like at rest, so the element
+     reads as the same surface and still hides what passes behind it. In the
+     light and high-contrast themes the surface token is already opaque and
+     paints over the canvas unchanged. */
+  background-color: var(--color-theme-bg);
+  background-image: linear-gradient(var(--surface-bg), var(--surface-bg));
+}
+
+@utility surface-secondary-opaque {
+  /* As surface-opaque, for the secondary tint — a sticky table header. */
+  background-color: var(--color-theme-bg);
+  background-image: linear-gradient(var(--surface-secondary), var(--surface-secondary));
+}
+
 /* --- Drag & Drop Surfaces --- */
 @utility drop-surface {
   /* Resting state of a droppable target — kanban columns and reorderable rows. */
@@ -1438,7 +1458,7 @@
      paddings, which is what lifts the bar clear of the 56px mobile bottom
      navigation; a hand-written `bottom-*` does not, and the bar renders first,
      so the navigation would paint over it and swallow its taps. */
-  @apply bg-theme-surface border-theme-surface-border action-bar-safe sticky bottom-0 z-30 border-t px-4;
+  @apply surface-opaque border-theme-surface-border action-bar-safe sticky bottom-0 z-30 border-t px-4;
   box-shadow: var(--shadow-sticky-bar);
 }
 

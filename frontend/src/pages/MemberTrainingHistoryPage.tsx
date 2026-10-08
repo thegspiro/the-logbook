@@ -87,7 +87,10 @@ const RecordAttachmentsModal: React.FC<{
       aria-modal="true"
       aria-labelledby="record-attachments-title"
     >
-      <div ref={dialogRef} className="bg-theme-surface modal-panel-scroll w-full max-w-lg rounded-lg p-6 shadow-xl">
+      <div
+        ref={dialogRef}
+        className="bg-theme-surface-modal modal-panel-scroll w-full max-w-lg rounded-lg p-6 shadow-xl"
+      >
         <div className="mb-1 flex items-center justify-between">
           <h3
             id="record-attachments-title"
