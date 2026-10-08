@@ -36,6 +36,7 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 COLUMN = "owner_position_id"
+POSITIONS = "positions"
 TABLES = (
     (
         "budget_categories",
@@ -87,7 +88,7 @@ def upgrade() -> None:
             op.create_index(index_name, table, [COLUMN])
         if not _foreign_key_names(table, COLUMN):
             op.create_foreign_key(
-                fk_name, table, "positions", [COLUMN], ["id"], ondelete="SET NULL"
+                fk_name, table, POSITIONS, [COLUMN], ["id"], ondelete="SET NULL"
             )
 
 

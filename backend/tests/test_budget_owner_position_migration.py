@@ -1,8 +1,10 @@
 """``1be4fbbc235d`` adds ``owner_position_id`` to budget categories and lines.
 
-Run for real against MySQL/MariaDB in a scratch database of its own — the DDL
-cannot ride in the rolled-back ``db_session`` transaction, because MySQL
-commits implicitly around it. Pinned:
+Run for real against MySQL/MariaDB — the DDL cannot ride in the rolled-back
+``db_session`` transaction, because MySQL commits implicitly around it. CI's
+database user may create tables only inside the test database, not a database
+of its own, so each test points the migration at uniquely prefixed scratch
+tables there and drops them afterwards. Pinned:
 
 * an empty database (CI's ``alembic upgrade head`` before ``create_all``) is
   a no-op both ways, since neither table is built by any migration;
@@ -17,6 +19,7 @@ commits implicitly around it. Pinned:
 import importlib.util
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import sqlalchemy as sa
@@ -69,20 +72,40 @@ class TestNamesMatchTheModels:
 
 
 @pytest.fixture
-def scratch_engine():
-    """A database of the test's own, dropped afterwards whatever happens."""
-    name = f"{settings.DB_NAME}_mig_{uuid.uuid4().hex[:8]}"
-    server = sa.create_engine(settings.SYNC_DATABASE_URL)
-    with server.connect() as conn:
-        conn.exec_driver_sql(f"CREATE DATABASE `{name}`")
-    engine = sa.create_engine(server.url.set(database=name))
+def scratch(monkeypatch):
+    """The migration aimed at scratch tables of the test's own.
+
+    Prefixed so they can collide with neither the suite's real tables nor a
+    concurrent run, and dropped afterwards whatever happens. Key and index
+    names are prefixed too: MySQL requires a key name to be unique across the
+    whole schema, not just its table.
+    """
+    prefix = f"m{uuid.uuid4().hex[:6]}_"
+    monkeypatch.setattr(MIGRATION, "POSITIONS", f"{prefix}positions")
+    monkeypatch.setattr(
+        MIGRATION,
+        "TABLES",
+        tuple(
+            (f"{prefix}{table}", f"{prefix}{fk}", f"{prefix}{idx}")
+            for table, fk, idx in MIGRATION.TABLES
+        ),
+    )
+    engine = sa.create_engine(settings.SYNC_DATABASE_URL)
     try:
-        yield engine
+        yield SimpleNamespace(engine=engine, prefix=prefix)
     finally:
+        with engine.connect() as conn:
+            conn.exec_driver_sql("SET FOREIGN_KEY_CHECKS = 0")
+            for table in ("budgets", "budget_categories", "positions"):
+                conn.exec_driver_sql(f"DROP TABLE IF EXISTS `{prefix}{table}`")
+            conn.exec_driver_sql("SET FOREIGN_KEY_CHECKS = 1")
+            conn.commit()
         engine.dispose()
-        with server.connect() as conn:
-            conn.exec_driver_sql(f"DROP DATABASE IF EXISTS `{name}`")
-        server.dispose()
+
+
+def _tables(engine, prefix: str) -> list:
+    with engine.connect() as conn:
+        return [t for t in sa.inspect(conn).get_table_names() if t.startswith(prefix)]
 
 
 def _run(engine, step) -> None:
@@ -109,39 +132,46 @@ def _shape(engine, table: str) -> dict:
     return {"column": columns.get("owner_position_id"), "keys": keys, "idx": indexes}
 
 
-def _build_existing(engine) -> None:
+def _build_existing(engine, prefix: str) -> None:
     """The three tables as an installation has them before this revision."""
     with engine.connect() as conn:
         conn.exec_driver_sql(
-            "CREATE TABLE positions (id VARCHAR(36) PRIMARY KEY, "
+            f"CREATE TABLE {prefix}positions (id VARCHAR(36) PRIMARY KEY, "
             "name VARCHAR(100) NOT NULL) ENGINE=InnoDB"
         )
         conn.exec_driver_sql(
-            "CREATE TABLE budget_categories (id VARCHAR(36) PRIMARY KEY, "
+            f"CREATE TABLE {prefix}budget_categories (id VARCHAR(36) PRIMARY KEY, "
             "name VARCHAR(200) NOT NULL) ENGINE=InnoDB"
         )
         conn.exec_driver_sql(
-            "CREATE TABLE budgets (id VARCHAR(36) PRIMARY KEY, "
+            f"CREATE TABLE {prefix}budgets (id VARCHAR(36) PRIMARY KEY, "
             "category_id VARCHAR(36) NOT NULL, "
             "amount_budgeted NUMERIC(12, 2) NOT NULL) ENGINE=InnoDB"
         )
-        conn.exec_driver_sql("INSERT INTO positions VALUES ('pos-1', 'Treasurer')")
-        conn.exec_driver_sql("INSERT INTO budget_categories VALUES ('cat-1', 'Gear')")
-        conn.exec_driver_sql("INSERT INTO budgets VALUES ('b-1', 'cat-1', 1000.00)")
+        conn.exec_driver_sql(
+            f"INSERT INTO {prefix}positions VALUES ('pos-1', 'Treasurer')"
+        )
+        conn.exec_driver_sql(
+            f"INSERT INTO {prefix}budget_categories VALUES ('cat-1', 'Gear')"
+        )
+        conn.exec_driver_sql(
+            f"INSERT INTO {prefix}budgets VALUES ('b-1', 'cat-1', 1000.00)"
+        )
         conn.commit()
 
 
 @pytest.mark.integration
 class TestAgainstARealDatabase:
-    def test_an_empty_database_is_a_no_op_both_ways(self, scratch_engine):
-        _run(scratch_engine, MIGRATION.upgrade)
-        _run(scratch_engine, MIGRATION.downgrade)
+    def test_an_empty_database_is_a_no_op_both_ways(self, scratch):
+        _run(scratch.engine, MIGRATION.upgrade)
+        _run(scratch.engine, MIGRATION.downgrade)
 
-        with scratch_engine.connect() as conn:
-            assert sa.inspect(conn).get_table_names() == []
+        assert _tables(scratch.engine, scratch.prefix) == []
 
-    def test_upgrade_over_existing_rows_then_downgrade(self, scratch_engine):
-        _build_existing(scratch_engine)
+    def test_upgrade_over_existing_rows_then_downgrade(self, scratch):
+        scratch_engine = scratch.engine
+        p = scratch.prefix
+        _build_existing(scratch_engine, p)
 
         for _ in range(2):  # the second run must change nothing
             _run(scratch_engine, MIGRATION.upgrade)
@@ -150,7 +180,7 @@ class TestAgainstARealDatabase:
                 assert shape["column"] is not None
                 assert shape["column"]["nullable"] is True
                 assert [k["name"] for k in shape["keys"]] == [fk_name]
-                assert shape["keys"][0]["referred_table"] == "positions"
+                assert shape["keys"][0]["referred_table"] == f"{p}positions"
                 assert shape["keys"][0]["options"].get("ondelete") == "SET NULL"
                 # One index: created before the key, so MySQL adds none.
                 assert shape["idx"] == [index_name]
@@ -158,18 +188,18 @@ class TestAgainstARealDatabase:
         with scratch_engine.connect() as conn:
             assert (
                 conn.exec_driver_sql(
-                    "SELECT owner_position_id FROM budgets WHERE id = 'b-1'"
+                    f"SELECT owner_position_id FROM {p}budgets WHERE id = 'b-1'"
                 ).scalar_one()
                 is None
             )
             # Deleting the position unowns the line rather than refusing.
             conn.exec_driver_sql(
-                "UPDATE budgets SET owner_position_id = 'pos-1' WHERE id = 'b-1'"
+                f"UPDATE {p}budgets SET owner_position_id = 'pos-1' WHERE id = 'b-1'"
             )
-            conn.exec_driver_sql("DELETE FROM positions WHERE id = 'pos-1'")
+            conn.exec_driver_sql(f"DELETE FROM {p}positions WHERE id = 'pos-1'")
             assert (
                 conn.exec_driver_sql(
-                    "SELECT owner_position_id FROM budgets WHERE id = 'b-1'"
+                    f"SELECT owner_position_id FROM {p}budgets WHERE id = 'b-1'"
                 ).scalar_one()
                 is None
             )
@@ -180,9 +210,13 @@ class TestAgainstARealDatabase:
             shape = _shape(scratch_engine, table)
             assert shape == {"column": None, "keys": [], "idx": []}
         with scratch_engine.connect() as conn:
-            assert conn.exec_driver_sql("SELECT COUNT(*) FROM budgets").scalar() == 1
             assert (
-                conn.exec_driver_sql("SELECT COUNT(*) FROM budget_categories").scalar()
+                conn.exec_driver_sql(f"SELECT COUNT(*) FROM {p}budgets").scalar() == 1
+            )
+            assert (
+                conn.exec_driver_sql(
+                    f"SELECT COUNT(*) FROM {p}budget_categories"
+                ).scalar()
                 == 1
             )
 
