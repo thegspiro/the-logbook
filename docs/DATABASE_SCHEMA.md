@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**296 tables · 4868 columns · 970 foreign keys**
+**297 tables · 4877 columns · 973 foreign keys**
 
 ---
 
@@ -253,6 +253,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`approval_chain_steps`](#approval_chain_steps) | `ApprovalChainStep` | 13 | A single step in an approval chain |
 | [`approval_chains`](#approval_chains) | `ApprovalChain` | 13 | Configurable approval chain template |
 | [`approval_step_records`](#approval_step_records) | `ApprovalStepRecord` | 13 | Tracks actual approval step progression for a specific entity |
+| [`budget_amendments`](#budget_amendments) | `BudgetAmendment` | 9 | Extra money leadership approved for a budget line, as recorded. |
 | [`budget_categories`](#budget_categories) | `BudgetCategory` | 11 | Budget category (hierarchical) |
 | [`budgets`](#budgets) | `Budget` | 13 | Budget line for a category within a fiscal year |
 | [`check_requests`](#check_requests) | `CheckRequest` | 20 | Request to cut a check for payment |
@@ -3712,6 +3713,29 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Constraints**
 
 - UNIQUE `uq_approval_step_records_approval_token` (`approval_token`)
+
+### `budget_amendments`
+
+**BudgetAmendment** · `app/models/finance.py`
+
+> Extra money leadership approved for a budget line, as recorded. Each row is an audit record of one increase: how much, why, who approved it and when, and which member entered it. Adding one raises the line's ``amount_budgeted`` by ``amount`` in the same transaction, so ``amount_budgeted`` stays the single live ceiling the spend checks read. The line's *original* budget is not stored anywhere; it is ``amount_budgeted`` minus the sum of these rows (``FinanceService._budget_row``). There is no edit or delete path: an amendment is what the department approved, and a correction is a separate concern.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `budget_id` | VARCHAR(36) | no | FK, IDX |  | → `budgets.id` ON DELETE CASCADE |
+| `amount` | NUMERIC(12, 2) | no |  |  |  |
+| `reason` | TEXT | no |  |  |  |
+| `approved_by` | VARCHAR(200) | no |  |  |  |
+| `approved_on` | DATE | no |  |  |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_budget_amendments_budget_id` (`budget_id`)
+- `ix_budget_amendments_organization_id` (`organization_id`)
 
 ### `budget_categories`
 
@@ -10296,7 +10320,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (355 references)
+### → `users` (356 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10333,6 +10357,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `approval_step_records` | `acted_by` | SET NULL | yes |
 | `approval_step_records` | `assigned_to` | SET NULL | yes |
 | `blocked_access_attempts` | `user_id` | RESTRICT | yes |
+| `budget_amendments` | `created_by` | SET NULL | yes |
 | `budgets` | `created_by` | RESTRICT | no |
 | `candidates` | `nominated_by` | SET NULL | yes |
 | `candidates` | `user_id` | SET NULL | yes |
@@ -10656,7 +10681,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (242 references)
+### → `organizations` (243 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10683,6 +10708,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `apparatus_types` | `organization_id` | CASCADE | yes |
 | `approval_chains` | `organization_id` | CASCADE | no |
 | `basic_apparatus` | `organization_id` | CASCADE | no |
+| `budget_amendments` | `organization_id` | CASCADE | no |
 | `budget_categories` | `organization_id` | CASCADE | no |
 | `budgets` | `organization_id` | CASCADE | no |
 | `check_item_deployed_lots` | `organization_id` | CASCADE | no |
@@ -11243,6 +11269,15 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_approvals` | `training_session_id` | CASCADE | no |
 | `training_effectiveness_evaluations` | `training_session_id` | SET NULL | yes |
 
+### → `budgets` (4 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `budget_amendments` | `budget_id` | CASCADE | no |
+| `check_requests` | `budget_id` | SET NULL | yes |
+| `expense_line_items` | `budget_id` | SET NULL | yes |
+| `purchase_requests` | `budget_id` | SET NULL | yes |
+
 ### → `department_messages` (4 references)
 
 | From table | Column | On delete | Nullable |
@@ -11313,14 +11348,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `approval_chains` | `budget_category_id` | SET NULL | yes |
 | `budget_categories` | `parent_category_id` | SET NULL | yes |
 | `budgets` | `category_id` | CASCADE | no |
-
-### → `budgets` (3 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `check_requests` | `budget_id` | SET NULL | yes |
-| `expense_line_items` | `budget_id` | SET NULL | yes |
-| `purchase_requests` | `budget_id` | SET NULL | yes |
 
 ### → `course_cohort_classes` (3 references)
 

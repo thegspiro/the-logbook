@@ -12,6 +12,7 @@ from sqlalchemy import (
     JSON,
     Boolean,
     Column,
+    Date,
     DateTime,
 )
 from sqlalchemy import Enum as SQLEnum
@@ -344,6 +345,13 @@ class Budget(Base):
     station = relationship("Facility", foreign_keys=[station_id])
     owner_position = relationship("Position", foreign_keys=[owner_position_id])
     creator = relationship("User", foreign_keys=[created_by])
+    amendments = relationship(
+        "BudgetAmendment",
+        back_populates="budget",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="BudgetAmendment.created_at.desc()",
+    )
 
     __table_args__ = (
         Index(
@@ -353,6 +361,56 @@ class Budget(Base):
             "category_id",
         ),
     )
+
+
+class BudgetAmendment(Base):
+    """Extra money leadership approved for a budget line, as recorded.
+
+    Each row is an audit record of one increase: how much, why, who approved
+    it and when, and which member entered it. Adding one raises the line's
+    ``amount_budgeted`` by ``amount`` in the same transaction, so
+    ``amount_budgeted`` stays the single live ceiling the spend checks read.
+    The line's *original* budget is not stored anywhere; it is
+    ``amount_budgeted`` minus the sum of these rows
+    (``FinanceService._budget_row``).
+
+    There is no edit or delete path: an amendment is what the department
+    approved, and a correction is a separate concern.
+    """
+
+    __tablename__ = "budget_amendments"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    budget_id = Column(
+        String(36),
+        ForeignKey("budgets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    amount = Column(Numeric(12, 2), nullable=False)
+    reason = Column(Text, nullable=False)
+    # Free text naming the approval, e.g. "Board vote 10/7".
+    approved_by = Column(String(200), nullable=False)
+    approved_on = Column(Date, nullable=False)
+    # SET NULL rather than RESTRICT: removing a member must not be blocked by,
+    # or delete, the record of money the department approved.
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    # Relationships
+    organization = relationship("Organization", foreign_keys=[organization_id])
+    budget = relationship("Budget", back_populates="amendments")
+    creator = relationship("User", foreign_keys=[created_by])
 
 
 # ============================================
