@@ -1211,6 +1211,23 @@ read-only — see
 The Create Budget row is closed too — see
 [FINANCE_MODULE.md](./FINANCE_MODULE.md#budget-line-owners-stations-and-the-createedit-budget-screen-2026-10-08).
 
+## Finance — Budget Requests Have an API but No Screens Yet (2026-10-08)
+
+Next-year budget requests (`budget_requests`, `/finance/budget-requests/…`) are
+built end to end in the API — line owners create, edit, submit and withdraw
+them, the Treasurer approves, adjusts or declines them, and an approval writes
+the draft-year line — but in this step (3a) only the Treasurer's two settings
+controls have a screen: **Start from last year** and the **request deadline**
+on _Finance › Settings_. The owners' request screen, the Treasurer's review
+screen and the deadline reminder emails are step 3b.
+
+This is not a stored-but-unread setting (CLAUDE.md pitfall #19): the deadline
+**is read** — the API refuses owners' changes after it, and every fiscal-year
+response reports `requestsOpen` from the same function. What is missing until
+3b is a way for an owner to act on it without calling the API, and a reminder
+that it is coming. See
+[FINANCE_MODULE.md](./FINANCE_MODULE.md#next-year-planning-start-from-last-year-the-request-deadline-and-budget-requests-2026-10-08).
+
 ## Finance — A Mistaken Budget Amendment Cannot Be Corrected (2026-10-08)
 
 A budget amendment (`budget_amendments`, `POST /finance/budgets/{id}/amendments`)
