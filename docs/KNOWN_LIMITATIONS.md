@@ -1170,26 +1170,14 @@ that added the purchase request, expense report and check request shots.
 | QuickBooks export mapping | `GET/POST/PUT /finance/export/mappings` and the `qbAccountName` types exist; no page, no route, no consumer.   | ❌ API + types only  |
 | Export logs               | `GET /finance/export/logs` and an `ExportLog` interface; no page, no route, no consumer.                       | ❌ API + types only  |
 
-**Budget detail's transaction history is a stub, not an empty state.**
-`BudgetDetailPage` renders `<EmptyState title="No transactions yet">`
-unconditionally — there is no fetch behind it and no code path that ever
-displays a transaction. The guide's placeholder asks for "a table of linked
-transactions below" the progress bar. The stacked progress bar is real and
-correct; the table does not exist. This is why that screenshot has been held
-back through several rounds of seeding: purchase requests, expense reports and
-check requests were all charged against the budgets and the panel still said
-"No transactions yet", because nothing could have changed it.
-
-Verified 2026-08-09 by counting non-test call sites for each store action and
-service method, and by reading the render bodies.
-
-**Still open after 2026-10-08.** The Create Budget row is closed: the screen
-exists, with station and owner position — see
+**Budget detail's transaction history** — _resolved 2026-10-08._ It was a
+stub that said "No transactions yet" unconditionally. It now lists what moved
+the line's spent and committed totals (`GET /finance/budgets/{id}/transactions`),
+and budget-line owners see their own lines on **My Budgets** and open them
+read-only — see
+[FINANCE_MODULE.md](./FINANCE_MODULE.md#my-budgets-the-owners-view-and-the-transaction-list-2026-10-08).
+The Create Budget row is closed too — see
 [FINANCE_MODULE.md](./FINANCE_MODULE.md#budget-line-owners-stations-and-the-createedit-budget-screen-2026-10-08).
-The transaction table on the budget detail page is still the stub described
-above, and budget-line owners cannot yet see "their" lines anywhere: ownership
-is stored, resolved and shown to `finance.view` holders, but the owner's own
-view is the next step of that work.
 
 ## Finance — A Mistaken Budget Amendment Cannot Be Corrected (2026-10-08)
 
