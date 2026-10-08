@@ -184,6 +184,29 @@ def _apply_payment_totals(dues: MemberDues) -> None:
         dues.status = DuesStatus.PENDING
 
 
+# The column names of QuickBooks Online's journal-entry import, which maps a
+# file's headers onto its fields by name. A file with no Account Name, or whose
+# debits and credits differ per Journal No, is rejected on import.
+QB_JOURNAL_HEADER = [
+    "Journal No",
+    "Journal Date",
+    "Memo",
+    "Account Name",
+    "Debits",
+    "Credits",
+    "Description",
+]
+
+
+def _qb_amount(value: Decimal) -> Decimal:
+    return Decimal(value).quantize(Decimal("0.01"))
+
+
+def _short_label(name: str, limit: int = 40) -> str:
+    name = name.strip()
+    return name if len(name) <= limit else name[: limit - 3] + "..."
+
+
 class FinanceService:
     """Core finance business logic"""
 
@@ -3561,6 +3584,92 @@ class FinanceService:
         await self.db.refresh(mapping, ["updated_at"])
         return mapping
 
+    async def _resolve_export_accounts(
+        self, org_id: str, sources: list
+    ) -> dict[str, tuple[str, str]]:
+        """Map each exported budget line to its (account, offset) QuickBooks pair.
+
+        ``sources`` are selects of ``(document number, budget_id)``. The
+        account comes from the category's own ``qb_account_name`` and falls
+        back to the export mapping named after the category; the offset only
+        exists on the mapping. Any transaction that cannot be given both
+        refuses the whole export: an import missing a row is a ledger that
+        silently disagrees with this one, which is worse than no import.
+        """
+        rows: list = []
+        for statement in sources:
+            rows.extend((await self.db.execute(statement)).all())
+        if not rows:
+            return {}
+
+        budget_ids = {budget_id for _, budget_id in rows if budget_id is not None}
+        categories: dict[str, tuple[str, Optional[str]]] = {}
+        if budget_ids:
+            result = await self.db.execute(
+                select(Budget.id, BudgetCategory.name, BudgetCategory.qb_account_name)
+                .join(BudgetCategory, Budget.category_id == BudgetCategory.id)
+                .where(
+                    Budget.id.in_(budget_ids),
+                    Budget.organization_id == org_id,
+                    BudgetCategory.organization_id == org_id,
+                )
+            )
+            categories = {row[0]: (row[1], row[2]) for row in result.all()}
+        unbudgeted = sorted(
+            {number for number, budget_id in rows if budget_id not in categories}
+        )
+
+        mapping_result = await self.db.execute(
+            select(ExportMapping).where(ExportMapping.organization_id == org_id)
+        )
+        mappings: dict[str, list[ExportMapping]] = {}
+        for mapping in mapping_result.scalars():
+            key = mapping.internal_category.strip().casefold()
+            mappings.setdefault(key, []).append(mapping)
+
+        resolved: dict[str, tuple[str, str]] = {}
+        problems: dict[str, str] = {}
+        for budget_id, (name, category_account) in categories.items():
+            label = _short_label(name)
+            matches = mappings.get(name.strip().casefold(), [])
+            if len(matches) > 1:
+                problems[name] = f"'{label}' has {len(matches)} mappings"
+                continue
+            mapping = matches[0] if matches else None
+            account = (category_account or "").strip() or (
+                mapping.qb_account_name.strip() if mapping else ""
+            )
+            offset = (mapping.qb_offset_account_name or "").strip() if mapping else ""
+            if not account:
+                problems[name] = f"'{label}' has no account"
+            elif not offset:
+                problems[name] = f"'{label}' has no offset account"
+            else:
+                resolved[budget_id] = (account, offset)
+
+        issues = [problems[name] for name in sorted(problems)]
+        if unbudgeted:
+            shown = ", ".join(unbudgeted[:3]) + (", ..." if len(unbudgeted) > 3 else "")
+            issues.insert(
+                0, f"{len(unbudgeted)} transactions with no budget line ({shown})"
+            )
+        if issues:
+            message = "Set QuickBooks accounts before exporting: " + "; ".join(
+                issues[:3]
+            )
+            if len(issues) > 3:
+                message += f"; and {len(issues) - 3} more"
+            # safe_error_detail replaces anything longer with a generic error,
+            # which would hide what needs fixing.
+            if len(message) > 300:
+                message = (
+                    f"Set QuickBooks accounts before exporting: {len(problems)} "
+                    f"budget categories and {len(unbudgeted)} transactions "
+                    "without a budget line need accounts"
+                )
+            raise ValueError(message)
+        return resolved
+
     async def generate_export(
         self,
         org_id: str,
@@ -3608,6 +3717,22 @@ class FinanceService:
                 f"Synchronous exports support at most {max_records} rows; "
                 f"this request contains {total}. Narrow the date range"
             )
+        # Resolved before the log row so a refusal leaves no pending export.
+        accounts = await self._resolve_export_accounts(
+            org_id,
+            [
+                select(PurchaseRequest.request_number, PurchaseRequest.budget_id).where(
+                    *filters
+                ),
+                select(CheckRequest.request_number, CheckRequest.budget_id).where(
+                    *cr_filters
+                ),
+                select(ExpenseReport.report_number, ExpenseLineItem.budget_id)
+                .select_from(ExpenseLineItem)
+                .join(ExpenseReport)
+                .where(*er_filters),
+            ],
+        )
 
         log = ExportLog(
             organization_id=org_id,
@@ -3621,32 +3746,37 @@ class FinanceService:
         self.db.add(log)
         await self.db.commit()  # Persist pending before any bytes reach the client.
 
+        def journal_lines(
+            number: str,
+            day: str,
+            memo: str,
+            budget_id: str,
+            amount: Decimal,
+            description: str,
+        ) -> list[list]:
+            # Money leaves the offset account and lands in the category's
+            # account; QuickBooks groups consecutive lines sharing a Journal
+            # No into one entry and rejects it unless the two sides balance.
+            account, offset = accounts[budget_id]
+            value = _qb_amount(amount)
+            return [
+                [number, day, memo, account, value, "", description],
+                [number, day, memo, offset, "", value, description],
+            ]
+
         async def stream() -> AsyncIterator[str]:
             output = io.StringIO()
             writer = SafeCsvWriter(output)
             delivered = 0
 
-            def csv_chunk(rows: list[list[str]]) -> str:
+            def csv_chunk(rows: list[list]) -> str:
                 output.seek(0)
                 output.truncate(0)
                 writer.writerows(rows)
                 return output.getvalue()
 
             try:
-                yield csv_chunk(
-                    [
-                        [
-                            "Date",
-                            "Type",
-                            "Num",
-                            "Name",
-                            "Memo",
-                            "Account",
-                            "Debit",
-                            "Credit",
-                        ]
-                    ]
-                )
+                yield csv_chunk([QB_JOURNAL_HEADER])
                 # Payment dates are UTC timestamps; the ledger wants the
                 # department's calendar day, or an evening payment books on
                 # the next one. Resolved inside the try so a failed lookup is
@@ -3664,31 +3794,34 @@ class FinanceService:
                         PurchaseRequest,
                         filters,
                         (PurchaseRequest.paid_at, PurchaseRequest.id),
-                        lambda pr: [
-                            local_day(pr.paid_at),
-                            "Bill Pmt",
+                        lambda pr: journal_lines(
                             pr.request_number,
-                            pr.vendor or "",
+                            local_day(pr.paid_at),
                             pr.title,
-                            "",
-                            str(pr.actual_amount or pr.estimated_amount),
-                            "",
-                        ],
+                            pr.budget_id,
+                            pr.actual_amount or pr.estimated_amount,
+                            pr.vendor or "",
+                        ),
                     ),
                     (
                         CheckRequest,
                         cr_filters,
                         (CheckRequest.check_date, CheckRequest.id),
-                        lambda cr: [
+                        # The request number, not the check number, is the
+                        # Journal No: it is unique across every exported type,
+                        # so two entries can never merge into one.
+                        lambda cr: journal_lines(
+                            cr.request_number,
                             local_day(cr.check_date),
-                            "Check",
-                            cr.check_number or cr.request_number,
-                            cr.payee_name,
                             cr.memo or cr.purpose or "",
-                            "",
-                            str(cr.amount),
-                            "",
-                        ],
+                            cr.budget_id,
+                            cr.amount,
+                            (
+                                f"{cr.payee_name} (check {cr.check_number})"
+                                if cr.check_number
+                                else cr.payee_name
+                            ),
+                        ),
                     ),
                 ):
                     for offset in range(0, total, batch_size):
@@ -3703,8 +3836,12 @@ class FinanceService:
                         if not records:
                             break
                         delivered += len(records)
-                        yield csv_chunk([render(record) for record in records])
+                        yield csv_chunk(
+                            [line for record in records for line in render(record)]
+                        )
 
+                # One journal entry per report: its lines are ordered by
+                # report, so they stay consecutive across batch boundaries.
                 for offset in range(0, int(line_count or 0), batch_size):
                     result = await self.db.execute(
                         select(ExpenseLineItem, ExpenseReport)
@@ -3722,17 +3859,20 @@ class FinanceService:
                     delivered += len(records)
                     yield csv_chunk(
                         [
-                            [
-                                local_day(er.paid_at),
-                                "Expense",
-                                er.report_number,
-                                item.merchant or "",
-                                item.description,
-                                "",
-                                str(item.amount),
-                                "",
-                            ]
+                            line
                             for item, er in records
+                            for line in journal_lines(
+                                er.report_number,
+                                local_day(er.paid_at),
+                                er.title,
+                                item.budget_id,
+                                item.amount,
+                                (
+                                    f"{item.merchant}: {item.description}"
+                                    if item.merchant
+                                    else item.description
+                                ),
+                            )
                         ]
                     )
 

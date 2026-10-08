@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**296 tables · 4868 columns · 970 foreign keys**
+**296 tables · 4869 columns · 970 foreign keys**
 
 ---
 
@@ -261,7 +261,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`expense_line_items`](#expense_line_items) | `ExpenseLineItem` | 10 | Individual line item within an expense report |
 | [`expense_reports`](#expense_reports) | `ExpenseReport` | 17 | Expense report submitted by a member for reimbursement |
 | [`finance_export_logs`](#finance_export_logs) | `ExportLog` | 12 | Log of an export attempt, including interrupted streams. |
-| [`finance_export_mappings`](#finance_export_mappings) | `ExportMapping` | 8 | Mapping between internal budget categories and QuickBooks accounts |
+| [`finance_export_mappings`](#finance_export_mappings) | `ExportMapping` | 9 | Mapping between internal budget categories and QuickBooks accounts |
 | [`fiscal_years`](#fiscal_years) | `FiscalYear` | 10 | Fiscal year definition for the organization |
 | [`member_dues`](#member_dues) | `MemberDues` | 18 | Individual member dues payment record |
 | [`purchase_requests`](#purchase_requests) | `PurchaseRequest` | 25 | Purchase request submitted by a member |
@@ -3954,6 +3954,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `internal_category` | VARCHAR(200) | no |  |  |  |
 | `qb_account_name` | VARCHAR(200) | no |  |  |  |
 | `qb_account_number` | VARCHAR(50) | yes |  |  |  |
+| `qb_offset_account_name` | VARCHAR(200) | yes |  |  |  |
 | `mapping_type` | ENUM(`expense`, `income`, `asset`) | no |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |

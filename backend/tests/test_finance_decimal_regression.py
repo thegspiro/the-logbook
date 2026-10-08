@@ -107,6 +107,7 @@ async def test_csv_export_preserves_two_decimal_money_strings() -> None:
     purchase = SimpleNamespace(
         paid_at=paid_at,
         request_number="PR-1",
+        budget_id="b",
         vendor="Vendor",
         title="Exact decimal",
         actual_amount=Decimal("0.30"),
@@ -126,10 +127,15 @@ async def test_csv_export_preserves_two_decimal_money_strings() -> None:
     org.scalar_one_or_none.return_value = SimpleNamespace(timezone="UTC")
     db.execute.side_effect = [org, purchases, empty]
 
-    stream = await FinanceService(db).generate_export("org", "user", paid_at, paid_at)
+    service = FinanceService(db)
+    # Account resolution has its own database-backed tests.
+    service._resolve_export_accounts = AsyncMock(
+        return_value={"b": ("Supplies", "Checking")}
+    )
+    stream = await service.generate_export("org", "user", paid_at, paid_at)
     contents = "".join([chunk async for chunk in stream])
     rows = list(csv.reader(io.StringIO(contents)))
 
     log = db.add.call_args[0][0]
     assert log.record_count == 1
-    assert rows[1][6] == "0.30"
+    assert (rows[1][4], rows[2][5]) == ("0.30", "0.30")

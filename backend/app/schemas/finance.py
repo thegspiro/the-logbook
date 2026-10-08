@@ -934,6 +934,7 @@ class ExportMappingCreate(BaseModel):
     internal_category: str = Field(..., min_length=1, max_length=200)
     qb_account_name: str = Field(..., min_length=1, max_length=200)
     qb_account_number: Optional[str] = None
+    qb_offset_account_name: Optional[str] = Field(None, max_length=200)
     mapping_type: str
 
 
@@ -949,6 +950,7 @@ class ExportMappingUpdate(BaseModel):
     internal_category: Optional[str] = Field(None, min_length=1, max_length=200)
     qb_account_name: Optional[str] = Field(None, min_length=1, max_length=200)
     qb_account_number: Optional[str] = None
+    qb_offset_account_name: Optional[str] = Field(None, max_length=200)
     mapping_type: Optional[str] = None
 
 
@@ -962,6 +964,7 @@ class ExportMappingResponse(UTCResponseBase):
     internal_category: str
     qb_account_name: str
     qb_account_number: Optional[str] = None
+    qb_offset_account_name: Optional[str] = None
     mapping_type: str
     created_at: datetime
     updated_at: datetime

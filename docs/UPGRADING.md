@@ -412,6 +412,31 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### The QuickBooks export is a journal-entry import, and needs accounts first (2026-10-08)
+
+`POST /finance/export/transactions` now produces a file QuickBooks Online's
+**Journal Entries** import accepts. Before this, every row had an empty
+Account and a debit with no matching credit, so QuickBooks rejected the file.
+
+- **New columns:** `Journal No, Journal Date, Memo, Account Name, Debits,
+Credits, Description`. Each transaction is two lines (two per expense line on
+  an expense report) under one Journal No: a debit to the category's account
+  and a credit to the account it was paid from. Update anything that reads the
+  old `Date, Type, Num, Name, Memo, Account, Debit, Credit` header.
+- **Journal No is the request number** (`PR-…`, `CR-…`, `ER-…`). A check's
+  number moves into Description.
+- **The export now refuses** (HTTP 400, naming what to fix) when any
+  transaction in the range has no budget line, or its budget category has no
+  QuickBooks account, or no **offset account**. The account comes from the
+  category's `qb_account_name`, or else from the export mapping whose
+  `internal_category` matches the category name. The offset account comes only
+  from that mapping's new `qbOffsetAccountName` field. Nothing is backfilled,
+  so **existing installations must set offset accounts before their next
+  export** with `PUT /finance/export/mappings/{id}`. There is no screen for
+  this yet (see `docs/KNOWN_LIMITATIONS.md`).
+- A migration adds the nullable `finance_export_mappings.qb_offset_account_name`
+  column. Its downgrade drops the column and the values stored in it.
+
 ### Training provider imports credit members automatically (2026-10-08)
 
 A **Target Solutions** sync or report upload now credits matched members as it
