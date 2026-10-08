@@ -16,6 +16,42 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#2990](https://github.com/thegspiro/the-logbook/pull/2990)**: branch
+`claude/security-review-security-audit-ip`, Feature 28 (Security, audit &
+IP), pass 6 (watchdog pickup — PR #2988, Feature 27, Integrations, had
+already merged over 100 minutes earlier with nothing started since,
+confirmed via `list_pull_requests` both before this iteration began and
+again before this PR was opened). Real delta since pass 5 (`bf0a45a6`) is
+substantial: SEC2-28-5 and SEC2-28-7 were both already resolved by
+owner-decision commits outside this rotation loop, re-verified here against
+current code rather than trusted from the doc; also a signing-key cut-over
+fix to `core/audit.py` (already co-reviewed under `CI2-33-core-infra.md`),
+an SSRF DNS-rebinding pin to `audit_ship_service.py` (already co-reviewed
+under `INT-27-integrations.md`), a new per-org scheduled-task error path,
+and cosmetic touches. 0 fixes needed by this pass itself, 0 new findings,
+1 small documentation fix (a dangling cross-reference in
+`KNOWN_LIMITATIONS.md`). SEC2-28-6 and SEC2-28-10 remain open, unchanged.
+Route surface re-enumerated: 35 routes (was 34), all correctly gated.
+Completion gate green (flake8/black/isort clean; migrations — 542
+revisions, single head; 327 scoped backend tests; frontend typecheck/lint
+clean). See the Log entry below for detail.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 6, PR #2988, merged, nothing further to record), preserved for history</summary>
+
+**None.** PR #2988 (Feature 27, Integrations, pass 6) merged clean
+(confirmed via `list_pull_requests`; merged_at 2026-10-07T21:00:43Z). 0
+fixes needed by that pass itself; the Log entry below already records it
+in full, so there is nothing further to record here. Rotation row 27 →
+✅. Watchdog pickup: over 100 minutes elapsed with no new branch or PR
+opened for Feature 28 (Security, audit & IP) before this iteration began
+(confirmed via `list_pull_requests`, state=open, no match).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 6, PR #2988, before it merged), preserved for history</summary>
+
 **PR [#2988](https://github.com/thegspiro/the-logbook/pull/2988)**: branch
 `claude/security-review-integrations`, Feature 27 (Integrations), pass 6
 (watchdog pickup — PR #2986, Feature 26, Forms, had already merged 74
@@ -34,6 +70,8 @@ unchanged; INT-11 still open. Completion gate green (flake8/black/isort
 clean; migrations — 541 revisions, single head; route check — 251 routes,
 0 errors; 4285 scoped backend tests; frontend typecheck/lint clean). See
 the Log entry below for detail.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (bridge note recording PR #2986's merge before Feature 27 started), preserved for history</summary>
@@ -18305,7 +18343,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
@@ -18319,6 +18357,43 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-07 — Feature 28 (Security, audit & IP, pass 6) — real delta, two prior findings resolved outside the loop, 0 new findings, 1 doc fix (watchdog pickup)
+
+Picked up by the scheduled watchdog: PR #2988 (Feature 27, Integrations,
+pass 6) had merged over 100 minutes earlier (21:00:43 UTC) with no new
+`claude/security-review-*` branch or PR opened for Feature 28. Confirmed
+via `list_pull_requests` (state=open) that no such PR existed, both before
+this iteration began and again before this PR was opened.
+
+This sandbox's local git history is a shallow/partial clone, so a naive
+`git log --since=<pass-5-date>` against this feature's files understated
+the real delta (returned two small, unrelated commits). Diffed directly
+against pass 5's actual merge base (`bf0a45a6`, PR #2896) through current
+`main` instead, which surfaced the real set: the SEC2-28-5 and SEC2-28-7
+resolutions (both already recorded "✅ RESOLVED" in the findings doc,
+applied by owner-decision commits outside this rotation loop — re-verified
+against current code rather than trusted from the doc), a signing-key
+cut-over fix to `core/audit.py` already co-reviewed under
+`CI2-33-core-infra.md`, an SSRF DNS-rebinding pin to `audit_ship_service.py`
+already co-reviewed under `INT-27-integrations.md`, a new
+`persist_task_error_log` path in `core/error_reporting.py`, and five purely
+cosmetic touches (button-color palette uplift, one label addition). All
+read in full; 0 new findings. SEC2-28-6 and SEC2-28-10 remain open,
+unchanged, both still needing their owner decision / larger build. Route
+surface re-enumerated: 35 routes (was 34 — the new
+`GET /security/download-activity`), every one correctly gated. One small
+documentation fix: a dangling "see the next row" cross-reference in
+`KNOWN_LIMITATIONS.md`, left over from SEC2-28-5's row being removed when
+it resolved, now cites the findings doc directly. Completion gate green
+(flake8/black/isort clean; migrations — 542 revisions, single head; 327
+scoped backend tests; frontend typecheck/lint clean). Full detail in
+`docs/security-review/SEC2-28-security-audit-ip.md` → Pass 6.
+
+Rotation row 28 → ✅ (pending merge). Next: Feature 29 (Reports &
+analytics).
+
+---
 
 ### 2026-10-07 — Feature 27 (Integrations, pass 6) — real delta, mostly already-reviewed hardening, 0 new findings (watchdog pickup)
 

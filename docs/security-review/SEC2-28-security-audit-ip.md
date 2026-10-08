@@ -1221,3 +1221,184 @@ not a defect).
 | backend tests, scope (audit/audit_ship/error_log/ip_security/privilege_ceiling/security_middleware/security_monitoring/suspicious_ip/w50_audit_username) | 268 passed                          |
 | frontend `npm run typecheck` (`tsc-native.mjs --noEmit`)                                                                                                 | 0 errors                            |
 | frontend `npm run lint` (`eslint --max-warnings 10`)                                                                                                     | 0 errors/warnings                   |
+
+---
+
+## Pass 6 (2026-10-07)
+
+Watchdog pickup: confirmed via `list_pull_requests` (state=open) that no
+`claude/security-review-*` PR existed for this feature — PR #2988 (Feature
+27, Integrations, pass 6) had already merged (21:00:43 UTC), and over 100
+minutes had passed with no new branch or PR opened for Feature 28. Rotation
+row 28 was the first `⬜`.
+
+Local git history in this sandbox is a shallow/partial clone, so
+`git log --since=<date>` against this feature's files initially returned
+only two small, unrelated commits — understating the real delta. Resolved by
+diffing directly against pass 5's actual merge base (`bf0a45a6`, PR #2896)
+through current `main`, which surfaced the real set below.
+
+### Real delta since pass 5 — read in full, not assumed from commit titles
+
+- **`fix(security): an approved IP exception lets its address past
+geo-blocking` (`9f44da79c`)** — the SEC2-28-5 resolution. Read
+  `IPBlockingMiddleware`'s new `_has_ip_exception`/`_ExceptionCache` and
+  `IPSecurityService.ip_has_active_allowlist_exception` directly: keyed on
+  the exact address only (no union, no range), fails closed on any lookup
+  error (`except Exception` returns `False` and does not cache the miss),
+  and the cache is bounded (`MAX_ENTRIES = 10_000`, LRU eviction via
+  `OrderedDict.move_to_end`/`popitem(last=False)`, 60s TTL) per Pitfall #9.
+  Matches the doc's existing "✅ RESOLVED" write-up exactly. **Verified good,
+  closes SEC2-28-5 as already recorded.**
+- **`feat(security): make security alerts actionable and monitor every
+export (SEC2-28-7)` (`9651e7f73`)** — the SEC2-28-7 resolution. Read the
+  full diff: `acknowledge_alert`/`resolve_alert` now go through
+  `_get_org_alert` (`SELECT ... WHERE id = :id AND organization_id = :org
+... FOR UPDATE`), so two officers racing on the same alert cannot both
+  pass the "not yet acknowledged" check — the second gets `ALERT_ACTION_
+ALREADY` → HTTP 409, and the first officer's attribution/note is never
+  overwritten. The new `GET /security/download-activity` route filters
+  `AuditLog.organization_id == current_user.organization_id` (XC-3 clean).
+  `_resolve_alert_organization`'s "installation's only organization"
+  fallback queries `select(Organization.id).limit(2)` and only attributes
+  when exactly one row comes back — a multi-org install still gets `NULL`,
+  matching the doc's residual. The export-size fix counts actual
+  `http.response.body` bytes instead of a `Content-Length` header (which
+  `StreamingResponse` never sets); `_route_template_pattern` compiles each
+  `{param}` segment to `[^/]+` and anchors with `fullmatch`, so a template
+  cannot swallow a longer path. New migration `9a4c2e7b5d18`
+  (`security_alerts.resolution_note`) is guarded/idempotent with a real
+  downgrade, nullable, and the request schema caps the note at 1,000 chars
+  with `extra="forbid"`. **Verified good, closes the actionable-alerts and
+  export-visibility halves of SEC2-28-7 as already recorded; the
+  multi-org brute-force-alert residual is unchanged and still open.**
+- **`fix(audit): keep SECRET_KEY-signed audit rows and ballots verifying,
+bounded by a cut-over` (`c5695a0f0`)** — touches `core/audit.py`
+  substantially (238-line diff) but is not yet mentioned in this file.
+  Already has its own dedicated, contemporaneous write-up under
+  `docs/security-review/CI2-33-core-infra.md`'s CI2-33-5 follow-up (the
+  compose-file signing-key gap that finding originally caught), so not
+  re-derived here — but read in full from this feature's own angle since
+  `core/audit.py` is one of this doc's nine files. `_check_keyed_row` fails
+  closed on a `signing_key_id` matching neither the current key's
+  fingerprint nor `SECRET_KEY`'s ("Unknown signing key"), and a `SECRET_KEY`
+  match past `cutover_id` is still reported as tampered rather than
+  silently accepted. Fingerprints are HMAC-SHA256 over a fixed domain label,
+  truncated to 16 hex chars — recovering the key from the fingerprint is as
+  hard as forging the HMAC itself, never the key. Does not touch
+  `create_log_entry`'s unlocked "last row" read, so it has no bearing on
+  SEC2-28-10 either way. Migration `01f36743137a` is nullable/guarded with a
+  real downgrade. The residual it documents (an attacker holding both
+  `SECRET_KEY` and audit-table write access can shift the database-derived
+  cut-over) is already in `KNOWN_LIMITATIONS.md`. **Verified good, no new
+  finding — co-reviewed with CI2-33, consistent with this feature's own
+  invariants.**
+- **`fix(integrations): pin every integration sender to its validated
+address` (`fb96e82cf`)** — touches `audit_ship_service.py` (one of this
+  doc's nine files): replaces its bare `httpx.AsyncClient` with
+  `create_integration_client`, which resolves the collector hostname once
+  and pins the connection to that address (closing a DNS-rebinding TOCTOU
+  between `assert_outbound_url_safe`'s check and the actual connect).
+  `AUDIT_SHIP_ALLOW_PRIVATE_DESTINATION` still reaches the transport, and a
+  transport refusal is caught as `UnsafeDestinationError` and reported as
+  "unsafe collector URL" rather than crashing the shipping run. Already
+  covered under Feature 27's own `INT-27-integrations.md` (per PR #2988);
+  re-read here from this file's own angle since the function lives in one
+  of this doc's nine files. **Verified good, no new finding.**
+- **`feat(errors): report scheduled-task failures to Error Monitoring per
+org` (`c951388c6`)** — new `persist_task_error_log(organization_id, ...)`
+  in `core/error_reporting.py`. Read in full: returns `False` without
+  writing when `organization_id` is falsy (never writes a tenant-less
+  `ErrorLog` row), and every call site is inside `scheduled_tasks.py`'s
+  per-org iteration, so each row is written with that org's own id — no
+  cross-tenant write path. The one-line `error_logs.py` touch (`f92fbd927`,
+  the preferred-name rollout) swaps `_affected_users`' display-name
+  construction for `format_display_name`, still inside the same
+  org-scoped query (`User.organization_id == organization_id`). **Verified
+  good, no new finding.**
+- Five further commits touch this doc's files only cosmetically: three
+  button-color changes in `ip-security`'s pages/components (the palette's
+  red-800 uplift, already governed by `primaryFillContrast.test.ts`), one
+  `ErrorMonitoringPage.tsx` label addition (`"Scheduled task"`, paired with
+  the `persist_task_error_log` change above), and `adminServices.ts`'s
+  72-line diff — read in full, all additions belong to unrelated features
+  (qualifications, leave editing, shift-analytics scope) sharing the file;
+  `securityService` (the pre-existing zero-caller export) is untouched.
+  None changes a permission gate, a query filter, or a request/response
+  shape this feature's findings depend on.
+
+### Re-verified — every open finding re-checked against current code, not the doc
+
+- **SEC2-28-5** — now ✅ **RESOLVED** (see above); was HIGH/flagged through
+  pass 5.
+- **SEC2-28-6** (LOW, flagged) — still open, unchanged. Re-read
+  `request_ip_exception` (`ip_security_service.py:48-104`): still a plain
+  `SELECT` for an existing pending/approved row followed by an `INSERT`, no
+  row lock, no DB-level unique constraint.
+- **SEC2-28-7** (HIGH, flagged) — now ✅ **RESOLVED, one residual** (see
+  above); the admin screen, export sizing/logging, and known-account
+  brute-force attribution are all built and verified. The
+  multi-organization unknown-username residual is unchanged and still
+  needs the platform-operator design decision pass 2 first raised.
+- **SEC2-28-10** (HIGH, flagged) — still open, unchanged. Re-read
+  `AuditLogger.create_log_entry`'s "last row" read directly
+  (`core/audit.py:334`): still `select(AuditLog).order_by(AuditLog.id.
+desc()).limit(1)` with no `.with_for_update()`. The signing-key-cutover
+  change above reads this same method's surrounding code and does not
+  touch this specific query.
+- **Dead detector code** (pass 3) — `analyze_request`, `_check_rate_limit`,
+  `_check_injection_patterns` in `services/security_monitoring.py`:
+  re-grepped across `app/` outside the file itself; still zero production
+  callers. Still flagged, not fixed.
+- **All previously-FIXED items** (SEC-1 through SEC-9, SEC2-28-1 through
+  SEC2-28-4, SEC2-28-9, SEC2-28-11): no code touching their mechanisms
+  changed this pass; not independently re-exercised beyond the completion
+  gate's test run below.
+
+### Route inventory — re-enumerated, 35 routes (was 34), all correctly gated
+
+Re-counted directly from the route decorators in all four endpoint files:
+14 in `security_monitoring.py` (13 + the new `GET /download-activity`), 12
+in `ip_security.py`, 3 in `audit_logs.py`, 6 in `error_logs.py` = 35. Every
+route carries a `Depends(require_permission(...))` matching its data's
+sensitivity (`audit.view` for reads, `audit.export` for the destructive/
+mutating ones) — the new route included.
+
+### Small documentation fix applied this pass
+
+`docs/KNOWN_LIMITATIONS.md`'s "Security/IP: global country-block table +
+geo fail-open" row still read "...so an internal operator can recover
+(correction 2026-08-27: allowlisted IPs are no longer part of that recovery
+path — see the next row)." The "next row" it pointed to was the SEC2-28-5
+row, which no longer exists as a standalone open item now that SEC2-28-5 is
+resolved — the dangling cross-reference now pointed at an unrelated row
+(brute-force alert visibility). Corrected to cite
+`SEC2-28-security-audit-ip.md` → SEC2-28-5 directly rather than "the next
+row."
+
+### No new findings this pass
+
+**0 fixed (by this pass directly — SEC2-28-5 and SEC2-28-7 were already
+resolved by the commits reviewed above, outside this rotation loop), 1
+small documentation fix, 0 new findings.** SEC2-28-6 and SEC2-28-10 remain
+open and still need their respective owner decisions / larger builds, not a
+drive-by fix; both are correctly mirrored in `KNOWN_LIMITATIONS.md`
+(SEC2-28-10's row already reflects the current state; SEC2-28-5's own row
+no longer exists there, having been removed when it was resolved, which is
+correct — it is cited by this pass's documentation fix above instead of
+tracked as open).
+
+### Completion gate (Pass 6)
+
+| Check                                                                                                                                                                                                                                                                                            | Result                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                                                                                    | clean                               |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                                                             | clean (2,037 files)                 |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                                                                                        | clean                               |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                | PASSED — 542 revisions, single head |
+| backend tests, scope (audit/audit_ship/error_log/ip_security/privilege_ceiling/security_middleware/security_monitoring/suspicious_ip/w50_audit_username/signing_key_cutover/security_alert_workflow/ip_allowlist_middleware/ip_exception_lookup_db/task_error_reporting/integration_dns_pinning) | 327 passed                          |
+| frontend `npm run typecheck` (`tsc-native.mjs --noEmit`)                                                                                                                                                                                                                                         | 0 errors                            |
+| frontend `npm run lint` (`eslint --max-warnings 10`)                                                                                                                                                                                                                                             | 0 errors/warnings                   |
+
+Next in rotation: Feature 29 (Reports & analytics — `reports.py`,
+`analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`).
