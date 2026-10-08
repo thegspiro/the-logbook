@@ -16,6 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3005](https://github.com/thegspiro/the-logbook/pull/3005)**: branch
+`claude/security-review-scheduled-tasks`, Feature 31 (Scheduled tasks),
+pass 6 (watchdog pickup — the dedicated `/loop 30m /security-review` session
+had no open PR/branch for this feature, and PR #2996 (Feature 30, Onboarding,
+pass 6) had already merged ~3 hours earlier with nothing started since, past
+this rotation's documented ~90-minute stall threshold). No application code
+changes: one real commit since pass 5 added four new scheduled tasks
+(PayPal capture backfill, self-report attachment retention, expired-session
+reaping, expired-password notices), all reviewed fresh and verified good,
+plus the already-merged CRON-40 fix (PR #2901). Two previously-flagged
+findings (CRON2-31-12, CRON-31-7) turned out already fixed by the same
+delta, not by this pass. Completion gate green (flake8/black/isort,
+migrations — 543 revisions, single head; registry sync 51/51; 291 scoped
+backend tests; frontend typecheck/lint). See the Log entry below and
+`docs/security-review/CRON6-31-scheduled-tasks.md` for detail.
+
 <details>
 <summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 6, PR #2996, merged, nothing further to record), preserved for history</summary>
 
