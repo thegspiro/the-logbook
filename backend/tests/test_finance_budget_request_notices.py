@@ -147,7 +147,7 @@ def mailer(monkeypatch):
 
 
 @pytest.fixture
-def no_audit(monkeypatch):
+def _no_audit(monkeypatch):
     from app.api.v1.endpoints import finance as finance_endpoints
 
     monkeypatch.setattr(finance_endpoints, "log_audit_event", AsyncMock())
@@ -159,7 +159,7 @@ def no_audit(monkeypatch):
 
 
 @pytest.fixture
-async def dept(db_session: AsyncSession, no_audit):
+async def dept(db_session: AsyncSession, _no_audit):
     org_id = await _org(db_session, "notice")
     other_org = await _org(db_session, "elsewhere")
 
