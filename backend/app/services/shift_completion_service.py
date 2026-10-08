@@ -53,6 +53,7 @@ from app.services.shift_eligibility_service import (
 from app.services.training_program_service import TrainingProgramService
 from app.utils.call_type_matching import matching_call_types
 from app.utils.member_names import format_display_name
+from app.utils.org_scoping import assert_all_in_org
 from app.utils.org_timezone import resolve_org_today
 
 #: ``settings["shift_reports"]["authorship"]`` value under which a shift's
@@ -350,6 +351,31 @@ class ShiftCompletionService:
             return round(duration / 60.0, 2)
         return None
 
+    async def _assert_task_checks_in_org(
+        self, tasks_performed: Optional[list], organization_id: UUID
+    ) -> None:
+        """Refuse a task citing another organization's equipment check (XC-1).
+
+        ``equipment_check_id`` is provenance — the check a task was drawn
+        from — and the report form sends it back on every save, so it is a
+        client-supplied reference into ``shift_equipment_checks`` like any
+        other.
+        """
+        if not tasks_performed:
+            return
+        check_ids = []
+        for task in tasks_performed:
+            raw = task.model_dump() if hasattr(task, "model_dump") else task
+            if isinstance(raw, dict):
+                check_ids.append(raw.get("equipment_check_id"))
+        await assert_all_in_org(
+            self.db,
+            ShiftEquipmentCheck,
+            check_ids,
+            organization_id,
+            label="equipment check",
+        )
+
     async def create_report(
         self,
         organization_id: UUID,
@@ -379,6 +405,10 @@ class ShiftCompletionService:
         # creates — comes through this method.
         if str(trainee_id) == str(officer_id):
             raise ValueError("You can't write a shift report about yourself")
+
+        # Before anything below adds a row: a batch runs this with
+        # commit=False and carries on past a refused member.
+        await self._assert_task_checks_in_org(tasks_performed, organization_id)
 
         # Validate shift linkage when provided
         data_sources: dict = {}
@@ -1504,6 +1534,11 @@ class ShiftCompletionService:
         # order, and a concurrent ordinary report edit and call-type
         # deletion could deadlock each other (Codex review — a real
         # deadlock, not merely a race).
+        if "tasks_performed" in updates:
+            await self._assert_task_checks_in_org(
+                updates["tasks_performed"], organization_id
+            )
+
         preserves_org_slugs = (
             await self._edit_preserves_org_slugs(report, updates["call_types"])
             if call_types_changing
