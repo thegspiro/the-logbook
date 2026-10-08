@@ -2,18 +2,25 @@
  * Budgets Page
  *
  * Displays budget allocations by fiscal year with utilization progress bars.
- * Supports fiscal year selection and category filtering.
+ * Supports fiscal year selection and station filtering; a `finance.manage`
+ * holder adds budget lines from here.
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router';
-import { BarChart3, AlertTriangle, ChevronRight } from 'lucide-react';
+import { BarChart3, AlertTriangle, ChevronRight, Plus } from 'lucide-react';
 import { useFinanceStore } from '../store/financeStore';
+import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
+import { BudgetFormDialog } from '../components/BudgetFormDialog';
+import { budgetOwnerLabel } from '../utils/budgetOwnership';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { SkeletonPage } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import type { Budget } from '../types';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
+
+/** Station filter value for lines with no station. */
+const DEPARTMENT_WIDE = '__department_wide__';
 
 // =============================================================================
 // Budget Progress Bar
@@ -113,8 +120,11 @@ const BudgetsPage: React.FC = () => {
     fetchBudgets,
     fetchBudgetCategories,
   } = useFinanceStore();
+  const { canManage } = useFinanceRequestAccess();
 
   const [selectedFiscalYear, setSelectedFiscalYear] = useState('');
+  const [stationFilter, setStationFilter] = useState('');
+  const [showAddDialog, setShowAddDialog] = useState(false);
 
   useEffect(() => {
     void fetchFiscalYears();
@@ -145,6 +155,33 @@ const BudgetsPage: React.FC = () => {
     return map;
   }, [budgetCategories]);
 
+  // The stations this year's lines are charged to. Read off the lines rather
+  // than the station picker's endpoint, which is finance.manage only.
+  const stationChoices = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const b of budgets) {
+      if (b.stationId) map.set(b.stationId, b.stationName || 'Unknown station');
+    }
+    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [budgets]);
+  const hasDepartmentWide = budgets.some((b) => !b.stationId);
+
+  const visibleBudgets = useMemo(() => {
+    if (!stationFilter) return budgets;
+    if (stationFilter === DEPARTMENT_WIDE) return budgets.filter((b) => !b.stationId);
+    return budgets.filter((b) => b.stationId === stationFilter);
+  }, [budgets, stationFilter]);
+
+  const handleSaved = (saved: Budget) => {
+    setShowAddDialog(false);
+    // Re-fetch rather than splice the response in (CLAUDE.md pitfall #11).
+    if (saved.fiscalYearId !== selectedFiscalYear) {
+      setSelectedFiscalYear(saved.fiscalYearId);
+    } else {
+      void fetchBudgets({ fiscalYearId: selectedFiscalYear });
+    }
+  };
+
   const getRemaining = (b: Budget): number =>
     Number(b.amountBudgeted) - Number(b.amountSpent) - Number(b.amountEncumbered);
 
@@ -171,18 +208,48 @@ const BudgetsPage: React.FC = () => {
           <h1 className="text-theme-text-primary text-2xl font-bold">Budgets</h1>
           <p className="text-theme-text-secondary mt-1 text-sm">Budgeted, spent, and encumbered amounts by category</p>
         </div>
-        <select
-          value={selectedFiscalYear}
-          onChange={(e) => setSelectedFiscalYear(e.target.value)}
-          className="form-input px-3 text-sm focus:border-red-500"
-        >
-          <option value="">Select Fiscal Year</option>
-          {fiscalYears.map((fy) => (
-            <option key={fy.id} value={fy.id}>
-              {fy.name} {fy.status === 'active' ? '(Active)' : ''}
-            </option>
-          ))}
-        </select>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <select
+            value={selectedFiscalYear}
+            onChange={(e) => {
+              setSelectedFiscalYear(e.target.value);
+              setStationFilter('');
+            }}
+            aria-label="Fiscal year"
+            className="form-input px-3 text-sm focus:border-red-500"
+          >
+            <option value="">Select Fiscal Year</option>
+            {fiscalYears.map((fy) => (
+              <option key={fy.id} value={fy.id}>
+                {fy.name} {fy.status === 'active' ? '(Active)' : ''}
+              </option>
+            ))}
+          </select>
+          <select
+            value={stationFilter}
+            onChange={(e) => setStationFilter(e.target.value)}
+            aria-label="Station"
+            className="form-input px-3 text-sm focus:border-red-500"
+          >
+            <option value="">All stations</option>
+            {hasDepartmentWide && <option value={DEPARTMENT_WIDE}>Department-wide</option>}
+            {stationChoices.map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+          </select>
+          {canManage && (
+            <button
+              type="button"
+              onClick={() => setShowAddDialog(true)}
+              className="btn-primary inline-flex items-center justify-center gap-2"
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Add budget line
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Error */}
@@ -194,10 +261,10 @@ const BudgetsPage: React.FC = () => {
       )}
 
       {/* Summary Cards */}
-      {budgets.length > 0 && <SummaryCards budgets={budgets} />}
+      {visibleBudgets.length > 0 && <SummaryCards budgets={visibleBudgets} />}
 
       {/* Budget legend */}
-      {budgets.length > 0 && (
+      {visibleBudgets.length > 0 && (
         <div className="text-theme-text-secondary flex items-center gap-4 text-xs">
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500" />
@@ -215,16 +282,18 @@ const BudgetsPage: React.FC = () => {
       )}
 
       {/* Budget Table */}
-      {budgets.length === 0 ? (
+      {visibleBudgets.length === 0 ? (
         <EmptyState
           icon={BarChart3}
           title="No budgets found"
           description={
-            selectedFiscalYear
-              ? 'This fiscal year has no budgets yet.'
-              : fiscalYears.length > 0
-                ? 'Select a fiscal year to see its budgets.'
-                : 'Create a fiscal year in Finance Settings first.'
+            budgets.length > 0
+              ? 'No budget lines match this station.'
+              : selectedFiscalYear
+                ? 'This fiscal year has no budgets yet.'
+                : fiscalYears.length > 0
+                  ? 'Select a fiscal year to see its budgets.'
+                  : 'Create a fiscal year in Finance Settings first.'
           }
         />
       ) : (
@@ -238,6 +307,18 @@ const BudgetsPage: React.FC = () => {
                     className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
                   >
                     Category
+                  </th>
+                  <th
+                    scope="col"
+                    className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
+                    Station
+                  </th>
+                  <th
+                    scope="col"
+                    className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
+                    Owner
                   </th>
                   <th
                     scope="col"
@@ -275,7 +356,7 @@ const BudgetsPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-theme-surface-border divide-y">
-                {budgets.map((budget) => {
+                {visibleBudgets.map((budget) => {
                   const remaining = getRemaining(budget);
 
                   return (
@@ -287,6 +368,12 @@ const BudgetsPage: React.FC = () => {
                         >
                           {categoryMap.get(budget.categoryId) ?? 'Unknown'}
                         </Link>
+                      </td>
+                      <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                        {budget.stationId ? budget.stationName || 'Unknown station' : 'Department-wide'}
+                      </td>
+                      <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                        {budgetOwnerLabel(budget)}
                       </td>
                       <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">
                         {formatCurrencyWhole(Number(budget.amountBudgeted))}
@@ -324,18 +411,20 @@ const BudgetsPage: React.FC = () => {
               {/* Totals row */}
               <tfoot>
                 <tr className="border-theme-surface-border bg-theme-surface border-t-2">
-                  <td className="text-theme-text-primary px-4 py-3 text-sm font-bold">Total</td>
-                  <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-bold whitespace-nowrap">
-                    {formatCurrencyWhole(budgets.reduce((s, b) => s + Number(b.amountBudgeted), 0))}
+                  <td colSpan={3} className="text-theme-text-primary px-4 py-3 text-sm font-bold">
+                    Total
                   </td>
                   <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-bold whitespace-nowrap">
-                    {formatCurrencyWhole(budgets.reduce((s, b) => s + Number(b.amountSpent), 0))}
+                    {formatCurrencyWhole(visibleBudgets.reduce((s, b) => s + Number(b.amountBudgeted), 0))}
+                  </td>
+                  <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-bold whitespace-nowrap">
+                    {formatCurrencyWhole(visibleBudgets.reduce((s, b) => s + Number(b.amountSpent), 0))}
                   </td>
                   <td className="text-theme-text-secondary px-4 py-3 text-right text-sm font-bold whitespace-nowrap">
-                    {formatCurrencyWhole(budgets.reduce((s, b) => s + Number(b.amountEncumbered), 0))}
+                    {formatCurrencyWhole(visibleBudgets.reduce((s, b) => s + Number(b.amountEncumbered), 0))}
                   </td>
                   <td className="px-4 py-3 text-right text-sm font-bold whitespace-nowrap text-green-600">
-                    {formatCurrencyWhole(budgets.reduce((s, b) => s + getRemaining(b), 0))}
+                    {formatCurrencyWhole(visibleBudgets.reduce((s, b) => s + getRemaining(b), 0))}
                   </td>
                   <td colSpan={2} />
                 </tr>
@@ -343,6 +432,16 @@ const BudgetsPage: React.FC = () => {
             </table>
           </div>
         </div>
+      )}
+
+      {showAddDialog && (
+        <BudgetFormDialog
+          onClose={() => setShowAddDialog(false)}
+          onSaved={handleSaved}
+          fiscalYears={fiscalYears}
+          categories={budgetCategories}
+          defaultFiscalYearId={selectedFiscalYear}
+        />
       )}
     </div>
   );

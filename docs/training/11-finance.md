@@ -194,7 +194,10 @@ Budget categories organize your department's spending into logical groups. Categ
 5. Optionally select a **parent category** to nest this category under.
 6. Set the **sort order** to control display position in lists (default: 0).
 7. Optionally enter a **QuickBooks account name** to pre-configure the export mapping (see [QuickBooks Export](#quickbooks-export)).
-8. Click **Save**.
+8. Optionally select an **owner position**. Budget lines in this category that have no owner of their own belong to it (see [Budget Owners](#budget-owners)).
+9. Click **Save**.
+
+To change a category's name, description or owner position later, click the pencil beside it.
 
 ![Budget categories list with QuickBooks account mapping](./images/11-03-budget-categories.png)
 
@@ -259,22 +262,50 @@ All monetary fields use `Numeric(12, 2)` precision (12 digits total, 2 decimal p
 ### Creating a Budget
 
 1. Navigate to **Finance > Budgets**.
-2. Click **Create Budget**.
-3. Select the **fiscal year** (only Draft or Active fiscal years are available).
-4. Select a **budget category**.
-5. Enter the **amount budgeted** (must be zero or greater).
-6. Optionally select a **station** to scope the budget to a specific fire station.
-7. Optionally add **notes** describing the budget purpose.
-8. Click **Save**.
+2. Click **Add budget line** (shown only with `finance.manage`).
+3. Select the **fiscal year**. Only Draft and Active years are offered; a closed
+   year is refused with _This fiscal year is closed_.
+4. Select a **category**.
+5. Optionally select a **station** to scope the line to one facility. Leave it
+   on **Department-wide** for a line that belongs to no station. The station's
+   name is what members see when they pick the line on a request.
+6. Enter the **amount budgeted** (zero or greater).
+7. Optionally select an **owner position** — see
+   [Budget Owners](#budget-owners). Left empty, the form says which owner the
+   line takes from its category ("Uses the category's owner: Training
+   Officer"), or "No owner" when the category has none.
+8. Optionally add **notes**.
+9. Click **Add budget line**. The list reloads with the new line.
 
-> **Corrected 2026-08-12.** Not built. See
-> [Finance — Five Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#finance--five-guide-sections-with-no-screen-2026-08-09),
-> which records what exists behind each of these: an API, a store
-> action, or types — but no page and no control that reaches them.
-> The steps above describe the intended design.
->
-> `financeStore.createBudget` works over a working API; no component calls
-> it, and `BudgetsPage` is read-only with no create control.
+### Editing a Budget
+
+Open the line and click **Edit** (`finance.manage` only). The amount, station,
+owner position and notes can be changed; the fiscal year and category are fixed
+once the line exists. Setting the station back to **Department-wide** or the
+owner back to the category's clears the value. Lowering the amount below what
+is already spent and encumbered is refused with _Insufficient available
+budget_, and the dialog stays open with that message.
+
+### Budget Owners
+
+A budget line is owned by a **position**, not a person, so ownership follows
+whoever holds the position — an election or a resignation needs no
+reassignment.
+
+- A **category** may name an owner position (set it in **Finance > Settings**
+  when creating or editing the category).
+- A **line** may name its own owner position, which overrides the category's.
+- A line with no owner of its own **inherits** its category's. The Budgets list
+  shows this as "Training Officer (from category)".
+- A line with neither has **No owner**.
+
+Ownership covers a line in every fiscal year, past ones included. Only
+`finance.manage` sets amounts, owners and stations; owning a line never lets a
+member change its amount.
+
+> **Not yet built (2026-10-08).** Owners do not yet have a view of their own
+> lines; ownership is shown on the Budgets list and detail pages to
+> `finance.view` holders. The owner's own "My budgets" view follows.
 
 ### Viewing Budget Details
 

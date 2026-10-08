@@ -224,6 +224,9 @@ export interface BudgetCategory {
   sortOrder: number;
   isActive: boolean;
   qbAccountName?: string;
+  /** The position answerable for this category's lines; a line without its own owner inherits it. */
+  ownerPositionId?: string | null;
+  ownerPositionName?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -237,10 +240,58 @@ export interface Budget {
   amountSpent: MonetaryAmount;
   amountEncumbered: MonetaryAmount;
   notes?: string;
-  stationId?: string;
+  stationId?: string | null;
+  /** The facility name — the same one the request forms label the line with. */
+  stationName?: string | null;
+  /** The line's own owner; null when it has none of its own. */
+  ownerPositionId?: string | null;
+  ownerPositionName?: string | null;
+  /** Who owns the line: its own owner, else its category's (backend-resolved). */
+  effectiveOwnerPositionId?: string | null;
+  effectiveOwnerPositionName?: string | null;
+  /** True when the owner comes from the category rather than the line. */
+  ownerInherited?: boolean;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/** `PUT /finance/budget-categories/:id`. Omitted leaves a field alone; `null` clears it. */
+export interface BudgetCategoryUpdatePayload {
+  name?: string;
+  description?: string | null;
+  parentCategoryId?: string | null;
+  sortOrder?: number;
+  isActive?: boolean;
+  qbAccountName?: string | null;
+  ownerPositionId?: string | null;
+}
+
+/** `POST /finance/budgets`. Blank optional fields are omitted. */
+export interface BudgetCreatePayload {
+  fiscalYearId: string;
+  categoryId: string;
+  amountBudgeted: MonetaryAmount;
+  notes?: string | undefined;
+  stationId?: string | undefined;
+  ownerPositionId?: string | undefined;
+}
+
+/**
+ * `PUT /finance/budgets/:id`. An omitted key leaves the field alone; `null`
+ * clears it (a cleared owner falls back to the category's).
+ */
+export interface BudgetUpdatePayload {
+  amountBudgeted?: MonetaryAmount;
+  notes?: string | null;
+  stationId?: string | null;
+  ownerPositionId?: string | null;
+}
+
+/** An id and a name — `GET /finance/position-options` and `/finance/station-options`. */
+export interface FinanceNamedOption {
+  id: string;
+  name: string;
 }
 
 /**

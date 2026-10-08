@@ -2,13 +2,17 @@
  * Budget Detail Page
  *
  * Displays detailed information for a single budget including
- * budget info header and transaction history placeholder.
+ * budget info header and transaction history placeholder. A `finance.manage`
+ * holder edits the line from here.
  */
 
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router';
-import { ArrowLeft, AlertTriangle, DollarSign, FileText } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, DollarSign, FileText, Pencil } from 'lucide-react';
 import { useFinanceStore } from '../store/financeStore';
+import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
+import { BudgetFormDialog } from '../components/BudgetFormDialog';
+import { budgetOwnerLabel } from '../utils/budgetOwnership';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
@@ -22,9 +26,11 @@ import type { Budget } from '../types';
 interface BudgetInfoProps {
   budget: Budget;
   categoryName: string;
+  /** Rendered beside the title — the Edit button, for a finance manager. */
+  actions?: React.ReactNode;
 }
 
-const BudgetInfoCard: React.FC<BudgetInfoProps> = ({ budget, categoryName }) => {
+const BudgetInfoCard: React.FC<BudgetInfoProps> = ({ budget, categoryName, actions }) => {
   const remaining = Number(budget.amountBudgeted) - Number(budget.amountSpent) - Number(budget.amountEncumbered);
   const pctUsed =
     Number(budget.amountBudgeted) > 0
@@ -41,15 +47,29 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({ budget, categoryName }) => 
 
   return (
     <div className="card p-6">
-      <div className="mb-4 flex items-center gap-3">
+      <div className="mb-4 flex items-start gap-3">
         <div className="rounded-lg bg-green-100 p-2 dark:bg-green-500/20">
           <DollarSign className="h-5 w-5 text-green-600" />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-theme-text-primary text-lg font-semibold">{categoryName}</h2>
           {budget.notes && <p className="text-theme-text-secondary text-sm">{budget.notes}</p>}
         </div>
+        {actions}
       </div>
+
+      <dl className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <dt className="text-theme-text-secondary text-sm">Station</dt>
+          <dd className="text-theme-text-primary text-sm font-medium">
+            {budget.stationId ? budget.stationName || 'Unknown station' : 'Department-wide'}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-theme-text-secondary text-sm">Owner</dt>
+          <dd className="text-theme-text-primary text-sm font-medium">{budgetOwnerLabel(budget)}</dd>
+        </div>
+      </dl>
 
       {/* Amounts grid */}
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -148,12 +168,28 @@ const DetailSkeleton: React.FC = () => (
 
 const BudgetDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { budgets, budgetCategories, isLoading, error, fetchBudgets, fetchBudgetCategories } = useFinanceStore();
+  const {
+    budgets,
+    budgetCategories,
+    fiscalYears,
+    isLoading,
+    error,
+    fetchBudgets,
+    fetchBudgetCategories,
+    fetchFiscalYears,
+  } = useFinanceStore();
+  const { canManage } = useFinanceRequestAccess();
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     void fetchBudgets();
     void fetchBudgetCategories();
   }, [fetchBudgets, fetchBudgetCategories]);
+
+  useEffect(() => {
+    // The edit dialog names the line's fiscal year.
+    if (canManage) void fetchFiscalYears();
+  }, [canManage, fetchFiscalYears]);
 
   const budget = useMemo(() => budgets.find((b) => b.id === id), [budgets, id]);
 
@@ -223,7 +259,36 @@ const BudgetDetailPage: React.FC = () => {
       )}
 
       {/* Budget Info Header */}
-      <BudgetInfoCard budget={budget} categoryName={categoryName} />
+      <BudgetInfoCard
+        budget={budget}
+        categoryName={categoryName}
+        actions={
+          canManage ? (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="btn-secondary inline-flex shrink-0 items-center gap-2"
+            >
+              <Pencil className="h-4 w-4" aria-hidden="true" />
+              Edit
+            </button>
+          ) : undefined
+        }
+      />
+
+      {editing && (
+        <BudgetFormDialog
+          budget={budget}
+          fiscalYears={fiscalYears}
+          categories={budgetCategories}
+          onClose={() => setEditing(false)}
+          onSaved={() => {
+            setEditing(false);
+            // Re-fetch rather than splice the response in (CLAUDE.md pitfall #11).
+            void fetchBudgets();
+          }}
+        />
+      )}
 
       {/* Transaction History Placeholder */}
       <div className="card p-6">

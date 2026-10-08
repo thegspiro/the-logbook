@@ -1163,12 +1163,12 @@ placeholders picture screens the frontend does not render; their placeholders
 are left open. Four defects found alongside them were fixed — see the commit
 that added the purchase request, expense report and check request shots.
 
-| Guide section             | What exists                                                                                                                              | State                |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| Create Budget form        | `financeStore.createBudget` over a working API, **no component calls it**. `BudgetsPage` is read-only — it has no create control at all. | ❌ Store action only |
-| Create Dues Schedule form | `financeStore.createDuesSchedule`, **no component calls it**.                                                                            | ❌ Store action only |
-| QuickBooks export mapping | `GET/POST/PUT /finance/export/mappings` and the `qbAccountName` types exist; no page, no route, no consumer.                             | ❌ API + types only  |
-| Export logs               | `GET /finance/export/logs` and an `ExportLog` interface; no page, no route, no consumer.                                                 | ❌ API + types only  |
+| Guide section             | What exists                                                                                                    | State                |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------- |
+| Create Budget form        | _Resolved 2026-10-08:_ **Add budget line** and **Edit** open `BudgetFormDialog` (`finance.manage`). See below. | ✅ Built             |
+| Create Dues Schedule form | `financeStore.createDuesSchedule`, **no component calls it**.                                                  | ❌ Store action only |
+| QuickBooks export mapping | `GET/POST/PUT /finance/export/mappings` and the `qbAccountName` types exist; no page, no route, no consumer.   | ❌ API + types only  |
+| Export logs               | `GET /finance/export/logs` and an `ExportLog` interface; no page, no route, no consumer.                       | ❌ API + types only  |
 
 **Budget detail's transaction history is a stub, not an empty state.**
 `BudgetDetailPage` renders `<EmptyState title="No transactions yet">`
@@ -1182,6 +1182,14 @@ check requests were all charged against the budgets and the panel still said
 
 Verified 2026-08-09 by counting non-test call sites for each store action and
 service method, and by reading the render bodies.
+
+**Still open after 2026-10-08.** The Create Budget row is closed: the screen
+exists, with station and owner position — see
+[FINANCE_MODULE.md](./FINANCE_MODULE.md#budget-line-owners-stations-and-the-createedit-budget-screen-2026-10-08).
+The transaction table on the budget detail page is still the stub described
+above, and budget-line owners cannot yet see "their" lines anywhere: ownership
+is stored, resolved and shown to `finance.view` holders, but the owner's own
+view is the next step of that work.
 
 ## Finance — Nobody Could Approve Anything (2026-08-12, narrowed 2026-09-06)
 

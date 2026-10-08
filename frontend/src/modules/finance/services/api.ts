@@ -17,8 +17,11 @@ import type {
   ApproverCoverageRow,
   Budget,
   BudgetCategory,
+  BudgetCategoryUpdatePayload,
+  BudgetCreatePayload,
   BudgetOption,
   BudgetSummary,
+  BudgetUpdatePayload,
   CheckRequest,
   DuesSchedule,
   DuesSummary,
@@ -27,6 +30,7 @@ import type {
   FinanceDashboard,
   FiscalYear,
   FiscalYearOption,
+  FinanceNamedOption,
   MemberDues,
   PendingApproval,
   PurchaseRequest,
@@ -95,12 +99,13 @@ export const budgetCategoryService = {
     parentCategoryId?: string;
     sortOrder?: number;
     qbAccountName?: string;
+    ownerPositionId?: string;
   }): Promise<BudgetCategory> {
     const response = await api.post<BudgetCategory>('/finance/budget-categories', data);
     return response.data;
   },
 
-  async update(id: string, data: Partial<BudgetCategory>): Promise<BudgetCategory> {
+  async update(id: string, data: BudgetCategoryUpdatePayload): Promise<BudgetCategory> {
     const response = await api.put<BudgetCategory>(`/finance/budget-categories/${id}`, data);
     return response.data;
   },
@@ -115,11 +120,12 @@ export const budgetCategoryService = {
 // =============================================================================
 
 export const budgetService = {
-  async list(params?: { fiscalYearId?: string; categoryId?: string }): Promise<Budget[]> {
+  async list(params?: { fiscalYearId?: string; categoryId?: string; stationId?: string }): Promise<Budget[]> {
     const response = await api.get<Budget[]>('/finance/budgets', {
       params: {
         fiscal_year_id: params?.fiscalYearId,
         category_id: params?.categoryId,
+        station_id: params?.stationId,
       },
     });
     return asArray(response.data);
@@ -141,18 +147,12 @@ export const budgetService = {
     return response.data;
   },
 
-  async create(data: {
-    fiscalYearId: string;
-    categoryId: string;
-    amountBudgeted: MonetaryAmount;
-    notes?: string;
-    stationId?: string;
-  }): Promise<Budget> {
+  async create(data: BudgetCreatePayload): Promise<Budget> {
     const response = await api.post<Budget>('/finance/budgets', data);
     return response.data;
   },
 
-  async update(id: string, data: Partial<Budget>): Promise<Budget> {
+  async update(id: string, data: BudgetUpdatePayload): Promise<Budget> {
     const response = await api.put<Budget>(`/finance/budgets/${id}`, data);
     return response.data;
   },
@@ -162,6 +162,24 @@ export const budgetService = {
       params: { fiscal_year_id: fiscalYearId },
     });
     return response.data;
+  },
+};
+
+// =============================================================================
+// Budget form options (finance.manage)
+// =============================================================================
+
+export const financeOptionService = {
+  /** The department's positions, for the budget and category owner pickers. */
+  async positions(): Promise<FinanceNamedOption[]> {
+    const response = await api.get<FinanceNamedOption[]>('/finance/position-options');
+    return asArray(response.data);
+  },
+
+  /** The department's facilities that are not archived, for the station picker. */
+  async stations(): Promise<FinanceNamedOption[]> {
+    const response = await api.get<FinanceNamedOption[]>('/finance/station-options');
+    return asArray(response.data);
   },
 };
 
