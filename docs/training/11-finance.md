@@ -162,7 +162,7 @@ When a fiscal year is complete:
 1. Click **Lock** on the active fiscal year.
 2. Confirm the lock.
 
-Locking transitions the fiscal year to **Closed** status and sets the `isLocked` flag. All budgets and transactions within it become read-only. A locked fiscal year cannot be modified or re-opened. This is typically done after year-end reconciliation.
+Locking transitions the fiscal year to **Closed** status and sets the `isLocked` flag. A locked fiscal year cannot be modified or re-opened, and its budget amounts are final: a line's amount can no longer be changed or amended. A line's notes, station and owner can still be edited. This is typically done after year-end reconciliation.
 
 > **Hint:** Create and set up your new fiscal year (including budgets) in Draft status before the current one ends. When the new period begins, activate it. This ensures a seamless transition with no gap in financial tracking.
 
@@ -286,6 +286,44 @@ owner back to the category's clears the value. Lowering the amount below what
 is already spent and encumbered is refused with _Insufficient available
 budget_, and the dialog stays open with that message.
 
+In a **locked** fiscal year the amount is shown read-only with the hint _This
+fiscal year is locked._; the other fields still save.
+
+When leadership has approved **extra money** for a line, record an amendment
+instead of editing the amount (below) — the amendment keeps the record of who
+approved it and why.
+
+### Budget Amendments
+
+An amendment records extra money approved for a budget line — by a board vote,
+the Chief, the membership — and raises the line's budget by that amount.
+Requires `finance.manage`.
+
+1. Open the budget line from **Finance > Budgets**.
+2. Click **Add amendment**.
+3. Fill in:
+   - **Amount added** — the extra money, more than zero.
+   - **Reason** — what it is for.
+   - **Approved by** — who approved it, for example _Board vote 10/7_.
+   - **Approval date** — the day it was approved (defaults to today; it
+     cannot be in the future).
+4. Click **Record amendment**.
+
+The line's budget goes up by the amount at once. Once a line has amendments its
+page shows the **Original budget**, the **Current budget** and **Amendments:
++$X (n)**, and the **Amendments** section lists each one with its approval
+date, amount, who approved it, the reason, and who entered it and when. The
+Budgets list marks the line _(amended)_.
+
+- Amendments can be added in **draft**, **active** and **closed** fiscal years,
+  but not in a **locked** one — the button is hidden there.
+- An amendment cannot be edited or removed afterwards; it is the record of what
+  was approved. To take money back out, edit the amount (while the year is not
+  locked).
+- A purchase or check request that was refused for lack of funds is **not**
+  re-run when the budget goes up, and nobody is emailed. The member submits it
+  again.
+
 ### Budget Owners
 
 A budget line is owned by a **position**, not a person, so ownership follows
@@ -353,6 +391,7 @@ The budget summary provides an aggregate view across all budgets in a fiscal yea
 
 | Scenario                                          | Behavior                                                                                                                                                                                                                                      |
 | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Changing or amending an amount in a locked year   | Not permitted -- refused with "This fiscal year is locked. Budget amounts can no longer be changed or amended." Notes, station and owner still save                                                                                           |
 | Creating a budget in a closed fiscal year         | Not permitted -- fiscal year must be in Draft or Active status                                                                                                                                                                                |
 | Two budgets for the same category and fiscal year | Permitted -- useful when different stations have separate budgets for the same category. Requests are linked to a specific budget, not just a category                                                                                        |
 | Budget remaining would go negative                | Not permitted -- the approval, payment or check that would push spent plus encumbered past the amount budgeted is refused with _Insufficient available budget_. Budget release operations are floored at zero to prevent negative encumbrance |

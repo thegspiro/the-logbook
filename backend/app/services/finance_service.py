@@ -10,7 +10,7 @@ import html
 import io
 import secrets
 from collections.abc import AsyncIterator
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import NoReturn, Optional
@@ -45,6 +45,7 @@ from app.models.finance import (
     ApprovalStepType,
     ApproverType,
     Budget,
+    BudgetAmendment,
     BudgetCategory,
     CheckRequest,
     CheckRequestStatus,
@@ -113,6 +114,15 @@ class BudgetLimitExceededError(Exception):
 
     def __init__(self) -> None:
         super().__init__("Insufficient available budget")
+
+
+# The largest value a Numeric(12, 2) column holds. A budget line's amount may
+# not be raised past it: MySQL would refuse the write with an opaque error.
+_MAX_BUDGET_AMOUNT = Decimal("9999999999.99")
+
+_LOCKED_YEAR_AMOUNT_MESSAGE = (
+    "This fiscal year is locked. Budget amounts can no longer be changed or amended."
+)
 
 
 class FinanceEntityNotFoundError(ValueError):
@@ -475,6 +485,18 @@ class FinanceService:
         """
         line_owner = aliased(Position)
         category_owner = aliased(Position)
+        # One grouped read of every line's amendments, joined once, so the
+        # list stays a single query however many lines it holds.
+        amendments = (
+            select(
+                BudgetAmendment.budget_id.label("budget_id"),
+                func.sum(BudgetAmendment.amount).label("total"),
+                func.count(BudgetAmendment.id).label("n"),
+            )
+            .where(BudgetAmendment.organization_id == org_id)
+            .group_by(BudgetAmendment.budget_id)
+            .subquery()
+        )
         return (
             select(
                 Budget,
@@ -482,7 +504,10 @@ class FinanceService:
                 Facility.name.label("station_name"),
                 line_owner.name.label("line_owner_name"),
                 category_owner.name.label("category_owner_name"),
+                func.coalesce(amendments.c.total, 0).label("amendments_total"),
+                func.coalesce(amendments.c.n, 0).label("amendment_count"),
             )
+            .outerjoin(amendments, amendments.c.budget_id == Budget.id)
             .outerjoin(
                 BudgetCategory,
                 and_(
@@ -516,11 +541,25 @@ class FinanceService:
 
     @staticmethod
     def _budget_row(row) -> dict:
+        """One budget line as the budget pages show it.
+
+        ``amount_budgeted`` is the current budget, amendments included. The
+        original budget is derived, not stored: the current amount less the
+        sum of the line's amendments. A direct edit of ``amount_budgeted``
+        therefore moves the original by the same amount, which is what the
+        edit means.
+        """
         budget = row[0]
         data = {
             column.key: getattr(budget, column.key)
             for column in Budget.__table__.columns
         }
+        amendments_total = Decimal(row.amendments_total or 0)
+        data.update(
+            amendments_total=amendments_total,
+            amendment_count=int(row.amendment_count or 0),
+            original_amount=Decimal(budget.amount_budgeted or 0) - amendments_total,
+        )
         effective_id, inherited = resolve_owner(
             budget.owner_position_id, row.category_owner_id
         )
@@ -607,12 +646,166 @@ class FinanceService:
             raise ValueError("Budget not found")
         if "amount_budgeted" in kwargs and kwargs["amount_budgeted"] is not None:
             new_amount = Decimal(kwargs["amount_budgeted"])
+            # A locked year's amounts are final. Notes, owner and station stay
+            # editable: they describe the line, they do not move money. An
+            # unchanged amount is not a change, so a form that sends every
+            # field it owns still saves.
+            if new_amount != budget.amount_budgeted and await self._year_is_locked(
+                budget.fiscal_year_id, org_id
+            ):
+                raise ValueError(_LOCKED_YEAR_AMOUNT_MESSAGE)
             if new_amount < budget.amount_spent + budget.amount_encumbered:
                 raise BudgetLimitExceededError()
         apply_updates(budget, kwargs)
         await self.db.flush()
         await self.db.refresh(budget, ["updated_at"])
         return budget
+
+    async def _year_is_locked(self, fiscal_year_id: str, org_id: str) -> bool:
+        """Whether a budget line's fiscal year is locked, read under a share lock.
+
+        The share lock waits out a ``lock_fiscal_year`` in flight and then
+        reads the committed flag, so an amount change cannot slip in beside a
+        lock that is landing; concurrent amendments in one year share it and
+        do not queue behind each other.
+        """
+        result = await self.db.execute(
+            select(FiscalYear.is_locked)
+            .where(
+                FiscalYear.id == fiscal_year_id,
+                FiscalYear.organization_id == org_id,
+            )
+            .with_for_update(read=True)
+        )
+        return bool(result.scalar_one_or_none())
+
+    # ========================================
+    # Budget Amendments
+    # ========================================
+
+    async def add_budget_amendment(
+        self,
+        budget_id: str,
+        org_id: str,
+        created_by: str,
+        *,
+        amount: Decimal,
+        reason: str,
+        approved_by: str,
+        approved_on: date,
+    ) -> BudgetAmendment:
+        """Record extra money approved for a line and raise its budget by it.
+
+        One transaction: lock the line (the same locking read ``update_budget``
+        and the spend checks use, CLAUDE.md pitfall #27), refuse a locked
+        year, insert the amendment, and raise ``amount_budgeted``. Raises
+        ``FinanceEntityNotFoundError`` for a line that is not the org's.
+
+        A request refused earlier for lack of funds is not reprocessed: the
+        member resubmits (owner decision, 2026-10-08).
+        """
+        amount = Decimal(amount).quantize(Decimal("0.01"))
+        if amount <= 0:
+            raise ValueError("The amount added must be greater than zero.")
+        reason = (reason or "").strip()
+        approved_by = (approved_by or "").strip()
+        if not reason:
+            raise ValueError("Give a reason for the amendment.")
+        if not approved_by:
+            raise ValueError("Say who approved the amendment.")
+        # The department's calendar, not the server's: a container runs in
+        # UTC, which is already tomorrow for a US department every evening.
+        if approved_on > await resolve_org_today(self.db, org_id):
+            raise ValueError("The approval date cannot be in the future.")
+
+        result = await self.db.execute(
+            select(Budget)
+            .where(Budget.id == budget_id, Budget.organization_id == org_id)
+            .with_for_update()
+        )
+        budget = result.scalar_one_or_none()
+        if not budget:
+            raise FinanceEntityNotFoundError("Budget not found")
+        if await self._year_is_locked(budget.fiscal_year_id, org_id):
+            raise ValueError(_LOCKED_YEAR_AMOUNT_MESSAGE)
+        new_amount = Decimal(budget.amount_budgeted or 0) + amount
+        if new_amount > _MAX_BUDGET_AMOUNT:
+            raise ValueError("That amendment would take the budget past its limit.")
+
+        amendment = BudgetAmendment(
+            organization_id=org_id,
+            budget_id=budget.id,
+            amount=amount,
+            reason=reason,
+            approved_by=approved_by,
+            approved_on=approved_on,
+            created_by=created_by,
+        )
+        self.db.add(amendment)
+        budget.amount_budgeted = new_amount
+        await self.db.flush()
+        await self.db.refresh(amendment, ["created_at"])
+        await self.db.refresh(budget, ["updated_at"])
+        logger.info("Budget {} amended by {} in org {}", budget.id, amount, org_id)
+        return amendment
+
+    async def list_budget_amendments(self, budget_id: str, org_id: str) -> list[dict]:
+        """A line's amendments, newest first, with who entered each.
+
+        Raises ``FinanceEntityNotFoundError`` for a line that is not the org's.
+        The entering member is joined in-org, so a stray id names nobody.
+        """
+        if await self.get_budget(budget_id, org_id) is None:
+            raise FinanceEntityNotFoundError("Budget not found")
+        result = await self.db.execute(
+            select(
+                BudgetAmendment,
+                User.first_name,
+                User.last_name,
+                User.preferred_name,
+                User.username,
+            )
+            .outerjoin(
+                User,
+                and_(
+                    User.id == BudgetAmendment.created_by,
+                    User.organization_id == org_id,
+                ),
+            )
+            .where(
+                BudgetAmendment.budget_id == budget_id,
+                BudgetAmendment.organization_id == org_id,
+            )
+            .order_by(BudgetAmendment.created_at.desc(), BudgetAmendment.id.desc())
+        )
+        return [self._amendment_row(*row) for row in result.all()]
+
+    @staticmethod
+    def _amendment_row(
+        amendment: BudgetAmendment,
+        first_name=None,
+        last_name=None,
+        preferred_name=None,
+        username=None,
+    ) -> dict:
+        data = {
+            column.key: getattr(amendment, column.key)
+            for column in BudgetAmendment.__table__.columns
+        }
+        name = format_display_name(first_name, last_name, preferred_name)
+        data["entered_by_name"] = name or username or None
+        return data
+
+    @classmethod
+    def amendment_detail(cls, amendment: BudgetAmendment, user: User) -> dict:
+        """A just-created amendment in the list's shape, entered by ``user``."""
+        return cls._amendment_row(
+            amendment,
+            user.first_name,
+            user.last_name,
+            user.preferred_name,
+            user.username,
+        )
 
     async def get_budget_summary(self, org_id: str, fiscal_year_id: str) -> dict:
         result = await self.db.execute(

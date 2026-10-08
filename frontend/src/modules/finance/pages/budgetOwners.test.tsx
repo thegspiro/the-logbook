@@ -46,6 +46,7 @@ vi.mock('../services/api', () => ({
   budgetService: {
     create: (...args: unknown[]) => createBudget(...args) as unknown,
     update: (...args: unknown[]) => updateBudget(...args) as unknown,
+    listAmendments: () => Promise.resolve([]),
   },
   budgetCategoryService: {
     create: (...args: unknown[]) => createCategory(...args) as unknown,

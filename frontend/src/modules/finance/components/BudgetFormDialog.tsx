@@ -69,6 +69,9 @@ export const BudgetFormDialog: React.FC<BudgetFormDialogProps> = ({
   const positionOptions = withCurrent(positions, budget?.ownerPositionId, budget?.ownerPositionName);
   const selectedCategory = categories.find((c) => c.id === categoryId);
   const yearName = fiscalYears.find((fy) => fy.id === fiscalYearId)?.name ?? 'Unknown';
+  // A locked year's amounts are final; the backend refuses a change, so the
+  // form neither offers one nor sends the amount (omitted = left alone).
+  const amountLocked = isEdit && fiscalYears.some((fy) => fy.id === budget?.fiscalYearId && fy.isLocked);
 
   const validate = (): string | null => {
     const next: Record<string, string> = {};
@@ -97,7 +100,7 @@ export const BudgetFormDialog: React.FC<BudgetFormDialogProps> = ({
         // Every field the form owns, blanks as null, so a cleared owner or
         // station is cleared rather than left behind (CLAUDE.md pitfall #1).
         const payload: BudgetUpdatePayload = {
-          amountBudgeted,
+          ...(amountLocked ? {} : { amountBudgeted }),
           notes: blankToNull(notes),
           stationId: blankToNull(stationId),
           ownerPositionId: blankToNull(ownerPositionId),
@@ -237,8 +240,15 @@ export const BudgetFormDialog: React.FC<BudgetFormDialogProps> = ({
             className="form-input"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
+            readOnly={amountLocked}
             aria-invalid={Boolean(errors.amount)}
+            aria-describedby={amountLocked ? 'budget-amount-locked' : undefined}
           />
+          {amountLocked && (
+            <p id="budget-amount-locked" className="text-theme-text-secondary mt-1 text-xs">
+              This fiscal year is locked.
+            </p>
+          )}
           {errors.amount && <p className="mt-1 text-xs text-red-700 dark:text-red-400">{errors.amount}</p>}
         </div>
 

@@ -32,6 +32,9 @@ from app.schemas.finance import (
     ApprovalChainUpdate,
     ApprovalStepRecordResponse,
     ApproverCoverageResponse,
+    BudgetAmendmentCreate,
+    BudgetAmendmentCreatedResponse,
+    BudgetAmendmentResponse,
     BudgetCategoryCreate,
     BudgetCategoryResponse,
     BudgetCategoryUpdate,
@@ -513,6 +516,88 @@ async def update_budget(
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+# ============================================
+# Budget Amendments
+# ============================================
+
+
+@router.post(
+    "/budgets/{budget_id}/amendments",
+    response_model=BudgetAmendmentCreatedResponse,
+    status_code=201,
+)
+async def add_budget_amendment(
+    budget_id: str,
+    data: BudgetAmendmentCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """Record extra money leadership approved for a budget line.
+
+    **Requires permission: finance.manage**
+
+    Raises the line's budget by ``amount`` and logs who approved it, when and
+    why. Refused in a locked fiscal year; allowed in a draft, active or closed
+    one. A line in another department is 404.
+    """
+    service = FinanceService(db)
+    org_id = str(current_user.organization_id)
+    try:
+        amendment = await service.add_budget_amendment(
+            budget_id, org_id, str(current_user.id), **data.model_dump()
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.budget_amended",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "budget_id": budget_id,
+                "amendment_id": amendment.id,
+                "amount": str(amendment.amount),
+                "approved_by": amendment.approved_by,
+                "approved_on": amendment.approved_on.isoformat(),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=org_id,
+        )
+        return {
+            "amendment": service.amendment_detail(amendment, current_user),
+            "budget": await service.get_budget_detail(budget_id, org_id),
+        }
+    except FinanceEntityNotFoundError:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.get(
+    "/budgets/{budget_id}/amendments",
+    response_model=list[BudgetAmendmentResponse],
+)
+async def list_budget_amendments(
+    budget_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.view")),
+):
+    """A budget line's amendments, newest first, with who entered each.
+
+    **Requires permission: finance.view**
+
+    The same gate as the line itself. A line in another department is 404.
+    """
+    service = FinanceService(db)
+    try:
+        return await service.list_budget_amendments(
+            budget_id, str(current_user.organization_id)
+        )
+    except FinanceEntityNotFoundError:
+        raise HTTPException(status_code=404, detail="Budget not found")
 
 
 # ============================================

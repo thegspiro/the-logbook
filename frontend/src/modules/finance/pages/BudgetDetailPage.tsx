@@ -2,22 +2,31 @@
  * Budget Detail Page
  *
  * Displays detailed information for a single budget including
- * budget info header and transaction history placeholder. A `finance.manage`
- * holder edits the line from here.
+ * budget info header, its amendments and a transaction history placeholder.
+ * A `finance.manage` holder edits the line and records amendments from here.
+ *
+ * An amendment is extra money leadership approved for the line. The backend
+ * raises `amountBudgeted` by it and reports the original (`originalAmount`);
+ * this page shows both rather than working either out (CLAUDE.md pitfall #29).
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router';
-import { ArrowLeft, AlertTriangle, DollarSign, FileText, Pencil } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, DollarSign, FileText, Pencil, Plus } from 'lucide-react';
 import { useFinanceStore } from '../store/financeStore';
 import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
 import { BudgetFormDialog } from '../components/BudgetFormDialog';
+import { AmendmentDialog } from '../components/AmendmentDialog';
+import { budgetService } from '../services/api';
 import { budgetOwnerLabel } from '../utils/budgetOwnership';
-import { formatCurrencyWhole } from '@/utils/currencyFormatting';
+import { formatCurrency, formatCurrencyWhole } from '@/utils/currencyFormatting';
+import { formatDate, formatDateTime } from '@/utils/dateFormatting';
+import { getErrorMessage } from '@/utils/errorHandling';
+import { useTimezone } from '@/hooks/useTimezone';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
-import type { Budget } from '../types';
+import type { Budget, BudgetAmendment } from '../types';
 
 // =============================================================================
 // Budget Info Card
@@ -31,6 +40,8 @@ interface BudgetInfoProps {
 }
 
 const BudgetInfoCard: React.FC<BudgetInfoProps> = ({ budget, categoryName, actions }) => {
+  const amendmentCount = budget.amendmentCount ?? 0;
+  const amended = amendmentCount > 0;
   const remaining = Number(budget.amountBudgeted) - Number(budget.amountSpent) - Number(budget.amountEncumbered);
   const pctUsed =
     Number(budget.amountBudgeted) > 0
@@ -71,10 +82,29 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({ budget, categoryName, actio
         </div>
       </dl>
 
+      {amended && (
+        <dl className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div>
+            <dt className="text-theme-text-secondary text-sm">Original budget</dt>
+            <dd className="text-theme-text-primary text-sm font-medium">{formatCurrency(budget.originalAmount)}</dd>
+          </div>
+          <div>
+            <dt className="text-theme-text-secondary text-sm">Current budget</dt>
+            <dd className="text-theme-text-primary text-sm font-medium">{formatCurrency(budget.amountBudgeted)}</dd>
+          </div>
+          <div>
+            <dt className="text-theme-text-secondary text-sm">Amendments</dt>
+            <dd className="text-theme-text-primary text-sm font-medium">
+              +{formatCurrency(budget.amendmentsTotal)} ({String(amendmentCount)})
+            </dd>
+          </div>
+        </dl>
+      )}
+
       {/* Amounts grid */}
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div>
-          <p className="text-theme-text-secondary text-sm">Budgeted</p>
+          <p className="text-theme-text-secondary text-sm">{amended ? 'Current budget' : 'Budgeted'}</p>
           <p className="text-theme-text-primary text-xl font-bold">
             {formatCurrencyWhole(Number(budget.amountBudgeted))}
           </p>
@@ -124,6 +154,53 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({ budget, categoryName, actio
           </span>
         </div>
       </div>
+    </div>
+  );
+};
+
+// =============================================================================
+// Amendments
+// =============================================================================
+
+interface AmendmentListProps {
+  amendments: BudgetAmendment[];
+  loading: boolean;
+  error: string | null;
+}
+
+const AmendmentList: React.FC<AmendmentListProps> = ({ amendments, loading, error }) => {
+  const tz = useTimezone();
+  let body: React.ReactNode;
+  if (error) {
+    body = <p className="text-sm text-red-700 dark:text-red-400">{error}</p>;
+  } else if (loading && amendments.length === 0) {
+    body = <Skeleton className="h-10 w-full" />;
+  } else if (amendments.length === 0) {
+    body = <p className="text-theme-text-secondary text-sm">No amendments have been recorded for this line.</p>;
+  } else {
+    body = (
+      <ul className="divide-theme-surface-border divide-y" aria-label="Amendments">
+        {amendments.map((a) => (
+          <li key={a.id} className="py-3 first:pt-0 last:pb-0">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-theme-text-primary text-sm font-semibold">+{formatCurrency(a.amount)}</p>
+              <p className="text-theme-text-secondary text-sm">
+                Approved {formatDate(a.approvedOn, tz)} by {a.approvedBy}
+              </p>
+            </div>
+            <p className="text-theme-text-primary mt-1 text-sm break-words whitespace-pre-line">{a.reason}</p>
+            <p className="text-theme-text-secondary mt-1 text-xs">
+              Entered by {a.enteredByName || 'a former member'} on {formatDateTime(a.createdAt, tz)}
+            </p>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  return (
+    <div className="card p-6">
+      <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Amendments</h3>
+      {body}
     </div>
   );
 };
@@ -180,6 +257,27 @@ const BudgetDetailPage: React.FC = () => {
   } = useFinanceStore();
   const { canManage } = useFinanceRequestAccess();
   const [editing, setEditing] = useState(false);
+  const [amending, setAmending] = useState(false);
+  const [amendments, setAmendments] = useState<BudgetAmendment[]>([]);
+  const [amendmentsLoading, setAmendmentsLoading] = useState(false);
+  const [amendmentsError, setAmendmentsError] = useState<string | null>(null);
+
+  const loadAmendments = useCallback(async () => {
+    if (!id) return;
+    setAmendmentsLoading(true);
+    try {
+      setAmendments(await budgetService.listAmendments(id));
+      setAmendmentsError(null);
+    } catch (err: unknown) {
+      setAmendmentsError(getErrorMessage(err, 'Could not load the amendments'));
+    } finally {
+      setAmendmentsLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    void loadAmendments();
+  }, [loadAmendments]);
 
   useEffect(() => {
     void fetchBudgets();
@@ -197,6 +295,9 @@ const BudgetDetailPage: React.FC = () => {
     if (!budget) return 'Unknown';
     return budgetCategories.find((c) => c.id === budget.categoryId)?.name ?? 'Unknown';
   }, [budget, budgetCategories]);
+
+  // A locked year takes no amendments; the backend refuses one regardless.
+  const yearLocked = Boolean(budget && fiscalYears.some((fy) => fy.id === budget.fiscalYearId && fy.isLocked));
 
   if (isLoading && !budget) {
     return (
@@ -264,17 +365,43 @@ const BudgetDetailPage: React.FC = () => {
         categoryName={categoryName}
         actions={
           canManage ? (
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="btn-secondary inline-flex shrink-0 items-center gap-2"
-            >
-              <Pencil className="h-4 w-4" aria-hidden="true" />
-              Edit
-            </button>
+            <div className="flex shrink-0 flex-wrap justify-end gap-2">
+              {!yearLocked && (
+                <button
+                  type="button"
+                  onClick={() => setAmending(true)}
+                  className="btn-secondary inline-flex items-center gap-2"
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  Add amendment
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="btn-secondary inline-flex items-center gap-2"
+              >
+                <Pencil className="h-4 w-4" aria-hidden="true" />
+                Edit
+              </button>
+            </div>
           ) : undefined
         }
       />
+
+      {amending && (
+        <AmendmentDialog
+          budgetId={budget.id}
+          lineName={categoryName}
+          onClose={() => setAmending(false)}
+          onSaved={() => {
+            setAmending(false);
+            // Re-fetch both rather than splice the response in (CLAUDE.md pitfall #11).
+            void fetchBudgets();
+            void loadAmendments();
+          }}
+        />
+      )}
 
       {editing && (
         <BudgetFormDialog
@@ -289,6 +416,8 @@ const BudgetDetailPage: React.FC = () => {
           }}
         />
       )}
+
+      <AmendmentList amendments={amendments} loading={amendmentsLoading} error={amendmentsError} />
 
       {/* Transaction History Placeholder */}
       <div className="card p-6">
