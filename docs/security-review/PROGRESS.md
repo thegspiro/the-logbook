@@ -18344,7 +18344,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
@@ -18357,6 +18357,89 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-08 — Feature 29 (Reports & analytics, pass 8) — 1 real finding fixed (pipeline_overview self-exposure), 0 new findings otherwise
+
+Confirmed via `list_pull_requests` (state=open) that no `claude/security-review-*`
+PR existed before starting: PR #2990 (Feature 28, Security/audit/IP, pass 6)
+had already merged (`724791a1`) with nothing started since. Rotation row 29
+was the first `⬜`.
+
+**Real delta since the last pass is zero.** The only commit touching any of
+this feature's ten files since `RPT5-29-reports-analytics.md`'s "Pass 7"
+merged (PR #2897, `6c422896`, 2026-10-04) is `c9dceac5`, which has no
+recorded parent and a full-tree "every file added" diff — the same
+shallow-clone squash/rebase history-boundary artifact prior passes have
+already documented (`f8fdd1a`, `0430faa0`, …), not a real code change. So
+this pass did a full fresh read of all five endpoint files and all five
+services end to end, rather than a diff review, specifically to catch what a
+diff-only pass would miss.
+
+**RPT6-29-1 — MEDIUM — fixed.** `_generate_pipeline_overview` ("Pipeline
+Overview" report) never excluded the caller's own prospective-membership
+record, unlike every one of the 9+ list/aggregate routes in
+`membership_pipeline.py` and `labels.py`'s three prospect-label routes,
+which all apply `get_hidden_prospect_ids` (`app/api/prospect_privacy.py`) for
+exactly this reason — "a member must never be able to read ... the
+prospective-membership record that describes them", which stays true after
+they are elected and hold `prospective_members.view` in their own right. An
+officer who had once applied through the same pipeline would see their own
+name, email, stage and applied date in this report's `prospects` list and
+baked into every aggregate the report computes. Same shape `MP-32`
+(`docs/security-review/MP-08-membership-pipeline.md`) already fixed on
+`GET /my-sign-offs` for the identical reason — a lister with no
+`{prospect_id}` path parameter, so the router-level
+`block_self_prospect_access` guard never sees it — but `pipeline_overview`
+sits behind a different router (`reports.py`) with no such dependency, so it
+was outside that fix's blast radius too, and no prior pass of any of the
+three review layers caught it. Fixed by threading
+`hidden_prospect_ids` through `ReportsService.generate_report` →
+`_generate_pipeline_overview` only (the other 12 generators keep their
+unchanged signature) and adding `get_hidden_prospect_ids` as a dependency on
+`reports.py`'s `/generate` and `/saved/{id}/run`, matching the exact
+query-level exclusion pattern already proven at every sibling call site. 4
+new guard tests (`tests/test_pipeline_overview_report_privacy.py`).
+
+**Everything else re-verified unchanged.** All 30 routes re-enumerated from
+source, every gate intact; `platform_analytics.py`'s 16 aggregates still
+org-scoped; zero `.like`/`.ilike`/`csv.writer` across all ten files; label
+transport SSRF hardening unchanged; `storage_areas`/label-setups (added
+pass 7) re-confirmed org-scoped and Pitfall-#12-safe.
+`RPT2-29-2` (saved-report scheduling has no reader), `LBL-29-2`
+(`GET /label-printers` auth-only, deliberate), `LBL-29-4` (no PDF
+label-count cap), `RPT-5c`/`RPT-6`/`RPT-7` (inventory float, hardcoded
+`last_inspection_date`, double-enrollment overcounting, dead `ValueError`
+wrapper), `DASH-2` (`GET /dashboard/stats` has no frontend caller), and
+`RPT5-29-1`/`RPT5-29-5` (compliance evaluator divergence, Pitfall #29 shape)
+are all re-confirmed unchanged — none re-litigated. Cross-checked the
+**separate** app-review rotation's dashboard pass 3
+(`docs/app-review/dashboard.md`, 2026-10-04, DASH-30–40) since it touches
+the same `dashboard.py`: confirmed its fixes are all navigation-link/UX
+correctness (dead `href` targets, a duplicate tile, two permission
+_tightenings_, a stale wiki name, a DST date-window bug) with no auth,
+org-scoping or data-exposure change — not duplicated here.
+
+**One pre-existing, out-of-scope sandbox issue found and corrected (not a
+code defect):** the sandbox database had reached the Alembic head via
+`alembic upgrade head` alone, without the app's own startup
+`_add_missing_model_columns` repair step (`main.py`) ever running. Six
+unrelated tables were missing 12 columns their models declare, failing 25
+tests in `test_shift_completion.py`/`test_call_tracking.py`/three others —
+none in this feature's files, reproduced as pre-existing against an
+unmodified `git stash` of this branch. Invoked
+`_add_missing_model_columns(engine)` directly (the same function a normal
+boot calls); all 25 then passed. Recorded per CLAUDE.md's "no silent
+pass-over" rule rather than worked around quietly.
+
+Completion gate green: flake8/black/isort clean against CI's pinned
+versions (`flake8==7.3.0`, `black==26.5.1`, `isort==9.0.1`);
+`validate_migrations.py --strict` — 543 revisions, single head; full backend
+unit suite **13446 passed, 1 skipped**, 0 failed; scoped suite (reports/
+label/analytics/dashboard/pipeline/membership_pipeline keywords) **1141
+passed**; frontend `typecheck`/`lint` clean; `vitest run
+src/modules/reports` **51 passed**. See
+`docs/security-review/RPT6-29-reports-analytics.md` for the full write-up.
+Rotation row 29 → ✅ (pending PR merge). Next: Feature 30 (Onboarding).
 
 ### 2026-10-07 — Feature 28 (Security, audit & IP, pass 6) — real delta, two prior findings resolved outside the loop, 0 new findings, 1 doc fix (watchdog pickup)
 
