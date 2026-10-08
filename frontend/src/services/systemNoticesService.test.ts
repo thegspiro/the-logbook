@@ -1,0 +1,36 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const mockGet = vi.fn();
+vi.mock('./apiClient', () => ({
+  default: {
+    get: (...args: unknown[]) => mockGet(...args) as unknown,
+  },
+}));
+
+import { systemNoticesService } from './systemNoticesService';
+
+const notice = {
+  key: 'malware_scanning_disabled',
+  severity: 'critical',
+  title: 'Uploaded files are not being scanned',
+  detail: 'CLAMAV_ENABLED is false.',
+};
+
+describe('systemNoticesService.list', () => {
+  beforeEach(() => {
+    mockGet.mockReset();
+  });
+
+  it('returns the notices the server reports', async () => {
+    mockGet.mockResolvedValue({ data: [notice] });
+
+    await expect(systemNoticesService.list()).resolves.toEqual([notice]);
+    expect(mockGet).toHaveBeenCalledWith('/system-notices');
+  });
+
+  it('treats a body that is not a list as no notices', async () => {
+    mockGet.mockResolvedValue({ data: {} });
+
+    await expect(systemNoticesService.list()).resolves.toEqual([]);
+  });
+});
