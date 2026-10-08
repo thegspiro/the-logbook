@@ -73,6 +73,7 @@ from app.services.equipment_check_service import (
     EquipmentCheckService,
 )
 from app.services.equipment_readiness_service import EquipmentReadinessService
+from app.services.upload_scanning import reject_if_malicious
 from app.utils.image_processing import optimize_image
 from app.utils.org_timezone import resolve_scheduling_timezone
 
@@ -1320,6 +1321,14 @@ async def upload_check_item_photos(
                     "Allowed: JPEG, PNG, WebP"
                 ),
             )
+        # Scanned as uploaded, before re-encoding.
+        await reject_if_malicious(
+            db,
+            contents,
+            upload_kind="equipment_check_photo",
+            detected_mime=detected_mime,
+            user=current_user,
+        )
 
         # Optimize: resize, strip EXIF, convert to WebP
         try:

@@ -17,13 +17,14 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
-from app.api.v1.endpoints import training_submissions
+from app.api.v1.endpoints import training_enhancements, training_submissions
 from app.models.training import SubmissionStatus
 from app.schemas.training_submission import (
     TrainingSubmissionCreate,
     TrainingSubmissionResponse,
     sanitize_attachments,
 )
+from app.services import file_storage_service
 from app.services.training_submission_service import TrainingSubmissionService
 
 
@@ -315,11 +316,9 @@ class TestAttachments:
             "_load_submission_for_attachment",
             AsyncMock(return_value=submission),
         )
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         monkeypatch.setattr(
-            training_submissions, "SUBMISSION_ATTACHMENT_DIR", str(tmp_path)
-        )
-        monkeypatch.setattr(
-            training_submissions, "detect_mime_type", lambda content: "text/plain"
+            file_storage_service, "detect_mime_type", lambda content: "text/plain"
         )
 
         upload = SimpleNamespace(
@@ -344,11 +343,9 @@ class TestAttachments:
             "_load_submission_for_attachment",
             AsyncMock(return_value=submission),
         )
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         monkeypatch.setattr(
-            training_submissions, "SUBMISSION_ATTACHMENT_DIR", str(tmp_path)
-        )
-        monkeypatch.setattr(
-            training_submissions, "detect_mime_type", lambda content: "application/pdf"
+            file_storage_service, "detect_mime_type", lambda content: "application/pdf"
         )
         # flag_modified needs a real mapped instance; the JSON reassignment
         # above it is the part under test.
@@ -376,8 +373,11 @@ class TestAttachments:
                 "uploaded_at": submission.attachments[0]["uploaded_at"],
             }
         ]
-        # Stored under a server-generated name with a magic-derived extension.
-        stored = os.listdir(os.path.join(str(tmp_path), "org-1"))
+        # Stored under a server-generated name with a magic-derived extension,
+        # in the submission's own directory of the org's self-reports area.
+        stored = os.listdir(
+            os.path.join(str(tmp_path), "org-1", "self-reports", str(submission.id))
+        )
         assert len(stored) == 1
         assert stored[0].endswith(".pdf")
 
@@ -392,9 +392,7 @@ class TestAttachments:
             "_load_submission_for_attachment",
             AsyncMock(return_value=submission),
         )
-        monkeypatch.setattr(
-            training_submissions, "SUBMISSION_ATTACHMENT_DIR", str(tmp_path)
-        )
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
 
         with pytest.raises(HTTPException) as exc:
             await training_submissions.upload_submission_attachment(
@@ -467,18 +465,56 @@ class TestDraftHandoffRevalidates:
 
 
 class TestAttachmentRoot:
-    def test_submission_evidence_lives_under_the_record_download_root(self):
+    async def test_submission_evidence_lives_under_the_record_download_root(
+        self, monkeypatch, tmp_path
+    ):
         """Approval copies these paths onto the TrainingRecord verbatim.
 
-        The record download route confines paths to TRAINING_ATTACHMENT_DIR, so
-        a sibling directory would 404 every approved certificate from the
-        member's own training history.
+        The record download route confines paths to its own areas, so evidence
+        stored anywhere it does not accept would 404 every approved
+        certificate from the member's own training history. Stores a file the
+        way the submission upload does and serves it through the record
+        download.
         """
-        from app.api.v1.endpoints.training_enhancements import TRAINING_ATTACHMENT_DIR
+        from fastapi.responses import FileResponse
 
-        assert training_submissions.SUBMISSION_ATTACHMENT_DIR.startswith(
-            TRAINING_ATTACHMENT_DIR + os.sep
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
+        monkeypatch.setattr(
+            file_storage_service, "detect_mime_type", lambda content: "application/pdf"
         )
+        member = SimpleNamespace(id="user-1", organization_id="org-1")
+        attachment = await training_submissions._store_attachment_file(
+            SimpleNamespace(
+                read=AsyncMock(return_value=b"%PDF-1.4"), filename="cert.pdf"
+            ),
+            member,
+            None,
+            submission_id="sub-1",
+        )
+        record = SimpleNamespace(
+            id="rec-1",
+            user_id=member.id,
+            organization_id=member.organization_id,
+            completion_date=None,
+            course_name="EMT Recertification",
+            attachments=[attachment],
+        )
+        # The download names its file after the member; none is found here.
+        db = SimpleNamespace(
+            execute=AsyncMock(return_value=SimpleNamespace(first=lambda: None))
+        )
+        monkeypatch.setattr(
+            training_enhancements,
+            "_load_record_for_attachment",
+            AsyncMock(return_value=record),
+        )
+
+        response = await training_enhancements.download_record_attachment(
+            "rec-1", 0, db=db, current_user=member
+        )
+
+        assert isinstance(response, FileResponse)
+        assert response.path == os.path.realpath(attachment["file_path"])
 
     def test_a_path_outside_the_root_is_never_returned(self):
         org = "org-1"
@@ -494,12 +530,27 @@ class TestAttachmentRoot:
             == []
         )
 
-    def test_another_orgs_evidence_is_never_returned(self):
-        """Every organization's evidence shares SUBMISSION_ATTACHMENT_DIR, so a
+    @pytest.mark.parametrize(
+        ("theirs", "ours"),
+        [
+            # Current layout: every organization's evidence shares one root.
+            (
+                ("org-2", "self-reports", "sub-1", "cert.pdf"),
+                ("org-1", "self-reports", "sub-1", "cert.pdf"),
+            ),
+            # Legacy layout, still read until the relocation script runs.
+            (
+                ("training_attachments", "self_reported_submissions", "org-2", "c.pdf"),
+                ("training_attachments", "self_reported_submissions", "org-1", "c.pdf"),
+            ),
+        ],
+    )
+    def test_another_orgs_evidence_is_never_returned(self, theirs, ours):
+        """Every organization's evidence shares one uploads root, so a
         root-level check would hand one tenant another tenant's certificate."""
-        root = training_submissions.SUBMISSION_ATTACHMENT_DIR
-        theirs = {"file_path": os.path.join(root, "org-2", "cert.pdf")}
-        ours = {"file_path": os.path.join(root, "org-1", "cert.pdf")}
+        root = file_storage_service.UPLOADS_ROOT
+        theirs = {"file_path": os.path.join(root, *theirs)}
+        ours = {"file_path": os.path.join(root, *ours)}
 
         assert training_submissions._confined_path(theirs, "org-1") is None
         assert training_submissions._confined_path(ours, "org-1") == os.path.realpath(
@@ -510,11 +561,15 @@ class TestAttachmentRoot:
 class TestDeletingASubmission:
     async def test_stored_evidence_is_removed_with_the_row(self, monkeypatch, tmp_path):
         """A withdrawn certificate must not outlive its submission on disk."""
-        monkeypatch.setattr(
-            training_submissions, "SUBMISSION_ATTACHMENT_DIR", str(tmp_path)
-        )
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         submission = _submission(attachments=[])
-        stored = tmp_path / str(submission.organization_id) / "cert.pdf"
+        stored = (
+            tmp_path
+            / str(submission.organization_id)
+            / "self-reports"
+            / str(submission.id)
+            / "cert.pdf"
+        )
         stored.parent.mkdir(parents=True)
         stored.write_bytes(b"%PDF")
         submission.attachments = [{"file_path": str(stored)}]
@@ -560,11 +615,9 @@ class TestCreateWithAttachment:
     async def test_the_attachment_is_on_the_row_that_routing_sees(
         self, monkeypatch, tmp_path
     ):
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         monkeypatch.setattr(
-            training_submissions, "SUBMISSION_ATTACHMENT_DIR", str(tmp_path)
-        )
-        monkeypatch.setattr(
-            training_submissions, "detect_mime_type", lambda content: "application/pdf"
+            file_storage_service, "detect_mime_type", lambda content: "application/pdf"
         )
         captured = {}
 
@@ -595,11 +648,9 @@ class TestCreateWithAttachment:
     async def test_a_rejected_file_never_reaches_the_service(
         self, monkeypatch, tmp_path
     ):
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         monkeypatch.setattr(
-            training_submissions, "SUBMISSION_ATTACHMENT_DIR", str(tmp_path)
-        )
-        monkeypatch.setattr(
-            training_submissions, "detect_mime_type", lambda content: "text/plain"
+            file_storage_service, "detect_mime_type", lambda content: "text/plain"
         )
         create = AsyncMock()
         monkeypatch.setattr(
@@ -625,11 +676,9 @@ class TestCreateWithAttachment:
     async def test_a_failed_create_does_not_strand_the_file(
         self, monkeypatch, tmp_path
     ):
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         monkeypatch.setattr(
-            training_submissions, "SUBMISSION_ATTACHMENT_DIR", str(tmp_path)
-        )
-        monkeypatch.setattr(
-            training_submissions, "detect_mime_type", lambda content: "application/pdf"
+            file_storage_service, "detect_mime_type", lambda content: "application/pdf"
         )
 
         async def _boom(**kwargs):
@@ -652,7 +701,7 @@ class TestCreateWithAttachment:
             )
 
         # The row never landed, so the bytes on disk belong to nothing.
-        assert os.listdir(os.path.join(str(tmp_path), "org-1")) == []
+        assert os.listdir(os.path.join(str(tmp_path), "org-1", "self-reports")) == []
 
 
 class TestStartTime:
@@ -755,11 +804,9 @@ class TestMultipartFailureHandling:
         """A rejected foreign key must not leave an attacker-sized orphan."""
         from sqlalchemy.exc import IntegrityError
 
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         monkeypatch.setattr(
-            training_submissions, "SUBMISSION_ATTACHMENT_DIR", str(tmp_path)
-        )
-        monkeypatch.setattr(
-            training_submissions, "detect_mime_type", lambda content: "application/pdf"
+            file_storage_service, "detect_mime_type", lambda content: "application/pdf"
         )
 
         async def _rejects_transaction(**kwargs):
@@ -789,7 +836,7 @@ class TestMultipartFailureHandling:
                 current_user=SimpleNamespace(id="user-1", organization_id="org-1"),
             )
 
-        assert os.listdir(os.path.join(str(tmp_path), "org-1")) == []
+        assert os.listdir(os.path.join(str(tmp_path), "org-1", "self-reports")) == []
 
     async def test_a_post_commit_failure_leaves_the_file_alone(
         self, monkeypatch, tmp_path
@@ -800,11 +847,9 @@ class TestMultipartFailureHandling:
         that point belongs to a submission — and possibly a training record —
         that durably references this path.
         """
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         monkeypatch.setattr(
-            training_submissions, "SUBMISSION_ATTACHMENT_DIR", str(tmp_path)
-        )
-        monkeypatch.setattr(
-            training_submissions, "detect_mime_type", lambda content: "application/pdf"
+            file_storage_service, "detect_mime_type", lambda content: "application/pdf"
         )
 
         async def _commits_then_trips(**kwargs):
@@ -834,7 +879,7 @@ class TestMultipartFailureHandling:
                 current_user=SimpleNamespace(id="user-1", organization_id="org-1"),
             )
 
-        assert os.listdir(os.path.join(str(tmp_path), "org-1"))
+        assert os.listdir(os.path.join(str(tmp_path), "org-1", "self-reports"))
 
     async def test_a_bad_payload_raises_the_frameworks_validation_error(
         self, monkeypatch, tmp_path
@@ -847,9 +892,7 @@ class TestMultipartFailureHandling:
         """
         from fastapi.exceptions import RequestValidationError
 
-        monkeypatch.setattr(
-            training_submissions, "SUBMISSION_ATTACHMENT_DIR", str(tmp_path)
-        )
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         payload = json.dumps(
             {
                 "course_name": "Pump Ops",

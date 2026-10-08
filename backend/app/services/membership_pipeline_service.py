@@ -53,11 +53,13 @@ from app.models.membership_pipeline import (
 )
 from app.models.user import Organization, Role, User, UserStatus, generate_uuid
 from app.schemas.membership_pipeline import resolve_conversion_outcome
+from app.services import file_storage_service as file_storage
 from app.services.email_policy import (
     EmailKind,
     department_required_kinds,
     recipients_for,
 )
+from app.services.file_storage_service import StorageArea
 from app.utils.membership import (
     ADMINISTRATIVE_RANK_MESSAGE,
     DEACTIVATED_EMAIL_MESSAGE,
@@ -72,30 +74,24 @@ from app.utils.prospect_fields import (
     REQUIRED_PROSPECT_FIELDS as _SHARED_REQUIRED_FIELDS,
 )
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
-from app.utils.upload_paths import resolve_in_org
+
+
+def prospect_document_path(file_path: Any, organization_id: Any) -> Optional[str]:
+    """Real path of a stored applicant document, confined to its organization.
+
+    Applicant files are stored by ``FileStorageService`` under the
+    organization's applicants area. Returns None for anything outside it (or
+    outside the legacy ``prospect-documents/<organization_id>/`` tree) —
+    including another organization's directory under the same root, which a
+    root-level check would accept. Every path this service writes, removes or
+    serves goes through here.
+    """
+    return file_storage.resolve(file_path, organization_id, StorageArea.APPLICANTS)
+
 
 # The tab on every email the pipeline sends an applicant. One constant so the
 # three senders cannot drift apart, and so the stage editor's preview
 # (AutomatedEmailConfig.tsx) has one wording to mirror.
-# Applicant documents are stored under ``<PROSPECT_DOCUMENT_DIR>/<org_id>/
-# <prospect_id>/`` (the uploads volume is mounted at /app/uploads). Every path
-# this service writes, removes or serves is confined to the owning
-# organization's subtree; see ``prospect_document_path``.
-PROSPECT_DOCUMENT_DIR = "/app/uploads/prospect-documents"
-
-
-def prospect_document_path(file_path: Any, organization_id: Any) -> Optional[str]:
-    """Real path of a stored applicant document, confined to its org's subtree.
-
-    Read at call time so a test can point PROSPECT_DOCUMENT_DIR at a
-    temporary directory. Returns None for anything outside
-    ``<PROSPECT_DOCUMENT_DIR>/<organization_id>/`` — including another
-    organization's directory under the same root, which a root-level check
-    would accept.
-    """
-    return resolve_in_org(file_path, PROSPECT_DOCUMENT_DIR, organization_id)
-
-
 _APPLICATION_UPDATE_CHIP = "Application update"
 
 

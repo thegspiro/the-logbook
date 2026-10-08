@@ -38,7 +38,7 @@ from app.services.email_theme import (
     facts,
     find_element_end,
 )
-from app.utils.email_attachments import confined_template_attachment_paths
+from app.utils.email_attachments import confined_template_attachments
 from app.utils.email_providers import (
     is_valid_cloudflare_account_id,
     resolve_smtp_settings,
@@ -50,6 +50,21 @@ from app.utils.org_timezone import ZONED_DATE_TIME_FORMAT, format_in_org_timezon
 # Header injection control characters that must never appear in
 # RFC 5322 unstructured fields (Subject, From display-name, etc.).
 _HEADER_INJECTION_RE = re.compile(r"[\r\n\x00]")
+
+
+# An attachment is a file path, or a (path, filename) pair when the name the
+# recipient should see differs from the name on disk — stored template
+# attachments live under UUID names.
+AttachmentSpec = Union[str, Tuple[str, str]]
+
+
+def _attachment_path_and_name(spec: AttachmentSpec) -> Tuple[str, str]:
+    if isinstance(spec, tuple):
+        path, name = spec
+    else:
+        path, name = spec, ""
+    resolved = os.path.realpath(path)
+    return resolved, name or os.path.basename(resolved)
 
 
 def _sanitize_header(value: str) -> str:
@@ -867,7 +882,7 @@ class EmailService:
     @classmethod
     def _build_cloudflare_attachments(
         cls,
-        attachment_paths: Optional[List[str]],
+        attachment_paths: Optional[Sequence[AttachmentSpec]],
         budget_bytes: Optional[int] = None,
     ) -> List[Dict[str, str]]:
         """Read attachment files into Cloudflare Email API attachment dicts.
@@ -885,8 +900,8 @@ class EmailService:
         )
         attachments: List[Dict[str, str]] = []
         used = 0
-        for filepath in attachment_paths or []:
-            resolved = os.path.realpath(filepath)
+        for spec in attachment_paths or []:
+            resolved, display_name = _attachment_path_and_name(spec)
             if not os.path.isfile(resolved):
                 logger.warning("Attachment not found, skipping")
                 continue
@@ -902,7 +917,7 @@ class EmailService:
             mime_type, _ = mimetypes.guess_type(resolved)
             attachments.append(
                 {
-                    "filename": _sanitize_header(os.path.basename(resolved)),
+                    "filename": _sanitize_header(display_name),
                     "type": mime_type or "application/octet-stream",
                     "content": content_b64,
                     "disposition": "attachment",
@@ -1323,7 +1338,7 @@ class EmailService:
         subject: str,
         html_body: str,
         text_body: Optional[str] = None,
-        attachment_paths: Optional[List[str]] = None,
+        attachment_paths: Optional[Sequence[AttachmentSpec]] = None,
         cc_emails: Optional[List[str]] = None,
         bcc_emails: Optional[List[str]] = None,
         db: Any = None,
@@ -1390,8 +1405,8 @@ class EmailService:
             # Pre-read attachment payloads once (avoids re-reading per recipient)
             attachment_parts: List[MIMEBase] = []
             attachment_bytes_used = 0
-            for filepath in attachment_paths or []:
-                resolved = os.path.realpath(filepath)
+            for spec in attachment_paths or []:
+                resolved, display_name = _attachment_path_and_name(spec)
                 if not os.path.isfile(resolved):
                     logger.warning("Attachment not found, skipping")
                     continue
@@ -1407,7 +1422,7 @@ class EmailService:
                     part = MIMEBase("application", "octet-stream")
                     part.set_payload(f.read())
                 encoders.encode_base64(part)
-                filename = _sanitize_header(os.path.basename(resolved))
+                filename = _sanitize_header(display_name)
                 part.add_header("Content-Disposition", "attachment", filename=filename)
                 attachment_parts.append(part)
 
@@ -1948,7 +1963,7 @@ class EmailService:
         login_url: str,
         db: Any = None,
         organization_id: Optional[str] = None,
-        attachment_paths: Optional[List[str]] = None,
+        attachment_paths: Optional[Sequence[AttachmentSpec]] = None,
     ) -> bool:
         """
         Send a welcome email to a newly created user.
@@ -1992,10 +2007,10 @@ class EmailService:
                     and loaded_template.allow_attachments
                     and loaded_template.attachments
                 ):
-                    stored_paths = confined_template_attachment_paths(
+                    stored = confined_template_attachments(
                         loaded_template.attachments, organization_id
                     )
-                    attachment_paths = (attachment_paths or []) + stored_paths
+                    attachment_paths = list(attachment_paths or []) + stored
             except Exception as e:
                 logger.warning(
                     "Failed to load welcome email template, using default: {}", e

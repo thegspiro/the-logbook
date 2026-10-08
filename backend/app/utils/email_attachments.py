@@ -1,34 +1,23 @@
-"""Where email-template attachments live, and the containment rule for them.
+"""Send-time helpers for email-template attachments.
 
-Attachments were originally written to the *relative* path
-``storage/email_attachments/<org_id>/``, which resolves to ``/app/storage`` in
-the container. No compose file mounts that directory, so in production the
-files lived in the container's writable layer: recreating the container lost
-every one of them, and the backup sidecar (which archives the uploads volume)
-never saw them. New uploads go to the uploads volume instead, and migration
-``relocate_email_attachments`` moves the existing files across.
+Attachments are stored by ``FileStorageService`` under the organization's
+email-attachments area. Two older locations are still read, each only inside
+the owning organization's subdirectory:
 
-The legacy root is still accepted on read. A file the migration could not move
-(an unwritable volume, say) keeps its old path and must stay sendable rather
-than silently dropping out of every welcome email.
+* ``/app/uploads/email-attachments/<org_id>/`` — 2026-10-08 until the
+  org-first layout;
+* ``storage/email_attachments/<org_id>/`` relative to the backend directory —
+  before that, off the uploads volume, so recreating the container lost the
+  files and backups never saw them. Migration ``2be075025403`` moved what
+  still existed; a file it could not move stays sendable from there rather
+  than silently dropping out of every welcome email.
 """
 
-import os
-from pathlib import Path
 from typing import Any, Optional
 
 from loguru import logger
 
-from app.utils.upload_paths import resolve_in_any_org_root
-
-EMAIL_ATTACHMENT_DIR = "/app/uploads/email-attachments"
-
-# The backend's own directory (``/app`` in the container). Legacy relative
-# paths were resolved against the process's working directory, which is this
-# directory in every deployment; anchoring on it explicitly keeps a resolver
-# run from another cwd (a script, a test) pointing at the same place.
-APP_ROOT = str(Path(__file__).resolve().parents[2])
-LEGACY_EMAIL_ATTACHMENT_DIR = os.path.join(APP_ROOT, "storage", "email_attachments")
+from app.services.file_storage_service import StorageArea, resolve
 
 
 def resolve_email_attachment_path(
@@ -36,32 +25,25 @@ def resolve_email_attachment_path(
 ) -> Optional[str]:
     """Real path of a stored attachment, confined to its organization.
 
-    Accepts the current root and the legacy one, each only within
-    ``<root>/<organization_id>/``. Returns None for anything else, so a
-    tampered ``storage_path`` can neither be attached to an outgoing email
-    nor unlinked.
+    Returns None for anything outside the organization's email-attachment
+    storage (current or legacy), so a tampered ``storage_path`` can neither be
+    attached to an outgoing email nor unlinked.
     """
-    if not isinstance(storage_path, str) or not storage_path:
-        return None
-    path = (
-        storage_path
-        if os.path.isabs(storage_path)
-        else os.path.join(APP_ROOT, storage_path)
-    )
-    return resolve_in_any_org_root(
-        path, (EMAIL_ATTACHMENT_DIR, LEGACY_EMAIL_ATTACHMENT_DIR), organization_id
-    )
+    return resolve(storage_path, organization_id, StorageArea.EMAIL_ATTACHMENTS)
 
 
-def confined_template_attachment_paths(
+def confined_template_attachments(
     attachments: Any, organization_id: Any
-) -> list[str]:
-    """Sendable paths for a template's attachment rows, out-of-org ones dropped.
+) -> list[tuple[str, str]]:
+    """``(path, filename)`` for each sendable attachment row; out-of-org rows
+    are dropped.
 
-    A dropped row is logged rather than raised: one bad row must not stop the
-    welcome email itself from going out.
+    *filename* is the name the uploader gave the file, so the recipient sees
+    ``Welcome Packet.pdf`` rather than the UUID it is stored under. A dropped
+    row is logged rather than raised: one bad row must not stop the welcome
+    email itself from going out.
     """
-    paths: list[str] = []
+    sendable: list[tuple[str, str]] = []
     for attachment in attachments or []:
         resolved = resolve_email_attachment_path(
             getattr(attachment, "storage_path", None), organization_id
@@ -73,5 +55,5 @@ def confined_template_attachment_paths(
                 getattr(attachment, "id", "?"),
             )
             continue
-        paths.append(resolved)
-    return paths
+        sendable.append((resolved, getattr(attachment, "filename", None) or ""))
+    return sendable

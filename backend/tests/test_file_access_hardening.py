@@ -17,10 +17,11 @@ Each section pins one boundary:
 import importlib.util
 import io
 import os
+from datetime import date, datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import HTTPException
@@ -31,13 +32,12 @@ from app.api.v1.endpoints import email_templates as email_templates_endpoint
 from app.api.v1.endpoints import equipment_check as equipment_check_endpoint
 from app.api.v1.endpoints import events as events_endpoint
 from app.api.v1.endpoints import membership_pipeline as pipeline_endpoint
-from app.api.v1.endpoints import training_enhancements, training_submissions
-from app.services import membership_pipeline_service
+from app.api.v1.endpoints import training_enhancements
+from app.services import file_storage_service, membership_pipeline_service
 from app.services.documents_service import DocumentsService
 from app.utils import email_attachments
 from app.utils.mime_validation import extension_matches_mime
 from app.utils.upload_paths import (
-    resolve_in_any_org_root,
     resolve_in_org,
     safe_download_filename,
 )
@@ -66,23 +66,40 @@ def _upload(content: bytes, filename: str, content_type: str) -> UploadFile:
     )
 
 
+def _result(value):
+    result = MagicMock()
+    result.scalar_one_or_none = MagicMock(return_value=value)
+    result.first = MagicMock(return_value=value)
+    result.scalars = MagicMock(
+        return_value=MagicMock(first=MagicMock(return_value=value))
+    )
+    return result
+
+
 def _db_returning(*values):
-    """A db whose successive execute() calls resolve to *values*."""
-    results = []
-    for value in values:
-        result = MagicMock()
-        result.scalar_one_or_none = MagicMock(return_value=value)
-        result.scalars = MagicMock(
-            return_value=MagicMock(first=MagicMock(return_value=value))
-        )
-        results.append(result)
+    """A db whose successive execute() calls resolve to *values*, then to
+    empty results (the organization and member lookups a download makes to
+    name its file find nothing, so defaults apply)."""
+    queue = [_result(value) for value in values]
+
+    async def _execute(*_args, **_kwargs):
+        return queue.pop(0) if queue else _result(None)
+
     db = MagicMock()
-    db.execute = AsyncMock(side_effect=results)
+    db.execute = AsyncMock(side_effect=_execute)
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
     db.delete = AsyncMock()
     db.add = MagicMock()
     return db
+
+
+@pytest.fixture
+def uploads(tmp_path, monkeypatch):
+    """Point FileStorageService at *tmp_path*; files live at
+    ``<tmp_path>/<org>/<area>/...``."""
+    monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
+    return tmp_path
 
 
 def _write(path: Path, data: bytes = b"x") -> Path:
@@ -128,12 +145,6 @@ class TestResolveInOrg:
     @pytest.mark.parametrize("bad", [None, "", 1, ["/tmp/x"], {"p": 1}])
     def test_a_non_string_path_is_refused_not_raised(self, tmp_path, bad):
         assert resolve_in_org(bad, str(tmp_path), ORG) is None
-
-    def test_any_of_several_roots(self, tmp_path):
-        own = _write(tmp_path / "second" / ORG / "a.pdf")
-        roots = (str(tmp_path / "first"), str(tmp_path / "second"))
-        assert resolve_in_any_org_root(str(own), roots, ORG) == os.path.realpath(own)
-        assert resolve_in_any_org_root(str(own), roots, OTHER_ORG) is None
 
 
 class TestSafeDownloadFilename:
@@ -194,7 +205,16 @@ class TestExtensionMatchesMime:
 
 
 def _event(**overrides):
-    base = dict(id=str(uuid4()), organization_id=ORG, is_draft=False, attachments=[])
+    base = dict(
+        id=str(uuid4()),
+        organization_id=ORG,
+        is_draft=False,
+        attachments=[],
+        title="Pump Ops Drill",
+        # 9:30 pm in New York (the default zone when no organization is
+        # found) — already the next day in UTC.
+        start_datetime=datetime(2026, 10, 9, 1, 30, tzinfo=timezone.utc),
+    )
     base.update(overrides)
     return SimpleNamespace(**base)
 
@@ -234,15 +254,12 @@ class TestEventAttachmentReads:
         )
         assert loaded is draft
 
-    async def test_a_stored_type_outside_the_allowlist_is_served_opaque(
-        self, tmp_path, monkeypatch
-    ):
+    async def test_a_stored_type_outside_the_allowlist_is_served_opaque(self, uploads):
         """The attachments column is writable through generic event updates,
         so a stored ``text/html`` must not become the response's type."""
-        monkeypatch.setattr(
-            "app.utils.event_attachments.ATTACHMENT_UPLOAD_DIR", str(tmp_path)
+        stored = _write(
+            uploads / ORG / "event-attachments" / "evt" / "a.pdf", PDF_BYTES
         )
-        stored = _write(tmp_path / ORG / "evt" / "a.pdf", PDF_BYTES)
         event = _event(
             attachments=[
                 {
@@ -258,37 +275,56 @@ class TestEventAttachmentReads:
         )
         assert isinstance(response, FileResponse)
         assert response.media_type == "application/octet-stream"
-        assert 'filename="agenda.pdf"' in response.headers["content-disposition"]
+        # Named from the event, dated in the department's timezone, the
+        # uploader's directory components gone.
+        assert (
+            'filename="2026-10-08_Pump-Ops-Drill_agenda.pdf"'
+            in response.headers["content-disposition"]
+        )
+
+    async def test_another_orgs_file_in_the_current_layout_is_refused(self, uploads):
+        """Every organization's attachments share one uploads root, so the
+        check must be per organization, not per root."""
+        theirs = _write(
+            uploads / OTHER_ORG / "event-attachments" / "evt" / "a.pdf", PDF_BYTES
+        )
+        event = _event(
+            attachments=[
+                {"id": "att-1", "file_name": "a.pdf", "file_path": str(theirs)}
+            ]
+        )
+        with pytest.raises(HTTPException) as refused:
+            await events_endpoint.download_event_attachment(
+                uuid4(), "att-1", _db_returning(event), _user("events.view")
+            )
+        assert refused.value.status_code == 403
 
 
 class TestEventAttachmentUpload:
-    async def _upload(self, tmp_path, monkeypatch, upload):
-        monkeypatch.setattr(events_endpoint, "ATTACHMENT_UPLOAD_DIR", str(tmp_path))
+    async def _upload(self, uploads, upload):
         event = _event()
         response = await events_endpoint.upload_event_attachment(
-            uuid4(), upload, None, _db_returning(event), _user("events.manage")
+            UUID(event.id), upload, None, _db_returning(event), _user("events.manage")
         )
         return event, response
 
-    async def test_the_detected_type_is_stored_not_the_claimed_one(
-        self, tmp_path, monkeypatch
-    ):
+    async def test_the_detected_type_is_stored_not_the_claimed_one(self, uploads):
         event, _ = await self._upload(
-            tmp_path,
-            monkeypatch,
-            _upload(PDF_BYTES, "agenda.pdf", "text/html"),
+            uploads, _upload(PDF_BYTES, "agenda.pdf", "text/html")
         )
-        assert event.attachments[0]["file_type"] == "application/pdf"
+        stored = event.attachments[0]
+        assert stored["file_type"] == "application/pdf"
+        assert Path(stored["file_path"]).parent == (
+            uploads / ORG / "event-attachments" / event.id
+        )
 
     async def test_an_extension_that_disagrees_with_the_content_is_refused(
-        self, tmp_path, monkeypatch
+        self, uploads
     ):
         with pytest.raises(HTTPException) as refused:
-            await self._upload(
-                tmp_path, monkeypatch, _upload(PDF_BYTES, "photo.png", "image/png")
-            )
+            await self._upload(uploads, _upload(PDF_BYTES, "photo.png", "image/png"))
         assert refused.value.status_code == 400
-        assert list(tmp_path.rglob("*.*")) == []
+        assert list(uploads.rglob("*.*")) == []
 
 
 # ---------------------------------------------------------------------------
@@ -345,16 +381,12 @@ class TestEquipmentCheckPhotos:
 
 class TestTrainingRecordDownload:
     @pytest.fixture
-    def roots(self, tmp_path, monkeypatch):
-        records = tmp_path / "training_attachments"
-        submissions = records / "self_reported_submissions"
-        monkeypatch.setattr(
-            training_enhancements, "TRAINING_ATTACHMENT_DIR", str(records)
+    def roots(self, uploads):
+        """The org's training-records and self-reports areas."""
+        return (
+            uploads / ORG / "training-records" / "rec-1",
+            uploads / ORG / "self-reports" / "sub-1",
         )
-        monkeypatch.setattr(
-            training_submissions, "SUBMISSION_ATTACHMENT_DIR", str(submissions)
-        )
-        return records, submissions
 
     async def _download(self, path):
         owner = _user()
@@ -362,6 +394,8 @@ class TestTrainingRecordDownload:
             id="rec-1",
             user_id=owner.id,
             organization_id=ORG,
+            completion_date=date(2026, 10, 8),
+            course_name="EMT Recertification",
             attachments=[
                 {"file_path": str(path), "file_name": "cert.pdf", "file_type": "x"}
             ],
@@ -370,24 +404,69 @@ class TestTrainingRecordDownload:
             "rec-1", 0, _db_returning(record), owner
         )
 
-    async def test_another_orgs_file_under_the_shared_root_is_refused(self, roots):
-        records, _ = roots
-        theirs = _write(records / OTHER_ORG / "cert.pdf")
+    @pytest.mark.parametrize(
+        "relative",
+        [
+            (OTHER_ORG, "training-records", "rec-1", "cert.pdf"),
+            (OTHER_ORG, "self-reports", "sub-1", "cert.pdf"),
+            ("training_attachments", OTHER_ORG, "cert.pdf"),
+        ],
+    )
+    async def test_another_orgs_file_under_the_shared_root_is_refused(
+        self, uploads, relative
+    ):
+        theirs = _write(uploads.joinpath(*relative))
         with pytest.raises(HTTPException) as refused:
             await self._download(theirs)
         assert refused.value.status_code == 404
 
     async def test_the_orgs_own_record_file_is_served(self, roots):
         records, _ = roots
-        own = _write(records / ORG / "cert.pdf")
+        own = _write(records / "cert.pdf")
         assert isinstance(await self._download(own), FileResponse)
+
+    async def test_the_download_is_named_for_the_member_and_course(self, roots):
+        """Owner decision: a downloaded certificate names its member, last
+        name first, so a Downloads folder sorts by member and date."""
+        records, _ = roots
+        own = _write(records / "cert.pdf")
+        owner = _user()
+        record = SimpleNamespace(
+            id="rec-1",
+            user_id=owner.id,
+            organization_id=ORG,
+            completion_date=date(2026, 10, 8),
+            course_name="EMT Recertification",
+            attachments=[{"file_path": str(own), "file_name": "IMG_2291.pdf"}],
+        )
+        member = SimpleNamespace(first_name="John", last_name="Smith")
+        response = await training_enhancements.download_record_attachment(
+            "rec-1", 0, _db_returning(record, member), owner
+        )
+        assert (
+            'filename="2026-10-08_Smith-John_EMT-Recertification.pdf"'
+            in response.headers["content-disposition"]
+        )
 
     async def test_an_approved_self_report_certificate_is_served(self, roots):
         """Approval copies the submission's attachment dicts onto the record,
-        so the record download must accept the org's submission subtree."""
+        so the record download must accept the org's self-reports area."""
         _, submissions = roots
-        approved = _write(submissions / ORG / "cert.pdf")
+        approved = _write(submissions / "cert.pdf")
         assert isinstance(await self._download(approved), FileResponse)
+
+    @pytest.mark.parametrize(
+        "relative",
+        [
+            ("training_attachments", ORG, "cert.pdf"),
+            ("training_attachments", "self_reported_submissions", ORG, "cert.pdf"),
+        ],
+    )
+    async def test_a_file_in_the_orgs_legacy_tree_is_served(self, uploads, relative):
+        """Files written before the org-first layout stay downloadable until
+        scripts/relocate_uploads.py has moved them."""
+        legacy = _write(uploads.joinpath(*relative))
+        assert isinstance(await self._download(legacy), FileResponse)
 
 
 # ---------------------------------------------------------------------------
@@ -396,11 +475,8 @@ class TestTrainingRecordDownload:
 
 
 class TestProspectDocuments:
-    async def test_download_refuses_another_orgs_file(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(
-            membership_pipeline_service, "PROSPECT_DOCUMENT_DIR", str(tmp_path)
-        )
-        theirs = _write(tmp_path / OTHER_ORG / "p" / "licence.jpg")
+    async def test_download_refuses_another_orgs_file(self, uploads, monkeypatch):
+        theirs = _write(uploads / OTHER_ORG / "applicants" / "p" / "licence.jpg")
         doc = SimpleNamespace(
             id=str(uuid4()), file_path=str(theirs), file_name="x", mime_type=None
         )
@@ -415,11 +491,8 @@ class TestProspectDocuments:
         assert refused.value.status_code == 403
 
     async def test_storing_a_path_in_another_orgs_subtree_is_refused(
-        self, tmp_path, monkeypatch
+        self, uploads, monkeypatch
     ):
-        monkeypatch.setattr(
-            membership_pipeline_service, "PROSPECT_DOCUMENT_DIR", str(tmp_path)
-        )
         svc = membership_pipeline_service.MembershipPipelineService(AsyncMock())
         monkeypatch.setattr(
             svc,
@@ -432,7 +505,9 @@ class TestProspectDocuments:
                 organization_id=ORG,
                 document_type="id",
                 file_name="licence.jpg",
-                file_path=str(tmp_path / OTHER_ORG / "p1" / "licence.jpg"),
+                file_path=str(
+                    uploads / OTHER_ORG / "applicants" / "p1" / "licence.jpg"
+                ),
             )
 
 
@@ -442,8 +517,7 @@ class TestProspectDocuments:
 
 
 class TestDocumentDeleteConfinement:
-    async def _delete(self, tmp_path, monkeypatch, stored):
-        monkeypatch.setattr(DocumentsService, "UPLOAD_DIR", str(tmp_path))
+    async def _delete(self, monkeypatch, stored):
         svc = DocumentsService(_db_returning())
         document = SimpleNamespace(file_path=str(stored))
         monkeypatch.setattr(svc, "get_document_by_id", AsyncMock(return_value=document))
@@ -452,16 +526,16 @@ class TestDocumentDeleteConfinement:
         )
         assert await svc.delete_document(uuid4(), ORG) is True
 
-    async def test_the_orgs_own_file_is_removed(self, tmp_path, monkeypatch):
-        own = _write(tmp_path / ORG / "a.pdf")
-        await self._delete(tmp_path, monkeypatch, own)
+    async def test_the_orgs_own_file_is_removed(self, uploads, monkeypatch):
+        own = _write(uploads / ORG / "documents" / "a.pdf")
+        await self._delete(monkeypatch, own)
         assert not own.exists()
 
     async def test_a_tampered_path_to_another_org_is_left_alone(
-        self, tmp_path, monkeypatch
+        self, uploads, monkeypatch
     ):
-        theirs = _write(tmp_path / OTHER_ORG / "a.pdf")
-        await self._delete(tmp_path, monkeypatch, theirs)
+        theirs = _write(uploads / OTHER_ORG / "documents" / "a.pdf")
+        await self._delete(monkeypatch, theirs)
         assert theirs.exists()
 
 
@@ -473,38 +547,46 @@ class TestDocumentDeleteConfinement:
 class TestEmailAttachments:
     @pytest.fixture
     def roots(self, tmp_path, monkeypatch):
-        new_root = tmp_path / "uploads" / "email-attachments"
-        legacy_root = tmp_path / "app" / "storage" / "email_attachments"
-        monkeypatch.setattr(email_attachments, "EMAIL_ATTACHMENT_DIR", str(new_root))
+        """``(uploads root, the off-volume legacy root)``."""
+        uploads = tmp_path / "uploads"
+        app_root = tmp_path / "app"
+        legacy_root = app_root / "storage" / "email_attachments"
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(uploads))
+        monkeypatch.setattr(file_storage_service, "APP_ROOT", str(app_root))
         monkeypatch.setattr(
-            email_attachments, "LEGACY_EMAIL_ATTACHMENT_DIR", str(legacy_root)
+            file_storage_service, "LEGACY_EMAIL_ATTACHMENT_DIR", str(legacy_root)
         )
-        monkeypatch.setattr(email_attachments, "APP_ROOT", str(tmp_path / "app"))
-        return new_root, legacy_root
+        return uploads, legacy_root
 
-    def test_paths_in_either_root_resolve_within_the_org(self, roots):
-        new_root, legacy_root = roots
-        current = _write(new_root / ORG / "a.pdf")
+    def test_paths_in_every_root_resolve_within_the_org(self, roots):
+        uploads, legacy_root = roots
+        current = _write(uploads / ORG / "email-attachments" / "tpl" / "a.pdf")
+        on_volume = _write(uploads / "email-attachments" / ORG / "v.pdf")
         legacy = _write(legacy_root / ORG / "b.pdf")
-        theirs = _write(new_root / OTHER_ORG / "c.pdf")
+        theirs = _write(uploads / OTHER_ORG / "email-attachments" / "tpl" / "c.pdf")
+        theirs_legacy = _write(uploads / "email-attachments" / OTHER_ORG / "d.pdf")
         rows = [
-            SimpleNamespace(id="1", storage_path=str(current)),
+            SimpleNamespace(id="1", filename="A.pdf", storage_path=str(current)),
+            SimpleNamespace(id="2", filename="V.pdf", storage_path=str(on_volume)),
             SimpleNamespace(
-                id="2",
+                id="3",
+                filename="B.pdf",
                 storage_path=os.path.join("storage", "email_attachments", ORG, "b.pdf"),
             ),
-            SimpleNamespace(id="3", storage_path=str(theirs)),
-            SimpleNamespace(id="4", storage_path="/etc/passwd"),
+            SimpleNamespace(id="4", filename="C.pdf", storage_path=str(theirs)),
+            SimpleNamespace(id="5", filename="D.pdf", storage_path=str(theirs_legacy)),
+            SimpleNamespace(id="6", filename="E.pdf", storage_path="/etc/passwd"),
         ]
-        assert email_attachments.confined_template_attachment_paths(rows, ORG) == [
-            os.path.realpath(current),
-            os.path.realpath(legacy),
+        assert email_attachments.confined_template_attachments(rows, ORG) == [
+            (os.path.realpath(current), "A.pdf"),
+            (os.path.realpath(on_volume), "V.pdf"),
+            (os.path.realpath(legacy), "B.pdf"),
         ]
 
     async def test_upload_lands_on_the_uploads_volume_with_the_detected_type(
         self, roots
     ):
-        new_root, _ = roots
+        uploads, _ = roots
         template = SimpleNamespace(allow_attachments=True)
         db = _db_returning(template)
         await email_templates_endpoint.upload_attachment(
@@ -516,11 +598,14 @@ class TestEmailAttachments:
         attachment = db.add.call_args.args[0]
         assert attachment.content_type == "application/pdf"
         assert attachment.filename == "Welcome Packet.pdf"
-        assert Path(attachment.storage_path).parent == new_root / ORG
+        assert Path(attachment.storage_path).parent == (
+            uploads / ORG / "email-attachments" / "tpl-1"
+        )
+        assert Path(attachment.storage_path).name != "Welcome Packet.pdf"
         assert Path(attachment.storage_path).read_bytes() == PDF_BYTES
 
     async def test_upload_refuses_an_extension_that_disagrees(self, roots):
-        new_root, _ = roots
+        uploads, _ = roots
         db = _db_returning(SimpleNamespace(allow_attachments=True))
         with pytest.raises(HTTPException) as refused:
             await email_templates_endpoint.upload_attachment(
@@ -530,11 +615,11 @@ class TestEmailAttachments:
                 _user("settings.manage"),
             )
         assert refused.value.status_code == 400
-        assert not new_root.exists()
+        assert not (uploads / ORG).exists()
 
     async def test_delete_never_unlinks_another_orgs_file(self, roots):
-        new_root, _ = roots
-        theirs = _write(new_root / OTHER_ORG / "a.pdf")
+        uploads, _ = roots
+        theirs = _write(uploads / OTHER_ORG / "email-attachments" / "tpl-1" / "a.pdf")
         attachment = SimpleNamespace(
             id="att-1", template_id="tpl-1", filename="a.pdf", storage_path=str(theirs)
         )

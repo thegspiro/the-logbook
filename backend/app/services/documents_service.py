@@ -35,6 +35,8 @@ from app.models.document import (
 )
 from app.models.facilities import FacilityDocument, FacilityPhoto
 from app.models.user import Organization, User
+from app.services import file_storage_service as file_storage
+from app.services.file_storage_service import StorageArea
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
@@ -44,7 +46,6 @@ from app.utils.org_timezone import (
     today_in,
 )
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
-from app.utils.upload_paths import resolve_in_org
 
 # Permissions that grant leadership-level access to all folders
 LEADERSHIP_PERMISSIONS = {"documents.manage", "members.manage", "*"}
@@ -201,8 +202,6 @@ async def reachable_folder_ids(
 
 class DocumentsService:
     """Service for document management used by the documents endpoint"""
-
-    UPLOAD_DIR = "/app/uploads/documents"
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -835,7 +834,9 @@ class DocumentsService:
         # rows are already gone. Only paths inside this organization's upload
         # subtree are ever unlinked (same boundary as the download, DOC-24).
         for file_path in file_paths:
-            confined = resolve_in_org(file_path, self.UPLOAD_DIR, organization_id)
+            confined = file_storage.resolve(
+                file_path, organization_id, StorageArea.DOCUMENTS
+            )
             if confined is None:
                 logger.warning(
                     "Not removing a backing file outside the organization's "
@@ -1280,7 +1281,9 @@ class DocumentsService:
         # not an error, and the DB row is already gone.
         # Only paths inside this organization's upload subtree are ever
         # unlinked (same boundary as the download, DOC-24).
-        confined = resolve_in_org(file_path, self.UPLOAD_DIR, organization_id)
+        confined = file_storage.resolve(
+            file_path, organization_id, StorageArea.DOCUMENTS
+        )
         if file_path and confined is None:
             logger.warning(
                 f"Not removing backing file for deleted document {document_id}: "

@@ -21,10 +21,19 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
-from app.api.v1.endpoints.events import ATTACHMENT_UPLOAD_DIR, download_event_attachment
+from app.api.v1.endpoints.events import download_event_attachment
+from app.services import file_storage_service
 from app.utils.event_attachments import (
     is_path_in_org,
     validate_attachments_for_org,
+)
+
+# The pre-org-first layout, ``event-attachments/<org>/<event>/``: still read
+# until scripts/relocate_uploads.py has moved every file, so it must stay
+# org-confined too. The current layout is covered in
+# test_file_access_hardening.py.
+ATTACHMENT_UPLOAD_DIR = os.path.join(
+    file_storage_service.UPLOADS_ROOT, "event-attachments"
 )
 
 VICTIM_ORG = str(uuid4())

@@ -329,6 +329,16 @@ def get_image_validator() -> ImageValidator:
     return _validator_instance
 
 
+def decode_logo_base64(base64_data: str) -> bytes:
+    """Raw bytes of a base64 logo (a ``data:`` URI prefix is allowed).
+
+    Raises ``ImageValidationError`` for input that is not valid base64. Used
+    to malware-scan the file exactly as it was uploaded, before validation
+    re-encodes it.
+    """
+    return get_image_validator()._decode_base64(base64_data)
+
+
 # Convenience function for FastAPI endpoints
 def validate_logo_image(base64_data: Optional[str]) -> Optional[str]:
     """

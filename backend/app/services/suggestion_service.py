@@ -69,11 +69,12 @@ from app.schemas.suggestion import (
     MAX_TITLE_LENGTH,
     SuggestionBoxWrite,
 )
+from app.services import file_storage_service as file_storage
+from app.services.file_storage_service import StorageArea
 from app.utils.image_processing import optimize_image
 from app.utils.mime_validation import detect_mime_type
 from app.utils.org_scoping import assert_all_in_org
 
-SUGGESTION_ATTACHMENT_DIR = "/app/uploads/suggestions"
 MAX_SCREENSHOTS = 5
 MAX_SCREENSHOT_BYTES = 10 * 1024 * 1024
 ALLOWED_SCREENSHOT_MIME = frozenset(
@@ -630,7 +631,10 @@ class SuggestionService:
         try:
             for index, content in enumerate(screenshots):
                 path = await self._write_screenshot(
-                    box.organization_id, content, stamp if is_anonymous else None
+                    box.organization_id,
+                    suggestion.id,
+                    content,
+                    stamp if is_anonymous else None,
                 )
                 written.append(path)
                 self.db.add(
@@ -654,23 +658,28 @@ class SuggestionService:
         return suggestion, key
 
     async def _write_screenshot(
-        self, organization_id: str, content: bytes, mtime: Optional[datetime]
+        self,
+        organization_id: str,
+        suggestion_id: str,
+        content: bytes,
+        mtime: Optional[datetime],
     ) -> str:
-        org_dir = os.path.join(SUGGESTION_ATTACHMENT_DIR, str(organization_id))
-        path = os.path.join(org_dir, f"{uuid.uuid4().hex}.webp")
+        directory = file_storage.area_directory(
+            organization_id, StorageArea.SUGGESTIONS, suggestion_id
+        )
 
-        def _write() -> None:
-            os.makedirs(org_dir, exist_ok=True)
-            with open(path, "wb") as handle:
-                handle.write(content)
+        def _write() -> str:
+            path = file_storage.write_atomically(
+                directory, f"{uuid.uuid4().hex}.webp", content
+            )
             if mtime is not None:
                 # The filesystem would otherwise keep the exact upload time the
                 # row itself declines to record.
                 seconds = mtime.timestamp()
                 os.utime(path, (seconds, seconds))
+            return path
 
-        await asyncio.to_thread(_write)
-        return path
+        return await asyncio.to_thread(_write)
 
     # ------------------------------------------------------------------
     # The submitter's side
@@ -1562,13 +1571,9 @@ class SuggestionService:
 
     @staticmethod
     def confined_path(attachment: SuggestionAttachment) -> Optional[str]:
-        real_path = os.path.realpath(attachment.file_path)
-        org_root = os.path.realpath(
-            os.path.join(SUGGESTION_ATTACHMENT_DIR, str(attachment.organization_id))
+        return file_storage.resolve(
+            attachment.file_path, attachment.organization_id, StorageArea.SUGGESTIONS
         )
-        if not real_path.startswith(org_root + os.sep):
-            return None
-        return real_path
 
     @staticmethod
     def _attachment_view(attachment: SuggestionAttachment) -> Dict[str, Any]:

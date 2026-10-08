@@ -784,13 +784,14 @@ A member can attach a certificate (PDF/JPG/PNG, 10 MB) to a self-reported
 training. Where the bytes end up, and when they are removed, is deliberate —
 and partly still open.
 
-**Where they live.** `/app/uploads/training_attachments/self_reported_submissions/<org_id>/`,
-under the _training-record_ attachment root on purpose. Approval copies the
-submission's attachment dicts onto the `TrainingRecord` verbatim, and the
-record download route confines paths to `TRAINING_ATTACHMENT_DIR`; a sibling
-directory would 404 every approved certificate from the member's own training
-history. `tests/test_training_submission_drafts_attachments.py` asserts the
-nesting.
+**Where they live.** `/app/uploads/<org_id>/self-reports/<submission_id>/`
+since 2026-10-08 (file-storage Phase 2; before that
+`training_attachments/self_reported_submissions/<org_id>/`, still read until
+`scripts/relocate_uploads.py` moves them). Approval copies the submission's
+attachment dicts onto the `TrainingRecord` verbatim, so the record download
+route accepts the self-reports area as well as its own; without that every
+approved certificate would 404 from the member's own training history.
+`tests/test_training_submission_drafts_attachments.py` asserts it.
 
 **When they are removed.** Deleting or withdrawing a submission unlinks its
 confined attachment paths along with the row. That is safe only because a
@@ -820,17 +821,17 @@ department-set period over an organization-removal sweep, and the only flow
 that deletes organizations today is the onboarding reset
 (`POST /onboarding/reset`), which runs before a department has members
 reporting training. A future organization-deletion flow must remove
-`self_reported_submissions/<org_id>/` itself — the retention task reads a
+`/app/uploads/<org_id>/` (and any not-yet-relocated legacy trees) itself — the retention task reads a
 `self_report_configs` row, which goes with the organization. A record whose certificate has been
 swept shows no attachment and says nothing about why — the audit trail is the
 only account of it.
 
 **What is still open:**
 
-| Item                                                      | Status                                   | Detail                                                                                                                                                                                                                                                                          |
-| --------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Malware scanning is opt-in, and covers this path only** | Resolved 2026-10-06 (opt-in) — see below | Uploads are validated by magic bytes and confined to a server-generated name, and with `CLAMAV_ENABLED=true` are also scanned by ClamAV before anything is written. Off by default, so a deployment that has not enabled it still serves officers whatever the member uploaded. |
-| **Voided records keep the file**                          | By design                                | `DELETE /training/records/{id}` marks a record `cancelled` rather than removing it, so the correction stays auditable — and the evidence behind the corrected entry stays with it.                                                                                              |
+| Item                             | Status                          | Detail                                                                                                                                                                                         |
+| -------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Malware scanning**             | Resolved 2026-10-08 — see below | Every upload path is scanned by ClamAV before anything is written, on by default. An operator can still set `CLAMAV_ENABLED=false`; administrators are then warned until it is turned back on. |
+| **Voided records keep the file** | By design                       | `DELETE /training/records/{id}` marks a record `cancelled` rather than removing it, so the correction stays auditable — and the evidence behind the corrected entry stays with it.             |
 
 **Malware scanning (resolved 2026-10-06, owner's choice: add ClamAV).** Both
 certificate upload routes stream the file to a ClamAV daemon
@@ -838,20 +839,24 @@ certificate upload routes stream the file to a ClamAV daemon
 magic-byte check and before the write. An infected file is refused
 (`LB-UPLD-004`), nothing is stored, and `upload_malware_detected` is audited
 with the signature name, type, size and SHA-256 — never the content or the
-member's file name. `CLAMAV_ENABLED` defaults to `false`, so an upgrade adds no
-container and changes nothing; the daemon is the `clamav` compose service under
-the `with-clamav` profile. Configuration: `CLAMAV_ENABLED`, `CLAMAV_HOST`,
+member's file name. **Since 2026-10-08 (file-storage Phase 2) scanning is on by
+default and covers every upload path** — documents, every attachment type,
+applicant files, email-template attachments, suggestion screenshots, member
+photos, logos, storefront and equipment-check photos, and every CSV import —
+through `app/services/upload_scanning.py`; `tests/test_upload_scan_sweep.py`
+fails on a new upload endpoint that does not reach it. The daemon is the
+`clamav` service every compose file now starts. Setting `CLAMAV_ENABLED=false`
+accepts files unscanned behind a startup/preflight warning and a standing
+administrator notice (`GET /system-notices`). Configuration: `CLAMAV_ENABLED`, `CLAMAV_HOST`,
 `CLAMAV_PORT`, `CLAMAV_TIMEOUT_SECONDS`
 ([wiki](../wiki/Configuration-Security.md#malware-scanning-of-uploads)).
 
 What remains for the owner:
 
-| Item                                                   | Status                       | Detail                                                                                                                                                                                                                                                                                                                                                                                                                |
-| ------------------------------------------------------ | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Scanner outage fails closed**                        | Inferred — owner may reverse | With scanning enabled, an unreachable clamd, a timeout, or any reply other than `OK`/`FOUND` refuses the upload with a retryable `503` (`LB-UPLD-005`). Inferred from the CAPTCHA precedent (an outage must not be a bypass), not stated by the owner. Reversing it is a one-line change in `_reject_if_malicious` in `training_submissions.py`.                                                                      |
-| **Other upload paths are not scanned**                 | Open (scope)                 | Each writes files through its own code; there is no shared helper to hook. Candidates: `documents.py` `POST /documents/upload` (also the source of facility photos/documents, which reference `document:<id>`), `training_enhancements.py` record attachments, `events.py` event attachments, `membership_pipeline.py` prospect documents, and `email_templates.py` template attachments.                             |
-| **Files stored before scanning was enabled**           | Open                         | Not rescanned. Enabling scanning covers new uploads only.                                                                                                                                                                                                                                                                                                                                                             |
-| **Re-encoded images are out of scope by construction** | By design                    | Member photos, storefront product images and equipment-check photos are decoded and re-encoded to WebP and stored in the database, and suggestion-box screenshots are re-encoded to WebP before they are written to disk — none is served as the uploaded bytes; logos are validated base64. CSV imports (training, inventory, events) are parsed in memory and not stored. They are not on the candidate list above. |
+| Item                                         | Status                      | Detail                                                                                                                                                                                                                                                                                                                |
+| -------------------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Scanner outage fails closed**              | Owner's decision 2026-10-08 | With scanning enabled, an unreachable clamd, a timeout, or any reply other than `OK`/`FOUND` refuses the upload with a retryable `503` (`LB-UPLD-005`) — on every upload path. The owner confirmed it for the on-by-default rollout: a host that upgrades without a running scanner refuses uploads until it has one. |
+| **Files stored before scanning was enabled** | Open                        | Not rescanned. Scanning covers new uploads only; files already on disk (and logos, photos and images already in the database) were never scanned.                                                                                                                                                                     |
 
 ## Scheduling Module
 

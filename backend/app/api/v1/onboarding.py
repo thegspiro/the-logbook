@@ -55,13 +55,13 @@ from app.services.onboarding import (
     ONBOARDING_ACCEPTED_MODULE_IDS,
     OnboardingService,
 )
+from app.services.upload_scanning import scan_and_validate_logo
 from app.utils.email_providers import (
     MICROSOFT_AUTH_METHODS,
     invalid_for_enabled,
     missing_for_enabled,
     required_field_message,
 )
-from app.utils.image_validator import validate_logo_image
 from app.utils.onboarding_security import find_system_owner
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
@@ -1383,7 +1383,8 @@ async def create_organization(
             # Additional info
             county=org_data.county,
             founded_year=org_data.founded_year,
-            logo=validate_logo_image(org_data.logo),
+            # Before an account exists, so no user is recorded with a detection.
+            logo=await scan_and_validate_logo(db, org_data.logo, user=None),
             settings_dict=_membership_id_settings(org_data),
         )
 
@@ -1780,7 +1781,7 @@ async def save_department_info(
         )
 
     # Validate and sanitize logo before storing
-    validated_logo = validate_logo_image(data.logo)
+    validated_logo = await scan_and_validate_logo(db, data.logo, user=None)
 
     # Update session data with department info
     session.data = session.data or {}
@@ -2268,7 +2269,8 @@ async def save_session_organization(
             # Additional info
             county=data.county,
             founded_year=data.founded_year,
-            logo=validate_logo_image(data.logo),  # Validate and sanitize logo
+            # Scanned, validated and re-encoded.
+            logo=await scan_and_validate_logo(db, data.logo, user=None),
             settings_dict=_membership_id_settings(data),
         )
 

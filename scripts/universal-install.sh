@@ -13,12 +13,18 @@
 # Or with options (each also needs --public-url, or LOGBOOK_PUBLIC_URL set):
 #   ./scripts/universal-install.sh --public-url https://logbook.example.org
 #                                                       # Address used in emailed links
-#   ./scripts/universal-install.sh --profile minimal    # Low memory (1GB RAM)
+#   ./scripts/universal-install.sh --profile minimal    # Low memory (3GB RAM; see below)
 #   ./scripts/universal-install.sh --profile standard   # Default (4GB RAM)
 #   ./scripts/universal-install.sh --profile full       # All features (8GB+ RAM)
 #   ./scripts/universal-install.sh --arm                # Force ARM configuration
 #   ./scripts/universal-install.sh --no-docker          # Skip Docker installation
 #   ./scripts/universal-install.sh --help               # Show help
+#
+# Every profile runs ClamAV, which scans each uploaded file before it is
+# stored and needs roughly 1.5-3 GB of RAM on its own. On a smaller host it is
+# killed for memory and uploads are refused until memory is added or an
+# administrator sets CLAMAV_ENABLED=false (files are then accepted UNSCANNED,
+# behind a standing warning).
 # ============================================
 
 set -e
@@ -247,6 +253,17 @@ detect_memory() {
     TOTAL_MEM_GB=$((TOTAL_MEM_KB / 1024 / 1024))
 
     log_info "Total memory: ${TOTAL_MEM_GB}GB"
+
+    # ClamAV is required on every profile (every upload is scanned before it
+    # is stored) and holds its signature database in memory.
+    if [[ $TOTAL_MEM_GB -lt 3 ]]; then
+        log_warning "This host has ${TOTAL_MEM_GB}GB of RAM. The malware scanner (ClamAV),"
+        log_warning "which every installation runs, needs roughly 1.5-3GB on its own."
+        log_warning "If it is killed for memory, file uploads are refused until memory"
+        log_warning "is added. Setting CLAMAV_ENABLED=false in .env accepts files"
+        log_warning "WITHOUT a malware scan, and administrators are warned until it is"
+        log_warning "turned back on. Adding memory is the safe fix."
+    fi
 
     # Auto-select profile based on memory if not explicitly set
     if [[ "$PROFILE" == "auto" ]]; then
@@ -802,7 +819,7 @@ USAGE:
 
 OPTIONS:
     --profile <name>    Resource profile: minimal, standard (default), full, auto
-                        - minimal: 1-2GB RAM (Raspberry Pi, small VPS)
+                        - minimal: 3GB RAM (Raspberry Pi, small VPS)
                         - standard: 4GB RAM (typical deployment)
                         - full: 8GB+ RAM (all features including search)
                         - auto: Auto-detect based on available memory

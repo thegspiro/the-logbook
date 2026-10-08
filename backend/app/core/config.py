@@ -352,13 +352,13 @@ class Settings(BaseSettings):
     # this are treated as bot traffic. Ignored by Turnstile and hCaptcha.
     CAPTCHA_MIN_SCORE: float = 0.5
 
-    # Malware scanning of uploaded files via a ClamAV daemon (clamd INSTREAM).
-    # Off by default so an upgrade needs no new container and changes nothing.
-    # Once enabled it FAILS CLOSED, like CAPTCHA: if clamd cannot be reached or
-    # does not answer in time the upload is refused, because accepting
-    # unscanned files during an outage is the state an attacker wants. Today
-    # it covers self-reported training certificates only.
-    CLAMAV_ENABLED: bool = False
+    # Malware scanning of every uploaded file via a ClamAV daemon (clamd
+    # INSTREAM). On by default — every compose file runs the `clamav` service —
+    # and it FAILS CLOSED, like CAPTCHA: if clamd cannot be reached or does not
+    # answer in time the upload is refused, because accepting unscanned files
+    # during an outage is the state an attacker wants. Setting it false accepts
+    # files unscanned; startup, preflight and the admin screens then warn.
+    CLAMAV_ENABLED: bool = True
     CLAMAV_HOST: str = "clamav"
     CLAMAV_PORT: int = 3310
     # Wall-clock budget for connect + stream + verdict, not a per-read timeout,
@@ -583,6 +583,19 @@ class Settings(BaseSettings):
                 "outgoing email will not open for a member reading away from "
                 "the station. Set FRONTEND_URL to the site's public address "
                 "if members reach it from outside."
+            )
+
+        # Non-blocking and in every environment, by the owner's decision: an
+        # operator may turn scanning off (a host too small for clamd), but it
+        # must never be a quiet state. The same notice is shown to
+        # administrators in the app (GET /system/notices).
+        if not self.CLAMAV_ENABLED:
+            warnings.append(
+                "WARNING: CLAMAV_ENABLED is false, so uploaded files — "
+                "documents, certificates, applicant files, attachments, images "
+                "and imports — are accepted WITHOUT a malware scan. Set "
+                "CLAMAV_ENABLED=true and run the clamav service as soon as the "
+                "host allows."
             )
 
         # --- Additional production/staging checks ---

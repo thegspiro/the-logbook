@@ -56,15 +56,26 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
     Apparatus folder like facility files, replacing the free-text URL.
 13. **Finance receipt upload is part of Phase 3**, filed in the Finance
     folder under finance rights.
+14. **Phase 2 is its own pull request**, opened after Phase 1 merged.
+15. **No scanner, no upload.** With scanning on, an unreachable scanner
+    refuses uploads (retryable 503) rather than storing them unscanned —
+    including on an install that upgrades without a running ClamAV.
+16. **Existing files move by an operator-run command**, not inside a database
+    migration: dry run first, checksum-verified copies, a manifest, rollback
+    until finalized.
+17. **Downloaded files name their member** where they belong to one
+    (`2026-10-08_Smith-John_EMT-Recert.pdf`).
+18. **Small hosts run ClamAV too.** Every profile requires it; an operator who
+    cannot spare the memory turns it off afterwards, behind the warning.
 
 ## Phases
 
-| Phase | Scope                                                                                                                                           | Status      |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| 1     | Close the access leaks                                                                                                                          | this change |
-| 2     | One storage service: org-first layout, descriptive names, size caps and malware scan everywhere (on by default)                                 | planned     |
-| 3     | A folder per module with module-specific rights; narrow `documents.view`; admin-only see-all; apparatus files and finance receipts as documents | planned     |
-| 4     | Encryption at rest, with the onboarding key-custody confirmation                                                                                | planned     |
+| Phase | Scope                                                                                                                                           | Status       |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| 1     | Close the access leaks                                                                                                                          | done (#3009) |
+| 2     | One storage service: org-first layout, descriptive names, size caps and malware scan everywhere (on by default)                                 | this change  |
+| 3     | A folder per module with module-specific rights; narrow `documents.view`; admin-only see-all; apparatus files and finance receipts as documents | planned      |
+| 4     | Encryption at rest, with the onboarding key-custody confirmation                                                                                | planned      |
 
 ### Phase 1 — what changed
 
@@ -85,14 +96,45 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
 `app/utils/upload_paths.py` holds the shared org-containment check. Phase 2
 folds it into the storage service.
 
+### Phase 2 — what changed
+
+- **`app/services/file_storage_service.py`** is the one write path for files
+  on disk: bounded read, magic-byte detection, the upload path's allowlist,
+  extension/content agreement, malware scan, then a write-and-rename into
+  `/app/uploads/<org_id>/<area>/<record_id>/<uuid><ext>` (directories `0750`,
+  files `0640`). `resolve()` confines every read and delete to the owning
+  organization's area, in the new layout or the area's legacy one.
+- **Every upload is scanned** (`app/services/upload_scanning.py`): the disk
+  paths through the service, and member photos, logos, storefront and
+  equipment-check photos, suggestion screenshots and all six CSV imports
+  directly. `tests/test_upload_scan_sweep.py` fails on a new upload endpoint
+  that does not reach a scan.
+- **ClamAV is required.** Every compose file starts it
+  (`clamav/clamav-debian`, multi-arch, `StreamMaxLength` raised to 60M) and
+  `CLAMAV_ENABLED` defaults to true. Turning it off warns in the startup log,
+  in preflight and as a red notice for every administrator
+  (`GET /system-notices`, `SystemNoticesBanner`).
+- **Descriptive download names** (`app/utils/download_names.py`) for
+  documents, event attachments, training-record and self-reported
+  certificates, applicant files and suggestion screenshots; emailed template
+  attachments keep their uploaded name.
+- **`scripts/relocate_uploads.py`** moves existing files
+  (`app/services/upload_relocation.py`).
+
+Found and fixed while there: a training-history CSV that was not UTF-8 was
+reported as "exceeds the 10MB limit" (an `except ValueError` caught the
+`UnicodeDecodeError` subclass before its own handler).
+
+Still not done, by design or for later phases: files stored before scanning
+was on are not rescanned; `UPLOADS_ROOT` is the fixed `/app/uploads` mount and
+the unread `UPLOAD_DIR` setting stays unread (`docs/KNOWN_LIMITATIONS.md`,
+CI3-33-4).
+
 ### Found in passing, not in this change
 
 - `GET /events?include_drafts=true` returns draft events to any member. The
   flag is honoured without a permission check. Belongs with the events
   module, not file storage.
-- Email attachments reach recipients named by their stored UUID
-  (`email_service` sends `basename(storage_path)`), not the uploaded name.
-  Phase 2 (descriptive names).
 - Apparatus photo and document records hold a client-supplied URL rather than
   an upload; finance receipts are URL fields with no upload at all. Phase 3.
 

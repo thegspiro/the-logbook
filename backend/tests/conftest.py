@@ -5,7 +5,10 @@ This module provides pytest fixtures and configuration for all tests.
 It sets up test database, async sessions, and common test data.
 """
 
+import atexit
 import os
+import shutil
+import tempfile
 import uuid
 from collections.abc import AsyncGenerator
 
@@ -34,6 +37,11 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-" + "x" * 48)
 # exporting DB_NAME; only the implicit .env value is overridden.
 os.environ.setdefault("DB_NAME", "intranet_test")
 
+# Malware scanning defaults on, and no clamd runs beside the suite: left on,
+# every upload test would be refused with a 503. Tests that exercise scanning
+# turn it on themselves and replace the scanner with a stub.
+os.environ.setdefault("CLAMAV_ENABLED", "false")
+
 # Eagerly register EVERY model and resolve all mappers at import time, before any
 # test module is collected. String-based relationships (e.g.
 # Organization.relationship("PublicPortalConfig")) can only resolve once every
@@ -45,10 +53,20 @@ os.environ.setdefault("DB_NAME", "intranet_test")
 # test collection order.
 import app.models  # noqa: E402,F401
 from app.core.database import database_manager
+from app.services import file_storage_service as _file_storage_service
 from tests.patch_leak_guard import find_leaks
 from tests.patch_leak_guard import install as _install_patch_leak_guard
 
 configure_mappers()
+
+# Point FileStorageService at a scratch directory for the whole run, at import
+# time rather than in a fixture: test modules build expected paths from
+# UPLOADS_ROOT when they are collected, before any fixture runs. Without this
+# an upload test writes to the real ``/app/uploads`` — inside the backend
+# container, the department's own uploads volume. A test that needs its own
+# location still monkeypatches ``UPLOADS_ROOT``.
+_file_storage_service.UPLOADS_ROOT = tempfile.mkdtemp(prefix="logbook-test-uploads-")
+atexit.register(shutil.rmtree, _file_storage_service.UPLOADS_ROOT, True)
 
 
 def _ensure_test_database() -> None:

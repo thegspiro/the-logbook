@@ -78,6 +78,9 @@ from app.services.suggestion_service import (
     submitter_notice,
     watcher_notice,
 )
+from app.services.upload_scanning import reject_if_malicious
+from app.utils import download_names
+from app.utils.org_timezone import resolve_scheduling_timezone
 from app.utils.upload_limits import read_upload_limited
 
 router = APIRouter()
@@ -85,7 +88,7 @@ router = APIRouter()
 _NOT_FOUND = "Submission not found"
 
 
-async def _read_screenshots(files: List[UploadFile]) -> List[bytes]:
+async def _read_screenshots(files: List[UploadFile], db: AsyncSession) -> List[bytes]:
     if len(files) > MAX_SCREENSHOTS:
         raise HTTPException(
             status_code=400,
@@ -103,6 +106,16 @@ async def _read_screenshots(files: List[UploadFile]) -> List[bytes]:
             )
         if not raw:
             continue
+        # Scanned as uploaded, before re-encoding. No user is recorded with a
+        # detection: the box may be anonymous, and an audit row naming the
+        # member would undo that.
+        await reject_if_malicious(
+            db,
+            raw,
+            upload_kind="suggestion_screenshot",
+            detected_mime=None,
+            user=None,
+        )
         try:
             processed.append(await asyncio.to_thread(process_screenshot, raw))
         except RuntimeError:
@@ -120,15 +133,27 @@ async def _read_screenshots(files: List[UploadFile]) -> List[bytes]:
     return processed
 
 
-async def _serve_attachment(suggestion: Suggestion, attachment_id: str) -> FileResponse:
+async def _serve_attachment(
+    db: AsyncSession, suggestion: Suggestion, attachment_id: str
+) -> FileResponse:
     attachment = SuggestionService.find_attachment(suggestion, attachment_id)
     if attachment is None:
         raise HTTPException(status_code=404, detail="Attachment not found")
     real_path = SuggestionService.confined_path(attachment)
     if not real_path or not await asyncio.to_thread(os.path.isfile, real_path):
         raise HTTPException(status_code=404, detail="Attachment file not found")
+    # Day precision only: an anonymous submission's timestamp is already
+    # rounded to the day, and the name must not be more exact than the row.
+    tz = await resolve_scheduling_timezone(db, suggestion.organization_id)
+    filename = download_names.descriptive_filename(
+        download_names.local_day(suggestion.created_at, tz),
+        suggestion.title,
+        f"Screenshot-{(attachment.position or 0) + 1}",
+        extension=download_names.stored_extension(real_path),
+        fallback="screenshot",
+    )
     return FileResponse(
-        real_path, media_type=attachment.content_type, filename=attachment.file_name
+        real_path, media_type=attachment.content_type, filename=filename
     )
 
 
@@ -171,7 +196,7 @@ async def submit_suggestion(
         await service.get_open_box(current_user.organization_id, box_id),
         "Suggestion box",
     )
-    processed = await _read_screenshots(screenshots)
+    processed = await _read_screenshots(screenshots, db)
     async with handle_service_errors("Failed to submit"):
         suggestion, key = await service.submit(
             box=box,
@@ -288,7 +313,7 @@ async def download_my_attachment(
         ),
         _NOT_FOUND,
     )
-    return await _serve_attachment(suggestion, attachment_id)
+    return await _serve_attachment(db, suggestion, attachment_id)
 
 
 # ---------------------------------------------------------------------------
@@ -343,7 +368,7 @@ async def download_attachment_by_key(
     current_user: User = Depends(get_current_user),
 ):
     suggestion = await _by_key(SuggestionService(db), current_user, data.key)
-    return await _serve_attachment(suggestion, attachment_id)
+    return await _serve_attachment(db, suggestion, attachment_id)
 
 
 async def _notify_reviewers_of_reply(
@@ -620,7 +645,7 @@ async def download_attachment_for_review(
     current_user: User = Depends(get_current_user),
 ):
     suggestion = await _for_review(SuggestionService(db), current_user, suggestion_id)
-    return await _serve_attachment(suggestion, attachment_id)
+    return await _serve_attachment(db, suggestion, attachment_id)
 
 
 # ---------------------------------------------------------------------------
