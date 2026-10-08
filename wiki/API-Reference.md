@@ -1166,6 +1166,56 @@ their current phase, these endpoints return HTTP **409**:
 
 Pass `override=true` to proceed anyway.
 
+## Attendance Requests ("I was there") _(2026-09-30)_
+
+A member with no check-in asks to be marked present at an event that is over,
+and the event's organizer, its alternate or an `events.manage` holder decides.
+All five routes require authentication only; who may review is checked per
+event in the handler, because an organizer need not hold `events.manage`. See
+[Module-Events](Module-Events#attendance-requests-i-was-there-2026-09-30).
+
+```
+POST   /api/v1/events/{event_id}/attendance-petitions                         # Ask (201)
+GET    /api/v1/events/{event_id}/attendance-petitions/mine                    # The caller's request and whether they may ask
+GET    /api/v1/events/{event_id}/attendance-petitions                         # Every request, pending first (reviewers)
+POST   /api/v1/events/{event_id}/attendance-petitions/{petition_id}/approve   # Record the confirmed times (reviewers)
+POST   /api/v1/events/{event_id}/attendance-petitions/{petition_id}/reject    # Decline with a reason (reviewers)
+```
+
+| Route         | Body                                                                                                                                        |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST` (ask)  | `reason` (1–1000 chars, required); `requested_check_in_at`, `requested_check_out_at` (optional, not in the future, departure after arrival) |
+| `.../approve` | `check_in_at`, `check_out_at` (both required, check-out after check-in and not in the future); `review_note` (optional, ≤1000)              |
+| `.../reject`  | `review_note` (1–1000 chars, required — it is the only thing the member is told)                                                            |
+
+`GET .../mine` returns `{ "petition": <request or null>, "can_request": bool,
+"unavailable_reason": <sentence or null> }`. The screen offers **I was there**
+exactly when `can_request` is true, so the rules below live only on the server:
+
+- the event is not a draft and not cancelled;
+- its check-in window has closed — while self check-in still works the answer
+  is "Check in instead";
+- it ended (`actual_end_time`, else `end_datetime`) no more than **30 days** ago;
+- the caller is not already present (`checked_in`, or an officer's
+  `override_check_in_at`);
+- the caller has not asked before — one request per member per event, enforced
+  by a unique index, so a declined request is final.
+
+Approval writes the same RSVP override **Edit Times** writes
+(`override_check_in_at`, `override_check_out_at`, `override_duration_minutes`)
+and sets `checked_in`; finalize credits it. It is therefore refused while
+attendance is finalized; declining is not. Nobody decides their own request.
+
+| Status | When                                                                                                      |
+| ------ | --------------------------------------------------------------------------------------------------------- |
+| `400`  | Not eligible (the sentence says why), invalid times, or the request is already decided                    |
+| `403`  | The caller is not the organizer, alternate or an `events.manage` holder, or is deciding their own request |
+| `404`  | Event or request not in the caller's organization, or the event is a draft                                |
+| `409`  | Approve while attendance is finalized — reopen attendance first                                           |
+
+Responses carry member names and free-text reasons, so the frontend never
+caches them (`/attendance-petitions` in `UNCACHEABLE_SUBSTRINGS`).
+
 ## Guest Check-In — Non-Member Attendance _(2026-08-09)_
 
 Unauthenticated endpoints reached by scanning the **guest** QR code on a room
