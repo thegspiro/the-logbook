@@ -46,21 +46,21 @@ The integrations page shows:
 
 ### Currently Available
 
-| Category           | Integration        | Description                                                               |
-| ------------------ | ------------------ | ------------------------------------------------------------------------- |
-| **Calendar**       | Google Calendar    | Two-way event sync                                                        |
-| **Calendar**       | Microsoft Outlook  | Calendar and contact sync                                                 |
-| **Calendar**       | iCalendar (ICS)    | Advertises the per-member shift feed; no configuration screen of its own  |
-| **Messaging**      | Slack              | Event alerts, training reminders, custom channels                         |
-| **Messaging**      | Discord            | Webhook notifications, event reminders                                    |
-| **Messaging**      | Microsoft Teams    | Adaptive Cards, channel notifications                                     |
-| **CRM**            | Salesforce         | Contact sync, donor management, bidirectional                             |
-| **Documents**      | Documenso          | Send documents for e-signature (open-source DocuSign alternative)         |
-| **Scheduling**     | Cal.com            | Self-scheduling links and booking sync (open-source Calendly alternative) |
-| **Payments**       | PayPal             | Match incoming store payments to department store orders automatically    |
-| **Data**           | Generic Webhooks   | HMAC-signed event notifications to any URL                                |
-| **Safety**         | NWS Weather Alerts | Tornado, flood, fire weather alerts (free)                                |
-| **Access Control** | NFC ID Cards       | Issue member ID cards with an NFC tag and check members in by tapping one |
+| Category           | Integration        | Description                                                                  |
+| ------------------ | ------------------ | ---------------------------------------------------------------------------- |
+| **Calendar**       | Google Calendar    | Two-way event sync                                                           |
+| **Calendar**       | Microsoft Outlook  | Calendar and contact sync                                                    |
+| **Calendar**       | iCalendar (ICS)    | Advertises the per-member shift feed; no configuration screen of its own     |
+| **Messaging**      | Slack              | Event alerts, training reminders, custom channels                            |
+| **Messaging**      | Discord            | Webhook notifications, event reminders                                       |
+| **Messaging**      | Microsoft Teams    | Adaptive Cards, channel notifications                                        |
+| **CRM**            | Salesforce         | Contact sync, donor management, bidirectional                                |
+| **Documents**      | Documenso          | Send documents for e-signature (open-source DocuSign alternative)            |
+| **Scheduling**     | Cal.com            | Self-scheduling links and booking sync (open-source Calendly alternative)    |
+| **Payments**       | PayPal             | Match incoming store payments to department store orders automatically       |
+| **Data**           | Generic Webhooks   | Signed messages to any URL — only a test message is sent today               |
+| **Safety**         | NWS Weather Alerts | Checks your zone code against the weather service — alerts are not shown yet |
+| **Access Control** | NFC ID Cards       | Issue member ID cards with an NFC tag and check members in by tapping one    |
 
 ### Coming Soon
 
@@ -481,7 +481,7 @@ Each member opens **Subscribe to my shifts** at the top of
 
 ## Weather Alerts
 
-The **NWS Weather Alerts** integration pulls tornado, flood, and fire weather warnings from NOAA — free, no API key required.
+The **NWS Weather Alerts** integration connects to the National Weather Service (part of NOAA, the US weather agency). It is free and needs no account or key.
 
 ### Configuration
 
@@ -491,9 +491,19 @@ The **NWS Weather Alerts** integration pulls tornado, flood, and fire weather wa
 
 ### How It Works
 
-- System checks the NOAA API hourly for active alerts in your zone
-- Active alerts display on the department dashboard
-- Alert types: Tornado Warning, Flood Warning, Fire Weather Watch, etc.
+> **Only the connection test works today.** When you connect this integration
+> and select **Test**, The Logbook asks the National Weather Service for your
+> zone's current alerts and tells you whether the zone code is valid and how
+> many alerts are active — for example, "Zone VAZ053 is valid. 2 active
+> alert(s)."
+>
+> Nothing happens after that. The Logbook does not check for alerts on a
+> schedule, and alerts do not appear on the dashboard or anywhere else in the
+> app. Do not rely on this integration to warn your members about severe
+> weather; keep using your current alerting.
+
+The alerts it can read are the ones the National Weather Service publishes for
+your zone, such as Tornado Warning, Flood Warning and Fire Weather Watch.
 
 > **Hint:** Find your NWS Zone ID at [weather.gov/pdd/gis](https://www.weather.gov/pdd/gis) — search by county or zone.
 
@@ -558,29 +568,77 @@ Send event notifications to any external system via HTTP POST:
 | **Webhook URL** | Your endpoint that receives POST requests                     |
 | **Secret**      | Optional HMAC signing secret for `X-Webhook-Signature` header |
 
-### Payload Format
+> **Only the test message is sent today.** Selecting **Test** sends one
+> `test.ping` message to your URL, so you can confirm your system receives it.
+> The Logbook does not yet send a webhook when anything happens in the app — a
+> new member, a completed training, a shift change or anything else. There are
+> no events to subscribe to. The format below is what the test message uses,
+> and is the format real events are expected to use once they are added.
+
+### What your system receives
+
+The Logbook sends an HTTP `POST` with a JSON body and these headers:
+
+| Header                | Value                                                          |
+| --------------------- | -------------------------------------------------------------- |
+| `Content-Type`        | `application/json`                                             |
+| `X-Webhook-Event`     | The event name — `test.ping` for the test message              |
+| `User-Agent`          | `TheLogbook-Webhook/1.0`                                       |
+| `X-Webhook-Signature` | Only when you entered a **Secret** — see _Checking it is real_ |
+
+The body of the test message:
 
 ```json
 {
-  "event": "member_created",
-  "timestamp": "2026-06-27T14:30:00Z",
+  "event_type": "test.ping",
+  "timestamp": 1782570600,
   "data": {
-    "member_id": "...",
-    "name": "John Smith",
-    "email": "john@example.com"
+    "message": "The Logbook webhook test"
   }
 }
 ```
 
-### Security
+`timestamp` is the time it was sent, as a whole number of seconds since
+1 January 1970 (UTC) — a "Unix timestamp", not a written-out date.
 
-- Requests include an `X-Webhook-Signature` header (HMAC-SHA256 of the payload body)
-- Your endpoint should validate the signature before processing
-- Failed deliveries are retried with exponential backoff
+### Checking it is real
 
-### Available Events
+If you entered a **Secret**, every message carries a signature:
 
-Events you can subscribe to include: member created/updated, training completed, event scheduled, shift changed, inventory assigned, and more.
+```
+X-Webhook-Signature: sha256=3f0a…c9
+```
+
+The part after `sha256=` is an HMAC-SHA256 of the **exact bytes** of the body,
+written as lowercase hexadecimal, using your secret as the key. To check it,
+compute the same value over the raw body you received — before parsing or
+reformatting the JSON, which changes the bytes — and compare the two. For
+example, in Python:
+
+```python
+import hashlib, hmac
+
+def is_genuine(raw_body: bytes, header: str, secret: str) -> bool:
+    expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+    received = header.removeprefix("sha256=")
+    return hmac.compare_digest(expected, received)
+```
+
+Without a secret, messages are sent unsigned and your system has no way to tell
+a message from The Logbook apart from one sent by someone else.
+
+### When delivery fails
+
+- **Your system must answer with a 2xx status** (such as 200 or 204). Anything
+  else counts as a failure.
+- **The Logbook tries three times in all**, waiting 1 second and then 2 seconds
+  between tries. After the third failure it gives up; the message is not
+  queued or sent later.
+- **The URL must start with `https://` and be reachable over the public
+  internet.** An address on a private network, such as
+  `https://192.168.1.20/hook` or `https://localhost/hook`, is refused when you
+  save it. It is checked again each time a message is sent, and a message to an
+  address that fails the check is not sent at all.
 
 ---
 
@@ -995,26 +1053,26 @@ Pictured under [iCalendar (ICS) Feed](#icalendar-ics-feed) above.
 
 The next week, Steve checks the integrations dashboard:
 
-| Integration     | Status          | Last Sync        | Notes                           |
-| --------------- | --------------- | ---------------- | ------------------------------- |
-| Slack           | Green (healthy) | 2 hours ago      | 14 notifications sent this week |
-| Google Calendar | Green (healthy) | 30 min ago       | 8 events synced                 |
-| iCalendar (ICS) | Green (healthy) | N/A (pull-based) | 12 subscribers                  |
+| Integration     | Status  | Last Sync        | Notes                           |
+| --------------- | ------- | ---------------- | ------------------------------- |
+| Slack           | Healthy | 2 hours ago      | 14 notifications sent this week |
+| Google Calendar | Healthy | 30 min ago       | 8 events synced                 |
+| iCalendar (ICS) | —       | N/A (pull-based) | 12 subscribers                  |
 
-**Edge case encountered:** On Wednesday, Slack returns a 429 (rate limit) error during a bulk event creation. The Logbook retries with exponential backoff and succeeds on the second attempt. Steve sees a brief yellow warning that auto-resolves.
+**Edge case encountered:** On Wednesday, while Steve creates a batch of events, Slack refuses one of the notifications because too many arrived at once. The Logbook does **not** try that message again — that one notification never reaches the channel. The Slack integration now reads **Recent failure**, and its history shows "The platform did not accept the message." The next notification goes through and the status returns to **Healthy**. If three in a row fail, it reads **Failing**. If an important announcement was the one that failed, post it in Slack by hand.
 
 **Edge case:** A member reports their shift calendar shows UTC times instead of Eastern. Steve checks and the ICS feed correctly includes timezone metadata — the member's calendar app was set to UTC. Fixed on the member's device, not in The Logbook.
 
 ### Edge Cases
 
-| Scenario                                            | Behavior                                                                                                                               |
-| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Slack webhook URL becomes invalid (channel deleted) | Integration shows red status; error: "channel_not_found". Reconnect with new URL.                                                      |
-| Google OAuth token expires                          | Auto-refreshed transparently. If refresh fails, integration shows yellow with "Re-authenticate" button.                                |
-| ICS feed subscriber exceeds rate limit              | Feed returns 429; subscriber's calendar app retries automatically.                                                                     |
-| Two integrations send the same event notification   | Each integration sends independently — member may see duplicate notifications in Slack and email. Configure triggers to avoid overlap. |
-| Webhook secret not configured                       | Notifications still send but without HMAC signature — receiving system cannot verify authenticity.                                     |
-| Integration configured but module disabled          | Events from disabled modules don't trigger notifications (e.g., inventory disabled → no equipment alerts).                             |
+| Scenario                                            | Behavior                                                                                                                                                                                                                                                  |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Slack webhook URL becomes invalid (channel deleted) | Each notification fails. The status reads **Recent failure**, then **Failing** after three in a row; the history shows "The platform did not accept the message." (Slack's own error text is not kept). Create a new webhook in Slack and update the URL. |
+| Google OAuth token expires                          | Refreshed automatically. If the refresh fails, the run is recorded as a failure on the integration's page. Disconnect Google Calendar and connect it again to sign in afresh.                                                                             |
+| ICS feed subscriber exceeds rate limit              | Feed returns 429; subscriber's calendar app retries automatically.                                                                                                                                                                                        |
+| Two integrations send the same event notification   | Each integration sends independently — member may see duplicate notifications in Slack and email. Configure triggers to avoid overlap.                                                                                                                    |
+| Generic webhook secret not configured               | The test message is sent without a signature, so the receiving system cannot tell it really came from The Logbook. (Generic webhooks send only the test message today.)                                                                                   |
+| Integration configured but module disabled          | Events from disabled modules don't trigger notifications (e.g., inventory disabled → no equipment alerts).                                                                                                                                                |
 
 ---
 

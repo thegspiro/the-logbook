@@ -255,16 +255,17 @@ Module availability is controlled per organization at runtime via the organizati
 
 ## Edge Cases
 
-| Scenario                                      | Behavior                                                                                            |
-| --------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Record linked to both user_id and prospect_id | Rejected with a 422 on create — a record names exactly one member or one prospect                   |
-| Record linked to neither                      | Rejected with a 422 on create; rows created before 2026-10-05 may still carry neither               |
-| `frequency_months = NULL`                     | One-time screening that does not recur and has no automatic expiration                              |
-| Grace period after expiration                 | Member remains compliant during grace period; becomes non-compliant only after grace period expires |
-| Expiring query with days=0 or >365            | Clamped to valid range (1-365)                                                                      |
-| Requirement deactivated                       | Existing records preserved; requirement excluded from future compliance calculations                |
-| Screening waived                              | Status set to `WAIVED`; excluded from compliance calculations                                       |
-| Provider name not provided                    | Optional field; no provider info displayed in compliance dashboard                                  |
+| Scenario                                                | Behavior                                                                                               |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Record linked to both user_id and prospect_id           | Rejected with a 422 on create — a record names exactly one member or one prospect                      |
+| Record linked to neither                                | Rejected with a 422 on create; rows created before 2026-10-05 may still carry neither                  |
+| `frequency_months = NULL`                               | One-time screening that does not recur and has no automatic expiration                                 |
+| Grace period after expiration                           | Member remains compliant during grace period; becomes non-compliant only after grace period expires    |
+| Expiring query with days=0 or >365                      | Rejected with a 422 — `days` must be between 1 and 365 (default 30); it is not clamped                 |
+| Member, prospect or requirement from another department | Rejected with a 400 on create: "Invalid member", "Invalid prospect" or "Invalid screening requirement" |
+| Requirement deactivated                                 | Existing records preserved; requirement excluded from future compliance calculations                   |
+| Screening waived                                        | Status set to `WAIVED`; excluded from compliance calculations                                          |
+| Provider name not provided                              | Optional field; no provider info displayed in compliance dashboard                                     |
 
 ---
 
@@ -280,5 +281,5 @@ Module availability is controlled per organization at runtime via the organizati
 ---
 
 **Document Version**: 1.0
-**Last Updated**: 2026-03-14
+**Last Updated**: 2026-10-08
 **Maintainer**: Development Team
