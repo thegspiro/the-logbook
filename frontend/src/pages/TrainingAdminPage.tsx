@@ -564,7 +564,7 @@ export const TrainingAdminPage: React.FC = () => {
               role="menu"
               aria-label="More training admin sections"
               onKeyDown={handleMoreMenuKeyDown}
-              className="border-theme-surface-border bg-theme-surface absolute right-0 z-20 mt-2 w-64 rounded-lg border p-1 shadow-lg"
+              className="popover-panel absolute right-0 z-20 mt-2 w-64 p-1"
             >
               {overflowPages.map((page) => {
                 const Icon = page.icon;
