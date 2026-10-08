@@ -2865,18 +2865,28 @@ async def reset_onboarding(
         # Commit all deletions
         await db.commit()
 
-        # Log successful completion of reset
-        await log_audit_event(
-            db=db,
-            event_type="onboarding.reset_completed",
-            event_category="onboarding",
-            severity="warning",
-            ip_address=client_ip,
-            event_data={
-                "action": "full_reset",
-                "message": "Onboarding reset completed - all data cleared successfully",
-            },
-        )
+        # The deletions above are already committed and irreversible. A
+        # failure to log their completion must not fall into the except
+        # block below: that would both report this request as a 500 and
+        # write a "reset_failed - nothing was deleted" audit entry (via
+        # _audit_reset_durably) that is false — everything WAS deleted.
+        # Log-and-continue instead; the response below is accurate either way.
+        try:
+            await log_audit_event(
+                db=db,
+                event_type="onboarding.reset_completed",
+                event_category="onboarding",
+                severity="warning",
+                ip_address=client_ip,
+                event_data={
+                    "action": "full_reset",
+                    "message": "Onboarding reset completed - all data cleared successfully",
+                },
+            )
+        except Exception as log_error:
+            logger.error(
+                f"Onboarding reset succeeded but completion audit log failed: {log_error}"
+            )
 
         # The caller's auth cookies name a user this reset just deleted. Left
         # in place they make every later request fail authentication, and

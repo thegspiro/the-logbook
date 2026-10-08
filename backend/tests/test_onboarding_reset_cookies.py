@@ -133,3 +133,41 @@ async def test_a_failed_reset_is_recorded_durably_too():
     events = [call.args[0] for call in audit.await_args_list]
     assert events == ["onboarding.reset_initiated", "onboarding.reset_failed"]
     db.rollback.assert_awaited()
+
+
+# ONB4-30-2: the deletes are already committed before "reset_completed" is
+# logged. A failure logging that fact must not be reported back as a failed
+# reset, and must not write a "reset_failed - nothing was deleted" entry --
+# the deletes already happened, so that message would be false.
+
+
+async def test_completion_log_failure_does_not_report_a_false_reset_failed():
+    db = _db()
+    durable_audit = AsyncMock()
+
+    async def _log_side_effect(db=None, event_type=None, **kwargs):
+        if event_type == "onboarding.reset_completed":
+            raise RuntimeError("audit log transient failure")
+        return None
+
+    with patch.object(
+        onboarding_ep.OnboardingService,
+        "get_onboarding_status",
+        new=AsyncMock(return_value=SimpleNamespace(is_completed=False)),
+    ), patch.object(onboarding_ep, "validate_session", new=AsyncMock()), patch.object(
+        onboarding_ep, "_require_owner_authority", new=AsyncMock()
+    ), patch(
+        "app.core.audit.log_audit_event", new=AsyncMock(side_effect=_log_side_effect)
+    ), patch.object(
+        onboarding_ep, "_audit_reset_durably", new=durable_audit
+    ):
+        response = await onboarding_ep.reset_onboarding(
+            request=MagicMock(), db=db, current_user=None
+        )
+
+    # The deletes committed; a failure logging that fact is not a failed reset.
+    assert response.status_code == 200
+    db.commit.assert_awaited()
+    db.rollback.assert_not_awaited()
+    events = [call.args[0] for call in durable_audit.await_args_list]
+    assert "onboarding.reset_failed" not in events

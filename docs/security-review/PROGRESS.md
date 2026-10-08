@@ -16,32 +16,60 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#2994](https://github.com/thegspiro/the-logbook/pull/2994)**: branch
-`claude/security-review-reports-analytics`, Feature 29 (Reports &
-analytics), pass 8 (confirmed via `list_pull_requests`, state=open, that no
-`claude/security-review-*` PR existed before starting — PR #2990, Feature
-28, Security/audit & IP, had already merged with nothing started since).
-Real delta since the last pass (`RPT5-29-reports-analytics.md`'s "Pass 7",
-PR #2897, `6c422896`, 2026-10-04) is zero — the one intervening commit
-touching this feature's ten files is a shallow-clone history-boundary
-artifact with no real diff, the same shape prior passes documented
-(`f8fdd1a`, `0430faa0`, …). A full fresh read (not a diff review, since
-there was no real diff) of all five endpoint files and five services found
-**1 real fix**: `_generate_pipeline_overview` (the "Pipeline Overview"
-report) never excluded the caller's own prospective-membership record, the
-one lister in this org that didn't — every other list/aggregate route in
-`membership_pipeline.py` and `labels.py`'s prospect-label routes already
-apply `get_hidden_prospect_ids` for exactly this reason. Fixed by threading
-`hidden_prospect_ids` through `ReportsService.generate_report` into
-`_generate_pipeline_overview` only; 4 new guard tests. All other prior-pass
-findings (`RPT2-29-2`, `LBL-29-2`/`4`, `RPT-5c`/`6`/`7`, `DASH-2`,
-`RPT5-29-1`/`5`) re-verified unchanged, none re-litigated. Route surface
-re-enumerated: 30 routes, all correctly gated (unchanged count). Completion
-gate green (flake8/black/isort clean against CI's pinned versions;
-migrations — 543 revisions, single head; full backend unit suite 13446
-passed, 1 skipped, 0 failed; frontend typecheck/lint clean). See the Log
-entry below and `docs/security-review/RPT6-29-reports-analytics.md` for
-detail.
+**PR [#2996](https://github.com/thegspiro/the-logbook/pull/2996)**: branch
+`claude/security-review-onboarding`, Feature 30 (Onboarding), pass 6
+(confirmed via `list_pull_requests`/`gh api`, state=open, that no
+`claude/security-review-*` PR existed before starting — PR #2994, Feature
+29, Reports & analytics, had already merged with nothing started since).
+**1 real finding, HIGH, fixed:** `OnboardingService.create_organization`'s
+single-org guard was an unlocked read-then-write — the same bug class
+ONB3-30-3 already fixed one call below, in `create_system_owner`. Two
+concurrent, pre-authentication callers to `POST /organization`/`POST
+/session/organization` both read "no organization exists" and both created
+one (reproduced against a real database, 8/8 → 2/2 successes before the
+fix); worse than a wasted row, since `create_system_owner`'s own "first
+active org by `created_at`" lookup means an attacker whose organization wins
+the race can have the real operator's own System Owner submission land on
+the attacker's organization instead of the one they described. Fixed with
+the same remediation as ONB3-30-3 (lock the `onboarding_status` singleton
+row, make the existence check itself a locking read); verified 8/8 → exactly
+1 success after the fix; guard test added
+(`tests/test_onboarding_organization_race.py`). Also re-verified: the ONB-8
+audit-durability residual every prior pass (2–5) left open is now closed on
+`main`, independently of this pass. Every other prior-pass finding (ONB-7,
+ONB2-30-8, ONB-30-3, duplicate-role-id 500, the cosmetic `/organization`
+except-Exception gap) re-verified unchanged. Completion gate green
+(flake8/black/isort clean; migrations — 543 revisions, single head; full
+backend suite 17,384 passed, 21 skipped, 0 failed; frontend typecheck/lint
+clean). See the Log entry below and
+`docs/security-review/ONB4-30-onboarding.md` for detail.
+
+**Addendum (same PR, folded in rather than opening a competing one):** a
+second session's Step 0 check also found no open `claude/security-review-*`
+PR at essentially the same moment and independently reviewed this same
+feature, landing a second, non-overlapping finding — **ONB4-30-2 (LOW,
+fixed):** the ONB-8 audit-durability fix itself had one narrow gap — a
+failure logging `reset_completed` (after `/reset`'s deletes already commit)
+fell into the generic failure branch and could write a **false**
+`reset_failed`/"nothing was deleted" entry for a reset that had, in fact,
+fully succeeded. Fixed with a scoped log-and-continue `try`/`except`; guard
+test added (`test_onboarding_reset_cookies.py::
+test_completion_log_failure_does_not_report_a_false_reset_failed`), verified
+to fail pre-fix and pass restored. Per this rotation's own "one PR at a
+time" rule, this is folded into PR #2996 and `ONB4-30-onboarding.md` as an
+addendum rather than opened as a second, competing PR. See the Log entry
+below for detail.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 8, PR #2994, merged, nothing further to record), preserved for history</summary>
+
+**None.** PR #2994 (Feature 29, Reports & analytics, pass 8) merged clean
+(confirmed via `list_commits` showing merge commit `b40475bd` on `main`). 0
+fixes needed beyond this row's own description above; the Log entry below
+already records it in full, so there is nothing further to record here.
+Rotation row 29 → ✅.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 28, Security/audit & IP, pass 6, PR #2990, merged, nothing further to record), preserved for history</summary>
@@ -18365,7 +18393,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
@@ -18377,6 +18405,131 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-08 — Feature 30 (Onboarding, pass 6) — 1 HIGH fix (unlocked single-org race), 0 new findings otherwise
+
+Confirmed via `list_pull_requests` (state=open) that no `claude/security-review-*`
+PR existed before starting: PR #2994 (Feature 29, Reports & analytics, pass 8)
+had already merged with nothing started since. Rotation row 30 was the first
+`⬜`.
+
+Read all three prior findings files (`ONB-30-onboarding.md`,
+`ONB2-30-onboarding.md`, `ONB3-30-onboarding.md`, covering passes 1–5) and
+`KNOWN_LIMITATIONS.md`'s onboarding rows before any code. Diff since pass 5's
+merge (`82f06f4c`, PR #2898) was small and scoped to this feature's own files
+(`onboarding.py` +62/-22, a docstring fix in `services/onboarding.py`) plus
+unrelated Authentik-SSO frontend work that happened to touch `LoginPage.tsx`
+(a call site of this feature's `/status` route). All 24 routes
+re-enumerated directly from source; every file not touched by the diff
+confirmed byte-identical to pass 5's reviewed version.
+
+**One real finding, HIGH, fixed:** `create_organization`'s single-org guard
+(`services/onboarding.py`) was an unlocked read-then-write — the identical bug
+class ONB3-30-3 found and fixed one call below in `create_system_owner`
+(pass 4), and the shape ONBOARD-7 fixed for `onboarding_status` itself
+(CLAUDE.md pitfall #27). Two concurrent, pre-authentication callers to
+`POST /organization`/`POST /session/organization` both read "no organization
+exists" and both created one — reproduced against a real database, 8/8 runs,
+2/2 successes before the fix. Worse than a wasted row: `create_system_owner`'s
+own org lookup is "first active org by `created_at`," so an attacker whose
+organization sorts first can have the real operator's own, correctly-filled
+System Owner submission land on the attacker's organization instead of the
+one the operator just described. Fixed with the same remediation as
+ONB3-30-3: lock the `onboarding_status` singleton row before the existence
+check, and make the existence check itself a locking read (REPEATABLE READ
+otherwise answers a losing caller's plain SELECT from its own stale
+snapshot). Verified 8/8 → exactly 1 success after the fix. Guard test added:
+`tests/test_onboarding_organization_race.py`, mirroring
+`test_onboarding_owner_race.py`'s two-connection pattern plus source-level
+lock assertions; verified to fail with the fix reverted and pass restored.
+
+**Independently landed and re-verified fixed, not by this pass:** the ONB-8
+audit-durability residual every prior pass (2–5) left open — `reset_initiated`
+sharing a transaction with `/reset`'s deletes — is now closed on `main`
+(`_audit_reset_durably`, a separate, independently-committed session that
+runs and commits before any delete, with the reset itself refused if that
+durable write fails). No KNOWN_LIMITATIONS.md row tracked this residual
+separately, so there was nothing to update there.
+
+**Every other prior-pass finding re-verified unchanged:** ONB-7 (role editor
+accepts client-controlled permissions/priority/system-flag on new roles,
+OPEN, product decision), ONB2-30-8 (sliding 30-minute session TTL with no
+absolute cap, OPEN, policy decision), ONB-30-3 (self-hosted SMTP test has no
+SSRF/private-network protection, OPEN, policy decision — blocking private IPs
+would break the legitimate on-premises-relay deployment this app's audience
+uses), the duplicate-`role.id`-causes-500 gap, and the cosmetic
+`POST /organization` missing-`except Exception` gap. One documentation-only
+correction: pass 5's route table mislabeled `POST /organization`'s auth
+dependency as "none" — the code has required `validate_session` since at
+least pass 2; no behavior change, noted in `ONB4-30-onboarding.md`.
+
+Completion gate: `flake8`/`black`/`isort` clean on all changed files;
+`validate_migrations.py --strict` clean (543 revisions, single head);
+`pytest -k "onboard or org_template or template_service"` 262 passed
+(up from 255); the new race test's 3 cases verified to fail pre-fix and pass
+post-fix; full backend suite (`pytest tests/`) 17,384 passed, 21 skipped
+(all pre-existing environment-only skips), 0 failures; `npm run typecheck`
+0 errors; `npm run lint` 0 errors, 0 warnings.
+
+Findings file: `docs/security-review/ONB4-30-onboarding.md`. Rotation row 30
+→ ✅ (pending PR merge). Next: Feature 31 (Scheduled tasks).
+
+### 2026-10-08 — Feature 30 (Onboarding, pass 6) addendum — a second session's independent review, folded into the same PR, 1 LOW fix
+
+A second session's own Step 0 check (`search_pull_requests`,
+`is:open head:claude/security-review-`) also found no open
+`claude/security-review-*` PR, at essentially the same moment as the
+session that logged the entry directly above — a genuine race, not a stale
+read on either side (both sessions' local `git branch -r` / search results
+predate either push). Rather than open a second, competing PR for the same
+rotation slot (which the rotation's own "one PR at a time" rule exists to
+prevent), this session's work is folded into PR #2996 and
+`ONB4-30-onboarding.md` as an addendum, once the race was discovered at
+push time (`git push` rejected, non-fast-forward, revealing the other
+session's already-pushed branch).
+
+This session's own review independently covered the same ground (all 24
+routes, every prior-pass finding) and reached the same conclusions on
+everything already documented above, with one addition neither this file's
+own prior passes nor the other session's fresh full read of `onboarding.py`
+caught: **ONB4-30-2 (LOW, fixed).** The ONB-8 audit-durability fix (already
+on `main` before either session started, confirmed independently by both)
+left one narrow gap of its own — `/reset`'s `reset_completed` log write
+(after the deletes already commit, so they are irreversible) had no
+`try`/`except` of its own. A failure logging just that one event would fall
+into the route's generic failure branch, which rolls back a
+no-longer-rollback-able transaction, writes a **false**
+`onboarding.reset_failed`/"nothing was deleted" entry via the very helper
+the audit-durability fix just added, and returns a 500 for a destructive
+action that had, in fact, already fully succeeded. Fixed by wrapping only
+that one log call in a scoped log-and-continue `try`/`except`, so a
+completion-log failure can never produce a false failure record or an
+inaccurate 500 for an action that already succeeded. Guard test added
+(`tests/test_onboarding_reset_cookies.py::
+test_completion_log_failure_does_not_report_a_false_reset_failed`),
+verified to fail against the pre-fix code (`git stash`) and pass restored;
+the pre-existing `test_a_failed_reset_is_recorded_durably_too` (a genuine
+delete failure, which must still reach `reset_failed`) continues to pass
+unchanged. Also corrected in this same commit: `docs/app-review/onboarding.md`
+was stale (it still described the ONB-8 audit-durability residual as open
+after the code had already fixed it; `docs/module-audit/onboarding.md` had
+already been corrected).
+
+Completion gate, re-run on the combined branch (both sessions' fixes
+together): `python3.13 -m flake8`/`black --check`/`isort --check-only`
+clean over `app/ tests/ alembic/` (7.3.0/26.5.1/9.0.1, CI's exact pins);
+`validate_migrations.py --strict` passed (543 revisions, single head
+`7db20aa49329`); `pytest tests/ -q -k "onboard or org_template or
+template_service"` 263 passed, 1 skipped (`pywebpush`, env-only);
+`pytest tests/test_onboarding_organization_race.py
+tests/test_onboarding_reset_cookies.py -v` 9 passed; frontend `npm run
+typecheck` 0 errors, `npm run lint` 0 errors/0 warnings. No
+`KNOWN_LIMITATIONS.md` change needed — the one new finding was fixed, not
+flagged.
+
+Findings file: `docs/security-review/ONB4-30-onboarding.md`'s **ONB4-30-2**
+addendum section. Rotation row 30 stays ✅ (unchanged by this addendum).
+Next: Feature 31 (Scheduled tasks) — unchanged.
 
 ### 2026-10-08 — Feature 29 (Reports & analytics, pass 8) — 1 real finding fixed (pipeline_overview self-exposure), 0 new findings otherwise
 
