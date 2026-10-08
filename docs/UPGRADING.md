@@ -442,6 +442,23 @@ Phase 1 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).
 The migration's downgrade moves relocated email attachments back to the old,
 unpersisted path.
 
+### A locked fiscal year's budget amounts are frozen (2026-10-08)
+
+`PUT /finance/budgets/{id}` that **changes** `amountBudgeted` on a line in a
+**locked** fiscal year is now refused with 400 "This fiscal year is locked.
+Budget amounts can no longer be changed or amended." It used to succeed, though
+the training guide already called a locked year read-only. Notes, station and
+owner still save, as does a request that sends the unchanged amount. An
+integration that adjusts locked-year amounts through the API will start getting
+the 400.
+
+The same upgrade adds **budget amendments** — logged increases to a line, with
+who approved them and when (Finance › Budgets › a line › **Add amendment**).
+Migration `ca564ba5a9ad` creates the `budget_amendments` table on an
+installation that has a `budgets` table; one that does not yet gets it from
+`create_all` with the rest of the finance tables. Existing lines are untouched
+and report their current amount as their original until amended.
+
 ### The QuickBooks export is a journal-entry import, and needs accounts first (2026-10-08)
 
 `POST /finance/export/transactions` now produces a file QuickBooks Online's

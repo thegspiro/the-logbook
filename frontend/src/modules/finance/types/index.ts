@@ -251,9 +251,46 @@ export interface Budget {
   effectiveOwnerPositionName?: string | null;
   /** True when the owner comes from the category rather than the line. */
   ownerInherited?: boolean;
+  /**
+   * `amountBudgeted` less the line's amendments — what the line started at.
+   * Derived by the backend, never stored; `amountBudgeted` is the current budget.
+   */
+  originalAmount?: MonetaryAmount;
+  /** The sum of the line's amendments. */
+  amendmentsTotal?: MonetaryAmount;
+  amendmentCount?: number;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Extra money leadership approved for a budget line — an audit record. */
+export interface BudgetAmendment {
+  id: string;
+  organizationId: string;
+  budgetId: string;
+  amount: MonetaryAmount;
+  reason: string;
+  approvedBy: string;
+  /** The approval date, a calendar date ("YYYY-MM-DD"). */
+  approvedOn: string;
+  createdBy?: string | null;
+  enteredByName?: string | null;
+  createdAt: string;
+}
+
+/** `POST /finance/budgets/:id/amendments`. Every field is required. */
+export interface BudgetAmendmentCreatePayload {
+  amount: MonetaryAmount;
+  reason: string;
+  approvedBy: string;
+  approvedOn: string;
+}
+
+/** The new amendment and the line as it now stands. */
+export interface BudgetAmendmentCreated {
+  amendment: BudgetAmendment;
+  budget: Budget;
 }
 
 /** `PUT /finance/budget-categories/:id`. Omitted leaves a field alone; `null` clears it. */

@@ -6,7 +6,7 @@ purchase requests, expense reports, check requests, dues,
 approval chains, and export operations.
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
@@ -223,9 +223,64 @@ class BudgetResponse(UTCResponseBase):
     effective_owner_position_id: Optional[str] = None
     effective_owner_position_name: Optional[str] = None
     owner_inherited: bool = False
+    # amount_budgeted is the current budget, amendments included; the
+    # original is derived from it (FinanceService._budget_row), never stored.
+    original_amount: Decimal
+    amendments_total: Decimal = Decimal("0")
+    amendment_count: int = 0
     created_by: str
     created_at: datetime
     updated_at: datetime
+
+
+class BudgetAmendmentCreate(BaseModel):
+    """Record extra money leadership approved for a budget line.
+
+    The approval date's "not in the future" check needs the department's
+    calendar, so the service makes it rather than this schema.
+    """
+
+    model_config = _REQUEST_CONFIG
+
+    # max_digits=12 with two places is the Numeric(12, 2) column's own limit.
+    amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
+    reason: str = Field(..., max_length=2000)
+    approved_by: str = Field(..., max_length=200)
+    approved_on: date
+
+    @field_validator("reason", "approved_by")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+
+class BudgetAmendmentResponse(UTCResponseBase):
+    """One recorded amendment to a budget line."""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    organization_id: str
+    budget_id: str
+    amount: Decimal
+    reason: str
+    approved_by: str
+    approved_on: date
+    created_by: Optional[str] = None
+    entered_by_name: Optional[str] = None
+    created_at: datetime
+
+
+class BudgetAmendmentCreatedResponse(BaseModel):
+    """The new amendment and the line as it now stands."""
+
+    model_config = _RESPONSE_CONFIG
+
+    amendment: BudgetAmendmentResponse
+    budget: BudgetResponse
 
 
 class FinanceNamedOptionResponse(BaseModel):

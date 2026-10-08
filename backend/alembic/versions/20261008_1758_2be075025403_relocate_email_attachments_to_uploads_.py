@@ -33,7 +33,7 @@ location and restores those rows. On a production container that puts them
 back in the unpersisted layer, which is the state being reverted to.
 
 Revision ID: 2be075025403
-Revises: d429a803f847
+Revises: ca564ba5a9ad
 Create Date: 2026-10-08 17:58:53.759495
 
 """
@@ -50,7 +50,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "2be075025403"
-down_revision: Union[str, None] = "d429a803f847"
+down_revision: Union[str, None] = "ca564ba5a9ad"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -16,6 +16,9 @@ import type {
   ApprovalStepRecord,
   ApproverCoverageRow,
   Budget,
+  BudgetAmendment,
+  BudgetAmendmentCreatePayload,
+  BudgetAmendmentCreated,
   BudgetCategory,
   BudgetCategoryUpdatePayload,
   BudgetCreatePayload,
@@ -154,6 +157,18 @@ export const budgetService = {
 
   async update(id: string, data: BudgetUpdatePayload): Promise<Budget> {
     const response = await api.put<Budget>(`/finance/budgets/${id}`, data);
+    return response.data;
+  },
+
+  /** A line's amendments, newest first. */
+  async listAmendments(id: string): Promise<BudgetAmendment[]> {
+    const response = await api.get<BudgetAmendment[]>(`/finance/budgets/${id}/amendments`);
+    return asArray(response.data);
+  },
+
+  /** Record extra money approved for a line; raises its budget by the amount. */
+  async addAmendment(id: string, data: BudgetAmendmentCreatePayload): Promise<BudgetAmendmentCreated> {
+    const response = await api.post<BudgetAmendmentCreated>(`/finance/budgets/${id}/amendments`, data);
     return response.data;
   },
 
