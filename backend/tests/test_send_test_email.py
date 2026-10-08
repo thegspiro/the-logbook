@@ -5,6 +5,7 @@ department checking its welcome email with a handbook attached saw a message
 without one and could not tell whether the attachment would arrive.
 """
 
+import os
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -13,6 +14,7 @@ import pytest
 from app.api.v1.endpoints.message_history import send_test_email
 from app.models.email_template import EmailTemplateType
 from app.schemas.email_template import SendTestEmailRequest
+from app.utils import email_attachments
 
 pytestmark = pytest.mark.unit
 
@@ -83,21 +85,43 @@ async def _send(template):
     return email_service.send_email.await_args.kwargs, render.call_args.args[1]
 
 
+def _stored(org, name):
+    return os.path.join(email_attachments.EMAIL_ATTACHMENT_DIR, org, name)
+
+
 async def test_the_templates_attachments_ride_along():
     kwargs, _ = await _send(
         _template(
             True,
             [
-                SimpleNamespace(storage_path="/data/attachments/handbook.pdf"),
-                SimpleNamespace(storage_path="/data/attachments/sop.pdf"),
+                SimpleNamespace(id="a", storage_path=_stored("org-1", "handbook.pdf")),
+                SimpleNamespace(id="b", storage_path=_stored("org-1", "sop.pdf")),
             ],
         )
     )
     assert kwargs["attachment_paths"] == [
-        "/data/attachments/handbook.pdf",
-        "/data/attachments/sop.pdf",
+        os.path.realpath(_stored("org-1", "handbook.pdf")),
+        os.path.realpath(_stored("org-1", "sop.pdf")),
     ]
     assert kwargs["subject"] == "[TEST] Welcome"
+
+
+async def test_a_file_outside_the_departments_storage_is_not_attached():
+    """A stored path is only sent when it is inside the sender's own
+    organization's attachment storage."""
+    kwargs, _ = await _send(
+        _template(
+            True,
+            [
+                SimpleNamespace(id="a", storage_path=_stored("org-1", "handbook.pdf")),
+                SimpleNamespace(id="b", storage_path=_stored("org-2", "theirs.pdf")),
+                SimpleNamespace(id="c", storage_path="/etc/passwd"),
+            ],
+        )
+    )
+    assert kwargs["attachment_paths"] == [
+        os.path.realpath(_stored("org-1", "handbook.pdf"))
+    ]
 
 
 async def test_files_on_a_template_with_attachments_switched_off_are_not_sent():
