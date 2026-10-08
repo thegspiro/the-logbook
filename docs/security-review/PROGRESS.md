@@ -16,25 +16,45 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#2990](https://github.com/thegspiro/the-logbook/pull/2990)**: branch
-`claude/security-review-security-audit-ip`, Feature 28 (Security, audit &
-IP), pass 6 (watchdog pickup — PR #2988, Feature 27, Integrations, had
-already merged over 100 minutes earlier with nothing started since,
-confirmed via `list_pull_requests` both before this iteration began and
-again before this PR was opened). Real delta since pass 5 (`bf0a45a6`) is
-substantial: SEC2-28-5 and SEC2-28-7 were both already resolved by
-owner-decision commits outside this rotation loop, re-verified here against
-current code rather than trusted from the doc; also a signing-key cut-over
-fix to `core/audit.py` (already co-reviewed under `CI2-33-core-infra.md`),
-an SSRF DNS-rebinding pin to `audit_ship_service.py` (already co-reviewed
-under `INT-27-integrations.md`), a new per-org scheduled-task error path,
-and cosmetic touches. 0 fixes needed by this pass itself, 0 new findings,
-1 small documentation fix (a dangling cross-reference in
-`KNOWN_LIMITATIONS.md`). SEC2-28-6 and SEC2-28-10 remain open, unchanged.
-Route surface re-enumerated: 35 routes (was 34), all correctly gated.
-Completion gate green (flake8/black/isort clean; migrations — 542
-revisions, single head; 327 scoped backend tests; frontend typecheck/lint
-clean). See the Log entry below for detail.
+**PR [#2994](https://github.com/thegspiro/the-logbook/pull/2994)**: branch
+`claude/security-review-reports-analytics`, Feature 29 (Reports &
+analytics), pass 8 (confirmed via `list_pull_requests`, state=open, that no
+`claude/security-review-*` PR existed before starting — PR #2990, Feature
+28, Security/audit & IP, had already merged with nothing started since).
+Real delta since the last pass (`RPT5-29-reports-analytics.md`'s "Pass 7",
+PR #2897, `6c422896`, 2026-10-04) is zero — the one intervening commit
+touching this feature's ten files is a shallow-clone history-boundary
+artifact with no real diff, the same shape prior passes documented
+(`f8fdd1a`, `0430faa0`, …). A full fresh read (not a diff review, since
+there was no real diff) of all five endpoint files and five services found
+**1 real fix**: `_generate_pipeline_overview` (the "Pipeline Overview"
+report) never excluded the caller's own prospective-membership record, the
+one lister in this org that didn't — every other list/aggregate route in
+`membership_pipeline.py` and `labels.py`'s prospect-label routes already
+apply `get_hidden_prospect_ids` for exactly this reason. Fixed by threading
+`hidden_prospect_ids` through `ReportsService.generate_report` into
+`_generate_pipeline_overview` only; 4 new guard tests. All other prior-pass
+findings (`RPT2-29-2`, `LBL-29-2`/`4`, `RPT-5c`/`6`/`7`, `DASH-2`,
+`RPT5-29-1`/`5`) re-verified unchanged, none re-litigated. Route surface
+re-enumerated: 30 routes, all correctly gated (unchanged count). Completion
+gate green (flake8/black/isort clean against CI's pinned versions;
+migrations — 543 revisions, single head; full backend unit suite 13446
+passed, 1 skipped, 0 failed; frontend typecheck/lint clean). See the Log
+entry below and `docs/security-review/RPT6-29-reports-analytics.md` for
+detail.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 28, Security/audit & IP, pass 6, PR #2990, merged, nothing further to record), preserved for history</summary>
+
+**None.** PR #2990 (Feature 28, Security, audit & IP, pass 6) merged clean
+(confirmed via `list_commits` showing merge commit `724791a1` on `main`). 0
+fixes needed by that pass itself; the Log entry below already records it in
+full, so there is nothing further to record here. Rotation row 28 → ✅.
+Watchdog/manual pickup: no new `claude/security-review-*` PR existed for
+Feature 29 before this iteration began (confirmed via `list_pull_requests`,
+state=open, no match).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 6, PR #2988, merged, nothing further to record), preserved for history</summary>
