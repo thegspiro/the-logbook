@@ -185,3 +185,69 @@ async def user_holds_position(
     )
     result = await db.execute(query.limit(1))
     return result.first() is not None
+
+
+def line_owner_members_query(organization_id: str, fiscal_year_id: str) -> Select:
+    """Select ``(User, Budget.id)`` for every owner of every line in one year.
+
+    ``owned_budgets_query`` asked from the line's end: the same chain — line,
+    category, effective owner position, holder — with the same org and
+    active-member constraints, for all of a fiscal year's lines at once. The
+    budget-request notices use it to find who to tell that requests are open
+    and who still owes one, so they cannot disagree with who may make one.
+    """
+    effective = effective_owner_column()
+    return (
+        select(User, Budget.id)
+        .select_from(Budget)
+        .join(
+            BudgetCategory,
+            and_(
+                BudgetCategory.id == Budget.category_id,
+                BudgetCategory.organization_id == organization_id,
+            ),
+        )
+        .join(
+            Position,
+            and_(
+                Position.id == effective,
+                Position.organization_id == organization_id,
+            ),
+        )
+        .join(user_positions, user_positions.c.position_id == Position.id)
+        .join(
+            User,
+            and_(
+                User.id == user_positions.c.user_id,
+                User.organization_id == organization_id,
+            ),
+        )
+        .where(
+            Budget.organization_id == organization_id,
+            Budget.fiscal_year_id == str(fiscal_year_id),
+            User.is_active,
+        )
+    )
+
+
+def position_holders_query(organization_id: str, position_id: str) -> Select:
+    """Select the active members of the org who hold ``position_id``.
+
+    ``held_positions_query`` from the position's end.
+    """
+    return (
+        select(User)
+        .join(user_positions, user_positions.c.user_id == User.id)
+        .join(
+            Position,
+            and_(
+                Position.id == user_positions.c.position_id,
+                Position.organization_id == organization_id,
+            ),
+        )
+        .where(
+            Position.id == str(position_id),
+            User.organization_id == organization_id,
+            User.is_active,
+        )
+    )

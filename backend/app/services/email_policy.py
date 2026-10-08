@@ -81,6 +81,7 @@ class EmailKind(str, enum.Enum):
     VOLUNTEER_CALLS = "volunteer_calls"
     ELECTION_NOTICES = "election_notices"
     SUGGESTION_BOX = "suggestion_box"
+    BUDGET_REQUESTS = "budget_requests"
 
     # Optional, sent to officers because of a role they hold
     EVENT_DUTIES = "event_duties"
@@ -89,6 +90,7 @@ class EmailKind(str, enum.Enum):
     ELECTION_ADMIN = "election_admin"
     INVENTORY_DUTIES = "inventory_duties"
     MEMBERSHIP_ADMIN = "membership_admin"
+    FINANCE_DUTIES = "finance_duties"
 
 
 class EmailAudience(str, enum.Enum):
@@ -268,6 +270,21 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         ),
         rationale="The suggestion box and the bell carry the same notices.",
     ),
+    # Members, not officers: a budget line is owned by a position, and the
+    # holder of "Station 2 Captain" may hold no management grant at all, so an
+    # officer-only toggle would be hidden from the people who receive these.
+    EmailKind.BUDGET_REQUESTS: EmailPolicy(
+        label="Next year's budget requests",
+        required=False,
+        audience=_M,
+        includes=(
+            "Budget requests are open for a budget line your position owns, "
+            "or the deadline changed",
+            "Reminders before the request deadline",
+            "The Treasurer's decision on a budget request",
+        ),
+        rationale="Finance > Next year's budget shows the same deadline and decisions.",
+    ),
     EmailKind.EVENT_DUTIES: EmailPolicy(
         label="Event officer duties",
         required=False,
@@ -341,6 +358,13 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "New store orders",
         ),
         rationale="The same records are kept in Membership and the store.",
+    ),
+    EmailKind.FINANCE_DUTIES: EmailPolicy(
+        label="Treasurer duties",
+        required=False,
+        audience=_O,
+        includes=("A budget request submitted for your review",),
+        rationale="Finance > Budget requests lists every request waiting.",
     ),
 }
 

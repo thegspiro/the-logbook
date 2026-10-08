@@ -96,6 +96,9 @@ Recommended crontab (add to host or container cron):
 
 # Daily at 4:45 AM — recover PayPal store payments the webhook never recorded
 45 4 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=paypal_capture_backfill
+
+# Daily at 8:10 AM — remind budget-line owners before a draft year's request deadline
+10 8 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=budget_request_reminders
 -----------------------------------------------------
 """
 
@@ -255,6 +258,17 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "07:00",
         "cron": "0 7 * * *",
+    },
+    "budget_request_reminders": {
+        "description": (
+            "Email budget-line owners who still owe a request for a draft "
+            "fiscal year, 7 days and 1 day before its request deadline (once "
+            "per member, deadline and reminder — safe to run more than once a "
+            "day)"
+        ),
+        "frequency": "daily",
+        "recommended_time": "08:10",
+        "cron": "10 8 * * *",
     },
     "prospect_attendance_advance": {
         "description": (
@@ -6355,6 +6369,21 @@ async def run_officer_directory_sync(db: AsyncSession) -> Dict[str, Any]:
     return {"task": "officer_directory_sync", "organizations": synced}
 
 
+async def run_budget_request_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """Remind line owners before a draft year's budget request deadline.
+
+    Email only (CLAUDE.md pitfall #18). The per-department work, the
+    sent-log that makes a second run the same day send nothing, and the
+    choice of which reminder is due are in
+    ``finance_budget_request_notifications.send_deadline_reminders``.
+    """
+    from app.services.finance_budget_request_notifications import (
+        send_deadline_reminders,
+    )
+
+    return await _for_each_org(db, "budget_request_reminders", send_deadline_reminders)
+
+
 async def run_prospect_attendance_advance(db: AsyncSession) -> Dict[str, Any]:
     """Advance applicants whose meeting attendance has settled without a finalize.
 
@@ -6790,6 +6819,7 @@ TASK_RUNNERS = {
     "officer_directory_sync": run_officer_directory_sync,
     "event_request_reminders": run_event_request_reminders,
     "prospect_attendance_advance": run_prospect_attendance_advance,
+    "budget_request_reminders": run_budget_request_reminders,
 }
 
 # Interval (in seconds) at which each task auto-runs in the in-process
@@ -6848,6 +6878,8 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "officer_directory_sync": 86400,
     "event_request_reminders": 86400,
     "prospect_attendance_advance": 86400,
+    # Daily; idempotent per (year, deadline, member, offset) through a sent-log.
+    "budget_request_reminders": 86400,
     # Weekly
     "struggling_member_check": 604800,
     "enrollment_deadline_warnings": 604800,
