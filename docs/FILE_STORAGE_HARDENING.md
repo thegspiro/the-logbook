@@ -42,15 +42,29 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
    confirm the encryption key is stored somewhere separate from the data and
    its backups — losing the key loses every file.
 8. **Malware-scan every file that enters the platform.**
+9. **Remote storage platforms are built later.** Onboarding's Google Drive,
+   OneDrive / SharePoint and S3 choices have no reader yet; recorded in
+   `docs/KNOWN_LIMITATIONS.md` ("File Storage — The Onboarding Platform
+   Choice Has No Reader").
+10. **Only full administrators (`*`) see every folder.** The
+    `documents.manage` / `members.manage` override goes; everyone else
+    reaches a folder only through the rights attached to it.
+11. **Malware scanning is on by default.** Turning it off is possible, but
+    the setting carries a strong warning and admins see a standing notice
+    while it is off.
+12. **Apparatus photos and documents become real documents**, filed in the
+    Apparatus folder like facility files, replacing the free-text URL.
+13. **Finance receipt upload is part of Phase 3**, filed in the Finance
+    folder under finance rights.
 
 ## Phases
 
-| Phase | Scope                                                                                           | Status      |
-| ----- | ----------------------------------------------------------------------------------------------- | ----------- |
-| 1     | Close the access leaks                                                                          | this change |
-| 2     | One storage service: org-first layout, descriptive names, size caps and malware scan everywhere | planned     |
-| 3     | A folder per module with module-specific rights; narrow `documents.view`                        | planned     |
-| 4     | Encryption at rest, with the onboarding key-custody confirmation                                | planned     |
+| Phase | Scope                                                                                                                                           | Status      |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| 1     | Close the access leaks                                                                                                                          | this change |
+| 2     | One storage service: org-first layout, descriptive names, size caps and malware scan everywhere (on by default)                                 | planned     |
+| 3     | A folder per module with module-specific rights; narrow `documents.view`; admin-only see-all; apparatus files and finance receipts as documents | planned     |
+| 4     | Encryption at rest, with the onboarding key-custody confirmation                                                                                | planned     |
 
 ### Phase 1 — what changed
 
@@ -84,11 +98,4 @@ folds it into the storage service.
 
 ## Open questions for later phases
 
-- Onboarding offers Google Drive, OneDrive and S3, none of which is read.
-  Mark them "not yet available", or schedule an S3 backend? (Pitfall #19.)
-- Should the `documents.manage` / `members.manage` override that sees every
-  folder be reduced to full administrators (`*`)?
-- Should ClamAV be required, or on by default with an explicit, visible
-  opt-out for small hosts? (~1–1.5 GB RAM.)
-- Apparatus files as real uploads — the URL field kept for one release?
-- Finance receipt upload: in Phase 3, or separate?
+None outstanding; items 9–13 above settled the last ones on 2026-10-08.
