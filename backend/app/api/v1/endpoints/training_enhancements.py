@@ -778,6 +778,8 @@ async def upload_record_attachment(
     import magic
     from sqlalchemy.orm.attributes import flag_modified
 
+    from app.utils.upload_paths import safe_download_filename
+
     record = await _load_record_for_attachment(db, record_id, current_user)
 
     content = await file.read()
@@ -814,7 +816,7 @@ async def upload_record_attachment(
     await asyncio.to_thread(_write_file, file_path, content)
 
     attachment = {
-        "file_name": file.filename or stored_name,
+        "file_name": safe_download_filename(file.filename, stored_name),
         "file_path": file_path,
         "file_type": detected_mime,
         "file_size": len(content),
@@ -897,14 +899,23 @@ async def download_record_attachment(
     if not isinstance(attachment, dict) or not attachment.get("file_path"):
         raise HTTPException(status_code=404, detail="Attachment file unavailable")
 
-    file_path = attachment["file_path"]
-    # Confine the stored path to the attachment directory. file_path is
-    # server-generated today, but it round-trips through a JSON column —
-    # if any future code path lets that column be written from user input,
-    # this check is what stands between it and arbitrary file read.
-    real_path = os.path.realpath(file_path)
-    attachment_root = os.path.realpath(TRAINING_ATTACHMENT_DIR)
-    if not real_path.startswith(attachment_root + os.sep):
+    from app.services.self_report_attachment_retention import (
+        submission_attachment_root,
+    )
+    from app.utils.upload_paths import resolve_in_any_org_root, safe_download_filename
+
+    # Confine the stored path to *this record's organization's* subtree.
+    # file_path round-trips through a JSON column, and confining to the shared
+    # TRAINING_ATTACHMENT_DIR root would still serve a path pointing at another
+    # organization's directory beneath it. Two roots, because approving a
+    # self-reported submission copies its attachment dicts onto the record
+    # verbatim, so an approved certificate lives under the submission tree.
+    real_path = resolve_in_any_org_root(
+        attachment["file_path"],
+        (TRAINING_ATTACHMENT_DIR, submission_attachment_root()),
+        record.organization_id,
+    )
+    if not real_path:
         raise HTTPException(status_code=404, detail="Attachment file not found")
 
     if not os.path.isfile(real_path):
@@ -913,5 +924,7 @@ async def download_record_attachment(
     return FileResponse(
         real_path,
         media_type=attachment.get("file_type") or "application/octet-stream",
-        filename=attachment.get("file_name") or os.path.basename(real_path),
+        filename=safe_download_filename(
+            attachment.get("file_name"), os.path.basename(real_path)
+        ),
     )

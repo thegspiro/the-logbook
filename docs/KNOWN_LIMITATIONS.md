@@ -746,6 +746,38 @@ honour it, so gating only this router would hide suggestion boxes on almost
 every installation. It is recorded in `DELIBERATELY_UNGATED` in
 `tests/test_module_api_gating.py`.
 
+## File Storage — The Onboarding Platform Choice Has No Reader (2026-10-08)
+
+**Open (owner decision 2026-10-08: build the connections later).** Onboarding's
+File Storage step (`FileStorageChoice.tsx`) and
+`PATCH /organization/settings/file-storage` let a department pick Google Drive,
+OneDrive / SharePoint, Amazon S3 (or an S3-compatible endpoint such as MinIO),
+Local Storage, or Configure Later, and store its credentials encrypted in the
+organization's settings (`FileStorageSettings`, `schemas/organization.py`).
+**No code reads that choice.** Every upload goes to the local uploads volume
+(`/app/uploads`) whatever was picked, and `local_storage_path` is ignored
+too. A department that chose S3 or SharePoint is keeping its files on the
+application server and has no indication of it — the step offers the options
+without saying they are not yet in effect (CLAUDE.md pitfall #19).
+
+What has to exist before any option other than Local Storage does anything:
+
+- a storage interface the upload, download and delete paths all go through —
+  Phase 2 of `docs/FILE_STORAGE_HARDENING.md` builds it with a local backend;
+- one backend per platform: S3 (which also covers MinIO; the compose file's
+  `minio` service under the `with-s3` profile has nothing connecting to it
+  either), then Google Drive and OneDrive / SharePoint, which need OAuth token
+  handling as well as storage calls;
+- a migration path for files already on local disk when a department switches,
+  and a decision on what happens to them;
+- the same org-scoped containment, malware scanning and (from Phase 4)
+  encryption on every backend, so choosing a remote platform never weakens
+  what local storage guarantees.
+
+The deployment-level `STORAGE_TYPE` / `UPLOAD_DIR` / `AWS_*` / `AZURE_*` /
+`GCS_*` settings are the same gap at the environment level (see the CI3-33-4
+row above).
+
 ## Self-Report Attachments — What Happens to the File (2026-08-23)
 
 A member can attach a certificate (PDF/JPG/PNG, 10 MB) to a self-reported

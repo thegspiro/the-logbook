@@ -25,6 +25,7 @@ Covered here:
   opened the record still is
 """
 
+import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -47,6 +48,7 @@ from app.models.medical_screening import (
     ScreeningType,
 )
 from app.models.membership_pipeline import PipelineStepType
+from app.services import membership_pipeline_service
 from app.services.event_service import EventService
 from app.services.guest_check_in_service import GuestCheckInService
 from app.services.medical_screening_service import MedicalScreeningService
@@ -156,7 +158,9 @@ async def _upload_document(
         organization_id=org_id,
         document_type=document_type,
         file_name=f"{token}.pdf",
-        file_path=f"/app/uploads/{token}.pdf",
+        file_path=os.path.join(
+            membership_pipeline_service.PROSPECT_DOCUMENT_DIR, org_id, f"{token}.pdf"
+        ),
         step_id=step_id,
     )
 

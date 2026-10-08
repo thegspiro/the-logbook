@@ -1227,13 +1227,20 @@ async def upload_check_item_photos(
     item_id: str,
     files: List[UploadFile] = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_permission("inventory.check_submit", "inventory.check_manage")
+    ),
 ) -> dict:
     """
     Upload photo(s) for an equipment check item.
 
     Accepts up to 3 images per item. Photos are optimized (resized,
     EXIF-stripped, converted to WebP) and stored as base64 data URIs.
+
+    Photos are evidence on a check somebody signed for, so only the member
+    who performed the check may add them; ``inventory.check_manage`` may add
+    to any check in the organization — the same rule
+    ``complete_incomplete_check`` applies.
     """
     if len(files) > MAX_PHOTOS_PER_ITEM:
         raise HTTPException(
@@ -1257,6 +1264,21 @@ async def upload_check_item_photos(
     check_item = result.scalars().first()
     if not check_item:
         raise HTTPException(status_code=404, detail="Check item not found")
+
+    check_result = await db.execute(
+        select(ShiftEquipmentCheck.checked_by).where(
+            ShiftEquipmentCheck.id == check_id,
+            ShiftEquipmentCheck.organization_id == current_user.organization_id,
+        )
+    )
+    checked_by = check_result.scalar_one_or_none()
+    if str(checked_by) != str(current_user.id) and not _has_permission(
+        "inventory.check_manage", _collect_user_permissions(current_user)
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the member who performed this check can add photos to it.",
+        )
 
     existing_urls: list[str] = check_item.photo_urls or []
 

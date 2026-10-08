@@ -36,6 +36,7 @@ from app.schemas.documents import (
     FoldersListResponse,
 )
 from app.services.documents_service import DocumentsService
+from app.utils.upload_paths import safe_download_filename
 
 router = APIRouter()
 
@@ -461,7 +462,7 @@ async def upload_document(
         "name": name,
         "description": description,
         "folder_id": folder_id if folder_id else None,
-        "file_name": file.filename or unique_name,
+        "file_name": safe_download_filename(file.filename, unique_name),
         "file_path": file_path,
         "file_size": len(content),
         "file_type": detected_mime,
@@ -625,7 +626,7 @@ async def download_document(
 
     return FileResponse(
         path=resolved_path,
-        filename=document.file_name or document.name or "download",
+        filename=safe_download_filename(document.file_name or document.name),
         media_type=document.file_type or "application/octet-stream",
     )
 

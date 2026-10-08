@@ -38,6 +38,7 @@ from app.services.email_theme import (
     facts,
     find_element_end,
 )
+from app.utils.email_attachments import confined_template_attachment_paths
 from app.utils.email_providers import (
     is_valid_cloudflare_account_id,
     resolve_smtp_settings,
@@ -1991,7 +1992,9 @@ class EmailService:
                     and loaded_template.allow_attachments
                     and loaded_template.attachments
                 ):
-                    stored_paths = [a.storage_path for a in loaded_template.attachments]
+                    stored_paths = confined_template_attachment_paths(
+                        loaded_template.attachments, organization_id
+                    )
                     attachment_paths = (attachment_paths or []) + stored_paths
             except Exception as e:
                 logger.warning(

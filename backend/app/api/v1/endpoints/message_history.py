@@ -34,6 +34,7 @@ from app.services.email_service import (
 )
 from app.services.email_theme import ACCENT_GREEN
 from app.services.officer_service import OfficerService
+from app.utils.email_attachments import confined_template_attachment_paths
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 router = APIRouter()
@@ -190,7 +191,9 @@ async def send_test_email(
         # The same files the real send attaches (EmailService.send_welcome_email
         # uses this rule), so a test shows whether they arrive and fit.
         if template.allow_attachments and template.attachments:
-            attachment_paths = [a.storage_path for a in template.attachments]
+            attachment_paths = confined_template_attachment_paths(
+                template.attachments, current_user.organization_id
+            )
 
     # Send the email (also logs to message_history automatically)
     email_svc = EmailService(organization=organization)

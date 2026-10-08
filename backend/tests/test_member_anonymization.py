@@ -13,6 +13,7 @@ from app.models.membership_pipeline import (
     MembershipPipeline,
     MembershipPipelineStep,
     PipelineStepType,
+    ProspectDocument,
     ProspectiveMember,
     ProspectStepProgress,
     StepProgressStatus,
@@ -24,6 +25,7 @@ from app.models.user import (
     User,
     UserStatus,
 )
+from app.services import membership_pipeline_service
 from app.services.member_anonymization_service import MemberAnonymizationService
 
 pytestmark = pytest.mark.integration
@@ -245,6 +247,52 @@ class TestAnonymizeMember:
         assert submission.ip_address is None
         assert submission.user_agent is None
         assert submission.integration_result is None
+
+    async def test_removes_only_the_orgs_own_applicant_files(
+        self, db_session, tmp_path, monkeypatch
+    ):
+        """Applicant files are removed, but a stored path pointing outside the
+        organization's own applicant storage is never unlinked."""
+        monkeypatch.setattr(
+            membership_pipeline_service, "PROSPECT_DOCUMENT_DIR", str(tmp_path)
+        )
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        prospect = ProspectiveMember(
+            organization_id=org.id,
+            first_name="Pat",
+            last_name="Firefighter",
+            email="pat@example.org",
+            transferred_user_id=user.id,
+        )
+        db_session.add(prospect)
+        await db_session.flush()
+
+        own = tmp_path / str(org.id) / str(prospect.id) / "licence.jpg"
+        own.parent.mkdir(parents=True)
+        own.write_bytes(b"licence")
+        foreign = tmp_path / str(uuid.uuid4()) / "theirs.pdf"
+        foreign.parent.mkdir(parents=True)
+        foreign.write_bytes(b"another department's file")
+        for path in (own, foreign):
+            db_session.add(
+                ProspectDocument(
+                    prospect_id=prospect.id,
+                    document_type="id",
+                    file_name=path.name,
+                    file_path=str(path),
+                )
+            )
+        await db_session.flush()
+
+        await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        assert not own.exists()
+        assert foreign.exists()
+        remaining = await db_session.execute(
+            select(ProspectDocument).where(ProspectDocument.prospect_id == prospect.id)
+        )
+        assert remaining.scalars().all() == []
 
     async def test_scrubs_step_progress_payloads_and_duplicate_submissions(
         self, db_session
