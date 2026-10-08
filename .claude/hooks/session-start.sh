@@ -95,6 +95,22 @@ if [ ! -f "$deps_marker" ]; then
   fi
 fi
 
+# Bare `python3` on PATH does not reliably match the interpreter `pip`
+# installed those dependencies into. On some session containers, a stray
+# /usr/local/bin/python3 -> python3.11 shadows the system python3.13 that
+# `pip`, and the real alembic/sqlalchemy, resolve to — so `python3
+# scripts/repair_schema.py` fails with `ModuleNotFoundError: No module named
+# 'sqlalchemy'` despite the install above having just succeeded. Resolve the
+# interpreter that actually has the dependencies, once, and use it for every
+# later python invocation in this hook.
+PY=python3
+for candidate in python3 python3.13 /usr/bin/python3 /usr/bin/python3.13; do
+  if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c "import sqlalchemy" >/dev/null 2>&1; then
+    PY="$candidate"
+    break
+  fi
+done
+
 # ── Node dependencies ────────────────────────────────────────────────────────
 # From the repo root: npm workspaces, one lockfile. `install` rather than `ci`
 # so a cached container reuses what is already unpacked.
@@ -185,7 +201,18 @@ log "building the schema (alembic upgrade head, then repair_schema)"
   # schema for the local suite to pass green against a migration chain that
   # is already broken — the exact false reassurance this hook exists to
   # prevent. Report it and leave the database as CI would find it.
-  if ! python3 -m alembic upgrade head >/tmp/session-alembic.log 2>&1; then
+  # The `alembic` console script, not `python3 -m alembic`: on some session
+  # containers, bare `python3` on PATH resolves to a stray /usr/local/bin/
+  # python3 -> python3.11, an interpreter with none of backend/requirements.txt
+  # installed (pip, and the real alembic/sqlalchemy, live under python3.13's
+  # dist-packages). That python3.11 then has no installed `alembic` package at
+  # all, so `-m alembic` falls back to treating `backend/alembic/` (the
+  # migrations folder, picked up via cwd) as an empty PEP 420 namespace
+  # package — "No module named alembic.__main__; 'alembic' is a package and
+  # cannot be directly executed". The `alembic` console script's shebang
+  # names its interpreter by absolute path, so it is immune to this PATH
+  # ordering.
+  if ! alembic upgrade head >/tmp/session-alembic.log 2>&1; then
     log "ERROR: alembic upgrade head failed."
     log "       CI migrates an empty database, so this reproduces there ONLY if"
     log "       $DB_NAME was empty. If a previous session left tables behind,"
@@ -201,7 +228,7 @@ log "building the schema (alembic upgrade head, then repair_schema)"
     tail -n 15 /tmp/session-alembic.log | sed 's/^/       | /'
     exit 1
   fi
-  if ! python3 scripts/repair_schema.py >/tmp/session-repair.log 2>&1; then
+  if ! "$PY" scripts/repair_schema.py >/tmp/session-repair.log 2>&1; then
     log "ERROR: repair_schema failed; the schema is incomplete."
     tail -n 15 /tmp/session-repair.log | sed 's/^/       | /'
     exit 1
