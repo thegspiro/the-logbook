@@ -184,9 +184,7 @@ const RowActionMenu: React.FC<{ label: string; children: React.ReactNode }> = ({
     >
       <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
     </summary>
-    <div className="border-theme-surface-border bg-theme-surface absolute top-full right-0 z-30 mt-1 min-w-56 overflow-hidden rounded-lg border py-1 shadow-lg">
-      {children}
-    </div>
+    <div className="popover-panel absolute top-full right-0 z-30 mt-1 min-w-56 overflow-hidden py-1">{children}</div>
   </details>
 );
 
@@ -5386,7 +5384,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <MoreHorizontal className="h-4 w-4" />
                 <span className="hidden sm:inline">Tools</span>
               </summary>
-              <div className="bg-theme-surface border-theme-surface-border absolute right-0 z-50 mt-1 w-56 rounded-lg border p-1.5 shadow-xl">
+              <div className="popover-panel absolute right-0 z-50 mt-1 w-56 p-1.5 shadow-xl">
                 {isEditing && templateId && (
                   <button
                     type="button"
