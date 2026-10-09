@@ -160,6 +160,25 @@ describe('AdminHubFrame', () => {
     await screen.findByText('87%');
   });
 
+  it('hands the caller each summary it loads, and null when one fails', async () => {
+    const onSummaryChange = vi.fn();
+    renderFrame({ onSummaryChange });
+    await waitFor(() => expect(onSummaryChange).toHaveBeenCalledWith(summary));
+
+    mockGetSummary.mockRejectedValue(new Error('boom'));
+    onSummaryChange.mockClear();
+    renderFrame({ onSummaryChange });
+    await waitFor(() => expect(onSummaryChange).toHaveBeenCalledWith(null));
+  });
+
+  it('reports null without fetching when the caller wants no summary', async () => {
+    const onSummaryChange = vi.fn();
+    renderFrame({ summary: false, onSummaryChange });
+
+    await waitFor(() => expect(onSummaryChange).toHaveBeenCalledWith(null));
+    expect(mockGetSummary).not.toHaveBeenCalled();
+  });
+
   it('refetches when the caller bumps its refresh token', async () => {
     const { rerender } = renderFrame({ refreshToken: 0 });
     await waitFor(() => expect(mockGetSummary).toHaveBeenCalledTimes(1));

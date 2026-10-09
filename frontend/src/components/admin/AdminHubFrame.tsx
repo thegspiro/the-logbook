@@ -90,6 +90,12 @@ interface AdminHubFrameProps<K extends string> {
   refreshToken?: number | string | undefined;
   /** A module with a richer, record-level queue in its body can hide the aggregate queue. */
   showAttentionQueue?: boolean | undefined;
+  /**
+   * Hands the caller each summary the frame loads (null when none could be),
+   * so a hub can badge its own navigation from the attention queue without a
+   * second request for the same data.
+   */
+  onSummaryChange?: ((summary: AdminHubSummary | null) => void) | undefined;
 
   children: React.ReactNode;
 }
@@ -110,28 +116,39 @@ export function AdminHubFrame<K extends string>({
   nav,
   refreshToken,
   showAttentionQueue = true,
+  onSummaryChange,
   children,
 }: AdminHubFrameProps<K>) {
   const [summary, setSummary] = useState<AdminHubSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  // Held in a ref so a caller passing an inline callback does not re-run the
+  // fetch on every render.
+  const onSummaryChangeRef = useRef(onSummaryChange);
+  useEffect(() => {
+    onSummaryChangeRef.current = onSummaryChange;
+  });
 
   const load = useCallback(async () => {
     if (!wantsSummary) {
       setSummary(null);
       setError(null);
       setLoading(false);
+      onSummaryChangeRef.current?.(null);
       return;
     }
     setLoading(true);
     try {
-      setSummary(await adminHubService.getSummary(moduleKey));
+      const loaded = await adminHubService.getSummary(moduleKey);
+      setSummary(loaded);
       setError(null);
+      onSummaryChangeRef.current?.(loaded);
     } catch (err: unknown) {
       // The frame is a summary of the work, not the work. A failed summary
       // leaves a quiet line and the tab body below it still usable.
       setSummary(null);
+      onSummaryChangeRef.current?.(null);
       setError(getErrorMessage(err, 'Could not load this page’s summary.'));
     } finally {
       setLoading(false);
