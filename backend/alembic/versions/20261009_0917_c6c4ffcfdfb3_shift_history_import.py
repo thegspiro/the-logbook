@@ -19,7 +19,7 @@ Imports already committed are unaffected: what they wrote lives in ``shifts``,
 this revision never touches.
 
 Revision ID: c6c4ffcfdfb3
-Revises: 5c8be05f2f0f
+Revises: c0bf0b155719
 Create Date: 2026-10-09 09:17:00.000000
 
 """
@@ -31,7 +31,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "c6c4ffcfdfb3"
-down_revision: Union[str, None] = "5c8be05f2f0f"
+down_revision: Union[str, None] = "c0bf0b155719"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

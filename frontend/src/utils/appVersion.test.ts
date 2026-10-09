@@ -1,11 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { fetchServerBuildId, formatBuildId, getCurrentBuildId, getCurrentBuildTime } from './appVersion';
 
-declare global {
-  var __BUILD_ID__: string | undefined;
-  var __BUILD_TIME__: string | undefined;
-}
-
 function mockVersionResponse(body: unknown, ok = true): void {
   vi.stubGlobal(
     'fetch',
@@ -24,7 +19,7 @@ afterEach(() => {
 
 describe('getCurrentBuildId', () => {
   it('returns the build stamped into the bundle', () => {
-    globalThis.__BUILD_ID__ = 'abc123def456789';
+    vi.stubGlobal('__BUILD_ID__', 'abc123def456789');
     expect(getCurrentBuildId()).toBe('abc123def456789');
   });
 
@@ -65,7 +60,7 @@ describe('fetchServerBuildId', () => {
 
 describe('getCurrentBuildTime', () => {
   it('returns the UTC timestamp stamped into the bundle', () => {
-    globalThis.__BUILD_TIME__ = '2026-08-25T19:14:00.000Z';
+    vi.stubGlobal('__BUILD_TIME__', '2026-08-25T19:14:00.000Z');
     expect(getCurrentBuildTime()).toBe('2026-08-25T19:14:00.000Z');
   });
 

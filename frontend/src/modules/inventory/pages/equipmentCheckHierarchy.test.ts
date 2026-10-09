@@ -7,11 +7,8 @@ const compartment = (id: string, name: string, parentCompartmentId = ''): Compar
   id,
   name,
   parentCompartmentId,
-  description: '',
-  imageUrl: '',
   isHeader: false,
   containerType: 'compartment',
-  items: [],
 });
 
 describe('EquipmentCheckTemplateBuilder Stored Inside options', () => {

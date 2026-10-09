@@ -143,8 +143,7 @@ describe('pipelineService stage mapping', () => {
 
     const stage = await pipelineService.updateStage('pipeline-1', 'step-1', stageUpdate());
 
-    expect(stage.config).toHaveProperty(arrayKey);
-    expect(Array.isArray((stage.config as Record<string, unknown>)[arrayKey])).toBe(true);
+    expect(stage.config).toHaveProperty(arrayKey, expect.any(Array));
   });
 
   describe('creating a stage', () => {

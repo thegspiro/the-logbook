@@ -30,6 +30,7 @@ const area = (id: string, name: string, barcode: string, parent_id?: string): St
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
   children: [],
+  item_count: 0,
   ...(parent_id ? { parent_id } : {}),
 });
 

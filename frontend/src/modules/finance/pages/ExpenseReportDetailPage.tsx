@@ -12,6 +12,8 @@ import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
+import { ReceiptControl } from '../components/ReceiptControl';
+import { expenseReportService } from '../services/api';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
@@ -132,6 +134,14 @@ const ExpenseReportDetailPage: React.FC = () => {
 
   // Submitting is the requester's action (or the finance office's).
   const canSubmit = er.status === ExpenseReportStatus.DRAFT && access.canActAsRequester(er.submittedBy);
+  // Mirrors _ER_RECEIPT_OPEN_TO_REQUESTER / _ER_RECEIPT_CLOSED in
+  // backend/app/api/v1/endpoints/finance.py: a requester changes receipts only
+  // while the report is editable; the finance office until it is closed out.
+  const canAttachReceipt =
+    access.canActAsRequester(er.submittedBy) &&
+    (access.canManage
+      ? er.status !== ExpenseReportStatus.DENIED && er.status !== ExpenseReportStatus.CANCELLED
+      : er.status === ExpenseReportStatus.DRAFT || er.status === ExpenseReportStatus.SUBMITTED);
 
   return (
     <div className="space-y-6">
@@ -240,6 +250,9 @@ const ExpenseReportDetailPage: React.FC = () => {
                   <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs uppercase">
                     Type
                   </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs uppercase">
+                    Receipt
+                  </th>
                   <th scope="col" className="text-theme-text-muted px-4 py-2 text-right text-xs uppercase">
                     Amount
                   </th>
@@ -252,6 +265,23 @@ const ExpenseReportDetailPage: React.FC = () => {
                     <td className="text-theme-text-secondary px-4 py-3 text-sm capitalize">
                       {item.expenseType ? (EXPENSE_TYPE_LABELS[item.expenseType] ?? item.expenseType) : '--'}
                     </td>
+                    <td className="px-4 py-3 text-sm">
+                      {canAttachReceipt || item.receiptFileUrl || item.receiptUrl ? (
+                        <ReceiptControl
+                          subject={item.description}
+                          receiptFileUrl={item.receiptFileUrl}
+                          receiptUrl={item.receiptUrl}
+                          canAttach={canAttachReceipt}
+                          onUpload={async (file) => {
+                            await expenseReportService.uploadLineItemReceipt(er.id, item.id, file);
+                            await fetchExpenseReport(er.id);
+                          }}
+                          onDownload={() => expenseReportService.downloadLineItemReceipt(er.id, item.id)}
+                        />
+                      ) : (
+                        <span className="text-theme-text-muted">--</span>
+                      )}
+                    </td>
                     <td className="text-theme-text-primary px-4 py-3 text-right text-sm">
                       {formatCurrency(item.amount)}
                     </td>
@@ -260,7 +290,7 @@ const ExpenseReportDetailPage: React.FC = () => {
               </tbody>
               <tfoot>
                 <tr className="border-theme-surface-border border-t-2">
-                  <td colSpan={2} className="text-theme-text-primary px-4 py-3 text-sm font-semibold">
+                  <td colSpan={3} className="text-theme-text-primary px-4 py-3 text-sm font-semibold">
                     Total
                   </td>
                   <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold">

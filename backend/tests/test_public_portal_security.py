@@ -103,7 +103,7 @@ class _CountingDB:
         # with, captured from the compiled statement rather than asserted
         # against separately — see test_reconciliation_query_scopes_to_the_
         # current_hour_bucket below.
-        self.captured_lower_bound: str | None = None
+        self.captured_lower_bound: datetime | None = None
 
     async def execute(self, stmt, *args, **kwargs):
         self.executions += 1
@@ -326,36 +326,55 @@ class TestAuthenticateApiKeyDoSHardening:
 
 
 class TestLastUsedThrottle:
+    """``last_used_at`` is a DateTime column: the throttle reads datetimes.
+
+    It once parsed the value with ``fromisoformat``, which a datetime makes
+    raise; the ``except`` answered "stale" and every request wrote (PP-7).
+    """
 
     @pytest.mark.unit
     def test_missing_is_stale(self):
         assert _last_used_is_stale(None, datetime.now(timezone.utc)) is True
-        assert _last_used_is_stale("", datetime.now(timezone.utc)) is True
 
     @pytest.mark.unit
-    def test_recent_is_not_stale(self):
+    def test_recent_aware_is_not_stale(self):
         now = datetime.now(timezone.utc)
-        recent = (now - timedelta(seconds=5)).isoformat()
-        assert _last_used_is_stale(recent, now) is False
+        assert _last_used_is_stale(now - timedelta(seconds=5), now) is False
 
     @pytest.mark.unit
-    def test_old_is_stale(self):
+    def test_old_aware_is_stale(self):
         now = datetime.now(timezone.utc)
-        old = (now - timedelta(seconds=_LAST_USED_THROTTLE_SECONDS + 5)).isoformat()
+        old = now - timedelta(seconds=_LAST_USED_THROTTLE_SECONDS + 5)
         assert _last_used_is_stale(old, now) is True
 
     @pytest.mark.unit
-    def test_malformed_is_stale(self):
-        assert (
-            _last_used_is_stale("not-a-timestamp", datetime.now(timezone.utc)) is True
-        )
+    def test_window_boundary_is_stale(self):
+        now = datetime.now(timezone.utc)
+        edge = now - timedelta(seconds=_LAST_USED_THROTTLE_SECONDS)
+        assert _last_used_is_stale(edge, now) is True
 
     @pytest.mark.unit
-    def test_naive_timestamp_treated_as_utc(self):
+    def test_recent_naive_is_treated_as_utc(self):
+        """MySQL DATETIME comes back naive; it is UTC wall time."""
         now = datetime.now(timezone.utc)
-        naive_recent = now.replace(tzinfo=None).isoformat()
-        # Must not raise on naive/aware subtraction; recent → not stale.
+        naive_recent = (now - timedelta(seconds=5)).replace(tzinfo=None)
         assert _last_used_is_stale(naive_recent, now) is False
+
+    @pytest.mark.unit
+    def test_old_naive_is_stale(self):
+        now = datetime.now(timezone.utc)
+        naive_old = (now - timedelta(seconds=_LAST_USED_THROTTLE_SECONDS + 5)).replace(
+            tzinfo=None
+        )
+        assert _last_used_is_stale(naive_old, now) is True
+
+    @pytest.mark.unit
+    def test_non_utc_offset_compares_by_instant(self):
+        now = datetime.now(timezone.utc)
+        recent_elsewhere = (now - timedelta(seconds=5)).astimezone(
+            timezone(timedelta(hours=-7))
+        )
+        assert _last_used_is_stale(recent_elsewhere, now) is False
 
 
 # ---------------------------------------------------------------------------
@@ -433,7 +452,7 @@ class TestCheckRateLimitDbReconciliation:
 
         await check_rate_limit("key-e", 100, db)
 
-        expected = datetime.fromtimestamp(hour_ts, tz=timezone.utc).isoformat()
+        expected = datetime.fromtimestamp(hour_ts, tz=timezone.utc)
         assert db.captured_lower_bound == expected
 
     @pytest.mark.unit

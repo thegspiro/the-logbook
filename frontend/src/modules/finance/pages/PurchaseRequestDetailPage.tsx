@@ -26,6 +26,7 @@ import { useFinanceStore } from '../store/financeStore';
 import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
 import { purchaseRequestService } from '../services/api';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
+import { ReceiptControl } from '../components/ReceiptControl';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
@@ -313,6 +314,13 @@ const PurchaseRequestDetailPage: React.FC = () => {
   const canCancel = access.canManage
     ? pr.status !== PurchaseRequestStatus.PAID && pr.status !== PurchaseRequestStatus.CANCELLED
     : isDraft && isRequester;
+  // Mirrors _PR_RECEIPT_CLOSED / _PR_RECEIPT_CLOSED_TO_REQUESTER in
+  // backend/app/api/v1/endpoints/finance.py.
+  const receiptClosed =
+    pr.status === PurchaseRequestStatus.DENIED ||
+    pr.status === PurchaseRequestStatus.CANCELLED ||
+    (!access.canManage && pr.status === PurchaseRequestStatus.PAID);
+  const canAttachReceipt = isRequester && !receiptClosed;
 
   return (
     <div className="space-y-6">
@@ -456,6 +464,22 @@ const PurchaseRequestDetailPage: React.FC = () => {
             <div>
               <p className="text-theme-text-secondary text-xs">Received</p>
               <p className="text-theme-text-primary text-sm">{formatDateTime(pr.receivedAt, tz)}</p>
+            </div>
+          )}
+          {(canAttachReceipt || pr.receiptFileUrl || pr.receiptUrl) && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Receipt</p>
+              <ReceiptControl
+                subject={pr.title}
+                receiptFileUrl={pr.receiptFileUrl}
+                receiptUrl={pr.receiptUrl}
+                canAttach={canAttachReceipt}
+                onUpload={async (file) => {
+                  await purchaseRequestService.uploadReceipt(pr.id, file);
+                  await fetchPurchaseRequest(pr.id);
+                }}
+                onDownload={() => purchaseRequestService.downloadReceipt(pr.id)}
+              />
             </div>
           )}
         </div>

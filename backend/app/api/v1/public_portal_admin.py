@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import require_permission
 from app.core.database import get_db
 from app.core.public_portal_fields import PUBLIC_PORTAL_FIELDS
-from app.core.public_portal_security import generate_api_key, hash_api_key
+from app.core.public_portal_security import as_utc, generate_api_key, hash_api_key
 from app.models.public_portal import (
     PublicPortalAccessLog,
     PublicPortalAPIKey,
@@ -115,7 +115,7 @@ async def create_portal_config(
         existing_config.default_rate_limit = config_data.default_rate_limit
         existing_config.cache_ttl_seconds = config_data.cache_ttl_seconds
         existing_config.settings = config_data.settings
-        existing_config.updated_at = datetime.now(timezone.utc).isoformat()
+        existing_config.updated_at = datetime.now(timezone.utc)
 
         await db.commit()
         await db.refresh(existing_config)
@@ -179,7 +179,7 @@ async def update_portal_config(
     if config_update.settings is not None:
         config.settings = config_update.settings
 
-    config.updated_at = datetime.now(timezone.utc).isoformat()
+    config.updated_at = datetime.now(timezone.utc)
 
     await db.commit()
     await db.refresh(config)
@@ -262,7 +262,7 @@ async def create_api_key(
         key_prefix=key_prefix,
         name=key_data.name,
         rate_limit_override=key_data.rate_limit_override,
-        expires_at=key_data.expires_at.isoformat() if key_data.expires_at else None,
+        expires_at=as_utc(key_data.expires_at) if key_data.expires_at else None,
         is_active=True,
         created_by=str(current_user.id),
     )
@@ -282,13 +282,9 @@ async def create_api_key(
         key_prefix=key_prefix,
         name=api_key_obj.name,
         rate_limit_override=api_key_obj.rate_limit_override,
-        expires_at=(
-            datetime.fromisoformat(api_key_obj.expires_at)
-            if api_key_obj.expires_at
-            else None
-        ),
+        expires_at=api_key_obj.expires_at,
         is_active=api_key_obj.is_active,
-        created_at=datetime.fromisoformat(api_key_obj.created_at),
+        created_at=api_key_obj.created_at,
     )
 
 
@@ -327,7 +323,7 @@ async def update_api_key(
     if key_update.rate_limit_override is not None:
         api_key.rate_limit_override = key_update.rate_limit_override
     if key_update.expires_at is not None:
-        api_key.expires_at = key_update.expires_at.isoformat()
+        api_key.expires_at = as_utc(key_update.expires_at)
     if key_update.is_active is not None:
         api_key.is_active = key_update.is_active
         if not key_update.is_active:
@@ -427,9 +423,9 @@ async def get_access_logs(
             PublicPortalAccessLog.flagged_suspicious == flagged_suspicious
         )
     if start_date:
-        query = query.where(PublicPortalAccessLog.timestamp >= start_date.isoformat())
+        query = query.where(PublicPortalAccessLog.timestamp >= as_utc(start_date))
     if end_date:
-        query = query.where(PublicPortalAccessLog.timestamp <= end_date.isoformat())
+        query = query.where(PublicPortalAccessLog.timestamp <= as_utc(end_date))
 
     # Order by most recent first
     query = query.order_by(desc(PublicPortalAccessLog.timestamp))
@@ -805,7 +801,7 @@ async def update_whitelist_entry(
         )
 
     whitelist_entry.is_enabled = entry_update.is_enabled
-    whitelist_entry.updated_at = datetime.now(timezone.utc).isoformat()
+    whitelist_entry.updated_at = datetime.now(timezone.utc)
 
     await db.commit()
     await db.refresh(whitelist_entry)
@@ -851,7 +847,7 @@ async def bulk_update_whitelist(
 
         if entry:
             entry.is_enabled = enabled
-            entry.updated_at = datetime.now(timezone.utc).isoformat()
+            entry.updated_at = datetime.now(timezone.utc)
             updated_count += 1
 
     await db.commit()

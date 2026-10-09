@@ -380,7 +380,7 @@ describe('electionService', () => {
     });
 
     it('saves configuration-only ballot data', async () => {
-      const payload = {
+      const payload: Parameters<typeof electionService.saveBallotTemplate>[0] = {
         name: 'Annual ballot',
         voting_method: 'simple_majority',
         allow_write_ins: false,

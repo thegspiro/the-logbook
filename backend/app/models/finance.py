@@ -904,6 +904,13 @@ class PurchaseRequest(Base):
     )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     receipt_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # An uploaded receipt: a Document under Finance > Receipts. receipt_url is
+    # the older typed link, kept for rows that have one.
+    receipt_document_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("documents.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     apparatus_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("apparatus.id", ondelete="SET NULL"),
@@ -1087,6 +1094,13 @@ class ExpenseLineItem(Base):
         default=ExpenseType.GENERAL,
     )
     receipt_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # An uploaded receipt: a Document under Finance > Receipts. receipt_url is
+    # the older typed link, kept for rows that have one.
+    receipt_document_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("documents.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     merchant: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
