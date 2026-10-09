@@ -110,6 +110,21 @@ frontend/src/modules/apparatus/          (39 files)
 > against it: `grep alias_generator=to_camel backend/app/schemas/<module>.py`.
 > See CLAUDE.md pitfall #5.
 
+> **Request casing.** Every request body takes **either** casing:
+> `apparatusId` or `apparatus_id`. Until 2026-10-09 only the main apparatus,
+> status-change, archive, EVOC, driver-exception and NFPA schemas did; the
+> sub-resource Create/Update schemas (operators, equipment, maintenance, fuel
+> logs, types, statuses, custom fields, maintenance types, photos, documents,
+> report configs, service providers, components, component notes) were
+> snake_case only, so the modals' creates were 422s and their updates dropped
+> every multi-word key. They now share `_REQUEST_CONFIG` (`loc_by_alias=False`,
+> so a 422 still names the snake_case field). Nested request items use
+> `FileAttachmentInput` / `OperatorRestrictionInput`; the response models keep
+> the plain `FileAttachment` / `OperatorRestriction`, whose keys serialize
+> snake_case (`file_path`, `is_active`) exactly as before.
+> `tests/test_apparatus_request_camelcase.py` walks every body model the router
+> accepts and fails on one that ignores a camelCase key.
+
 ### Enums
 
 All are `(str, Enum)` with lowercase values, per the repo convention.
@@ -470,11 +485,12 @@ bare `date.today()` here.
 
 ## Known Gaps
 
-| Gap                                                     | Detail                                                                                                                     |
-| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| **AP2-4** — EVOC gate fails open on a missing apparatus | Owner decision pending: fail closed, or give `shifts.apparatus_id` a real `SET NULL` foreign key. See KNOWN_LIMITATIONS.md |
-| Maintenance intervals are not scheduled                 | `default_interval_value` / `_unit` / `_miles` / `_hours` exist on `apparatus_maintenance_types` and nothing reads them     |
-| Sub-resource business logic is unreviewed               | Fuel logs, equipment, photos/documents and custom fields have verified tenancy invariants but no depth review              |
+| Gap                                                     | Detail                                                                                                                                                                                                                                 |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **AP2-4** — EVOC gate fails open on a missing apparatus | Owner decision pending: fail closed, or give `shifts.apparatus_id` a real `SET NULL` foreign key. See KNOWN_LIMITATIONS.md                                                                                                             |
+| Maintenance intervals are not scheduled                 | `default_interval_value` / `_unit` / `_miles` / `_hours` exist on `apparatus_maintenance_types` and nothing reads them                                                                                                                 |
+| Sub-resource business logic is unreviewed               | Fuel logs, equipment, photos/documents and custom fields have verified tenancy invariants but no depth review                                                                                                                          |
+| Emptying a field in an edit modal does not clear it     | Operator, Equipment and Maintenance modals omit blank fields on update (`...(f.x ? {x} : {})`), and an omitted key means "leave alone" — CLAUDE.md #1 wants `blankToNull` there. The API clears on an explicit `null` in either casing |
 
 ---
 

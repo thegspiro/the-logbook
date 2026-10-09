@@ -19,6 +19,25 @@ _response_config = ConfigDict(
     from_attributes=True, alias_generator=to_camel, populate_by_name=True
 )
 
+# Request config for the sub-resource write schemas (operators, equipment,
+# maintenance, fuel logs, types, statuses, custom fields, photos, documents,
+# report configs, service providers, components, component notes). The apparatus
+# pages build these bodies from the camelCase response types, and without an
+# alias a create 422'd on "missing" required fields while an update silently
+# dropped every multi-word key. populate_by_name keeps snake_case callers
+# working; loc_by_alias=False keeps 422 field names snake_case, as they were
+# before the alias. Dumps stay by field name, so the service receives snake_case
+# keys — do not dump these with by_alias=True.
+#
+# It goes on the Create/Update classes, not the *Base classes, because the
+# *Response classes inherit from the bases and Pydantic merges a parent's
+# model_config into the child.
+_REQUEST_CONFIG = ConfigDict(
+    alias_generator=to_camel,
+    populate_by_name=True,
+    loc_by_alias=False,
+)
+
 
 # =============================================================================
 # Enumerations (matching model enums)
@@ -130,9 +149,13 @@ class ApparatusTypeBase(BaseModel):
 class ApparatusTypeCreate(ApparatusTypeBase):
     """Schema for creating apparatus type"""
 
+    model_config = _REQUEST_CONFIG
+
 
 class ApparatusTypeUpdate(BaseModel):
     """Schema for updating apparatus type"""
+
+    model_config = _REQUEST_CONFIG
 
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     code: Optional[str] = Field(None, min_length=1, max_length=50)
@@ -201,9 +224,13 @@ class ApparatusStatusBase(BaseModel):
 class ApparatusStatusCreate(ApparatusStatusBase):
     """Schema for creating apparatus status"""
 
+    model_config = _REQUEST_CONFIG
+
 
 class ApparatusStatusUpdate(BaseModel):
     """Schema for updating apparatus status"""
+
+    model_config = _REQUEST_CONFIG
 
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     code: Optional[str] = Field(None, min_length=1, max_length=50)
@@ -683,9 +710,13 @@ class ApparatusCustomFieldBase(BaseModel):
 class ApparatusCustomFieldCreate(ApparatusCustomFieldBase):
     """Schema for creating custom field"""
 
+    model_config = _REQUEST_CONFIG
+
 
 class ApparatusCustomFieldUpdate(BaseModel):
     """Schema for updating custom field"""
+
+    model_config = _REQUEST_CONFIG
 
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     field_key: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -755,9 +786,13 @@ class ApparatusMaintenanceTypeBase(BaseModel):
 class ApparatusMaintenanceTypeCreate(ApparatusMaintenanceTypeBase):
     """Schema for creating maintenance type"""
 
+    model_config = _REQUEST_CONFIG
+
 
 class ApparatusMaintenanceTypeUpdate(BaseModel):
     """Schema for updating maintenance type"""
+
+    model_config = _REQUEST_CONFIG
 
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     code: Optional[str] = Field(None, min_length=1, max_length=50)
@@ -800,6 +835,18 @@ class FileAttachment(BaseModel):
     file_path: str
     file_name: str
     mime_type: Optional[str] = None
+
+
+class FileAttachmentInput(FileAttachment):
+    """FileAttachment as a request body takes it: camelCase or snake_case.
+
+    A separate class rather than the config on FileAttachment itself, because
+    the response schemas embed FileAttachment and FastAPI serializes responses
+    by alias — aliasing it would rename ``file_path`` to ``filePath`` inside
+    every stored attachment a response returns.
+    """
+
+    model_config = _REQUEST_CONFIG
 
 
 # =============================================================================
@@ -850,6 +897,10 @@ class ApparatusMaintenanceBase(BaseModel):
 class ApparatusMaintenanceCreate(ApparatusMaintenanceBase):
     """Schema for creating maintenance record"""
 
+    model_config = _REQUEST_CONFIG
+
+    attachments: Optional[List[FileAttachmentInput]] = None
+
     is_completed: bool = Field(default=False)
 
     # Historic entry support — for back-dating records entered during onboarding
@@ -870,6 +921,8 @@ class ApparatusMaintenanceCreate(ApparatusMaintenanceBase):
 
 class ApparatusMaintenanceUpdate(BaseModel):
     """Schema for updating maintenance record"""
+
+    model_config = _REQUEST_CONFIG
 
     maintenance_type_id: Optional[str] = None
     component_id: Optional[str] = None
@@ -900,7 +953,7 @@ class ApparatusMaintenanceUpdate(BaseModel):
     notes: Optional[str] = None
 
     # Attachments
-    attachments: Optional[List[FileAttachment]] = None
+    attachments: Optional[List[FileAttachmentInput]] = None
 
     # Historic fields (allow correction after creation)
     occurred_date: Optional[date] = None
@@ -957,6 +1010,8 @@ class ApparatusFuelLogBase(BaseModel):
 
 class ApparatusFuelLogCreate(ApparatusFuelLogBase):
     """Schema for creating fuel log"""
+
+    model_config = _REQUEST_CONFIG
 
 
 class ApparatusFuelLogResponse(ApparatusFuelLogBase):
@@ -1149,6 +1204,13 @@ class OperatorRestriction(BaseModel):
     is_active: bool = Field(default=True)
 
 
+class OperatorRestrictionInput(OperatorRestriction):
+    """OperatorRestriction as a request body takes it (see FileAttachmentInput
+    for why this is a subclass rather than config on the response model)."""
+
+    model_config = _REQUEST_CONFIG
+
+
 class ApparatusOperatorBase(BaseModel):
     """Base operator schema"""
 
@@ -1178,9 +1240,15 @@ class ApparatusOperatorBase(BaseModel):
 class ApparatusOperatorCreate(ApparatusOperatorBase):
     """Schema for creating operator"""
 
+    model_config = _REQUEST_CONFIG
+
+    restrictions: Optional[List[OperatorRestrictionInput]] = None
+
 
 class ApparatusOperatorUpdate(BaseModel):
     """Schema for updating operator"""
+
+    model_config = _REQUEST_CONFIG
 
     evoc_level_id: Optional[str] = None
 
@@ -1193,7 +1261,7 @@ class ApparatusOperatorUpdate(BaseModel):
     license_verified_date: Optional[date] = None
 
     has_restrictions: Optional[bool] = None
-    restrictions: Optional[List[OperatorRestriction]] = None
+    restrictions: Optional[List[OperatorRestrictionInput]] = None
     restriction_notes: Optional[str] = None
 
     is_active: Optional[bool] = None
@@ -1277,9 +1345,13 @@ class ApparatusEquipmentBase(BaseModel):
 class ApparatusEquipmentCreate(ApparatusEquipmentBase):
     """Schema for creating equipment"""
 
+    model_config = _REQUEST_CONFIG
+
 
 class ApparatusEquipmentUpdate(BaseModel):
     """Schema for updating equipment"""
+
+    model_config = _REQUEST_CONFIG
 
     inventory_item_id: Optional[str] = None
 
@@ -1331,6 +1403,8 @@ class ApparatusPhotoBase(BaseModel):
 class ApparatusPhotoCreate(ApparatusPhotoBase):
     """Schema for creating photo"""
 
+    model_config = _REQUEST_CONFIG
+
     apparatus_id: str = Field(..., description="Apparatus ID")
     file_path: str = Field(..., description="Path in storage system")
     file_name: str = Field(..., max_length=255)
@@ -1375,6 +1449,8 @@ class ApparatusDocumentBase(BaseModel):
 
 class ApparatusDocumentCreate(ApparatusDocumentBase):
     """Schema for creating document"""
+
+    model_config = _REQUEST_CONFIG
 
     apparatus_id: str = Field(..., description="Apparatus ID")
     file_path: str = Field(..., description="Path in storage system")
@@ -1672,9 +1748,13 @@ class ApparatusReportConfigBase(BaseModel):
 class ApparatusReportConfigCreate(ApparatusReportConfigBase):
     """Schema for creating report config"""
 
+    model_config = _REQUEST_CONFIG
+
 
 class ApparatusReportConfigUpdate(BaseModel):
     """Schema for updating report config"""
+
+    model_config = _REQUEST_CONFIG
 
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
@@ -1818,9 +1898,13 @@ class ApparatusServiceProviderBase(BaseModel):
 class ApparatusServiceProviderCreate(ApparatusServiceProviderBase):
     """Schema for creating service provider"""
 
+    model_config = _REQUEST_CONFIG
+
 
 class ApparatusServiceProviderUpdate(BaseModel):
     """Schema for updating service provider"""
+
+    model_config = _REQUEST_CONFIG
 
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     company_name: Optional[str] = Field(None, max_length=200)
@@ -1897,9 +1981,13 @@ class ApparatusComponentBase(BaseModel):
 class ApparatusComponentCreate(ApparatusComponentBase):
     """Schema for creating component"""
 
+    model_config = _REQUEST_CONFIG
+
 
 class ApparatusComponentUpdate(BaseModel):
     """Schema for updating component"""
+
+    model_config = _REQUEST_CONFIG
 
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     component_type: Optional[ComponentTypeEnum] = None
@@ -1970,9 +2058,15 @@ class ApparatusComponentNoteBase(BaseModel):
 class ApparatusComponentNoteCreate(ApparatusComponentNoteBase):
     """Schema for creating component note"""
 
+    model_config = _REQUEST_CONFIG
+
+    attachments: Optional[List[FileAttachmentInput]] = None
+
 
 class ApparatusComponentNoteUpdate(BaseModel):
     """Schema for updating component note"""
+
+    model_config = _REQUEST_CONFIG
 
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     description: Optional[str] = None
@@ -1986,7 +2080,7 @@ class ApparatusComponentNoteUpdate(BaseModel):
     actual_cost: Optional[Decimal] = Field(None, ge=0)
 
     resolution_notes: Optional[str] = None
-    attachments: Optional[List[NoteAttachment]] = None
+    attachments: Optional[List[FileAttachmentInput]] = None
     tags: Optional[List[str]] = None
 
 
