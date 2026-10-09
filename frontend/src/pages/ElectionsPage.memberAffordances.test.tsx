@@ -54,14 +54,14 @@ describe('ElectionsPage member affordances', () => {
     mockGetRanks.mockResolvedValue([]);
   });
 
-  it('leaves the panel blank for a member when no elections exist', async () => {
+  // A blank panel read as a broken page on a fresh install. The member's copy
+  // says where a vote turns up, and never points at Create Election.
+  it('tells a member where a vote will appear when no elections exist', async () => {
     renderWithRouter(<ElectionsPage />);
 
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /^All/ })).toBeInTheDocument();
-    });
-    expect(screen.queryByText('No elections found')).not.toBeInTheDocument();
-    expect(screen.queryByText('No elections have been created yet.')).not.toBeInTheDocument();
+    expect(await screen.findByText('No elections yet')).toBeInTheDocument();
+    expect(screen.getByText(/When your department opens a vote, it appears here/)).toBeInTheDocument();
+    expect(screen.queryByText(/Create an election, add the candidates/)).not.toBeInTheDocument();
   });
 
   it('still reports an empty result to a member when a status filter narrows the list', async () => {
@@ -83,8 +83,8 @@ describe('ElectionsPage member affordances', () => {
 
     renderWithRouter(<ElectionsPage />);
 
-    expect(await screen.findByText('No elections found')).toBeInTheDocument();
-    expect(screen.getByText('Get started by creating your first election.')).toBeInTheDocument();
+    expect(await screen.findByText('No elections yet')).toBeInTheDocument();
+    expect(screen.getByText(/Create an election, add the candidates, then open voting/)).toBeInTheDocument();
   });
 
   it('does not request create-dialog support data for a member', async () => {

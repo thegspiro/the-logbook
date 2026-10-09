@@ -65,7 +65,6 @@ const rosterResponse = (overrides: Partial<EligibilityRosterType>): EligibilityR
 
 const openRoster = async () => {
   renderWithRouter(<EligibilityRoster electionId="e1" />);
-  await userEvent.click(screen.getByRole('button', { name: /voter eligibility roster/i }));
   await screen.findByRole('table', { name: /voter eligibility roster/i });
 };
 
@@ -132,5 +131,29 @@ describe('EligibilityRoster (W50-55)', () => {
     expect(screen.queryByText(/received ballot/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/ballot\(s\) sent/i)).not.toBeInTheDocument();
     expect(screen.getByText('Will Receive Ballot')).toBeInTheDocument();
+  });
+});
+
+// The roster is the whole Eligibility tab. It used to start collapsed, so
+// choosing the tab showed only a title bar until a second click.
+describe('EligibilityRoster on first view', () => {
+  beforeEach(() => {
+    mockGetEligibilityRoster.mockReset();
+    mockGetEligibilityRoster.mockResolvedValue(rosterResponse({}));
+  });
+
+  it('loads and shows the roster without a second click', async () => {
+    renderWithRouter(<EligibilityRoster electionId="e1" />);
+    expect(screen.getByRole('button', { name: /voter eligibility roster/i })).toHaveAttribute('aria-expanded', 'true');
+    expect(await screen.findByRole('table', { name: /voter eligibility roster/i })).toBeInTheDocument();
+    expect(mockGetEligibilityRoster).toHaveBeenCalledWith('e1');
+  });
+
+  it('still collapses when its header is selected', async () => {
+    renderWithRouter(<EligibilityRoster electionId="e1" />);
+    await screen.findByRole('table', { name: /voter eligibility roster/i });
+    await userEvent.click(screen.getByRole('button', { name: /voter eligibility roster/i }));
+    expect(screen.getByRole('button', { name: /voter eligibility roster/i })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('table', { name: /voter eligibility roster/i })).not.toBeInTheDocument();
   });
 });

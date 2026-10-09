@@ -211,7 +211,10 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({ electionId
   const [roster, setRoster] = useState<EligibilityRosterType | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
+  // This panel is the whole Eligibility tab, so choosing the tab is already
+  // the request to see the roster; starting collapsed showed a title bar and
+  // nothing else until a second click.
+  const [isOpen, setIsOpen] = useState(true);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterValue>('all');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -282,6 +285,7 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({ electionId
       <button
         className="hover:bg-theme-surface-hover flex w-full items-center justify-between px-6 py-4 text-left transition-colors"
         onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
       >
         <div className="flex items-center gap-3">
           <Users className="text-theme-text-muted h-5 w-5" />

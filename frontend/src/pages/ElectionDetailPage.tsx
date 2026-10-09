@@ -1486,6 +1486,16 @@ export const ElectionDetailPage: React.FC = () => {
               {/* Lifecycle Actions */}
               <div>
                 <h4 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">Lifecycle</h4>
+                {/* open_election refuses a draft with no accepted candidate or
+                    ballot item, and opening never emails ballots, so a first
+                    election stalls at one or the other without this. */}
+                {election.status === ElectionStatus.DRAFT && (
+                  <p className="text-theme-text-secondary mb-3 text-sm">
+                    Next: add at least one candidate on the Candidates tab, or a ballot item on the Ballot tab, then
+                    select Open Election. Opening does not email ballots; send them with Send Ballot Emails once voting
+                    is open.
+                  </p>
+                )}
                 <div className="flex flex-wrap gap-2">
                   {election.ballot_items && election.ballot_items.length > 0 && (
                     <button
@@ -1671,6 +1681,15 @@ export const ElectionDetailPage: React.FC = () => {
                     {/* The emailed ballot carries ballot items and plain positions.
                         The reason used to be a hover title on a disabled button,
                         which a phone, a keyboard and a screen reader never show. */}
+                    {/* The sent stamp below only appears after a send; without
+                        this an opened election looks finished while no member
+                        has been told voting is open. */}
+                    {election.status === ElectionStatus.OPEN && canEmailBallots && !election.email_sent && (
+                      <p className="text-theme-text-secondary w-full text-sm">
+                        Ballots have not been emailed yet. Members can already vote on this page; Send Ballot Emails
+                        tells them voting is open and gives each a ballot link.
+                      </p>
+                    )}
                     {election.status === ElectionStatus.OPEN && !canEmailBallots && (
                       <p id="send-ballot-unavailable" className="text-theme-text-muted w-full text-xs">
                         Ballot emails need ballot items or positions, and the ballot cannot change while voting is open.
@@ -1721,7 +1740,7 @@ export const ElectionDetailPage: React.FC = () => {
               {/* Danger Zone */}
               {election.status !== ElectionStatus.CANCELLED && (
                 <div>
-                  <h4 className="mb-2 text-xs font-semibold tracking-wider text-red-500 uppercase dark:text-red-400">
+                  <h4 className="mb-2 text-xs font-semibold tracking-wider text-red-800 uppercase dark:text-red-300">
                     Danger Zone
                   </h4>
                   <button
