@@ -173,8 +173,8 @@ class TrainingSessionService:
 
     async def get_session_by_event(
         self,
-        event_id: UUID,
-        organization_id: UUID,
+        event_id: UUID | str,
+        organization_id: UUID | str,
     ) -> Optional[TrainingSession]:
         """Fetch the training session attached to an event, org-scoped."""
         result = await self.db.execute(
@@ -182,7 +182,8 @@ class TrainingSessionService:
             .where(TrainingSession.event_id == str(event_id))
             .where(TrainingSession.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        training_session: Optional[TrainingSession] = result.scalar_one_or_none()
+        return training_session
 
     async def update_session_linkage(
         self,
@@ -277,7 +278,8 @@ class TrainingSessionService:
             .where(TrainingCourse.id == str(course_id))
             .where(TrainingCourse.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        training_course: Optional[TrainingCourse] = result.scalar_one_or_none()
+        return training_course
 
     async def resolve_attach_details(
         self, details: TrainingSessionAttach, organization_id: UUID
@@ -2654,7 +2656,7 @@ class TrainingSessionService:
             )
             .order_by(ProgramEnrollment.enrolled_at.desc())
         )
-        enrollments = list(result.scalars().all())
+        enrollments: List[ProgramEnrollment] = list(result.scalars().all())
         if not enrollments:
             return None
         if len(enrollments) == 1:

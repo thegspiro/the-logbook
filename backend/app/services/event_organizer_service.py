@@ -122,7 +122,7 @@ class EventOrganizerService:
     # ------------------------------------------------------------------
 
     async def _active_member(self, user_id: str, organization_id: str) -> User:
-        user = (
+        user: Optional[User] = (
             await self.db.execute(
                 select(User).where(
                     User.id == str(user_id),

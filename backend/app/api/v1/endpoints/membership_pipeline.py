@@ -1392,7 +1392,7 @@ async def skip_step(
 @router.post("/prospects/{prospect_id}/advance", response_model=ProspectResponse)
 async def advance_prospect(
     prospect_id: UUID,
-    data: AdvanceProspectRequest = None,
+    data: AdvanceProspectRequest | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("members.manage", "prospective_members.manage")
@@ -1642,7 +1642,7 @@ async def bulk_set_prospect_status(
 @router.post("/prospects/{prospect_id}/regress", response_model=ProspectResponse)
 async def regress_prospect(
     prospect_id: UUID,
-    data: AdvanceProspectRequest = None,
+    data: AdvanceProspectRequest | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("members.manage", "prospective_members.manage")

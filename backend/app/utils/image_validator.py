@@ -161,7 +161,7 @@ class ImageValidator:
         This prevents attackers from renaming malicious files.
         """
         try:
-            mime_type = self.magic.from_buffer(image_bytes)
+            mime_type: str = self.magic.from_buffer(image_bytes)
 
             if mime_type not in self.ALLOWED_MIME_TYPES:
                 raise ImageValidationError(

@@ -271,13 +271,14 @@ async def _org_training_config(db: AsyncSession, organization_id) -> object | No
     """The organization's training config, or None when it has never been saved."""
     from app.models.training import TrainingModuleConfig
 
-    return (
+    config: TrainingModuleConfig | None = (
         await db.execute(
             select(TrainingModuleConfig).where(
                 TrainingModuleConfig.organization_id == str(organization_id)
             )
         )
     ).scalar_one_or_none()
+    return config
 
 
 async def _named_viewer_ids(db: AsyncSession, test_id: str) -> set[str]:
@@ -706,7 +707,7 @@ async def update_template(
     update_data = template_update.model_dump(exclude_unset=True)
 
     # Convert sections to JSON-serializable dicts if provided
-    if "sections" in update_data and update_data["sections"] is not None:
+    if "sections" in update_data and template_update.sections is not None:
         update_data["sections"] = [s.model_dump() for s in template_update.sections]
 
     # Validate/normalize the requirement link (UUID -> str for the FK column)
@@ -1870,7 +1871,7 @@ async def update_test(
         test.resume_count = (test.resume_count or 0) + 1
 
     # Convert section_results to JSON-serializable dicts if provided
-    if "section_results" in update_data and update_data["section_results"] is not None:
+    if "section_results" in update_data and test_update.section_results is not None:
         update_data["section_results"] = [
             sr.model_dump() for sr in test_update.section_results
         ]
@@ -1956,7 +1957,8 @@ async def _lock_test_for_transition(
         .where(SkillTest.organization_id == organization_id)
         .with_for_update()
     )
-    return result.scalar_one_or_none()
+    locked_test: SkillTest | None = result.scalar_one_or_none()
+    return locked_test
 
 
 @router.post("/tests/{test_id}/complete", response_model=SkillTestResponse)

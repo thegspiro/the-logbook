@@ -59,7 +59,8 @@ def current_stint_start(
     starts = [p.start_date or hire_date for p in periods]
     known = [s for s in starts if s is not None]
     if known:
-        return max(known)
+        latest: date = max(known)
+        return latest
     return hire_date
 
 

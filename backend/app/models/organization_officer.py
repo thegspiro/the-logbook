@@ -11,7 +11,11 @@ The office keys themselves are not stored per-organization — they come from
 from the linked member.
 """
 
-from sqlalchemy import Column, DateTime, ForeignKey, String, UniqueConstraint
+from datetime import datetime
+from typing import Optional
+
+from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -32,39 +36,39 @@ class OrganizationOfficer(Base):
 
     __tablename__ = "organization_officers"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Office identifier from OFFICE_CATALOG (e.g. "president", "chief").
-    office_key = Column(String(50), nullable=False)
+    office_key: Mapped[str] = mapped_column(String(50), nullable=False)
 
     # The member holding the office. SET NULL (not CASCADE) so removing a
     # member leaves the office row — and its overrides — in place instead of
     # silently emptying the department's signature block.
-    user_id = Column(
+    user_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Admin overrides. NULL means "derive from the linked member".
-    display_name = Column(String(200), nullable=True)
-    title = Column(String(150), nullable=True)
-    email = Column(String(320), nullable=True)
-    phone = Column(String(50), nullable=True)
+    display_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    title: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(320), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
     )
-    updated_by = Column(
+    updated_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 

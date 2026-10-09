@@ -125,7 +125,8 @@ class DocumentService:
             .where(DocumentFolder.slug == slug)
             .where(DocumentFolder.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     # ============================================
     # Document CRUD
@@ -140,7 +141,8 @@ class DocumentService:
             .where(Document.id == document_id)
             .where(Document.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        document: Optional[Document] = result.scalar_one_or_none()
+        return document
 
     # ============================================
     # Publish Meeting Minutes

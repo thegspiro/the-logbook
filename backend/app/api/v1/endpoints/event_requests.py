@@ -1583,7 +1583,7 @@ async def _load_request_for_staffing(
     if for_update:
         query = query.with_for_update()
     result = await db.execute(query)
-    event_request = result.scalar_one_or_none()
+    event_request: EventRequest | None = result.scalar_one_or_none()
     if not event_request:
         raise HTTPException(status_code=404, detail="Event request not found")
     return event_request
@@ -1813,8 +1813,6 @@ async def get_outreach_type_labels(
     db: AsyncSession = Depends(get_db),
 ):
     """Get labels for outreach event types. No auth required."""
-    from app.api.v1.endpoints.events import EVENT_SETTINGS_DEFAULTS
-
     if organization_id:
         result = await db.execute(
             select(Organization).where(
@@ -1826,7 +1824,8 @@ async def get_outreach_type_labels(
             types = get_outreach_types(org)
             return {t["value"]: t["label"] for t in types}
 
-    default_types = EVENT_SETTINGS_DEFAULTS["outreach_event_types"]
+    # With no organization this is the shipped default list.
+    default_types = get_outreach_types(None)
     return {t["value"]: t["label"] for t in default_types}
 
 

@@ -170,7 +170,8 @@ class ApparatusService:
                 )
             )
         )
-        return result.scalar_one_or_none()
+        apparatus_type: Optional[ApparatusType] = result.scalar_one_or_none()
+        return apparatus_type
 
     async def list_apparatus_types(
         self,
@@ -319,7 +320,8 @@ class ApparatusService:
                 )
             )
         )
-        return result.scalar_one_or_none()
+        apparatus_status: Optional[ApparatusStatus] = result.scalar_one_or_none()
+        return apparatus_status
 
     async def list_apparatus_statuses(
         self,
@@ -531,7 +533,7 @@ class ApparatusService:
     async def get_apparatus(
         self,
         apparatus_id: str,
-        organization_id: str,
+        organization_id: str | UUID,
         include_relations: bool = True,
     ) -> Optional[Apparatus]:
         """Get apparatus by ID"""
@@ -556,7 +558,8 @@ class ApparatusService:
             )
 
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        apparatus: Optional[Apparatus] = result.scalar_one_or_none()
+        return apparatus
 
     async def list_apparatus(
         self,
@@ -971,7 +974,8 @@ class ApparatusService:
             .where(ApparatusCustomField.id == str(field_id))
             .where(ApparatusCustomField.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        custom_field: Optional[ApparatusCustomField] = result.scalar_one_or_none()
+        return custom_field
 
     async def list_custom_fields(
         self,
@@ -1096,7 +1100,10 @@ class ApparatusService:
                 )
             )
         )
-        return result.scalar_one_or_none()
+        maintenance_type: Optional[ApparatusMaintenanceType] = (
+            result.scalar_one_or_none()
+        )
+        return maintenance_type
 
     async def list_maintenance_types(
         self,
@@ -1283,7 +1290,8 @@ class ApparatusService:
             .where(ApparatusMaintenance.organization_id == str(organization_id))
             .options(selectinload(ApparatusMaintenance.maintenance_type))
         )
-        return result.scalar_one_or_none()
+        record: Optional[ApparatusMaintenance] = result.scalar_one_or_none()
+        return record
 
     async def list_maintenance_records(
         self,
@@ -1623,7 +1631,8 @@ class ApparatusService:
             .where(ApparatusOperator.id == str(operator_id))
             .options(selectinload(ApparatusOperator.evoc_level))
         )
-        return result.scalar_one()
+        apparatus_operator: ApparatusOperator = result.scalar_one()
+        return apparatus_operator
 
     async def list_operators(
         self,
@@ -1785,7 +1794,7 @@ class ApparatusService:
             .where(ApparatusEquipment.id == str(equipment_id))
             .where(ApparatusEquipment.organization_id == str(organization_id))
         )
-        equipment = result.scalar_one_or_none()
+        equipment: Optional[ApparatusEquipment] = result.scalar_one_or_none()
         if not equipment:
             return None
 
@@ -2075,7 +2084,8 @@ class ApparatusService:
 
         query = query.order_by(ApparatusNFPACompliance.next_due_date.asc())
         result = await self.db.execute(query)
-        return result.scalars().all()
+        items: List[ApparatusNFPACompliance] = result.scalars().all()
+        return items
 
     async def get_nfpa_compliance(
         self, compliance_id: str, organization_id: UUID
@@ -2086,13 +2096,14 @@ class ApparatusService:
             .where(ApparatusNFPACompliance.id == compliance_id)
             .where(ApparatusNFPACompliance.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        compliance: Optional[ApparatusNFPACompliance] = result.scalar_one_or_none()
+        return compliance
 
     async def create_nfpa_compliance(
         self,
         compliance_data,
         organization_id: UUID,
-        checked_by: UUID = None,
+        checked_by: Optional[UUID] = None,
     ) -> ApparatusNFPACompliance:
         """Create an NFPA compliance record"""
         # Verify apparatus exists and belongs to org
@@ -2118,7 +2129,7 @@ class ApparatusService:
         compliance_id: str,
         compliance_data,
         organization_id: UUID,
-        checked_by: UUID = None,
+        checked_by: Optional[UUID] = None,
     ) -> Optional[ApparatusNFPACompliance]:
         """Update an NFPA compliance record"""
         record = await self.get_nfpa_compliance(compliance_id, organization_id)
@@ -2280,7 +2291,8 @@ class ApparatusService:
 
         query = query.order_by(ApparatusReportConfig.name)
         result = await self.db.execute(query)
-        return result.scalars().all()
+        items: List[ApparatusReportConfig] = result.scalars().all()
+        return items
 
     async def get_report_config(
         self, config_id: str, organization_id: UUID
@@ -2291,13 +2303,14 @@ class ApparatusService:
             .where(ApparatusReportConfig.id == str(config_id))
             .where(ApparatusReportConfig.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        config: Optional[ApparatusReportConfig] = result.scalar_one_or_none()
+        return config
 
     async def create_report_config(
         self,
         config_data,
         organization_id: UUID,
-        created_by: UUID = None,
+        created_by: Optional[UUID] = None,
     ) -> ApparatusReportConfig:
         """Create a report config"""
         config = ApparatusReportConfig(
@@ -2370,7 +2383,8 @@ class ApparatusService:
             .limit(limit)
         )
         result = await self.db.execute(query)
-        return result.scalars().all()
+        items: List[ApparatusServiceProvider] = result.scalars().all()
+        return items
 
     async def get_service_provider(
         self, provider_id: str, organization_id: UUID
@@ -2381,13 +2395,14 @@ class ApparatusService:
             .where(ApparatusServiceProvider.id == str(provider_id))
             .where(ApparatusServiceProvider.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        provider: Optional[ApparatusServiceProvider] = result.scalar_one_or_none()
+        return provider
 
     async def create_service_provider(
         self,
         provider_data,
         organization_id: UUID,
-        created_by: UUID = None,
+        created_by: Optional[UUID] = None,
     ) -> ApparatusServiceProvider:
         """Create a service provider"""
         provider = ApparatusServiceProvider(
@@ -2486,7 +2501,8 @@ class ApparatusService:
             .limit(limit)
         )
         result = await self.db.execute(query)
-        return result.scalars().all()
+        items: List[ApparatusComponent] = result.scalars().all()
+        return items
 
     async def get_component(
         self, component_id: str, organization_id: UUID
@@ -2497,13 +2513,14 @@ class ApparatusService:
             .where(ApparatusComponent.id == str(component_id))
             .where(ApparatusComponent.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        apparatus_component: Optional[ApparatusComponent] = result.scalar_one_or_none()
+        return apparatus_component
 
     async def create_component(
         self,
         component_data,
         organization_id: UUID,
-        created_by: UUID = None,
+        created_by: Optional[UUID] = None,
     ) -> ApparatusComponent:
         """Create a component"""
         apparatus = await self.get_apparatus(
@@ -2546,7 +2563,7 @@ class ApparatusService:
         self,
         component_id: str,
         organization_id: UUID,
-        archived_by: UUID = None,
+        archived_by: Optional[UUID] = None,
     ) -> bool:
         """Soft-delete (archive) a component"""
         component = await self.get_component(component_id, organization_id)
@@ -2606,7 +2623,8 @@ class ApparatusService:
             .limit(limit)
         )
         result = await self.db.execute(query)
-        return result.scalars().all()
+        items: List[ApparatusComponentNote] = result.scalars().all()
+        return items
 
     async def get_component_note(
         self, note_id: str, organization_id: UUID
@@ -2617,14 +2635,15 @@ class ApparatusService:
             .where(ApparatusComponentNote.id == str(note_id))
             .where(ApparatusComponentNote.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        note: Optional[ApparatusComponentNote] = result.scalar_one_or_none()
+        return note
 
     async def create_component_note(
         self,
         note_data,
         organization_id: UUID,
-        created_by: UUID = None,
-        reported_by: UUID = None,
+        created_by: Optional[UUID] = None,
+        reported_by: Optional[UUID] = None,
     ) -> ApparatusComponentNote:
         """Create a component note"""
         component = await self.get_component(note_data.component_id, organization_id)
@@ -2662,7 +2681,7 @@ class ApparatusService:
         note_id: str,
         note_data,
         organization_id: UUID,
-        resolved_by: UUID = None,
+        resolved_by: Optional[UUID] = None,
     ) -> Optional[ApparatusComponentNote]:
         """Update a component note"""
         note = await self.get_component_note(note_id, organization_id)

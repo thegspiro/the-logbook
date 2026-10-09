@@ -21,21 +21,18 @@ drivers, and for the same reason: a certification that is current now but
 lapses before the shift qualifies nobody to work it.
 """
 
-from sqlalchemy import (
-    Column,
-    Date,
-    DateTime,
-    ForeignKey,
-    Index,
-    String,
-    Text,
-    UniqueConstraint,
-)
-from sqlalchemy.orm import relationship
+from datetime import date, datetime
+from typing import TYPE_CHECKING, Optional
+
+from sqlalchemy import Date, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class MemberQualification(Base):
@@ -49,13 +46,13 @@ class MemberQualification(Base):
 
     __tablename__ = "member_qualifications"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
@@ -65,29 +62,29 @@ class MemberQualification(Base):
     # Stored as a string rather than an enum so a department can be given its
     # own qualifications later without a schema change — the same shape the
     # rank list already has.
-    qualification_code = Column(String(50), nullable=False)
+    qualification_code: Mapped[str] = mapped_column(String(50), nullable=False)
 
-    granted_on = Column(Date, nullable=True)
+    granted_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     # NULL means it does not expire. A qualification with no expiry is
     # ordinary — Firefighter I does not lapse in most states — so NULL has to
     # mean "current forever" rather than "unknown", and every reader treats it
     # that way.
-    expires_on = Column(Date, nullable=True, index=True)
+    expires_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True, index=True)
 
-    notes = Column(Text, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
     )
 
-    user = relationship("User", backref="qualifications")
+    user: Mapped["User"] = relationship("User", backref="qualifications")
 
     __table_args__ = (
         # One row per member per qualification. Renewing an EMT card updates

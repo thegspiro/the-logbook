@@ -32,7 +32,7 @@ from app.api.dependencies import (
 from app.api.v1.endpoints.documents import DOCUMENT_FILE_RULES
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.utils import safe_error_detail
+from app.core.utils import ensure_found, safe_error_detail
 from app.models.apparatus import Apparatus, ApparatusDocument, ApparatusPhoto
 from app.models.document import DocumentFolder
 from app.models.facilities import SHARED_DOCUMENT_PREFIX, shared_document_id
@@ -536,7 +536,7 @@ async def create_apparatus(
     service = ApparatusService(db)
 
     try:
-        apparatus = await service.create_apparatus(
+        created = await service.create_apparatus(
             apparatus_data=apparatus_data,
             organization_id=current_user.organization_id,
             created_by=current_user.id,
@@ -547,12 +547,13 @@ async def create_apparatus(
         )
 
     # Reload with relations
-    apparatus = await service.get_apparatus(
-        apparatus_id=apparatus.id,
-        organization_id=current_user.organization_id,
+    return ensure_found(
+        await service.get_apparatus(
+            apparatus_id=created.id,
+            organization_id=current_user.organization_id,
+        ),
+        "Apparatus",
     )
-
-    return apparatus
 
 
 @router.get("/summary", response_model=ApparatusFleetSummary, tags=["Apparatus"])

@@ -146,7 +146,7 @@ def _json_has_value(column):
     )
 
 
-def restricted_folders_query(organization_id: str):
+def restricted_folders_query(organization_id: str | UUID):
     """The org's folders that carry any restriction of their own.
 
     Only these can turn a caller away; an organization-visible folder with no
@@ -330,7 +330,8 @@ class DocumentsService:
             .where(DocumentFolder.id == str(folder_id))
             .where(DocumentFolder.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     @staticmethod
     def _folder_admits_user(
@@ -885,7 +886,8 @@ class DocumentsService:
             )
             .with_for_update()
         )
-        return rows.all()
+        items: List[Tuple[str, Optional[str]]] = rows.all()
+        return items
 
     async def _delete_facility_document_references(
         self,
@@ -965,7 +967,7 @@ class DocumentsService:
 
     async def _match_facility_document_references(
         self,
-        model: type,
+        model: type[FacilityDocument] | type[FacilityPhoto],
         target_document_ids: Set[str],
         organization_id: UUID,
     ) -> List[str]:
@@ -1130,7 +1132,8 @@ class DocumentsService:
         if for_update:
             query = query.with_for_update()
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        document: Optional[Document] = result.scalar_one_or_none()
+        return document
 
     async def attach_document_names(
         self, organization_id: UUID, documents: List[Document]
@@ -1322,7 +1325,8 @@ class DocumentsService:
             .order_by(DocumentFolder.id)
             .limit(1)
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _lock_members_root(
         self, organization_id: UUID
@@ -1343,7 +1347,8 @@ class DocumentsService:
             .limit(1)
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _peek_member_personal_folder(
         self, members_root_id: str, user_id: str
@@ -1372,7 +1377,8 @@ class DocumentsService:
             .order_by(DocumentFolder.id)
             .limit(1)
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _lock_member_personal_folder(
         self, members_root_id: str, user_id: str
@@ -1393,7 +1399,8 @@ class DocumentsService:
             .limit(1)
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def ensure_member_folder(
         self, organization_id: UUID, user: User
@@ -1517,7 +1524,8 @@ class DocumentsService:
             .order_by(DocumentFolder.id)
             .limit(1)
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _lock_apparatus_root(
         self, organization_id: UUID
@@ -1537,7 +1545,8 @@ class DocumentsService:
             .limit(1)
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _peek_apparatus_folder(
         self, apparatus_root_id: str, apparatus_id_str: str
@@ -1556,7 +1565,8 @@ class DocumentsService:
             .order_by(DocumentFolder.id)
             .limit(1)
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _lock_apparatus_folder(
         self, apparatus_root_id: str, apparatus_id_str: str
@@ -1576,7 +1586,8 @@ class DocumentsService:
             .limit(1)
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def ensure_apparatus_folder(
         self, organization_id: UUID, apparatus_id: str, apparatus_unit_number: str
@@ -1778,7 +1789,8 @@ class DocumentsService:
             .limit(1)
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _lock_facility_folder(
         self, facilities_root_id: str, facility_id_str: str
@@ -1804,7 +1816,8 @@ class DocumentsService:
             .limit(1)
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _peek_facility_folder(
         self, facilities_root_id: str, facility_id_str: str
@@ -1833,7 +1846,8 @@ class DocumentsService:
             .order_by(DocumentFolder.id)
             .limit(1)
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _lock_folder_by_id(self, folder_id: str) -> Optional[DocumentFolder]:
         """Locking read for one already-known folder row, by primary key.
@@ -1854,7 +1868,8 @@ class DocumentsService:
             .where(DocumentFolder.id == folder_id)
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _peek_facilities_root(
         self, organization_id: UUID
@@ -1890,7 +1905,8 @@ class DocumentsService:
             .order_by(DocumentFolder.id)
             .limit(1)
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def ensure_facility_folder(
         self, organization_id: UUID, facility_id: str, facility_display_name: str
@@ -2168,7 +2184,8 @@ class DocumentsService:
             .order_by(DocumentFolder.id)
             .limit(1)
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     FINANCE_ROOT_SLUG = "finance"
     FINANCE_RECEIPTS_SLUG = "finance-receipts"
@@ -2271,7 +2288,8 @@ class DocumentsService:
             .limit(1)
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _peek_event_folder(
         self, events_root_id: str, event_id_str: str
@@ -2290,7 +2308,8 @@ class DocumentsService:
             .order_by(DocumentFolder.id)
             .limit(1)
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _lock_event_folder(
         self, events_root_id: str, event_id_str: str
@@ -2310,7 +2329,8 @@ class DocumentsService:
             .limit(1)
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def ensure_event_folder(
         self, organization_id: UUID, event_id: str, event_title: str

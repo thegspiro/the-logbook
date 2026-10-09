@@ -795,7 +795,7 @@ class SchedulingService:
     # ============================================
 
     async def _get_apparatus_map(
-        self, organization_id: UUID, apparatus_ids: List[str]
+        self, organization_id: UUID | str, apparatus_ids: List[str]
     ) -> Dict[str, Any]:
         """Load apparatus display fields for a set of shift apparatus IDs.
 
@@ -1373,15 +1373,12 @@ class SchedulingService:
         date.
         """
         span = timedelta(days=MEMBER_SHIFT_WINDOW_DAYS)
-        if start_date is None and end_date is None:
-            start_date = today
-            end_date = start_date + span
-        elif start_date is None:
-            start_date = end_date - span
-        elif end_date is None:
-            end_date = start_date + span
-        elif end_date - start_date > span:
-            end_date = start_date + span
+        if start_date is None:
+            if end_date is None:
+                return today, today + span
+            return end_date - span, end_date
+        if end_date is None or end_date - start_date > span:
+            return start_date, start_date + span
         return start_date, end_date
 
     async def get_member_visible_shifts(
@@ -1823,7 +1820,10 @@ class SchedulingService:
         return keep
 
     async def get_shift_by_id(
-        self, shift_id: UUID, organization_id: UUID, for_update: bool = False
+        self,
+        shift_id: UUID | str,
+        organization_id: UUID | str,
+        for_update: bool = False,
     ) -> Optional[Shift]:
         """Get a shift by ID.
 
@@ -1856,7 +1856,8 @@ class SchedulingService:
         if for_update:
             query = query.with_for_update().execution_options(populate_existing=True)
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        shift: Optional[Shift] = result.scalar_one_or_none()
+        return shift
 
     # ============================================
     # Personal calendar (ICS) feed
@@ -1882,7 +1883,8 @@ class SchedulingService:
             user.calendar_feed_token = generate_feed_token()[:64]
             await self.db.commit()
             await self.db.refresh(user)
-        return user.calendar_feed_token
+        token: Optional[str] = user.calendar_feed_token
+        return token
 
     async def rotate_calendar_token(
         self, user_id: UUID, organization_id: UUID
@@ -1902,7 +1904,8 @@ class SchedulingService:
         user.calendar_feed_token = generate_feed_token()[:64]
         await self.db.commit()
         await self.db.refresh(user)
-        return user.calendar_feed_token
+        token: Optional[str] = user.calendar_feed_token
+        return token
 
     async def get_user_by_calendar_token(self, token: str) -> Optional[User]:
         """Resolve the member owning a calendar-feed token (public, unauth)."""
@@ -1913,7 +1916,8 @@ class SchedulingService:
             .where(User.calendar_feed_token == token)
             .where(User.deleted_at.is_(None))
         )
-        return result.scalar_one_or_none()
+        user: Optional[User] = result.scalar_one_or_none()
+        return user
 
     async def auto_generate_shifts_for_org(
         self,
@@ -2000,7 +2004,9 @@ class SchedulingService:
         )
         return list(result.scalars().all())
 
-    async def _user_in_org(self, user_id: UUID, organization_id: UUID) -> bool:
+    async def _user_in_org(
+        self, user_id: UUID | str, organization_id: UUID | str
+    ) -> bool:
         """Return True if user_id belongs to the given organization.
 
         Used to reject caller-supplied user IDs (attendance, assignments)
@@ -2098,7 +2104,7 @@ class SchedulingService:
             Shift.status != ShiftStatus.CANCELLED,
         )
 
-        running = (
+        running: Optional[Shift] = (
             await self.db.execute(
                 select(Shift)
                 .where(
@@ -2118,7 +2124,7 @@ class SchedulingService:
         if running:
             return running
 
-        just_ended = (
+        just_ended: Optional[Shift] = (
             await self.db.execute(
                 select(Shift)
                 .where(
@@ -2133,7 +2139,7 @@ class SchedulingService:
         if just_ended:
             return just_ended
 
-        upcoming = (
+        upcoming: Optional[Shift] = (
             await self.db.execute(
                 select(Shift)
                 .where(*usable, Shift.start_time > now)
@@ -2707,7 +2713,7 @@ class SchedulingService:
             .where(ShiftAttendance.shift_id == str(shift_id))
             .order_by(ShiftAttendance.created_at)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def update_attendance(
         self, attendance_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
@@ -2923,7 +2929,7 @@ class SchedulingService:
         self,
         shift_id: str,
         user_id: str,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Tuple[Optional[ShiftAttendance], Optional[str]]:
         """Member self-service check-in for a shift.
 
@@ -3031,7 +3037,7 @@ class SchedulingService:
         self,
         shift_id: str,
         user_id: str,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Tuple[Optional[ShiftAttendance], Optional[str]]:
         """Member self-service check-out for a shift."""
         shift = await self.get_shift_by_id(shift_id, organization_id)
@@ -3068,7 +3074,7 @@ class SchedulingService:
         self,
         shift_id: str,
         user_id: str,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Optional[ShiftAttendance]:
         """Get a member's attendance record for a shift."""
         shift = await self.get_shift_by_id(shift_id, organization_id)
@@ -3080,7 +3086,8 @@ class SchedulingService:
                 ShiftAttendance.user_id == user_id,
             )
         )
-        return result.scalar_one_or_none()
+        shift_attendance: Optional[ShiftAttendance] = result.scalar_one_or_none()
+        return shift_attendance
 
     async def remove_attendance(
         self, attendance_id: UUID, organization_id: UUID
@@ -3293,7 +3300,7 @@ class SchedulingService:
             .where(ShiftCall.organization_id == str(organization_id))
             .order_by(ShiftCall.dispatched_at.asc())
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_shift_call_by_id(
         self, call_id: UUID, organization_id: UUID
@@ -3304,7 +3311,8 @@ class SchedulingService:
             .where(ShiftCall.id == str(call_id))
             .where(ShiftCall.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        shift_call: Optional[ShiftCall] = result.scalar_one_or_none()
+        return shift_call
 
     async def update_shift_call(
         self, call_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
@@ -3544,7 +3552,7 @@ class SchedulingService:
 
         query = query.order_by(ShiftTemplate.name.asc())
         result = await self.db.execute(query)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_template_by_id(
         self, template_id: UUID, organization_id: UUID
@@ -3555,7 +3563,8 @@ class SchedulingService:
             .where(ShiftTemplate.id == str(template_id))
             .where(ShiftTemplate.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        shift_template: Optional[ShiftTemplate] = result.scalar_one_or_none()
+        return shift_template
 
     async def update_template(
         self, template_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
@@ -3621,7 +3630,7 @@ class SchedulingService:
 
         query = query.order_by(ShiftPattern.name.asc())
         result = await self.db.execute(query)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_pattern_by_id(
         self, pattern_id: UUID, organization_id: UUID
@@ -3632,7 +3641,8 @@ class SchedulingService:
             .where(ShiftPattern.id == str(pattern_id))
             .where(ShiftPattern.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        shift_pattern: Optional[ShiftPattern] = result.scalar_one_or_none()
+        return shift_pattern
 
     async def update_pattern(
         self, pattern_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
@@ -3658,7 +3668,7 @@ class SchedulingService:
         organization_id: UUID,
         start_date: date,
         end_date: date,
-        created_by: UUID,
+        created_by: Optional[UUID],
     ) -> Tuple[List[Shift], Optional[str]]:
         """Generate shifts from a pattern for a given date range"""
         # Driver seats skipped for want of an EVOC certification, reported
@@ -4121,7 +4131,8 @@ class SchedulingService:
         )
         if outcome is None or outcome["allowed"]:
             return None
-        return outcome["blocked_reason"]
+        reason: Optional[str] = outcome["blocked_reason"]
+        return reason
 
     async def _check_driver_qualification(
         self,
@@ -4300,7 +4311,7 @@ class SchedulingService:
             else None
         )
         slots = self.normalize_positions(shift.positions)
-        candidate = None
+        candidate: Optional[User] = None
         if enforce_position_eligibility:
             user_result = await self.db.execute(
                 select(User).where(
@@ -4408,6 +4419,10 @@ class SchedulingService:
                 ShiftEligibilityService,
             )
 
+            # The active-member check above read this row in the same
+            # transaction, so the candidate is always found here.
+            if candidate is None:
+                return "Participating member is no longer active in this organization"
             eligible = await ShiftEligibilityService(self.db).get_eligible_positions(
                 candidate, str(organization_id), str(shift.id)
             )
@@ -4626,7 +4641,7 @@ class SchedulingService:
             .where(ShiftAssignment.organization_id == str(organization_id))
             .order_by(ShiftAssignment.created_at.asc())
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_user_assignments(
         self,
@@ -4650,7 +4665,7 @@ class SchedulingService:
 
         query = query.order_by(Shift.shift_date.asc(), Shift.start_time.asc())
         result = await self.db.execute(query)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_overtime_warnings(
         self,
@@ -4732,7 +4747,8 @@ class SchedulingService:
             .where(ShiftAssignment.id == str(assignment_id))
             .where(ShiftAssignment.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        shift_assignment: Optional[ShiftAssignment] = result.scalar_one_or_none()
+        return shift_assignment
 
     async def update_assignment(
         self,
@@ -5559,6 +5575,8 @@ class SchedulingService:
 
             # The offering shift must exist in the caller's org and the
             # requester must actually hold an assignment on it.
+            if not offering_shift_id:
+                return None, "Offering shift not found"
             offering_shift = await self.get_shift_by_id(
                 offering_shift_id, organization_id
             )
@@ -5639,7 +5657,8 @@ class SchedulingService:
                 ),
             )
         )
-        return result.scalars().first()
+        shift_assignment: Optional[ShiftAssignment] = result.scalars().first()
+        return shift_assignment
 
     async def _qualified_for_seat(
         self, organization_id: UUID, user_id: Any, shift: Shift, position: Any
@@ -5950,7 +5969,8 @@ class SchedulingService:
             .where(ShiftSwapRequest.id == str(request_id))
             .where(ShiftSwapRequest.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        shift_swap_request: Optional[ShiftSwapRequest] = result.scalar_one_or_none()
+        return shift_swap_request
 
     async def get_swap_request_for_user_by_id(
         self, request_id: UUID, organization_id: UUID, user_id: UUID
@@ -5967,7 +5987,8 @@ class SchedulingService:
                 )
             )
         )
-        return result.scalar_one_or_none()
+        shift_swap_request: Optional[ShiftSwapRequest] = result.scalar_one_or_none()
+        return shift_swap_request
 
     async def review_swap_request(
         self,
@@ -5995,7 +6016,7 @@ class SchedulingService:
         participant may perform the review.
         """
 
-        async def reject(message: str):
+        async def reject(message: str) -> Tuple[Optional[ShiftSwapRequest], str]:
             # SELECT ... FOR UPDATE locks live until transaction end.
             await self.db.rollback()
             return None, message
@@ -6326,7 +6347,7 @@ class SchedulingService:
         one.
         """
 
-        async def reject(message: str):
+        async def reject(message: str) -> Tuple[Optional[ShiftSwapRequest], str]:
             # SELECT ... FOR UPDATE locks live until the transaction ends.
             await self.db.rollback()
             return None, message
@@ -6695,7 +6716,7 @@ class SchedulingService:
         second finds it no longer pending.
         """
 
-        async def reject(message: str):
+        async def reject(message: str) -> Tuple[Optional[ShiftSwapRequest], str]:
             await self.db.rollback()
             return None, message
 
@@ -7286,7 +7307,8 @@ class SchedulingService:
             .where(ShiftTimeOff.id == str(time_off_id))
             .where(ShiftTimeOff.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        shift_time_off: Optional[ShiftTimeOff] = result.scalar_one_or_none()
+        return shift_time_off
 
     async def get_time_off_for_user_by_id(
         self, time_off_id: UUID, organization_id: UUID, user_id: UUID
@@ -7298,7 +7320,8 @@ class SchedulingService:
             .where(ShiftTimeOff.organization_id == str(organization_id))
             .where(ShiftTimeOff.user_id == str(user_id))
         )
-        return result.scalar_one_or_none()
+        shift_time_off: Optional[ShiftTimeOff] = result.scalar_one_or_none()
+        return shift_time_off
 
     async def review_time_off(
         self,
@@ -8045,12 +8068,12 @@ class SchedulingService:
             for row in user_rows.all():
                 _entry(row)
         for uid, totals in external.items():
-            entry = members.get(uid)
-            if entry is None:
+            external_entry = members.get(uid)
+            if external_entry is None:
                 continue
-            entry["external_shifts"] = totals["shift_count"]
-            entry["external_minutes"] = totals["minutes"]
-            entry["external_hours"] = hours_from_minutes(totals["minutes"])
+            external_entry["external_shifts"] = totals["shift_count"]
+            external_entry["external_minutes"] = totals["minutes"]
+            external_entry["external_hours"] = hours_from_minutes(totals["minutes"])
 
         # Ordered by the figure the report is about.
         return sorted(
@@ -8985,7 +9008,7 @@ class SchedulingService:
                     )
                 elif req.requirement_type == RequirementType.SHIFTS.value:
                     completed_value = shift_count
-                    compliance_value = completed_value
+                    compliance_value: float = completed_value
                 else:
                     completed_value = total_hours
                     # Keep the quarter-hour figure for presentation, but grade
@@ -9486,7 +9509,7 @@ class SchedulingService:
             [str(a.user_id) for a in att_rows if a.user_id] + missing_ids
         )
 
-        members = []
+        members: List[Dict[str, Any]] = []
         combined_minutes = 0
         for uid in missing_ids:
             members.append(

@@ -256,7 +256,10 @@ class ShiftCompletionService:
         org = await eligibility._get_org(str(organization_id))
         if org is None:
             return []
-        return eligibility.get_call_tracking_settings(org).get("call_types", [])
+        call_types: list = eligibility.get_call_tracking_settings(org).get(
+            "call_types", []
+        )
+        return call_types
 
     async def _shift_has_incident_rows(self, shift_id: str) -> bool:
         """Whether this shift logged per-incident calls.
@@ -342,7 +345,7 @@ class ShiftCompletionService:
                 ShiftAttendance.user_id == trainee_id,
             )
         )
-        duration = result.scalar_one_or_none()
+        duration: Optional[int] = result.scalar_one_or_none()
         if duration and duration > 0:
             return round(duration / 60.0, 2)
         return None
@@ -978,7 +981,7 @@ class ShiftCompletionService:
                 .join(user_roles, User.id == user_roles.c.user_id)
                 .where(user_roles.c.position_id == t_role.id)
                 .where(User.organization_id == str(organization_id))
-                .where(User.is_active.is_(True))
+                .where(User.is_active)
             )
             officers = list(officers_result.scalars().all())
             if not officers:
@@ -1423,7 +1426,7 @@ class ShiftCompletionService:
                 ShiftCompletionReport.organization_id == str(organization_id)
             )
         result = await self.db.execute(query)
-        report = result.scalar_one_or_none()
+        report: Optional[ShiftCompletionReport] = result.scalar_one_or_none()
         if report is not None:
             if organization_id is not None:
                 await self._attach_shift_labels([report], organization_id)

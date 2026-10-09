@@ -29,6 +29,7 @@ from typing import Any, Optional
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import Base
 from app.models.user import Organization
 from app.services.org_template_registry import (
     INCLUDED_TABLES,
@@ -108,7 +109,7 @@ def _looks_like_pii(value: Any) -> bool:
     return "@" in value or bool(_UUID_RE.match(value))
 
 
-def user_ref_columns(model: type) -> set[str]:
+def user_ref_columns(model: type[Base]) -> set[str]:
     """Columns on ``model`` that reference member identity (nulled on export).
 
     Detected structurally (FK → ``users``) *and* by naming convention
@@ -135,7 +136,8 @@ def _parent_table(spec: TableSpec) -> str:
     """Resolve the parent table a parent-scoped spec hangs off, via its FK."""
     col = spec.model.__table__.c[spec.parent_fk]
     fk = next(iter(col.foreign_keys))
-    return fk.column.table.name
+    name: str = fk.column.table.name
+    return name
 
 
 def _expand_closure(base: list[TableSpec]) -> list[TableSpec]:
@@ -246,7 +248,8 @@ class OrgTemplateService:
         result = await self.db.execute(
             select(Organization).where(Organization.id == organization_id)
         )
-        return result.scalar_one_or_none()
+        organization: Optional[Organization] = result.scalar_one_or_none()
+        return organization
 
     async def _select_rows(
         self,

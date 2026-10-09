@@ -11,7 +11,7 @@ field cannot leak across by being "optional" in a shared one:
 """
 
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
@@ -38,8 +38,8 @@ Disposition = Literal[
 ]
 
 # Keep the Literal types above honest against the model enums they mirror.
-assert set(AnonymityMode.__args__) == {m.value for m in SuggestionAnonymityMode}
-assert set(Disposition.__args__) == {d.value for d in SuggestionDisposition}
+assert set(get_args(AnonymityMode)) == {m.value for m in SuggestionAnonymityMode}
+assert set(get_args(Disposition)) == {d.value for d in SuggestionDisposition}
 
 
 def _strip_required(value: str) -> str:

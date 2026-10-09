@@ -648,7 +648,8 @@ class Apparatus(Base):
     @property
     def display_name(self) -> str:
         """Get display name (unit number or friendly name)"""
-        return self.name if self.name else self.unit_number
+        display: str = self.name if self.name else self.unit_number
+        return display
 
     @property
     def full_description(self) -> str:

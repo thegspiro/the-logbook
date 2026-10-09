@@ -524,7 +524,32 @@ export interface ApparatusMaintenanceCreate {
   notes?: string;
 }
 
-export type ApparatusMaintenanceUpdate = Partial<ApparatusMaintenanceCreate>;
+/**
+ * An omitted key leaves the stored value alone; `null` clears it. The backend
+ * dumps updates with `exclude_unset`, so the two are not interchangeable.
+ * `apparatusId` is absent because the update schema has no such field, and
+ * `maintenanceTypeId` / `isCompleted` are NOT NULL columns.
+ */
+export interface ApparatusMaintenanceUpdate {
+  maintenanceTypeId?: string;
+  isCompleted?: boolean;
+  scheduledDate?: string | null;
+  dueDate?: string | null;
+  completedDate?: string | null;
+  performedBy?: string | null;
+  description?: string | null;
+  workPerformed?: string | null;
+  findings?: string | null;
+  mileageAtService?: number | null;
+  hoursAtService?: number | null;
+  cost?: number | null;
+  vendor?: string | null;
+  invoiceNumber?: string | null;
+  nextDueDate?: string | null;
+  nextDueMileage?: number | null;
+  nextDueHours?: number | null;
+  notes?: string | null;
+}
 
 export interface ApparatusMaintenanceDue {
   id: string;
@@ -717,10 +742,17 @@ export interface EvocEligibilityCheck {
 // Operator
 // =============================================================================
 
+/**
+ * Snake_case on purpose: the response nests the backend's plain
+ * `OperatorRestriction` model, which has no alias generator, so its keys reach
+ * the browser unconverted while the operator around it is camelCase. The
+ * request side (`OperatorRestrictionInput`) accepts either casing, so the same
+ * shape round-trips.
+ */
 export interface OperatorRestriction {
   type: string;
   description: string;
-  isActive: boolean;
+  is_active: boolean;
 }
 
 export interface ApparatusOperator {
@@ -766,7 +798,21 @@ export interface ApparatusOperatorCreate {
   notes?: string;
 }
 
-export type ApparatusOperatorUpdate = Partial<Omit<ApparatusOperatorCreate, 'apparatusId' | 'userId'>>;
+/** An omitted key leaves the stored value alone; `null` clears it. Booleans are NOT NULL columns. */
+export interface ApparatusOperatorUpdate {
+  evocLevelId?: string | null;
+  isCertified?: boolean;
+  certificationDate?: string | null;
+  certificationExpiration?: string | null;
+  licenseTypeRequired?: string | null;
+  licenseVerified?: boolean;
+  licenseVerifiedDate?: string | null;
+  hasRestrictions?: boolean;
+  restrictions?: OperatorRestriction[] | null;
+  restrictionNotes?: string | null;
+  isActive?: boolean;
+  notes?: string | null;
+}
 
 // =============================================================================
 // Equipment
@@ -807,7 +853,23 @@ export interface ApparatusEquipmentCreate {
   notes?: string;
 }
 
-export type ApparatusEquipmentUpdate = Partial<Omit<ApparatusEquipmentCreate, 'apparatusId'>>;
+/**
+ * An omitted key leaves the stored value alone; `null` clears it. `name`,
+ * `quantity` and the booleans are NOT NULL columns.
+ */
+export interface ApparatusEquipmentUpdate {
+  inventoryItemId?: string | null;
+  name?: string;
+  description?: string | null;
+  quantity?: number;
+  locationOnApparatus?: string | null;
+  isMounted?: boolean;
+  isRequired?: boolean;
+  serialNumber?: string | null;
+  assetTag?: string | null;
+  isPresent?: boolean;
+  notes?: string | null;
+}
 
 // =============================================================================
 // Photos and Documents

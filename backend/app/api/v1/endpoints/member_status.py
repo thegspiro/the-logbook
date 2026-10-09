@@ -234,9 +234,8 @@ async def _send_property_return_email(
                 "performed_by_title": report_data["performed_by_title"],
             }
 
-            subject = None
-            html_body = None
-            text_body = None
+            # (subject, html_body, text_body), once something has rendered.
+            rendered: tuple[str, str, str | None] | None = None
 
             # Try loading the admin-configured template (same session).
             try:
@@ -249,9 +248,7 @@ async def _send_property_return_email(
                     EmailTemplateType.MEMBER_DROPPED,
                 )
                 if template:
-                    subject, html_body, text_body = tmpl_svc.render(
-                        template, context, organization=org
-                    )
+                    rendered = tmpl_svc.render(template, context, organization=org)
             except Exception as tmpl_err:
                 logger.warning(
                     f"Failed to load member_dropped template, using default: {tmpl_err}"
@@ -263,13 +260,14 @@ async def _send_property_return_email(
             # controls, and `render()` escapes them for the HTML body (and
             # only there — escaping the plain-text body would corrupt names
             # like "O'Brien"). It also fills the shell's colourway and footer.
-            if not subject:
+            if rendered is None or not rendered[0]:
                 from app.models.email_template import EmailTemplateType
                 from app.services.email_template_service import EmailTemplateService
 
-                subject, html_body, text_body = EmailTemplateService.render_default(
+                rendered = EmailTemplateService.render_default(
                     EmailTemplateType.MEMBER_DROPPED, context, organization=org
                 )
+            subject, html_body, text_body = rendered
 
         # Outbound delivery may block for the SMTP timeout. Do it only after
         # the generator has committed and closed the database session so slow
@@ -659,7 +657,8 @@ async def _load_member(
     )
     if for_update:
         query = query.with_for_update().execution_options(populate_existing=True)
-    return ensure_found((await db.execute(query)).scalar_one_or_none(), "Member")
+    member: User | None = (await db.execute(query)).scalar_one_or_none()
+    return ensure_found(member, "Member")
 
 
 @router.get("/{user_id}/undo-drop", response_model=UndoDropAvailability)

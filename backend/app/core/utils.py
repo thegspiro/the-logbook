@@ -35,7 +35,7 @@ _GENERIC_ERROR = "An unexpected error occurred. Please try again."
 
 
 def safe_error_detail(
-    exc: Exception,
+    exc: BaseException,
     fallback: str = _GENERIC_ERROR,
 ) -> str:
     """Return a user-safe error detail string.

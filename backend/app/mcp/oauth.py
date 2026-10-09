@@ -555,7 +555,8 @@ class McpOAuthService:
                 McpOAuthClient.organization_id == organization_id,
             )
         )
-        return result.scalar_one_or_none()
+        client: Optional[McpOAuthClient] = result.scalar_one_or_none()
+        return client
 
     async def register_client(
         self,
@@ -650,7 +651,7 @@ class McpOAuthService:
         result = await self.db.execute(
             select(McpOAuthClient).where(McpOAuthClient.client_id == client_id)
         )
-        client = result.scalar_one_or_none()
+        client: Optional[McpOAuthClient] = result.scalar_one_or_none()
         if client is None or client.revoked_at is not None:
             raise OAuthError("invalid_client", "Unknown client", status=401)
         if client.client_secret_hash:
@@ -985,7 +986,7 @@ class McpOAuthService:
         grant_id = parse_token(refresh_token or "", REFRESH_TOKEN_PREFIX)
         if grant_id is None:
             raise OAuthError("invalid_grant", "The refresh token is invalid")
-        grant = (
+        grant: Optional[McpOAuthGrant] = (
             await self.db.execute(
                 select(McpOAuthGrant)
                 .where(McpOAuthGrant.id == grant_id)
@@ -1082,7 +1083,7 @@ class McpOAuthService:
         )
         if grant_id is None:
             return None
-        grant = (
+        grant: Optional[McpOAuthGrant] = (
             await self.db.execute(
                 select(McpOAuthGrant)
                 .where(McpOAuthGrant.id == grant_id)
@@ -1168,7 +1169,9 @@ class McpOAuthService:
         )
         if user_id is not None:
             query = query.where(McpOAuthGrant.user_id == user_id)
-        grant = (await self.db.execute(query.with_for_update())).scalar_one_or_none()
+        grant: Optional[McpOAuthGrant] = (
+            await self.db.execute(query.with_for_update())
+        ).scalar_one_or_none()
         if grant is None:
             return None
         if grant.revoked_at is None:
@@ -1209,7 +1212,7 @@ class McpOAuthService:
 
     async def _member(self, user_id: str, organization_id: str) -> User:
         """The consenting member, still active and still in the department."""
-        user = (
+        user: Optional[User] = (
             await self.db.execute(
                 select(User)
                 .where(

@@ -5,7 +5,11 @@ Rows that exist only to be locked, so a read-then-write decision can be
 serialized per department without locking a row other writes depend on.
 """
 
-from sqlalchemy import Column, DateTime, ForeignKey, String
+from datetime import datetime
+from typing import Optional
+
+from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -34,10 +38,12 @@ class OrganizationLock(Base):
 
     __tablename__ = "organization_locks"
 
-    organization_id = Column(
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    scope = Column(String(50), primary_key=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    scope: Mapped[str] = mapped_column(String(50), primary_key=True)
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

@@ -15,7 +15,17 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from types import SimpleNamespace
-from typing import Any, Dict, List, NamedTuple, Optional, Set, Tuple
+from typing import (
+    Any,
+    Dict,
+    List,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    overload,
+)
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -300,10 +310,11 @@ def _effective_voting_method(
     method — unchanged behavior for those callers.
     """
     if item is not None:
-        override = item.get("voting_method")
+        override: Optional[str] = item.get("voting_method")
         if override:
             return override
-    return election.voting_method
+    text: Optional[str] = election.voting_method
+    return text
 
 
 def _dedup_scoped_item_aliases(item: Dict, all_items: List[Dict]) -> Set[str]:
@@ -447,6 +458,7 @@ def _token_eligibility_error(
         # label, not just one — closes that without guessing which alias
         # is "real".
         if voting_token.eligible_positions is not None:
+            denied: Sequence[Optional[str]]
             if colliding_positions:
                 denied = sorted(
                     label
@@ -518,11 +530,37 @@ def office_ineligible_message(name: Optional[str]) -> str:
     )
 
 
+def _require_ballot(
+    election: Optional[Election], voting_token: Optional[VotingToken]
+) -> Tuple[Election, VotingToken]:
+    """The pair a token lookup returned alongside no error.
+
+    ``get_ballot_by_token`` and ``_lock_token_ballot_for_submission`` return
+    either both rows and no error, or no rows and an error message. Callers
+    check the error first; this states the other half for the checker, and
+    fails loudly if a lookup ever breaks that contract rather than letting a
+    vote proceed against a missing election.
+    """
+    if election is None or voting_token is None:
+        raise RuntimeError("Token ballot lookup returned no ballot and no error")
+    return election, voting_token
+
+
 class ElectionService:
     """Service for election management"""
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    @overload
+    @staticmethod
+    def _ensure_utc(dt: datetime) -> datetime:
+        """A datetime in, an aware datetime out."""
+
+    @overload
+    @staticmethod
+    def _ensure_utc(dt: None) -> None:
+        """No datetime in, none out."""
 
     @staticmethod
     def _ensure_utc(dt: datetime | None) -> datetime | None:
@@ -695,7 +733,8 @@ class ElectionService:
             .where(Election.id == str(election_id))
             .where(Election.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        election: Optional[Election] = result.scalar_one_or_none()
+        return election
 
     async def list_candidates(
         self,
@@ -2003,7 +2042,8 @@ class ElectionService:
         if for_update:
             query = query.with_for_update()
         result = await self.db.execute(query)
-        return result.scalars().all()
+        items: List[Vote] = result.scalars().all()
+        return items
 
     def _voter_identity_filter(self, election: Election, user_id: UUID):
         """The one definition of "rows this member cast in this election".
@@ -2037,7 +2077,7 @@ class ElectionService:
         return or_(Vote.voter_id == str(user_id), Vote.voter_hash == voter_hash)
 
     def _generate_voter_hash(
-        self, user_id: UUID, election_id: UUID, salt: str = ""
+        self, user_id: UUID | str, election_id: UUID | str, salt: str = ""
     ) -> str:
         """Generate a keyed hash to track anonymous voters without revealing identity.
 
@@ -2213,7 +2253,8 @@ class ElectionService:
                 )
             )
         ).scalar()
-        return self._ensure_utc(cutover)
+        cutover_at: Optional[datetime] = self._ensure_utc(cutover)
+        return cutover_at
 
     def _sign_vote(self, vote: Vote, signing_key: Optional[str] = None) -> str:
         """Generate a cryptographic signature for a vote to detect tampering.
@@ -2466,7 +2507,7 @@ class ElectionService:
         if election_id:
             query = query.where(Vote.election_id == str(election_id))
         result = await self.db.execute(query)
-        vote = result.scalar_one_or_none()
+        vote: Optional[Vote] = result.scalar_one_or_none()
         if not vote:
             return None
 
@@ -2963,7 +3004,7 @@ class ElectionService:
         counts_result = await self.db.execute(
             select(User.membership_type, func.count(User.id))
             .where(User.organization_id == str(organization_id))
-            .where(User.is_active.is_(True))
+            .where(User.is_active)
             .group_by(User.membership_type)
         )
         total = 0
@@ -2982,7 +3023,7 @@ class ElectionService:
                 select(func.count(User.id))
                 .where(User.id.in_(list(override_ids)))
                 .where(User.organization_id == str(organization_id))
-                .where(User.is_active.is_(True))
+                .where(User.is_active)
                 .where(User.membership_type.in_(list(ineligible_tier_ids)))
             )
             total += override_count.scalar() or 0
@@ -3644,7 +3685,7 @@ class ElectionService:
         )
 
         # Votes by position
-        votes_by_position = {}
+        votes_by_position: Dict[str, int] = {}
         for vote in all_votes:
             if vote.position:
                 votes_by_position[vote.position] = (
@@ -3695,7 +3736,7 @@ class ElectionService:
             users_result = await self.db.execute(
                 select(User)
                 .where(User.organization_id == str(organization_id))
-                .where(User.is_active.is_(True))
+                .where(User.is_active)
                 .options(selectinload(User.roles))
             )
         eligible_users = users_result.scalars().all()
@@ -3853,7 +3894,9 @@ class ElectionService:
         expired_count = 0
         expire_ids: List[str] = []
         for uid in sent_user_ids:
-            expire_ids.extend(prior_token_ids_by_hash.get(hash_by_user.get(uid), []))
+            voter_hash = hash_by_user.get(uid)
+            if voter_hash is not None:
+                expire_ids.extend(prior_token_ids_by_hash.get(voter_hash, []))
         if expire_ids:
             from sqlalchemy import update as sa_update
 
@@ -4000,7 +4043,7 @@ class ElectionService:
             members_result = await self.db.execute(
                 select(User)
                 .where(User.organization_id == str(organization_id))
-                .where(User.is_active.is_(True))
+                .where(User.is_active)
             )
             members = members_result.scalars().all()
             member_emails = [
@@ -6552,7 +6595,7 @@ class ElectionService:
         users_result = await self.db.execute(
             select(User)
             .where(User.organization_id == str(organization_id))
-            .where(User.is_active.is_(True))
+            .where(User.is_active)
             .options(selectinload(User.roles))
         )
         all_users = users_result.scalars().all()
@@ -6746,7 +6789,7 @@ class ElectionService:
         is_test: bool = False,
         eligible_item_ids: Optional[List[str]] = None,
         eligible_positions: Optional[List[str]] = None,
-    ) -> VotingToken:
+    ) -> Tuple[VotingToken, str]:
         """
         Generate a secure voting token for a user-election pair
 
@@ -6814,9 +6857,10 @@ class ElectionService:
 
     def _is_proxy_voting_enabled(self, organization: "Organization") -> bool:
         """Check if the organization has opted in to proxy voting."""
-        return (
+        enabled: bool = (
             (organization.settings or {}).get("proxy_voting", {}).get("enabled", False)
         )
+        return enabled
 
     def _max_proxies_per_person(self, organization: "Organization") -> int:
         """Free-form JSON: a bad or missing value degrades to the documented
@@ -7353,7 +7397,7 @@ class ElectionService:
             users_result = await self.db.execute(
                 select(User)
                 .where(User.organization_id == str(organization_id))
-                .where(User.is_active.is_(True))
+                .where(User.is_active)
                 .options(selectinload(User.roles))
             )
             recipients = users_result.scalars().all()
@@ -8059,7 +8103,7 @@ class ElectionService:
             users_result = await self.db.execute(
                 select(User)
                 .where(User.organization_id == str(organization_id))
-                .where(User.is_active.is_(True))
+                .where(User.is_active)
                 .options(selectinload(User.roles))
                 .order_by(User.last_name, User.first_name)
             )
@@ -8134,7 +8178,8 @@ class ElectionService:
             dt = self._ensure_utc(dt)
             if not dt:
                 return ""
-            return dt.astimezone(tz).strftime("%B %d, %Y at %I:%M %p")
+            text: str = dt.astimezone(tz).strftime("%B %d, %Y at %I:%M %p")
+            return text
 
         # Meeting context (org-scoped — a stale/foreign meeting_id must not
         # surface another org's meeting in the package)
@@ -8298,6 +8343,10 @@ class ElectionService:
             return False, error or "Failed to generate package PDF", 0
 
         election = await self.get_election(election_id, organization_id)
+        if election is None:
+            # The PDF build above already found it; only a concurrent delete
+            # lands here, and it is reported the way that build reports it.
+            return False, "Election not found", 0
         org_result = await self.db.execute(
             select(Organization).where(Organization.id == str(organization_id))
         )
@@ -8731,7 +8780,7 @@ class ElectionService:
         )
 
     async def _build_ballot_recipient_lists(
-        self, election: Election, organization_id: str
+        self, election: Election, organization_id: str | UUID
     ) -> Tuple[str, str, int]:
         """Build HTML and text lists of members who received ballots.
 
@@ -9044,12 +9093,14 @@ class ElectionService:
 
         if error:
             return None, error
+        election, voting_token = _require_ballot(election, voting_token)
 
         election, voting_token, error = await self._lock_token_ballot_for_submission(
             election, voting_token
         )
         if error:
             return None, error
+        election, voting_token = _require_ballot(election, voting_token)
 
         # Validate vote_rank matches the voting method (parity with cast_vote)
         if election.voting_method == "ranked_choice" and vote_rank is None:
@@ -9384,12 +9435,14 @@ class ElectionService:
         election, voting_token, error = await self.get_ballot_by_token(token)
         if error:
             return None, error
+        election, voting_token = _require_ballot(election, voting_token)
 
         election, voting_token, error = await self._lock_token_ballot_for_submission(
             election, voting_token
         )
         if error:
             return None, error
+        election, voting_token = _require_ballot(election, voting_token)
 
         # Check if this token has already been used
         if voting_token.used:
@@ -9487,7 +9540,9 @@ class ElectionService:
             return new_vote
 
         for vote_data in votes:
-            ballot_item_id = vote_data.get("ballot_item_id")
+            # The schema requires ballot_item_id; a vote without one could
+            # not be looked up in item_map below either way.
+            ballot_item_id = vote_data["ballot_item_id"]
             choice = vote_data.get("choice")
             candidate_ids = vote_data.get("candidate_ids")
             rankings = vote_data.get("rankings")
@@ -9755,7 +9810,9 @@ class ElectionService:
                 # could select a candidate from ballot item A while naming
                 # item B, binding an otherwise-uneligible candidate onto B's
                 # position (_create_token_vote below stores it there).
-                choice_candidate = candidate_map.get(choice)
+                choice_candidate = (
+                    candidate_map.get(choice) if choice is not None else None
+                )
                 if (
                     choice_candidate is None
                     or choice_candidate.position not in item_candidate_positions
@@ -9947,7 +10004,7 @@ class ElectionService:
     ) -> Candidate:
         """The item's Approve or Deny row, creating it if a pre-existing
         election never had one (they are created at open since W50-8)."""
-        existing = (
+        existing: Optional[Candidate] = (
             await self.db.execute(
                 select(Candidate)
                 .where(Candidate.election_id == str(election.id))
@@ -10000,6 +10057,8 @@ class ElectionService:
             )
             if error:
                 return None, error
+            if auth is None:
+                return None, "Proxy authorization not found"
             voter_id = UUID(auth["delegating_user_id"])
             proxy = {
                 "authorization_id": auth.get("id"),
@@ -10112,7 +10171,9 @@ class ElectionService:
         selections: List[Tuple[str, str, Optional[int]]] = []
         abstentions = 0
         for vote_data in votes:
-            item_id = vote_data.get("ballot_item_id")
+            # Every vote's ballot_item_id was checked against item_map above,
+            # and the schema requires one, so the key is present.
+            item_id = vote_data["ballot_item_id"]
             item = item_map[item_id]
             title = item.get("title") or item_id
             choice = vote_data.get("choice")
@@ -10213,7 +10274,9 @@ class ElectionService:
                     vote_rank=rank,
                     commit=False,
                 )
-            if error:
+            if error or vote is None:
+                # cast_vote/cast_proxy_vote return a vote whenever they return
+                # no error; a miss is handled as a failure, not appended.
                 await self.db.rollback()
                 return None, f"{title}: {error} — no votes were recorded"
             recorded.append(vote)
@@ -10252,7 +10315,7 @@ class ElectionService:
         users_result = await self.db.execute(
             select(User)
             .where(User.organization_id == str(organization_id))
-            .where(User.is_active.is_(True))
+            .where(User.is_active)
             .options(selectinload(User.roles))
             .order_by(User.last_name, User.first_name)
         )

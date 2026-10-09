@@ -17,10 +17,11 @@ there, not here.
 """
 
 import enum
+from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import (
     Boolean,
-    Column,
     DateTime,
     ForeignKey,
     Index,
@@ -29,7 +30,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -68,46 +69,50 @@ class SuggestionBox(Base):
 
     __tablename__ = "suggestion_boxes"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    name = Column(String(100), nullable=False)
-    description = Column(Text, nullable=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Plain strings rather than a MySQL ENUM so a new mode or disposition is a
     # code change, not an ALTER TABLE; the Pydantic schemas validate values.
-    anonymity_mode = Column(
+    anonymity_mode: Mapped[str] = mapped_column(
         String(16),
         nullable=False,
         default=SuggestionAnonymityMode.ALLOWED.value,
         server_default=SuggestionAnonymityMode.ALLOWED.value,
     )
-    follow_up_enabled = Column(
+    follow_up_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
-    is_active = Column(Boolean, nullable=False, default=True, server_default="1")
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
     # Lets reviewers publish a rewritten copy of a submission for members to
     # see and vote on. Off by default: a box has always been private, and a
     # department opts each one in.
-    public_board_enabled = Column(
+    public_board_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    reviewers = relationship(
+    reviewers: Mapped[list["SuggestionBoxReviewer"]] = relationship(
         "SuggestionBoxReviewer",
         back_populates="box",
         cascade="all, delete-orphan",
     )
-    watchers = relationship(
+    watchers: Mapped[list["SuggestionBoxWatcher"]] = relationship(
         "SuggestionBoxWatcher",
         back_populates="box",
         cascade="all, delete-orphan",
@@ -131,26 +136,30 @@ class SuggestionBoxReviewer(Base):
 
     __tablename__ = "suggestion_box_reviewers"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    box_id = Column(
+    box_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("suggestion_boxes.id", ondelete="CASCADE"),
         nullable=False,
     )
-    position_id = Column(
+    position_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("positions.id", ondelete="CASCADE"), nullable=True
     )
-    user_id = Column(
+    user_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
-    box = relationship("SuggestionBox", back_populates="reviewers")
+    box: Mapped["SuggestionBox"] = relationship(
+        "SuggestionBox", back_populates="reviewers"
+    )
 
     __table_args__ = (
         Index("idx_suggestion_reviewers_org_box", "organization_id", "box_id"),
@@ -170,26 +179,30 @@ class SuggestionBoxWatcher(Base):
 
     __tablename__ = "suggestion_box_watchers"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    box_id = Column(
+    box_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("suggestion_boxes.id", ondelete="CASCADE"),
         nullable=False,
     )
-    position_id = Column(
+    position_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("positions.id", ondelete="CASCADE"), nullable=True
     )
-    user_id = Column(
+    user_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
-    box = relationship("SuggestionBox", back_populates="watchers")
+    box: Mapped["SuggestionBox"] = relationship(
+        "SuggestionBox", back_populates="watchers"
+    )
 
     __table_args__ = (
         Index("idx_suggestion_watchers_org_box", "organization_id", "box_id"),
@@ -201,60 +214,70 @@ class SuggestionBoxWatcher(Base):
 class Suggestion(Base):
     __tablename__ = "suggestions"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    box_id = Column(
+    box_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("suggestion_boxes.id", ondelete="CASCADE"),
         nullable=False,
     )
-    is_anonymous = Column(Boolean, nullable=False, default=False)
+    is_anonymous: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # NULL for every anonymous submission — never populated and then hidden.
-    submitted_by = Column(
+    submitted_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     # SHA-256 hex digest of an anonymous submitter's follow-up key.
-    follow_up_key_hash = Column(String(64), nullable=True, unique=True)
-    title = Column(String(200), nullable=False)
-    details = Column(Text, nullable=False)
-    disposition = Column(
+    follow_up_key_hash: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True, unique=True
+    )
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    details: Mapped[str] = mapped_column(Text, nullable=False)
+    disposition: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
         default=SuggestionDisposition.NEW.value,
         server_default=SuggestionDisposition.NEW.value,
     )
     # Reviewer-only; never returned to the submitter.
-    internal_note = Column(Text, nullable=True)
-    disposition_updated_by = Column(
+    internal_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    disposition_updated_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    disposition_updated_at = Column(DateTime(timezone=True), nullable=True)
+    disposition_updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # The idea board shows a reviewer-written copy, never the submission: the
     # original may name people or carry screenshots, and its wording can give
     # away an anonymous author. NULL published_at means not on the board.
-    published_at = Column(DateTime(timezone=True), nullable=True)
-    published_by = Column(
+    published_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    published_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    published_title = Column(String(200), nullable=True)
-    published_summary = Column(Text, nullable=True)
+    published_title: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    published_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Set explicitly by the service (day-truncated when anonymous), so no
     # server default here.
-    created_at = Column(DateTime(timezone=True), nullable=False)
-    updated_at = Column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
-    box = relationship("SuggestionBox")
-    attachments = relationship(
+    box: Mapped["SuggestionBox"] = relationship("SuggestionBox")
+    attachments: Mapped[list["SuggestionAttachment"]] = relationship(
         "SuggestionAttachment",
         back_populates="suggestion",
         cascade="all, delete-orphan",
         order_by="SuggestionAttachment.position",
     )
-    messages = relationship(
+    messages: Mapped[list["SuggestionMessage"]] = relationship(
         "SuggestionMessage",
         back_populates="suggestion",
         cascade="all, delete-orphan",
@@ -279,25 +302,27 @@ class SuggestionStatusEvent(Base):
 
     __tablename__ = "suggestion_status_events"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    suggestion_id = Column(
+    suggestion_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("suggestions.id", ondelete="CASCADE"),
         nullable=False,
     )
     # Orders the steps. Timestamps cannot: MySQL keeps whole seconds, and a
     # status change and a response saved together share one.
-    sequence = Column(Integer, nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
     # The disposition in force after this step, so a response given without
     # a status change still reads in context.
-    disposition = Column(String(32), nullable=False)
-    public_response = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False)
+    disposition: Mapped[str] = mapped_column(String(32), nullable=False)
+    public_response: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
     __table_args__ = (
         Index(
@@ -320,21 +345,23 @@ class SuggestionVote(Base):
 
     __tablename__ = "suggestion_votes"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    suggestion_id = Column(
+    suggestion_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("suggestions.id", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     __table_args__ = (
         Index(
@@ -350,27 +377,31 @@ class SuggestionAttachment(Base):
 
     __tablename__ = "suggestion_attachments"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    suggestion_id = Column(
+    suggestion_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("suggestions.id", ondelete="CASCADE"),
         nullable=False,
     )
-    position = Column(Integer, nullable=False, default=0)
-    file_name = Column(String(100), nullable=False)
-    file_path = Column(String(500), nullable=False)
-    content_type = Column(String(50), nullable=False)
-    file_size = Column(Integer, nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    file_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    file_size: Mapped[int] = mapped_column(Integer, nullable=False)
     # Set by the service to the submission's own stamp, so an anonymous
     # submission's screenshots are day-precision too.
-    created_at = Column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
-    suggestion = relationship("Suggestion", back_populates="attachments")
+    suggestion: Mapped["Suggestion"] = relationship(
+        "Suggestion", back_populates="attachments"
+    )
 
     __table_args__ = (
         Index("idx_suggestion_attachments_suggestion", "suggestion_id"),
@@ -392,27 +423,31 @@ class SuggestionMessage(Base):
 
     __tablename__ = "suggestion_messages"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    suggestion_id = Column(
+    suggestion_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("suggestions.id", ondelete="CASCADE"),
         nullable=False,
     )
-    sequence = Column(Integer, nullable=False)
-    author_role = Column(String(16), nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    author_role: Mapped[str] = mapped_column(String(16), nullable=False)
     # Set for reviewers and for a named submitter; NULL for an anonymous one.
-    author_id = Column(
+    author_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    body = Column(Text, nullable=False)
-    created_at = Column(DateTime(timezone=True), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
-    suggestion = relationship("Suggestion", back_populates="messages")
+    suggestion: Mapped["Suggestion"] = relationship(
+        "Suggestion", back_populates="messages"
+    )
 
     __table_args__ = (
         UniqueConstraint("suggestion_id", "sequence", name="uq_suggestion_msg_seq"),
@@ -436,27 +471,29 @@ class SuggestionForward(Base):
 
     __tablename__ = "suggestion_forwards"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    suggestion_id = Column(
+    suggestion_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("suggestions.id", ondelete="CASCADE"),
         nullable=False,
     )
-    position_id = Column(
+    position_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("positions.id", ondelete="CASCADE"), nullable=True
     )
-    user_id = Column(
+    user_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
-    forwarded_by = Column(
+    forwarded_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     __table_args__ = (
         UniqueConstraint(

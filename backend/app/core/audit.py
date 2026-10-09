@@ -124,11 +124,12 @@ class AuditLogger:
             # Zero the microseconds so write and verify hash the identical value.
             # (timestamp_nanos is also in the hash and preserves sub-second
             # ordering losslessly.)
-            return (
+            normalized: str = (
                 ts.astimezone(UTC)
                 .replace(microsecond=0)
                 .isoformat(timespec="microseconds")
             )
+            return normalized
         return str(ts)
 
     @staticmethod

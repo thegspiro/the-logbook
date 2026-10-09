@@ -526,12 +526,14 @@ async def subscribe_to_push(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
     await log_audit_event(
-        db,
-        user_id=current_user.id,
-        organization_id=current_user.organization_id,
-        action="push_subscription.create",
-        resource_type="push_subscription",
-        resource_id=str(sub.id),
+        db=db,
+        event_type="push_subscription_created",
+        event_category="notifications",
+        severity="info",
+        event_data={"push_subscription_id": str(sub.id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+        organization_id=str(current_user.organization_id),
     )
     return PushSubscriptionResponse(id=str(sub.id), endpoint=sub.endpoint)
 

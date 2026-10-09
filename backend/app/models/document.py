@@ -6,12 +6,13 @@ documents, and version tracking.
 """
 
 import enum
+from datetime import datetime
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
     JSON,
     BigInteger,
     Boolean,
-    Column,
     DateTime,
     Enum,
     ForeignKey,
@@ -21,11 +22,14 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy.dialects import mysql
-from sqlalchemy.orm import backref, relationship
+from sqlalchemy.orm import Mapped, backref, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class DocumentStatus(str, enum.Enum):
@@ -328,38 +332,38 @@ class DocumentFolder(Base):
 
     __tablename__ = "document_folders"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Folder Information
-    name = Column(String(255), nullable=False)
-    slug = Column(String(100), nullable=True)
-    description = Column(Text)
-    color = Column(String(20), default="#3B82F6")
-    icon = Column(String(50), default="folder")
-    is_system = Column(Boolean, default=False)
-    sort_order = Column(Integer, default=0)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    slug: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    color: Mapped[Optional[str]] = mapped_column(String(20), default="#3B82F6")
+    icon: Mapped[Optional[str]] = mapped_column(String(50), default="folder")
+    is_system: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    sort_order: Mapped[Optional[int]] = mapped_column(Integer, default=0)
 
     # Hierarchy
-    parent_id = Column(
+    parent_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("document_folders.id", ondelete="CASCADE")
     )
 
     # Access control
-    visibility = Column(
+    visibility: Mapped[FolderVisibility] = mapped_column(
         Enum(FolderVisibility, values_callable=lambda x: [e.value for e in x]),
         default=FolderVisibility.ORGANIZATION,
         nullable=False,
         server_default="organization",
     )
-    owner_user_id = Column(
+    owner_user_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    allowed_roles = Column(
+    allowed_roles: Mapped[Optional[list[str]]] = mapped_column(
         JSON, nullable=True
     )  # List of role slugs; null = no restriction
 
@@ -369,14 +373,20 @@ class DocumentFolder(Base):
     # on facilities.view_sensitive/edit/manage, which no set of role slugs
     # names stably — a department renames or adds roles, and a slug list
     # silently stops matching while the permission does not.
-    required_permissions = Column(JSON, nullable=True)
+    required_permissions: Mapped[Optional[list[str]]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
 
     # Relationships
     # FAC-40 (Codex): passive_deletes=True stops SQLAlchemy from lazy-loading
@@ -396,7 +406,7 @@ class DocumentFolder(Base):
     # scan's own authoritative result -- this relationship's cascade must
     # stay out of that decision entirely rather than separately, and
     # unreliably, re-deriving the same set.
-    documents = relationship(
+    documents: Mapped[list["Document"]] = relationship(
         "Document",
         back_populates="folder",
         cascade="all, delete-orphan",
@@ -411,13 +421,13 @@ class DocumentFolder(Base):
     # ``parent_id`` before the DELETE even runs, silently orphaning the
     # entire subtree as detached root folders instead of removing it (FAC-16:
     # this is what the folder-delete cascade regression test caught).
-    children = relationship(
+    children: Mapped[list["DocumentFolder"]] = relationship(
         "DocumentFolder",
         backref=backref("parent", remote_side=[id]),
         cascade="all, delete-orphan",
         single_parent=True,
     )
-    owner = relationship("User", foreign_keys=[owner_user_id])
+    owner: Mapped[Optional["User"]] = relationship("User", foreign_keys=[owner_user_id])
 
     __table_args__ = (
         Index("idx_doc_folders_org", "organization_id"),
@@ -446,30 +456,32 @@ class Document(Base):
 
     __tablename__ = "documents"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    folder_id = Column(
+    folder_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("document_folders.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Document Information
-    name = Column(String(255), nullable=False)
-    description = Column(Text)
-    file_name = Column(String(255))
-    file_path = Column(String(500))
-    file_size = Column(BigInteger, default=0)  # Size in bytes
-    file_type = Column(String(100))  # MIME type
-    document_type = Column(
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    file_name: Mapped[Optional[str]] = mapped_column(String(255))
+    file_path: Mapped[Optional[str]] = mapped_column(String(500))
+    file_size: Mapped[Optional[int]] = mapped_column(
+        BigInteger, default=0
+    )  # Size in bytes
+    file_type: Mapped[Optional[str]] = mapped_column(String(100))  # MIME type
+    document_type: Mapped[Optional[DocumentType]] = mapped_column(
         Enum(DocumentType, values_callable=lambda x: [e.value for e in x]),
         default=DocumentType.UPLOADED,
     )
-    status = Column(
+    status: Mapped[DocumentStatus] = mapped_column(
         Enum(DocumentStatus, values_callable=lambda x: [e.value for e in x]),
         default=DocumentStatus.ACTIVE,
         nullable=False,
@@ -480,28 +492,40 @@ class Document(Base):
     # LONGTEXT, not TEXT: a published set of minutes routinely exceeds TEXT's
     # 64 KB ceiling. Migration 20260213_0800 created this column as LONGTEXT;
     # the model has to match or fresh installs truncate document bodies.
-    content_html = Column(Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True)
+    content_html: Mapped[Optional[str]] = mapped_column(
+        Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True
+    )
 
     # Source tracking (links generated docs to their origin)
-    source_type = Column(String(50), nullable=True)  # e.g. "meeting_minutes"
-    source_id = Column(String(36), nullable=True)
+    source_type: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )  # e.g. "meeting_minutes"
+    source_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
 
     # Versioning
-    version = Column(Integer, default=1)
+    version: Mapped[Optional[int]] = mapped_column(Integer, default=1)
 
     # Metadata
-    tags = Column(Text)  # Comma-separated tags
+    tags: Mapped[Optional[str]] = mapped_column(Text)  # Comma-separated tags
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    uploaded_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    uploaded_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
 
     # Relationships
-    folder = relationship("DocumentFolder", back_populates="documents")
-    uploader = relationship("User", foreign_keys=[uploaded_by])
+    folder: Mapped[Optional["DocumentFolder"]] = relationship(
+        "DocumentFolder", back_populates="documents"
+    )
+    uploader: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[uploaded_by]
+    )
 
     __table_args__ = (
         Index("idx_documents_folder", "folder_id"),

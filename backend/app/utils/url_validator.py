@@ -111,7 +111,9 @@ def _assert_hostname_resolves_public(hostname: str) -> None:
     except socket.gaierror:
         raise ValueError(f"Could not resolve hostname '{hostname}'")
     for _family, _type, _proto, _canonname, sockaddr in resolved:
-        ip_str = sockaddr[0]
+        # typeshed widens sockaddr[0] to str | int for exotic families; for the
+        # AF_INET/AF_INET6 answers getaddrinfo yields here it is the host string.
+        ip_str = str(sockaddr[0])
         if _is_private_ip(ip_str):
             raise ValueError(
                 f"URL resolves to a private/internal IP address ({ip_str}). "

@@ -39,7 +39,7 @@ from app.api.dependencies import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.utils import safe_error_detail
+from app.core.utils import ensure_found, safe_error_detail
 from app.models.user import User
 from app.schemas.documents import FoldersListResponse
 from app.schemas.facilities import (  # Facility Type; Facility Status; Main Facility; Photos; Documents; Maintenance Types; Maintenance Records; Systems; Inspections; Utility Accounts; Access Keys; Rooms; Emergency Contacts; Shutoff Locations; Capital Projects; Insurance Policies; Occupants; Compliance Checklists
@@ -271,7 +271,7 @@ def _facility_response_for(facility, current_user: User) -> FacilityResponse:
     even those currently reachable only with edit/manage — so a future
     relaxation of a route's permission gate cannot silently reopen the leak.
     """
-    payload = FacilityResponse.model_validate(facility)
+    payload: FacilityResponse = FacilityResponse.model_validate(facility)
     if not any(
         user_has_permission(current_user, permission)
         for permission in _SENSITIVE_READ_PERMISSIONS
@@ -711,7 +711,7 @@ async def create_facility(
     service = FacilitiesService(db)
 
     try:
-        facility = await service.create_facility(
+        created = await service.create_facility(
             facility_data=facility_data,
             organization_id=current_user.organization_id,
             created_by=current_user.id,
@@ -722,9 +722,12 @@ async def create_facility(
         )
 
     # Reload with relations
-    facility = await service.get_facility(
-        facility_id=facility.id,
-        organization_id=current_user.organization_id,
+    facility = ensure_found(
+        await service.get_facility(
+            facility_id=created.id,
+            organization_id=current_user.organization_id,
+        ),
+        "Facility",
     )
 
     return _facility_response_for(facility, current_user)
@@ -1330,7 +1333,7 @@ async def create_facility_maintenance_record(
     service = FacilitiesService(db)
 
     try:
-        record = await service.create_maintenance_record(
+        created = await service.create_maintenance_record(
             maintenance_data=maintenance_data,
             organization_id=current_user.organization_id,
             created_by=current_user.id,
@@ -1341,12 +1344,13 @@ async def create_facility_maintenance_record(
         )
 
     # Reload with relationships for response serialization
-    record = await service.get_maintenance_record(
-        record_id=record.id,
-        organization_id=current_user.organization_id,
+    return ensure_found(
+        await service.get_maintenance_record(
+            record_id=created.id,
+            organization_id=current_user.organization_id,
+        ),
+        "Maintenance record",
     )
-
-    return record
 
 
 @router.get(

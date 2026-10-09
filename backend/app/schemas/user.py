@@ -438,12 +438,13 @@ class UserUpdate(MembershipClassificationFields):
         return _clean_preferred_name(v)
 
 
-class UserResponse(UserBase, UTCResponseBase):
-    """
-    Schema for user response (without sensitive data like password)
+class _UserResponseFields(UserBase, UTCResponseBase):
+    """The fields every user response shares.
 
-    Contact information (phone, email, mobile) will be conditionally
-    included based on organization settings.
+    The record timestamps are optional here because ``UserProfileResponse``
+    withholds them from directory-only callers; ``UserResponse`` narrows them
+    back to required. Both derive from this rather than one from the other, so
+    the profile schema does not widen a type its parent promises is set.
     """
 
     id: UUID
@@ -464,8 +465,8 @@ class UserResponse(UserBase, UTCResponseBase):
     email_verified: Optional[bool] = None
     mfa_enabled: Optional[bool] = None
     last_login_at: Optional[datetime] = None
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     # Contact info - conditionally included
     phone: Optional[str] = None
@@ -496,6 +497,20 @@ class UserResponse(UserBase, UTCResponseBase):
     def coerce_null_emergency_contacts(cls, v: object) -> object:
         """Coerce NULL (from DB) to empty list so Pydantic doesn't reject it."""
         return v if v is not None else []
+
+    model_config = _response_config
+
+
+class UserResponse(_UserResponseFields):
+    """
+    Schema for user response (without sensitive data like password)
+
+    Contact information (phone, email, mobile) will be conditionally
+    included based on organization settings.
+    """
+
+    created_at: datetime
+    updated_at: datetime
 
     model_config = _response_config
 
@@ -654,7 +669,7 @@ class ContactInfoUpdate(BaseModel):
     notification_preferences: Optional[NotificationPreferences] = None
 
 
-class UserProfileResponse(UserResponse):
+class UserProfileResponse(_UserResponseFields):
     """Extended user response with roles and notification preferences"""
 
     # These account-management fields are cleared when this schema is used as

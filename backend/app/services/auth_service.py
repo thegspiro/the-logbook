@@ -581,7 +581,7 @@ class AuthService:
         result = await self.db.execute(
             delete(UserSession).where(UserSession.user_id == str(user_id))
         )
-        count = result.rowcount
+        count: int = result.rowcount
         if count:
             await self.db.flush()
             logger.info(f"Revoked {count} session(s) for user {user_id}")

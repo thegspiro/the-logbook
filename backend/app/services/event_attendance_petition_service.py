@@ -17,7 +17,7 @@ the deliberate step that lets credited records change.
 import html as _html
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
-from typing import Dict, Iterable, List, Optional, Set, Tuple
+from typing import Dict, Iterable, List, Optional, Set, Tuple, overload
 
 from loguru import logger
 from sqlalchemy import and_, case, or_, select
@@ -74,6 +74,16 @@ class PetitionNotFound(LookupError):
     """The event or petition does not exist in the caller's organization."""
 
 
+@overload
+def _utc(value: datetime) -> datetime:
+    """A stored time read as UTC; a naive one is UTC by convention."""
+
+
+@overload
+def _utc(value: None) -> None:
+    """No time in, no time out."""
+
+
 def _utc(value: Optional[datetime]) -> Optional[datetime]:
     if value is None:
         return None
@@ -82,7 +92,8 @@ def _utc(value: Optional[datetime]) -> Optional[datetime]:
 
 def effective_end(event: Event) -> datetime:
     """When the event ended: its recorded end if one was set, else scheduled."""
-    return _utc(event.actual_end_time or event.end_datetime)
+    ended: datetime = event.actual_end_time or event.end_datetime
+    return _utc(ended)
 
 
 def can_review(event: Event, reviewer: User) -> bool:
@@ -108,7 +119,7 @@ class EventAttendancePetitionService:
         )
         if for_update:
             query = query.with_for_update().execution_options(populate_existing=True)
-        event = (await self.db.execute(query)).scalar_one_or_none()
+        event: Optional[Event] = (await self.db.execute(query)).scalar_one_or_none()
         if event is None:
             raise PetitionNotFound("Event not found")
         return event
@@ -451,7 +462,7 @@ class EventAttendancePetitionService:
             .with_for_update()
             .execution_options(populate_existing=True)
         )
-        petition = result.scalar_one_or_none()
+        petition: Optional[EventAttendancePetition] = result.scalar_one_or_none()
         if petition is None:
             raise PetitionNotFound("Attendance request not found")
         return petition
@@ -591,11 +602,12 @@ class EventAttendancePetitionService:
         return list(result.scalars().all())
 
     async def _organization(self, organization_id: str) -> Optional[Organization]:
-        return (
+        organization: Optional[Organization] = (
             await self.db.execute(
                 select(Organization).where(Organization.id == str(organization_id))
             )
         ).scalar_one_or_none()
+        return organization
 
     async def _notify_reviewers(
         self,

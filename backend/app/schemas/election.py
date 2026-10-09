@@ -6,7 +6,7 @@ Request and response schemas for election-related endpoints.
 
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import AbstractSet, Any, Dict, List, Optional, Sequence, TypeVar
 from uuid import UUID
 
 from pydantic import (
@@ -28,8 +28,16 @@ VALID_TIE_POLICIES = {"co_winners", "runoff", "revote", "chair_decides"}
 VALID_BALLOT_ITEM_TYPES = {"membership_approval", "officer_election", "general_vote"}
 VALID_VOTE_TYPES = {"approval", "candidate_selection"}
 
+# The field validators below return exactly what they were given, so the
+# helpers are generic over it: a required field stays ``str``, an optional one
+# ``Optional[str]``, and a saved-template item list keeps its item type.
+_ChoiceT = TypeVar("_ChoiceT", bound=Optional[str])
+_BallotItemsT = TypeVar("_BallotItemsT", bound="Optional[Sequence[BallotItemInput]]")
 
-def _validate_choice(value, valid_set, label):
+
+def _validate_choice(
+    value: _ChoiceT, valid_set: AbstractSet[str], label: str
+) -> _ChoiceT:
     """Shared validation: reject values not in the allowed set, pass through None."""
     if value is not None and value not in valid_set:
         raise ValueError(
@@ -67,7 +75,7 @@ def _empty_roster_means_everyone(
     return values
 
 
-def _validate_ballot_item_identities(items):
+def _validate_ballot_item_identities(items: _BallotItemsT) -> _BallotItemsT:
     """Ids are unique, and no item's alias names a different item (ELEC-40).
 
     A stored ``Candidate`` or ``Vote`` records only a position string. A

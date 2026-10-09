@@ -133,7 +133,9 @@ class ExternalShiftHoursService:
         )
         if user_id is not None:
             query = query.where(ExternalShiftHours.user_id == str(user_id))
-        return (await self.db.execute(query)).scalar_one_or_none()
+        result = await self.db.execute(query)
+        entry: Optional[ExternalShiftHours] = result.scalar_one_or_none()
+        return entry
 
     async def update_own(
         self,

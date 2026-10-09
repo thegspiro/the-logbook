@@ -93,7 +93,7 @@ class NotificationsService:
 
         query = query.order_by(NotificationRule.name)
         result = await self.db.execute(query)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_rule_by_id(
         self, rule_id: UUID, organization_id: UUID
@@ -104,7 +104,8 @@ class NotificationsService:
             .where(NotificationRule.id == str(rule_id))
             .where(NotificationRule.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        notification_rule: Optional[NotificationRule] = result.scalar_one_or_none()
+        return notification_rule
 
     async def update_rule(
         self, rule_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
@@ -151,7 +152,7 @@ class NotificationsService:
     # ============================================
 
     async def log_notification(
-        self, organization_id: UUID, log_data: Dict[str, Any]
+        self, organization_id: UUID | str, log_data: Dict[str, Any]
     ) -> Tuple[Optional[NotificationLog], Optional[str]]:
         """Log a sent notification.
 
@@ -172,7 +173,9 @@ class NotificationsService:
         await self._maybe_push(organization_id, log)
         return log, None
 
-    async def _maybe_push(self, organization_id: UUID, log: NotificationLog) -> None:
+    async def _maybe_push(
+        self, organization_id: UUID | str, log: NotificationLog
+    ) -> None:
         """Best-effort web push for an in-app notification.
 
         Deliberately runs after the log row is committed and swallows all

@@ -113,10 +113,11 @@ def _local(value: Any, organization: Optional[Organization], fmt: str) -> str:
     if not value:
         return ""
     if isinstance(value, str):
+        text = value
         try:
-            value = datetime.fromisoformat(value)
+            value = datetime.fromisoformat(text)
         except ValueError:
-            return value
+            return text
     if isinstance(value, datetime):
         return format_in_org_timezone(value, organization, fmt)
     return str(value)
