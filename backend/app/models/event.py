@@ -69,6 +69,9 @@ class AttendancePetitionStatus(str, Enum):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
+    # Taken back by the member while pending. The row is kept, so asking again
+    # reuses it and its withdrawal_count survives the round trip.
+    WITHDRAWN = "withdrawn"
 
 
 class RecurrencePattern(str, Enum):
@@ -681,6 +684,10 @@ class EventAttendancePetition(Base):
         server_default="pending",
     )
     reason = Column(Text, nullable=False)
+    # How many times the member has withdrawn and asked again. Capped (see
+    # MAX_PETITION_WITHDRAWALS) so a request cannot be cycled to re-notify the
+    # organizer indefinitely; at the cap the pending request is final.
+    withdrawal_count = Column(Integer, nullable=False, default=0, server_default="0")
     # What the member says, for the reviewer to confirm or correct. Not
     # credited as-is: approval records the times the reviewer settles on.
     requested_check_in_at = Column(DateTime(timezone=True), nullable=True)

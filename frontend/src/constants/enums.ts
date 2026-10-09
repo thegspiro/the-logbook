@@ -212,6 +212,7 @@ export const AttendancePetitionStatus = {
   PENDING: 'pending',
   APPROVED: 'approved',
   REJECTED: 'rejected',
+  WITHDRAWN: 'withdrawn',
 } as const;
 export type AttendancePetitionStatus = (typeof AttendancePetitionStatus)[keyof typeof AttendancePetitionStatus];
 

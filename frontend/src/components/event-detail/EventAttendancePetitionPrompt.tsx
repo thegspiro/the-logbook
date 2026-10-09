@@ -117,6 +117,8 @@ export const EventAttendancePetitionPrompt: React.FC<EventAttendancePetitionProm
       setStanding({ petition, can_request: false, unavailable_reason: null });
       setShowForm(false);
       toast.success('Request sent to the event organizer');
+      // Only the server knows how many withdrawals this request has left.
+      void loadStanding();
     } catch (err) {
       setFormError(getErrorDetail(err) || 'Failed to send your request');
     } finally {
@@ -137,15 +139,22 @@ export const EventAttendancePetitionPrompt: React.FC<EventAttendancePetitionProm
           <span>
             You asked to be marked present on {formatDateTime(petition.created_at, timezone)}. The event organizer has
             been notified and will confirm or decline it.
+            {/* The server caps withdrawals, so a request cannot be cycled to
+                re-notify the organizer; past the cap this one is final. */}
+            {standing?.can_withdraw === false && (
+              <span className="mt-1 block">You have withdrawn this request as many times as allowed.</span>
+            )}
           </span>
-          <button
-            type="button"
-            onClick={() => void handleWithdraw()}
-            disabled={withdrawing}
-            className="btn-secondary shrink-0 text-sm font-medium disabled:opacity-50"
-          >
-            {withdrawing ? 'Withdrawing...' : 'Withdraw request'}
-          </button>
+          {standing?.can_withdraw && (
+            <button
+              type="button"
+              onClick={() => void handleWithdraw()}
+              disabled={withdrawing}
+              className="btn-secondary shrink-0 text-sm font-medium disabled:opacity-50"
+            >
+              {withdrawing ? 'Withdrawing...' : 'Withdraw request'}
+            </button>
+          )}
         </div>
       );
     }

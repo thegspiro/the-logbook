@@ -25,10 +25,12 @@ from app.schemas.event import (
     AttendancePetitionReject,
 )
 from app.services.event_attendance_petition_service import (
+    MAX_PETITION_WITHDRAWALS,
     MEMBER_UPDATE_CATEGORY,
     REVIEW_PROMPT_CATEGORY,
     EventAttendancePetitionService,
     PetitionNotFound,
+    can_withdraw,
 )
 from app.services.event_service import ATTENDANCE_LOCKED_PREFIX
 
@@ -626,3 +628,85 @@ class TestPendingAcrossEvents:
             db_session
         ).list_pending_for_reviewer(manager, include_all=True)
         assert rows == []
+
+
+class TestWithdrawalLimit:
+    async def _cycle(self, service, db_session, dept, event_id, times):
+        """Withdraw and ask again *times* times; returns the live request."""
+        member = await _load(db_session, dept["member"])
+        petition = await service.submit(event_id, member, _ask())
+        for n in range(times):
+            member = await _load(db_session, dept["member"])
+            await service.withdraw(event_id, member)
+            member = await _load(db_session, dept["member"])
+            petition = await service.submit(event_id, member, _ask(f"Try {n + 2}"))
+        return petition
+
+    async def test_the_third_request_is_final(self, db_session, dept):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        service = EventAttendancePetitionService(db_session)
+        petition = await self._cycle(
+            service, db_session, dept, event_id, MAX_PETITION_WITHDRAWALS
+        )
+
+        assert petition.withdrawal_count == MAX_PETITION_WITHDRAWALS
+        assert petition.reason == f"Try {MAX_PETITION_WITHDRAWALS + 1}"
+        assert can_withdraw(petition) is False
+        member = await _load(db_session, dept["member"])
+        with pytest.raises(ValueError, match="waits for the organizer"):
+            await service.withdraw(event_id, member)
+
+    async def test_below_the_limit_withdrawing_is_still_offered(self, db_session, dept):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        service = EventAttendancePetitionService(db_session)
+        petition = await self._cycle(service, db_session, dept, event_id, 1)
+
+        assert petition.withdrawal_count == 1
+        assert can_withdraw(petition) is True
+
+    async def test_asking_again_reuses_the_request_and_prompts_the_organizer(
+        self, db_session, dept
+    ):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        service = EventAttendancePetitionService(db_session)
+        member = await _load(db_session, dept["member"])
+        first = await service.submit(event_id, member, _ask())
+        member = await _load(db_session, dept["member"])
+        await service.withdraw(event_id, member)
+        member = await _load(db_session, dept["member"])
+        again = await service.submit(event_id, member, _ask("Corrected"))
+
+        assert again.id == first.id
+        assert again.status == AttendancePetitionStatus.PENDING
+        prompts = await _notices(db_session, dept["organizer"], REVIEW_PROMPT_CATEGORY)
+        # The first prompt was archived on withdrawal; the second is live.
+        assert len(prompts) == 2
+
+    async def test_reviewers_never_see_a_withdrawn_request(self, db_session, dept):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        service = EventAttendancePetitionService(db_session)
+        member = await _load(db_session, dept["member"])
+        petition = await service.submit(event_id, member, _ask())
+        member = await _load(db_session, dept["member"])
+        await service.withdraw(event_id, member)
+
+        organizer = await _load(db_session, dept["organizer"])
+        assert await service.list_for_event(event_id, organizer) == []
+        assert await service.list_pending_for_reviewer(organizer) == []
+        organizer = await _load(db_session, dept["organizer"])
+        with pytest.raises(ValueError, match="was withdrawn"):
+            await service.approve(event_id, petition.id, organizer, TestDecide._times())
+
+    async def test_a_withdrawn_request_cannot_be_withdrawn_again(
+        self, db_session, dept
+    ):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        service = EventAttendancePetitionService(db_session)
+        member = await _load(db_session, dept["member"])
+        await service.submit(event_id, member, _ask())
+        member = await _load(db_session, dept["member"])
+        await service.withdraw(event_id, member)
+
+        member = await _load(db_session, dept["member"])
+        with pytest.raises(PetitionNotFound):
+            await service.withdraw(event_id, member)
