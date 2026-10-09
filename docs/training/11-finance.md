@@ -1408,63 +1408,63 @@ The summary can be filtered by a specific dues schedule using the optional `sche
 
 **Required Permission:** `finance.manage`
 
-The QuickBooks export feature generates CSV files compatible with QuickBooks and other accounting software, allowing you to transfer financial data from The Logbook into your accounting system.
+The export produces a **QuickBooks Online journal-entry import file** (CSV). Each paid purchase request, issued check request and paid expense report becomes one balanced journal entry: a debit to the budget category's expense account and an equal credit to the account it was paid from.
 
 ### Account Mappings
 
-Before exporting, set up mappings between your Logbook budget categories and your QuickBooks chart of accounts:
+Open **Finance › QuickBooks Export** (`/finance/settings/quickbooks`). The **Budget categories** table shows, for every category, the account its spending posts to, the account it is paid from, and whether an export would accept it:
 
-1. Navigate to the export settings (accessible from the Finance module).
-2. For each internal category, configure:
-   - **Internal Category** -- The budget category name from The Logbook
-   - **QB Account Name** -- The corresponding QuickBooks account name
-   - **QB Account Number** -- Optional QuickBooks account number for additional precision
-   - **Mapping Type** -- The account type: Expense, Income, or Asset
+| Status                         | What to do                                                                                     |
+| ------------------------------ | ---------------------------------------------------------------------------------------------- |
+| **Ready**                      | Nothing — its spending exports                                                                 |
+| **No account**                 | Add a mapping, or enter a **QuickBooks account** on the category in Finance Settings           |
+| **No paid-from account**       | Add the account it is paid from to its mapping                                                 |
+| **More than one mapping**      | Delete all but one of its mappings                                                             |
+| **Payable/receivable account** | Change it: QuickBooks can't import journal lines to Accounts Payable or Receivable (see below) |
 
-3. Click **Save**.
+Click **Add mapping** (or **Edit mapping**) on a category and enter:
 
-> **Corrected 2026-08-12.** Not built. See
-> [Finance — Five Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#finance--five-guide-sections-with-no-screen-2026-08-09),
-> which records what exists behind each of these: an API, a store
-> action, or types — but no page and no control that reaches them.
-> The steps above describe the intended design.
->
-> `GET/POST/PUT /finance/export/mappings` and the `qbAccountName` types
-> exist; there is no page, no route and no consumer.
+- **QuickBooks account** — the expense account its spending posts to, spelled exactly as in your chart of accounts. Write a subaccount as `Parent:Child` (for example `Vehicle Expense:Fuel`); the subaccount name alone fails with "Line Account invalid".
+- **Paid from account** — the bank or credit card account the money comes out of (for example `Operating Checking`).
 
-> **Hint:** You can also set the QuickBooks account name directly on each budget category (the `qbAccountName` field in Budget Category settings). The export mapping page provides a separate, more granular mapping layer.
+A category's own **QuickBooks account** (set in its dialog on Finance Settings) takes precedence over its mapping's.
 
-### Generating an Export
+> **Accounts Payable and Accounts Receivable can't be used** _(2026-10-09)_. QuickBooks requires a vendor or customer on every journal line posting to those accounts, and the export carries none, so the import would fail. The mapping and category dialogs refuse them, and a mapping saved before that shows **Payable/receivable account**. The check recognizes QuickBooks' standard names ("Accounts Payable (A/P)", "Accounts Receivable (A/R)"); if you renamed those accounts, the check can't tell, so don't use them.
 
-1. Navigate to the export section.
-2. Select the **date range start** and **date range end** for the transactions to include.
-3. Select the **file format** (CSV is the default; IIF is also supported as a format type).
-4. Click **Generate Export**.
-5. A CSV file named `finance_export.csv` is downloaded to your computer.
+### The File
 
-The CSV includes these columns:
+| Column           | Contents                                                                                     |
+| ---------------- | -------------------------------------------------------------------------------------------- |
+| **Journal No**   | The request number (`PR-…`, `CR-…`, `ER-…`); every line of one entry shares it               |
+| **Journal Date** | The payment or check date, MM/DD/YYYY, on the department's calendar                          |
+| **Memo**         | The request's title, or the check's memo or purpose                                          |
+| **Account Name** | The expense account (debit line) or the paid-from account (credit line)                      |
+| **Debits**       | The amount, on the expense line                                                              |
+| **Credits**      | The same amount, on the paid-from line                                                       |
+| **Description**  | The vendor, payee (with check number), or merchant and description of an expense-report line |
 
-| Column      | Description                                                                                                       |
-| ----------- | ----------------------------------------------------------------------------------------------------------------- |
-| **Date**    | Transaction date in MM/DD/YYYY format, on the department's calendar (see below)                                   |
-| **Type**    | Transaction type: `Bill Pmt` (purchase request), `Check` (check request), or `Expense` (expense report line item) |
-| **Num**     | Reference number (request number, check number, or report number)                                                 |
-| **Name**    | Vendor, payee, or merchant name                                                                                   |
-| **Memo**    | Transaction description (title, memo, or line item description)                                                   |
-| **Account** | Reserved for account mapping (currently empty in export)                                                          |
-| **Debit**   | Transaction amount                                                                                                |
-| **Credit**  | Reserved (currently empty in export)                                                                              |
+An expense report is one entry with a debit and credit pair for each of its lines, each charged to that line's budget.
 
-The export includes:
+An export is **refused** — with a message naming what to fix, and no file — when any transaction in the period has no budget line, when a category it uses is not **Ready**, or when the file would reach **1,000 rows**, QuickBooks Online's import limit. Each transaction is two rows, so that is about 499 transactions; export a shorter period, then the rest.
 
-- **Purchase Requests** with Paid status, filtered by `paidAt` date
-- **Check Requests** with Issued status, filtered by `checkDate`
-- **Expense Reports** with Paid status (one row per line item), filtered by `paidAt` date
+Running an export (`POST /finance/export/transactions`) has no screen yet; see [Finance — QuickBooks Export Gaps](../KNOWN_LIMITATIONS.md#finance--quickbooks-export-gaps-2026-10-08).
+
+### Importing into QuickBooks Online
+
+Intuit's requirements for a journal-entry import _(checked 2026-10-09)_. They are also listed at the bottom of **Finance › QuickBooks Export**:
+
+1. **Create every account first.** Each account named in the file must already exist in your chart of accounts, spelled the same.
+2. **Turn account numbers off** while you import (**Settings › Account and settings › Advanced › Chart of accounts**). The file uses account names. You can turn them back on afterwards.
+3. **Turn off "Warn if duplicate journal number is used"** (**Settings › Account and settings › Advanced › Other preferences**). Each entry carries its request number, and with the warning on, an entry whose number already exists is not imported.
+4. In QuickBooks, go to **Settings › Import data › Journal entries**, choose the file, and map its columns to QuickBooks' fields. Choose the **MM/DD/YYYY** date format.
+5. Start the import, then compare the totals with the Finance dashboard.
+
+> **Hint:** Journal entries do not appear on a vendor's record in QuickBooks, and may not be counted on its 1099 report. If you pay contractors who need a 1099, check QuickBooks' 1099 report against your payments before filing, or record those payments in QuickBooks as checks or expenses.
 
 > **Dates are the department's day** _(2026-09-25)_. Payment and check dates are
 > stored as UTC timestamps, and the export used to print the UTC date — so a
 > payment recorded on a US evening was booked on the next day in QuickBooks.
-> The **Date** column now uses the timezone set under **Settings → Organization
+> The **Journal Date** column uses the timezone set under **Settings → Organization
 > → Profile → Timezone** (America/New_York when none is set). An export taken
 > before this date may disagree with a new one for evening payments.
 
@@ -1494,13 +1494,14 @@ Every export is logged with:
 
 ### Edge Cases
 
-| Scenario                                                     | Behavior                                                                                                        |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| No transactions in the selected date range                   | An empty CSV file is generated (headers only, no data rows). An export log is still created with record count 0 |
-| Date range spanning multiple fiscal years                    | All matching transactions are included regardless of fiscal year boundaries                                     |
-| Expense report with multiple line items                      | Each line item becomes a separate row in the CSV, all sharing the same report number                            |
-| Purchase request with actual amount different from estimated | The export uses the actual amount if set, otherwise falls back to the estimated amount                          |
-| Check request without a check number                         | The export uses the request number (CK-YYYY-NNNN) as the Num column value                                       |
+| Scenario                                                     | Behavior                                                                                                                        |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| No transactions in the selected date range                   | A file with only the header row. An export log is still created with record count 0                                             |
+| Date range spanning multiple fiscal years                    | All matching transactions are included regardless of fiscal year boundaries                                                     |
+| Expense report with multiple line items                      | One journal entry under the report number, with a debit and credit pair per line item                                           |
+| Purchase request with actual amount different from estimated | The export uses the actual amount if set, otherwise falls back to the estimated amount                                          |
+| Check request                                                | The Journal No is the request number; the check number appears in the Description, since the request number is unique per entry |
+| A period with 500 or more transactions                       | Refused: the file would reach QuickBooks' 1,000-row limit. Export it in shorter periods                                         |
 
 ---
 

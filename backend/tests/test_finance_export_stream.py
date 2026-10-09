@@ -180,8 +180,10 @@ async def test_payment_dates_are_the_departments_calendar_day():
 @pytest.mark.asyncio
 async def test_row_limit_is_checked_before_log_or_stream_creation():
     now = datetime(2026, 1, 1, tzinfo=timezone.utc)
-    db = _db([10_001, 0, 0], [])
-    with pytest.raises(ValueError, match="at most 10000 rows"):
+    # 500 transactions are 1,000 rows and the header: one too many for
+    # QuickBooks Online's importer.
+    db = _db([500, 0, 0], [])
+    with pytest.raises(ValueError, match="fewer than 1,000 rows"):
         await FinanceService(db).generate_export("org", "user", now, now)
     db.add.assert_not_called()
 
