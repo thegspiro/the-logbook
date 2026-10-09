@@ -78,6 +78,19 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
     only for the library's own folders.
 22. **A folder-access editor comes later**, in its own change; custom folders
     keep the visibility levels they have.
+23. **The file key comes from `ENCRYPTION_KEY` and `ENCRYPTION_SALT`**
+    (2026-10-09), the secrets already protecting encrypted fields, so there is
+    no second secret to lose. Rotation reuses `ENCRYPTION_KEYS_LEGACY`, plus a
+    rewrap command for files.
+24. **Files stored before encryption are encrypted by an operator command**:
+    dry run, a verified round trip per file, a manifest, rollback until
+    finalized. Until it runs they stay readable, and administrators see a
+    notice.
+25. **Confirming the key is kept safe is required.** A new installation cannot
+    finish setup without it; an existing one shows `settings.manage` holders a
+    notice that only a confirmation clears. Who confirmed, and when, is
+    recorded and audited.
+26. **Encryption at rest is always on.** There is no switch.
 
 ## Phases
 
@@ -85,8 +98,8 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
 | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
 | 1     | Close the access leaks                                                                                                                          | done (#3009) |
 | 2     | One storage service: org-first layout, descriptive names, size caps and malware scan everywhere (on by default)                                 | done (#3011) |
-| 3     | A folder per module with module-specific rights; narrow `documents.view`; admin-only see-all; apparatus files and finance receipts as documents | this change  |
-| 4     | Encryption at rest, with the onboarding key-custody confirmation                                                                                | planned      |
+| 3     | A folder per module with module-specific rights; narrow `documents.view`; admin-only see-all; apparatus files and finance receipts as documents | done (#3031) |
+| 4     | Encryption at rest, with the onboarding key-custody confirmation                                                                                | this change  |
 
 ### Phase 1 — what changed
 
@@ -175,6 +188,72 @@ document, serve back with a descriptive name, delete with the file.
 Not done here: a screen for setting a custom folder's rights (decision 22);
 facility files still upload through `/documents/upload`, which needs
 `documents.manage` on top of the facility grant.
+
+### Phase 4 — what changed
+
+**Every file written to disk is encrypted** (`app/core/file_encryption.py`).
+`FileStorageService.write_atomically` encrypts before it writes, so every
+upload path from Phase 2 is covered. The format:
+
+- a 94-byte header: magic `LBENC\x01`, the key id, and a per-file data key
+  wrapped with AES-256-GCM under the installation's file key;
+- the body in 64 KiB chunks, each sealed with AES-256-GCM. Each chunk's
+  associated data binds the header, the chunk's index and whether it is the
+  last, so reordering, truncation and trailing bytes are all refused.
+
+The file key is HKDF-SHA256 over the same PBKDF2 output the field cipher
+uses, with its own label, so it is never the field key itself. The key id
+is an HMAC of the file key, which identifies the key without revealing it.
+
+**Reads decrypt.** Every download goes through `stored_file_response`. It
+streams the plaintext with the right length and download name, and it
+unwraps the key before the response starts, so a wrong key is an error
+rather than a truncated download. A file written before this change is
+recognised by its missing magic bytes and served as it is. Email
+attachments are read the same way. `test_file_encryption.py` fails on any
+`FileResponse` outside the storage service.
+
+**`scripts/encrypt_uploads.py`** encrypts what is already on disk
+(`app/services/upload_encryption.py`):
+
+1. `--apply` writes the ciphertext beside each file and decrypts it back to
+   compare. Only then does it swap the ciphertext in, keep the original as
+   `.<name>.plaintext` and record both in a manifest under
+   `/app/uploads/.encryption/`.
+2. `--rollback` puts the originals back.
+3. `--finalize` re-verifies each file against its recorded checksum before
+   deleting its original.
+
+Modification times are kept, because anonymous suggestion screenshots rely
+on a coarse one. `--rewrap` moves files written under a key now only in
+`ENCRYPTION_KEYS_LEGACY` onto the current key without re-encrypting the
+body. Until no plaintext copy is left, administrators see a "not yet
+encrypted" notice.
+
+**Key custody.** Setup has a new required step after the system owner
+account, Encryption Key (`/onboarding/encryption-key`).
+`complete_onboarding` refuses to finish without it. On an installation that
+is already set up, `settings.manage` holders see a red notice with a confirm
+button.
+
+A confirmation is stored in `encryption_key_custody`, one row per key
+fingerprint, with who confirmed it and when. It is audited as
+`encryption_key.custody_confirmed`. A rotated key has a new fingerprint and
+is asked about again. The request carries the fingerprint the administrator
+was shown, so a key changed in the meantime is refused (409) rather than
+confirmed unseen.
+
+The installers now `chmod 600` the `.env` they write and tell the operator
+to copy the key somewhere else before setup.
+
+Not done here:
+
+- Images stored in the database (member photos, logos, storefront and
+  equipment-check photos) are not files on disk and are not covered.
+- Encrypted downloads do not support HTTP Range requests.
+- Backups taken before the encrypt run still hold plaintext copies.
+
+These are in `docs/KNOWN_LIMITATIONS.md`.
 
 ### Found in passing, not in this change
 

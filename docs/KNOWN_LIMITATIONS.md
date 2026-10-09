@@ -796,6 +796,37 @@ each module folder on that module's rights. Two things it did not do:
   upload through their own module endpoints since this change; facilities
   would need the same (`app/services/module_documents.py` is the shared path).
 
+## File Storage — What Encryption at Rest Does Not Cover (2026-10-09)
+
+**Open, each deliberate.** Phase 4 of `docs/FILE_STORAGE_HARDENING.md`
+encrypts every file written under `/app/uploads`. It does not reach:
+
+- **Images stored in the database.** Member photos, logos, storefront and
+  equipment-check photos are re-encoded and kept in table columns, not on
+  disk. They are protected by database access and backup handling, not by
+  the file key.
+- **Backups taken before the encrypt run.** An `uploads.tar.gz` made before
+  `scripts/encrypt_uploads.py --apply` holds the plaintext files, and one
+  made between `--apply` and `--finalize` holds both copies. Retire or
+  re-protect those archives on their own schedule. Restoring one brings
+  plaintext files back; they are served as before, but the "not yet
+  encrypted" notice does not return on its own once a finalize recorded the
+  tree as complete. Delete `/app/uploads/.encryption/state.json` and run the
+  command again.
+- **HTTP Range requests on encrypted downloads.** They stream whole; a
+  resumed download starts again. A file stored before encryption, still on
+  `FileResponse`, keeps Range support until it is encrypted.
+- **Downgrading the code.** A release from before Phase 4 serves an
+  encrypted file's ciphertext. The encrypt command's `--rollback` only
+  restores the files it encrypted, not uploads made since. Do not downgrade
+  past Phase 4 once files have been uploaded (see "Before every upgrade" in
+  `docs/UPGRADING.md`).
+- **Key custody is attested, not checked.** The confirmation records that an
+  administrator said the key is stored separately. The application cannot
+  see where it is, and on an installation hosting more than one organization
+  any organization's `settings.manage` holder confirms for the installation,
+  because the key is installation-wide.
+
 ## Self-Report Attachments — What Happens to the File (2026-08-23)
 
 A member can attach a certificate (PDF/JPG/PNG, 10 MB) to a self-reported

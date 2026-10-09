@@ -412,6 +412,44 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Stored files are encrypted; confirm the key is kept safe (2026-10-09)
+
+Phase 4 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).
+Nothing here stops the stack from starting. Every file uploaded from now on
+is encrypted with a key derived from `ENCRYPTION_KEY` and `ENCRYPTION_SALT`,
+which compose already refuses to start without. Migration `7e1a3c94d2b6`
+adds one table, `encryption_key_custody`. Three things to do:
+
+1. **Store the key somewhere other than the server and its backups**, then
+   confirm it. Administrators (`settings.manage`) see a red notice with a
+   **Confirm the key is stored safely** button until somebody does. Without
+   the key, neither the database's encrypted fields nor any uploaded file
+   can be recovered from a backup. With the key kept beside the backups,
+   anyone holding a backup can read them.
+2. **Encrypt the files already on disk.** They keep working as they are, and
+   administrators see a "not yet encrypted" notice until this is done:
+   ```bash
+   docker exec -it intranet-backend python scripts/encrypt_uploads.py            # dry run
+   docker exec -it intranet-backend python scripts/encrypt_uploads.py --apply    # encrypt; originals kept
+   docker exec -it intranet-backend python scripts/encrypt_uploads.py \
+       --finalize /app/uploads/.encryption/encryption-<stamp>.json              # delete the originals
+   ```
+   `--rollback <manifest>` undoes an `--apply` until it is finalized. The
+   originals sit beside each file as `.<name>.plaintext` until finalize, and
+   the backup sidecar archives them, so finalize once you have checked a few
+   downloads.
+3. **Treat older `uploads.tar.gz` archives as plaintext.** They were made
+   before encryption.
+
+**A setup still in progress** when you upgrade gains a required Encryption Key
+step. Its last page reports "Required step 'key_custody' has not been
+completed" until the administrator visits `/onboarding/encryption-key`.
+
+**Do not downgrade the code past this change** once files have been uploaded:
+earlier releases serve an encrypted file's raw bytes. The database part does
+roll back: `cd backend && alembic downgrade c0bf0b155719` drops
+`encryption_key_custody`, and the notice returns after a re-upgrade.
+
 ### Document folders open to module rights; who sees what changes (2026-10-09)
 
 Phase 3 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).
