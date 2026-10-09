@@ -173,6 +173,12 @@ class MembershipPipeline(Base):
         cascade="all, delete-orphan",
     )
 
+    if TYPE_CHECKING:
+        # Set per request by MembershipPipelineService.list_pipelines; not
+        # mapped and never persisted. Declared only for the type checker, so
+        # the declarative scan never sees it.
+        prospect_count: int
+
     __table_args__ = (
         Index("idx_pipeline_org_default", "organization_id", "is_default"),
         Index("idx_pipeline_org_template", "organization_id", "is_template"),
@@ -454,6 +460,15 @@ class ProspectiveMember(Base):
         cascade="all, delete-orphan",
         order_by="ProspectActivityLog.created_at.desc()",
     )
+
+    if TYPE_CHECKING:
+        # Created at runtime by the backref on ProspectInterview.prospect.
+        interviews: Mapped[list["ProspectInterview"]]
+        # Set by MembershipPipelineService.get_prospect for ProspectResponse;
+        # not mapped and never persisted. Kept out of the runtime class body
+        # so the declarative scan never sees them.
+        pipeline_name: Optional[str]
+        target_role_name: Optional[str]
 
     __table_args__ = (
         Index("idx_prospect_org_status", "organization_id", "status"),

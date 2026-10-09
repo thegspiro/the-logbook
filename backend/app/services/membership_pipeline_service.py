@@ -206,7 +206,7 @@ def effective_step_type(step: MembershipPipelineStep) -> PipelineStepType:
         ActionType.SEND_EMAIL.value: PipelineStepType.AUTOMATED_EMAIL,
         ActionType.SCHEDULE_MEETING.value: PipelineStepType.MEETING,
         ActionType.COLLECT_DOCUMENT.value: PipelineStepType.DOCUMENT_UPLOAD,
-    }.get(raw, PipelineStepType.ACTION)
+    }.get(raw or "", PipelineStepType.ACTION)
 
 
 def is_status_page_stage(step: MembershipPipelineStep) -> bool:
@@ -414,9 +414,12 @@ def _approval_roles_held(positions: Iterable[Any]) -> set[str]:
     }
     slugs = {position.slug.casefold() for position in positions if position.slug}
     for office in OFFICE_CATALOG:
-        office_slugs = {
-            str(slug).casefold() for slug in office.get("position_slugs", [])
-        }
+        position_slugs = office.get("position_slugs")
+        office_slugs = (
+            {str(slug).casefold() for slug in position_slugs}
+            if isinstance(position_slugs, list)
+            else set()
+        )
         if slugs & office_slugs:
             roles.add(str(office["key"]).casefold())
             roles.add(str(office["label"]).casefold())
@@ -661,7 +664,10 @@ class MembershipPipelineService:
                 self.db.add(step)
 
         await self.db.commit()
-        return await self.get_pipeline(pipeline.id, organization_id)
+        created = await self.get_pipeline(pipeline.id, organization_id)
+        if created is None:
+            raise RuntimeError(f"Pipeline {pipeline.id} not found after commit")
+        return created
 
     # Fields that may never be set via the generic update dict
     _PIPELINE_PROTECTED_FIELDS = frozenset(
@@ -770,8 +776,8 @@ class MembershipPipelineService:
             description=source.description,
             is_template=False,
             is_default=False,
-            is_active=source.is_active,
-            auto_transfer_on_approval=source.auto_transfer_on_approval,
+            is_active=bool(source.is_active),
+            auto_transfer_on_approval=bool(source.auto_transfer_on_approval),
             inactivity_config=source.inactivity_config,
             conversion_config=copy.deepcopy(source.conversion_config),
             steps=steps,
@@ -1626,9 +1632,7 @@ class MembershipPipelineService:
                 # staff compare it against the applicant's legal name.
                 "name": m.full_name,
                 "email": m.email,
-                "status": (
-                    m.status.value if hasattr(m.status, "value") else str(m.status)
-                ),
+                "status": getattr(m.status, "value", str(m.status)),
                 "membership_number": m.membership_number,
                 "archived_at": m.archived_at.isoformat() if m.archived_at else None,
                 "match_type": (
@@ -1796,6 +1800,8 @@ class MembershipPipelineService:
         ):
             await self.db.commit()
             created = await self.get_prospect(prospect.id, organization_id)
+        if created is None:
+            raise RuntimeError(f"Prospect {prospect.id} not found after commit")
         return created
 
     # Fields that may never be set via the generic update dict
@@ -1943,13 +1949,17 @@ class MembershipPipelineService:
         # so it is stamped like one; otherwise an application deactivated here
         # would carry no inactive_since and never be auto-purged, and one
         # reactivated here would keep a running purge clock.
-        if "status" in written and updates.get("status") is not None:
+        if (
+            "status" in written
+            and updates.get("status") is not None
+            and previous_status is not None
+        ):
             raw_status = updates["status"]
             target_status = self._parse_status(getattr(raw_status, "value", raw_status))
             if target_status.value != previous_status:
                 self._stamp_lifecycle(prospect, previous_status, target_status, None)
 
-        changes = {}
+        changes: Dict[str, Dict[str, Any]] = {}
         for key in written:
             new_value = getattr(prospect, key)
             old_value = old_values.get(key)
@@ -2146,7 +2156,7 @@ class MembershipPipelineService:
                     ScreeningStatus,
                 )
 
-                result = await self.db.execute(
+                screening_result = await self.db.execute(
                     select(ScreeningRecord).where(
                         and_(
                             ScreeningRecord.prospect_id == prospect.id,
@@ -2160,8 +2170,10 @@ class MembershipPipelineService:
                         )
                     )
                 )
-                records = result.scalars().all()
-                passed_types = {r.screening_type.value for r in records}
+                screening_records = screening_result.scalars().all()
+                passed_types = {
+                    record.screening_type.value for record in screening_records
+                }
                 missing = [s for s in required_screenings if s not in passed_types]
                 if missing:
                     raise ValueError(
@@ -2499,7 +2511,7 @@ class MembershipPipelineService:
         organization_id: str,
         prospect: ProspectiveMember,
         step_id: str,
-        recorded_by: str,
+        recorded_by: Optional[str],
         action_result: Dict[str, Any],
         notes: Optional[str],
         missing_roles: List[str],
@@ -4516,7 +4528,7 @@ class MembershipPipelineService:
         self,
         user_id: str,
         organization_id: str,
-        enrolled_by: str,
+        enrolled_by: Optional[str],
     ) -> Optional[Dict[str, Any]]:
         """
         Auto-enroll a newly converted member into the organization's
@@ -5500,7 +5512,7 @@ class MembershipPipelineService:
         self, organization_id: str, created_by: Optional[str] = None
     ):
         """Create default pipeline templates for an organization"""
-        templates = [
+        templates: List[Dict[str, Any]] = [
             {
                 "name": "Standard Membership Pipeline",
                 "description": "A standard pipeline for processing new membership applications with bookended steps.",
@@ -6748,8 +6760,11 @@ class MembershipPipelineService:
         # the pipeline's election step" case the pass-4 tests cover, and
         # never when step_id is omitted). The caller re-fetches and retries,
         # which is correct — the applicant genuinely moved.
+        # `current_step is not None` matters: an applicant whose stage was
+        # deleted has neither, and `None is None` would otherwise fire this.
         if (
-            election_step is current_step
+            current_step is not None
+            and election_step is current_step
             and step_id is not None
             and str(step_id) != str(current_step.id)
         ):
@@ -7589,7 +7604,7 @@ class MembershipPipelineService:
         """
         config = getattr(step, "config", None) or {}
         raw_type = getattr(step, "step_type", None)
-        step_type = raw_type.value if hasattr(raw_type, "value") else raw_type
+        step_type = getattr(raw_type, "value", raw_type)
 
         if step_type == "meeting" and config.get("scheduling_provider") == "calcom":
             url = config.get("calcom_booking_url") or ""
@@ -7671,7 +7686,11 @@ class MembershipPipelineService:
                 if step.public_visible:
                     public_step_ids.add(str(step.id))
 
-        show_future = prospect.pipeline.public_show_future_stages is not False
+        pipeline = prospect.pipeline
+        if pipeline is None:
+            # _status_token_usable already refused a pipeline-less applicant.
+            return None
+        show_future = pipeline.public_show_future_stages is not False
 
         # Build stage timeline — only include public-visible steps
         completed_stages = []
@@ -7801,7 +7820,10 @@ class MembershipPipelineService:
             if not timeout_days:
                 continue
 
-            days_inactive = (now - (prospect.updated_at or prospect.created_at)).days
+            last_activity = prospect.updated_at or prospect.created_at
+            if last_activity is None:
+                continue
+            days_inactive = (now - last_activity).days
             warning_pct = 80  # default warning at 80%
             if prospect.pipeline and prospect.pipeline.inactivity_config:
                 warning_pct = prospect.pipeline.inactivity_config.get(
