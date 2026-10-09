@@ -290,3 +290,105 @@ describe('ApparatusFormPage newcomer guidance', () => {
     expect(within(fuel).queryByRole('option', { name: 'Cng' })).not.toBeInTheDocument();
   });
 });
+
+// Out of Service is seeded with requires_reason, which POST /apparatus/{id}/status
+// enforces. This form saves through the plain update, which does not, and had
+// no reason field at all, so a rig went out of service with no record of why.
+describe('ApparatusFormPage status reason', () => {
+  const statusRow = (id: string, name: string, requiresReason: boolean) => ({
+    id,
+    organizationId: null,
+    name,
+    code: id,
+    description: null,
+    isSystem: true,
+    defaultStatus: null,
+    isAvailable: !requiresReason,
+    isOperational: !requiresReason,
+    requiresReason,
+    isArchivedStatus: false,
+    color: null,
+    icon: null,
+    sortOrder: 1,
+    isActive: true,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+  });
+  const existing = {
+    id: 'app-1',
+    unitNumber: 'E-2',
+    name: 'Pumper',
+    apparatusTypeId: 'type-1',
+    statusId: 'st-oos',
+    statusReason: 'Radio dead',
+    minStaffing: 3,
+    crewPositions: [],
+    isFinanced: false,
+    nfpaTrackingEnabled: false,
+  };
+
+  const renderEdit = () =>
+    render(
+      <MemoryRouter initialEntries={['/apparatus/app-1/edit']}>
+        <Routes>
+          <Route path="/apparatus/:id/edit" element={<ApparatusFormPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    ranksState = { ranks: [], loading: false };
+    localStorage.setItem('has_session', 'true');
+    Object.assign(store, {
+      currentApparatus: existing,
+      statuses: [statusRow('st-in', 'In Service', false), statusRow('st-oos', 'Out of Service', true)],
+    });
+    vi.mocked(apparatusService.updateApparatus).mockReset();
+    vi.mocked(apparatusService.updateApparatus).mockResolvedValue(existing as never);
+  });
+
+  afterEach(() => {
+    Object.assign(store, { currentApparatus: null, statuses: [] });
+  });
+
+  it('loads the saved reason and marks it required for Out of Service', async () => {
+    renderEdit();
+    const reason = await screen.findByRole('textbox', { name: /Reason/ });
+    expect(reason).toHaveValue('Radio dead');
+    expect(screen.getByText('*', { selector: 'label[for="apparatus-statusReason"] span' })).toBeInTheDocument();
+  });
+
+  it('refuses to save Out of Service without a reason', async () => {
+    const user = userEvent.setup();
+    renderEdit();
+    await user.clear(await screen.findByRole('textbox', { name: /Reason/ }));
+    await user.click(screen.getByRole('button', { name: /Save|Update/ }));
+    expect(await screen.findByText('Give a reason for Out of Service')).toBeInTheDocument();
+    expect(apparatusService.updateApparatus).not.toHaveBeenCalled();
+  });
+
+  it('drops the old reason when the status changes, and clears it on the server', async () => {
+    const user = userEvent.setup();
+    renderEdit();
+    await screen.findByRole('textbox', { name: /Reason/ });
+    await user.selectOptions(screen.getByRole('combobox', { name: /Status/ }), 'st-in');
+    expect(screen.getByRole('textbox', { name: /Reason/ })).toHaveValue('');
+    await user.click(screen.getByRole('button', { name: /Save|Update/ }));
+    await waitFor(() => expect(apparatusService.updateApparatus).toHaveBeenCalled());
+    const [, payload] = vi.mocked(apparatusService.updateApparatus).mock.calls[0] ?? [];
+    expect(payload).toMatchObject({ statusId: 'st-in', statusReason: null });
+  });
+
+  it('sends a typed reason with the status', async () => {
+    const user = userEvent.setup();
+    renderEdit();
+    const reason = await screen.findByRole('textbox', { name: /Reason/ });
+    await user.clear(reason);
+    await user.type(reason, 'Pump seal leaking');
+    await user.click(screen.getByRole('button', { name: /Save|Update/ }));
+    await waitFor(() => expect(apparatusService.updateApparatus).toHaveBeenCalled());
+    const [, payload] = vi.mocked(apparatusService.updateApparatus).mock.calls[0] ?? [];
+    expect(payload).toMatchObject({ statusId: 'st-oos', statusReason: 'Pump seal leaking' });
+  });
+});

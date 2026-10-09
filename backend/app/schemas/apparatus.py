@@ -268,6 +268,9 @@ class ApparatusStatusListItem(BaseModel):
     default_status: Optional[DefaultApparatusStatusEnum] = None
     is_available: bool
     is_operational: bool
+    # The edit form asks for a reason when this is set; without it in the list
+    # the form could not tell Out of Service from In Service.
+    requires_reason: bool = False
     is_archived_status: bool
     color: Optional[str] = None
     icon: Optional[str] = None
