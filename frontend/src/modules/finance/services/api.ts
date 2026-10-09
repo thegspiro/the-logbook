@@ -19,6 +19,7 @@ import type {
   BudgetAmendment,
   BudgetAmendmentCreatePayload,
   BudgetAmendmentCreated,
+  BudgetAmendmentReversePayload,
   BudgetCategory,
   BudgetCategoryUpdatePayload,
   BudgetCreatePayload,
@@ -210,6 +211,19 @@ export const budgetService = {
   /** Record extra money approved for a line; raises its budget by the amount. */
   async addAmendment(id: string, data: BudgetAmendmentCreatePayload): Promise<BudgetAmendmentCreated> {
     const response = await api.post<BudgetAmendmentCreated>(`/finance/budgets/${id}/amendments`, data);
+    return response.data;
+  },
+
+  /** Cancel a mistaken amendment with a reversing entry; lowers the budget by it. */
+  async reverseAmendment(
+    id: string,
+    amendmentId: string,
+    data: BudgetAmendmentReversePayload
+  ): Promise<BudgetAmendmentCreated> {
+    const response = await api.post<BudgetAmendmentCreated>(
+      `/finance/budgets/${id}/amendments/${amendmentId}/reverse`,
+      data
+    );
     return response.data;
   },
 

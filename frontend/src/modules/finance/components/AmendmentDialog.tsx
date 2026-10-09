@@ -3,7 +3,8 @@
  *
  * The Treasurer's screen (`finance.manage`). Saving raises the line's budget by
  * the amount and keeps the amendment as a record of who approved it and when.
- * Amendments cannot be edited or removed afterwards, so the form says so.
+ * Amendments cannot be edited or removed afterwards, so the form says so; a
+ * mistaken one is corrected with `ReverseAmendmentDialog`.
  *
  * The checks here only spare a round trip; the backend makes the same ones
  * (the approval date against the department's calendar) and its message is
@@ -119,7 +120,7 @@ export const AmendmentDialog: React.FC<AmendmentDialogProps> = ({ budgetId, line
       <div className="space-y-4">
         <p id="amendment-form-description" className="text-theme-text-secondary text-sm">
           Extra money approved for {lineName}. The budget goes up by this amount. An amendment is kept as a record and
-          cannot be edited or removed later.
+          cannot be edited or removed later; a mistaken one is corrected by reversing it.
         </p>
 
         <div>

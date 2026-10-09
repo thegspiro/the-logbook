@@ -330,7 +330,14 @@ export interface BudgetTransactionPage {
   offset: number;
 }
 
-/** Extra money leadership approved for a budget line — an audit record. */
+/**
+ * Extra money leadership approved for a budget line — an audit record.
+ *
+ * A mistaken amendment is corrected by a reversing entry, never edited: a
+ * row with a negative `amount` (`isReversal`) naming the amendment it
+ * cancels in `reversesAmendmentId`. The reversed amendment carries the
+ * reversal's id, when it was entered and by whom.
+ */
 export interface BudgetAmendment {
   id: string;
   organizationId: string;
@@ -343,6 +350,13 @@ export interface BudgetAmendment {
   createdBy?: string | null;
   enteredByName?: string | null;
   createdAt: string;
+  /** On a reversal: the amendment it cancels. */
+  reversesAmendmentId?: string | null;
+  isReversal?: boolean;
+  /** On a reversed amendment: the reversal, when it was entered and by whom. */
+  reversedByAmendmentId?: string | null;
+  reversedAt?: string | null;
+  reversedByName?: string | null;
 }
 
 /** `POST /finance/budgets/:id/amendments`. Every field is required. */
@@ -353,7 +367,17 @@ export interface BudgetAmendmentCreatePayload {
   approvedOn: string;
 }
 
-/** The new amendment and the line as it now stands. */
+/**
+ * `POST /finance/budgets/:id/amendments/:amendmentId/reverse`. Every field is
+ * required; the amount is the whole amendment's, taken by the backend.
+ */
+export interface BudgetAmendmentReversePayload {
+  reason: string;
+  approvedBy: string;
+  approvedOn: string;
+}
+
+/** The new amendment (or reversal) and the line as it now stands. */
 export interface BudgetAmendmentCreated {
   amendment: BudgetAmendment;
   budget: Budget;
