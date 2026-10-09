@@ -412,6 +412,32 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Prospective members: Auto-Purge now deletes — the clock starts at this upgrade (2026-10-09)
+
+The pipeline **Auto-Purge** setting (Pipeline Settings → inactivity) used to be
+stored and never read. It is now in effect: a daily task
+(`membership_auto_purge`) permanently deletes, with their uploaded documents,
+the **inactive** applications in each pipeline that has Auto-Purge on, once
+they have been inactive for the configured number of days (30–1095; a value
+outside that range is treated as the nearest bound, and an unreadable one
+skips the pipeline). Each run writes a `membership_pipeline.prospects_purged`
+audit event marked `trigger: auto_purge`, with the pipeline, the threshold and
+the purged ids. No email is sent before a purge.
+
+**Nothing already inactive is deleted straight away.** Migration
+`feecd81eef2d` adds `prospective_members.inactive_since` and sets it to the
+time the migration runs for every application inactive at that moment — not
+to the date it actually went inactive. So an application that has sat
+inactive for years in a pipeline with Auto-Purge switched on is purged only
+after a full grace period has passed **after the upgrade**. The **Deactivated**
+date shown on the application is unchanged. An application with no
+`inactive_since` is never auto-purged.
+
+If a pipeline had Auto-Purge switched on without anyone expecting it to act,
+review it during that grace period: turn it off, or reactivate the
+applications you want to keep. Reactivating an application stops its clock;
+if it goes inactive again, the clock starts afresh.
+
 ### Document folders open to module rights; who sees what changes (2026-10-09)
 
 Phase 3 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).
@@ -1114,7 +1140,8 @@ inactive, removes their uploaded documents from the server, and records the
 purge in the audit log (count and ids only); the message reports how many were
 really deleted. Withdrawn, rejected and on-hold applications are never purged.
 The pipeline's **Auto-Purge** setting is still stored but nothing reads it, so
-no application is ever deleted automatically.
+no application is ever deleted automatically. _(Wired on 2026-10-09 — see
+"Auto-Purge now deletes" above.)_
 
 ### Each pipeline decides what a converted applicant becomes (2026-09-30)
 

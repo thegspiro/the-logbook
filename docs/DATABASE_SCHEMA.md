@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**300 tables · 4939 columns · 992 foreign keys**
+**300 tables · 4940 columns · 992 foreign keys**
 
 ---
 
@@ -455,7 +455,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`prospect_event_links`](#prospect_event_links) | `ProspectEventLink` | 6 | Links a prospective member to an upcoming event. |
 | [`prospect_interviews`](#prospect_interviews) | `ProspectInterview` | 12 | Interview record for a prospective member. |
 | [`prospect_step_progress`](#prospect_step_progress) | `ProspectStepProgress` | 10 | Tracks a prospect's progress on each pipeline step. |
-| [`prospective_members`](#prospective_members) | `ProspectiveMember` | 36 | Prospective member record, kept separate from the users table. |
+| [`prospective_members`](#prospective_members) | `ProspectiveMember` | 37 | Prospective member record, kept separate from the users table. |
 
 ### Nfc_Tag
 
@@ -6835,6 +6835,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `reactivated_at` | DATETIME | yes |  |  |  |
 | `withdrawn_at` | DATETIME | yes |  |  |  |
 | `withdrawal_reason` | TEXT | yes |  |  |  |
+| `inactive_since` | DATETIME | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
 | `active_email` | VARCHAR(255) | yes |  | server default |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |

@@ -10,7 +10,7 @@
 
 import React, { Suspense, useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { Plus, QrCode, Settings } from 'lucide-react';
+import { CalendarPlus, History, Inbox, Megaphone, Plus, QrCode, Settings } from 'lucide-react';
 import { AdminHubFrame } from '../components/admin';
 import type { AdminHubAction, AdminHubTab } from '../components/admin';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
@@ -24,14 +24,32 @@ const EventsSettingsTab = lazyWithRetry(() => import('./EventsSettingsTab'));
 
 type AdminTab = 'create' | 'past_events' | 'requests' | 'analytics' | 'community' | 'settings';
 
-/** Settings is always last — the frame's rule, on every module. */
+/**
+ * Settings is always last — the frame's rule, on every module. Every tab is
+ * described, so the frame draws them as cards that say what each one holds.
+ */
 const tabs: AdminHubTab<AdminTab>[] = [
-  { id: 'create', label: 'Create Event' },
-  { id: 'past_events', label: 'Past Events' },
-  { id: 'requests', label: 'Requests' },
-  { id: 'analytics', label: 'QR Code Analytics' },
-  { id: 'community', label: 'Community Engagement' },
-  { id: 'settings', label: 'Settings' },
+  {
+    id: 'create',
+    label: 'Create Event',
+    description: 'A one-off or recurring event, or one from a template',
+    icon: CalendarPlus,
+  },
+  { id: 'past_events', label: 'Past Events', description: 'Events that have already happened', icon: History },
+  { id: 'requests', label: 'Requests', description: 'Community requests for outreach events', icon: Inbox },
+  { id: 'analytics', label: 'QR Code Analytics', description: 'Check-ins by QR code, device and error', icon: QrCode },
+  {
+    id: 'community',
+    label: 'Community Engagement',
+    description: 'How far public outreach events reach',
+    icon: Megaphone,
+  },
+  {
+    id: 'settings',
+    label: 'Settings',
+    description: 'Event types, categories, the request pipeline and metrics',
+    icon: Settings,
+  },
 ];
 
 const TabLoading = () => (

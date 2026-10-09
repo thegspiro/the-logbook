@@ -674,7 +674,7 @@ class MedicalScreeningService:
 
         prospects: dict = {}
         if prospect_ids:
-            rows = await self.db.execute(
+            prospect_rows = await self.db.execute(
                 select(
                     ProspectiveMember.id,
                     ProspectiveMember.first_name,
@@ -686,18 +686,18 @@ class MedicalScreeningService:
             )
             prospects = {
                 pid: f"{first or ''} {last or ''}".strip()
-                for pid, first, last in rows.all()
+                for pid, first, last in prospect_rows.all()
             }
 
         requirements: dict = {}
         if requirement_ids:
-            rows = await self.db.execute(
+            requirement_rows = await self.db.execute(
                 select(ScreeningRequirement.id, ScreeningRequirement.name).where(
                     ScreeningRequirement.id.in_(requirement_ids),
                     ScreeningRequirement.organization_id == organization_id,
                 )
             )
-            requirements = {rid: name for rid, name in rows.all()}
+            requirements = {rid: name for rid, name in requirement_rows.all()}
 
         return {"users": users, "prospects": prospects, "requirements": requirements}
 
