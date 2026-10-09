@@ -72,7 +72,8 @@ electorates.
 """
 
 import enum
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import (
     JSON,
@@ -92,8 +93,8 @@ from sqlalchemy import (
 from sqlalchemy.dialects import mysql
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.ext.mutable import MutableDict
-from sqlalchemy.orm import relationship, synonym
-from sqlalchemy.sql import and_, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
+from sqlalchemy.sql import ColumnElement, and_, func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
@@ -105,6 +106,9 @@ from app.utils.membership import (
     derive_membership_type,
     split_membership_type,
 )
+
+if TYPE_CHECKING:
+    from app.models.public_portal import PublicPortalConfig
 
 
 class UserStatus(str, enum.Enum):
@@ -174,20 +178,20 @@ class Organization(Base):
 
     __tablename__ = "organizations"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    name = Column(String(255), nullable=False)
-    slug = Column(String(100), nullable=False, unique=True)
-    description = Column(Text)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    description: Mapped[Optional[str]] = mapped_column(Text)
     # Purchasing controls are explicit department policy, not client hints.
-    reorder_vendor_required = Column(
+    reorder_vendor_required: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
-    reorder_po_required = Column(
+    reorder_po_required: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
 
     # Organization Type
-    organization_type = Column(
+    organization_type: Mapped[OrganizationType] = mapped_column(
         Enum(OrganizationType, values_callable=lambda x: [e.value for e in x]),
         default=OrganizationType.FIRE_DEPARTMENT,
         nullable=False,
@@ -195,77 +199,99 @@ class Organization(Base):
     )
 
     # Timezone
-    timezone = Column(String(50), default="America/New_York")
+    timezone: Mapped[Optional[str]] = mapped_column(
+        String(50), default="America/New_York"
+    )
 
     # Contact Information
-    phone = Column(String(20))
-    fax = Column(String(20))
-    email = Column(String(255))
-    website = Column(String(255))
+    phone: Mapped[Optional[str]] = mapped_column(String(20))
+    fax: Mapped[Optional[str]] = mapped_column(String(20))
+    email: Mapped[Optional[str]] = mapped_column(String(255))
+    website: Mapped[Optional[str]] = mapped_column(String(255))
 
     # Mailing Address
-    mailing_address_line1 = Column(String(255))
-    mailing_address_line2 = Column(String(255))
-    mailing_city = Column(String(100))
-    mailing_state = Column(String(50))
-    mailing_zip = Column(String(20))
-    mailing_country = Column(String(100), default="USA")
+    mailing_address_line1: Mapped[Optional[str]] = mapped_column(String(255))
+    mailing_address_line2: Mapped[Optional[str]] = mapped_column(String(255))
+    mailing_city: Mapped[Optional[str]] = mapped_column(String(100))
+    mailing_state: Mapped[Optional[str]] = mapped_column(String(50))
+    mailing_zip: Mapped[Optional[str]] = mapped_column(String(20))
+    mailing_country: Mapped[Optional[str]] = mapped_column(String(100), default="USA")
 
     # Physical Address (station/headquarters location)
-    physical_address_same = Column(Boolean, default=True)
-    physical_address_line1 = Column(String(255))
-    physical_address_line2 = Column(String(255))
-    physical_city = Column(String(100))
-    physical_state = Column(String(50))
-    physical_zip = Column(String(20))
-    physical_country = Column(String(100), default="USA")
+    physical_address_same: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
+    physical_address_line1: Mapped[Optional[str]] = mapped_column(String(255))
+    physical_address_line2: Mapped[Optional[str]] = mapped_column(String(255))
+    physical_city: Mapped[Optional[str]] = mapped_column(String(100))
+    physical_state: Mapped[Optional[str]] = mapped_column(String(50))
+    physical_zip: Mapped[Optional[str]] = mapped_column(String(20))
+    physical_country: Mapped[Optional[str]] = mapped_column(String(100), default="USA")
 
     # Department Identifiers
-    identifier_type = Column(
+    identifier_type: Mapped[IdentifierType] = mapped_column(
         Enum(IdentifierType, values_callable=lambda x: [e.value for e in x]),
         default=IdentifierType.DEPARTMENT_ID,
         nullable=False,
         server_default="department_id",
     )
-    fdid = Column(String(50))  # Fire Department ID (NFIRS)
-    state_id = Column(String(50))  # State license/certification number
-    department_id = Column(String(50))  # Internal department ID
+    fdid: Mapped[Optional[str]] = mapped_column(
+        String(50)
+    )  # Fire Department ID (NFIRS)
+    state_id: Mapped[Optional[str]] = mapped_column(
+        String(50)
+    )  # State license/certification number
+    department_id: Mapped[Optional[str]] = mapped_column(
+        String(50)
+    )  # Internal department ID
 
     # Additional Information
-    county = Column(String(100))
-    founded_year = Column(Integer)
-    tax_id = Column(String(50))  # EIN for 501(c)(3) organizations
+    county: Mapped[Optional[str]] = mapped_column(String(100))
+    founded_year: Mapped[Optional[int]] = mapped_column(Integer)
+    tax_id: Mapped[Optional[str]] = mapped_column(
+        String(50)
+    )  # EIN for 501(c)(3) organizations
 
     # Logo stored as base64 or URL (MEDIUMTEXT for large base64 images)
     # LONGTEXT, not MEDIUMTEXT: the logo is stored as a base64 data URI, and
     # migration 20260209_0600 widened this column to LONGTEXT on existing
     # databases. The model has to match, or fresh installs silently get the
     # narrower column that migration exists to prevent.
-    logo = Column(Text().with_variant(mysql.LONGTEXT(), "mysql"))
+    logo: Mapped[Optional[str]] = mapped_column(
+        Text().with_variant(mysql.LONGTEXT(), "mysql")
+    )
 
     # Legacy field - keep for compatibility
-    type = Column(String(50), default="fire_department")
+    type: Mapped[Optional[str]] = mapped_column(String(50), default="fire_department")
 
     # Settings JSON for extensibility — MutableDict ensures SQLAlchemy detects
     # in-place mutations to nested dicts, preventing silent commit no-ops.
-    settings = Column(MutableDict.as_mutable(JSON), default=dict)
+    settings: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        MutableDict.as_mutable(JSON), default=dict
+    )
     # server_default matches what the migrations give this column. Without it,
     # a table built by create_all() — the fast-path install, and the test
     # database — has no column default, so a raw-SQL insert that omits
     # `active` stores NULL, and every `if not org.active` check then treats a
     # brand-new department as deactivated.
-    active = Column(Boolean, default=True, server_default="1", index=True)
+    active: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True, server_default="1", index=True
+    )
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    users = relationship("User", back_populates="organization")
-    positions = relationship("Position", back_populates="organization")
-    prospects = relationship("Prospect", back_populates="organization")
-    public_portal_config = relationship(
+    users: Mapped[list["User"]] = relationship("User", back_populates="organization")
+    positions: Mapped[list["Position"]] = relationship(
+        "Position", back_populates="organization"
+    )
+    prospects: Mapped[list["Prospect"]] = relationship(
+        "Prospect", back_populates="organization"
+    )
+    public_portal_config: Mapped[Optional["PublicPortalConfig"]] = relationship(
         "PublicPortalConfig",
         back_populates="organization",
         uselist=False,
@@ -286,35 +312,37 @@ class User(Base):
 
     __tablename__ = "users"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Basic Info
-    username = Column(String(100), nullable=False)
-    email = Column(String(255), nullable=False, index=True)
-    personal_email = Column(
+    username: Mapped[str] = mapped_column(String(100), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    personal_email: Mapped[Optional[str]] = mapped_column(
         String(255)
     )  # Personal/home email for post-separation contact
-    password_hash = Column(String(255))
+    password_hash: Mapped[Optional[str]] = mapped_column(String(255))
     # OAuth / external identity provider linkage. NULL for password-only users.
     # oauth_provider records the IdP ("google"); oauth_subject is the provider's
     # stable, immutable user id (Google's "sub" claim) used to re-match on later
     # logins even if the email address changes.
-    oauth_provider = Column(String(50), nullable=True)
-    oauth_subject = Column(String(255), nullable=True, index=True)
-    first_name = Column(String(100))
-    middle_name = Column(String(100))
-    last_name = Column(String(100))
+    oauth_provider: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    oauth_subject: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True, index=True
+    )
+    first_name: Mapped[Optional[str]] = mapped_column(String(100))
+    middle_name: Mapped[Optional[str]] = mapped_column(String(100))
+    last_name: Mapped[Optional[str]] = mapped_column(String(100))
     # The name a member goes by ("Terry" for John Terry Heather). It replaces
     # first_name on everyday screens only; first_name stays the legal name of
     # record that reports, training records, certificates, ballots and legal
     # documents must carry. NULL means "goes by first_name".
-    preferred_name = Column(String(100), nullable=True)
-    membership_number = Column(
+    preferred_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    membership_number: Mapped[Optional[str]] = mapped_column(
         String(50)
     )  # Organization-assigned membership ID (e.g., "001", "M-042")
     # The code a member's printed and on-screen badge carries, issued at
@@ -322,42 +350,50 @@ class User(Base):
     # number it appears nowhere in the directory, so a colleague cannot print
     # a working copy; reissuing it cancels a lost badge. Never add it to a
     # general user response — it is served only by /member-badges.
-    badge_code = Column(String(16), nullable=True, default=generate_badge_code)
-    previous_membership_number = Column(
+    badge_code: Mapped[Optional[str]] = mapped_column(
+        String(16), nullable=True, default=generate_badge_code
+    )
+    previous_membership_number: Mapped[Optional[str]] = mapped_column(
         String(50)
     )  # Preserved on soft-delete so returning members can reclaim their number
-    phone = Column(String(20))
-    mobile = Column(String(20))
+    phone: Mapped[Optional[str]] = mapped_column(String(20))
+    mobile: Mapped[Optional[str]] = mapped_column(String(20))
 
     # Profile
-    photo_url = Column(Text)
-    date_of_birth = Column(Date)
-    hire_date = Column(Date)
+    photo_url: Mapped[Optional[str]] = mapped_column(Text)
+    date_of_birth: Mapped[Optional[date]] = mapped_column(Date)
+    hire_date: Mapped[Optional[date]] = mapped_column(Date)
 
     # Operational Rank (one per member, has default permissions)
-    rank = Column(String(100))  # e.g., "fire_chief", "captain", "firefighter"
-    station = Column(String(100))  # e.g., "Station 1", "Headquarters"
+    rank: Mapped[Optional[str]] = mapped_column(
+        String(100)
+    )  # e.g., "fire_chief", "captain", "firefighter"
+    station: Mapped[Optional[str]] = mapped_column(
+        String(100)
+    )  # e.g., "Station 1", "Headquarters"
     # Duty platoon / shift group for platoon-rotation scheduling (A/B/C/...).
     # Single source of truth consumed by shift pattern generation.
-    platoon = Column(String(20))
+    platoon: Mapped[Optional[str]] = mapped_column(String(20))
 
     # Address
-    address_street = Column(String(255))
-    address_city = Column(String(100))
-    address_state = Column(String(50))
-    address_zip = Column(String(20))
-    address_country = Column(String(100), default="USA")
+    address_street: Mapped[Optional[str]] = mapped_column(String(255))
+    address_city: Mapped[Optional[str]] = mapped_column(String(100))
+    address_state: Mapped[Optional[str]] = mapped_column(String(50))
+    address_zip: Mapped[Optional[str]] = mapped_column(String(20))
+    address_country: Mapped[Optional[str]] = mapped_column(String(100), default="USA")
 
     # Referral data preserved from prospect record on transfer
-    referral_source = Column(String(255))
-    interest_reason = Column(Text)
-    referred_by_user_id = Column(
+    referral_source: Mapped[Optional[str]] = mapped_column(String(255))
+    interest_reason: Mapped[Optional[str]] = mapped_column(Text)
+    referred_by_user_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Emergency Contacts (stored as JSON array)
     # Format: [{"name": "...", "relationship": "...", "phone": "...", "email": "...", "is_primary": true}, ...]
-    emergency_contacts = Column(JSON, default=list)
+    emergency_contacts: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, default=list
+    )
 
     # Notification Preferences (stored as JSON object)
     # Format: {"email_notifications": true, "sms_notifications": true,
@@ -367,7 +403,9 @@ class User(Base):
     # urgent department message (the email still goes out) and is one of two
     # gates — the recorded TCPA consent is the other. See
     # app/services/notification_channels.
-    notification_preferences = Column(JSON, default=dict)
+    notification_preferences: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, default=dict
+    )
 
     # What of the member's own contact block other members may see. Canonical
     # shape is the five booleans in
@@ -377,7 +415,9 @@ class User(Base):
     # new dict — there is no nested-key mutation path (pitfall #12). No
     # ``default=``: ``{}`` and NULL would otherwise be two spellings of "never
     # chosen".
-    profile_visibility = Column(JSON, nullable=True)
+    profile_visibility: Mapped[Optional[dict[str, bool]]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # The member's choice of the two configurable tabs on the phone bottom bar,
     # as a JSON array of app paths (``["/events", "/account"]``). NULL means
@@ -385,7 +425,7 @@ class User(Base):
     # only as a whole list by ``PUT /users/me/bottom-navigation`` and read
     # through ``normalize_bottom_nav_slots``, so a malformed value degrades to
     # the defaults rather than breaking the bar.
-    bottom_nav_slots = Column(JSON, nullable=True)
+    bottom_nav_slots: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
 
     # Department Membership (one per member, no permissions – purely classification)
     #
@@ -396,50 +436,58 @@ class User(Base):
     # it. ``app/utils/membership.py`` owns the derivation, and the
     # ``_reconcile_membership`` listener below keeps the three consistent no
     # matter which of them a caller writes.
-    membership_type = Column(String(50), default="active")  # See MembershipType enum
+    membership_type: Mapped[Optional[str]] = mapped_column(
+        String(50), default="active"
+    )  # See MembershipType enum
     # No column default, for the same reason the migration sets no server
     # default: a default would be applied to writes that name only
     # `membership_type`, and would be wrong for precisely the members who are
     # not plain operational regulars. NULL means "nobody has set this", and a
     # reader derives from `membership_type` when it sees one. ORM writes never
     # leave it NULL — `_reconcile_membership` below fills both.
-    member_class = Column(String(20), index=True)
-    member_status = Column(String(20), index=True)
-    membership_type_changed_at = Column(
+    member_class: Mapped[Optional[str]] = mapped_column(String(20), index=True)
+    member_status: Mapped[Optional[str]] = mapped_column(String(20), index=True)
+    membership_type_changed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True)
     )  # When membership tier last changed
 
     # Status
-    status = Column(
+    status: Mapped[Optional[UserStatus]] = mapped_column(
         Enum(UserStatus, values_callable=lambda x: [e.value for e in x]),
         default=UserStatus.ACTIVE,
         index=True,
     )
-    status_changed_at = Column(
+    status_changed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True)
     )  # When status last changed (used for drop-date tracking)
-    status_change_reason = Column(Text)  # Reason for the last status change
-    archived_at = Column(
+    status_change_reason: Mapped[Optional[str]] = mapped_column(
+        Text
+    )  # Reason for the last status change
+    archived_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True)
     )  # When the member was archived (after all property returned)
     # Compliance exemption — when True, the member is not evaluated against
     # training requirements, shift minimums, admin-hour targets, or
     # certificate maintenance.  Typical use: retired / honorary members.
-    compliance_exempt = Column(
+    compliance_exempt: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="0"
     )
 
-    email_verified = Column(Boolean, default=False)
+    email_verified: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
 
     # MFA — secret and backup codes are encrypted at rest via
     # application-layer AES-256 (Fernet) to protect against DB compromise.
-    mfa_enabled = Column(Boolean, default=False)
-    _mfa_secret_encrypted = Column("mfa_secret", String(255))
-    _mfa_backup_codes_encrypted = Column("mfa_backup_codes", JSON)
+    mfa_enabled: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    _mfa_secret_encrypted: Mapped[Optional[str]] = mapped_column(
+        "mfa_secret", String(255)
+    )
+    _mfa_backup_codes_encrypted: Mapped[Optional[list[str]]] = mapped_column(
+        "mfa_backup_codes", JSON
+    )
     # Highest TOTP time-step (unix_time // period) already accepted at login.
     # A code whose step is <= this value is rejected as a replay, so a captured
     # or shoulder-surfed code cannot be reused within its ±30s validity window.
-    mfa_last_timestep = Column(Integer, nullable=True)
+    mfa_last_timestep: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     @property
     def mfa_secret(self) -> str | None:
@@ -499,37 +547,49 @@ class User(Base):
             self._mfa_backup_codes_encrypted = [encrypt_data(c) for c in value]
 
     # Password Management
-    password_changed_at = Column(DateTime(timezone=True))
-    must_change_password = Column(
+    password_changed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
+    must_change_password: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="0"
     )
     # When the member was first told their password had expired; the server
     # refuses an expired password HIPAA_PASSWORD_EXPIRY_GRACE_DAYS after this
     # (AUTH-15). Cleared whenever the password changes.
-    password_expiry_notified_at = Column(DateTime(timezone=True), nullable=True)
-    failed_login_attempts = Column(Integer, default=0)
-    locked_until = Column(DateTime(timezone=True))
-    password_reset_token = Column(String(128), index=True)
-    password_reset_expires_at = Column(DateTime(timezone=True))
+    password_expiry_notified_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    failed_login_attempts: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    locked_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    password_reset_token: Mapped[Optional[str]] = mapped_column(String(128), index=True)
+    password_reset_expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
     # Unguessable token for the member's personal read-only ICS calendar feed
     # (subscribed from Google/Apple Calendar, which can't do cookie auth).
-    calendar_feed_token = Column(String(64), index=True, nullable=True)
+    calendar_feed_token: Mapped[Optional[str]] = mapped_column(
+        String(64), index=True, nullable=True
+    )
 
     # Timestamps
-    last_login_at = Column(DateTime(timezone=True))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    deleted_at = Column(DateTime(timezone=True))
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     # Set when this member's PII was scrubbed by the anonymization workflow
     # (member_anonymization_service). NULL = not anonymized. Operational
     # history rows stay linked to the anonymized shell record.
-    anonymized_at = Column(DateTime(timezone=True))
+    anonymized_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     # Relationships
-    organization = relationship("Organization", back_populates="users")
-    positions = relationship(
+    organization: Mapped["Organization"] = relationship(
+        "Organization", back_populates="users"
+    )
+    positions: Mapped[list["Position"]] = relationship(
         "Position",
         secondary="user_positions",
         back_populates="users",
@@ -585,7 +645,7 @@ class User(Base):
     # rebinding the name, so the class keeps one ``is_active`` definition.
     @is_active.inplace.expression
     @classmethod
-    def _is_active_expression(cls):
+    def _is_active_expression(cls) -> ColumnElement[bool]:
         """SQL form of ``is_active``; the two must stay identical."""
         return and_(cls.status.in_(ACTIVE_ACCOUNT_STATUSES), cls.deleted_at.is_(None))
 
@@ -676,32 +736,40 @@ class Position(Base):
 
     __tablename__ = "positions"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    name = Column(String(100), nullable=False)
-    slug = Column(String(100), nullable=False)
-    description = Column(Text)
-    permissions = Column(JSON, default=list)
-    is_system = Column(Boolean, default=False)  # System positions can't be deleted
-    priority = Column(Integer, default=0)  # Higher priority = more powerful
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    slug: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    permissions: Mapped[Optional[list[str]]] = mapped_column(JSON, default=list)
+    is_system: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=False
+    )  # System positions can't be deleted
+    priority: Mapped[Optional[int]] = mapped_column(
+        Integer, default=0
+    )  # Higher priority = more powerful
 
     # Per-position UI preferences (e.g. the inventory label printer/size this
     # role uses). Nullable JSON; mutate via copy.deepcopy + reassign.
-    settings = Column(JSON, nullable=True)
+    settings: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    organization = relationship("Organization", back_populates="positions")
-    users = relationship(
+    organization: Mapped["Organization"] = relationship(
+        "Organization", back_populates="positions"
+    )
+    users: Mapped[list["User"]] = relationship(
         "User",
         secondary="user_positions",
         back_populates="positions",
@@ -764,42 +832,46 @@ class Prospect(Base):
 
     __tablename__ = "prospects"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Contact Information
-    first_name = Column(String(100), nullable=False)
-    middle_name = Column(String(100))
-    last_name = Column(String(100), nullable=False)
-    email = Column(String(255))  # Personal email
-    phone = Column(String(20))
-    mobile = Column(String(20))
+    first_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    middle_name: Mapped[Optional[str]] = mapped_column(String(100))
+    last_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    email: Mapped[Optional[str]] = mapped_column(String(255))  # Personal email
+    phone: Mapped[Optional[str]] = mapped_column(String(20))
+    mobile: Mapped[Optional[str]] = mapped_column(String(20))
 
     # Address
-    address_street = Column(String(255))
-    address_city = Column(String(100))
-    address_state = Column(String(50))
-    address_zip = Column(String(20))
+    address_street: Mapped[Optional[str]] = mapped_column(String(255))
+    address_city: Mapped[Optional[str]] = mapped_column(String(100))
+    address_state: Mapped[Optional[str]] = mapped_column(String(50))
+    address_zip: Mapped[Optional[str]] = mapped_column(String(20))
 
     # Application Details
-    status = Column(
+    status: Mapped[Optional[str]] = mapped_column(
         String(50), default="applied"
     )  # applied, interviewing, accepted, rejected, withdrawn
-    notes = Column(Text)
-    referred_by = Column(String(255))  # Who referred them
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    referred_by: Mapped[Optional[str]] = mapped_column(String(255))  # Who referred them
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    organization = relationship("Organization", back_populates="prospects")
+    organization: Mapped["Organization"] = relationship(
+        "Organization", back_populates="prospects"
+    )
 
     __table_args__ = (
         Index("idx_prospect_org_email", "organization_id", "email"),
@@ -839,57 +911,67 @@ class MemberLeaveOfAbsence(Base):
 
     __tablename__ = "member_leaves_of_absence"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
 
-    leave_type = Column(
+    leave_type: Mapped[LeaveType] = mapped_column(
         Enum(LeaveType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=LeaveType.LEAVE_OF_ABSENCE,
         server_default="leave_of_absence",
     )
-    reason = Column(Text, nullable=True)
+    reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # The period the member is on leave (inclusive, month-level granularity)
-    start_date = Column(Date, nullable=False)
-    end_date = Column(Date, nullable=True)  # None = permanent leave
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[Optional[date]] = mapped_column(
+        Date, nullable=True
+    )  # None = permanent leave
 
     # Approval
-    granted_by = Column(
+    granted_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
-    granted_at = Column(DateTime(timezone=True), nullable=True)
+    granted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
-    active = Column(Boolean, default=True, nullable=False, server_default="1")
+    active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
 
     # When True, no training waiver is auto-created for this leave.
     # Officers can set this to keep training requirements active during the leave.
-    exempt_from_training_waiver = Column(
+    exempt_from_training_waiver: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="0"
     )
 
     # Back-reference to the auto-created training waiver (if any)
-    linked_training_waiver_id = Column(String(36), nullable=True)
+    linked_training_waiver_id: Mapped[Optional[str]] = mapped_column(
+        String(36), nullable=True
+    )
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    user = relationship("User", foreign_keys=[user_id])
-    grantor = relationship("User", foreign_keys=[granted_by])
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+    grantor: Mapped[Optional["User"]] = relationship("User", foreign_keys=[granted_by])
 
     __table_args__ = (
         Index("idx_member_leave_org_user", "organization_id", "user_id"),
@@ -924,32 +1006,36 @@ class MemberServicePeriod(Base):
 
     __tablename__ = "member_service_periods"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    start_date = Column(Date, nullable=True)
-    end_date = Column(Date, nullable=True)  # None = still serving
+    start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    end_date: Mapped[Optional[date]] = mapped_column(
+        Date, nullable=True
+    )  # None = still serving
     # The status the member separated into (dropped_voluntary,
     # dropped_involuntary, retired); None while the stint is open.
-    separation_status = Column(String(32), nullable=True)
-    counts_toward_service = Column(
+    separation_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    counts_toward_service: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="1"
     )
-    notes = Column(Text, nullable=True)
-    created_by = Column(
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
@@ -965,23 +1051,29 @@ class Session(Base):
 
     __tablename__ = "sessions"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    user_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
 
-    token = Column(String(512), nullable=False, unique=True, index=True)
-    refresh_token = Column(String(512), index=True)
-    ip_address = Column(String(45))
-    user_agent = Column(Text)
-    geo_location = Column(JSON)
+    token: Mapped[str] = mapped_column(
+        String(512), nullable=False, unique=True, index=True
+    )
+    refresh_token: Mapped[Optional[str]] = mapped_column(String(512), index=True)
+    ip_address: Mapped[Optional[str]] = mapped_column(String(45))
+    user_agent: Mapped[Optional[str]] = mapped_column(Text)
+    geo_location: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON)
 
-    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    last_activity = Column(
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    last_activity: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
@@ -1000,14 +1092,16 @@ class PasswordHistory(Base):
 
     __tablename__ = "password_history"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    user_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    password_hash = Column(String(255), nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     __table_args__ = (
         Index("idx_password_history_user_created", "user_id", "created_at"),
