@@ -166,6 +166,13 @@ member, when they asked, their reason and the times they gave, with
   finalized.
 - **Decline** asks for a **Reason**, which the member is shown.
 
+**Every request in one place.** When requests are waiting on your events, the
+Events page says _"N attendance requests are waiting for you"_; it opens
+**Attendance Requests** (`/events/attendance-requests`), which lists every
+pending request on events you organize or are alternate for, oldest first,
+with the same **Approve** and **Decline**. Members holding `events.manage`
+can switch between **My events** and **All events**.
+
 Nobody decides their own request. **Approving is refused while attendance is
 finalized** — the card says _"Attendance is finalized. Reopen attendance to
 approve a request; declining still works."_ — because approving would change

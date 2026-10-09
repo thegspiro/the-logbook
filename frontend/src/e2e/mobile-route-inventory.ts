@@ -271,6 +271,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/events/attendance-requests',
+    source: 'src/modules/events/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
     path: '/events/analytics',
     source: 'src/modules/events/routes.tsx',
     coverage: 'exempt',

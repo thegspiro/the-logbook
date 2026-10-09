@@ -34,6 +34,7 @@ The Events module manages department events with QR code check-in, recurring eve
 | `/events`                         | Events List                                                                                                                                                                    | Authenticated    |
 | `/events/:id`                     | Event Detail                                                                                                                                                                   | Authenticated    |
 | `/events/:id/qr-code`             | Event QR Code                                                                                                                                                                  | Authenticated    |
+| `/events/attendance-requests`     | Attendance requests across events — pending "I was there" requests on the viewer's events; **All events** for `events.manage` _(2026-10-09)_                                   | Authenticated    |
 | `/events/:id/check-in`            | Self Check-In                                                                                                                                                                  | Authenticated    |
 | `/events/:id/edit`                | Edit Event                                                                                                                                                                     | `events.manage`  |
 | `/events/:id/monitoring`          | Check-In Monitoring                                                                                                                                                            | `events.manage`  |
@@ -823,6 +824,14 @@ client API cache.
   marked, so the one-per-member index lets them ask again; the reviewers'
   prompts are archived and the audit log keeps the record. A decided request
   cannot be withdrawn.
+- **Across events** _(2026-10-09)_: `/events/attendance-requests` lists every
+  pending request on events the viewer organizes or is alternate for, oldest
+  first, with **Approve** / **Decline** in place (the same dialogs as the event
+  card, `AttendancePetitionDecisionDialogs.tsx`). `events.manage` holders get
+  **All events**. The Events page shows _"N attendance requests are waiting for
+  you"_ when there are any. Backed by
+  `GET /events/attendance-petitions/pending?scope=mine|all`; the viewer's own
+  requests are never listed.
 
 ## Organizer, alternate and transfer _(2026-10-03)_
 

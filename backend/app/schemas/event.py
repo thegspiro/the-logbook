@@ -1578,6 +1578,22 @@ class AttendancePetitionResponse(UTCResponseBase):
     model_config = _response_config
 
 
+class PendingAttendancePetitionResponse(AttendancePetitionResponse):
+    """A pending request with the event it is about, for the cross-event list.
+
+    Carries what the approve form needs (the times to start from, and whether
+    attendance is finalized) so the list can decide without loading each
+    event.
+    """
+
+    event_title: str
+    event_start_datetime: datetime
+    event_end_datetime: datetime
+    event_actual_start_time: Optional[datetime] = None
+    event_actual_end_time: Optional[datetime] = None
+    attendance_finalized: bool = False
+
+
 class MyAttendancePetitionResponse(BaseModel):
     """The caller's own petition, and whether they may make one.
 

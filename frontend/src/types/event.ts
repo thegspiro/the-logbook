@@ -132,6 +132,16 @@ export interface AttendancePetition {
   created_at: string;
 }
 
+/** A pending request with the event it is about, for the cross-event list. */
+export interface PendingAttendancePetition extends AttendancePetition {
+  event_title: string;
+  event_start_datetime: string;
+  event_end_datetime: string;
+  event_actual_start_time?: string | null;
+  event_actual_end_time?: string | null;
+  attendance_finalized: boolean;
+}
+
 /** The caller's own request, and whether the server would accept one now.
  * `can_request` is the server's decision; the screen does not re-derive it. */
 export interface MyAttendancePetition {
