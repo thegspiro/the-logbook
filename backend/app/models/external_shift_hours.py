@@ -17,12 +17,13 @@ leadership can count which outside units members help staff without
 "Engine 42", "E-42" and "eng 42" reading as three different trucks.
 """
 
+from datetime import date, datetime
 from enum import Enum
+from typing import Optional
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
-    Column,
     Date,
     DateTime,
     ForeignKey,
@@ -32,6 +33,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -53,16 +55,18 @@ class ExternalAgency(Base):
 
     __tablename__ = "external_agencies"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
-    name = Column(String(255), nullable=False)
-    is_active = Column(Boolean, nullable=False, default=True, server_default="1")
-    created_at = Column(
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -81,22 +85,24 @@ class ExternalApparatus(Base):
 
     __tablename__ = "external_apparatus"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
-    agency_id = Column(
+    agency_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("external_agencies.id", ondelete="CASCADE"),
         nullable=False,
     )
-    name = Column(String(100), nullable=False)
-    apparatus_type = Column(String(50), nullable=True)
-    is_active = Column(Boolean, nullable=False, default=True, server_default="1")
-    created_at = Column(
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    apparatus_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -112,55 +118,61 @@ class ExternalApparatus(Base):
 class ExternalShiftHours(Base):
     __tablename__ = "external_shift_hours"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
 
-    shift_date = Column(Date, nullable=False)
-    duration_minutes = Column(Integer, nullable=False)
+    shift_date: Mapped[date] = mapped_column(Date, nullable=False)
+    duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     # When the member gave the shift's start and end, both are kept and the
     # date and duration above are derived from them: ``shift_date`` is the
     # start's calendar date in the department's timezone. Null on entries
     # logged as a date and an hours figure, which is how every entry before
     # these columns existed was written, and on an entry whose date or hours
     # were later corrected without times — the pair would no longer describe it.
-    start_at = Column(DateTime(timezone=True), nullable=True)
-    end_at = Column(DateTime(timezone=True), nullable=True)
+    start_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    end_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Required on every write; nullable only so removing a unit from the
     # list cannot take the shifts logged on it with it. The two name columns
     # are a snapshot taken at the write, which is what keeps such an entry
     # readable afterwards.
-    external_apparatus_id = Column(
+    external_apparatus_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("external_apparatus.id", ondelete="SET NULL"),
         nullable=True,
     )
-    agency_name = Column(String(255), nullable=False)
-    apparatus_name = Column(String(100), nullable=False)
-    role = Column(String(100), nullable=True)
-    notes = Column(Text, nullable=True)
+    agency_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    apparatus_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    role: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    status = Column(
+    status: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
         default=ExternalShiftHoursStatus.COUNTED.value,
         server_default=ExternalShiftHoursStatus.COUNTED.value,
     )
-    reviewed_by = Column(
+    reviewed_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    reviewed_at = Column(DateTime(timezone=True), nullable=True)
-    rejection_reason = Column(Text, nullable=True)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    rejection_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),

@@ -4,17 +4,12 @@ Onboarding System Models
 Tracks onboarding progress and stores initial setup information.
 """
 
-from sqlalchemy import (
-    JSON,
-    Boolean,
-    Column,
-    DateTime,
-    Integer,
-    String,
-    Text,
-    UniqueConstraint,
-)
+from datetime import datetime
+from typing import Any, Optional
+
+from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text, UniqueConstraint
 from sqlalchemy.ext.mutable import MutableDict
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -46,43 +41,57 @@ class OnboardingStatus(Base):
         UniqueConstraint("singleton", name="uq_onboarding_status_singleton"),
     )
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
 
-    singleton = Column(Integer, nullable=False, default=1, server_default="1")
+    singleton: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
 
     # Onboarding completion status
-    is_completed = Column(Boolean, default=False, nullable=False, server_default="0")
-    completed_at = Column(DateTime(timezone=True))
+    is_completed: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     # Onboarding steps tracking
-    steps_completed = Column(JSON, default=dict)
-    current_step = Column(Integer, default=0)
+    steps_completed: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, default=dict
+    )
+    current_step: Mapped[Optional[int]] = mapped_column(Integer, default=0)
 
     # System information collected during onboarding
-    organization_name = Column(String(255))
-    organization_type = Column(String(50))
-    admin_email = Column(String(255))
-    admin_username = Column(String(100))
+    organization_name: Mapped[Optional[str]] = mapped_column(String(255))
+    organization_type: Mapped[Optional[str]] = mapped_column(String(50))
+    admin_email: Mapped[Optional[str]] = mapped_column(String(255))
+    admin_username: Mapped[Optional[str]] = mapped_column(String(100))
 
     # Security verification
-    security_keys_verified = Column(Boolean, default=False)
-    database_verified = Column(Boolean, default=False)
-    email_configured = Column(Boolean, default=False)
+    security_keys_verified: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=False
+    )
+    database_verified: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    email_configured: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
 
     # Configuration choices
-    enabled_modules = Column(JSON, default=list)
-    timezone = Column(String(50), default="America/New_York")
+    enabled_modules: Mapped[Optional[list[str]]] = mapped_column(JSON, default=list)
+    timezone: Mapped[Optional[str]] = mapped_column(
+        String(50), default="America/New_York"
+    )
 
     # Metadata
-    setup_started_at = Column(DateTime(timezone=True), server_default=func.now())
-    setup_ip_address = Column(String(45))
-    setup_user_agent = Column(Text)
+    setup_started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    setup_ip_address: Mapped[Optional[str]] = mapped_column(String(45))
+    setup_user_agent: Mapped[Optional[str]] = mapped_column(Text)
 
     # Notes from setup process
-    setup_notes = Column(Text)
+    setup_notes: Mapped[Optional[str]] = mapped_column(Text)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
@@ -112,22 +121,30 @@ class OnboardingSessionModel(Base):
 
     __tablename__ = "onboarding_sessions"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    session_id = Column(String(64), unique=True, nullable=False, index=True)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    session_id: Mapped[str] = mapped_column(
+        String(64), unique=True, nullable=False, index=True
+    )
 
     # Session data (JSON with encrypted sensitive fields)
-    data = Column(MutableDict.as_mutable(JSON), default=dict, nullable=False)
+    data: Mapped[dict[str, Any]] = mapped_column(
+        MutableDict.as_mutable(JSON), default=dict, nullable=False
+    )
 
     # Client information for security tracking
-    ip_address = Column(String(45), nullable=False)
-    user_agent = Column(Text, nullable=True)
+    ip_address: Mapped[str] = mapped_column(String(45), nullable=False)
+    user_agent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Session expiration
-    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
