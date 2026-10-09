@@ -335,6 +335,11 @@ from app.models.public_portal import (
 from app.models.qualification import MemberQualification
 from app.models.scheduling_module_config import SchedulingModuleConfig
 from app.models.security_alert import AlertType, SecurityAlertRecord, ThreatLevel
+from app.models.shift_history_import import (
+    ShiftHistoryImport,
+    ShiftHistoryImportRow,
+    ShiftHistoryImportStatus,
+)
 from app.models.skills_testing import SkillTemplate, SkillTest
 from app.models.storefront import (
     StoreFulfillmentMethod,
@@ -596,6 +601,10 @@ __all__ = [
     "Shift",
     "ShiftAttendance",
     "ShiftCall",
+    # Shift history import
+    "ShiftHistoryImport",
+    "ShiftHistoryImportRow",
+    "ShiftHistoryImportStatus",
     # Shift equipment check models
     "ShiftEquipmentCheck",
     "ShiftEquipmentCheckItem",
