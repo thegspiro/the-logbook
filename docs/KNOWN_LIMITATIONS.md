@@ -1216,22 +1216,25 @@ read-only — see
 The Create Budget row is closed too — see
 [FINANCE_MODULE.md](./FINANCE_MODULE.md#budget-line-owners-stations-and-the-createedit-budget-screen-2026-10-08).
 
-## Finance — Budget Requests Have an API but No Screens Yet (2026-10-08)
+## Finance — Budget Request Reminders Go Out 7 Days and 1 Day Before, for Every Department (2026-10-08)
 
-Next-year budget requests (`budget_requests`, `/finance/budget-requests/…`) are
-built end to end in the API — line owners create, edit, submit and withdraw
-them, the Treasurer approves, adjusts or declines them, and an approval writes
-the draft-year line — but in this step (3a) only the Treasurer's two settings
-controls have a screen: **Start from last year** and the **request deadline**
-on _Finance › Settings_. The owners' request screen, the Treasurer's review
-screen and the deadline reminder emails are step 3b.
+The deadline reminder for next year's budget requests is sent 7 days and 1 day
+before a draft year's request deadline, to line owners who still owe a request.
+The two offsets are constants (`REMINDER_OFFSETS_DAYS` in
+`app/services/finance_budget_request_notifications.py`), not a department
+setting: no finance settings section exists to hold one, and a new one for two
+numbers was judged more surface than the reminder is worth. A department that
+wants a different schedule cannot choose it today.
 
-This is not a stored-but-unread setting (CLAUDE.md pitfall #19): the deadline
-**is read** — the API refuses owners' changes after it, and every fiscal-year
-response reports `requestsOpen` from the same function. What is missing until
-3b is a way for an owner to act on it without calling the API, and a reminder
-that it is coming. See
-[FINANCE_MODULE.md](./FINANCE_MODULE.md#next-year-planning-start-from-last-year-the-request-deadline-and-budget-requests-2026-10-08).
+The budget-request notices are email only — there is no in-app bell entry,
+because the Finance module has none for anything; the deadline and every
+decision are on the owner's _Next year's budget_ screen. A member can turn the
+emails off under their email preferences (_Next year's budget requests_,
+_Treasurer duties_), and a department can make either required. See
+[FINANCE_MODULE.md](./FINANCE_MODULE.md#budget-request-emails).
+
+**Owner decision needed** only if a department asks for a different schedule
+or for bell entries.
 
 ## Finance — A Mistaken Budget Amendment Cannot Be Corrected (2026-10-08)
 

@@ -267,11 +267,16 @@ class MyBudgetResponse(BudgetResponse):
 
 
 class MyBudgetsSummaryResponse(BaseModel):
-    """Whether the caller owns any budget line, for the navigation."""
+    """Whether the caller owns any budget line, for the navigation.
+
+    ``plans_next_year`` is the "Next year's budget" entry's signal: the caller
+    owns a line in a draft fiscal year, or has a budget request for one.
+    """
 
     model_config = _RESPONSE_CONFIG
 
     owns_any: bool
+    plans_next_year: bool = False
 
 
 class BudgetTransactionResponse(UTCResponseBase):
@@ -366,6 +371,22 @@ class FinanceNamedOptionResponse(BaseModel):
 
     id: str
     name: str
+
+
+class BudgetRequestProposalOptionsResponse(BaseModel):
+    """What the owner's "Propose a new line" form may offer.
+
+    ``positions`` are only the positions the caller holds — a proposal is
+    made for one of them. ``categories`` and ``stations`` are ids and names
+    and are empty for a caller who holds no position, who could not propose
+    anything.
+    """
+
+    model_config = _RESPONSE_CONFIG
+
+    positions: list[FinanceNamedOptionResponse]
+    categories: list[FinanceNamedOptionResponse]
+    stations: list[FinanceNamedOptionResponse]
 
 
 class BudgetOptionResponse(BaseModel):

@@ -43,6 +43,7 @@ from app.schemas.finance import (
     BudgetOptionResponse,
     BudgetRequestCreate,
     BudgetRequestDecision,
+    BudgetRequestProposalOptionsResponse,
     BudgetRequestResponse,
     BudgetRequestUpdate,
     BudgetResponse,
@@ -92,6 +93,11 @@ from app.services.finance_approver_matching import ApproverMismatchError
 from app.services.finance_budget_ownership import (
     user_owns_any_budget,
     user_owns_budget,
+)
+from app.services.finance_budget_request_notifications import (
+    notify_request_decided,
+    notify_request_submitted,
+    notify_requests_open,
 )
 from app.services.finance_budget_request_service import (
     BudgetRequestConflictError,
@@ -264,13 +270,17 @@ async def update_fiscal_year(
 
     ``requestDeadline`` (a date, or null to clear it) is accepted only while
     the year is a draft; owners' budget requests close after that day on the
-    department's calendar.
+    department's calendar. Setting or moving a deadline while requests are
+    open emails the year's line owners; clearing one sends nothing.
     """
     service = FinanceService(db)
     org_id = str(current_user.organization_id)
     updates = data.model_dump(exclude_unset=True)
     try:
+        before = await service.get_fiscal_year(fy_id, org_id)
+        previous_deadline = before.request_deadline if before else None
         fy = await service.update_fiscal_year(fy_id, org_id, **updates)
+        row = await FinanceBudgetRequestService(db).fiscal_year_row(fy, org_id)
         if "request_deadline" in updates:
             deadline = updates["request_deadline"]
             await log_audit_event(
@@ -286,7 +296,12 @@ async def update_fiscal_year(
                 username=current_user.username,
                 organization_id=org_id,
             )
-        return await FinanceBudgetRequestService(db).fiscal_year_row(fy, org_id)
+            if deadline is not None and deadline != previous_deadline:
+                if row["requests_open"]:
+                    await notify_requests_open(
+                        db, org_id, fy_id, changed=previous_deadline is not None
+                    )
+        return row
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -632,13 +647,18 @@ async def get_my_budgets_summary(
     """Whether the caller owns any budget line, for the Finance navigation.
 
     **Authentication required** — no permission; it answers only about the
-    caller. One ``LIMIT 1`` probe, so the navigation can ask it once per
-    session instead of loading the lines.
+    caller. ``LIMIT 1`` probes, so the navigation can ask it once per
+    session instead of loading the lines. ``plansNextYear`` is whether the
+    caller owns a line in a draft fiscal year or has a request for one — the
+    "Next year's budget" entry's signal.
     """
+    org_id = str(current_user.organization_id)
+    user_id = str(current_user.id)
     return {
-        "owns_any": await user_owns_any_budget(
-            db, str(current_user.organization_id), str(current_user.id)
-        )
+        "owns_any": await user_owns_any_budget(db, org_id, user_id),
+        "plans_next_year": await FinanceBudgetRequestService(db).plans_next_year(
+            org_id, user_id
+        ),
     }
 
 
@@ -902,6 +922,28 @@ async def list_my_budget_request_lines(
         raise HTTPException(status_code=404, detail="Fiscal year not found")
 
 
+@router.get(
+    "/budget-requests/proposal-options",
+    response_model=BudgetRequestProposalOptionsResponse,
+)
+async def list_budget_request_proposal_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The choices for proposing a new budget line: positions, categories, stations.
+
+    **Authentication required** — no permission: the positions are only the
+    ones the caller holds (a proposal is made for one of them, and the API
+    refuses any other), and a caller who holds no position gets three empty
+    lists. Ids and names only.
+    """
+    # Registered before `/budget-requests/{request_id}` for the reason
+    # list_my_budget_request_lines gives.
+    return await FinanceBudgetRequestService(db).proposal_options(
+        str(current_user.organization_id), str(current_user.id)
+    )
+
+
 @router.post("/budget-requests", response_model=BudgetRequestResponse, status_code=201)
 async def create_budget_request(
     data: BudgetRequestCreate,
@@ -1013,6 +1055,7 @@ async def submit_budget_request(
             request,
             requested_amount=str(request.requested_amount),
         )
+        await notify_request_submitted(db, org_id, request.id, str(current_user.id))
         return (await service.describe([request], org_id))[0]
     except Exception as e:
         raise _budget_request_error(e)
@@ -1104,6 +1147,7 @@ async def decide_budget_request(
                 else None
             ),
         )
+        await notify_request_decided(db, org_id, request.id, str(current_user.id))
         return (await service.describe([request], org_id))[0]
     except Exception as e:
         raise _budget_request_error(e)

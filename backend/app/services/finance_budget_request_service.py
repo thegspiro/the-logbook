@@ -847,6 +847,77 @@ class FinanceBudgetRequestService:
             )
         return rows
 
+    async def plans_next_year(self, org_id: str, user_id: str) -> bool:
+        """Whether the caller has anything on the owner's request screen.
+
+        True when they own a line in a draft fiscal year, or can see a request
+        made for a draft year (their line's, their position's, or one they
+        submitted). Two ``LIMIT 1`` probes, for the navigation.
+        """
+        draft_year = and_(
+            FiscalYear.id == Budget.fiscal_year_id,
+            FiscalYear.organization_id == org_id,
+        )
+        owned = (
+            owned_budgets_query(org_id, user_id)
+            .with_only_columns(Budget.id)
+            .join(FiscalYear, draft_year)
+            .where(FiscalYear.status == FiscalYearStatus.DRAFT)
+            .limit(1)
+        )
+        if (await self.db.execute(owned)).first() is not None:
+            return True
+        requested = (
+            select(BudgetRequest.id)
+            .join(
+                FiscalYear,
+                and_(
+                    FiscalYear.id == BudgetRequest.fiscal_year_id,
+                    FiscalYear.organization_id == org_id,
+                ),
+            )
+            .where(
+                BudgetRequest.organization_id == org_id,
+                FiscalYear.status == FiscalYearStatus.DRAFT,
+                self._visibility(org_id, user_id),
+            )
+            .limit(1)
+        )
+        return (await self.db.execute(requested)).first() is not None
+
+    async def proposal_options(self, org_id: str, user_id: str) -> dict:
+        """The choices for proposing a new line: held positions, categories,
+        stations.
+
+        A proposal is made for a position the member holds, so the positions
+        are only those; a member who holds none could not propose anything and
+        is given no categories or stations either.
+        """
+        positions = await self.db.execute(
+            select(Position.id, Position.name)
+            .where(
+                Position.organization_id == org_id,
+                Position.id.in_(held_positions_query(org_id, user_id)),
+            )
+            .order_by(Position.name, Position.id)
+        )
+        held = [{"id": row.id, "name": row.name} for row in positions.all()]
+        if not held:
+            return {"positions": [], "categories": [], "stations": []}
+        categories = await self.db.execute(
+            select(BudgetCategory.id, BudgetCategory.name)
+            .where(
+                BudgetCategory.organization_id == org_id,
+                BudgetCategory.is_active.is_(True),
+            )
+            .order_by(BudgetCategory.sort_order, BudgetCategory.name)
+        )
+        return {
+            "positions": held,
+            "categories": [{"id": r.id, "name": r.name} for r in categories.all()],
+            "stations": await self.finance.list_station_options(org_id),
+        }
+
     async def my_lines(self, fiscal_year_id: str, org_id: str, user_id: str) -> dict:
         """The caller's lines in one fiscal year, each with its request.
 

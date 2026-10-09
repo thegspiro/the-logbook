@@ -76,6 +76,8 @@ does not want members raising requests removes `finance.request` from the
 | `/finance/budgets`                    | Budget list                        |
 | `/finance/budgets/:id`                | Budget detail                      |
 | `/finance/my-budgets`                 | My Budgets (lines you own)         |
+| `/finance/budget-requests`            | Next year's budget (your requests) |
+| `/finance/budget-requests/review`     | Budget requests (`finance.manage`) |
 | `/finance/settings`                   | Fiscal years and budget categories |
 | `/finance/settings/approval-chains`   | Approval chain builder             |
 | `/finance/approvals`                  | Approvals (`finance.approve`)      |
@@ -186,9 +188,38 @@ Each copy keeps the line's category, station, notes and its own owner position, 
 
 The year's row then reads _"Requests close {date}"_ with a **Requests open** or **Requests closed** badge. Requests stay open through the **end of that day in your department's time zone**. After it, owners can no longer make, change, submit or withdraw a request (they see _"The request deadline for {year} has passed."_); you can still enter or change them on their behalf. A deadline can only be set while the year is a draft.
 
-**3. Decide the requests.** Each request is approved as asked, adjusted to a different amount (a note saying why is required), or declined (a note is required). Approving or adjusting writes the amount into the draft year's line — or, for a proposed new line, creates it. You can change a decision while the year is still a draft; once you activate it, decisions are final and the budget changes through amendments. The screens for owners to make requests and for you to review them are coming in a follow-up release; until then requests are made through the API.
+**3. Decide the requests.** Each request is approved as asked, adjusted to a different amount (a note saying why is required), or declined (a note is required). Approving or adjusting writes the amount into the draft year's line — or, for a proposed new line, creates it. You can change a decision while the year is still a draft; once you activate it, decisions are final and the budget changes through amendments. See [Reviewing Budget Requests](#reviewing-budget-requests-treasurer) below.
 
 > **Hint:** A sensible order is: create the draft year, **Start from last year**, adjust the lines you already know, set the deadline, let owners request, decide, then **Activate** the year when it begins.
+
+### Requesting Next Year's Budget (Line Owners)
+
+If your position owns a budget line (see [Budget Owners](#budget-owners)), you propose what it needs next year. When the Treasurer sets a request deadline you get an email, _"Budget requests for {year} are open until {date}"_, and reminders 7 days and 1 day before the deadline while a line still has no submitted request.
+
+1. Open **Finance > Next year's budget**. The entry appears once your position owns a line in next year's draft budget, or you have made a request.
+2. The banner says _"Requests close {date}"_ (or _"No deadline set"_). After the deadline it reads _"Requests are closed"_ and everything on the page is read-only.
+3. Each of your lines shows this year's **Budgeted** and **Spent** for comparison. Click **Request an amount**, enter the **Amount requested** and a **Justification**, and click **Save draft**.
+4. Check the draft, then click **Submit**. The Treasurer is emailed. Until the deadline you can still **Edit** a submitted request, or **Withdraw** it back to a draft (you are asked to confirm). A draft can be deleted with **Delete draft**.
+5. When the Treasurer decides, you are emailed and the card shows **Approved**, **Adjusted** (with the approved amount and the Treasurer's note) or **Declined** (with the note). A decided request can no longer be changed; after a decline you may **Request again** while requests are open.
+
+**Proposing a new line.** If a line your position needs does not exist yet, click **Propose a new line**, choose the **Category**, optionally a **Station**, and **For your position** (only positions you hold are listed), then the amount and justification. Submit it the same way. If it is approved, the line is created and your position owns it.
+
+> **Hint:** Your current lines and their spending are on **My Budgets**; next year's requests are on **Next year's budget**. You can turn the reminder emails off under your email preferences (_Next year's budget requests_), unless your department has made them required.
+
+### Reviewing Budget Requests (Treasurer)
+
+With `finance.manage`, open **Finance > Budget requests** (or **Review requests** on the draft year's row in **Finance > Settings**). You are emailed each time an owner submits a request (_"Budget request to review: {line} ({amount})"_).
+
+1. Pick the draft **Fiscal year** if there is more than one. The page shows the deadline and whether owners can still change requests.
+2. The **Status** filter starts on **Submitted** — the requests waiting for you — and each option shows its count. Choose **All** to see everything.
+3. Each row shows the line, the owner position, who submitted it and when, this year's budgeted and spent, the amount requested, the amount approved and the status. The **Total** row adds up the requested, this-year-budgeted and approved amounts of the rows shown.
+4. Click **Review** on a row to read the justification, then choose:
+   - **Approve as requested** — the requested amount becomes the line's budget.
+   - **Approve a different amount** — enter the **Amount approved** and a note saying why (required).
+   - **Decline** — a note saying why is required. The line's amount is not changed.
+5. Click **Record decision**. The owner and the submitter are emailed, and the list refreshes. To change a decision while the year is still a draft, filter to its status and click **Change**.
+
+If the API refuses (for example, an amount below what the line has already spent or committed), its message is shown and nothing is saved.
 
 ### Edge Cases
 

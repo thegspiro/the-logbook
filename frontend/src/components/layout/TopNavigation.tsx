@@ -31,7 +31,7 @@ import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
 import { fitNavItems } from './topNavigationOverflow';
 import { GRANTS_NAV_ITEMS } from './grantsNavigation';
 import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './financeNavigation';
-import { useOwnsBudgets } from '../../modules/finance/hooks/useOwnsBudgets';
+import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/useOwnsBudgets';
 
 interface TopNavigationProps {
   departmentName: string;
@@ -88,6 +88,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
   const { isConnected } = useConnectedIntegrations({ enabled: !modulesLoading && isModuleOn('integrations') });
   const isNfcCardsOn = isConnected(NFC_ID_CARDS_INTEGRATION);
   const ownsBudgets = useOwnsBudgets(currentUser?.id, !modulesLoading && isModuleOn('finance'));
+  const plansNextYear = usePlansNextYear(currentUser?.id, !modulesLoading && isModuleOn('finance'));
 
   // The mobile bottom bar's "More" button asks us to open the menu; a second
   // tap closes it again. Toggling matters because the bar stays visible above
@@ -251,7 +252,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
             label: 'Finance',
             path: financeNavPath(checkPermission),
             anyPermission: [...FINANCE_NAV_PERMISSIONS],
-            subItems: financeNavItems(checkPermission, { ownsBudgets }),
+            subItems: financeNavItems(checkPermission, { ownsBudgets, plansNextYear }),
           } as NavItem,
         ]
       : []),

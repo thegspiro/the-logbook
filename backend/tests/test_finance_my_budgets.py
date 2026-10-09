@@ -224,9 +224,10 @@ class TestMyBudgets:
         owner = await _get(db_session, dept["trainer"], "/finance/my-budgets/summary")
         member = await _get(db_session, dept["member"], "/finance/my-budgets/summary")
         former = await _get(db_session, dept["former"], "/finance/my-budgets/summary")
-        assert owner.json() == {"ownsAny": True}
-        assert member.json() == {"ownsAny": False}
-        assert former.json() == {"ownsAny": False}
+        # plansNextYear rides alongside (test_finance_budget_request_notices).
+        assert owner.json()["ownsAny"] is True
+        assert member.json()["ownsAny"] is False
+        assert former.json()["ownsAny"] is False
 
 
 # ============================================
