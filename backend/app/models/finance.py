@@ -73,13 +73,15 @@ class BudgetPlanningStage(str, enum.Enum):
     Owners request amounts (``requests``), the Treasurer closes the draft to
     them and senior leadership adjusts the decided amounts
     (``leadership_review``), then the budget goes before the board
-    (``board_review``). Adoption is activation, which needs the board's vote
-    recorded. Only a draft year has a stage.
+    (``board_review``). Recording the board's vote moves it to ``adopted``,
+    where it waits for the Treasurer to start the year on or after its start
+    date. Only a draft year has a stage.
     """
 
     REQUESTS = "requests"
     LEADERSHIP_REVIEW = "leadership_review"
     BOARD_REVIEW = "board_review"
+    ADOPTED = "adopted"
 
 
 class PurchaseRequestStatus(str, enum.Enum):
@@ -260,9 +262,9 @@ class FiscalYear(Base):
         ),
         nullable=True,
     )
-    # The board's adoption of the budget, recorded when the year is
-    # activated from a draft: the vote is what makes the budget spendable,
-    # so it is kept with the year rather than only in the audit log.
+    # The board's adoption of the budget, recorded from board review: the
+    # vote is what allows the year to be started and its budget spent, so it
+    # is kept with the year rather than only in the audit log.
     adopted_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     adoption_reference: Mapped[Optional[str]] = mapped_column(
         String(500), nullable=True
@@ -274,6 +276,18 @@ class FiscalYear(Base):
     adoption_recorded_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # When the Treasurer began the year-end close (status became CLOSED
+    # without the lock), and the reconciliation sign-off that locked it.
+    closing_started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    locked_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    locked_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    lock_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_by: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )

@@ -3,6 +3,11 @@
  *
  * Displays detailed info for a single expense report including
  * line items, approval timeline, and action buttons.
+ *
+ * Each line carries its receipt. On a draft the requester attaches one per
+ * line, and the report cannot be submitted until every line has one (the
+ * API refuses; the page says so beside the button). The report's approvers
+ * read it here too, receipts included.
  */
 
 import React, { useEffect } from 'react';
@@ -134,6 +139,9 @@ const ExpenseReportDetailPage: React.FC = () => {
 
   // Submitting is the requester's action (or the finance office's).
   const canSubmit = er.status === ExpenseReportStatus.DRAFT && access.canActAsRequester(er.submittedBy);
+  // Every line needs an uploaded receipt before the report is submitted;
+  // the API refuses otherwise, and this says why beside the button.
+  const missingReceipts = er.lineItems.filter((item) => !item.receiptDocumentId).length;
   // Mirrors _ER_RECEIPT_OPEN_TO_REQUESTER / _ER_RECEIPT_CLOSED in
   // backend/app/api/v1/endpoints/finance.py: a requester changes receipts only
   // while the report is editable; the finance office until it is closed out.
@@ -178,10 +186,17 @@ const ExpenseReportDetailPage: React.FC = () => {
             <p className="text-theme-text-secondary mt-1 text-sm">{er.reportNumber}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {canSubmit && missingReceipts > 0 && (
+              <p id="expense-receipts-needed" className="text-xs text-amber-800 dark:text-amber-300">
+                Attach a receipt to {missingReceipts === 1 ? 'the remaining line' : `${String(missingReceipts)} lines`}{' '}
+                before submitting.
+              </p>
+            )}
             {canSubmit && (
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy || missingReceipts > 0}
+                aria-describedby={missingReceipts > 0 ? 'expense-receipts-needed' : undefined}
                 onClick={() => void handleSubmit()}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
               >

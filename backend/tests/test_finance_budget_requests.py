@@ -41,13 +41,20 @@ from app.models.finance import (
     Budget,
     BudgetAmendment,
     BudgetCategory,
+    CheckRequest,
+    CheckRequestStatus,
+    ExpenseReport,
+    ExpenseReportStatus,
     FiscalYear,
     FiscalYearStatus,
+    PurchaseRequest,
+    PurchaseRequestStatus,
 )
 from app.services.finance_budget_request_service import (
     FinanceBudgetRequestService,
     requests_open,
 )
+from app.services.finance_service import FinanceService
 from tests.test_finance_budget_owners import (
     _client,
     _org,
@@ -890,7 +897,9 @@ class TestDecision:
         line = await _line(db_session, dept["lines"]["training_next"])
         assert line.amount_budgeted == Decimal("2200.00")
 
-    async def test_decisions_are_final_once_the_year_is_active(self, db_session, dept):
+    async def test_decisions_are_final_once_the_year_is_active(
+        self, db_session, dept, monkeypatch
+    ):
         request_id = await _submitted(db_session, dept)
         await self._decide(db_session, dept, request_id, {"decision": "approve"})
         for stage in ("leadership_review", "board_review"):
@@ -902,13 +911,7 @@ class TestDecision:
                 {"stage": stage},
             )
             assert moved.status_code == 200, moved.text
-        activated = await _call(
-            db_session,
-            dept["treasurer"],
-            "POST",
-            f"/finance/fiscal-years/{dept['draft']}/activate",
-            {"adoptedOn": "2026-01-05", "adoptionReference": "Motion 2026-01"},
-        )
+        activated = await _adopt_and_start(db_session, dept, monkeypatch)
         assert activated.status_code == 200, activated.text
         resp = await self._decide(
             db_session,
@@ -1309,84 +1312,176 @@ class TestLeadershipReview:
 _ADOPTION = {"adoptedOn": "2026-01-05", "adoptionReference": "Motion 2026-01"}
 
 
-async def _activate(db, dept, body=None, year="draft"):
+async def _year_action(db, dept, action, body=None, year="draft", method="POST"):
     return await _call(
         db,
         dept["treasurer"],
-        "POST",
-        f"/finance/fiscal-years/{dept[year]}/activate",
+        method,
+        f"/finance/fiscal-years/{dept[year]}/{action}",
         body,
     )
+
+
+def _today_is(monkeypatch, day: date) -> None:
+    """Move the department's calendar for both services that read it."""
+    from app.services import finance_budget_request_service as requests_module
+    from app.services import finance_service as finance_module
+
+    async def today(db, org_id):
+        return day
+
+    monkeypatch.setattr(finance_module, "resolve_org_today", today)
+    monkeypatch.setattr(requests_module, "resolve_org_today", today)
+
+
+async def _adopt_and_start(db, dept, monkeypatch):
+    """Adopt FY2027, close FY2026, and start FY2027 on its first day."""
+    for stage in ("leadership_review", "board_review"):
+        if (await _stage(db, dept, stage)).status_code != 200:
+            break
+    adopted = await _year_action(db, dept, "adopt", _ADOPTION)
+    assert adopted.status_code == 200, adopted.text
+    closing = await _year_action(db, dept, "begin-close", year="active")
+    assert closing.status_code == 200, closing.text
+    _today_is(monkeypatch, date(2027, 1, 1))
+    return await _year_action(db, dept, "activate")
 
 
 @pytest.mark.integration
 class TestAdoption:
     @pytest.fixture
-    def adopted(self, monkeypatch):
+    def started(self, monkeypatch):
         recorder = AsyncMock(return_value=0)
         monkeypatch.setattr(finance_endpoints, "notify_budget_adopted", recorder)
         return recorder
 
     async def test_a_draft_is_adopted_only_from_board_review(
-        self, db_session, dept, adopted
+        self, db_session, dept, started
     ):
-        resp = await _activate(db_session, dept, _ADOPTION)
+        resp = await _year_action(db_session, dept, "adopt", _ADOPTION)
         assert resp.status_code == 400
         assert "board review" in resp.json()["detail"]
-        adopted.assert_not_awaited()
+        fy = await db_session.get(FiscalYear, dept["draft"])
+        assert fy.adopted_on is None
 
-    async def test_the_boards_vote_must_be_recorded(self, db_session, dept, adopted):
+    async def test_the_boards_vote_must_be_recorded(self, db_session, dept):
         await _stage(db_session, dept, "leadership_review")
         await _stage(db_session, dept, "board_review")
 
-        assert (await _activate(db_session, dept)).status_code == 400
-        missing = await _activate(db_session, dept, {"adoptedOn": "2026-01-05"})
-        assert missing.status_code == 400
-        future = await _activate(
-            db_session, dept, {**_ADOPTION, "adoptedOn": "2999-01-01"}
+        assert (await _year_action(db_session, dept, "adopt")).status_code == 422
+        missing = await _year_action(
+            db_session, dept, "adopt", {"adoptedOn": "2026-01-05"}
+        )
+        assert missing.status_code == 422
+        blank = await _year_action(
+            db_session, dept, "adopt", {**_ADOPTION, "adoptionReference": "  "}
+        )
+        assert blank.status_code == 422
+        future = await _year_action(
+            db_session, dept, "adopt", {**_ADOPTION, "adoptedOn": "2999-01-01"}
         )
         assert future.status_code == 400
         assert "future" in future.json()["detail"]
 
-    async def test_adoption_is_recorded_and_owners_are_told(
-        self, db_session, dept, adopted, audit
+    async def test_adoption_is_recorded_and_the_year_waits_to_start(
+        self, db_session, dept, started, audit
     ):
         await _stage(db_session, dept, "leadership_review")
         await _stage(db_session, dept, "board_review")
 
-        resp = await _activate(
-            db_session, dept, {**_ADOPTION, "adoptionNotes": "Passed 5-0"}
+        resp = await _year_action(
+            db_session, dept, "adopt", {**_ADOPTION, "adoptionNotes": "Passed 5-0"}
         )
+
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["status"] == "draft"
+        assert body["planningStage"] == "adopted"
+        assert body["adoptedOn"] == "2026-01-05"
+        assert body["adoptionReference"] == "Motion 2026-01"
+        assert body["adoptionNotes"] == "Passed 5-0"
+        assert body["adoptionRecordedBy"] == dept["treasurer"].id
+        assert "finance.budget_adopted" in _audited(audit)
+        # Nobody can spend from it yet, so nobody is told.
+        started.assert_not_awaited()
+        back = await _stage(db_session, dept, "board_review")
+        assert back.status_code == 400
+        assert "adopted by the board" in back.json()["detail"]
+
+    async def test_an_unadopted_draft_cannot_be_started(
+        self, db_session, dept, started
+    ):
+        await _stage(db_session, dept, "leadership_review")
+        await _stage(db_session, dept, "board_review")
+        resp = await _year_action(db_session, dept, "activate")
+        assert resp.status_code == 400
+        assert "has not been adopted" in resp.json()["detail"]
+        started.assert_not_awaited()
+
+    async def test_a_year_starts_on_its_start_date(self, db_session, dept, started):
+        await _stage(db_session, dept, "leadership_review")
+        await _stage(db_session, dept, "board_review")
+        await _year_action(db_session, dept, "adopt", _ADOPTION)
+        await _year_action(db_session, dept, "begin-close", year="active")
+
+        resp = await _year_action(db_session, dept, "activate")
+
+        # FY2027 begins January 1, 2027; the department's today is earlier.
+        assert resp.status_code == 400
+        assert "starts on January 1, 2027" in resp.json()["detail"]
+        started.assert_not_awaited()
+
+    async def test_starting_waits_for_the_current_years_close(
+        self, db_session, dept, started, monkeypatch
+    ):
+        await _stage(db_session, dept, "leadership_review")
+        await _stage(db_session, dept, "board_review")
+        await _year_action(db_session, dept, "adopt", _ADOPTION)
+        _today_is(monkeypatch, date(2027, 1, 1))
+
+        resp = await _year_action(db_session, dept, "activate")
+
+        assert resp.status_code == 400
+        assert "FY2026 is still the active fiscal year" in resp.json()["detail"]
+        fy = await db_session.get(FiscalYear, dept["active"])
+        assert fy.status == FiscalYearStatus.ACTIVE
+
+    async def test_starting_an_adopted_year_tells_the_owners(
+        self, db_session, dept, started, audit, monkeypatch
+    ):
+        resp = await _adopt_and_start(db_session, dept, monkeypatch)
 
         assert resp.status_code == 200, resp.text
         body = resp.json()
         assert body["status"] == "active"
         assert body["planningStage"] is None
         assert body["adoptedOn"] == "2026-01-05"
-        assert body["adoptionReference"] == "Motion 2026-01"
-        assert body["adoptionNotes"] == "Passed 5-0"
-        assert body["adoptionRecordedBy"] == dept["treasurer"].id
-        assert "finance.budget_adopted" in _audited(audit)
-        adopted.assert_awaited_once()
-        assert adopted.await_args.args[1:] == (dept["org_id"], dept["draft"])
+        assert "finance.fiscal_year_started" in _audited(audit)
+        started.assert_awaited_once()
+        assert started.await_args.args[1:] == (dept["org_id"], dept["draft"])
 
-    async def test_reactivating_a_closed_year_needs_no_vote(
-        self, db_session, dept, adopted
+    async def test_reopening_a_closed_year_needs_no_vote(
+        self, db_session, dept, started, audit
     ):
-        resp = await _activate(db_session, dept, year="closed")
+        refused = await _year_action(db_session, dept, "activate", year="closed")
+        assert refused.status_code == 400
+        assert "FY2026 is still the active" in refused.json()["detail"]
+
+        await _year_action(db_session, dept, "begin-close", year="active")
+        resp = await _year_action(db_session, dept, "activate", year="closed")
+
         assert resp.status_code == 200, resp.text
         assert resp.json()["adoptedOn"] is None
-        adopted.assert_not_awaited()
+        assert resp.json()["closingStartedAt"] is None
+        assert "finance.fiscal_year_reopened" in _audited(audit)
+        started.assert_not_awaited()
 
     async def test_a_draft_cannot_be_locked(self, db_session, dept):
-        resp = await _call(
-            db_session,
-            dept["treasurer"],
-            "POST",
-            f"/finance/fiscal-years/{dept['draft']}/lock",
+        resp = await _year_action(
+            db_session, dept, "lock", {"notes": "Reconciled to the bank"}
         )
         assert resp.status_code == 400
-        assert "still being planned" in resp.json()["detail"]
+        assert "year-end close has begun" in resp.json()["detail"]
         fy = await db_session.get(FiscalYear, dept["draft"])
         assert fy.is_locked is False
 
@@ -1422,3 +1517,201 @@ class TestAdoptionEmail:
         assert "Station 2: $300.00" in by_user[dept["chief"].id]
         assert "$2,400.00" not in by_user[dept["chief"].id]
         assert "January 5, 2026" in by_user[dept["trainer"].id]
+
+
+# ============================================
+# Year-end close and the lock sign-off
+# ============================================
+
+
+def _purchase(dept, number, status, year="active"):
+    return PurchaseRequest(
+        organization_id=dept["org_id"],
+        fiscal_year_id=dept[year],
+        request_number=number,
+        title=f"Purchase {number}",
+        estimated_amount=Decimal("250.00"),
+        requested_by=dept["treasurer"].id,
+        status=status,
+    )
+
+
+@pytest.mark.integration
+class TestYearEndClose:
+    async def test_only_the_active_year_begins_its_close(self, db_session, dept, audit):
+        draft = await _year_action(db_session, dept, "begin-close")
+        assert draft.status_code == 400
+        assert "not the active fiscal year" in draft.json()["detail"]
+
+        resp = await _year_action(db_session, dept, "begin-close", year="active")
+
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["status"] == "closed"
+        assert body["isLocked"] is False
+        assert body["closingStartedAt"] is not None
+        assert "finance.fiscal_year_close_begun" in _audited(audit)
+        foreign = await _year_action(
+            db_session, dept, "begin-close", year="foreign_year"
+        )
+        assert foreign.status_code == 404
+
+    async def test_the_close_is_due_after_the_end_date(
+        self, db_session, dept, monkeypatch
+    ):
+        path = f"/finance/fiscal-years/{dept['active']}"
+        _today_is(monkeypatch, date(2026, 12, 31))
+        last_day = await _call(db_session, dept["treasurer"], "GET", path)
+        assert last_day.json()["closeDue"] is False
+
+        _today_is(monkeypatch, date(2027, 1, 1))
+        after = await _call(db_session, dept["treasurer"], "GET", path)
+        assert after.json()["closeDue"] is True
+
+        await _year_action(db_session, dept, "begin-close", year="active")
+        closing = await _call(db_session, dept["treasurer"], "GET", path)
+        assert closing.json()["closeDue"] is False
+
+    async def test_a_closing_year_takes_nothing_new(self, db_session, dept):
+        service = FinanceService(db_session)
+        draft = _purchase(dept, "PR-CLOSE-1", PurchaseRequestStatus.DRAFT)
+        db_session.add(draft)
+        await db_session.flush()
+        await _year_action(db_session, dept, "begin-close", year="active")
+
+        with pytest.raises(ValueError, match="closing for year-end"):
+            await service.create_purchase_request(
+                dept["org_id"],
+                dept["treasurer"].id,
+                fiscal_year_id=dept["active"],
+                title="Hose",
+                estimated_amount=Decimal("90.00"),
+            )
+        with pytest.raises(ValueError, match="closing for year-end"):
+            await service.submit_purchase_request(draft.id, dept["org_id"])
+        with pytest.raises(ValueError, match="closing for year-end"):
+            await service.create_check_request(
+                dept["org_id"],
+                dept["treasurer"].id,
+                fiscal_year_id=dept["active"],
+                payee_name="Hose Co",
+                amount=Decimal("90.00"),
+            )
+
+    async def test_a_closing_year_finishes_what_was_submitted(self, db_session, dept):
+        submitted = _purchase(dept, "PR-CLOSE-2", PurchaseRequestStatus.SUBMITTED)
+        db_session.add(submitted)
+        await db_session.flush()
+        await _year_action(db_session, dept, "begin-close", year="active")
+
+        cancelled = await FinanceService(db_session).cancel_purchase_request(
+            submitted.id, dept["org_id"]
+        )
+
+        assert cancelled.status == PurchaseRequestStatus.CANCELLED
+
+    async def test_open_items_are_listed(self, db_session, dept):
+        db_session.add_all(
+            [
+                _purchase(dept, "PR-OPEN-1", PurchaseRequestStatus.ORDERED),
+                _purchase(dept, "PR-DRAFT-1", PurchaseRequestStatus.DRAFT),
+                _purchase(dept, "PR-PAID-1", PurchaseRequestStatus.PAID),
+                _purchase(
+                    dept, "PR-ELSEWHERE", PurchaseRequestStatus.SUBMITTED, "closed"
+                ),
+                ExpenseReport(
+                    organization_id=dept["org_id"],
+                    fiscal_year_id=dept["active"],
+                    report_number="ER-OPEN-1",
+                    title="Boots",
+                    total_amount=Decimal("120.00"),
+                    submitted_by=dept["treasurer"].id,
+                    status=ExpenseReportStatus.APPROVED,
+                ),
+                CheckRequest(
+                    organization_id=dept["org_id"],
+                    fiscal_year_id=dept["active"],
+                    request_number="CR-OPEN-1",
+                    payee_name="Hose Co",
+                    amount=Decimal("90.00"),
+                    requested_by=dept["treasurer"].id,
+                    status=CheckRequestStatus.PENDING_APPROVAL,
+                ),
+            ]
+        )
+        await db_session.flush()
+
+        resp = await _year_action(
+            db_session, dept, "open-items", year="active", method="GET"
+        )
+
+        assert resp.status_code == 200, resp.text
+        assert [(i["kind"], i["number"], i["status"]) for i in resp.json()] == [
+            ("purchase_request", "PR-OPEN-1", "ordered"),
+            ("expense_report", "ER-OPEN-1", "approved"),
+            ("check_request", "CR-OPEN-1", "pending_approval"),
+        ]
+        assert resp.json()[1]["description"] == "Boots"
+        foreign = await _year_action(
+            db_session, dept, "open-items", year="foreign_year", method="GET"
+        )
+        assert foreign.status_code == 404
+
+    async def test_the_lock_waits_until_nothing_is_open(self, db_session, dept, audit):
+        open_item = _purchase(dept, "PR-LOCK-1", PurchaseRequestStatus.APPROVED)
+        db_session.add(open_item)
+        await db_session.flush()
+        body = {"notes": "Reconciled to the June bank statement"}
+
+        active = await _year_action(db_session, dept, "lock", body, year="active")
+        assert active.status_code == 400
+        assert "year-end close has begun" in active.json()["detail"]
+
+        await _year_action(db_session, dept, "begin-close", year="active")
+        refused = await _year_action(db_session, dept, "lock", body, year="active")
+        assert refused.status_code == 400
+        assert "1 open item: PR-LOCK-1" in refused.json()["detail"]
+
+        await FinanceService(db_session).cancel_purchase_request(
+            open_item.id, dept["org_id"]
+        )
+        resp = await _year_action(db_session, dept, "lock", body, year="active")
+
+        assert resp.status_code == 200, resp.text
+        locked = resp.json()
+        assert locked["isLocked"] is True
+        assert locked["lockedBy"] == dept["treasurer"].id
+        assert locked["lockedAt"] is not None
+        assert locked["lockNotes"] == body["notes"]
+        assert "finance.fiscal_year_locked" in _audited(audit)
+
+    async def test_the_sign_off_needs_notes(self, db_session, dept):
+        await _year_action(db_session, dept, "begin-close", year="active")
+        for body in (None, {}, {"notes": "   "}):
+            resp = await _year_action(db_session, dept, "lock", body, year="active")
+            assert resp.status_code == 422
+        fy = await db_session.get(FiscalYear, dept["active"])
+        assert fy.is_locked is False
+
+    async def test_a_locked_year_changes_no_more(self, db_session, dept):
+        draft = _purchase(dept, "PR-LOCKED-1", PurchaseRequestStatus.DRAFT)
+        db_session.add(draft)
+        await db_session.flush()
+        await _year_action(db_session, dept, "begin-close", year="active")
+        locked = await _year_action(
+            db_session, dept, "lock", {"notes": "Reconciled"}, year="active"
+        )
+        assert locked.status_code == 200, locked.text
+
+        with pytest.raises(ValueError, match="FY2026 is locked"):
+            await FinanceService(db_session).cancel_purchase_request(
+                draft.id, dept["org_id"]
+            )
+        reopen = await _year_action(db_session, dept, "activate", year="active")
+        assert reopen.status_code == 400
+        assert "locked and cannot be reopened" in reopen.json()["detail"]
+        again = await _year_action(
+            db_session, dept, "lock", {"notes": "Again"}, year="active"
+        )
+        assert again.status_code == 400
+        assert "already locked" in again.json()["detail"]

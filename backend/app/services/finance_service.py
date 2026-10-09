@@ -371,82 +371,287 @@ class FinanceService:
         await self.db.refresh(fy, ["updated_at"])
         return fy
 
-    async def activate_fiscal_year(
+    async def adopt_fiscal_year(
         self,
         fy_id: str,
         org_id: str,
         *,
-        recorded_by: Optional[str] = None,
-        adopted_on: Optional[date] = None,
-        adoption_reference: Optional[str] = None,
+        recorded_by: str,
+        adopted_on: date,
+        adoption_reference: str,
         adoption_notes: Optional[str] = None,
     ) -> FiscalYear:
-        """Make a year the active one.
+        """Record the board's adoption of a draft year's budget.
 
-        A draft year's budget becomes spendable here, so activating one is
-        its adoption: it must have been before the board (``board_review``)
-        and the board's vote is recorded with it — the meeting date, not in
-        the future, and a motion or minutes reference. Re-activating a year
-        that is not a draft records nothing new.
+        Only from board review. The year stays a draft — the board usually
+        adopts before the year begins — and becomes spendable when the
+        Treasurer starts it (``activate_fiscal_year``). The record is final:
+        an adopted year's stage no longer moves.
         """
-        fy = await self.get_fiscal_year(fy_id, org_id)
-        if not fy:
-            raise ValueError("Fiscal year not found")
-        if fy.status == FiscalYearStatus.DRAFT:
-            if fy.planning_stage != BudgetPlanningStage.BOARD_REVIEW:
-                raise ValueError(
-                    f"{fy.name} is adopted from board review. Move it to board "
-                    "review first."
-                )
-            reference = (adoption_reference or "").strip()
-            if adopted_on is None or not reference:
-                raise ValueError(
-                    "Record the board's adoption: the meeting date and the "
-                    "motion or minutes reference."
-                )
-            if adopted_on > await resolve_org_today(self.db, org_id):
-                raise ValueError("The adoption date cannot be in the future.")
-            fy.adopted_on = adopted_on
-            fy.adoption_reference = reference
-            fy.adoption_notes = (adoption_notes or "").strip() or None
-            fy.adoption_recorded_by = recorded_by
-            fy.adoption_recorded_at = datetime.now(timezone.utc)
-            fy.planning_stage = None
-
-        # Deactivate any currently active fiscal year
-        result = await self.db.execute(
-            select(FiscalYear).where(
-                FiscalYear.organization_id == org_id,
-                FiscalYear.status == FiscalYearStatus.ACTIVE,
-                FiscalYear.id != fy_id,
+        fy = await self._fiscal_year_for_update(fy_id, org_id)
+        if fy.status != FiscalYearStatus.DRAFT or fy.is_locked:
+            raise ValueError(f"{fy.name} is not a draft fiscal year.")
+        if fy.planning_stage != BudgetPlanningStage.BOARD_REVIEW:
+            raise ValueError(
+                f"{fy.name} is adopted from board review. Move it to board "
+                "review first."
             )
-        )
-        for active_fy in result.scalars().all():
-            active_fy.status = FiscalYearStatus.CLOSED
+        reference = (adoption_reference or "").strip()
+        if not reference:
+            raise ValueError(
+                "Record the board's adoption: the meeting date and the motion "
+                "or minutes reference."
+            )
+        if adopted_on > await resolve_org_today(self.db, org_id):
+            raise ValueError("The adoption date cannot be in the future.")
+        fy.adopted_on = adopted_on
+        fy.adoption_reference = reference
+        fy.adoption_notes = (adoption_notes or "").strip() or None
+        fy.adoption_recorded_by = recorded_by
+        fy.adoption_recorded_at = datetime.now(timezone.utc)
+        fy.planning_stage = BudgetPlanningStage.ADOPTED
+        await self.db.flush()
+        await self.db.refresh(fy, ["updated_at"])
+        return fy
 
+    async def activate_fiscal_year(self, fy_id: str, org_id: str) -> FiscalYear:
+        """Start a year: make it the active one.
+
+        A draft must have been adopted by the board and have reached its start
+        date on the department's calendar. A year in its year-end close may be
+        reopened. Either way no other year may be active: the current year's
+        close is begun deliberately (``begin_year_end_close``), never as a side
+        effect of starting the next one.
+        """
+        fy = await self._fiscal_year_for_update(fy_id, org_id)
+        if fy.is_locked:
+            raise ValueError(f"{fy.name} is locked and cannot be reopened.")
+        if fy.status == FiscalYearStatus.ACTIVE:
+            raise ValueError(f"{fy.name} is already the active fiscal year.")
+        if fy.status == FiscalYearStatus.DRAFT:
+            if fy.planning_stage != BudgetPlanningStage.ADOPTED:
+                raise ValueError(
+                    f"{fy.name} has not been adopted by the board. Record the "
+                    "adoption before starting the year."
+                )
+            # A start date entered as a calendar day is stored as that day's
+            # midnight UTC, so its UTC date is the day the Treasurer chose.
+            starts = fy.start_date.date()
+            if await resolve_org_today(self.db, org_id) < starts:
+                raise ValueError(
+                    f"{fy.name} starts on {starts:%B} {starts.day}, {starts.year}; "
+                    "it can be started on or after that day."
+                )
+        other = (
+            await self.db.execute(
+                select(FiscalYear.name)
+                .where(
+                    FiscalYear.organization_id == org_id,
+                    FiscalYear.status == FiscalYearStatus.ACTIVE,
+                    FiscalYear.id != fy.id,
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if other is not None:
+            raise ValueError(
+                f"{other} is still the active fiscal year. Begin its year-end "
+                "close first."
+            )
         fy.status = FiscalYearStatus.ACTIVE
+        fy.planning_stage = None
+        fy.closing_started_at = None
         await self.db.flush()
         await self.db.refresh(fy, ["updated_at"])
         logger.info("Activated fiscal year {} for org {}", fy_id, org_id)
         return fy
 
-    async def lock_fiscal_year(self, fy_id: str, org_id: str) -> FiscalYear:
+    async def begin_year_end_close(self, fy_id: str, org_id: str) -> FiscalYear:
+        """Move the active year into its closing period.
+
+        Nothing new is raised or submitted against it from here; what was
+        already submitted can still be approved, paid, issued or cancelled
+        (``require_year_accepts``). Locking ends the period.
+        """
+        fy = await self._fiscal_year_for_update(fy_id, org_id)
+        if fy.status != FiscalYearStatus.ACTIVE:
+            raise ValueError(
+                f"{fy.name} is not the active fiscal year, so it has no "
+                "year-end close to begin."
+            )
+        fy.status = FiscalYearStatus.CLOSED
+        fy.closing_started_at = datetime.now(timezone.utc)
+        await self.db.flush()
+        await self.db.refresh(fy, ["updated_at"])
+        logger.info("Began year-end close of fiscal year {}", fy_id)
+        return fy
+
+    async def list_open_items(self, fy_id: str, org_id: str) -> list[dict]:
+        """What still has to be paid, issued, cancelled or denied before lock.
+
+        Submitted items still in approval, approved purchases not yet paid,
+        approved expense reports not yet paid and approved checks not yet
+        issued. Drafts are not open items: they moved no money, and nothing
+        submits them once the year is closing.
+        """
         fy = await self.get_fiscal_year(fy_id, org_id)
         if not fy:
-            raise ValueError("Fiscal year not found")
-        if fy.status == FiscalYearStatus.DRAFT:
-            # Locking closes a year for good; a draft is still being planned
-            # and has never been adopted, so locking it would end it unused.
+            raise FinanceEntityNotFoundError("Fiscal year not found")
+        sources = (
+            (
+                "purchase_request",
+                PurchaseRequest,
+                PurchaseRequest.request_number,
+                PurchaseRequest.title,
+                func.coalesce(
+                    PurchaseRequest.actual_amount, PurchaseRequest.estimated_amount
+                ),
+                (
+                    PurchaseRequestStatus.SUBMITTED,
+                    PurchaseRequestStatus.PENDING_APPROVAL,
+                    PurchaseRequestStatus.APPROVED,
+                    PurchaseRequestStatus.ORDERED,
+                    PurchaseRequestStatus.RECEIVED,
+                ),
+            ),
+            (
+                "expense_report",
+                ExpenseReport,
+                ExpenseReport.report_number,
+                ExpenseReport.title,
+                ExpenseReport.total_amount,
+                (
+                    ExpenseReportStatus.SUBMITTED,
+                    ExpenseReportStatus.PENDING_APPROVAL,
+                    ExpenseReportStatus.APPROVED,
+                ),
+            ),
+            (
+                "check_request",
+                CheckRequest,
+                CheckRequest.request_number,
+                CheckRequest.payee_name,
+                CheckRequest.amount,
+                (
+                    CheckRequestStatus.SUBMITTED,
+                    CheckRequestStatus.PENDING_APPROVAL,
+                    CheckRequestStatus.APPROVED,
+                ),
+            ),
+        )
+        items: list[dict] = []
+        for kind, model, number, label, amount, statuses in sources:
+            result = await self.db.execute(
+                select(model.id, number, label, model.status, amount)
+                .where(
+                    model.organization_id == org_id,
+                    model.fiscal_year_id == fy.id,
+                    model.status.in_(statuses),
+                )
+                .order_by(number)
+            )
+            for row in result.all():
+                items.append(
+                    {
+                        "kind": kind,
+                        "entity_id": row[0],
+                        "number": row[1],
+                        "description": row[2],
+                        "status": getattr(row[3], "value", row[3]),
+                        "amount": row[4],
+                    }
+                )
+        return items
+
+    async def lock_fiscal_year(
+        self,
+        fy_id: str,
+        org_id: str,
+        *,
+        locked_by: str,
+        notes: str,
+    ) -> FiscalYear:
+        """Lock a reconciled year for good, with the Treasurer's sign-off.
+
+        Only from the closing period, and only once nothing is open: every
+        item must be paid, issued, cancelled or denied first. The year's row
+        is locked for the check, and the guards that admit new activity read
+        it under a share lock, so nothing can be submitted or paid beside a
+        lock that is landing.
+        """
+        reconciliation = (notes or "").strip()
+        if not reconciliation:
+            raise ValueError("Add the reconciliation notes for the sign-off.")
+        fy = await self._fiscal_year_for_update(fy_id, org_id)
+        if fy.is_locked:
+            raise ValueError(f"{fy.name} is already locked.")
+        if fy.status != FiscalYearStatus.CLOSED:
             raise ValueError(
-                f"{fy.name} is a draft that is still being planned, so it "
-                "cannot be locked."
+                f"{fy.name} can be locked only after its year-end close has " "begun."
+            )
+        open_items = await self.list_open_items(fy.id, org_id)
+        if open_items:
+            shown = ", ".join(item["number"] for item in open_items[:5])
+            more = f" and {len(open_items) - 5} more" if len(open_items) > 5 else ""
+            raise ValueError(
+                f"{fy.name} still has {len(open_items)} open "
+                f"{'item' if len(open_items) == 1 else 'items'}: {shown}{more}. "
+                "Pay, issue, cancel or deny each before locking."
             )
         fy.is_locked = True
-        fy.status = FiscalYearStatus.CLOSED
+        fy.locked_by = locked_by
+        fy.locked_at = datetime.now(timezone.utc)
+        fy.lock_notes = reconciliation
         await self.db.flush()
         await self.db.refresh(fy, ["updated_at"])
         logger.info("Locked fiscal year {}", fy_id)
         return fy
+
+    async def _fiscal_year_for_update(self, fy_id: str, org_id: str) -> FiscalYear:
+        fy = (
+            await self.db.execute(
+                select(FiscalYear)
+                .where(FiscalYear.id == fy_id, FiscalYear.organization_id == org_id)
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if fy is None:
+            raise FinanceEntityNotFoundError("Fiscal year not found")
+        return fy
+
+    async def require_year_accepts(
+        self, fiscal_year_id: Optional[str], org_id: str, *, action: str
+    ) -> None:
+        """Refuse finance activity a fiscal year no longer accepts.
+
+        ``new`` — raising, editing or submitting a request — needs an active
+        or draft year. ``finish`` — paying, issuing, voiding or cancelling
+        what is already in flight — needs only a year that is not locked, so a
+        closing year can settle its last bills. Read under a share lock so it
+        waits out a ``lock_fiscal_year`` that is landing.
+        """
+        if not fiscal_year_id:
+            return
+        row = (
+            await self.db.execute(
+                select(FiscalYear.name, FiscalYear.status, FiscalYear.is_locked)
+                .where(
+                    FiscalYear.id == fiscal_year_id,
+                    FiscalYear.organization_id == org_id,
+                )
+                .with_for_update(read=True)
+            )
+        ).one_or_none()
+        if row is None:
+            return
+        name, status, is_locked = row
+        if is_locked:
+            raise ValueError(f"{name} is locked; its records can no longer change.")
+        if action == "new" and status == FiscalYearStatus.CLOSED:
+            raise ValueError(
+                f"{name} is closing for year-end: new requests can no longer be "
+                "raised or submitted against it."
+            )
 
     async def get_active_fiscal_year(self, org_id: str) -> Optional[FiscalYear]:
         result = await self.db.execute(
@@ -3324,6 +3529,7 @@ class FinanceService:
     ) -> PurchaseRequest:
         await self._validate_finance_fks(org_id, kwargs)
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
+        await self.require_year_accepts(fiscal_year_id, org_id, action="new")
         pr = PurchaseRequest(
             organization_id=org_id,
             requested_by=requested_by,
@@ -3344,6 +3550,11 @@ class FinanceService:
         )
         if not pr:
             _raise_not_found("Purchase request", requester_id)
+        await self.require_year_accepts(pr.fiscal_year_id, org_id, action="new")
+        if kwargs.get("fiscal_year_id"):
+            await self.require_year_accepts(
+                kwargs["fiscal_year_id"], org_id, action="new"
+            )
         if pr.status not in (
             PurchaseRequestStatus.DRAFT,
             PurchaseRequestStatus.SUBMITTED,
@@ -3363,6 +3574,7 @@ class FinanceService:
         )
         if not pr:
             _raise_not_found("Purchase request", requester_id)
+        await self.require_year_accepts(pr.fiscal_year_id, org_id, action="new")
         if pr.status != PurchaseRequestStatus.DRAFT:
             raise ValueError("Only draft requests can be submitted")
 
@@ -3412,6 +3624,7 @@ class FinanceService:
         pr = await self.get_purchase_request(pr_id, org_id, for_update=True)
         if not pr:
             raise ValueError("Purchase request not found")
+        await self.require_year_accepts(pr.fiscal_year_id, org_id, action="finish")
         if pr.status != PurchaseRequestStatus.APPROVED:
             raise ValueError("Only approved requests can be marked as ordered")
         pr.status = PurchaseRequestStatus.ORDERED
@@ -3424,6 +3637,7 @@ class FinanceService:
         pr = await self.get_purchase_request(pr_id, org_id, for_update=True)
         if not pr:
             raise ValueError("Purchase request not found")
+        await self.require_year_accepts(pr.fiscal_year_id, org_id, action="finish")
         if pr.status != PurchaseRequestStatus.ORDERED:
             raise ValueError("Only ordered requests can be marked as received")
         pr.status = PurchaseRequestStatus.RECEIVED
@@ -3469,6 +3683,7 @@ class FinanceService:
             PurchaseRequestStatus.RECEIVED,
         ):
             raise ValueError("Request cannot be marked as paid in this status")
+        await self.require_year_accepts(pr.fiscal_year_id, org_id, action="finish")
 
         pr.status = PurchaseRequestStatus.PAID
         pr.paid_at = datetime.now(timezone.utc)
@@ -3518,6 +3733,7 @@ class FinanceService:
         pr: PurchaseRequest | None = result.scalar_one_or_none()
         if not pr:
             _raise_not_found("Purchase request", requester_id)
+        await self.require_year_accepts(pr.fiscal_year_id, org_id, action="finish")
         if pr.status in (PurchaseRequestStatus.PAID,):
             raise ValueError("Paid requests cannot be cancelled")
         if requester_id is not None and pr.status != PurchaseRequestStatus.DRAFT:
@@ -3612,6 +3828,7 @@ class FinanceService:
         for item_data in line_items or []:
             await self._validate_finance_fks(org_id, item_data)
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
+        await self.require_year_accepts(fiscal_year_id, org_id, action="new")
         er = ExpenseReport(
             organization_id=org_id,
             submitted_by=submitted_by,
@@ -3646,6 +3863,11 @@ class FinanceService:
         )
         if not er:
             _raise_not_found("Expense report", requester_id)
+        await self.require_year_accepts(er.fiscal_year_id, org_id, action="new")
+        if kwargs.get("fiscal_year_id"):
+            await self.require_year_accepts(
+                kwargs["fiscal_year_id"], org_id, action="new"
+            )
         if er.status not in (
             ExpenseReportStatus.DRAFT,
             ExpenseReportStatus.SUBMITTED,
@@ -3663,6 +3885,7 @@ class FinanceService:
         er = await self.get_expense_report(er_id, org_id, restrict_to_user=requester_id)
         if not er:
             _raise_not_found("Expense report", requester_id)
+        await self.require_year_accepts(er.fiscal_year_id, org_id, action="new")
         if er.status not in (ExpenseReportStatus.DRAFT,):
             raise ValueError("Can only add items to draft reports")
         await self._validate_finance_fks(org_id, kwargs)
@@ -3685,6 +3908,41 @@ class FinanceService:
         await self.db.refresh(item, ["created_at"])
         return item
 
+    async def reviews_entity(
+        self,
+        user: User,
+        entity_type: ApprovalEntityType,
+        entity_id: str,
+        org_id: str,
+        *,
+        submitted: bool,
+    ) -> bool:
+        """Whether ``user`` is one of this document's approvers.
+
+        Someone a step names (the rule approve/deny enforce), someone who has
+        already acted on a step, or an approvals administrator, who may act on
+        any step with an override reason. A submitted document no chain
+        applies to is approved by hand by any ``finance.approve`` holder
+        (``manual_approve``), so they are its approvers. They read the document
+        they are asked to decide on, its receipts included, without the
+        org-wide grant. A draft has no approvers.
+        """
+        if not submitted:
+            return False
+        if is_approvals_admin(user):
+            return True
+        records = await self.get_approval_records(entity_type, entity_id, org_id)
+        if not records:
+            return user_has_permission(user, FINANCE_APPROVE)
+        for record in records:
+            if record.acted_by and str(record.acted_by) == str(user.id):
+                return True
+            if record.step is not None and await user_matches_step(
+                self.db, user, record.step, org_id
+            ):
+                return True
+        return False
+
     async def submit_expense_report(
         self, er_id: str, org_id: str, requester_id: Optional[str] = None
     ) -> ExpenseReport:
@@ -3693,10 +3951,19 @@ class FinanceService:
         )
         if not er:
             _raise_not_found("Expense report", requester_id)
+        await self.require_year_accepts(er.fiscal_year_id, org_id, action="new")
         if er.status != ExpenseReportStatus.DRAFT:
             raise ValueError("Only draft reports can be submitted")
         if er.total_amount <= 0:
             raise ValueError("Expense report must have line items")
+        missing = [item for item in er.line_items if not item.receipt_document_id]
+        if missing:
+            named = ", ".join(f'"{item.description}"' for item in missing[:3])
+            more = f" and {len(missing) - 3} more" if len(missing) > 3 else ""
+            raise ValueError(
+                "Attach a receipt to every line before submitting. Missing: "
+                f"{named}{more}."
+            )
 
         er.status = ExpenseReportStatus.SUBMITTED
 
@@ -3757,6 +4024,7 @@ class FinanceService:
         )
         if er.status != ExpenseReportStatus.APPROVED:
             raise ValueError("Only approved reports can be marked as paid")
+        await self.require_year_accepts(er.fiscal_year_id, org_id, action="finish")
 
         er.status = ExpenseReportStatus.PAID
         er.paid_at = datetime.now(timezone.utc)
@@ -3830,6 +4098,7 @@ class FinanceService:
     ) -> CheckRequest:
         await self._validate_finance_fks(org_id, kwargs)
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
+        await self.require_year_accepts(fiscal_year_id, org_id, action="new")
         cr = CheckRequest(
             organization_id=org_id,
             requested_by=requested_by,
@@ -3849,6 +4118,11 @@ class FinanceService:
         )
         if not cr:
             _raise_not_found("Check request", requester_id)
+        await self.require_year_accepts(cr.fiscal_year_id, org_id, action="new")
+        if kwargs.get("fiscal_year_id"):
+            await self.require_year_accepts(
+                kwargs["fiscal_year_id"], org_id, action="new"
+            )
         if cr.status not in (
             CheckRequestStatus.DRAFT,
             CheckRequestStatus.SUBMITTED,
@@ -3868,6 +4142,7 @@ class FinanceService:
         )
         if not cr:
             _raise_not_found("Check request", requester_id)
+        await self.require_year_accepts(cr.fiscal_year_id, org_id, action="new")
         if cr.status != CheckRequestStatus.DRAFT:
             raise ValueError("Only draft requests can be submitted")
 
@@ -3937,6 +4212,7 @@ class FinanceService:
         )
         if cr.status != CheckRequestStatus.APPROVED:
             raise ValueError("Only approved requests can have checks issued")
+        await self.require_year_accepts(cr.fiscal_year_id, org_id, action="finish")
 
         cr.status = CheckRequestStatus.ISSUED
         cr.check_number = check_number
@@ -3964,6 +4240,7 @@ class FinanceService:
         cr: CheckRequest | None = result.scalar_one_or_none()
         if not cr:
             raise ValueError("Check request not found")
+        await self.require_year_accepts(cr.fiscal_year_id, org_id, action="finish")
         if cr.status != CheckRequestStatus.ISSUED:
             raise ValueError("Only issued checks can be voided")
 
