@@ -3,6 +3,11 @@
  *
  * Displays detailed info for a single expense report including
  * line items, approval timeline, and action buttons.
+ *
+ * Each line carries its receipt. On a draft the requester attaches one per
+ * line, and the report cannot be submitted until every line has one (the
+ * API refuses; the page says so beside the button). The report's approvers
+ * read it here too, receipts included.
  */
 
 import React, { useEffect } from 'react';
@@ -27,6 +32,7 @@ import {
   EXPENSE_TYPE_LABELS,
 } from '../types';
 import { ApprovalStepActions } from '../components/ApprovalStepActions';
+import { ExpenseReceiptControl } from '../components/ExpenseReceiptControl';
 
 const STATUS_LABELS: Record<string, string> = {
   draft: 'Draft',
@@ -132,6 +138,7 @@ const ExpenseReportDetailPage: React.FC = () => {
 
   // Submitting is the requester's action (or the finance office's).
   const canSubmit = er.status === ExpenseReportStatus.DRAFT && access.canActAsRequester(er.submittedBy);
+  const missingReceipts = er.lineItems.filter((item) => !item.hasReceipt).length;
 
   return (
     <div className="space-y-6">
@@ -168,10 +175,17 @@ const ExpenseReportDetailPage: React.FC = () => {
             <p className="text-theme-text-secondary mt-1 text-sm">{er.reportNumber}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {canSubmit && missingReceipts > 0 && (
+              <p id="expense-receipts-needed" className="text-xs text-amber-800 dark:text-amber-300">
+                Attach a receipt to {missingReceipts === 1 ? 'the remaining line' : `${String(missingReceipts)} lines`}{' '}
+                before submitting.
+              </p>
+            )}
             {canSubmit && (
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy || missingReceipts > 0}
+                aria-describedby={missingReceipts > 0 ? 'expense-receipts-needed' : undefined}
                 onClick={() => void handleSubmit()}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -240,6 +254,9 @@ const ExpenseReportDetailPage: React.FC = () => {
                   <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs uppercase">
                     Type
                   </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs uppercase">
+                    Receipt
+                  </th>
                   <th scope="col" className="text-theme-text-muted px-4 py-2 text-right text-xs uppercase">
                     Amount
                   </th>
@@ -252,6 +269,14 @@ const ExpenseReportDetailPage: React.FC = () => {
                     <td className="text-theme-text-secondary px-4 py-3 text-sm capitalize">
                       {item.expenseType ? (EXPENSE_TYPE_LABELS[item.expenseType] ?? item.expenseType) : '--'}
                     </td>
+                    <td className="px-4 py-3">
+                      <ExpenseReceiptControl
+                        reportId={er.id}
+                        item={item}
+                        editable={canSubmit}
+                        onChanged={() => void fetchExpenseReport(er.id)}
+                      />
+                    </td>
                     <td className="text-theme-text-primary px-4 py-3 text-right text-sm">
                       {formatCurrency(item.amount)}
                     </td>
@@ -260,7 +285,7 @@ const ExpenseReportDetailPage: React.FC = () => {
               </tbody>
               <tfoot>
                 <tr className="border-theme-surface-border border-t-2">
-                  <td colSpan={2} className="text-theme-text-primary px-4 py-3 text-sm font-semibold">
+                  <td colSpan={3} className="text-theme-text-primary px-4 py-3 text-sm font-semibold">
                     Total
                   </td>
                   <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold">

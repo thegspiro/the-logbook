@@ -412,6 +412,26 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Expense reports need a receipt on every line (2026-10-09)
+
+Migration `0a159454f04b`.
+
+- **Submitting an expense report now refuses (400)** until every line has an
+  uploaded receipt. Members attach them on the report's page after saving it.
+  Drafts saved before the upgrade need receipts before they are submitted;
+  reports already submitted, approved or paid are unaffected.
+- **Receipts are stored on the uploads volume** under
+  `<org>/finance-receipts/`, through the same scanned path as every other
+  upload, so the volume and ClamAV your deployment already runs are all it
+  needs. Back the volume up with the database, as for documents.
+- **Approvers can now open the reports they decide on.** An approver without
+  `finance.manage` was linked from the approvals queue to a report that
+  answered 404; the report and its receipts now open for the people its chain
+  names (and for any `finance.approve` holder on a report no chain applies
+  to). Other members' reports stay hidden as before.
+- **Downgrading** drops the receipt columns; the files stay on disk,
+  unreferenced.
+
 ### Adopting, starting and closing a fiscal year are separate steps (2026-10-09)
 
 The year-end close is now a period the Treasurer begins, and the budget's

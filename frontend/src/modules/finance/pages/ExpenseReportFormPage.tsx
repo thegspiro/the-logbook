@@ -315,7 +315,8 @@ const ExpenseReportFormPage: React.FC = () => {
 
           {lineItems.length === 0 ? (
             <p className="text-theme-text-secondary py-8 text-center text-sm">
-              No line items yet. Use &quot;Add Item&quot; to add each expense.
+              No line items yet. Use &quot;Add Item&quot; to add each expense. After saving, attach a receipt to each
+              line — the report cannot be submitted without them.
             </p>
           ) : (
             <div className="space-y-4">

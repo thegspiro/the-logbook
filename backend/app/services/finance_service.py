@@ -3871,6 +3871,141 @@ class FinanceService:
         await self.db.refresh(item, ["created_at"])
         return item
 
+    # ========================================
+    # Expense receipts
+    # ========================================
+
+    async def _receipt_line(
+        self,
+        er_id: str,
+        item_id: str,
+        org_id: str,
+        requester_id: Optional[str],
+        *,
+        for_update: bool = False,
+    ) -> tuple[ExpenseReport, ExpenseLineItem]:
+        er = await self.get_expense_report(
+            er_id, org_id, restrict_to_user=requester_id, for_update=for_update
+        )
+        if not er:
+            raise FinanceEntityNotFoundError("Expense report not found")
+        item = next((i for i in er.line_items if str(i.id) == str(item_id)), None)
+        if item is None:
+            raise FinanceEntityNotFoundError("Line item not found")
+        return er, item
+
+    async def require_receipt_editable(
+        self, er_id: str, item_id: str, org_id: str, requester_id: Optional[str]
+    ) -> tuple[ExpenseReport, ExpenseLineItem]:
+        """The draft report's line a receipt may be attached to or removed from.
+
+        Checked before an upload is stored, so a refused request writes no
+        file, and again under the report's row lock when the change is made.
+        """
+        er, item = await self._receipt_line(er_id, item_id, org_id, requester_id)
+        await self._require_receipt_change(er, org_id)
+        return er, item
+
+    async def _require_receipt_change(self, er: ExpenseReport, org_id: str) -> None:
+        # Once submitted, the receipts are what the approvers are deciding on;
+        # they stay as submitted.
+        if er.status != ExpenseReportStatus.DRAFT:
+            raise ValueError(
+                "Receipts can only be changed while the report is a draft."
+            )
+        await self._require_year_accepts(er.fiscal_year_id, org_id, action="new")
+
+    async def attach_line_item_receipt(
+        self,
+        er_id: str,
+        item_id: str,
+        org_id: str,
+        requester_id: Optional[str],
+        *,
+        file_path: str,
+        file_name: str,
+        content_type: str,
+        file_size: int,
+        uploaded_by: str,
+    ) -> tuple[ExpenseLineItem, Optional[str]]:
+        """Record a stored receipt on a draft line; return it and the file it replaced.
+
+        The caller deletes the replaced file only after the commit, so a failed
+        save never leaves the line pointing at a file that is gone.
+        """
+        er, item = await self._receipt_line(
+            er_id, item_id, org_id, requester_id, for_update=True
+        )
+        await self._require_receipt_change(er, org_id)
+        previous = item.receipt_file_path
+        item.receipt_file_path = file_path
+        item.receipt_file_name = file_name
+        item.receipt_content_type = content_type
+        item.receipt_file_size = file_size
+        item.receipt_uploaded_by = uploaded_by
+        item.receipt_uploaded_at = datetime.now(timezone.utc)
+        await self.db.flush()
+        return item, previous
+
+    async def remove_line_item_receipt(
+        self, er_id: str, item_id: str, org_id: str, requester_id: Optional[str]
+    ) -> Optional[str]:
+        """Clear a draft line's receipt; return the stored file to delete."""
+        er, item = await self._receipt_line(
+            er_id, item_id, org_id, requester_id, for_update=True
+        )
+        await self._require_receipt_change(er, org_id)
+        previous = item.receipt_file_path
+        item.receipt_file_path = None
+        item.receipt_file_name = None
+        item.receipt_content_type = None
+        item.receipt_file_size = None
+        item.receipt_uploaded_by = None
+        item.receipt_uploaded_at = None
+        await self.db.flush()
+        return previous
+
+    async def receipt_line(
+        self, er_id: str, item_id: str, org_id: str
+    ) -> tuple[ExpenseReport, ExpenseLineItem]:
+        """A report's line, for a reader the caller has already authorized."""
+        return await self._receipt_line(er_id, item_id, org_id, None)
+
+    async def reviews_entity(
+        self,
+        user: User,
+        entity_type: ApprovalEntityType,
+        entity_id: str,
+        org_id: str,
+        *,
+        submitted: bool,
+    ) -> bool:
+        """Whether ``user`` is one of this document's approvers.
+
+        Someone a step names (the rule approve/deny enforce), someone who has
+        already acted on a step, or an approvals administrator, who may act on
+        any step with an override reason. A submitted document no chain
+        applies to is approved by hand by any ``finance.approve`` holder
+        (``manual_approve``), so they are its approvers. They read the document
+        they are asked to decide on, its receipts included, without the
+        org-wide grant. A draft has no approvers.
+        """
+        if not submitted:
+            return False
+        if is_approvals_admin(user):
+            return True
+        records = await self.get_approval_records(entity_type, entity_id, org_id)
+        if not records:
+            return user_has_permission(user, FINANCE_APPROVE)
+        for record in records:
+            if record.acted_by and str(record.acted_by) == str(user.id):
+                return True
+            if record.step is not None and await user_matches_step(
+                self.db, user, record.step, org_id
+            ):
+                return True
+        return False
+
     async def submit_expense_report(
         self, er_id: str, org_id: str, requester_id: Optional[str] = None
     ) -> ExpenseReport:
@@ -3884,6 +4019,14 @@ class FinanceService:
             raise ValueError("Only draft reports can be submitted")
         if er.total_amount <= 0:
             raise ValueError("Expense report must have line items")
+        missing = [item for item in er.line_items if not item.receipt_file_path]
+        if missing:
+            named = ", ".join(f'"{item.description}"' for item in missing[:3])
+            more = f" and {len(missing) - 3} more" if len(missing) > 3 else ""
+            raise ValueError(
+                "Attach a receipt to every line before submitting. Missing: "
+                f"{named}{more}."
+            )
 
         er.status = ExpenseReportStatus.SUBMITTED
 

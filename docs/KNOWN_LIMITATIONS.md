@@ -1303,6 +1303,22 @@ year"). Three gaps remain, pending a decision:
   begins, and does not stop the lock. A requester who still needs it raises it
   again in the new year; nothing moves it across.
 
+## Finance — Expense Receipts: What They Do Not Cover (2026-10-09)
+
+Every expense line needs an uploaded receipt before its report is submitted
+(see `docs/FINANCE_MODULE.md`, "Expense receipts"). Gaps, pending a decision:
+
+- **One file per line.** A hotel folio covering several lines is attached to
+  each of them. Lines cannot share one stored file.
+- **Mileage has no log of its own.** A mileage line needs a file like any
+  other; the guide asks for the trip log. Nothing checks what the file is.
+- **Files outlive what referenced them in two cases.** A downgrade past
+  `0a159454f04b` leaves them on disk, and so would deleting an expense
+  report — which no endpoint does today. Nothing sweeps the
+  `finance-receipts` area for unreferenced files.
+- **Purchase requests and check requests are unchanged.** They keep their
+  free-text `receipt_url` and need no file.
+
 ## Finance — QuickBooks Export Gaps (2026-10-08)
 
 The transactions export is now a valid QuickBooks Online journal-entry import

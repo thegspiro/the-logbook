@@ -247,7 +247,7 @@ export const getFinanceRoutes = () => {
         path="/finance/expenses/:id"
         element={
           <ProtectedRoute
-            requiredAnyPermission={['finance.request', 'finance.view', 'finance.manage']}
+            requiredAnyPermission={['finance.request', 'finance.view', 'finance.manage', 'finance.approve']}
             requiredModule="finance"
             moduleLabel="Finance"
           >

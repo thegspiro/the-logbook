@@ -120,6 +120,10 @@ folds it into the storage service.
   attachments keep their uploaded name.
 - **`scripts/relocate_uploads.py`** moves existing files
   (`app/services/upload_relocation.py`).
+- **Expense receipts** _(2026-10-09)_ were built on it from the start: area
+  `finance-receipts` (`StorageArea.FINANCE_RECEIPTS`, no legacy root), PDF,
+  JPG or PNG up to 10 MB, read and deleted through `resolve()`. See
+  `docs/FINANCE_MODULE.md`, "Expense receipts".
 
 Found and fixed while there: a training-history CSV that was not UTF-8 was
 reported as "exceeds the 10MB limit" (an `except ValueError` caught the

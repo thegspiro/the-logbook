@@ -568,6 +568,30 @@ export const expenseReportService = {
     return response.data;
   },
 
+  /** Attach (or replace) a draft line's receipt: a PDF, JPG or PNG. */
+  async uploadReceipt(reportId: string, itemId: string, file: File): Promise<ExpenseLineItem> {
+    const form = new FormData();
+    form.append('file', file);
+    const response = await api.put<ExpenseLineItem>(
+      `/finance/expense-reports/${reportId}/items/${itemId}/receipt`,
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  },
+
+  async removeReceipt(reportId: string, itemId: string): Promise<void> {
+    await api.delete(`/finance/expense-reports/${reportId}/items/${itemId}/receipt`);
+  },
+
+  /** Fetched through the authenticated client; a plain link would carry no session. */
+  async getReceipt(reportId: string, itemId: string): Promise<Blob> {
+    const response = await api.get<Blob>(`/finance/expense-reports/${reportId}/items/${itemId}/receipt`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
   async markPaid(id: string, paymentMethod?: string): Promise<ExpenseReport> {
     const response = await api.post<ExpenseReport>(`/finance/expense-reports/${id}/mark-paid`, undefined, {
       params: { payment_method: paymentMethod },
