@@ -14,6 +14,9 @@
  * An amendment is extra money leadership approved for the line. The backend
  * raises `amountBudgeted` by it and reports the original (`originalAmount`);
  * this page shows both rather than working either out (CLAUDE.md pitfall #29).
+ * A mistaken amendment is corrected by a reversing entry, never edited: the
+ * backend reports which rows are reversals and which are reversed, and this
+ * page only renders that.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -24,6 +27,7 @@ import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
 import { useAuthStore } from '@/stores/authStore';
 import { BudgetFormDialog } from '../components/BudgetFormDialog';
 import { AmendmentDialog } from '../components/AmendmentDialog';
+import { ReverseAmendmentDialog } from '../components/ReverseAmendmentDialog';
 import { BudgetTransactionList } from '../components/BudgetTransactionList';
 import { budgetService } from '../services/api';
 import { budgetOwnerLabel } from '../utils/budgetOwnership';
@@ -174,10 +178,13 @@ interface AmendmentListProps {
   amendments: BudgetAmendment[];
   loading: boolean;
   error: string | null;
+  /** Offered only to a finance manager, and only while the year is unlocked. */
+  onReverse?: ((amendment: BudgetAmendment) => void) | undefined;
 }
 
-const AmendmentList: React.FC<AmendmentListProps> = ({ amendments, loading, error }) => {
+const AmendmentList: React.FC<AmendmentListProps> = ({ amendments, loading, error, onReverse }) => {
   const tz = useTimezone();
+  const byId = new Map(amendments.map((a) => [a.id, a]));
   let body: React.ReactNode;
   if (error) {
     body = <p className="text-sm text-red-700 dark:text-red-400">{error}</p>;
@@ -188,20 +195,62 @@ const AmendmentList: React.FC<AmendmentListProps> = ({ amendments, loading, erro
   } else {
     body = (
       <ul className="divide-theme-surface-border divide-y" aria-label="Amendments">
-        {amendments.map((a) => (
-          <li key={a.id} className="py-3 first:pt-0 last:pb-0">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <p className="text-theme-text-primary text-sm font-semibold">+{formatCurrency(a.amount)}</p>
-              <p className="text-theme-text-secondary text-sm">
-                Approved {formatDate(a.approvedOn, tz)} by {a.approvedBy}
-              </p>
-            </div>
-            <p className="text-theme-text-primary mt-1 text-sm break-words whitespace-pre-line">{a.reason}</p>
-            <p className="text-theme-text-secondary mt-1 text-xs">
-              Entered by {a.enteredByName || 'a former member'} on {formatDateTime(a.createdAt, tz)}
-            </p>
-          </li>
-        ))}
+        {amendments.map((a) => {
+          const reversed = Boolean(a.reversedByAmendmentId);
+          const original = a.reversesAmendmentId ? byId.get(a.reversesAmendmentId) : undefined;
+          return (
+            <li key={a.id} className="py-3 first:pt-0 last:pb-0">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                {a.isReversal ? (
+                  <p className="text-theme-text-primary text-sm font-semibold">
+                    {/* U+2212, the minus sign, not a hyphen. */}
+                    {'\u2212'}
+                    {formatCurrency(Math.abs(Number(a.amount)))}
+                    <span className="text-theme-text-secondary font-normal">
+                      {' · '}
+                      {original
+                        ? `Reverses the ${formatDate(original.approvedOn, tz)} amendment of +${formatCurrency(original.amount)}`
+                        : 'Reverses an earlier amendment'}
+                    </span>
+                  </p>
+                ) : (
+                  <p
+                    className={`text-sm font-semibold ${
+                      reversed ? 'text-theme-text-secondary line-through' : 'text-theme-text-primary'
+                    }`}
+                  >
+                    +{formatCurrency(a.amount)}
+                  </p>
+                )}
+                <p className="text-theme-text-secondary text-sm">
+                  Approved {formatDate(a.approvedOn, tz)} by {a.approvedBy}
+                </p>
+              </div>
+              {reversed && (
+                <p className="text-theme-text-secondary mt-1 text-sm font-medium">
+                  Reversed {formatDate(a.reversedAt, tz)} by {a.reversedByName || 'a former member'}
+                </p>
+              )}
+              <p className="text-theme-text-primary mt-1 text-sm break-words whitespace-pre-line">{a.reason}</p>
+              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-theme-text-secondary text-xs">
+                  Entered by {a.enteredByName || 'a former member'} on {formatDateTime(a.createdAt, tz)}
+                </p>
+                {onReverse && !a.isReversal && !reversed && (
+                  <button
+                    type="button"
+                    onClick={() => onReverse(a)}
+                    className="btn-secondary btn-sm"
+                    // Every row has one; the name says which amendment it reverses.
+                    aria-label={`Reverse the ${formatDate(a.approvedOn, tz)} amendment of +${formatCurrency(a.amount)}`}
+                  >
+                    Reverse
+                  </button>
+                )}
+              </div>
+            </li>
+          );
+        })}
       </ul>
     );
   }
@@ -263,6 +312,7 @@ const BudgetDetailPage: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [amending, setAmending] = useState(false);
+  const [reversing, setReversing] = useState<BudgetAmendment | null>(null);
   const [amendments, setAmendments] = useState<BudgetAmendment[]>([]);
   const [amendmentsLoading, setAmendmentsLoading] = useState(false);
   const [amendmentsError, setAmendmentsError] = useState<string | null>(null);
@@ -375,7 +425,8 @@ const BudgetDetailPage: React.FC = () => {
   }
 
   const categoryName = budget.categoryName || 'Unknown category';
-  // A locked year takes no amendments; the backend refuses one regardless.
+  // A locked year takes no amendments or reversals; the backend refuses
+  // either regardless.
   const yearLocked = fiscalYears.some((fy) => fy.id === budget.fiscalYearId && fy.isLocked);
 
   return (
@@ -428,6 +479,18 @@ const BudgetDetailPage: React.FC = () => {
         />
       )}
 
+      {reversing && (
+        <ReverseAmendmentDialog
+          budgetId={budget.id}
+          amendment={reversing}
+          onClose={() => setReversing(null)}
+          onSaved={() => {
+            setReversing(null);
+            reload();
+          }}
+        />
+      )}
+
       {editing && (
         <BudgetFormDialog
           budget={budget}
@@ -441,7 +504,14 @@ const BudgetDetailPage: React.FC = () => {
         />
       )}
 
-      <AmendmentList amendments={amendments} loading={amendmentsLoading} error={amendmentsError} />
+      <AmendmentList
+        amendments={amendments}
+        loading={amendmentsLoading}
+        error={amendmentsError}
+        // Owners read the list too (#3010) but never reverse; a locked year
+        // takes no reversal, and the backend refuses one regardless.
+        onReverse={canManage && !yearLocked ? setReversing : undefined}
+      />
 
       <BudgetTransactionList
         budgetId={budget.id}

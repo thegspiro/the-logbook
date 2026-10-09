@@ -1,7 +1,7 @@
 """Gate module system folders on module rights.
 
 Revision ID: b38df38d849b
-Revises: 9effb8790488
+Revises: c62a98b47406
 Create Date: 2026-10-09 03:17:00.000000
 
 Phase 3 of docs/FILE_STORAGE_HARDENING.md. A module's folder now opens to the
@@ -29,7 +29,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "b38df38d849b"
-down_revision = "9effb8790488"
+down_revision = "c62a98b47406"
 branch_labels = None
 depends_on = None
 

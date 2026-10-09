@@ -146,7 +146,7 @@ class BudgetCategoryCreate(BaseModel):
     description: Optional[str] = None
     parent_category_id: Optional[str] = None
     sort_order: int = 0
-    qb_account_name: Optional[str] = None
+    qb_account_name: Optional[str] = Field(None, max_length=200)
     owner_position_id: Optional[str] = None
 
 
@@ -160,7 +160,7 @@ class BudgetCategoryUpdate(BaseModel):
     parent_category_id: Optional[str] = None
     sort_order: Optional[int] = None
     is_active: Optional[bool] = None
-    qb_account_name: Optional[str] = None
+    qb_account_name: Optional[str] = Field(None, max_length=200)
     # Omitted leaves the owner alone; an explicit null clears it.
     owner_position_id: Optional[str] = None
 
@@ -339,8 +339,38 @@ class BudgetAmendmentCreate(BaseModel):
         return value
 
 
+class BudgetAmendmentReverse(BaseModel):
+    """Reverse a mistaken amendment with an entry of its own.
+
+    The amount is not sent: a reversal cancels the whole amendment, so the
+    service takes it from the row being reversed. The approval date's "not in
+    the future" check needs the department's calendar, so the service makes it.
+    """
+
+    model_config = _REQUEST_CONFIG
+
+    reason: str = Field(..., max_length=2000)
+    approved_by: str = Field(..., max_length=200)
+    approved_on: date
+
+    @field_validator("reason", "approved_by")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+
 class BudgetAmendmentResponse(UTCResponseBase):
-    """One recorded amendment to a budget line."""
+    """One recorded amendment to a budget line.
+
+    A reversing entry has a negative ``amount`` and names the amendment it
+    cancels in ``reverses_amendment_id``; ``is_reversal`` says which kind a
+    row is. On a reversed amendment, ``reversed_by_amendment_id``,
+    ``reversed_at`` (when the reversal was entered) and ``reversed_by_name``
+    (who entered it) are filled from that reversal.
+    """
 
     model_config = _RESPONSE_CONFIG
 
@@ -354,10 +384,15 @@ class BudgetAmendmentResponse(UTCResponseBase):
     created_by: Optional[str] = None
     entered_by_name: Optional[str] = None
     created_at: datetime
+    reverses_amendment_id: Optional[str] = None
+    is_reversal: bool = False
+    reversed_by_amendment_id: Optional[str] = None
+    reversed_at: Optional[datetime] = None
+    reversed_by_name: Optional[str] = None
 
 
 class BudgetAmendmentCreatedResponse(BaseModel):
-    """The new amendment and the line as it now stands."""
+    """The new amendment (or reversal) and the line as it now stands."""
 
     model_config = _RESPONSE_CONFIG
 
@@ -1331,6 +1366,32 @@ class ExportMappingResponse(UTCResponseBase):
     mapping_type: str
     created_at: datetime
     updated_at: datetime
+
+
+class ExportReadinessCategoryResponse(UTCResponseBase):
+    """What an export would post one budget category to."""
+
+    model_config = _RESPONSE_CONFIG
+
+    category_id: str
+    category_name: str
+    is_active: bool
+    # ready, no_account, no_offset or duplicate_mappings
+    status: str
+    account_name: Optional[str] = None
+    # category (its own qb_account_name) or mapping
+    account_source: Optional[str] = None
+    offset_account_name: Optional[str] = None
+    mapping_ids: list[str]
+
+
+class ExportReadinessResponse(UTCResponseBase):
+    """Export readiness for every budget category in the organization."""
+
+    model_config = _RESPONSE_CONFIG
+
+    categories: list[ExportReadinessCategoryResponse]
+    unmatched_mapping_ids: list[str]
 
 
 MAX_SYNCHRONOUS_EXPORT_DAYS = 366

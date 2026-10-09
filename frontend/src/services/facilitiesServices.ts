@@ -407,10 +407,11 @@ export interface ComplianceChecklist {
   id: string;
   facilityId: string;
   complianceType: string;
-  title: string;
-  description?: string;
-  dueDate?: string;
-  completedDate?: string;
+  // The ORM column is checklist_name; the response serializes it camelCased.
+  checklistName: string;
+  description?: string | null;
+  dueDate?: string | null;
+  completedDate?: string | null;
   isCompleted?: boolean;
   createdAt: string;
   updatedAt: string;
@@ -419,9 +420,21 @@ export interface ComplianceChecklist {
 export interface ComplianceChecklistCreate {
   facility_id: string;
   compliance_type: string;
-  title: string;
+  checklist_name: string;
   description?: string;
   due_date?: string;
+}
+
+// The PATCH applies only the keys sent (exclude_unset) and clears a column on
+// an explicit null, so nullable fields accept null for "clear" (pitfall #1).
+export interface ComplianceChecklistUpdate {
+  facility_id?: string;
+  compliance_type?: string;
+  checklist_name?: string;
+  description?: string | null;
+  due_date?: string | null;
+  is_completed?: boolean;
+  completed_date?: string | null;
 }
 
 export interface ComplianceItem {
@@ -1000,10 +1013,7 @@ export const facilitiesService = {
     const response = await api.post<ComplianceChecklist>('/facilities/compliance-checklists', data);
     return response.data;
   },
-  async updateComplianceChecklist(
-    checklistId: string,
-    data: Partial<ComplianceChecklistCreate>
-  ): Promise<ComplianceChecklist> {
+  async updateComplianceChecklist(checklistId: string, data: ComplianceChecklistUpdate): Promise<ComplianceChecklist> {
     const response = await api.patch<ComplianceChecklist>(`/facilities/compliance-checklists/${checklistId}`, data);
     return response.data;
   },

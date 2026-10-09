@@ -456,7 +456,7 @@ folder's list. Facility folders are unchanged.
 existing system folders, `6c25b7d68965` adds `document_id` to apparatus
 photos and documents, `c0bf0b155719` adds `receipt_document_id` to purchase
 requests and expense lines. All three run on `alembic upgrade head` and are
-reversible: `alembic downgrade 9effb8790488`, then redeploy the previous
+reversible: `alembic downgrade c62a98b47406`, then redeploy the previous
 image. Downgrading closes the Finance folder to leadership-only (the earlier
 code has no finance gate) and drops the receipt and apparatus links; the
 uploaded files remain in Documents.
@@ -581,8 +581,8 @@ Credits, Description`. Each transaction is two lines (two per expense line on
   `internal_category` matches the category name. The offset account comes only
   from that mapping's new `qbOffsetAccountName` field. Nothing is backfilled,
   so **existing installations must set offset accounts before their next
-  export** with `PUT /finance/export/mappings/{id}`. There is no screen for
-  this yet (see `docs/KNOWN_LIMITATIONS.md`).
+  export**, on **Finance › QuickBooks Export** (`/finance/settings/quickbooks`,
+  added 2026-10-09), which lists each budget category and what it is missing.
 - A migration adds the nullable `finance_export_mappings.qb_offset_account_name`
   column. Its downgrade drops the column and the values stored in it.
 

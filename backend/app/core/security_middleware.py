@@ -1696,6 +1696,7 @@ class SecurityMonitoringMiddleware:
         "/api/v1/errors/export",
         "/api/v1/finance/export/logs",
         "/api/v1/finance/export/mappings",
+        "/api/v1/finance/export/readiness",
         "/api/v1/finance/export/transactions",
         "/api/v1/inventory/items/export",
         "/api/v1/inventory/not-seen/export",

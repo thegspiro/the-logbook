@@ -21,14 +21,16 @@ export const INSPECTION_TYPE_OPTIONS = [
   'other',
 ] as const;
 
+// Must match ComplianceType in backend/app/models/facilities.py exactly: the
+// create endpoint rejects any other value with a 422.
 export const COMPLIANCE_TYPE_OPTIONS = [
   'nfpa',
   'osha',
   'ada',
   'building_code',
   'fire_code',
+  'health',
   'environmental',
-  'insurance',
   'other',
 ] as const;
 

@@ -1218,12 +1218,12 @@ placeholders picture screens the frontend does not render; their placeholders
 are left open. Four defects found alongside them were fixed — see the commit
 that added the purchase request, expense report and check request shots.
 
-| Guide section             | What exists                                                                                                    | State                |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------- |
-| Create Budget form        | _Resolved 2026-10-08:_ **Add budget line** and **Edit** open `BudgetFormDialog` (`finance.manage`). See below. | ✅ Built             |
-| Create Dues Schedule form | `financeStore.createDuesSchedule`, **no component calls it**.                                                  | ❌ Store action only |
-| QuickBooks export mapping | `GET/POST/PUT /finance/export/mappings` and the `qbAccountName` types exist; no page, no route, no consumer.   | ❌ API + types only  |
-| Export logs               | `GET /finance/export/logs` and an `ExportLog` interface; no page, no route, no consumer.                       | ❌ API + types only  |
+| Guide section             | What exists                                                                                                           | State                |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| Create Budget form        | _Resolved 2026-10-08:_ **Add budget line** and **Edit** open `BudgetFormDialog` (`finance.manage`). See below.        | ✅ Built             |
+| Create Dues Schedule form | `financeStore.createDuesSchedule`, **no component calls it**.                                                         | ❌ Store action only |
+| QuickBooks export mapping | _Resolved 2026-10-09:_ **Finance › QuickBooks Export** (`/finance/settings/quickbooks`, `finance.manage`). See below. | ✅ Built             |
+| Export logs               | `GET /finance/export/logs` and an `ExportLog` interface; no page, no route, no consumer.                              | ❌ API + types only  |
 
 **Budget detail's transaction history** — _resolved 2026-10-08._ It was a
 stub that said "No transactions yet" unconditionally. It now lists what moved
@@ -1254,36 +1254,44 @@ _Treasurer duties_), and a department can make either required. See
 **Owner decision needed** only if a department asks for a different schedule
 or for bell entries.
 
-## Finance — A Mistaken Budget Amendment Cannot Be Corrected (2026-10-08)
+## Finance — Budget Amendment Corrections Are Whole Reversals Only (2026-10-09)
 
-A budget amendment (`budget_amendments`, `POST /finance/budgets/{id}/amendments`)
-is the record of extra money leadership approved, so there is deliberately no
-endpoint or screen to edit or delete one. The consequence is that a typo — $2,500
-entered for $250 — stays on the line's amendment list for good.
+**Resolved in part (owner decision, 2026-10-09).** A mistaken amendment is now
+corrected by a **reversing entry** —
+`POST /finance/budgets/{id}/amendments/{amendmentId}/reverse`, the **Reverse**
+button on the line's page — a negative amendment with its own reason and
+approval that lowers the current budget and leaves the original budget and the
+original amendment on record (`docs/FINANCE_MODULE.md`, "Reversing a mistaken
+amendment"). The old workaround, editing the amount down, is no longer needed
+and should not be used for this: it moves the original budget.
 
-The workaround is to edit the line's amount back down (while its fiscal year is
-not locked). That restores the right **current** budget, but the **original**
-budget is derived as current minus the amendments, so it drops by the same
-amount and the line then reads as if it started lower. Nothing records that the
-edit was a correction. In a locked year there is no workaround at all.
+What remains limited, by design:
 
-**Owner decision needed:** whether a correction should be a reversing amendment
-(a negative entry with its own reason and approval, keeping the record whole),
-a void flag on the original row, or neither. Either is a follow-up; this pass
-recorded increases only, as approved.
+- **No partial reversal.** $2,500 entered for $250 is fixed by reversing the
+  whole $2,500 and recording a new $250 amendment — two entries, not one.
+- **A reversal is final.** It cannot itself be reversed; restoring the money
+  takes a new amendment with a fresh approval.
+- **A locked year takes no reversal**, as it takes no amendment. A mistake found
+  after the year is locked stays as entered unless the year is unlocked.
+- **A reversal is refused when the money is already spent or committed** past
+  the lower budget (409 "Insufficient available budget"); the spending has to be
+  resolved first.
+
+**Owner decision needed** only if partial reversals, or reversals in a locked
+year, are wanted.
 
 ## Finance — QuickBooks Export Gaps (2026-10-08)
 
 The transactions export is now a valid QuickBooks Online journal-entry import
-(see `docs/FINANCE_MODULE.md`, "QuickBooks Export"). Four gaps remain, and each
-needs a decision or a follow-up change rather than a fix inside that one:
+(see `docs/FINANCE_MODULE.md`, "QuickBooks Export"). Its accounts are set on
+**Finance › QuickBooks Export** _(2026-10-09)_, which also shows each budget
+category's export readiness, and in the budget category dialog. Four gaps
+remain, and each needs a decision or a follow-up change rather than a fix
+inside that one:
 
-- **Accounts can only be set through the API.** The export refuses until every
-  exported budget category has an account and an offset account. That makes
-  the "QuickBooks export mapping" row in the table above more than a missing
-  screen: until a mapping screen exists, a treasurer can only configure the
-  export with `POST`/`PUT /finance/export/mappings` and
-  `PUT /finance/budget-categories/{id}`.
+- **Running the export has no screen.** `POST /finance/export/transactions`
+  and its history (`GET /finance/export/logs`, the "Export logs" row above)
+  are still API only.
 - **Dues payments are not exported.** `DuesSchedule` and `DuesPayment` carry no
   budget category, so the export has nothing to resolve an income account or a
   deposit account from. Adding them needs a decision about where those two

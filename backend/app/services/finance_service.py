@@ -118,6 +118,17 @@ class BudgetLimitExceededError(Exception):
         super().__init__("Insufficient available budget")
 
 
+class AmendmentAlreadyReversedError(Exception):
+    """The amendment already has a reversing entry (→ 409).
+
+    Its own class rather than a ``ValueError`` so the endpoint can tell a
+    conflict with the line's current state from a malformed request.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("This amendment has already been reversed.")
+
+
 # The largest value a Numeric(12, 2) column holds. A budget line's amount may
 # not be raised past it: MySQL would refuse the write with an opaque error.
 _MAX_BUDGET_AMOUNT = Decimal("9999999999.99")
@@ -212,6 +223,35 @@ QB_JOURNAL_HEADER = [
 
 def _qb_amount(value: Decimal) -> Decimal:
     return Decimal(value).quantize(Decimal("0.01"))
+
+
+def _mapping_key(name: str) -> str:
+    return name.strip().casefold()
+
+
+def _classify_category_accounts(
+    category_account: Optional[str], matches: list[ExportMapping]
+) -> tuple[str, str, Optional[str]]:
+    """Resolve a budget category to ``(account, offset, problem)``.
+
+    The one definition of how a category reaches QuickBooks: the export uses it
+    to post each transaction and the readiness report uses it to show what an
+    export would do, so the two cannot disagree. ``problem`` is
+    ``duplicate_mappings``, ``no_account`` or ``no_offset``; ``None`` means the
+    category exports.
+    """
+    if len(matches) > 1:
+        return "", "", "duplicate_mappings"
+    mapping = matches[0] if matches else None
+    account = (category_account or "").strip() or (
+        mapping.qb_account_name.strip() if mapping else ""
+    )
+    offset = (mapping.qb_offset_account_name or "").strip() if mapping else ""
+    if not account:
+        return account, offset, "no_account"
+    if not offset:
+        return account, offset, "no_offset"
+    return account, offset, None
 
 
 def _short_label(name: str, limit: int = 40) -> str:
@@ -1008,14 +1048,137 @@ class FinanceService:
         logger.info("Budget {} amended by {} in org {}", budget.id, amount, org_id)
         return amendment
 
+    async def reverse_budget_amendment(
+        self,
+        budget_id: str,
+        amendment_id: str,
+        org_id: str,
+        created_by: str,
+        *,
+        reason: str,
+        approved_by: str,
+        approved_on: date,
+    ) -> BudgetAmendment:
+        """Cancel a mistaken amendment with a reversing entry.
+
+        A mistaken amendment is never edited or deleted (owner decision,
+        2026-10-09). The reversal is a new row for the whole amount, negated,
+        carrying its own reason and approval, and ``amount_budgeted`` drops by
+        the amount. The original budget is unchanged, because it is the current
+        amount less the sum of every row and both moved by the same amount.
+
+        One transaction, locks taken in ``add_budget_amendment``'s order: the
+        line first (the locking read the spend checks use, CLAUDE.md pitfall
+        #27), then the amendment, then a *locking* read for an existing
+        reversal -- a plain read would answer from the snapshot taken before
+        the line's lock was granted, and let two reversals of one amendment
+        both see none. The UNIQUE key on ``reverses_amendment_id`` stands
+        behind that check.
+
+        Raises ``FinanceEntityNotFoundError`` for a line that is not the org's
+        or an amendment that is not on that line; ``AmendmentAlreadyReversedError``
+        for an amendment reversed before; ``BudgetLimitExceededError`` when the
+        lower budget would no longer cover what is spent and committed; and
+        ``ValueError`` for a reversal of a reversal, a locked year, a blank
+        reason or approver, or a future approval date.
+        """
+        reason = (reason or "").strip()
+        approved_by = (approved_by or "").strip()
+        if not reason:
+            raise ValueError("Give a reason for the reversal.")
+        if not approved_by:
+            raise ValueError("Say who approved the reversal.")
+        # The department's calendar, as for an amendment.
+        if approved_on > await resolve_org_today(self.db, org_id):
+            raise ValueError("The approval date cannot be in the future.")
+
+        result = await self.db.execute(
+            select(Budget)
+            .where(Budget.id == budget_id, Budget.organization_id == org_id)
+            .with_for_update()
+        )
+        budget = result.scalar_one_or_none()
+        if not budget:
+            raise FinanceEntityNotFoundError("Budget not found")
+        result = await self.db.execute(
+            select(BudgetAmendment)
+            .where(
+                BudgetAmendment.id == amendment_id,
+                BudgetAmendment.budget_id == budget.id,
+                BudgetAmendment.organization_id == org_id,
+            )
+            .with_for_update()
+        )
+        target = result.scalar_one_or_none()
+        if not target:
+            raise FinanceEntityNotFoundError("Amendment not found")
+        # A reversal is final: money it took back is restored by recording a
+        # new amendment, with its own approval. A negative amount marks a
+        # reversal even if its link was lost to a downgrade.
+        if target.reverses_amendment_id is not None or target.amount <= 0:
+            raise ValueError(
+                "A reversal cannot itself be reversed. Record a new amendment "
+                "instead."
+            )
+        existing = await self.db.execute(
+            select(BudgetAmendment.id)
+            .where(
+                BudgetAmendment.reverses_amendment_id == target.id,
+                BudgetAmendment.organization_id == org_id,
+            )
+            .with_for_update()
+        )
+        if existing.first() is not None:
+            raise AmendmentAlreadyReversedError()
+        if await self._year_is_locked(budget.fiscal_year_id, org_id):
+            raise ValueError(_LOCKED_YEAR_AMOUNT_MESSAGE)
+        new_amount = Decimal(budget.amount_budgeted or 0) - target.amount
+        if new_amount < budget.amount_spent + budget.amount_encumbered:
+            raise BudgetLimitExceededError()
+
+        reversal = BudgetAmendment(
+            organization_id=org_id,
+            budget_id=budget.id,
+            amount=-target.amount,
+            reason=reason,
+            approved_by=approved_by,
+            approved_on=approved_on,
+            created_by=created_by,
+            reverses_amendment_id=target.id,
+        )
+        try:
+            async with self.db.begin_nested():
+                self.db.add(reversal)
+                await self.db.flush()
+        except IntegrityError:
+            # Unreachable behind the locks above; the unique key answers if
+            # some other writer ever skips them.
+            raise AmendmentAlreadyReversedError()
+        budget.amount_budgeted = new_amount
+        await self.db.flush()
+        await self.db.refresh(reversal, ["created_at"])
+        await self.db.refresh(budget, ["updated_at"])
+        logger.info(
+            "Budget {} amendment {} reversed by {} in org {}",
+            budget.id,
+            target.id,
+            reversal.id,
+            org_id,
+        )
+        return reversal
+
     async def list_budget_amendments(self, budget_id: str, org_id: str) -> list[dict]:
         """A line's amendments, newest first, with who entered each.
 
         Raises ``FinanceEntityNotFoundError`` for a line that is not the org's.
-        The entering member is joined in-org, so a stray id names nobody.
+        The entering member is joined in-org, so a stray id names nobody. A
+        reversed amendment carries its reversal's id, when it was entered and
+        by whom, from one more in-org join of the same table.
         """
         if await self.get_budget(budget_id, org_id) is None:
             raise FinanceEntityNotFoundError("Budget not found")
+        reversal = aliased(BudgetAmendment)
+        reverser = aliased(User)
         result = await self.db.execute(
             select(
                 BudgetAmendment,
@@ -1023,6 +1186,12 @@ class FinanceService:
                 User.last_name,
                 User.preferred_name,
                 User.username,
+                reversal.id.label("reversal_id"),
+                reversal.created_at.label("reversal_created_at"),
+                reverser.first_name.label("reverser_first_name"),
+                reverser.last_name.label("reverser_last_name"),
+                reverser.preferred_name.label("reverser_preferred_name"),
+                reverser.username.label("reverser_username"),
             )
             .outerjoin(
                 User,
@@ -1031,13 +1200,42 @@ class FinanceService:
                     User.organization_id == org_id,
                 ),
             )
+            .outerjoin(
+                reversal,
+                and_(
+                    reversal.reverses_amendment_id == BudgetAmendment.id,
+                    reversal.organization_id == org_id,
+                ),
+            )
+            .outerjoin(
+                reverser,
+                and_(
+                    reverser.id == reversal.created_by,
+                    reverser.organization_id == org_id,
+                ),
+            )
             .where(
                 BudgetAmendment.budget_id == budget_id,
                 BudgetAmendment.organization_id == org_id,
             )
             .order_by(BudgetAmendment.created_at.desc(), BudgetAmendment.id.desc())
         )
-        return [self._amendment_row(*row) for row in result.all()]
+        rows = []
+        for row in result.all():
+            data = self._amendment_row(*row[:5])
+            if row.reversal_id is not None:
+                name = format_display_name(
+                    row.reverser_first_name,
+                    row.reverser_last_name,
+                    row.reverser_preferred_name,
+                )
+                data.update(
+                    reversed_by_amendment_id=row.reversal_id,
+                    reversed_at=row.reversal_created_at,
+                    reversed_by_name=name or row.reverser_username or None,
+                )
+            rows.append(data)
+        return rows
 
     @staticmethod
     def _amendment_row(
@@ -1053,6 +1251,11 @@ class FinanceService:
         }
         name = format_display_name(first_name, last_name, preferred_name)
         data["entered_by_name"] = name or username or None
+        # A negative amount is a reversal even where a downgrade dropped the
+        # link; only the reverse endpoint writes one.
+        data["is_reversal"] = (
+            amendment.reverses_amendment_id is not None or Decimal(amendment.amount) < 0
+        )
         return data
 
     @classmethod
@@ -4036,6 +4239,83 @@ class FinanceService:
         await self.db.refresh(mapping, ["updated_at"])
         return mapping
 
+    async def delete_export_mapping(self, mapping_id: str, org_id: str) -> None:
+        result = await self.db.execute(
+            select(ExportMapping).where(
+                ExportMapping.id == mapping_id,
+                ExportMapping.organization_id == org_id,
+            )
+        )
+        mapping = result.scalar_one_or_none()
+        if not mapping:
+            raise ValueError("Export mapping not found")
+        await self.db.delete(mapping)
+        await self.db.flush()
+
+    async def _export_mappings_by_category(
+        self, org_id: str
+    ) -> dict[str, list[ExportMapping]]:
+        result = await self.db.execute(
+            select(ExportMapping)
+            .where(ExportMapping.organization_id == org_id)
+            .order_by(ExportMapping.id)
+        )
+        mappings: dict[str, list[ExportMapping]] = {}
+        for mapping in result.scalars():
+            mappings.setdefault(_mapping_key(mapping.internal_category), []).append(
+                mapping
+            )
+        return mappings
+
+    async def get_export_readiness(self, org_id: str) -> dict:
+        """Report, per budget category, what an export would post it to.
+
+        Built on the export's own classifier, so a category reported ready is
+        one the export accepts. Mappings whose ``internal_category`` names no
+        category are listed separately: they are never used.
+        """
+        result = await self.db.execute(
+            select(BudgetCategory)
+            .where(BudgetCategory.organization_id == org_id)
+            .order_by(BudgetCategory.sort_order, BudgetCategory.name)
+        )
+        categories = list(result.scalars())
+        mappings = await self._export_mappings_by_category(org_id)
+
+        rows = []
+        for category in categories:
+            matches = mappings.get(_mapping_key(category.name), [])
+            account, offset, problem = _classify_category_accounts(
+                category.qb_account_name, matches
+            )
+            if not account:
+                source = None
+            elif (category.qb_account_name or "").strip():
+                source = "category"
+            else:
+                source = "mapping"
+            rows.append(
+                {
+                    "category_id": category.id,
+                    "category_name": category.name,
+                    "is_active": category.is_active,
+                    "status": problem or "ready",
+                    "account_name": account or None,
+                    "account_source": source,
+                    "offset_account_name": offset or None,
+                    "mapping_ids": [m.id for m in matches],
+                }
+            )
+
+        category_keys = {_mapping_key(c.name) for c in categories}
+        unmatched = [
+            mapping.id
+            for key, group in mappings.items()
+            if key not in category_keys
+            for mapping in group
+        ]
+        return {"categories": rows, "unmatched_mapping_ids": unmatched}
+
     async def _resolve_export_accounts(
         self, org_id: str, sources: list
     ) -> dict[str, tuple[str, str]]:
@@ -4071,30 +4351,21 @@ class FinanceService:
             {number for number, budget_id in rows if budget_id not in categories}
         )
 
-        mapping_result = await self.db.execute(
-            select(ExportMapping).where(ExportMapping.organization_id == org_id)
-        )
-        mappings: dict[str, list[ExportMapping]] = {}
-        for mapping in mapping_result.scalars():
-            key = mapping.internal_category.strip().casefold()
-            mappings.setdefault(key, []).append(mapping)
+        mappings = await self._export_mappings_by_category(org_id)
 
         resolved: dict[str, tuple[str, str]] = {}
         problems: dict[str, str] = {}
         for budget_id, (name, category_account) in categories.items():
             label = _short_label(name)
-            matches = mappings.get(name.strip().casefold(), [])
-            if len(matches) > 1:
-                problems[name] = f"'{label}' has {len(matches)} mappings"
-                continue
-            mapping = matches[0] if matches else None
-            account = (category_account or "").strip() or (
-                mapping.qb_account_name.strip() if mapping else ""
+            matches = mappings.get(_mapping_key(name), [])
+            account, offset, problem = _classify_category_accounts(
+                category_account, matches
             )
-            offset = (mapping.qb_offset_account_name or "").strip() if mapping else ""
-            if not account:
+            if problem == "duplicate_mappings":
+                problems[name] = f"'{label}' has {len(matches)} mappings"
+            elif problem == "no_account":
                 problems[name] = f"'{label}' has no account"
-            elif not offset:
+            elif problem == "no_offset":
                 problems[name] = f"'{label}' has no offset account"
             else:
                 resolved[budget_id] = (account, offset)

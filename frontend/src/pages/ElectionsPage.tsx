@@ -68,14 +68,12 @@ export const ElectionsPage: React.FC = () => {
   const canManage = checkPermission('elections.manage');
   const tz = useTimezone();
 
-  // The unfiltered empty state exists to point a secretary at Create Election.
-  // A member cannot create one, so an empty roster of elections gives them a
-  // blank panel rather than a notice about something they have no part in. An
-  // empty result that follows from a status filter is still reported to
-  // everyone -- that is feedback on what they asked for. This is the only place
-  // that decision is made, so the unfiltered copy below can address a secretary
-  // directly.
-  const showEmptyState = canManage || statusFilter !== 'all';
+  // A member cannot create an election, so the unfiltered empty state tells
+  // them where a vote will turn up rather than pointing at Create Election. It
+  // used to be a blank panel, which on a fresh install read as a broken page:
+  // members do have a part here, since they vote. A filtered empty result is
+  // feedback on the filter, for everyone.
+  const isMemberFirstRun = !canManage && statusFilter === 'all';
 
   const fetchElections = async () => {
     try {
@@ -418,60 +416,84 @@ export const ElectionsPage: React.FC = () => {
           })}
         </div>
 
-        {(filteredElections.length > 0 || showEmptyState) && (
-          <div className="bg-theme-surface overflow-hidden shadow-sm backdrop-blur-xs sm:rounded-md">
-            {filteredElections.length === 0 ? (
-              <div className="py-16 text-center">
-                <svg
-                  className="text-theme-text-muted mx-auto h-12 w-12"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
-                <h3 className="text-theme-text-primary mt-3 text-sm font-medium">No elections found</h3>
-                <p className="text-theme-text-muted mt-1 text-sm">
-                  {statusFilter !== 'all'
-                    ? `No ${statusFilter} elections. Try a different filter.`
-                    : 'Get started by creating your first election.'}
-                </p>
-              </div>
-            ) : (
-              <ul className="divide-theme-surface-border divide-y">
-                {filteredElections.map((election) => {
-                  const timeRemaining =
-                    election.status === ElectionStatus.OPEN ? getTimeRemaining(election.end_date) : null;
+        <div className="bg-theme-surface overflow-hidden shadow-sm backdrop-blur-xs sm:rounded-md">
+          {filteredElections.length === 0 ? (
+            <div className="py-16 text-center">
+              <svg
+                className="text-theme-text-muted mx-auto h-12 w-12"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
+              </svg>
+              {/* h2: the only heading above it is the page's h1, and an h3
+                  here skips a level (axe heading-order). */}
+              <h2 className="text-theme-text-primary mt-3 text-sm font-medium">
+                {statusFilter !== 'all' ? 'No elections found' : 'No elections yet'}
+              </h2>
+              <p className="text-theme-text-muted mx-auto mt-1 max-w-md text-sm">
+                {statusFilter !== 'all'
+                  ? `No ${statusFilter} elections. Try a different filter.`
+                  : isMemberFirstRun
+                    ? 'When your department opens a vote, it appears here and you can cast your ballot from this page. You may also get a ballot link by email.'
+                    : 'Create an election, add the candidates, then open voting and send ballot emails. Each step is a button on the election once it is created.'}
+              </p>
+            </div>
+          ) : (
+            <ul className="divide-theme-surface-border divide-y">
+              {filteredElections.map((election) => {
+                const timeRemaining =
+                  election.status === ElectionStatus.OPEN ? getTimeRemaining(election.end_date) : null;
 
-                  return (
-                    <li key={election.id}>
-                      <Link
-                        to={`/elections/${election.id}`}
-                        className="hover:bg-theme-surface-hover block transition-colors"
-                      >
-                        <div className="px-4 py-4 sm:px-6">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <p className="text-theme-text-primary truncate text-base font-semibold">
-                                  {election.title}
-                                </p>
-                                <span
-                                  className={`inline-flex rounded-full px-2 py-0.5 text-xs leading-5 font-semibold ${getStatusBadgeClass(
-                                    election.status
-                                  )}`}
+                return (
+                  <li key={election.id}>
+                    <Link
+                      to={`/elections/${election.id}`}
+                      className="hover:bg-theme-surface-hover block transition-colors"
+                    >
+                      <div className="px-4 py-4 sm:px-6">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-theme-text-primary truncate text-base font-semibold">
+                                {election.title}
+                              </p>
+                              <span
+                                className={`inline-flex rounded-full px-2 py-0.5 text-xs leading-5 font-semibold ${getStatusBadgeClass(
+                                  election.status
+                                )}`}
+                              >
+                                {election.status}
+                              </span>
+                            </div>
+
+                            <div className="text-theme-text-muted mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                              <span className="inline-flex items-center gap-1.5">
+                                <svg
+                                  className="h-4 w-4"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  aria-hidden="true"
                                 >
-                                  {election.status}
-                                </span>
-                              </div>
-
-                              <div className="text-theme-text-muted mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                  />
+                                </svg>
+                                {formatDate(election.start_date, tz)} - {formatDate(election.end_date, tz)}
+                              </span>
+                              <ElectionCloseStamp election={election} className="inline-flex items-center" />
+                              {election.total_votes !== undefined && election.total_votes > 0 && (
                                 <span className="inline-flex items-center gap-1.5">
                                   <svg
                                     className="h-4 w-4"
@@ -484,125 +506,105 @@ export const ElectionsPage: React.FC = () => {
                                       strokeLinecap="round"
                                       strokeLinejoin="round"
                                       strokeWidth={2}
-                                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
                                     />
                                   </svg>
-                                  {formatDate(election.start_date, tz)} - {formatDate(election.end_date, tz)}
+                                  {election.total_votes} {election.total_votes === 1 ? 'vote' : 'votes'}
                                 </span>
-                                <ElectionCloseStamp election={election} className="inline-flex items-center" />
-                                {election.total_votes !== undefined && election.total_votes > 0 && (
-                                  <span className="inline-flex items-center gap-1.5">
-                                    <svg
-                                      className="h-4 w-4"
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      stroke="currentColor"
-                                      aria-hidden="true"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                                      />
-                                    </svg>
-                                    {election.total_votes} {election.total_votes === 1 ? 'vote' : 'votes'}
+                              )}
+                              {election.meeting_title && (
+                                <span className="inline-flex items-center gap-1.5">
+                                  <svg
+                                    className="h-4 w-4"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    aria-hidden="true"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+                                    />
+                                  </svg>
+                                  {election.meeting_title}
+                                </span>
+                              )}
+                            </div>
+
+                            {election.positions && election.positions.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {election.positions.map((position) => (
+                                  <span
+                                    key={position}
+                                    className="inline-flex items-center rounded-md bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-400"
+                                  >
+                                    {position}
                                   </span>
-                                )}
-                                {election.meeting_title && (
-                                  <span className="inline-flex items-center gap-1.5">
-                                    <svg
-                                      className="h-4 w-4"
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      stroke="currentColor"
-                                      aria-hidden="true"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
-                                      />
-                                    </svg>
-                                    {election.meeting_title}
-                                  </span>
-                                )}
+                                ))}
                               </div>
+                            )}
+                          </div>
 
-                              {election.positions && election.positions.length > 0 && (
-                                <div className="mt-2 flex flex-wrap gap-1.5">
-                                  {election.positions.map((position) => (
-                                    <span
-                                      key={position}
-                                      className="inline-flex items-center rounded-md bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-400"
-                                    >
-                                      {position}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="flex shrink-0 flex-col items-end gap-1">
-                              {timeRemaining && (
-                                <span className="inline-flex items-center gap-1 rounded-md bg-green-500/10 px-2 py-1 text-xs font-medium text-green-700 dark:text-green-400">
-                                  <svg
-                                    className="h-3 w-3"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    aria-hidden="true"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                                    />
-                                  </svg>
-                                  {timeRemaining}
-                                </span>
-                              )}
-                              {election.status === ElectionStatus.OPEN && !timeRemaining && (
-                                <span className="inline-flex items-center gap-1 rounded-md bg-red-500/10 px-2 py-1 text-xs font-medium text-red-700 dark:text-red-400">
-                                  <svg
-                                    className="h-3 w-3"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    aria-hidden="true"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                                    />
-                                  </svg>
-                                  Time expired
-                                </span>
-                              )}
-                              <svg
-                                className="text-theme-text-muted h-5 w-5"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                                aria-hidden="true"
-                              >
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                              </svg>
-                            </div>
+                          <div className="flex shrink-0 flex-col items-end gap-1">
+                            {timeRemaining && (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-green-500/10 px-2 py-1 text-xs font-medium text-green-700 dark:text-green-400">
+                                <svg
+                                  className="h-3 w-3"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  aria-hidden="true"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                                  />
+                                </svg>
+                                {timeRemaining}
+                              </span>
+                            )}
+                            {election.status === ElectionStatus.OPEN && !timeRemaining && (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-red-500/10 px-2 py-1 text-xs font-medium text-red-700 dark:text-red-400">
+                                <svg
+                                  className="h-3 w-3"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  aria-hidden="true"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                                  />
+                                </svg>
+                                Time expired
+                              </span>
+                            )}
+                            <svg
+                              className="text-theme-text-muted h-5 w-5"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              aria-hidden="true"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
                           </div>
                         </div>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-        )}
+                      </div>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
 
         {canManage && showCreateModal && (
           <div
@@ -1022,12 +1024,17 @@ export const ElectionsPage: React.FC = () => {
                       <input
                         type="checkbox"
                         id="election-enable-runoffs"
+                        aria-describedby="election-enable-runoffs-help"
                         checked={formData.enable_runoffs}
                         onChange={(e) => setFormData({ ...formData, enable_runoffs: e.target.checked })}
                         className="form-checkbox"
                       />
                       <span className="text-theme-text-primary ml-2 text-sm font-medium">Enable Automatic Runoffs</span>
                     </label>
+                    <p id="election-enable-runoffs-help" className="text-theme-text-muted mb-2 ml-6 text-xs">
+                      If no candidate meets the winning rule when voting closes, a runoff election is created
+                      automatically.
+                    </p>
 
                     {formData.enable_runoffs && (
                       <div className="bg-theme-surface-secondary ml-6 space-y-3 rounded-sm p-3">
@@ -1083,46 +1090,67 @@ export const ElectionsPage: React.FC = () => {
                       <input
                         type="checkbox"
                         id="election-anonymous"
+                        aria-describedby="election-anonymous-help"
                         checked={formData.anonymous_voting}
                         onChange={(e) => setFormData({ ...formData, anonymous_voting: e.target.checked })}
                         className="form-checkbox"
                       />
                       <span className="text-theme-text-primary ml-2 text-sm">Anonymous Voting</span>
                     </label>
+                    <p id="election-anonymous-help" className="text-theme-text-muted mb-2 ml-6 text-xs">
+                      Votes are saved without the voter's name or IP address. The app still records who has voted, so
+                      each member votes once.
+                    </p>
 
                     <label className="flex items-center">
                       <input
                         type="checkbox"
                         id="election-write-ins"
+                        aria-describedby="election-write-ins-help"
                         checked={formData.allow_write_ins}
                         onChange={(e) => setFormData({ ...formData, allow_write_ins: e.target.checked })}
                         className="form-checkbox"
                       />
                       <span className="text-theme-text-primary ml-2 text-sm">Allow Write-in Candidates</span>
                     </label>
+                    <p id="election-write-ins-help" className="text-theme-text-muted mb-2 ml-6 text-xs">
+                      Voters may type in someone who is not on the ballot.
+                    </p>
 
                     <label className="flex items-center">
                       <input
                         type="checkbox"
                         id="election-results-visible"
+                        aria-describedby="election-results-visible-help"
                         checked={formData.results_visible_immediately}
                         onChange={(e) => setFormData({ ...formData, results_visible_immediately: e.target.checked })}
                         className="form-checkbox"
                       />
                       <span className="text-theme-text-primary ml-2 text-sm">Show Results Immediately</span>
                     </label>
+                    <p id="election-results-visible-help" className="text-theme-text-muted mb-2 ml-6 text-xs">
+                      Members see the running tally while voting is still open. Left off, results appear once voting
+                      closes. This cannot be changed after voting opens.
+                    </p>
 
                     {featureFlags.auto_open_enabled && (
-                      <label className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id="election-auto-open"
-                          checked={formData.auto_open ?? false}
-                          onChange={(e) => setFormData({ ...formData, auto_open: e.target.checked })}
-                          className="form-checkbox"
-                        />
-                        <span className="text-theme-text-primary ml-2 text-sm">Open Automatically at Start Time</span>
-                      </label>
+                      <>
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            id="election-auto-open"
+                            aria-describedby="election-auto-open-help"
+                            checked={formData.auto_open ?? false}
+                            onChange={(e) => setFormData({ ...formData, auto_open: e.target.checked })}
+                            className="form-checkbox"
+                          />
+                          <span className="text-theme-text-primary ml-2 text-sm">Open Automatically at Start Time</span>
+                        </label>
+                        <p id="election-auto-open-help" className="text-theme-text-muted mb-2 ml-6 text-xs">
+                          Voting opens at the start time without anyone selecting Open Election. Ballot emails are still
+                          sent separately.
+                        </p>
+                      </>
                     )}
 
                     {featureFlags.reminders_enabled && (

@@ -330,7 +330,14 @@ export interface BudgetTransactionPage {
   offset: number;
 }
 
-/** Extra money leadership approved for a budget line — an audit record. */
+/**
+ * Extra money leadership approved for a budget line — an audit record.
+ *
+ * A mistaken amendment is corrected by a reversing entry, never edited: a
+ * row with a negative `amount` (`isReversal`) naming the amendment it
+ * cancels in `reversesAmendmentId`. The reversed amendment carries the
+ * reversal's id, when it was entered and by whom.
+ */
 export interface BudgetAmendment {
   id: string;
   organizationId: string;
@@ -343,6 +350,13 @@ export interface BudgetAmendment {
   createdBy?: string | null;
   enteredByName?: string | null;
   createdAt: string;
+  /** On a reversal: the amendment it cancels. */
+  reversesAmendmentId?: string | null;
+  isReversal?: boolean;
+  /** On a reversed amendment: the reversal, when it was entered and by whom. */
+  reversedByAmendmentId?: string | null;
+  reversedAt?: string | null;
+  reversedByName?: string | null;
 }
 
 /** `POST /finance/budgets/:id/amendments`. Every field is required. */
@@ -353,7 +367,17 @@ export interface BudgetAmendmentCreatePayload {
   approvedOn: string;
 }
 
-/** The new amendment and the line as it now stands. */
+/**
+ * `POST /finance/budgets/:id/amendments/:amendmentId/reverse`. Every field is
+ * required; the amount is the whole amendment's, taken by the backend.
+ */
+export interface BudgetAmendmentReversePayload {
+  reason: string;
+  approvedBy: string;
+  approvedOn: string;
+}
+
+/** The new amendment (or reversal) and the line as it now stands. */
 export interface BudgetAmendmentCreated {
   amendment: BudgetAmendment;
   budget: Budget;
@@ -843,16 +867,68 @@ export interface DuesSummary {
   membersWaived: number;
 }
 
+export const ExportMappingType = {
+  EXPENSE: 'expense',
+  INCOME: 'income',
+  ASSET: 'asset',
+} as const;
+export type ExportMappingType = (typeof ExportMappingType)[keyof typeof ExportMappingType];
+
 export interface ExportMapping {
   id: string;
   organizationId: string;
   internalCategory: string;
   qbAccountName: string;
-  qbAccountNumber?: string;
-  qbOffsetAccountName?: string;
+  qbAccountNumber?: string | null;
+  qbOffsetAccountName?: string | null;
   mappingType: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/** `POST /finance/export/mappings`. Blank optional fields are omitted. */
+export interface ExportMappingCreatePayload {
+  internalCategory: string;
+  qbAccountName: string;
+  qbAccountNumber?: string | undefined;
+  qbOffsetAccountName?: string | undefined;
+  mappingType: ExportMappingType;
+}
+
+/** `PUT /finance/export/mappings/:id`. Omitted leaves a field alone; `null` clears it. */
+export interface ExportMappingUpdatePayload {
+  internalCategory?: string;
+  qbAccountName?: string;
+  qbAccountNumber?: string | null;
+  qbOffsetAccountName?: string | null;
+  mappingType?: ExportMappingType;
+}
+
+/** Why the export would refuse a category, as `GET /finance/export/readiness` reports it. */
+export const ExportReadinessStatus = {
+  READY: 'ready',
+  NO_ACCOUNT: 'no_account',
+  NO_OFFSET: 'no_offset',
+  DUPLICATE_MAPPINGS: 'duplicate_mappings',
+} as const;
+export type ExportReadinessStatus = (typeof ExportReadinessStatus)[keyof typeof ExportReadinessStatus];
+
+export interface ExportReadinessCategory {
+  categoryId: string;
+  categoryName: string;
+  isActive: boolean;
+  status: ExportReadinessStatus;
+  accountName?: string | null;
+  /** `category` when the category names its own account, else `mapping`. */
+  accountSource?: 'category' | 'mapping' | null;
+  offsetAccountName?: string | null;
+  mappingIds: string[];
+}
+
+export interface ExportReadiness {
+  categories: ExportReadinessCategory[];
+  /** Mappings whose category name matches no budget category: the export never uses them. */
+  unmatchedMappingIds: string[];
 }
 
 export interface ExportLog {

@@ -40,6 +40,7 @@ from app.schemas.finance import (
     BudgetAmendmentCreate,
     BudgetAmendmentCreatedResponse,
     BudgetAmendmentResponse,
+    BudgetAmendmentReverse,
     BudgetCategoryCreate,
     BudgetCategoryResponse,
     BudgetCategoryUpdate,
@@ -71,6 +72,7 @@ from app.schemas.finance import (
     ExportMappingCreate,
     ExportMappingResponse,
     ExportMappingUpdate,
+    ExportReadinessResponse,
     ExportRequest,
     FinanceDashboardResponse,
     FinanceNamedOptionResponse,
@@ -111,6 +113,7 @@ from app.services.finance_budget_request_service import (
     FinanceBudgetRequestService,
 )
 from app.services.finance_service import (
+    AmendmentAlreadyReversedError,
     BudgetLimitExceededError,
     FinanceEntityNotFoundError,
     FinanceService,
@@ -767,6 +770,68 @@ async def add_budget_amendment(
         }
     except FinanceEntityNotFoundError:
         raise HTTPException(status_code=404, detail="Budget not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.post(
+    "/budgets/{budget_id}/amendments/{amendment_id}/reverse",
+    response_model=BudgetAmendmentCreatedResponse,
+    status_code=201,
+)
+async def reverse_budget_amendment(
+    budget_id: str,
+    amendment_id: str,
+    data: BudgetAmendmentReverse,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """Correct a mistaken amendment with a reversing entry.
+
+    **Requires permission: finance.manage**
+
+    Records a new amendment for the whole amount, negated, with its own
+    reason and approval, and lowers the line's budget by it; the original
+    stays on record and the original budget is unchanged. Refused: an
+    amendment already reversed (409), the reversal itself (400), a locked
+    fiscal year (400), a future approval date (400), and a budget that would
+    no longer cover what is spent and committed (409 "Insufficient available
+    budget"). A line in another department, or an amendment not on this
+    line, is 404.
+    """
+    service = FinanceService(db)
+    org_id = str(current_user.organization_id)
+    try:
+        reversal = await service.reverse_budget_amendment(
+            budget_id, amendment_id, org_id, str(current_user.id), **data.model_dump()
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.budget_amendment_reversed",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "budget_id": budget_id,
+                "amendment_id": reversal.id,
+                "reversed_amendment_id": amendment_id,
+                "amount": str(reversal.amount),
+                "approved_by": reversal.approved_by,
+                "approved_on": reversal.approved_on.isoformat(),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=org_id,
+        )
+        return {
+            "amendment": service.amendment_detail(reversal, current_user),
+            "budget": await service.get_budget_detail(budget_id, org_id),
+        }
+    except FinanceEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except (AmendmentAlreadyReversedError, BudgetLimitExceededError) as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -2814,6 +2879,32 @@ async def update_export_mapping(
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.delete("/export/mappings/{mapping_id}", status_code=204)
+async def delete_export_mapping(
+    mapping_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    service = FinanceService(db)
+    try:
+        await service.delete_export_mapping(
+            mapping_id, str(current_user.organization_id)
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.get("/export/readiness", response_model=ExportReadinessResponse)
+async def get_export_readiness(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    service = FinanceService(db)
+    return await service.get_export_readiness(str(current_user.organization_id))
 
 
 @router.post("/export/transactions")

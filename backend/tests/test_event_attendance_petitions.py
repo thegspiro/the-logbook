@@ -482,3 +482,70 @@ class TestOwnStanding:
         assert petition is not None
         assert petition.id == submitted.id
         assert refusal is not None
+
+
+class TestWithdraw:
+    async def test_a_pending_request_is_removed_and_the_member_may_ask_again(
+        self, db_session, dept
+    ):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        member = await _load(db_session, dept["member"])
+        service = EventAttendancePetitionService(db_session)
+        first = await service.submit(event_id, member, _ask("Wrong event"))
+
+        member = await _load(db_session, dept["member"])
+        assert await service.withdraw(event_id, member) == first.id
+
+        member = await _load(db_session, dept["member"])
+        petition, refusal = await service.get_own(event_id, member)
+        assert petition is None
+        assert refusal is None
+        # The organizer's prompt is archived: nothing is left to review.
+        prompt = (
+            await _notices(db_session, dept["organizer"], REVIEW_PROMPT_CATEGORY)
+        )[0]
+        await db_session.refresh(prompt)
+        assert prompt.read is True
+        assert prompt.expires_at is not None
+
+        member = await _load(db_session, dept["member"])
+        again = await service.submit(event_id, member, _ask("Phone died"))
+        assert again.status == AttendancePetitionStatus.PENDING
+
+    async def test_a_decided_request_cannot_be_withdrawn(self, db_session, dept):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        member = await _load(db_session, dept["member"])
+        service = EventAttendancePetitionService(db_session)
+        petition = await service.submit(event_id, member, _ask())
+        organizer = await _load(db_session, dept["organizer"])
+        await service.reject(
+            event_id, petition.id, organizer, AttendancePetitionReject(review_note="No")
+        )
+
+        member = await _load(db_session, dept["member"])
+        with pytest.raises(ValueError, match="already been decided"):
+            await service.withdraw(event_id, member)
+
+    async def test_without_a_request_there_is_nothing_to_withdraw(
+        self, db_session, dept
+    ):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        member = await _load(db_session, dept["member"])
+
+        with pytest.raises(PetitionNotFound):
+            await EventAttendancePetitionService(db_session).withdraw(event_id, member)
+
+    async def test_only_the_members_own_request_is_touched(self, db_session, dept):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        member = await _load(db_session, dept["member"])
+        service = EventAttendancePetitionService(db_session)
+        theirs = await service.submit(event_id, member, _ask())
+
+        bystander = await _load(db_session, dept["bystander"])
+        with pytest.raises(PetitionNotFound):
+            await service.withdraw(event_id, bystander)
+
+        member = await _load(db_session, dept["member"])
+        petition, _ = await service.get_own(event_id, member)
+        assert petition is not None
+        assert petition.id == theirs.id

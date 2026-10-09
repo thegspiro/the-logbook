@@ -27,6 +27,7 @@ from app.schemas.finance import (
     ApprovalChainStepUpdate,
     ApprovalChainUpdate,
     BudgetAmendmentCreate,
+    BudgetAmendmentReverse,
     BudgetCategoryCreate,
     BudgetCategoryUpdate,
     BudgetCreate,
@@ -128,6 +129,11 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "reason": "Hose replacement",
         "approved_by": "Board vote 10/7",
         "approved_on": "2026-10-07",
+    },
+    BudgetAmendmentReverse: {
+        "reason": "Entered $2,500 for $250",
+        "approved_by": "Treasurer's correction",
+        "approved_on": "2026-10-08",
     },
     BudgetRequestCreate: {
         "fiscal_year_id": "fy-2",

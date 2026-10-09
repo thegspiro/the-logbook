@@ -394,7 +394,12 @@ class BudgetAmendment(Base):
     (``FinanceService._budget_row``).
 
     There is no edit or delete path: an amendment is what the department
-    approved, and a correction is a separate concern.
+    approved. A mistaken one is corrected by a **reversing entry** (owner
+    decision, 2026-10-09): a new row whose ``amount`` is the original's,
+    negated, and whose ``reverses_amendment_id`` names it. The original stays
+    on record, ``amount_budgeted`` drops by the amount, and the original
+    budget -- current less the sum of every row, reversals included -- is
+    unchanged. ``FinanceService.reverse_budget_amendment`` holds the rules.
     """
 
     __tablename__ = "budget_amendments"
@@ -424,6 +429,18 @@ class BudgetAmendment(Base):
     )
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    # Set only on a reversing entry: the amendment it cancels. UNIQUE so an
+    # amendment is reversed at most once -- InnoDB lets any number of rows
+    # hold NULL under a unique key, so ordinary amendments are unaffected,
+    # and the unique index also serves the foreign key. SET NULL (hence
+    # nullable) because the reversal's negative amount must keep counting
+    # even if the link is ever lost; only a line's own cascade removes rows.
+    reverses_amendment_id = Column(
+        String(36),
+        ForeignKey("budget_amendments.id", ondelete="SET NULL"),
+        nullable=True,
+        unique=True,
     )
 
     # Relationships

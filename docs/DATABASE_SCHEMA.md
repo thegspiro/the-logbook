@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**298 tables · 4901 columns · 985 foreign keys**
+**298 tables · 4902 columns · 986 foreign keys**
 
 ---
 
@@ -253,7 +253,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`approval_chain_steps`](#approval_chain_steps) | `ApprovalChainStep` | 13 | A single step in an approval chain |
 | [`approval_chains`](#approval_chains) | `ApprovalChain` | 13 | Configurable approval chain template |
 | [`approval_step_records`](#approval_step_records) | `ApprovalStepRecord` | 13 | Tracks actual approval step progression for a specific entity |
-| [`budget_amendments`](#budget_amendments) | `BudgetAmendment` | 9 | Extra money leadership approved for a budget line, as recorded. |
+| [`budget_amendments`](#budget_amendments) | `BudgetAmendment` | 10 | Extra money leadership approved for a budget line, as recorded. |
 | [`budget_categories`](#budget_categories) | `BudgetCategory` | 11 | Budget category (hierarchical) |
 | [`budget_requests`](#budget_requests) | `BudgetRequest` | 18 | A line owner's proposed amount for a budget line in a draft year. |
 | [`budgets`](#budgets) | `Budget` | 13 | Budget line for a category within a fiscal year |
@@ -3723,7 +3723,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **BudgetAmendment** · `app/models/finance.py`
 
-> Extra money leadership approved for a budget line, as recorded. Each row is an audit record of one increase: how much, why, who approved it and when, and which member entered it. Adding one raises the line's ``amount_budgeted`` by ``amount`` in the same transaction, so ``amount_budgeted`` stays the single live ceiling the spend checks read. The line's *original* budget is not stored anywhere; it is ``amount_budgeted`` minus the sum of these rows (``FinanceService._budget_row``). There is no edit or delete path: an amendment is what the department approved, and a correction is a separate concern.
+> Extra money leadership approved for a budget line, as recorded. Each row is an audit record of one increase: how much, why, who approved it and when, and which member entered it. Adding one raises the line's ``amount_budgeted`` by ``amount`` in the same transaction, so ``amount_budgeted`` stays the single live ceiling the spend checks read. The line's *original* budget is not stored anywhere; it is ``amount_budgeted`` minus the sum of these rows (``FinanceService._budget_row``). There is no edit or delete path: an amendment is what the department approved. A mistaken one is corrected by a **reversing entry** (owner decision, 2026-10-09): a new row whose ``amount`` is the original's, negated, and whose ``reverses_amendment_id`` names it. The original stays on record, ``amount_budgeted`` drops by the amount, and the original budget -- current less the sum of every row, reversals included -- is unchanged. ``FinanceService.reverse_budget_amendment`` holds the rules.
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
@@ -3736,11 +3736,16 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `approved_on` | DATE | no |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
+| `reverses_amendment_id` | VARCHAR(36) | yes | FK, UQ |  | → `budget_amendments.id` ON DELETE SET NULL |
 
 **Indexes**
 
 - `ix_budget_amendments_budget_id` (`budget_id`)
 - `ix_budget_amendments_organization_id` (`organization_id`)
+
+**Constraints**
+
+- UNIQUE `uq_budget_amendments_reverses_amendment_id` (`reverses_amendment_id`)
 
 ### `budget_categories`
 
@@ -11652,6 +11657,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `approval_step_records` | `step_id` | CASCADE | no |
+
+### → `budget_amendments` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `budget_amendments` | `reverses_amendment_id` | SET NULL | yes |
 
 ### → `candidates` (1 references)
 
