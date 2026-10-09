@@ -157,7 +157,12 @@ def member_badge_value(user) -> str:
     run ``MemberBadgeService.ensure_codes`` first; the reader that turns the
     code back into a member is ``MemberBadgeService.resolve``.
     """
-    return user.badge_code
+    code = user.badge_code
+    if not isinstance(code, str):
+        raise ValueError(
+            "Member has no badge code; run MemberBadgeService.ensure_codes first"
+        )
+    return code
 
 
 async def _build_member_specs(db, org_id, ids, extra_lines):
@@ -335,7 +340,7 @@ class LabelService:
     async def _primary_position_id(self, user_id, organization_id) -> Optional[str]:
         from app.models.user import Position, user_roles
 
-        row = await self.db.scalar(
+        row: Optional[str] = await self.db.scalar(
             select(Position.id)
             .join(user_roles, Position.id == user_roles.c.position_id)
             .where(user_roles.c.user_id == str(user_id))
@@ -534,7 +539,9 @@ class LabelService:
             return None
         settings = copy.deepcopy(org.settings or {})
         by_module = settings.get("label_setups")
-        current = by_module.get(module) if isinstance(by_module, dict) else None
+        if not isinstance(by_module, dict):
+            return None
+        current = by_module.get(module)
         if not isinstance(current, list):
             return None
         remaining = [

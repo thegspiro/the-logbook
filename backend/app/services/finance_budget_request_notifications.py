@@ -159,7 +159,8 @@ async def _active_member(
             User.is_active,
         )
     )
-    return result.scalar_one_or_none()
+    user: Optional[User] = result.scalar_one_or_none()
+    return user
 
 
 async def position_holders(
@@ -288,7 +289,8 @@ async def _load_request(
             BudgetRequest.organization_id == org_id,
         )
     )
-    return result.scalar_one_or_none()
+    budget_request: Optional[BudgetRequest] = result.scalar_one_or_none()
+    return budget_request
 
 
 # ============================================

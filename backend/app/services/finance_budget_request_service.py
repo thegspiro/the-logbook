@@ -126,7 +126,9 @@ class FinanceBudgetRequestService:
     # Fiscal-year request state
     # ========================================
 
-    async def fiscal_year_rows(self, years: list[FiscalYear], org_id: str) -> list:
+    async def fiscal_year_rows(
+        self, years: list[FiscalYear], org_id: str
+    ) -> list[dict]:
         """Fiscal years as the API returns them, with ``requests_open`` added."""
         if not years:
             return []
@@ -151,7 +153,7 @@ class FinanceBudgetRequestService:
         )
         if lock:
             query = query.with_for_update()
-        fy = (await self.db.execute(query)).scalar_one_or_none()
+        fy: Optional[FiscalYear] = (await self.db.execute(query)).scalar_one_or_none()
         if fy is None:
             raise FinanceEntityNotFoundError("Fiscal year not found")
         return fy
@@ -293,7 +295,9 @@ class FinanceBudgetRequestService:
             query = query.where(self._visibility(org_id, user_id))
         if lock:
             query = query.with_for_update()
-        request = (await self.db.execute(query)).scalar_one_or_none()
+        request: Optional[BudgetRequest] = (
+            await self.db.execute(query)
+        ).scalar_one_or_none()
         if request is None:
             raise FinanceEntityNotFoundError("Budget request not found")
         return request
@@ -381,7 +385,8 @@ class FinanceBudgetRequestService:
             .limit(1)
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        budget: Optional[Budget] = result.scalar_one_or_none()
+        return budget
 
     # ========================================
     # Owner side: create, edit, submit, withdraw, delete
@@ -458,14 +463,14 @@ class FinanceBudgetRequestService:
                     org_id,
                     label="Owner position",
                 )
+                if not is_manager and not await user_holds_position(
+                    self.db, org_id, user_id, owner_position_id
+                ):
+                    raise BudgetRequestForbiddenError(
+                        "You can only propose a line for a position you hold."
+                    )
             elif not is_manager:
                 raise ValueError("Name the position you are proposing the line for.")
-            if not is_manager and not await user_holds_position(
-                self.db, org_id, user_id, owner_position_id
-            ):
-                raise BudgetRequestForbiddenError(
-                    "You can only propose a line for a position you hold."
-                )
             if await self._existing_line(org_id, fy.id, category_id, station_id):
                 raise BudgetRequestConflictError(
                     f"That category and station already have a line in "
@@ -760,7 +765,7 @@ class FinanceBudgetRequestService:
             )
         return active.name, figures
 
-    async def describe(self, requests: list[BudgetRequest], org_id: str) -> list:
+    async def describe(self, requests: list[BudgetRequest], org_id: str) -> list[dict]:
         """Requests as the API returns them, every name resolved in-org."""
         if not requests:
             return []

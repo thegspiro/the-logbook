@@ -175,7 +175,7 @@ def resolve(file_path: Any, organization_id: Any, *areas: StorageArea) -> Option
         # Only the pre-2026-10-08 email attachments were stored relative
         # (``storage/email_attachments/...``), resolved against APP_ROOT.
         file_path = os.path.join(APP_ROOT, file_path)
-    resolved = os.path.realpath(file_path)
+    resolved: str = os.path.realpath(file_path)
     for area in areas:
         current = os.path.realpath(os.path.join(_root(), org, area.value))
         if resolved.startswith(current + os.sep):

@@ -200,7 +200,7 @@ class IPSecurityService:
                 IPException.organization_id == str(organization_id),
             )
         )
-        exception = result.scalar_one_or_none()
+        exception: IPException | None = result.scalar_one_or_none()
 
         if not exception:
             raise ValueError("Exception not found")
@@ -292,7 +292,7 @@ class IPSecurityService:
                 IPException.organization_id == str(organization_id),
             )
         )
-        exception = result.scalar_one_or_none()
+        exception: IPException | None = result.scalar_one_or_none()
 
         if not exception:
             raise ValueError("Exception not found")
@@ -368,7 +368,7 @@ class IPSecurityService:
                 IPException.organization_id == str(organization_id),
             )
         )
-        exception = result.scalar_one_or_none()
+        exception: IPException | None = result.scalar_one_or_none()
 
         if not exception:
             raise ValueError("Exception not found")
@@ -614,7 +614,8 @@ class IPSecurityService:
                 IPException.organization_id == str(organization_id),
             )
         )
-        return result.scalar_one_or_none()
+        ip_exception: Optional[IPException] = result.scalar_one_or_none()
+        return ip_exception
 
     async def get_exception_audit_log(
         self,
@@ -679,7 +680,7 @@ class IPSecurityService:
                 CountryBlockRule.country_code == country_code
             )
         )
-        rule = existing.scalar_one_or_none()
+        rule: CountryBlockRule | None = existing.scalar_one_or_none()
         if rule is not None:
             rule.is_blocked = True
             rule.reason = reason
