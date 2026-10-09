@@ -88,23 +88,20 @@ class MinuteService:
         if minutes_dict.get("attendees"):
             minutes_dict["attendees"] = [
                 a.model_dump() if hasattr(a, "model_dump") else a
-                for a in data.attendees
+                for a in data.attendees or []
             ]
 
         # Serialize sections to dicts
         if minutes_dict.get("sections"):
             minutes_dict["sections"] = [
-                s.model_dump() if hasattr(s, "model_dump") else s for s in data.sections
+                s.model_dump() if hasattr(s, "model_dump") else s
+                for s in data.sections or []
             ]
 
         # Serialize header/footer configs
-        if minutes_dict.get("header_config") and hasattr(
-            data.header_config, "model_dump"
-        ):
+        if minutes_dict.get("header_config") and data.header_config is not None:
             minutes_dict["header_config"] = data.header_config.model_dump()
-        if minutes_dict.get("footer_config") and hasattr(
-            data.footer_config, "model_dump"
-        ):
+        if minutes_dict.get("footer_config") and data.footer_config is not None:
             minutes_dict["footer_config"] = data.footer_config.model_dump()
 
         # Validate any client-supplied template_id belongs to the caller's org
@@ -203,7 +200,10 @@ class MinuteService:
         await self.db.refresh(minutes)
 
         # Reload with relationships
-        return await self.get_minutes(minutes.id, organization_id)
+        reloaded = await self.get_minutes(minutes.id, organization_id)
+        if reloaded is None:
+            raise RuntimeError("Meeting minutes vanished immediately after creation")
+        return reloaded
 
     async def _get_template(
         self, template_id: str, organization_id: UUID
@@ -214,7 +214,8 @@ class MinuteService:
             .where(MinutesTemplate.id == str(template_id))
             .where(MinutesTemplate.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        minutes_template: Optional[MinutesTemplate] = result.scalar_one_or_none()
+        return minutes_template
 
     async def get_minutes(
         self,
@@ -253,7 +254,8 @@ class MinuteService:
                 MeetingMinutes.meeting_type != MinutesMeetingType.EXECUTIVE.value,
             )
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        meeting_minutes: Optional[MeetingMinutes] = result.scalar_one_or_none()
+        return meeting_minutes
 
     async def list_minutes(
         self,
@@ -383,13 +385,14 @@ class MinuteService:
         if "attendees" in update_data and update_data["attendees"]:
             update_data["attendees"] = [
                 a.model_dump() if hasattr(a, "model_dump") else a
-                for a in data.attendees
+                for a in data.attendees or []
             ]
 
         # Serialize sections
         if "sections" in update_data and update_data["sections"]:
             update_data["sections"] = [
-                s.model_dump() if hasattr(s, "model_dump") else s for s in data.sections
+                s.model_dump() if hasattr(s, "model_dump") else s
+                for s in data.sections or []
             ]
 
         # Serialize header/footer configs
@@ -564,7 +567,7 @@ class MinuteService:
             .where(Motion.id == motion_id)
             .where(Motion.minutes_id == minutes_id)
         )
-        motion = result.scalar_one_or_none()
+        motion: Optional[Motion] = result.scalar_one_or_none()
         if not motion:
             return None
 
@@ -658,7 +661,7 @@ class MinuteService:
             .where(ActionItem.id == str(item_id))
             .where(ActionItem.minutes_id == minutes_id)
         )
-        item = result.scalar_one_or_none()
+        item: Optional[ActionItem] = result.scalar_one_or_none()
         if not item:
             return None
 
@@ -832,7 +835,7 @@ class MinuteService:
             ("committee_reports", MeetingMinutes.committee_reports),
         ]
 
-        results = []
+        results: List[dict] = []
         seen_ids = set()
 
         for field_name, field in search_fields:

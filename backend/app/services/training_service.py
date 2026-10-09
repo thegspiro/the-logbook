@@ -427,7 +427,7 @@ class TrainingService:
         # match, or the requirement name appearing in the record's course
         # name -- the same two criteria the fallback branch itself uses.
         if requirement.training_type:
-            return record.training_type == requirement.training_type
+            return bool(record.training_type == requirement.training_type)
         return bool(
             requirement.name
             and record.course_name
@@ -550,7 +550,8 @@ class TrainingService:
         if not anchors:
             return None
         latest = max(anchors, key=lambda r: r.completion_date or date.min)
-        return latest.expiration_date
+        expiration: Optional[date] = latest.expiration_date
+        return expiration
 
     @staticmethod
     def evaluate_requirement_detail(
@@ -1791,4 +1792,4 @@ class TrainingService:
             query = query.where(TrainingRecord.user_id == str(user_id))
 
         result = await self.db.execute(query)
-        return result.scalars().all()
+        return list(result.scalars().all())

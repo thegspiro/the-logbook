@@ -190,7 +190,10 @@ class MemberLeaveService:
                 MemberLeaveOfAbsence.organization_id == organization_id,
             )
         )
-        return result.scalar_one_or_none()
+        member_leave_of_absence: Optional[MemberLeaveOfAbsence] = (
+            result.scalar_one_or_none()
+        )
+        return member_leave_of_absence
 
     async def update_leave(
         self,

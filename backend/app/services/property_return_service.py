@@ -285,7 +285,8 @@ class PropertyReturnService:
                 DocumentFolder.slug == self.SEPARATIONS_FOLDER_SLUG,
             )
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _lock_separations_folder(
         self, organization_id: str
@@ -311,7 +312,8 @@ class PropertyReturnService:
             )
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _get_or_create_separations_folder(
         self, organization_id: str, created_by: str

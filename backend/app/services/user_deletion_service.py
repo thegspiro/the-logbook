@@ -49,7 +49,8 @@ _ReferenceSet = tuple[tuple[str, str], ...]
 def _targets_user_id(foreign_key: ForeignKey) -> bool:
     """True when *foreign_key* points at ``users.id``."""
     # target_fullname is "users.id", or "<schema>.users.id" when qualified.
-    return foreign_key.target_fullname.split(".")[-2:] == [_USER_TABLE, "id"]
+    target: str = foreign_key.target_fullname
+    return target.split(".")[-2:] == [_USER_TABLE, "id"]
 
 
 @lru_cache(maxsize=1)

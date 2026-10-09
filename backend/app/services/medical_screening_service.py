@@ -114,7 +114,10 @@ class MedicalScreeningService:
                 )
             )
         )
-        return result.scalar_one_or_none()
+        screening_requirement: Optional[ScreeningRequirement] = (
+            result.scalar_one_or_none()
+        )
+        return screening_requirement
 
     async def create_requirement(
         self,
@@ -218,7 +221,8 @@ class MedicalScreeningService:
                 )
             )
         )
-        return result.scalar_one_or_none()
+        screening_record: Optional[ScreeningRecord] = result.scalar_one_or_none()
+        return screening_record
 
     async def list_subjects(self, organization_id: str) -> ScreeningSubjects:
         """Members and prospects a new screening record can be filed against.

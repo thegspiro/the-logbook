@@ -135,7 +135,8 @@ class RoleManagementService:
                 Role.id == role_id, Role.organization_id == organization_id
             )
         )
-        return result.scalar_one_or_none()
+        role: Optional[Role] = result.scalar_one_or_none()
+        return role
 
     async def get_role_by_slug(
         self,
@@ -149,7 +150,8 @@ class RoleManagementService:
                 Role.slug == slug, Role.organization_id == organization_id
             )
         )
-        return result.scalar_one_or_none()
+        role: Optional[Role] = result.scalar_one_or_none()
+        return role
 
     async def create_role(
         self,

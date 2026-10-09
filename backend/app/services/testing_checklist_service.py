@@ -68,7 +68,8 @@ class TestingChecklistService:
         if for_update:
             query = query.with_for_update().execution_options(populate_existing=True)
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        testing_run: Optional[TestingRun] = result.scalar_one_or_none()
+        return testing_run
 
     async def get_run(self, organization_id: str, run_id: str) -> Optional[TestingRun]:
         """One run of this department's, by id — org-scoped (pitfall #14a)."""
@@ -78,7 +79,8 @@ class TestingChecklistService:
                 TestingRun.organization_id == organization_id,
             )
         )
-        return result.scalar_one_or_none()
+        testing_run: Optional[TestingRun] = result.scalar_one_or_none()
+        return testing_run
 
     async def list_runs(self, organization_id: str) -> list[TestingRun]:
         """Every run, newest first — the history picker."""
@@ -329,7 +331,10 @@ class TestingChecklistService:
                 TestingChecklistEntry.route_path == payload.route_path,
             )
         )
-        return result.scalar_one_or_none()
+        testing_checklist_entry: Optional[TestingChecklistEntry] = (
+            result.scalar_one_or_none()
+        )
+        return testing_checklist_entry
 
     @staticmethod
     def _apply(

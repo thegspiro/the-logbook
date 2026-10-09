@@ -204,7 +204,8 @@ class TemplateService:
             .where(MinutesTemplate.id == str(template_id))
             .where(MinutesTemplate.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        minutes_template: Optional[MinutesTemplate] = result.scalar_one_or_none()
+        return minutes_template
 
     async def create_template(
         self, data: TemplateCreate, organization_id: UUID, created_by: UUID
@@ -311,7 +312,8 @@ class TemplateService:
             .where(MinutesTemplate.meeting_type == meeting_type)
             .where(MinutesTemplate.is_default.is_(True))
         )
-        return result.scalar_one_or_none()
+        minutes_template: Optional[MinutesTemplate] = result.scalar_one_or_none()
+        return minutes_template
 
     async def _clear_defaults(self, organization_id: UUID, meeting_type: str):
         """Clear the is_default flag for all templates of a given type"""

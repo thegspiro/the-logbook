@@ -47,7 +47,7 @@ class TrainingModuleConfigService:
                 TrainingModuleConfig.organization_id == str(organization_id)
             )
         )
-        config = result.scalars().first()
+        config: Optional[TrainingModuleConfig] = result.scalars().first()
 
         if not config:
             config = TrainingModuleConfig(organization_id=str(organization_id))
@@ -79,4 +79,5 @@ class TrainingModuleConfigService:
     async def get_member_visibility(self, organization_id: UUID) -> Dict[str, bool]:
         """Return the visibility dict for a member (lightweight)."""
         config = await self.get_config(organization_id)
-        return config.to_visibility_dict()
+        visibility: Dict[str, bool] = config.to_visibility_dict()
+        return visibility
