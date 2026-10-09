@@ -458,6 +458,11 @@ export interface ApparatusOption {
   min_staffing?: number;
 }
 
+/** An apparatus option a shift can actually be put on: a real vehicle, not a type placeholder. */
+export interface ShiftApparatusOption extends ApparatusOption {
+  id: string;
+}
+
 export interface ApparatusOptionsResponse {
   options: ApparatusOption[];
   source: 'apparatus' | 'basic' | 'default';
