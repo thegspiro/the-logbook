@@ -52,8 +52,6 @@ router = APIRouter()
 
 MAX_SHIFT_HISTORY_CSV_BYTES = 10 * 1024 * 1024
 
-_MANAGE = "scheduling.manage"
-
 
 def _http_error(exc: Exception) -> HTTPException:
     if isinstance(exc, ImportNotFound):
@@ -67,7 +65,7 @@ def _http_error(exc: Exception) -> HTTPException:
 
 @router.get("/template")
 async def download_template(
-    current_user: User = Depends(require_permission(_MANAGE)),
+    current_user: User = Depends(require_permission("scheduling.manage")),
 ):
     """A CSV header row in the columns the import reads without mapping."""
     output = io.StringIO()
@@ -87,7 +85,7 @@ async def download_template(
 @router.get("", response_model=ShiftHistoryImportListResponse)
 async def list_imports(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(_MANAGE)),
+    current_user: User = Depends(require_permission("scheduling.manage")),
 ):
     service = ShiftHistoryImportService(db)
     drafts = await service.list_imports(str(current_user.organization_id))
@@ -103,7 +101,7 @@ async def upload_import(
     file: UploadFile = File(...),
     timezone: Optional[str] = Form(None, max_length=64),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(_MANAGE)),
+    current_user: User = Depends(require_permission("scheduling.manage")),
 ):
     """Store an uploaded CSV as a draft. Nothing is written to the schedule.
 
@@ -164,7 +162,7 @@ async def upload_import(
 async def get_import(
     import_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(_MANAGE)),
+    current_user: User = Depends(require_permission("scheduling.manage")),
 ):
     """A draft with its full analysis, or a committed import's record."""
     service = ShiftHistoryImportService(db)
@@ -193,7 +191,7 @@ async def update_import_settings(
     import_id: UUID,
     payload: ShiftHistoryImportSettingsUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(_MANAGE)),
+    current_user: User = Depends(require_permission("scheduling.manage")),
 ):
     """Change the time zone the file is read in, or the column mapping."""
     org = str(current_user.organization_id)
@@ -220,7 +218,7 @@ async def update_import_row(
     row_id: UUID,
     payload: ShiftHistoryImportRowUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(_MANAGE)),
+    current_user: User = Depends(require_permission("scheduling.manage")),
 ):
     """Correct a row's values, exclude or restore it, or answer a probable
     match it raised."""
@@ -253,7 +251,7 @@ async def update_import_mappings(
     import_id: UUID,
     payload: ShiftHistoryImportMappingsUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(_MANAGE)),
+    current_user: User = Depends(require_permission("scheduling.manage")),
 ):
     """Decide who a name is, which unit a vehicle name means, which seat a
     position names, and whether a proposed shift is one already scheduled.
@@ -292,7 +290,7 @@ async def update_import_mappings(
 async def commit_import(
     import_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(_MANAGE)),
+    current_user: User = Depends(require_permission("scheduling.manage")),
 ):
     """Write the reviewed import to the schedule. Final: there is no undo."""
     org = str(current_user.organization_id)
@@ -325,7 +323,7 @@ async def commit_import(
 async def discard_import(
     import_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(_MANAGE)),
+    current_user: User = Depends(require_permission("scheduling.manage")),
 ):
     """Throw away a draft. A committed import cannot be discarded."""
     service = ShiftHistoryImportService(db)
