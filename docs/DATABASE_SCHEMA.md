@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**298 tables · 4913 columns · 988 foreign keys**
+**298 tables · 4914 columns · 988 foreign keys**
 
 ---
 
@@ -200,7 +200,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`event_attendance_petitions`](#event_attendance_petitions) | `EventAttendancePetition` | 13 | A member's request to be recorded as present at an event that is over. |
+| [`event_attendance_petitions`](#event_attendance_petitions) | `EventAttendancePetition` | 14 | A member's request to be recorded as present at an event that is over. |
 | [`event_external_attendees`](#event_external_attendees) | `EventExternalAttendee` | 17 | External (non-member) attendee at an event. |
 | [`event_rsvps`](#event_rsvps) | `EventRSVP` | 21 | Event RSVP model for tracking attendance |
 | [`event_templates`](#event_templates) | `EventTemplate` | 29 | Event Template model for reusable event configurations |
@@ -2667,8 +2667,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `event_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `events.id` ON DELETE CASCADE |
 | `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
-| `status` | ENUM(`pending`, `approved`, `rejected`) | no |  | `pending` |  |
+| `status` | ENUM(`pending`, `approved`, `rejected`, `withdrawn`) | no |  | `pending` |  |
 | `reason` | TEXT | no |  |  |  |
+| `withdrawal_count` | INTEGER | no |  | `0` |  |
 | `requested_check_in_at` | DATETIME | yes |  |  |  |
 | `requested_check_out_at` | DATETIME | yes |  |  |  |
 | `reviewed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |

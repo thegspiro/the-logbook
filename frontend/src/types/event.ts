@@ -148,6 +148,8 @@ export interface MyAttendancePetition {
   petition: AttendancePetition | null;
   can_request: boolean;
   unavailable_reason?: string | null;
+  /** False once the request has been withdrawn the maximum number of times. */
+  can_withdraw?: boolean;
 }
 
 export interface AttendancePetitionCreate {

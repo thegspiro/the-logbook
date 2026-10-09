@@ -149,8 +149,10 @@ event.
 **Withdraw request** button — for a request sent for the wrong event, or with
 the wrong times. Confirm with **Withdraw request** (or **Keep it** to back
 out); the organizer is no longer asked, and **I was there** comes back so you
-can send a corrected request. Once the organizer has approved or declined it,
-the decision stands and can no longer be withdrawn.
+can send a corrected request. You can do this **twice** per event: after that
+the notice says _"You have withdrawn this request as many times as allowed."_
+and the request waits for the organizer's answer. Once the organizer has
+approved or declined it, the decision stands and can no longer be withdrawn.
 
 **Deciding it (organizers).** The event's organizer, its alternate and anyone
 holding `events.manage` see an **Attendance Requests** card on the event page —
