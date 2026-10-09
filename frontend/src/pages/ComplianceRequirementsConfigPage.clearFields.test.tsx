@@ -26,7 +26,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import toast from 'react-hot-toast';
-import { renderWithRouter } from '../test/utils';
+import { nth, renderWithRouter } from '../test/utils';
 import type { ComplianceConfigData, ComplianceProfile, AvailableRequirement } from '../types/training';
 
 vi.mock('react-hot-toast', () => ({
@@ -211,7 +211,9 @@ describe('ComplianceRequirementsConfigPage — clearing a field on update', () =
       expect(descriptionInput).toHaveValue('Some description');
       await userEvent.clear(descriptionInput);
 
-      const [compliantOverride, atRiskOverride] = screen.getAllByPlaceholderText('Use org default');
+      const overrides = screen.getAllByPlaceholderText('Use org default');
+      const compliantOverride = nth(overrides, 0);
+      const atRiskOverride = nth(overrides, 1);
       expect(compliantOverride).toHaveValue(90);
       expect(atRiskOverride).toHaveValue(70);
       await userEvent.clear(compliantOverride);
