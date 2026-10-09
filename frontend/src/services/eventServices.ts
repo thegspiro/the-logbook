@@ -408,6 +408,21 @@ export const eventService = {
     return asArray(response.data);
   },
 
+  /**
+   * Pending attendance requests across events, oldest first: on events the
+   * caller organizes or is alternate for, or — `all`, events.manage only —
+   * every event in the department.
+   */
+  async getPendingAttendancePetitions(
+    scope: 'mine' | 'all' = 'mine'
+  ): Promise<import('../types/event').PendingAttendancePetition[]> {
+    const response = await api.get<import('../types/event').PendingAttendancePetition[]>(
+      '/events/attendance-petitions/pending',
+      { params: { scope } }
+    );
+    return asArray(response.data);
+  },
+
   async approveAttendancePetition(
     eventId: string,
     petitionId: string,

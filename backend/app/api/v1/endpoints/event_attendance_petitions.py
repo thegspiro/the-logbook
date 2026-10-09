@@ -6,10 +6,10 @@ Mounted under ``/events`` alongside the events router. See
 ``app/services/event_attendance_petition_service.py`` for the rules.
 """
 
-from typing import Dict, List
+from typing import Dict, List, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.attendance_lock import attendance_lock_http_error
@@ -25,12 +25,14 @@ from app.schemas.event import (
     AttendancePetitionReject,
     AttendancePetitionResponse,
     MyAttendancePetitionResponse,
+    PendingAttendancePetitionResponse,
 )
 from app.services.event_attendance_petition_service import (
     EventAttendancePetitionService,
     PetitionNotFound,
     reviewer_ids,
 )
+from app.services.event_service import attendance_is_finalized
 
 router = APIRouter()
 
@@ -77,6 +79,56 @@ async def _respond(
 ) -> AttendancePetitionResponse:
     names = await service.display_names(reviewer_ids([petition]), organization_id)
     return _to_response(petition, names)
+
+
+@router.get(
+    "/attendance-petitions/pending",
+    response_model=List[PendingAttendancePetitionResponse],
+)
+async def list_pending_attendance_petitions(
+    scope: Literal["mine", "all"] = Query(
+        "mine",
+        description=(
+            "mine: events you organize or are alternate for; all: every event "
+            "in the department (events.manage only)"
+        ),
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Pending attendance requests across events, oldest first.
+
+    `scope=mine` (the default) lists requests on events you organize or are
+    alternate for. `scope=all` lists every pending request in the department
+    and needs events.manage, checked in the handler because the default scope
+    is open to any organizer. Your own requests are never listed: nobody
+    decides their own.
+
+    **Authentication required**
+    """
+    service = EventAttendancePetitionService(db)
+    try:
+        rows = await service.list_pending_for_reviewer(
+            current_user, include_all=scope == "all"
+        )
+    except PermissionError as exc:
+        raise _http_error(exc)
+    names = await service.display_names(
+        reviewer_ids(petition for petition, _ in rows), current_user.organization_id
+    )
+    return [
+        PendingAttendancePetitionResponse(
+            **_to_response(petition, names).model_dump(),
+            event_title=event.title,
+            event_start_datetime=event.start_datetime,
+            event_end_datetime=event.end_datetime,
+            event_actual_start_time=event.actual_start_time,
+            event_actual_end_time=event.actual_end_time,
+            attendance_finalized=attendance_is_finalized(event),
+        )
+        for petition, event in rows
+    ]
 
 
 @router.post(

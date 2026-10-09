@@ -20,10 +20,11 @@ from datetime import timezone as dt_timezone
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from loguru import logger
-from sqlalchemy import case, or_, select
+from sqlalchemy import and_, case, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependencies import user_has_permission
 from app.core.config import settings
 from app.core.utils import generate_uuid
 from app.models.event import (
@@ -46,6 +47,7 @@ from app.services.email_policy import (
     member_receives_email,
 )
 from app.services.event_organizer_service import (
+    EVENT_MANAGER_PERMISSION,
     EventOrganizerService,
     can_manage_organizers,
 )
@@ -188,6 +190,51 @@ class EventAttendancePetitionService:
             .order_by(pending_first, EventAttendancePetition.created_at)
         )
         return list(result.scalars().all())
+
+    async def list_pending_for_reviewer(
+        self, reviewer: User, *, include_all: bool = False
+    ) -> List[Tuple[EventAttendancePetition, Event]]:
+        """Pending requests the reviewer can act on, oldest first.
+
+        By default, the events they organize or are alternate for — the same
+        pair a request is routed to. ``include_all`` widens it to every event
+        in the department and is for ``events.manage`` holders only, who may
+        decide any of them. Their own requests are left out either way, since
+        nobody decides their own.
+        """
+        if include_all and not user_has_permission(reviewer, EVENT_MANAGER_PERMISSION):
+            raise PermissionError(
+                "Only an event manager can list every department's attendance "
+                "requests"
+            )
+        organization_id = str(reviewer.organization_id)
+        query = (
+            select(EventAttendancePetition, Event)
+            .join(
+                Event,
+                and_(
+                    Event.id == EventAttendancePetition.event_id,
+                    Event.organization_id == organization_id,
+                ),
+            )
+            .where(
+                EventAttendancePetition.organization_id == organization_id,
+                EventAttendancePetition.status == AttendancePetitionStatus.PENDING,
+                EventAttendancePetition.user_id != str(reviewer.id),
+            )
+            # created_at is stored to the second, so the id breaks ties and
+            # keeps the order stable between loads.
+            .order_by(EventAttendancePetition.created_at, EventAttendancePetition.id)
+        )
+        if not include_all:
+            query = query.where(
+                or_(
+                    Event.organizer_id == str(reviewer.id),
+                    Event.alternate_organizer_id == str(reviewer.id),
+                )
+            )
+        result = await self.db.execute(query)
+        return [(petition, event) for petition, event in result.all()]
 
     async def display_names(
         self, user_ids: Iterable[Optional[str]], organization_id: str

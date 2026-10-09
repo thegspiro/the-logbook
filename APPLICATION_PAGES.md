@@ -288,6 +288,14 @@ Requires `members.manage` permission. Tab-based admin interface.
 | `/events/analytics` | Event Analytics Dashboard  | `analytics.view` |
 | `/events/templates` | Event Templates Management | `events.manage`  |
 
+### Attendance Requests _(2026-10-09)_
+
+| URL                           | Page                              | Permission    |
+| ----------------------------- | --------------------------------- | ------------- |
+| `/events/attendance-requests` | Attendance requests across events | Authenticated |
+
+> Authenticated rather than `events.manage` on purpose: an event's organizer or alternate decides its "I was there" requests whether or not they hold `events.manage`. The server scopes the list to the events the viewer organizes; **All events** needs `events.manage`.
+
 ### Check-In Settings _(2026-08-09)_
 
 Set per event on **Edit Event → Check-In Settings**. Both default to off.

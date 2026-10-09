@@ -5466,7 +5466,7 @@ Expected: 10 system folders (SOPs, Policies, Forms & Templates, Reports, Trainin
 
 **Cause**: A request notifies the event's **organizer** and **alternate** in-app and by email. When neither can take it (both have left, or the only one set is the member asking), it goes to the position chosen for that event type under **Manage Events → Event settings → Attendance → Attendance requests** (default **Secretary**), then the `secretary` position, then every `events.manage` holder. Email follows each recipient's **Event officer duties** preference, so someone who switched that off sees the request only in the notification bell and on the event page.
 
-**Solution**: Check the event's **Organized by** row, and **Transfer event** to someone active if the organizer has moved on — open requests move with it. Anyone holding `events.manage` can also decide a request from the event page.
+**Solution**: Check the event's **Organized by** row, and **Transfer event** to someone active if the organizer has moved on — open requests move with it. Anyone holding `events.manage` can also decide a request from the event page, or see every waiting request at once on **Attendance Requests** (`/events/attendance-requests`) with **All events**.
 
 ---
 
