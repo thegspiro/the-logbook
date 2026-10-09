@@ -73,7 +73,7 @@ const summaryWithAttention: AdminHubSummary = {
 };
 
 const areaTablist = () => screen.getByRole('tablist', { name: 'Training admin areas' });
-const areaTab = (name: string) => within(areaTablist()).getByRole('tab', { name: new RegExp(`^${name}`) });
+const areaTab = (name: string) => within(areaTablist()).getByRole('tab', { name });
 
 describe('TrainingAdminPage', () => {
   beforeEach(() => {
@@ -166,7 +166,7 @@ describe('TrainingAdminPage', () => {
     renderWithRouter(<TrainingAdminPage />);
 
     const overview = areaTab('Overview');
-    expect(screen.getByRole('tabpanel', { name: /^Overview/ })).toHaveAttribute(
+    expect(screen.getByRole('tabpanel', { name: 'Overview' })).toHaveAttribute(
       'id',
       overview.getAttribute('aria-controls')
     );

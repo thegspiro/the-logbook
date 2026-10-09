@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import type { TrainingAdminArea, TrainingAdminAreaId } from './trainingAdminAreas';
-import { TRAINING_ADMIN_AREAS, areaPanelId, areaTabId, tabId, tabPanelId } from './trainingAdminAreas';
+import { TRAINING_ADMIN_AREAS, tabId, tabPanelId } from './trainingAdminAreas';
+import AdminHubCardTabs from '../admin/AdminHubCardTabs';
 
 /**
  * Training Administration's two-level navigation, drawn as area cards above a
@@ -11,9 +12,11 @@ import { TRAINING_ADMIN_AREAS, areaPanelId, areaTabId, tabId, tabPanelId } from 
  * The previous design hid half the sections behind "More" and labelled the
  * rest with words ("Setup") that did not say what was inside them.
  *
- * Both levels are tablists with roving focus. The panels they control are
- * rendered by the page, under the ids `areaPanelId` / `tabPanelId` return
- * (declared beside the areas so the page and this nav share one definition).
+ * The area cards are the shared `AdminHubCardTabs` every described hub uses;
+ * the destination strip under them is Training's own second level. Both are
+ * tablists with roving focus. The panels they control are rendered by the
+ * page, under the ids `areaPanelId` / `tabPanelId` return (declared beside the
+ * areas so the page and this nav share one definition).
  */
 
 interface TrainingAdminNavProps {
@@ -72,9 +75,7 @@ export const TrainingAdminNav: React.FC<TrainingAdminNavProps> = ({
   onTabChange,
   attentionCounts,
 }) => {
-  const areaRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const destinationRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const areaIds = TRAINING_ADMIN_AREAS.map((area) => area.id);
   const destinationIds = activeArea.destinations.map((destination) => destination.id);
   const activeDestination =
     activeArea.destinations.find((destination) => destination.id === activeTab) ?? activeArea.destinations[0];
@@ -84,62 +85,21 @@ export const TrainingAdminNav: React.FC<TrainingAdminNavProps> = ({
     area.destinations.reduce((total, destination) => total + (attentionCounts[destination.id] ?? 0), 0);
 
   return (
-    <div className="@container flex flex-col gap-4">
-      {/* Seven columns only once the hub's own column has room for seven
-          readable cards — a container query, because the sidebar decides that
-          width as much as the viewport does. Below that the grid wraps rather
-          than scrolling, so no area is ever off screen. Descriptions are dropped on a phone, where the open area's
-          destinations and the strip beneath them carry that information. */}
-      <div
-        className="grid grid-cols-2 gap-2 sm:gap-3 @xl:grid-cols-3 @3xl:grid-cols-4 @5xl:grid-cols-7"
-        role="tablist"
-        aria-label="Training admin areas"
-      >
-        {TRAINING_ADMIN_AREAS.map((area) => {
-          const Icon = area.icon;
-          const isActive = area.id === activeArea.id;
-          const count = areaCount(area);
-          return (
-            <button
-              key={area.id}
-              id={areaTabId(area.id)}
-              ref={(element) => {
-                areaRefs.current[area.id] = element;
-              }}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              aria-controls={areaPanelId(area.id)}
-              tabIndex={isActive ? 0 : -1}
-              onClick={() => onAreaChange(area.id)}
-              onKeyDown={(event) => handleRovingKeyDown(event, areaIds, area.id, onAreaChange, areaRefs)}
-              className={`focus:ring-theme-focus-ring flex min-h-11 items-center gap-2 rounded-lg border p-2.5 text-left transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden sm:flex-col sm:items-start sm:p-3 ${
-                isActive
-                  ? 'border-red-800 bg-red-800 text-white shadow-md'
-                  : 'border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover shadow-sm'
-              }`}
-            >
-              <span className="flex w-full items-center justify-between gap-2">
-                <span
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-                    isActive ? 'bg-white/15' : 'bg-theme-surface-secondary'
-                  }`}
-                >
-                  <Icon className={`h-4 w-4 ${isActive ? 'text-white' : 'text-theme-accent-red'}`} aria-hidden="true" />
-                </span>
-                <span className="min-w-0 flex-1 text-sm leading-tight font-semibold sm:hidden">{area.label}</span>
-                {count > 0 && <CountBadge count={count} inverted={isActive} />}
-              </span>
-              <span className="hidden text-sm leading-tight font-semibold sm:block">{area.label}</span>
-              <span
-                className={`hidden text-xs leading-snug sm:block ${isActive ? 'text-white' : 'text-theme-text-muted'}`}
-              >
-                {area.description}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+    <div className="flex flex-col gap-4">
+      <AdminHubCardTabs<TrainingAdminAreaId>
+        tabs={TRAINING_ADMIN_AREAS.map((area) => ({
+          id: area.id,
+          label: area.label,
+          description: area.description,
+          icon: area.icon,
+          count: areaCount(area),
+        }))}
+        activeTab={activeArea.id}
+        onTabChange={onAreaChange}
+        label="Training admin areas"
+        // Matches `areaTabId` / `areaPanelId`, under which the page renders the area's panel.
+        idPrefix="training-admin-area"
+      />
 
       <div className="card overflow-hidden">
         {/* Declared an intentional scroll region so the mobile pass stops

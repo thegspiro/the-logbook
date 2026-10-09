@@ -191,7 +191,7 @@ export const TrainingAdminPage: React.FC = () => {
       refreshToken={frameToken}
       onSummaryChange={handleSummaryChange}
     >
-      <div id={areaPanelId(activeAreaId)} role="tabpanel" aria-labelledby={areaTabId(activeAreaId)}>
+      <div id={areaPanelId(activeAreaId)} role="tabpanel" aria-labelledby={`${areaTabId(activeAreaId)}-label`}>
         <div className="mx-auto max-w-7xl">
           {/*
             One panel per destination, not one for the selected destination.

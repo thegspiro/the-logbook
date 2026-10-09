@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Plus, ScanLine, Settings } from 'lucide-react';
+import { History, Inbox, Plus, ScanLine, Settings } from 'lucide-react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockGetSummary = vi.fn();
@@ -158,6 +158,55 @@ describe('AdminHubFrame', () => {
     mockGetSummary.mockResolvedValue(summary);
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
     await screen.findByText('87%');
+  });
+
+  describe('described tabs', () => {
+    const describedTabs = [
+      { id: 'past_events', label: 'Past Events', description: 'Events that have happened', icon: History },
+      { id: 'requests', label: 'Requests', description: 'Community requests', icon: Inbox },
+      { id: 'settings', label: 'Settings', description: 'Types and metrics', icon: Settings },
+    ];
+
+    const renderDescribed = (tabs = describedTabs) => {
+      window.history.replaceState({}, '', '/events/admin');
+      return renderFrame({ tabs, activeTab: 'requests', onTabChange: vi.fn() });
+    };
+
+    it('draws cards when every tab is described, and makes the body their panel', () => {
+      renderDescribed();
+
+      const requests = screen.getByRole('tab', { name: 'Requests' });
+      expect(screen.getByRole('tablist', { name: 'Training Administration sections' })).toBeInTheDocument();
+      expect(requests).toHaveAccessibleDescription('Community requests');
+      expect(screen.getByRole('tabpanel', { name: 'Requests' })).toHaveTextContent('Tab body');
+      expect(requests).toHaveAttribute('aria-controls', screen.getByRole('tabpanel').id);
+    });
+
+    it('keeps the underline bar when any tab is undescribed', () => {
+      renderDescribed([...describedTabs.slice(0, 2), { id: 'settings', label: 'Settings' }] as typeof describedTabs);
+
+      expect(screen.getByRole('tablist', { name: 'Training Administration tabs' })).toBeInTheDocument();
+      expect(screen.queryByRole('tablist', { name: 'Training Administration sections' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('tabpanel')).not.toBeInTheDocument();
+    });
+
+    it('badges a card with the queue items that link to its tab on this page', async () => {
+      mockGetSummary.mockResolvedValue({
+        ...summary,
+        attention: [
+          { ...summary.attention[0], key: 'requests', href: '/events/admin?tab=requests', count: 4 },
+          { ...summary.attention[0], key: 'elsewhere', href: '/events', count: 9 },
+        ],
+      });
+      renderDescribed();
+
+      await waitFor(() =>
+        expect(screen.getByRole('tab', { name: 'Requests' })).toHaveAccessibleDescription(
+          'Community requests. 4 need attention'
+        )
+      );
+      expect(screen.getByRole('tab', { name: 'Past Events' })).toHaveAccessibleDescription('Events that have happened');
+    });
   });
 
   it('hands the caller each summary it loads, and null when one fails', async () => {
