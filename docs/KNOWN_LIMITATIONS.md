@@ -1236,23 +1236,31 @@ _Treasurer duties_), and a department can make either required. See
 **Owner decision needed** only if a department asks for a different schedule
 or for bell entries.
 
-## Finance — A Mistaken Budget Amendment Cannot Be Corrected (2026-10-08)
+## Finance — Budget Amendment Corrections Are Whole Reversals Only (2026-10-09)
 
-A budget amendment (`budget_amendments`, `POST /finance/budgets/{id}/amendments`)
-is the record of extra money leadership approved, so there is deliberately no
-endpoint or screen to edit or delete one. The consequence is that a typo — $2,500
-entered for $250 — stays on the line's amendment list for good.
+**Resolved in part (owner decision, 2026-10-09).** A mistaken amendment is now
+corrected by a **reversing entry** —
+`POST /finance/budgets/{id}/amendments/{amendmentId}/reverse`, the **Reverse**
+button on the line's page — a negative amendment with its own reason and
+approval that lowers the current budget and leaves the original budget and the
+original amendment on record (`docs/FINANCE_MODULE.md`, "Reversing a mistaken
+amendment"). The old workaround, editing the amount down, is no longer needed
+and should not be used for this: it moves the original budget.
 
-The workaround is to edit the line's amount back down (while its fiscal year is
-not locked). That restores the right **current** budget, but the **original**
-budget is derived as current minus the amendments, so it drops by the same
-amount and the line then reads as if it started lower. Nothing records that the
-edit was a correction. In a locked year there is no workaround at all.
+What remains limited, by design:
 
-**Owner decision needed:** whether a correction should be a reversing amendment
-(a negative entry with its own reason and approval, keeping the record whole),
-a void flag on the original row, or neither. Either is a follow-up; this pass
-recorded increases only, as approved.
+- **No partial reversal.** $2,500 entered for $250 is fixed by reversing the
+  whole $2,500 and recording a new $250 amendment — two entries, not one.
+- **A reversal is final.** It cannot itself be reversed; restoring the money
+  takes a new amendment with a fresh approval.
+- **A locked year takes no reversal**, as it takes no amendment. A mistake found
+  after the year is locked stays as entered unless the year is unlocked.
+- **A reversal is refused when the money is already spent or committed** past
+  the lower budget (409 "Insufficient available budget"); the spending has to be
+  resolved first.
+
+**Owner decision needed** only if partial reversals, or reversals in a locked
+year, are wanted.
 
 ## Finance — QuickBooks Export Gaps (2026-10-08)
 
