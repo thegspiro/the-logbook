@@ -1032,7 +1032,8 @@ class EquipmentReadinessService:
         submitted = [o for o in occasions if o.check is not None]
         submitted.sort(
             key=lambda o: (
-                o.check.checked_at or datetime.min.replace(tzinfo=timezone.utc)
+                (o.check.checked_at if o.check is not None else None)
+                or datetime.min.replace(tzinfo=timezone.utc)
             )
         )
         last = submitted[-1] if submitted else None
@@ -1041,7 +1042,7 @@ class EquipmentReadinessService:
         overdue = sum(1 for o in occasions if o.status == STATUS_MISSED)
         partial = next((o for o in occasions if o.status == STATUS_PARTIAL), None)
 
-        by_date = {o.shift_date: [] for o in occasions}
+        by_date: Dict[date, List[str]] = {o.shift_date: [] for o in occasions}
         for occ in occasions:
             by_date[occ.shift_date].append(occ.status)
         strip = [

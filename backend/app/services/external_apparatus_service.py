@@ -80,7 +80,7 @@ class ExternalApparatusService:
     async def get_agency(
         self, organization_id: str, agency_id: str
     ) -> Optional[ExternalAgency]:
-        return (
+        agency: Optional[ExternalAgency] = (
             await self.db.execute(
                 select(ExternalAgency).where(
                     ExternalAgency.id == str(agency_id),
@@ -88,11 +88,12 @@ class ExternalApparatusService:
                 )
             )
         ).scalar_one_or_none()
+        return agency
 
     async def get_apparatus(
         self, organization_id: str, apparatus_id: str
     ) -> Optional[ExternalApparatus]:
-        return (
+        apparatus: Optional[ExternalApparatus] = (
             await self.db.execute(
                 select(ExternalApparatus).where(
                     ExternalApparatus.id == str(apparatus_id),
@@ -100,6 +101,7 @@ class ExternalApparatusService:
                 )
             )
         ).scalar_one_or_none()
+        return apparatus
 
     async def get_pickable_apparatus(
         self, organization_id: str, apparatus_id: str

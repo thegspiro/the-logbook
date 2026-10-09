@@ -61,7 +61,8 @@ async def _next_event(
         .order_by(Event.start_datetime.asc())
         .limit(1)
     )
-    return result.scalar_one_or_none()
+    event: Optional[Event] = result.scalar_one_or_none()
+    return event
 
 
 async def _event_reminder(
@@ -143,7 +144,8 @@ async def _next_shift(
         .order_by(Shift.start_time.asc())
         .limit(1)
     )
-    return result.scalar_one_or_none()
+    shift: Optional[Shift] = result.scalar_one_or_none()
+    return shift
 
 
 def _shift_clock(value: Optional[datetime], organization: Any) -> str:
