@@ -4,16 +4,22 @@ Event Models
 Database models for event management, including events and RSVPs.
 """
 
+from datetime import datetime
 from enum import Enum
+from typing import TYPE_CHECKING, Any, Optional
 
-from sqlalchemy import JSON, Boolean, Column, DateTime
+from sqlalchemy import JSON, Boolean, DateTime
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Index, Integer, String, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
+
+if TYPE_CHECKING:
+    from app.models.location import Location
+    from app.models.user import User
 
 
 class EventType(str, Enum):
@@ -122,50 +128,60 @@ class Event(Base):
 
     __tablename__ = "events"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
 
     # Event details
-    title = Column(String(200), nullable=False)
-    description = Column(Text, nullable=True)
-    event_type = Column(
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    event_type: Mapped[EventType] = mapped_column(
         SQLEnum(EventType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=EventType.OTHER,
         server_default="other",
     )
-    custom_category = Column(
+    custom_category: Mapped[Optional[str]] = mapped_column(
         String(100), nullable=True
     )  # Organization-defined custom category (from custom_event_categories settings)
 
     # Location (new system with location_id FK, or legacy free-text location for "Other")
-    location_id = Column(
+    location_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("locations.id", ondelete="RESTRICT"), nullable=True
     )  # FK to Location table
-    location = Column(
+    location: Mapped[Optional[str]] = mapped_column(
         String(300), nullable=True
     )  # Free-text location for "Other Location" or legacy events
-    location_details = Column(
+    location_details: Mapped[Optional[str]] = mapped_column(
         Text, nullable=True
     )  # Additional directions, room numbers, etc.
 
     # Timing
-    start_datetime = Column(DateTime(timezone=True), nullable=False)
-    end_datetime = Column(DateTime(timezone=True), nullable=False)
-    actual_start_time = Column(
+    start_datetime: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    end_datetime: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    actual_start_time: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )  # Recorded by secretary when event actually starts
-    actual_end_time = Column(
+    actual_end_time: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )  # Recorded by secretary when event actually ends
 
     # RSVP settings
-    requires_rsvp = Column(Boolean, nullable=False, default=False, server_default="0")
-    rsvp_deadline = Column(DateTime(timezone=True), nullable=True)
-    max_attendees = Column(Integer, nullable=True)  # Null means unlimited
-    allowed_rsvp_statuses = Column(
+    requires_rsvp: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    rsvp_deadline: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    max_attendees: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )  # Null means unlimited
+    allowed_rsvp_statuses: Mapped[Optional[list[str]]] = mapped_column(
         JSON, nullable=True
     )  # List of allowed RSVP statuses, defaults to ["going", "not_going"]
 
@@ -175,36 +191,46 @@ class Event(Base):
     # default after overriding it. Stored as a String rather than a SQL ENUM:
     # MySQL stores an ENUM as the member's ordinal, so adding a visibility
     # level later would rewrite the type of every event row already stored.
-    attendee_visibility = Column(String(20), nullable=True)
+    attendee_visibility: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True
+    )
 
     # Attendance settings
-    is_mandatory = Column(Boolean, nullable=False, default=False, server_default="0")
-    mandatory_membership_types = Column(JSON, nullable=True)
+    is_mandatory: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    mandatory_membership_types: Mapped[Optional[list[str]]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Additional settings
-    allow_guests = Column(Boolean, nullable=False, default=False, server_default="0")
-    send_reminders = Column(Boolean, nullable=False, default=True, server_default="1")
-    reminder_schedule = Column(
+    allow_guests: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    send_reminders: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    reminder_schedule: Mapped[list[int]] = mapped_column(
         JSON, nullable=False, default=lambda: [24]
     )  # List of hours before event to send reminders
-    reminder_target = Column(
+    reminder_target: Mapped[str] = mapped_column(
         String(20), nullable=False, default="going", server_default="going"
     )  # going (RSVPs), all active members, or none
 
     # Check-in window settings
-    check_in_window_type = Column(
+    check_in_window_type: Mapped[CheckInWindowType] = mapped_column(
         SQLEnum(CheckInWindowType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=CheckInWindowType.FLEXIBLE,
         server_default="flexible",
     )
-    check_in_minutes_before = Column(
+    check_in_minutes_before: Mapped[Optional[int]] = mapped_column(
         Integer, nullable=True, default=60
     )  # Minutes before start to allow check-in
-    check_in_minutes_after = Column(
+    check_in_minutes_after: Mapped[Optional[int]] = mapped_column(
         Integer, nullable=True, default=15
     )  # For WINDOW type: minutes after start
-    require_checkout = Column(
+    require_checkout: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )  # Require manual check-out
 
@@ -216,55 +242,59 @@ class Event(Base):
     # events — volunteer interest nights, open houses — and must stay off for
     # business meetings and training sessions, whose attendance drives records
     # that only apply to members.
-    allow_guest_check_in = Column(
+    allow_guest_check_in: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
     # When guest check-in is on, also open a prospective-member record for each
     # guest who supplies an email, so a recruitment lead is not lost between the
     # sign-in sheet and the membership pipeline.
-    guest_check_in_creates_prospect = Column(
+    guest_check_in_creates_prospect: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
 
     # Recurrence
-    is_recurring = Column(Boolean, nullable=False, default=False, server_default="0")
-    recurrence_pattern = Column(
+    is_recurring: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    recurrence_pattern: Mapped[Optional[RecurrencePattern]] = mapped_column(
         SQLEnum(RecurrencePattern, values_callable=lambda x: [e.value for e in x]),
         nullable=True,
     )
-    recurrence_end_date = Column(
+    recurrence_end_date: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )  # When the recurring series ends
-    recurrence_custom_days = Column(
+    recurrence_custom_days: Mapped[Optional[list[int]]] = mapped_column(
         JSON, nullable=True
     )  # For CUSTOM: list of weekday numbers (0=Mon, 6=Sun)
-    recurrence_weekday = Column(
+    recurrence_weekday: Mapped[Optional[int]] = mapped_column(
         Integer, nullable=True
     )  # For monthly/annual weekday: target weekday (0=Mon, 6=Sun)
-    recurrence_week_ordinal = Column(
+    recurrence_week_ordinal: Mapped[Optional[int]] = mapped_column(
         Integer, nullable=True
     )  # For monthly/annual weekday: which occurrence (1-5, -1=last)
-    recurrence_month = Column(
+    recurrence_month: Mapped[Optional[int]] = mapped_column(
         Integer, nullable=True
     )  # For annually_weekday: target month (1-12)
-    recurrence_exceptions = Column(
+    recurrence_exceptions: Mapped[Optional[list[str]]] = mapped_column(
         JSON, nullable=True
     )  # List of ISO date strings to skip in a recurring series
-    rolling_recurrence = Column(
+    rolling_recurrence: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )  # Auto-extend series on a rolling 12-month window
-    recurrence_parent_id = Column(
+    recurrence_parent_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("events.id", ondelete="RESTRICT"), nullable=True
     )  # Links instances to their parent
-    template_id = Column(
+    template_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("event_templates.id", ondelete="RESTRICT"), nullable=True
     )  # Created from a template
 
     # Custom fields
-    custom_fields = Column(
+    custom_fields: Mapped[Optional[dict[str, Any]]] = mapped_column(
         JSON, nullable=True
     )  # Flexible storage for event-specific data
-    attachments = Column(JSON, nullable=True)  # List of attachment URLs/metadata
+    attachments: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, nullable=True
+    )  # List of attachment URLs/metadata
 
     # Attendance finalization.
     #
@@ -276,22 +306,30 @@ class Event(Base):
     # legacy custom_fields["attendance_finalized"] marker is still written
     # alongside these columns because the post-event validation reminder task
     # keys off it; these columns are the authority for the lock.
-    attendance_finalized_at = Column(DateTime(timezone=True), nullable=True)
-    attendance_finalized_by = Column(
+    attendance_finalized_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    attendance_finalized_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Status
-    is_draft = Column(Boolean, default=False, server_default="0")
-    is_cancelled = Column(Boolean, nullable=False, default=False, server_default="0")
-    cancellation_reason = Column(Text, nullable=True)
-    cancelled_at = Column(DateTime(timezone=True), nullable=True)
+    is_draft: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=False, server_default="0"
+    )
+    is_cancelled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    cancellation_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Metadata
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
-    updated_by = Column(
+    updated_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
 
@@ -305,19 +343,19 @@ class Event(Base):
     # event — so a path that never heard of the column still gets the
     # behaviour attendance requests had before it existed. An explicit value
     # (including the one a rolling series copies from its parent) wins.
-    organizer_id = Column(
+    organizer_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
         default=lambda ctx: ctx.get_current_parameters().get("created_by"),
     )
-    alternate_organizer_id = Column(
+    alternate_organizer_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -325,22 +363,24 @@ class Event(Base):
     )
 
     # Relationships
-    rsvps = relationship(
+    rsvps: Mapped[list["EventRSVP"]] = relationship(
         "EventRSVP", back_populates="event", cascade="all, delete-orphan"
     )
-    location_obj = relationship(
+    location_obj: Mapped[Optional["Location"]] = relationship(
         "Location", foreign_keys=[location_id], back_populates="events"
     )
-    recurrence_children = relationship(
+    recurrence_children: Mapped[list["Event"]] = relationship(
         "Event", foreign_keys=[recurrence_parent_id], back_populates="recurrence_parent"
     )
-    recurrence_parent = relationship(
+    recurrence_parent: Mapped[Optional["Event"]] = relationship(
         "Event",
         foreign_keys=[recurrence_parent_id],
         remote_side=[id],
         back_populates="recurrence_children",
     )
-    template = relationship("EventTemplate", foreign_keys=[template_id])
+    template: Mapped[Optional["EventTemplate"]] = relationship(
+        "EventTemplate", foreign_keys=[template_id]
+    )
 
     __table_args__ = (
         Index("ix_events_organization_id", "organization_id"),
@@ -363,36 +403,42 @@ class EventRSVP(Base):
 
     __tablename__ = "event_rsvps"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
-    event_id = Column(
+    event_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("events.id", ondelete="CASCADE"), nullable=False
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
 
     # RSVP details
-    status = Column(
+    status: Mapped[RSVPStatus] = mapped_column(
         SQLEnum(RSVPStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=RSVPStatus.GOING,
         server_default="going",
     )
-    guest_count = Column(
+    guest_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )  # Number of additional guests
-    notes = Column(Text, nullable=True)  # Special requests, dietary restrictions, etc.
-    dietary_restrictions = Column(String(500), nullable=True)
-    accessibility_needs = Column(String(500), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )  # Special requests, dietary restrictions, etc.
+    dietary_restrictions: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True
+    )
+    accessibility_needs: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True
+    )
 
     # Tracking
-    responded_at = Column(
+    responded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -400,10 +446,16 @@ class EventRSVP(Base):
     )
 
     # Actual attendance (filled in after event)
-    checked_in = Column(Boolean, nullable=False, default=False, server_default="0")
-    checked_in_at = Column(DateTime(timezone=True), nullable=True)
-    checked_out_at = Column(DateTime(timezone=True), nullable=True)
-    attendance_duration_minutes = Column(
+    checked_in: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    checked_in_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    checked_out_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    attendance_duration_minutes: Mapped[Optional[int]] = mapped_column(
         Integer, nullable=True
     )  # Calculated duration in minutes
 
@@ -414,28 +466,30 @@ class EventRSVP(Base):
     # EventService._credited_check_in_time). Not set for manager-recorded
     # check-ins — an officer checking somebody in early is doing it on purpose
     # and does not need warning about their own action.
-    early_check_in_minutes = Column(Integer, nullable=True)
+    early_check_in_minutes: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
 
     # Attendance overrides (for managers/training officers)
-    override_check_in_at = Column(
+    override_check_in_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )  # Manual override of check-in time
-    override_check_out_at = Column(
+    override_check_out_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )  # Manual override of check-out time
-    override_duration_minutes = Column(
+    override_duration_minutes: Mapped[Optional[int]] = mapped_column(
         Integer, nullable=True
     )  # Manual override of duration
-    overridden_by = Column(
+    overridden_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )  # Who made the override
-    overridden_at = Column(
+    overridden_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )  # When the override was made
 
     # Relationships
-    event = relationship("Event", back_populates="rsvps")
-    user = relationship("User", foreign_keys=[user_id])
+    event: Mapped["Event"] = relationship("Event", back_populates="rsvps")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
 
     __table_args__ = (
         Index("ix_event_rsvps_user_id", "user_id"),
@@ -456,76 +510,98 @@ class EventTemplate(Base):
 
     __tablename__ = "event_templates"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
 
     # Template identification
-    name = Column(
+    name: Mapped[str] = mapped_column(
         String(200), nullable=False
     )  # Template name (e.g., "Weekly Business Meeting")
-    description = Column(Text, nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Event defaults (copied when creating an event from this template)
-    event_type = Column(
+    event_type: Mapped[EventType] = mapped_column(
         SQLEnum(EventType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=EventType.OTHER,
         server_default="other",
     )
-    default_title = Column(
+    default_title: Mapped[Optional[str]] = mapped_column(
         String(200), nullable=True
     )  # Default title for events created from template
-    default_description = Column(Text, nullable=True)
-    default_location_id = Column(
+    default_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    default_location_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("locations.id", ondelete="RESTRICT"), nullable=True
     )
-    default_location = Column(String(300), nullable=True)
-    default_location_details = Column(Text, nullable=True)
-    default_duration_minutes = Column(Integer, nullable=True)  # Default event duration
+    default_location: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    default_location_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    default_duration_minutes: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )  # Default event duration
 
     # RSVP defaults
-    requires_rsvp = Column(Boolean, nullable=False, default=False, server_default="0")
-    max_attendees = Column(Integer, nullable=True)
-    is_mandatory = Column(Boolean, nullable=False, default=False, server_default="0")
-    allow_guests = Column(Boolean, nullable=False, default=False, server_default="0")
+    requires_rsvp: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    max_attendees: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    is_mandatory: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    allow_guests: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     # NULL means "inherit the org default" — see Event.attendee_visibility.
-    attendee_visibility = Column(String(20), nullable=True)
+    attendee_visibility: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True
+    )
 
     # Check-in defaults
-    check_in_window_type = Column(
+    check_in_window_type: Mapped[Optional[CheckInWindowType]] = mapped_column(
         SQLEnum(CheckInWindowType, values_callable=lambda x: [e.value for e in x]),
         nullable=True,
     )
-    check_in_minutes_before = Column(Integer, nullable=True, default=60)
-    check_in_minutes_after = Column(Integer, nullable=True, default=15)
-    require_checkout = Column(
+    check_in_minutes_before: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, default=60
+    )
+    check_in_minutes_after: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, default=15
+    )
+    require_checkout: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
 
     # Notification defaults
-    send_reminders = Column(Boolean, nullable=False, default=True, server_default="1")
-    reminder_schedule = Column(JSON, nullable=False, default=lambda: [24])
-    reminder_target = Column(
+    send_reminders: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    reminder_schedule: Mapped[list[int]] = mapped_column(
+        JSON, nullable=False, default=lambda: [24]
+    )
+    reminder_target: Mapped[str] = mapped_column(
         String(20), nullable=False, default="going", server_default="going"
     )
 
     # Custom fields template (structure for custom data fields)
-    custom_fields_template = Column(JSON, nullable=True)
+    custom_fields_template: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Metadata
-    is_active = Column(Boolean, nullable=False, default=True, server_default="1")
-    created_by = Column(
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
-    updated_by = Column(
+    updated_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -546,53 +622,59 @@ class EventExternalAttendee(Base):
 
     __tablename__ = "event_external_attendees"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
-    event_id = Column(
+    event_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("events.id", ondelete="CASCADE"), nullable=False
     )
 
     # Attendee info
-    name = Column(String(255), nullable=False)
-    email = Column(String(255), nullable=True)
-    phone = Column(String(50), nullable=True)
-    organization_name = Column(String(255), nullable=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    organization_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Check-in tracking
-    checked_in = Column(Boolean, nullable=False, default=False, server_default="0")
-    checked_in_at = Column(DateTime(timezone=True), nullable=True)
+    checked_in: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    checked_in_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Source tracking (e.g., "form_submission" with form submission ID)
-    source = Column(String(50), nullable=True)
-    source_id = Column(String(36), nullable=True)
-    notes = Column(Text, nullable=True)
+    source: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    source_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Prospective member opened from this attendance, when the event has
     # guest_check_in_creates_prospect enabled. SET NULL so purging a prospect
     # (retention, withdrawal) never destroys the attendance record itself —
     # who was in the room is the event's history, not the prospect's.
-    prospect_id = Column(
+    prospect_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("prospective_members.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Metadata
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(DateTime(timezone=True), nullable=True, onupdate=func.now())
-    created_by = Column(
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, onupdate=func.now()
+    )
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    updated_by = Column(
+    updated_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Relationships
-    event = relationship("Event", foreign_keys=[event_id])
+    event: Mapped["Event"] = relationship("Event", foreign_keys=[event_id])
 
     __table_args__ = (
         Index("ix_ext_attendees_event_id", "event_id"),
@@ -611,30 +693,32 @@ class RSVPHistory(Base):
 
     __tablename__ = "rsvp_history"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    rsvp_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    rsvp_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("event_rsvps.id", ondelete="CASCADE"), nullable=False
     )
-    event_id = Column(
+    event_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("events.id", ondelete="CASCADE"), nullable=False
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    old_status = Column(String(20), nullable=True)  # Null for initial RSVP
-    new_status = Column(String(20), nullable=False)
-    changed_at = Column(
+    old_status: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True
+    )  # Null for initial RSVP
+    new_status: Mapped[str] = mapped_column(String(20), nullable=False)
+    changed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    changed_by = Column(
+    changed_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )  # Null means self-change
 
     # Relationships
-    rsvp = relationship("EventRSVP", foreign_keys=[rsvp_id])
-    event = relationship("Event", foreign_keys=[event_id])
-    user = relationship("User", foreign_keys=[user_id])
-    changer = relationship("User", foreign_keys=[changed_by])
+    rsvp: Mapped["EventRSVP"] = relationship("EventRSVP", foreign_keys=[rsvp_id])
+    event: Mapped["Event"] = relationship("Event", foreign_keys=[event_id])
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+    changer: Mapped[Optional["User"]] = relationship("User", foreign_keys=[changed_by])
 
     __table_args__ = (
         Index("ix_rsvp_history_event_id", "event_id"),
@@ -661,17 +745,17 @@ class EventAttendancePetition(Base):
 
     __tablename__ = "event_attendance_petitions"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
-    event_id = Column(
+    event_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("events.id", ondelete="CASCADE"), nullable=False
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    status = Column(
+    status: Mapped[AttendancePetitionStatus] = mapped_column(
         SQLEnum(
             AttendancePetitionStatus,
             values_callable=lambda x: [e.value for e in x],
@@ -680,20 +764,26 @@ class EventAttendancePetition(Base):
         default=AttendancePetitionStatus.PENDING,
         server_default="pending",
     )
-    reason = Column(Text, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
     # What the member says, for the reviewer to confirm or correct. Not
     # credited as-is: approval records the times the reviewer settles on.
-    requested_check_in_at = Column(DateTime(timezone=True), nullable=True)
-    requested_check_out_at = Column(DateTime(timezone=True), nullable=True)
-    reviewed_by = Column(
+    requested_check_in_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    requested_check_out_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    reviewed_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    reviewed_at = Column(DateTime(timezone=True), nullable=True)
-    review_note = Column(Text, nullable=True)
-    created_at = Column(
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    review_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
