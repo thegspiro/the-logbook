@@ -46,8 +46,30 @@ class FolderVisibility(str, enum.Enum):
     """Who can see a folder and its contents"""
 
     ORGANIZATION = "organization"  # All org members with documents.view
-    LEADERSHIP = "leadership"  # Only users with members.manage or documents.manage
-    OWNER = "owner"  # Only the owner_user_id (+ leadership)
+    LEADERSHIP = "leadership"  # Only the library managers (documents.manage)
+    OWNER = "owner"  # Only the owner_user_id
+
+
+# Module rights stamped on each module's system root (owner decision,
+# 2026-10-09, docs/FILE_STORAGE_HARDENING.md decision 19). Any one admits a
+# reader; a write needs one that is not view-tier. Children inherit through
+# the ancestor walk in DocumentsService.can_access_folder, so only the root
+# carries the list. A migration stamps existing roots with a frozen copy;
+# change these and that copy needs a new revision, not an edit.
+TRAINING_FOLDER_PERMISSIONS = ["training.view", "training.manage"]
+EVENTS_FOLDER_PERMISSIONS = ["events.view", "events.edit", "events.manage"]
+APPARATUS_FOLDER_PERMISSIONS = [
+    "apparatus.view",
+    "apparatus.edit",
+    "apparatus.manage",
+]
+FACILITY_FOLDER_PERMISSIONS = [
+    "facilities.view_sensitive",
+    "facilities.edit",
+    "facilities.manage",
+]
+FINANCE_FOLDER_PERMISSIONS = ["finance.view", "finance.manage", "finance.approve"]
+SEPARATIONS_FOLDER_PERMISSIONS = ["members.manage"]
 
 
 # System folders created automatically for each organization
@@ -99,6 +121,7 @@ SYSTEM_FOLDERS = [
         "sort_order": 5,
         "icon": "book-open",
         "color": "text-red-400",
+        "required_permissions": TRAINING_FOLDER_PERMISSIONS,
     },
     {
         "slug": "general",
@@ -126,7 +149,8 @@ SYSTEM_FOLDERS = [
         "sort_order": 8,
         "icon": "truck",
         "color": "text-orange-400",
-        "visibility": FolderVisibility.LEADERSHIP,
+        "visibility": FolderVisibility.ORGANIZATION,
+        "required_permissions": APPARATUS_FOLDER_PERMISSIONS,
     },
     {
         "slug": "facilities",
@@ -138,11 +162,7 @@ SYSTEM_FOLDERS = [
         # Facility permissions, rather than document leadership, are the
         # sensitive-record contract for this entire tree.
         "visibility": FolderVisibility.ORGANIZATION,
-        "required_permissions": [
-            "facilities.view_sensitive",
-            "facilities.edit",
-            "facilities.manage",
-        ],
+        "required_permissions": FACILITY_FOLDER_PERMISSIONS,
     },
     {
         "slug": "events",
@@ -151,6 +171,7 @@ SYSTEM_FOLDERS = [
         "sort_order": 10,
         "icon": "calendar",
         "color": "text-rose-400",
+        "required_permissions": EVENTS_FOLDER_PERMISSIONS,
     },
     {
         "slug": "member-separations",
@@ -166,10 +187,38 @@ SYSTEM_FOLDERS = [
         # holder — published a dropped member's address and the grounds for
         # their removal to the whole department. Same hazard, and the same
         # answer, as executive minutes: see the MM2-1 note in
-        # DocumentService.publish_minutes.
-        "visibility": FolderVisibility.LEADERSHIP,
+        # DocumentService.publish_minutes. Gated on members.manage, the
+        # grant the separation workflow itself runs behind.
+        "visibility": FolderVisibility.ORGANIZATION,
+        "required_permissions": SEPARATIONS_FOLDER_PERMISSIONS,
+    },
+    {
+        "slug": "finance",
+        "name": "Finance",
+        "description": "Receipts and finance records",
+        "sort_order": 12,
+        "icon": "receipt",
+        "color": "text-lime-400",
+        "required_permissions": FINANCE_FOLDER_PERMISSIONS,
     },
 ]
+
+
+def system_folder_fields(slug: str) -> dict:
+    """``DocumentFolder`` constructor arguments for the system root *slug*.
+
+    Every code path that creates a root goes through this, so a root built
+    lazily by a module carries the same visibility and rights as one built by
+    the reconciler. Lists are copied: the JSON column must not share an
+    object with this module-level definition.
+    """
+    definition = next(s for s in SYSTEM_FOLDERS if s["slug"] == slug)
+    fields = dict(definition)
+    fields.setdefault("visibility", FolderVisibility.ORGANIZATION)
+    required = fields.get("required_permissions")
+    fields["required_permissions"] = list(required) if required else None
+    fields["is_system"] = True
+    return fields
 
 
 # Standard sub-folders auto-created inside each apparatus folder

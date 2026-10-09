@@ -50,8 +50,8 @@ const SEARCH_DEBOUNCE_MS = 300;
  * uploading a departure clearance into it (W53-3).
  */
 const RESTRICTED_FOLDER_LABEL: Record<string, string> = {
-  leadership: 'Leadership only',
-  owner: 'Owner and leadership only',
+  leadership: 'Document managers only',
+  owner: 'Only its owner',
 };
 
 const DocumentsPage: React.FC = () => {

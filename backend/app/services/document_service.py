@@ -14,7 +14,13 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.document import SYSTEM_FOLDERS, Document, DocumentFolder, DocumentType
+from app.models.document import (
+    SYSTEM_FOLDERS,
+    Document,
+    DocumentFolder,
+    DocumentType,
+    system_folder_fields,
+)
 from app.models.minute import MeetingMinutes, MinutesMeetingType, MinutesStatus
 from app.models.user import Organization
 
@@ -87,8 +93,7 @@ class DocumentService:
                 folder = DocumentFolder(
                     organization_id=str(organization_id),
                     created_by=str(created_by),
-                    is_system=True,
-                    **folder_def,
+                    **system_folder_fields(folder_def["slug"]),
                 )
                 self.db.add(folder)
             await self.db.commit()

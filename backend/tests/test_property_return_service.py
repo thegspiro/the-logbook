@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.models.document import SYSTEM_FOLDERS, DocumentFolder, FolderVisibility
+from app.models.document import SYSTEM_FOLDERS, DocumentFolder
 from app.services.property_return_service import PropertyReturnService
 
 
@@ -283,7 +283,7 @@ class TestSaveAsDocument:
         db.add.assert_called_once()
         db.commit.assert_awaited()
 
-    async def test_creates_leadership_folder_when_absent(self):
+    async def test_creates_gated_folder_when_absent(self):
         """A department onboarded before this folder existed still gets one.
 
         ``initialize_system_folders`` returns early for any organization that
@@ -307,7 +307,7 @@ class TestSaveAsDocument:
         assert len(folders) == 1
         folder = folders[0]
         assert folder.slug == "member-separations"
-        assert folder.visibility is FolderVisibility.LEADERSHIP
+        assert folder.required_permissions == ["members.manage"]
         assert folder.organization_id == "org-1"
         assert folder.is_system is True
 
@@ -315,10 +315,10 @@ class TestSaveAsDocument:
         assert doc.folder_id is not None
         assert doc.folder_id == str(folder.id)
 
-    async def test_registry_entry_is_leadership_only(self):
+    async def test_registry_entry_is_gated_on_members_manage(self):
         """The seeded definition itself, so a fresh org is not the exception."""
         entry = next(s for s in SYSTEM_FOLDERS if s["slug"] == "member-separations")
-        assert entry["visibility"] is FolderVisibility.LEADERSHIP
+        assert entry["required_permissions"] == ["members.manage"]
 
     async def test_reuses_folder_a_concurrent_drop_created(self):
         """The re-check under the organization lock, not just the fast path.

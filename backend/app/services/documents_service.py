@@ -28,10 +28,12 @@ from app.core.permissions import (
     permission_matches_any_write,
 )
 from app.models.document import (
+    FACILITY_FOLDER_PERMISSIONS,
     Document,
     DocumentFolder,
     DocumentStatus,
     FolderVisibility,
+    system_folder_fields,
 )
 from app.models.facilities import FacilityDocument, FacilityPhoto
 from app.models.user import Organization, User
@@ -47,8 +49,12 @@ from app.utils.org_timezone import (
 )
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
-# Permissions that grant leadership-level access to all folders
-LEADERSHIP_PERMISSIONS = {"documents.manage", "members.manage", "*"}
+# Decision 10 (docs/FILE_STORAGE_HARDENING.md): only a full administrator
+# sees every folder. documents.manage no longer overrides a module's rights or
+# a member's personal folder; it admits the library's leadership-only folders
+# and nothing else.
+FULL_ADMIN_PERMISSION = "*"
+LIBRARY_MANAGER_PERMISSIONS = ["documents.manage"]
 
 # The facilities module gates its sensitive records — access codes, utility
 # accounts, capital projects, insurance policies, lease terms — on this set,
@@ -56,11 +62,7 @@ LEADERSHIP_PERMISSIONS = {"documents.manage", "members.manage", "*"}
 # carry the same gate or the record is protected and the file it points at is
 # not. Kept identical to _SENSITIVE_READ_PERMISSIONS in the facilities
 # endpoint; tests/test_facility_folder_access.py asserts the two agree.
-FACILITY_SENSITIVE_PERMISSIONS = [
-    "facilities.view_sensitive",
-    "facilities.edit",
-    "facilities.manage",
-]
+FACILITY_SENSITIVE_PERMISSIONS = FACILITY_FOLDER_PERMISSIONS
 
 # ============================================================================
 # FAC-35: canonical lock order for facility document/photo references
@@ -126,9 +128,8 @@ def _get_user_role_slugs(user: User) -> Set[str]:
     return {role.slug for role in user.roles}
 
 
-def _is_leadership(user_permissions: Set[str]) -> bool:
-    """Check if the user has any leadership-level permission."""
-    return bool(user_permissions & LEADERSHIP_PERMISSIONS)
+def _is_full_admin(user_permissions: Set[str]) -> bool:
+    return FULL_ADMIN_PERMISSION in user_permissions
 
 
 def _json_has_value(column):
@@ -252,8 +253,9 @@ class DocumentsService:
 
         Access rules:
         - visibility='organization' → visible to all org members
-        - visibility='leadership'   → only users with leadership permissions
-        - visibility='owner'        → only the owner_user_id + leadership
+        - visibility='leadership'   → only the library managers (documents.manage)
+        - visibility='owner'        → only the owner_user_id
+        - a full administrator (*)  → every folder
         - allowed_roles (if set)    → only users with a matching role slug
         - required_permissions      → only users holding one of them
 
@@ -336,15 +338,13 @@ class DocumentsService:
     ) -> bool:
         """Apply one folder's restrictions, without considering its parent.
 
-        ``required_permissions`` is checked *before* the leadership bypass and
-        is the one rule leadership does not override. Every other restriction
-        here answers "is this person senior enough", which documents.manage
-        legitimately settles. This one answers "does this person hold the
-        module grant the data is gated on" — a facility's insurance policies
-        and lease terms are readable with facilities.view_sensitive and not
-        otherwise, and a documents administrator holding no facilities grant is
-        exactly who that contract excludes. Letting the bypass win here would
-        reopen the leak this field exists to close, one module at a time.
+        A full administrator (``*``) passes every folder; nothing else is an
+        override. ``required_permissions`` carries a module's rights — a
+        facility's lease terms are readable with facilities.view_sensitive,
+        a vehicle's registration with apparatus.view — and a documents
+        administrator holding none of them is exactly who that excludes. A
+        member's personal folder admits its owner alone, and a leadership-only
+        library folder admits the library managers.
 
         ``require_write``: ``required_permissions`` lists every permission
         that admits a *reader* — for a sensitive facility folder, that
@@ -363,11 +363,13 @@ class DocumentsService:
         """
         user_perms = _get_user_permissions(user)
 
+        if _is_full_admin(user_perms):
+            return True
+
         if folder.required_permissions:
             # permission_matches_any, not a raw set intersection: a member
             # granted `facilities.*` holds every facilities permission, and an
-            # intersection sees none of them. It also subsumes the global "*"
-            # case this previously special-cased by hand.
+            # intersection sees none of them.
             matcher = (
                 permission_matches_any_write
                 if require_write
@@ -376,20 +378,16 @@ class DocumentsService:
             if not matcher(folder.required_permissions, user_perms):
                 return False
 
-        if _is_leadership(user_perms):
-            return True
-
         vis = folder.visibility or FolderVisibility.ORGANIZATION
 
         if vis == FolderVisibility.LEADERSHIP:
-            return False
+            return permission_matches_any(LIBRARY_MANAGER_PERMISSIONS, user_perms)
 
         if vis == FolderVisibility.OWNER:
             return folder.owner_user_id is not None and str(
                 folder.owner_user_id
             ) == str(user.id)
 
-        # organization visibility - check allowed_roles if set
         if folder.allowed_roles:
             user_roles = _get_user_role_slugs(user)
             return bool(user_roles & set(folder.allowed_roles))
@@ -410,8 +408,8 @@ class DocumentsService:
         Restrictions compose with logical AND: every folder from the requested
         folder through the root must admit the caller.  Missing ancestors,
         ancestors belonging to another organization, and ancestry cycles all
-        fail closed.  The per-folder leadership bypass still cannot override
-        ``required_permissions``.
+        fail closed.  Only a full administrator passes a folder regardless of
+        its restrictions.
 
         ``folders_by_id`` may contain an already org-scoped folder snapshot for
         callers authorizing many folders.  A missing id in such a snapshot is
@@ -483,7 +481,7 @@ class DocumentsService:
     ) -> Set[str]:
         """Return exactly the folder ids whose complete hierarchy is accessible.
 
-        An explicit set is returned even for leadership because corrupt or
+        An explicit set is returned even for a full administrator because corrupt or
         cross-organization ancestry must never be converted into an unrestricted
         document query. This keeps unfiltered listings consistent with direct
         folder and document authorization.
@@ -1050,10 +1048,10 @@ class DocumentsService:
     ) -> Tuple[List[Document], int]:
         """Get documents with filtering and pagination.
 
-        When *accessible_folder_ids* is provided (non-leadership callers), the
-        result is restricted to documents in those folders (or with no folder),
-        so an unfiltered listing can't leak documents from restricted folders.
-        Pass None to impose no folder restriction (leadership).
+        When *accessible_folder_ids* is provided, the result is restricted to
+        documents in those folders (or with no folder), so an unfiltered
+        listing can't leak documents from restricted folders. Pass None to
+        impose no folder restriction.
 
         *defer_content* leaves ``content_html`` (a LONGTEXT) unloaded, for a
         caller that renders metadata only; touching the attribute afterwards
@@ -1403,7 +1401,7 @@ class DocumentsService:
         """
         Get or create a personal folder for a member under the
         'Member Files' system folder.  The folder is access-controlled
-        so only the member and leadership can see it.
+        so only the member (and a full administrator) can see it.
 
         Folder hierarchy:
           Member Files/              (system, visibility=organization)
@@ -1467,19 +1465,9 @@ class DocumentsService:
 
         if not members_root:
             # Auto-create if missing (e.g. org created before this feature)
-            from app.models.document import SYSTEM_FOLDERS
-
-            members_def = next(s for s in SYSTEM_FOLDERS if s["slug"] == "members")
             members_root = DocumentFolder(
                 organization_id=organization_id,
-                name=members_def["name"],
-                slug=members_def["slug"],
-                description=members_def["description"],
-                icon=members_def["icon"],
-                color=members_def["color"],
-                sort_order=members_def["sort_order"],
-                is_system=True,
-                visibility=FolderVisibility.ORGANIZATION,
+                **system_folder_fields("members"),
             )
             self.db.add(members_root)
             await self.db.flush()
@@ -1598,7 +1586,7 @@ class DocumentsService:
         under the 'Apparatus Files' system folder.
 
         Folder hierarchy:
-          Apparatus Files/                      (system, visibility=leadership)
+          Apparatus Files/                      (system, apparatus rights)
             └── Engine 1 (unit_number)/         (visibility=organization)
                 ├── Photos/
                 ├── Registration & Insurance/
@@ -1655,19 +1643,9 @@ class DocumentsService:
 
         if not apparatus_root:
             # Auto-create if missing (e.g. org created before this feature)
-            from app.models.document import SYSTEM_FOLDERS
-
-            apparatus_def = next(s for s in SYSTEM_FOLDERS if s["slug"] == "apparatus")
             apparatus_root = DocumentFolder(
                 organization_id=organization_id,
-                name=apparatus_def["name"],
-                slug=apparatus_def["slug"],
-                description=apparatus_def["description"],
-                icon=apparatus_def["icon"],
-                color=apparatus_def["color"],
-                sort_order=apparatus_def["sort_order"],
-                is_system=True,
-                visibility=FolderVisibility.LEADERSHIP,
+                **system_folder_fields("apparatus"),
             )
             self.db.add(apparatus_root)
             await self.db.flush()
@@ -2050,22 +2028,9 @@ class DocumentsService:
         facilities_root = await self._lock_facilities_root(organization_id)
 
         if not facilities_root:
-            from app.models.document import SYSTEM_FOLDERS
-
-            facilities_def = next(
-                s for s in SYSTEM_FOLDERS if s["slug"] == FOLDER_FACILITIES
-            )
             facilities_root = DocumentFolder(
                 organization_id=organization_id,
-                name=facilities_def["name"],
-                slug=facilities_def["slug"],
-                description=facilities_def["description"],
-                icon=facilities_def["icon"],
-                color=facilities_def["color"],
-                sort_order=facilities_def["sort_order"],
-                is_system=True,
-                visibility=FolderVisibility.ORGANIZATION,
-                required_permissions=list(FACILITY_SENSITIVE_PERMISSIONS),
+                **system_folder_fields(FOLDER_FACILITIES),
             )
             self.db.add(facilities_root)
             await self.db.flush()
@@ -2322,19 +2287,9 @@ class DocumentsService:
         events_root = await self._lock_events_root(organization_id)
 
         if not events_root:
-            from app.models.document import SYSTEM_FOLDERS
-
-            events_def = next(s for s in SYSTEM_FOLDERS if s["slug"] == FOLDER_EVENTS)
             events_root = DocumentFolder(
                 organization_id=organization_id,
-                name=events_def["name"],
-                slug=events_def["slug"],
-                description=events_def["description"],
-                icon=events_def["icon"],
-                color=events_def["color"],
-                sort_order=events_def["sort_order"],
-                is_system=True,
-                visibility=FolderVisibility.ORGANIZATION,
+                **system_folder_fields(FOLDER_EVENTS),
             )
             self.db.add(events_root)
             await self.db.flush()

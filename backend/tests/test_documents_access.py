@@ -53,7 +53,7 @@ from app.services.documents_service import (
     DocumentsService,
     _get_user_permissions,
     _get_user_role_slugs,
-    _is_leadership,
+    _is_full_admin,
 )
 
 
@@ -114,19 +114,23 @@ class TestHelpers:
         user = _user(roles=[([], "chief"), ([], "secretary")])
         assert _get_user_role_slugs(user) == {"chief", "secretary"}
 
-    async def test_is_leadership(self):
-        assert _is_leadership({"documents.manage"}) is True
-        assert _is_leadership({"members.manage"}) is True
-        assert _is_leadership({"*"}) is True
-        assert _is_leadership({"events.view"}) is False
+    async def test_only_the_wildcard_is_a_full_admin(self):
+        assert _is_full_admin({"*"}) is True
+        assert _is_full_admin({"documents.manage"}) is False
+        assert _is_full_admin({"members.manage"}) is False
+        assert _is_full_admin({"documents.*"}) is False
 
 
 class TestCanAccessFolder:
-    async def test_leadership_sees_everything(self):
+    async def test_library_managers_see_leadership_folders(self):
         user = _user(roles=[(["documents.manage"], "chief")])
-        # Even a leadership-only folder is visible to leadership.
         folder = _folder(FolderVisibility.LEADERSHIP)
         assert await _svc().can_access_folder(folder, "org-1", user) is True
+
+    async def test_members_manage_no_longer_opens_leadership_folders(self):
+        user = _user(roles=[(["members.manage"], "captain")])
+        folder = _folder(FolderVisibility.LEADERSHIP)
+        assert await _svc().can_access_folder(folder, "org-1", user) is False
 
     async def test_leadership_visibility_blocks_non_leadership(self):
         user = _user(roles=[(["events.view"], "ff")])
@@ -612,10 +616,13 @@ class TestDocumentsSummaryAccess:
                 _user(roles=[(["facilities.view_sensitive"], "facility-reader")]),
                 (3, 2, 55, 3),
             ),
+            # The library manager sees the leadership-only folder and what is
+            # under it, and nothing a role, an owner or a module gates.
             (
                 _user(roles=[(["documents.manage"], "leadership")]),
-                (6, 5, 175, 5),
+                (4, 3, 125, 4),
             ),
+            (_user(roles=[(["*"], "admin")]), (7, 6, 215, 6)),
         ]
 
         service = DocumentsService(db_session)
