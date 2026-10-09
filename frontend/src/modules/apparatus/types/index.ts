@@ -880,6 +880,10 @@ export interface ApparatusPhoto {
   organizationId: string;
   apparatusId: string;
   filePath: string;
+  /** The stored document behind the file; null on rows from before uploads. */
+  documentId: string | null;
+  /** Where to open the file: the apparatus file endpoint, or a legacy HTTP(S) link. Null when there is nothing safe to open. */
+  fileUrl: string | null;
   fileName: string;
   fileSize: number | null;
   mimeType: string | null;
@@ -892,11 +896,33 @@ export interface ApparatusPhoto {
   uploadedAt: string;
 }
 
+/** A document type, and the vehicle sub-folder the server files it in. */
+export const APPARATUS_DOCUMENT_TYPES = [
+  { value: 'registration', label: 'Registration' },
+  { value: 'insurance', label: 'Insurance' },
+  { value: 'title', label: 'Title' },
+  { value: 'inspection', label: 'Inspection' },
+  { value: 'maintenance', label: 'Maintenance record' },
+  { value: 'manual', label: 'Manual' },
+  { value: 'other', label: 'Other' },
+] as const;
+
+export interface ApparatusDocumentUpload {
+  file: File;
+  title: string;
+  documentType: string;
+  expirationDate?: string | undefined;
+}
+
 export interface ApparatusDocument {
   id: string;
   organizationId: string;
   apparatusId: string;
   filePath: string;
+  /** The stored document behind the file; null on rows from before uploads. */
+  documentId: string | null;
+  /** Where to open the file: the apparatus file endpoint, or a legacy HTTP(S) link. Null when there is nothing safe to open. */
+  fileUrl: string | null;
   fileName: string;
   fileSize: number | null;
   mimeType: string | null;

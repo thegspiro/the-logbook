@@ -74,22 +74,22 @@ Documents**.
 
 Documents are organized into folders. The system provides default folders, and administrators can create additional ones.
 
-**System Folders** (created automatically):
+**System Folders** (created automatically). A module's folder opens to that
+module's rights, not to document managers; only a full administrator sees every
+folder:
 
-- Meeting Minutes
-- SOPs & Procedures
-- Policies
-- Forms & Templates
-- Reports
-- Training Materials
-- General Documents
-- Member Files
-- Apparatus Files
-- Facility Files
-- Event Attachments
-- **Member Separations** — leadership only. Property-return reports are filed
-  here, because each names a departed member, the reason for the separation and
-  their home address.
+| Folder                                                                                      | Who can open it                                                                                                                                      |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Meeting Minutes, SOPs & Procedures, Policies, Forms & Templates, Reports, General Documents | anyone with `documents.view`                                                                                                                         |
+| Training Materials                                                                          | `training.view` or `training.manage`                                                                                                                 |
+| Event Attachments                                                                           | `events.view`, `events.edit` or `events.manage`                                                                                                      |
+| Apparatus Files                                                                             | `apparatus.view`, `apparatus.edit` or `apparatus.manage`; photos and documents are uploaded on the vehicle's page                                    |
+| Facility Files                                                                              | `facilities.view_sensitive`, `facilities.edit` or `facilities.manage`                                                                                |
+| Finance (and Receipts)                                                                      | `finance.view`, `finance.manage` or `finance.approve`; a member opens their own receipt on the request itself                                        |
+| Member Separations                                                                          | `members.manage`. Property-return reports are filed here, because each names a departed member, the reason for the separation and their home address |
+| Member Files                                                                                | each member sees their own folder only                                                                                                               |
+
+A folder marked **Document managers only** opens to `documents.manage`.
 
 ### Creating Folders
 
