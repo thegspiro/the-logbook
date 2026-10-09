@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**301 tables · 4950 columns · 994 foreign keys**
+**302 tables · 4959 columns · 996 foreign keys**
 
 ---
 
@@ -563,7 +563,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`shift_history_import_rows`](#shift_history_import_rows) | `ShiftHistoryImportRow` | 9 | One data row of the file, kept as read plus the reviewer's edits. |
+| [`shift_history_import_mappings`](#shift_history_import_mappings) | `ShiftHistoryImportMapping` | 8 | A review decision the department has committed, remembered for later |
+| [`shift_history_import_rows`](#shift_history_import_rows) | `ShiftHistoryImportRow` | 10 | One data row of the file, kept as read plus the reviewer's edits. |
 | [`shift_history_imports`](#shift_history_imports) | `ShiftHistoryImport` | 18 | One uploaded file and the review state around it. |
 
 ### Skills Testing
@@ -7495,6 +7496,28 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 ## Shift_History_Import
 
+### `shift_history_import_mappings`
+
+**ShiftHistoryImportMapping** · `app/models/shift_history_import.py`
+
+> A review decision the department has committed, remembered for later files. A department brings its history in over several files, usually exported from the same system, so the same names, vehicles and positions recur. A decision is remembered only once an import using it is committed — a discarded draft teaches nothing — and a draft's own decision always wins over a remembered one. A member or outside unit the commit *created* is remembered as a mapping to the record it created, never as "create", so the next file cannot create the same person or unit a second time.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `kind` | VARCHAR(20) | no |  |  |  |
+| `source_key` | VARCHAR(600) | no |  |  |  |
+| `mapping` | JSON | no |  |  |  |
+| `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Constraints**
+
+- CHECK `ck_shift_history_import_mappings_ck_shift_history_import_mappings_kind`: `kind IN ('member', 'unit', 'position')`
+- UNIQUE `uq_shift_history_import_mappings_org_kind_key` (`organization_id`, `kind`, `source_key`)
+
 ### `shift_history_import_rows`
 
 **ShiftHistoryImportRow** · `app/models/shift_history_import.py`
@@ -7510,6 +7533,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `edits` | JSON | yes |  |  |  |
 | `excluded` | BOOL | no |  | `0` |  |
 | `match_decision` | VARCHAR(20) | yes |  |  |  |
+| `keep_separate` | BOOL | no |  | `0` |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -10475,7 +10499,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (364 references)
+### → `users` (365 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10767,6 +10791,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_completion_reports` | `reviewed_by` | SET NULL | yes |
 | `shift_completion_reports` | `trainee_id` | CASCADE | no |
 | `shift_equipment_checks` | `checked_by` | SET NULL | yes |
+| `shift_history_import_mappings` | `updated_by` | SET NULL | yes |
 | `shift_history_imports` | `committed_by` | SET NULL | yes |
 | `shift_history_imports` | `created_by` | SET NULL | yes |
 | `shift_patterns` | `created_by` | SET NULL | yes |
@@ -10844,7 +10869,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (245 references)
+### → `organizations` (246 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11043,6 +11068,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_calls` | `organization_id` | CASCADE | no |
 | `shift_completion_reports` | `organization_id` | CASCADE | no |
 | `shift_equipment_checks` | `organization_id` | CASCADE | no |
+| `shift_history_import_mappings` | `organization_id` | CASCADE | no |
 | `shift_history_imports` | `organization_id` | CASCADE | no |
 | `shift_patterns` | `organization_id` | CASCADE | no |
 | `shift_swap_requests` | `organization_id` | CASCADE | no |

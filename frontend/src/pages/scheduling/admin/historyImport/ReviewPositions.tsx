@@ -13,6 +13,7 @@ import type {
   HistoryImportMappingsUpdate,
 } from '../../../../modules/scheduling/types/historyImport';
 import { isSettled, RESOLUTION_LABELS } from './historyImportLabels';
+import RememberedBadge from './RememberedBadge';
 
 interface ReviewPositionsProps {
   analysis: HistoryImportAnalysis;
@@ -53,6 +54,7 @@ const ReviewPositions: React.FC<ReviewPositionsProps> = ({ analysis, busy, onMap
                     <span className={`badge border ${HISTORY_IMPORT_RESOLUTION_COLORS[position.status] ?? ''}`}>
                       {RESOLUTION_LABELS[position.status] ?? position.status}
                     </span>
+                    {position.remembered && <RememberedBadge />}
                   </div>
                   <p className="text-theme-text-secondary mt-1 text-sm">
                     {position.row_count} {position.row_count === 1 ? 'row' : 'rows'}

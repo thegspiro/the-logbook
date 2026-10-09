@@ -34,6 +34,7 @@ const analysis: HistoryImportAnalysis = {
       candidate_ids: [],
       reason: '',
       row_count: 1,
+      remembered: false,
     },
   ],
   units: [
@@ -47,6 +48,7 @@ const analysis: HistoryImportAnalysis = {
       new_agency_name: 'Metro Fire',
       new_unit_name: 'M7',
       row_count: 1,
+      remembered: false,
     },
   ],
   options: {
