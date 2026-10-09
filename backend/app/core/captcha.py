@@ -107,10 +107,13 @@ def _verdict_from_payload(payload: dict[str, Any]) -> tuple[bool, str | None]:
     return True, None
 
 
-async def verify_captcha_token(token: str, remote_ip: str | None) -> tuple[bool, str]:
+async def verify_captcha_token(
+    token: str, remote_ip: str | None
+) -> tuple[bool, str | None]:
     """Verify *token* with the configured provider.
 
-    Returns ``(is_valid, reason)``. ``reason`` is for logs only — it can name the
+    Returns ``(is_valid, reason)``; ``reason`` is None when the token passed.
+    It is for logs only — it can name the
     provider's error codes, which must not be echoed to the client.
     """
     if not token:

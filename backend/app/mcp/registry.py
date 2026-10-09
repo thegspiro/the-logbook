@@ -339,11 +339,11 @@ def bound_for_audit(value: Any) -> Any:
             bounded["…"] = f"[{len(items)} keys]"
         return bounded
     if isinstance(value, (list, tuple, set, frozenset)):
-        items = list(value)
-        bounded = [bound_for_audit(v) for v in items[:AUDIT_ARGUMENT_ITEMS]]
-        if len(items) > AUDIT_ARGUMENT_ITEMS:
-            bounded.append(f"… [{len(items)} items]")
-        return bounded
+        elements = list(value)
+        bounded_list = [bound_for_audit(v) for v in elements[:AUDIT_ARGUMENT_ITEMS]]
+        if len(elements) > AUDIT_ARGUMENT_ITEMS:
+            bounded_list.append(f"… [{len(elements)} items]")
+        return bounded_list
     return value
 
 

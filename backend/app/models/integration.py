@@ -5,7 +5,7 @@ SQLAlchemy models for external integration configurations.
 """
 
 import json
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 from loguru import logger
 from sqlalchemy import (
@@ -107,7 +107,8 @@ class Integration(Base):
             from app.core.security import decrypt_data
 
             decrypted = decrypt_data(self.encrypted_config)
-            return json.loads(decrypted)
+            config: Dict[str, Any] = json.loads(decrypted)
+            return config
         except Exception:
             logger.warning(
                 "Failed to decrypt encrypted_config for integration {}", self.id

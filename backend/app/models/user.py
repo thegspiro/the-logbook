@@ -454,7 +454,8 @@ class User(Base):
         except InvalidToken:
             # Fallback for legacy pre-encryption plaintext values only; a real
             # error (missing key, bug) propagates instead of being masked.
-            return self._mfa_secret_encrypted
+            legacy: str = self._mfa_secret_encrypted
+            return legacy
 
     @mfa_secret.setter
     def mfa_secret(self, value: str | None) -> None:
@@ -467,7 +468,7 @@ class User(Base):
 
     @property
     def mfa_backup_codes(self) -> list | None:
-        raw = self._mfa_backup_codes_encrypted
+        raw: list | None = self._mfa_backup_codes_encrypted
         if raw is None:
             return None
         # If stored as a list of encrypted strings, decrypt each
@@ -580,9 +581,11 @@ class User(Base):
         """
         return self.status in ACTIVE_ACCOUNT_STATUSES and not self.deleted_at
 
-    @is_active.expression
+    # ``inplace`` attaches the expression to the hybrid above rather than
+    # rebinding the name, so the class keeps one ``is_active`` definition.
+    @is_active.inplace.expression
     @classmethod
-    def is_active(cls):
+    def _is_active_expression(cls):
         """SQL form of ``is_active``; the two must stay identical."""
         return and_(cls.status.in_(ACTIVE_ACCOUNT_STATUSES), cls.deleted_at.is_(None))
 
@@ -596,7 +599,7 @@ class User(Base):
             if self.locked_until.tzinfo
             else self.locked_until.replace(tzinfo=timezone.utc)
         )
-        return datetime.now(timezone.utc) < locked
+        return bool(datetime.now(timezone.utc) < locked)
 
     def __repr__(self):
         return f"<User(username={self.username}, email={self.email})>"

@@ -197,7 +197,7 @@ class CacheManager:
             return False
 
         try:
-            return await self.redis_client.exists(key) > 0
+            return bool(await self.redis_client.exists(key) > 0)
         except Exception as e:
             logger.error(f"Cache exists error: {e}")
             return False

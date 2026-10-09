@@ -135,7 +135,8 @@ class McpKeyService:
             )
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        integration: Optional[Integration] = result.scalar_one_or_none()
+        return integration
 
     async def _unrevoked_keys(
         self, organization_id: str, *, for_update: bool = False
@@ -160,7 +161,8 @@ class McpKeyService:
                 McpServiceKey.organization_id == organization_id,
             )
         )
-        return result.scalar_one_or_none()
+        key: Optional[McpServiceKey] = result.scalar_one_or_none()
+        return key
 
     async def mint(
         self,

@@ -50,7 +50,7 @@ def hash_api_key(api_key: str) -> str:
         The bcrypt hash of the API key
     """
     salt = bcrypt.gensalt()
-    hashed = bcrypt.hashpw(api_key.encode("utf-8"), salt)
+    hashed: bytes = bcrypt.hashpw(api_key.encode("utf-8"), salt)
     return hashed.decode("utf-8")
 
 
@@ -66,7 +66,10 @@ def verify_api_key(api_key: str, key_hash: str) -> bool:
         True if the key matches, False otherwise
     """
     try:
-        return bcrypt.checkpw(api_key.encode("utf-8"), key_hash.encode("utf-8"))
+        matches: bool = bcrypt.checkpw(
+            api_key.encode("utf-8"), key_hash.encode("utf-8")
+        )
+        return matches
     except Exception as e:
         logger.error(f"Error verifying API key: {e}")
         return False
@@ -531,7 +534,7 @@ async def authenticate_api_key(
             PublicPortalAPIKey.key_prefix.in_({selective_prefix, legacy_prefix})
         )
     )
-    api_key_obj = None
+    api_key_obj: PublicPortalAPIKey | None = None
     for candidate in result.scalars().all():
         if verify_api_key(api_key, candidate.key_hash):
             api_key_obj = candidate
