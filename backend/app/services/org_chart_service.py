@@ -86,7 +86,8 @@ class OrgChartService:
                 OrgChartNode.organization_id == organization_id,
             )
         )
-        return result.scalar_one_or_none()
+        org_chart_node: Optional[OrgChartNode] = result.scalar_one_or_none()
+        return org_chart_node
 
     async def _require_node(self, organization_id: str, node_id: str) -> OrgChartNode:
         node = await self._get_node(organization_id, node_id)

@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import PaginationParams, require_permission
 from app.core.database import get_db
-from app.core.utils import safe_error_detail
+from app.core.utils import ensure_found, safe_error_detail
 from app.models.user import User
 from app.schemas.grant import (
     CampaignCreate,
@@ -208,15 +208,18 @@ async def create_application(
     """
     try:
         service = GrantService(db)
-        application = await service.create_application(
+        created = await service.create_application(
             organization_id=str(current_user.organization_id),
             data=data.model_dump(exclude_unset=True),
             user_id=str(current_user.id),
         )
         # Reload with relationships for response serialization
-        application = await service.get_application(
-            application_id=application.id,
-            organization_id=str(current_user.organization_id),
+        application = ensure_found(
+            await service.get_application(
+                application_id=created.id,
+                organization_id=str(current_user.organization_id),
+            ),
+            "Grant application",
         )
         payload = GrantApplicationResponse.model_validate(application)
         payload.grant_notes = await _notes_with_authors(
@@ -338,13 +341,16 @@ async def update_application(
                 detail="Grant application not found",
             )
         # Reload with fresh relationships (status changes may add notes/tasks)
-        application = await service.get_application(
-            application_id=str(application_id),
-            organization_id=str(current_user.organization_id),
+        reloaded = ensure_found(
+            await service.get_application(
+                application_id=str(application_id),
+                organization_id=str(current_user.organization_id),
+            ),
+            "Grant application",
         )
-        payload = GrantApplicationResponse.model_validate(application)
+        payload = GrantApplicationResponse.model_validate(reloaded)
         payload.grant_notes = await _notes_with_authors(
-            db, application.grant_notes, str(current_user.organization_id)
+            db, reloaded.grant_notes, str(current_user.organization_id)
         )
         return payload
     except HTTPException:

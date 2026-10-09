@@ -209,7 +209,7 @@ async def _build_election_response(
 ) -> ElectionResponse:
     """Build an ElectionResponse with meeting details populated."""
     await _load_meeting_for_election(db, election)
-    response = ElectionResponse.model_validate(election)
+    response: ElectionResponse = ElectionResponse.model_validate(election)
     # `total_votes`, `total_voters` and `voter_turnout_percentage` are declared
     # on the response but are not columns, so validating off the ORM row left
     # all three null on every detail fetch. The Publish Results panel reads
@@ -605,8 +605,11 @@ async def lookup_ballot_by_token(
     service = ElectionService(db)
     election, voting_token, error = await service.get_ballot_by_token(payload.token)
 
-    if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    if error or election is None or voting_token is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
 
     response = BallotElectionResponse.model_validate(election)
 
@@ -762,8 +765,11 @@ async def cast_vote_with_token(
         vote_rank=vote_data.vote_rank,
     )
 
-    if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    if error or vote is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
 
     # Return vote without revealing voter information. The receipt hash lets
     # the voter verify their vote was recorded via GET /{id}/verify-receipt.
@@ -824,8 +830,11 @@ async def submit_ballot_with_token(
             detail="This ballot has already been submitted",
         )
 
-    if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    if error or result is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
 
     return BallotSubmissionResponse(**result)
 
@@ -1399,6 +1408,9 @@ async def delete_election(
     election_title = election.title
     election_status = election.status.value
     reason = delete_data.reason if delete_data else None
+    # Set only once the non-draft reason check below has passed; the
+    # leadership alert is sent for exactly those elections.
+    deletion_reason = ""
     notifications_sent = 0
     vote_count = 0
 
@@ -1435,6 +1447,7 @@ async def delete_election(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="A reason of at least 10 characters is required to delete a non-draft election",
             )
+        deletion_reason = reason
 
         # Count active votes for audit context
         votes_result = await db.execute(
@@ -1475,7 +1488,7 @@ async def delete_election(
                 election=election,
                 performed_by=current_user.id,
                 organization_id=current_user.organization_id,
-                reason=reason,
+                reason=deletion_reason,
                 vote_count=vote_count,
             )
         except Exception as e:
@@ -1543,11 +1556,12 @@ def _service_error_status(error: str) -> int:
     Rollback while every by-id GET said 404. One definition, so the string
     comparison cannot drift between call sites (Pitfall #29).
     """
-    return (
+    code: int = (
         status.HTTP_404_NOT_FOUND
         if "not found" in error.lower()
         else status.HTTP_400_BAD_REQUEST
     )
+    return code
 
 
 @router.post("/{election_id}/open", response_model=ElectionResponse)
@@ -1567,8 +1581,11 @@ async def open_election(
         election_id, current_user.organization_id
     )
 
-    if error:
-        raise HTTPException(status_code=_service_error_status(error), detail=error)
+    if error or election is None:
+        raise HTTPException(
+            status_code=_service_error_status(error or "An unexpected error occurred"),
+            detail=error or "An unexpected error occurred",
+        )
 
     return await _build_election_response(db, election)
 
@@ -1590,13 +1607,15 @@ async def close_election(
         election_id, current_user.organization_id, closed_by=current_user.id
     )
 
-    if error:
+    if error or election is None:
         status_code = (
             status.HTTP_404_NOT_FOUND
-            if "not found" in error.lower()
+            if error and "not found" in error.lower()
             else status.HTTP_400_BAD_REQUEST
         )
-        raise HTTPException(status_code=status_code, detail=error)
+        raise HTTPException(
+            status_code=status_code, detail=error or "An unexpected error occurred"
+        )
 
     return await _build_election_response(db, election)
 
@@ -1623,13 +1642,15 @@ async def open_nominations(
         current_user.organization_id,
         acting_user_id=str(current_user.id),
     )
-    if error:
+    if error or election is None:
         status_code = (
             status.HTTP_404_NOT_FOUND
-            if "not found" in error.lower()
+            if error and "not found" in error.lower()
             else status.HTTP_400_BAD_REQUEST
         )
-        raise HTTPException(status_code=status_code, detail=error)
+        raise HTTPException(
+            status_code=status_code, detail=error or "An unexpected error occurred"
+        )
     return await _build_election_response(db, election)
 
 
@@ -1650,13 +1671,15 @@ async def close_nominations(
     election, error = await service.close_nominations(
         election_id, current_user.organization_id
     )
-    if error:
+    if error or election is None:
         status_code = (
             status.HTTP_404_NOT_FOUND
-            if "not found" in error.lower()
+            if error and "not found" in error.lower()
             else status.HTTP_400_BAD_REQUEST
         )
-        raise HTTPException(status_code=status_code, detail=error)
+        raise HTTPException(
+            status_code=status_code, detail=error or "An unexpected error occurred"
+        )
     return await _build_election_response(db, election)
 
 
@@ -1965,13 +1988,15 @@ async def clone_election(
         nomination_deadline=payload.nomination_deadline,
         include_candidates=payload.include_candidates,
     )
-    if error:
+    if error or clone is None:
         status_code = (
             status.HTTP_404_NOT_FOUND
-            if "not found" in error.lower()
+            if error and "not found" in error.lower()
             else status.HTTP_400_BAD_REQUEST
         )
-        raise HTTPException(status_code=status_code, detail=error)
+        raise HTTPException(
+            status_code=status_code, detail=error or "An unexpected error occurred"
+        )
     return await _build_election_response(db, clone)
 
 
@@ -2523,8 +2548,11 @@ async def get_member_ballot(
     )
     if error == "Election not found":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
-    if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    if error or ballot is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
 
     election_view = BallotElectionResponse.model_validate(ballot["election"])
     election_view.ballot_items = [
@@ -3481,8 +3509,11 @@ async def check_in_attendee(
         checked_in_by=current_user.id,
     )
 
-    if error:
-        raise HTTPException(status_code=_service_error_status(error), detail=error)
+    if error or attendee is None:
+        raise HTTPException(
+            status_code=_service_error_status(error or "An unexpected error occurred"),
+            detail=error or "An unexpected error occurred",
+        )
 
     # Get updated total
     attendees = await service.get_attendees(election_id, current_user.organization_id)

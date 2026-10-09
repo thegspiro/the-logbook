@@ -154,7 +154,7 @@ def _resolve_public_address(endpoint: str) -> tuple[str, str]:
     if hostname is None:  # validate_push_endpoint has already rejected this
         raise PermanentPushEndpointError("Invalid push endpoint")
     answers = socket.getaddrinfo(hostname, 443, type=socket.SOCK_STREAM)
-    addresses = {answer[4][0] for answer in answers}
+    addresses = {str(answer[4][0]) for answer in answers}
     if not addresses or any(not ipaddress.ip_address(ip).is_global for ip in addresses):
         raise ValueError("Push endpoint does not resolve exclusively to public IPs")
     return hostname, sorted(addresses)[0]
@@ -328,7 +328,7 @@ class PushService:
         # row was deleted between the peek and here, this simply finds
         # nothing and falls through to the brand-new-subscription path
         # below, exactly like a peek that found nothing in the first place.
-        existing = None
+        existing: Optional[PushSubscription] = None
         if peeked_id is not None:
             result = await self.db.execute(
                 select(PushSubscription)
@@ -443,8 +443,8 @@ class PushService:
 
     async def send_to_user(
         self,
-        organization_id: UUID,
-        user_id: UUID,
+        organization_id: UUID | str,
+        user_id: UUID | str,
         title: str,
         body: str,
         url: str = "/notifications?tab=inbox",

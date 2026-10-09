@@ -8,6 +8,7 @@ import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { blankToNull, numberOrNull } from '../../../utils/formValues';
 import { apparatusEquipmentService } from '../services/api';
 import type { ApparatusEquipment, ApparatusEquipmentCreate, ApparatusEquipmentUpdate } from '../types';
 
@@ -86,20 +87,31 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
       return;
     }
 
+    // quantity is NOT NULL, so an edit cannot clear it. A blank used to save
+    // as 1, quietly replacing the stored count; refuse it instead.
+    const editQuantity = numberOrNull(f.quantity);
+    if (editEquipment && (editQuantity === null || editQuantity < 1)) {
+      toast.error('Enter a quantity of at least 1');
+      return;
+    }
+
     setSaving(true);
     try {
       if (editEquipment) {
+        // Every field the form owns, every save: the backend applies updates
+        // with exclude_unset, so a blank left out of the payload would keep
+        // the old value. A blank goes as null, which clears it.
         const payload: ApparatusEquipmentUpdate = {
           name: f.name.trim(),
-          quantity: Number(f.quantity) || 1,
+          description: blankToNull(f.description),
+          quantity: editQuantity ?? editEquipment.quantity,
+          locationOnApparatus: blankToNull(f.locationOnApparatus),
           isMounted: f.isMounted,
           isRequired: f.isRequired,
+          serialNumber: blankToNull(f.serialNumber),
+          assetTag: blankToNull(f.assetTag),
           isPresent: f.isPresent,
-          ...(f.description ? { description: f.description } : {}),
-          ...(f.locationOnApparatus ? { locationOnApparatus: f.locationOnApparatus } : {}),
-          ...(f.serialNumber ? { serialNumber: f.serialNumber } : {}),
-          ...(f.assetTag ? { assetTag: f.assetTag } : {}),
-          ...(f.notes ? { notes: f.notes } : {}),
+          notes: blankToNull(f.notes),
         };
         await apparatusEquipmentService.updateEquipment(editEquipment.id, payload);
         toast.success('Equipment updated');

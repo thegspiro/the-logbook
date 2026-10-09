@@ -6,16 +6,22 @@ Supports QR code clock-in/clock-out, manual entry with optional approval workflo
 and automatic crediting from event attendance via configurable mappings.
 """
 
+from datetime import datetime
 from enum import Enum
+from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Boolean, CheckConstraint, Column, DateTime
+from sqlalchemy import Boolean, CheckConstraint, DateTime
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
+
+if TYPE_CHECKING:
+    from app.models.event import Event
+    from app.models.user import User
 
 
 class AdminHoursEntryMethod(str, Enum):
@@ -51,42 +57,50 @@ class AdminHoursCategory(Base):
 
     __tablename__ = "admin_hours_categories"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
 
     # Category details
-    name = Column(String(200), nullable=False)
-    description = Column(Text, nullable=True)
-    color = Column(String(7), nullable=True)  # Hex color for UI, e.g. "#3B82F6"
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    color: Mapped[Optional[str]] = mapped_column(
+        String(7), nullable=True
+    )  # Hex color for UI, e.g. "#3B82F6"
 
     # Approval settings
-    require_approval = Column(Boolean, nullable=False, default=True, server_default="1")
-    auto_approve_under_hours = Column(
+    require_approval: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    auto_approve_under_hours: Mapped[Optional[float]] = mapped_column(
         Float, nullable=True
     )  # Auto-approve if under X hours (null = always require approval)
 
     # Safety limits
-    max_hours_per_session = Column(
+    max_hours_per_session: Mapped[Optional[float]] = mapped_column(
         Float, nullable=True, default=12.0
     )  # Auto clock-out after X hours (null = no limit)
 
     # Status
-    is_active = Column(Boolean, nullable=False, default=True, server_default="1")
-    sort_order = Column(Integer, nullable=False, default=0, server_default="0")
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    sort_order: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
     # Metadata
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
-    updated_by = Column(
+    updated_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -94,7 +108,7 @@ class AdminHoursCategory(Base):
     )
 
     # Relationships
-    entries = relationship(
+    entries: Mapped[list["AdminHoursEntry"]] = relationship(
         "AdminHoursEntry", back_populates="category", cascade="all, delete-orphan"
     )
 
@@ -113,27 +127,33 @@ class AdminHoursEntry(Base):
 
     __tablename__ = "admin_hours_entries"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    category_id = Column(
+    category_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("admin_hours_categories.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Time tracking
-    clock_in_at = Column(DateTime(timezone=True), nullable=False)
-    clock_out_at = Column(DateTime(timezone=True), nullable=True)  # null = still active
-    duration_minutes = Column(Integer, nullable=True)  # Calculated on clock-out
+    clock_in_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    clock_out_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )  # null = still active
+    duration_minutes: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )  # Calculated on clock-out
 
     # Details
-    description = Column(Text, nullable=True)
-    entry_method = Column(
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    entry_method: Mapped[AdminHoursEntryMethod] = mapped_column(
         SQLEnum(
             AdminHoursEntryMethod,
             values_callable=lambda x: [e.value for e in x],
@@ -143,19 +163,19 @@ class AdminHoursEntry(Base):
     )
 
     # Event attendance source (set when entry_method = EVENT_ATTENDANCE)
-    source_event_id = Column(
+    source_event_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("events.id", ondelete="SET NULL"),
         nullable=True,
     )
-    source_rsvp_id = Column(
+    source_rsvp_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("event_rsvps.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Approval workflow
-    status = Column(
+    status: Mapped[AdminHoursEntryStatus] = mapped_column(
         SQLEnum(
             AdminHoursEntryStatus,
             values_callable=lambda x: [e.value for e in x],
@@ -164,17 +184,19 @@ class AdminHoursEntry(Base):
         default=AdminHoursEntryStatus.ACTIVE,
         server_default="active",
     )
-    approved_by = Column(
+    approved_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
-    approved_at = Column(DateTime(timezone=True), nullable=True)
-    rejection_reason = Column(Text, nullable=True)
+    approved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    rejection_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Metadata
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -182,10 +204,16 @@ class AdminHoursEntry(Base):
     )
 
     # Relationships
-    category = relationship("AdminHoursCategory", back_populates="entries")
-    user = relationship("User", foreign_keys=[user_id])
-    approver = relationship("User", foreign_keys=[approved_by])
-    source_event = relationship("Event", foreign_keys=[source_event_id])
+    category: Mapped["AdminHoursCategory"] = relationship(
+        "AdminHoursCategory", back_populates="entries"
+    )
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+    approver: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[approved_by]
+    )
+    source_event: Mapped[Optional["Event"]] = relationship(
+        "Event", foreign_keys=[source_event_id]
+    )
 
     __table_args__ = (
         Index("ix_admin_hours_entries_category_id", "category_id"),
@@ -225,33 +253,37 @@ class EventHourMapping(Base):
 
     __tablename__ = "event_hour_mappings"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Source: exactly one of these must be set
-    event_type = Column(String(50), nullable=True)
-    custom_category = Column(String(100), nullable=True)
+    event_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    custom_category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Target admin hours category + percentage of hours to credit
-    admin_hours_category_id = Column(
+    admin_hours_category_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("admin_hours_categories.id", ondelete="CASCADE"),
         nullable=False,
     )
-    percentage = Column(Integer, nullable=False, default=100, server_default="100")
+    percentage: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=100, server_default="100"
+    )
 
-    is_active = Column(Boolean, nullable=False, default=True, server_default="1")
-    created_by = Column(
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -259,7 +291,9 @@ class EventHourMapping(Base):
     )
 
     # Relationships
-    admin_hours_category = relationship("AdminHoursCategory")
+    admin_hours_category: Mapped["AdminHoursCategory"] = relationship(
+        "AdminHoursCategory"
+    )
 
     __table_args__ = (
         CheckConstraint(

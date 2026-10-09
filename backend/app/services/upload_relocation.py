@@ -505,7 +505,7 @@ async def apply(
 
 def _load_manifest(path: str) -> dict[str, Any]:
     with open(path, encoding="utf-8") as handle:
-        data = json.load(handle)
+        data: dict[str, Any] = json.load(handle)
     if data.get("version") != MANIFEST_VERSION:
         raise ValueError(f"Unsupported manifest version in {path}")
     return data

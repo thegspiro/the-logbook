@@ -170,7 +170,7 @@ class MessageDeliveryService:
             .where(DepartmentMessageDelivery.idempotency_key == key)
             .with_for_update()
         )
-        attempt = result.scalar_one_or_none()
+        attempt: Optional[DepartmentMessageDelivery] = result.scalar_one_or_none()
         cutoff = datetime.now(timezone.utc) - _STALE_CLAIM_AFTER
         attempted_at = getattr(attempt, "attempted_at", None) if attempt else None
         if attempted_at is not None and attempted_at.tzinfo is None:
@@ -408,17 +408,19 @@ class MessageDeliveryService:
             # half is never emailed — on the channel of record. Claims stay
             # per member; the connection is shared.
             claimed = []
+            addresses: List[str] = []
             for user in email_recipients:
                 attempt = await self._claim_delivery(message.id, user.id, "email")
                 if attempt is not None and user.email:
                     claimed.append((user, attempt))
+                    addresses.append(user.email)
             if not claimed:
                 return
 
             outcomes: List[bool] = []
             try:
                 await email_svc.send_email(
-                    to_emails=[user.email for user, _ in claimed],
+                    to_emails=addresses,
                     subject=subject,
                     html_body=html_body,
                     db=self.db,

@@ -86,7 +86,8 @@ async def _integration_row(
             Integration.integration_type == MCP_INTEGRATION_TYPE,
         )
     )
-    return result.scalar_one_or_none()
+    integration: Integration | None = result.scalar_one_or_none()
+    return integration
 
 
 async def require_audit_entry(

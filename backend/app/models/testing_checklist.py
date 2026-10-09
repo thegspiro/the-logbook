@@ -27,19 +27,11 @@ the same action and leaves no state that can disagree with itself.
 """
 
 import enum
+from datetime import datetime
+from typing import Optional
 
-from sqlalchemy import (
-    JSON,
-    Column,
-    DateTime,
-    Enum,
-    ForeignKey,
-    Index,
-    Integer,
-    String,
-    Text,
-)
-from sqlalchemy.orm import relationship
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -96,8 +88,8 @@ class TestingRun(Base):
 
     __tablename__ = "testing_runs"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
@@ -109,12 +101,12 @@ class TestingRun(Base):
     # lands in. The sequence also gives the unique index below something real
     # to enforce, which is what makes "one run at a time" a database rule
     # rather than a hope (CLAUDE.md pitfall #27).
-    sequence = Column(Integer, nullable=False)
-    label = Column(String(120), nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    label: Mapped[str] = mapped_column(String(120), nullable=False)
     # The build the run was started against. Absent in development, where the
     # bundle carries no build id.
-    build_id = Column(String(64), nullable=True)
-    started_by_id = Column(
+    build_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    started_by_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         # SET NULL, so nullable — MySQL 1830 rejects the pair otherwise
         # (CLAUDE.md pitfall #2). A run outlives the account that opened it;
@@ -122,21 +114,21 @@ class TestingRun(Base):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    started_at = Column(
+    started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
     )
 
-    entries = relationship(
+    entries: Mapped[list["TestingChecklistEntry"]] = relationship(
         "TestingChecklistEntry", back_populates="run", cascade="all, delete-orphan"
     )
 
@@ -165,8 +157,8 @@ class TestingChecklistEntry(Base):
 
     __tablename__ = "testing_checklist_entries"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
@@ -175,12 +167,12 @@ class TestingChecklistEntry(Base):
     # Denormalized alongside run_id on purpose: every query stays directly
     # org-scoped (CLAUDE.md pitfall #14a) instead of reaching the tenancy
     # column through a join that a future caller can forget.
-    run_id = Column(
+    run_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("testing_runs.id", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id = Column(
+    user_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         # SET NULL, so nullable — MySQL 1830 rejects the pair otherwise
         # (CLAUDE.md pitfall #2). A mark is evidence about a *run*, and an
@@ -195,40 +187,42 @@ class TestingChecklistEntry(Base):
     )
     # The route pattern as declared in the frontend router, ":id" segments and
     # all — not a resolved URL. The pattern is what the checklist is a list of.
-    route_path = Column(String(200), nullable=False)
-    status = Column(
+    route_path: Mapped[str] = mapped_column(String(200), nullable=False)
+    status: Mapped[TestingCheckStatus] = mapped_column(
         Enum(TestingCheckStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=TestingCheckStatus.UNTESTED,
     )
-    note = Column(Text, nullable=True)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Sample record ids for a parameterized route, keyed by parameter name.
-    params = Column(JSON, nullable=True)
+    params: Mapped[Optional[dict[str, str]]] = mapped_column(JSON, nullable=True)
     # The tester's positions when the mark was made.
-    tested_as = Column(JSON, nullable=True)
+    tested_as: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
     # The build the tester was actually looking at, so a mark made three
     # deployments ago can be told from one made against what is running now.
-    build_id = Column(String(64), nullable=True)
-    expected_access = Column(
+    build_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    expected_access: Mapped[Optional[TestingAccessExpectation]] = mapped_column(
         Enum(
             TestingAccessExpectation,
             values_callable=lambda x: [e.value for e in x],
         ),
         nullable=True,
     )
-    checked_at = Column(DateTime(timezone=True), nullable=True)
+    checked_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
     )
 
-    run = relationship("TestingRun", back_populates="entries")
+    run: Mapped["TestingRun"] = relationship("TestingRun", back_populates="entries")
 
     __table_args__ = (
         # One row per tester per page *per run*. The upsert relies on it:

@@ -5,8 +5,11 @@ Persists security alerts so they survive server restarts.
 """
 
 import enum
+from datetime import datetime
+from typing import Any, Optional
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, Index, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Enum, Index, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -47,47 +50,51 @@ class SecurityAlertRecord(Base):
 
     __tablename__ = "security_alerts"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
 
-    alert_type = Column(
+    alert_type: Mapped[AlertType] = mapped_column(
         Enum(AlertType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
-    threat_level = Column(
+    threat_level: Mapped[ThreatLevel] = mapped_column(
         Enum(ThreatLevel, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         index=True,
     )
 
-    timestamp = Column(
+    timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    description = Column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
 
-    source_ip = Column(String(45))
-    user_id = Column(String(36), index=True)
+    source_ip: Mapped[Optional[str]] = mapped_column(String(45))
+    user_id: Mapped[Optional[str]] = mapped_column(String(36), index=True)
 
     # Tenant that the alert belongs to, so an org admin only sees (and can only
     # acknowledge/resolve) their own org's alerts. Nullable: pre-auth / IP-only
     # alerts (e.g. brute force against the login page) have no owning tenant and
     # are platform-level, not shown in any single org's view.
-    organization_id = Column(String(36), nullable=True)
+    organization_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
 
-    details = Column(JSON, nullable=False, default=dict)
+    details: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
-    acknowledged = Column(Boolean, nullable=False, default=False, server_default="0")
-    acknowledged_by = Column(String(255))
-    acknowledged_at = Column(DateTime(timezone=True))
+    acknowledged: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    acknowledged_by: Mapped[Optional[str]] = mapped_column(String(255))
+    acknowledged_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
-    resolved = Column(Boolean, nullable=False, default=False, server_default="0")
-    resolved_by = Column(String(255))
-    resolved_at = Column(DateTime(timezone=True))
+    resolved: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    resolved_by: Mapped[Optional[str]] = mapped_column(String(255))
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     # What the officer found, written when the alert is resolved. Capped at
     # the API (1,000 characters); set once, never overwritten by a second
     # resolve, so the trail keeps the first account of what happened.
-    resolution_note = Column(Text, nullable=True)
+    resolution_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 

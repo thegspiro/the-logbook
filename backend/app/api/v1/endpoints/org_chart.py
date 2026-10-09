@@ -11,6 +11,8 @@ defeat that. Editing is held behind ``orgchart.manage`` (delegable to a
 secretary or adjutant on its own) or ``settings.manage``.
 """
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,9 +57,9 @@ async def _chart_payload(db: AsyncSession, current_user: User) -> OrgChartRespon
     nodes = await service.get_chart(
         current_user.organization_id, include_unpublished=can_manage
     )
-    members = []
-    roles = []
-    ranks = []
+    members: list[dict[str, str]] = []
+    roles: list[dict[str, Any]] = []
+    ranks: list[dict[str, Any]] = []
     if can_manage:
         members = await service.list_member_options(current_user.organization_id)
         roles, ranks = await service.list_link_options(current_user.organization_id)

@@ -41,7 +41,8 @@ class QuorumService:
         org = result.scalar_one_or_none()
         if not org:
             return {"enabled": False}
-        return (org.settings or {}).get("quorum_config", {"enabled": False})
+        config: Dict = (org.settings or {}).get("quorum_config", {"enabled": False})
+        return config
 
     async def get_active_member_count(self, organization_id: UUID) -> int:
         """Count active members in the organization (denominator for percentage quorum)."""

@@ -6,11 +6,12 @@ logs, preferences, and department messages.
 """
 
 import enum
+from datetime import datetime
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import (
     JSON,
     Boolean,
-    Column,
     DateTime,
     Enum,
     ForeignKey,
@@ -19,12 +20,15 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
 from app.utils.member_names import format_display_name
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class NotificationChannel(str, enum.Enum):
@@ -102,27 +106,27 @@ class NotificationRule(Base):
 
     __tablename__ = "notification_rules"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Rule Information
-    name = Column(String(255), nullable=False)
-    description = Column(Text)
-    trigger = Column(
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    trigger: Mapped[NotificationTrigger] = mapped_column(
         Enum(NotificationTrigger, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
-    category = Column(
+    category: Mapped[NotificationCategory] = mapped_column(
         Enum(NotificationCategory, values_callable=lambda x: [e.value for e in x]),
         default=NotificationCategory.GENERAL,
         nullable=False,
         server_default="general",
     )
-    channel = Column(
+    channel: Mapped[NotificationChannel] = mapped_column(
         Enum(NotificationChannel, values_callable=lambda x: [e.value for e in x]),
         default=NotificationChannel.IN_APP,
         nullable=False,
@@ -130,18 +134,24 @@ class NotificationRule(Base):
     )
 
     # Settings
-    enabled = Column(Boolean, default=True)
-    config = Column(JSON)  # Trigger-specific config (e.g., days_before for reminders)
+    enabled: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
+    config: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON
+    )  # Trigger-specific config (e.g., days_before for reminders)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
 
     # Relationships
-    logs = relationship(
+    logs: Mapped[list["NotificationLog"]] = relationship(
         "NotificationLog", back_populates="rule", cascade="all, delete-orphan"
     )
 
@@ -178,13 +188,13 @@ class NotificationLog(Base):
 
     __tablename__ = "notification_logs"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    rule_id = Column(
+    rule_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("notification_rules.id", ondelete="SET NULL"),
         nullable=True,
@@ -192,29 +202,29 @@ class NotificationLog(Base):
     )
 
     # Notification Details
-    recipient_id = Column(
+    recipient_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    recipient_email = Column(String(255))
+    recipient_email: Mapped[Optional[str]] = mapped_column(String(255))
     # A first-class link (rather than JSON-only metadata) makes department
     # message deliveries queryable and lets the database reject duplicate
     # fan-out when two workers race.
-    department_message_id = Column(
+    department_message_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("department_messages.id", ondelete="CASCADE"),
         nullable=True,
     )
-    channel = Column(
+    channel: Mapped[NotificationChannel] = mapped_column(
         Enum(NotificationChannel, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
-    subject = Column(String(500))
-    message = Column(Text)
+    subject: Mapped[Optional[str]] = mapped_column(String(500))
+    message: Mapped[Optional[str]] = mapped_column(Text)
 
     # Categorization
-    category = Column(
+    category: Mapped[Optional[str]] = mapped_column(
         String(50), nullable=True, index=True
     )  # e.g., "event_reminder", "action_items"
 
@@ -223,34 +233,48 @@ class NotificationLog(Base):
     # would sort last under `ORDER BY sent_at DESC` and be unreachable by any
     # cursor, absent from a list claiming to be complete. See migration
     # c8f4a1e6b309.
-    sent_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    delivered = Column(Boolean, default=_delivered_default)
-    read = Column(Boolean, default=False)
-    read_at = Column(DateTime(timezone=True))
-    pinned = Column(Boolean, default=False)
-    error = Column(Text)
+    sent_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    delivered: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=_delivered_default
+    )
+    read: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    read_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    pinned: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    error: Mapped[Optional[str]] = mapped_column(Text)
 
     # Navigation
-    action_url = Column(
+    action_url: Mapped[Optional[str]] = mapped_column(
         String(500), nullable=True
     )  # Frontend route to navigate to on click
 
     # "metadata" is reserved by SQLAlchemy Declarative; map via Column("metadata")
-    notification_metadata = Column("metadata", JSON, nullable=True)
+    notification_metadata: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        "metadata", JSON, nullable=True
+    )
 
     # Lifecycle
-    expires_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     # Relationships
     # `rule` is eager (lazy="joined") like `recipient` because the rule_name
     # property below reads self.rule during response serialization: for a log
     # with a rule_id whose rule wasn't eager-loaded, that access triggers a lazy
     # load in async context and raises MissingGreenlet (a 500 on the logs list).
-    rule = relationship("NotificationRule", back_populates="logs", lazy="joined")
-    recipient = relationship("User", foreign_keys=[recipient_id], lazy="joined")
+    rule: Mapped[Optional["NotificationRule"]] = relationship(
+        "NotificationRule", back_populates="logs", lazy="joined"
+    )
+    recipient: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[recipient_id], lazy="joined"
+    )
 
     __table_args__ = (
         Index("idx_notif_logs_recipient", "recipient_id"),
@@ -332,17 +356,17 @@ class DepartmentMessage(Base):
 
     __tablename__ = "department_messages"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Content
-    title = Column(String(500), nullable=False)
-    body = Column(Text, nullable=False)
-    priority = Column(
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    priority: Mapped[MessagePriority] = mapped_column(
         Enum(MessagePriority, values_callable=lambda x: [e.value for e in x]),
         default=MessagePriority.NORMAL,
         nullable=False,
@@ -350,51 +374,61 @@ class DepartmentMessage(Base):
     )
 
     # Targeting
-    target_type = Column(
+    target_type: Mapped[MessageTargetType] = mapped_column(
         Enum(MessageTargetType, values_callable=lambda x: [e.value for e in x]),
         default=MessageTargetType.ALL,
         nullable=False,
         server_default="all",
     )
-    target_roles = Column(
+    target_roles: Mapped[Optional[list[str]]] = mapped_column(
         JSON, nullable=True
     )  # Array of role ids; legacy role-name entries remain supported
-    target_statuses = Column(
+    target_statuses: Mapped[Optional[list[str]]] = mapped_column(
         JSON, nullable=True
     )  # Array of status values when target_type == 'statuses'
-    target_member_ids = Column(
+    target_member_ids: Mapped[Optional[list[str]]] = mapped_column(
         JSON, nullable=True
     )  # Array of user IDs when target_type == 'members'
 
     # Display
-    is_pinned = Column(Boolean, default=False)
-    is_active = Column(Boolean, default=True)
-    is_persistent = Column(Boolean, default=False)
-    requires_acknowledgment = Column(Boolean, default=False)
+    is_pinned: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    is_active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
+    is_persistent: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    requires_acknowledgment: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=False
+    )
 
     # Lifecycle
-    posted_by = Column(
+    posted_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    expires_at = Column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # Soft delete: preserves read/acknowledgment records (compliance evidence)
     # instead of cascade-removing them on a hard DELETE.
-    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # Deferred publish time. A future value means the message is not yet live
     # (hidden from inboxes, not yet escalated); the publish task clears this to
     # NULL when it goes live, so NULL == published/immediate.
-    scheduled_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    scheduled_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    author = relationship("User", foreign_keys=[posted_by])
-    reads = relationship(
+    author: Mapped[Optional["User"]] = relationship("User", foreign_keys=[posted_by])
+    reads: Mapped[list["DepartmentMessageRead"]] = relationship(
         "DepartmentMessageRead", back_populates="message", cascade="all, delete-orphan"
     )
-    recipients = relationship(
+    recipients: Mapped[list["DepartmentMessageRecipient"]] = relationship(
         "DepartmentMessageRecipient",
         back_populates="message",
         cascade="all, delete-orphan",
@@ -425,20 +459,26 @@ class DepartmentMessageRead(Base):
 
     __tablename__ = "department_message_reads"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    message_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    message_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("department_messages.id", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    read_at = Column(DateTime(timezone=True), server_default=func.now())
-    acknowledged_at = Column(DateTime(timezone=True), nullable=True)
+    read_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    acknowledged_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
-    message = relationship("DepartmentMessage", back_populates="reads")
-    user = relationship("User", foreign_keys=[user_id])
+    message: Mapped["DepartmentMessage"] = relationship(
+        "DepartmentMessage", back_populates="reads"
+    )
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
 
     __table_args__ = (
         UniqueConstraint("message_id", "user_id", name="uq_dept_msg_read_user"),
@@ -451,21 +491,29 @@ class DepartmentMessageDelivery(Base):
 
     __tablename__ = "department_message_deliveries"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    message_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    message_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("department_messages.id", ondelete="CASCADE"),
         nullable=False,
     )
-    recipient_id = Column(
+    recipient_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    channel = Column(String(16), nullable=False)
-    status = Column(String(16), nullable=False, server_default="pending")
-    idempotency_key = Column(String(255), nullable=False, unique=True)
-    attempted_at = Column(DateTime(timezone=True), server_default=func.now())
-    delivered_at = Column(DateTime(timezone=True), nullable=True)
-    error = Column(Text, nullable=True)
+    channel: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="pending"
+    )
+    idempotency_key: Mapped[str] = mapped_column(
+        String(255), nullable=False, unique=True
+    )
+    attempted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    delivered_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
         UniqueConstraint(
@@ -483,16 +531,16 @@ class DepartmentMessageRecipient(Base):
 
     __tablename__ = "department_message_recipients"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    message_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    message_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("department_messages.id", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    organization_id = Column(
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
@@ -502,18 +550,28 @@ class DepartmentMessageRecipient(Base):
     # narrowed one revokes them — so this diverges from the message's own
     # created_at, which is the case the delivery path has to tell apart, and
     # every other stamp here is a state change against a row already present.
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    read_at = Column(DateTime(timezone=True), nullable=True)
-    acknowledged_at = Column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    read_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    acknowledged_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # Set when a published message's audience was narrowed and this member
     # fell out of it, but the row carries a receipt worth keeping. The row is
     # evidence from then on, not access: every visibility query filters on
     # this, because they authorize on the row's existence alone and an author
     # who removes somebody from an audience means to remove their access too.
-    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
-    message = relationship("DepartmentMessage", back_populates="recipients")
-    user = relationship("User", foreign_keys=[user_id])
+    message: Mapped["DepartmentMessage"] = relationship(
+        "DepartmentMessage", back_populates="recipients"
+    )
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
 
     __table_args__ = (
         UniqueConstraint("message_id", "user_id", name="uq_dept_msg_recipient_user"),
@@ -554,14 +612,14 @@ class PushSubscription(Base):
 
     __tablename__ = "push_subscriptions"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
@@ -570,17 +628,21 @@ class PushSubscription(Base):
     # Push endpoints are URLs with no documented length bound; observed values
     # from FCM already exceed 200 chars, so this is stored as TEXT. It cannot
     # be indexed directly at full width in MySQL, hence endpoint_hash below.
-    endpoint = Column(Text, nullable=False)
+    endpoint: Mapped[str] = mapped_column(Text, nullable=False)
     # SHA-256 of the endpoint, so uniqueness can be enforced and lookups done
     # without a prefix index on an unbounded column.
-    endpoint_hash = Column(String(64), nullable=False)
-    p256dh = Column(String(255), nullable=False)
-    auth = Column(String(255), nullable=False)
-    user_agent = Column(String(500), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    last_used_at = Column(DateTime(timezone=True), nullable=True)
+    endpoint_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    p256dh: Mapped[str] = mapped_column(String(255), nullable=False)
+    auth: Mapped[str] = mapped_column(String(255), nullable=False)
+    user_agent: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
-    user = relationship("User", foreign_keys=[user_id])
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
 
     __table_args__ = (
         UniqueConstraint("endpoint_hash", name="uq_push_sub_endpoint"),

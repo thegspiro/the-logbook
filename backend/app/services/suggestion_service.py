@@ -177,7 +177,8 @@ class SuggestionService:
             )
             .execution_options(populate_existing=True)
         )
-        return result.scalar_one_or_none()
+        suggestion_box: Optional[SuggestionBox] = result.scalar_one_or_none()
+        return suggestion_box
 
     async def list_boxes_for_admin(self, organization_id: str) -> List[Dict[str, Any]]:
         result = await self.db.execute(
@@ -565,7 +566,8 @@ class SuggestionService:
                 SuggestionBox.is_active.is_(True),
             )
         )
-        return result.scalar_one_or_none()
+        suggestion_box: Optional[SuggestionBox] = result.scalar_one_or_none()
+        return suggestion_box
 
     @staticmethod
     def resolve_anonymity(box: SuggestionBox, requested: bool) -> bool:
@@ -743,7 +745,8 @@ class SuggestionService:
                 Suggestion.is_anonymous.is_(False),
             )
         )
-        return result.scalar_one_or_none()
+        suggestion: Optional[Suggestion] = result.scalar_one_or_none()
+        return suggestion
 
     async def get_by_key(self, organization_id: str, key: str) -> Optional[Suggestion]:
         result = await self.db.execute(
@@ -752,7 +755,8 @@ class SuggestionService:
                 Suggestion.follow_up_key_hash == hash_follow_up_key(key),
             )
         )
-        return result.scalar_one_or_none()
+        suggestion: Optional[Suggestion] = result.scalar_one_or_none()
+        return suggestion
 
     async def submitter_view(
         self, suggestion: Suggestion, viewer_id: Optional[str]
@@ -954,7 +958,8 @@ class SuggestionService:
                 condition,
             )
         )
-        return result.scalar_one_or_none()
+        suggestion: Optional[Suggestion] = result.scalar_one_or_none()
+        return suggestion
 
     async def is_box_reviewer(
         self, organization_id: str, user_id: str, box_id: str
@@ -1564,6 +1569,7 @@ class SuggestionService:
     def find_attachment(
         suggestion: Suggestion, attachment_id: str
     ) -> Optional[SuggestionAttachment]:
+        attachment: SuggestionAttachment
         for attachment in suggestion.attachments:
             if attachment.id == str(attachment_id):
                 return attachment
