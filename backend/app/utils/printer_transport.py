@@ -97,7 +97,9 @@ def validate_printer_port(port: int) -> None:
         )
 
 
-def _check_address(ip: ipaddress._BaseAddress, host: str) -> None:
+def _check_address(
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address, host: str
+) -> None:
     if ip.is_loopback:
         raise ValueError(
             f"{host} resolves to a loopback address. A label printer must be a "

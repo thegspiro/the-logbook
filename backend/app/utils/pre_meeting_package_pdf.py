@@ -278,9 +278,10 @@ def render_pre_meeting_package_pdf(
 
     # ---- Voting window / election configuration ----
     story.append(Paragraph("Election Configuration", section_style))
-    victory = _VICTORY_LABELS.get(
-        election.get("victory_condition"), election.get("victory_condition") or "—"
-    )
+    victory_condition: Optional[str] = election.get("victory_condition")
+    # A missing condition is never a key, so "" falls through to the "—" default
+    # exactly as a None lookup would.
+    victory = _VICTORY_LABELS.get(victory_condition or "", victory_condition or "—")
     if election.get("victory_percentage"):
         victory += f" ({election['victory_percentage']}%)"
     if election.get("victory_threshold"):
@@ -313,7 +314,7 @@ def render_pre_meeting_package_pdf(
             "Voting method",
             _esc(
                 _VOTING_METHOD_LABELS.get(
-                    election.get("voting_method"),
+                    election.get("voting_method") or "",
                     election.get("voting_method") or "—",
                 )
             ),
@@ -416,7 +417,7 @@ def render_pre_meeting_package_pdf(
     any_item_blocked = any(row.get("blocked_count") for row in item_summary)
     if item_summary:
         story.append(Paragraph("Eligibility by Ballot Item", item_title_style))
-        rows = [["Ballot Item", "Eligible", "Not eligible", "Why not"]]
+        rows: List[List[Any]] = [["Ballot Item", "Eligible", "Not eligible", "Why not"]]
         for row in item_summary:
             eligible_text = str(row.get("eligible_count", 0))
             if row.get("eligible_by_override"):
@@ -439,7 +440,7 @@ def render_pre_meeting_package_pdf(
 
     story.append(Paragraph(f"Eligible Voters ({len(eligible)})", item_title_style))
     if eligible:
-        rows: List[List[Any]] = [["Member", "Membership Type", ""]]
+        rows = [["Member", "Membership Type", ""]]
         for member in eligible:
             rows.append(
                 [

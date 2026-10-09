@@ -185,11 +185,10 @@ _MAX_SEAT_COUNT = 50
 
 def _seat_count(count: Any) -> int:
     """How many seats one entry stands for. Anything unusable means one."""
-    if isinstance(count, bool) or not isinstance(count, int):
-        return 1
-    if count < 1:
-        return 1
-    return min(count, _MAX_SEAT_COUNT)
+    # bool is an int subclass, but True is a flag, not "one seat".
+    if isinstance(count, int) and not isinstance(count, bool) and count >= 1:
+        return min(count, _MAX_SEAT_COUNT)
+    return 1
 
 
 # The widest seat name the position columns hold. Matches

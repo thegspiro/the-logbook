@@ -65,7 +65,8 @@ def hash_password(password: str, *, skip_validation: bool = False) -> str:
             raise ValueError(error_msg)
 
     # Hash the password
-    return password_hasher.hash(password)
+    hashed: str = password_hasher.hash(password)
+    return hashed
 
 
 def verify_password(password: str, hashed_password: str) -> tuple[bool, str | None]:
@@ -418,7 +419,8 @@ def _derive_key_bytes(
         salt=get_encryption_salt(),
         iterations=iterations,
     )
-    return kdf.derive((key or settings.ENCRYPTION_KEY).encode())
+    derived: bytes = kdf.derive((key or settings.ENCRYPTION_KEY).encode())
+    return derived
 
 
 def _get_legacy_keys() -> list[str]:
@@ -586,7 +588,8 @@ def decrypt_data(encrypted_data: str) -> str:
         raw = base64.urlsafe_b64decode(encrypted_data[len(prefix) :])
         nonce, ciphertext = raw[:_GCM_NONCE_BYTES], raw[_GCM_NONCE_BYTES:]
         try:
-            return _get_aesgcm(iterations).decrypt(nonce, ciphertext, None).decode()
+            plaintext: bytes = _get_aesgcm(iterations).decrypt(nonce, ciphertext, None)
+            return plaintext.decode()
         except InvalidTag:
             # Key-rotation ring: values written before a rotation decrypt
             # under a legacy key. GCM authentication guarantees only the
@@ -594,26 +597,25 @@ def decrypt_data(encrypted_data: str) -> str:
             # fail-closed contract — if no key verifies, re-raise.
             for legacy_key in _get_legacy_keys():
                 try:
-                    return (
-                        _get_legacy_aesgcm(legacy_key, iterations)
-                        .decrypt(nonce, ciphertext, None)
-                        .decode()
+                    plaintext = _get_legacy_aesgcm(legacy_key, iterations).decrypt(
+                        nonce, ciphertext, None
                     )
+                    return plaintext.decode()
                 except InvalidTag:
                     continue
             raise
 
     # Legacy Fernet (AES-128-CBC + HMAC) ciphertext written before the migration.
     try:
-        return _get_cipher().decrypt(encrypted_data.encode()).decode()
+        fernet_plaintext: bytes = _get_cipher().decrypt(encrypted_data.encode())
+        return fernet_plaintext.decode()
     except InvalidToken:
         for legacy_key in _get_legacy_keys():
             try:
-                return (
-                    _get_legacy_fernet(legacy_key)
-                    .decrypt(encrypted_data.encode())
-                    .decode()
+                fernet_plaintext = _get_legacy_fernet(legacy_key).decrypt(
+                    encrypted_data.encode()
                 )
+                return fernet_plaintext.decode()
             except InvalidToken:
                 continue
         raise
@@ -687,7 +689,7 @@ def create_access_token(
         }
     )
 
-    encoded_jwt = jwt.encode(
+    encoded_jwt: str = jwt.encode(
         to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
     )
     return encoded_jwt
@@ -707,7 +709,10 @@ def create_mfa_pending_token(user_id: str, minutes: int = 5) -> str:
         "iat": now,
         "type": "mfa_pending",
     }
-    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    encoded_jwt: str = jwt.encode(
+        to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
+    )
+    return encoded_jwt
 
 
 def create_refresh_token(data: dict[str, Any]) -> str:
@@ -734,7 +739,7 @@ def create_refresh_token(data: dict[str, Any]) -> str:
         }
     )
 
-    encoded_jwt = jwt.encode(
+    encoded_jwt: str = jwt.encode(
         to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
     )
     return encoded_jwt
@@ -764,7 +769,7 @@ def decode_token(token: str) -> dict[str, Any]:
     # SEC: Require an expiry claim so a token minted without `exp` (which would
     # otherwise never expire) is rejected. Every issuer in this codebase sets
     # exp, so this only closes the malformed/forged-without-exp case.
-    payload = jwt.decode(
+    payload: dict[str, Any] = jwt.decode(
         token,
         settings.SECRET_KEY,
         algorithms=_ALLOWED_ALGORITHMS,
