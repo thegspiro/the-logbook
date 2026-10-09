@@ -89,7 +89,7 @@ async def create_meeting(
     result, error = await service.create_meeting(
         current_user.organization_id, meeting_data, current_user.id
     )
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400, detail=safe_error_detail(ValueError(error))
         )
@@ -197,7 +197,7 @@ async def approve_meeting(
     result, error = await service.approve_meeting(
         meeting_id, current_user.organization_id, current_user.id
     )
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400, detail=safe_error_detail(ValueError(error))
         )
@@ -311,7 +311,7 @@ async def create_action_item(
     result, error = await service.create_action_item(
         meeting_id, current_user.organization_id, item.model_dump(exclude_none=True)
     )
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400, detail=safe_error_detail(ValueError(error))
         )
@@ -582,15 +582,15 @@ async def create_meeting_from_event(
         organization_id=current_user.organization_id,
         created_by=current_user.id,
     )
-    if error:
+    if error or meeting is None:
         # MM-10: `error` here can be the service's own bare str(exception) —
         # not a ValueError instance safe_error_detail() can pattern-check —
         # so it must go through sanitize_error_message() (the helper built
         # for exactly this "raw service-layer string" shape, already used by
         # inventory.py/medical_supplies.py) rather than reach the client raw.
         raise HTTPException(
-            status_code=400 if "already exists" in error else 404,
-            detail=sanitize_error_message(error),
+            status_code=400 if error and "already exists" in error else 404,
+            detail=sanitize_error_message(error or ""),
         )
 
     await log_audit_event(

@@ -213,15 +213,15 @@ async def submit_public_form(
             message="Thank you for your submission!",
         )
 
-    if error:
+    if error or result is None:
         if error == FormsService.PUBLIC_DAILY_CAP_ERROR:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=error,
+                detail=error or "An unexpected error occurred",
             )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=error or "An unexpected error occurred",
         )
 
     # Get form name for response

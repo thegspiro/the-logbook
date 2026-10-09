@@ -135,10 +135,10 @@ async def create_form(
         created_by=current_user.id,
     )
 
-    if error:
+    if error or new_form is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=error or "An unexpected error occurred",
         )
 
     await log_audit_event(
@@ -619,10 +619,10 @@ async def submit_form(
         submitted_by=current_user.id,
     )
 
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=error or "An unexpected error occurred",
         )
 
     await log_audit_event(

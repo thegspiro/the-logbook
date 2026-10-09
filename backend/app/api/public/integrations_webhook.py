@@ -66,7 +66,7 @@ async def _load_integration(
             Integration.enabled.is_(True),
         )
     )
-    integration = result.scalar_one_or_none()
+    integration: Integration | None = result.scalar_one_or_none()
     if not integration:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found"
