@@ -78,7 +78,8 @@ class BudgetRequestForbiddenError(PermissionError):
 
 
 # The order a draft year's budget moves through on its way to adoption. A
-# move is one step forward or back; adoption itself is activation.
+# move is one step forward or back. ADOPTED is not in it: only recording the
+# board's vote reaches it, and nothing moves a year back out of it.
 _STAGE_ORDER = (
     BudgetPlanningStage.REQUESTS,
     BudgetPlanningStage.LEADERSHIP_REVIEW,
@@ -88,6 +89,7 @@ _STAGE_LABELS = {
     BudgetPlanningStage.REQUESTS: "taking requests",
     BudgetPlanningStage.LEADERSHIP_REVIEW: "in leadership review",
     BudgetPlanningStage.BOARD_REVIEW: "before the board",
+    BudgetPlanningStage.ADOPTED: "adopted by the board",
 }
 
 
@@ -178,6 +180,13 @@ class FinanceBudgetRequestService:
             )
             if fy.status == FiscalYearStatus.DRAFT:
                 row["planning_stage"] = planning_stage(fy.planning_stage).value
+            # An end date entered as a calendar day is that day's midnight
+            # UTC, so its UTC date is the last day of the year.
+            row["close_due"] = (
+                fy.status == FiscalYearStatus.ACTIVE
+                and not fy.is_locked
+                and today > fy.end_date.date()
+            )
             rows.append(row)
         return rows
 
@@ -771,13 +780,18 @@ class FinanceBudgetRequestService:
         try:
             target = BudgetPlanningStage(stage)
         except ValueError:
-            raise ValueError(
-                "Choose requests, leadership_review or board_review."
-            ) from None
+            target = None
+        if target not in _STAGE_ORDER:
+            raise ValueError("Choose requests, leadership_review or board_review.")
         fy = await self._year_or_404(fy_id, org_id, lock=True)
         if fy.status != FiscalYearStatus.DRAFT or fy.is_locked:
             raise ValueError(f"{fy.name} is not a draft fiscal year.")
         current = planning_stage(fy.planning_stage)
+        if current == BudgetPlanningStage.ADOPTED:
+            raise ValueError(
+                f"{fy.name} has been adopted by the board; its stage no longer "
+                "moves."
+            )
         if target == current:
             raise ValueError(f"{fy.name} is already {_STAGE_LABELS[target]}.")
         if abs(_STAGE_ORDER.index(target) - _STAGE_ORDER.index(current)) != 1:

@@ -447,8 +447,101 @@ completed" until the administrator visits `/onboarding/encryption-key`.
 
 **Do not downgrade the code past this change** once files have been uploaded:
 earlier releases serve an encrypted file's raw bytes. The database part does
-roll back: `cd backend && alembic downgrade c0bf0b155719` drops
+roll back: `cd backend && alembic downgrade c6c4ffcfdfb3` drops
 `encryption_key_custody`, and the notice returns after a re-upgrade.
+
+### QuickBooks exports follow Intuit's import limits (2026-10-09)
+
+- **An export that would reach 1,000 rows is refused** (400), since QuickBooks
+  Online does not import a file that long. That is about 499 transactions;
+  export a shorter period. The limit was 10,000 transactions, which produced
+  files QuickBooks rejected.
+- **Accounts Payable and Accounts Receivable are refused** as a category's
+  QuickBooks account or a mapping's account or paid-from account, because the
+  import needs a vendor or customer on those lines. A mapping already saved
+  with one shows **Payable/receivable account** on **Finance › QuickBooks
+  Export**, and an export using it is refused until it is changed to the bank
+  or card account the money is paid from.
+
+### Expense reports need a receipt on every line (2026-10-09)
+
+Builds on the uploaded receipts below (migration `c0bf0b155719`); no
+migration of its own.
+
+- **Submitting an expense report now refuses (400)** until every line has an
+  uploaded receipt. Members attach them on the report's page after saving it.
+  Drafts saved before the upgrade need receipts before they are submitted;
+  reports already submitted, approved or paid are unaffected.
+- **Approvers can now open the reports they decide on.** An approver without
+  `finance.manage` was linked from the approvals queue to a report that
+  answered 404; the report and its receipts now open for the people its chain
+  names (and for any `finance.approve` holder on a report no chain applies
+  to). Other members' reports stay hidden as before.
+- **A closing year takes no new receipts from members**, and a locked year
+  none at all; the finance office can still attach receipts in a closing year
+  for what it is settling.
+
+### Adopting, starting and closing a fiscal year are separate steps (2026-10-09)
+
+The year-end close is now a period the Treasurer begins, and the budget's
+adoption no longer starts the year. Migration `af92f1496c43`. This supersedes
+the activate behaviour described in the next entry:
+
+- **Adoption has its own endpoint.** `POST /finance/fiscal-years/{id}/adopt`
+  takes the board's vote (`{"adoptedOn", "adoptionReference",
+"adoptionNotes"?}`) on a draft in board review and moves it to a new
+  `adopted` stage. The year stays a draft; nobody is emailed yet.
+- **`POST /finance/fiscal-years/{id}/activate` takes no body.** On a draft it
+  now refuses (400) unless the year was adopted and the department's today is
+  on or after its start date; starting it emails the line owners. A client
+  still sending the adoption body to `activate` gets that refusal — send it to
+  `adopt` first.
+- **Starting a year no longer closes the active one.** It is refused while
+  another year is active: `POST /finance/fiscal-years/{id}/begin-close` on the
+  current year first. A year in its close can be reopened with `activate`.
+- **A closing year takes nothing new.** Purchase requests, expense reports and
+  check requests can no longer be created, edited, given line items or
+  submitted against a closed year (400). Approving, paying, issuing, voiding
+  and cancelling what is already in it still work, as do budget amendments. A
+  **locked** year refuses all of those.
+- **`POST /finance/fiscal-years/{id}/lock` needs a body and a clear year:**
+  `{"notes": "..."}` (the reconciliation sign-off, required), only from a year
+  in its close, and refused (400) while any request is still submitted or
+  approved-but-unpaid — `GET /finance/fiscal-years/{id}/open-items` lists them.
+  Locking an active year directly is no longer possible.
+- **Years closed before the upgrade but never locked** — the ones a newer year
+  replaced — now show as **Closing** and take no new requests. Lock them from
+  _Finance › Settings_ once their open items are cleared, or reopen one if it
+  was closed by mistake. They have no close date recorded, and years locked
+  before the upgrade have no sign-off; none is invented.
+- **Downgrading** drops the close date and sign-off columns and returns any
+  adopted draft to board review (its adoption record stays).
+
+### Prospective members: Auto-Purge now deletes — the clock starts at this upgrade (2026-10-09)
+
+The pipeline **Auto-Purge** setting (Pipeline Settings → inactivity) used to be
+stored and never read. It is now in effect: a daily task
+(`membership_auto_purge`) permanently deletes, with their uploaded documents,
+the **inactive** applications in each pipeline that has Auto-Purge on, once
+they have been inactive for the configured number of days (30–1095; a value
+outside that range is treated as the nearest bound, and an unreadable one
+skips the pipeline). Each run writes a `membership_pipeline.prospects_purged`
+audit event marked `trigger: auto_purge`, with the pipeline, the threshold and
+the purged ids. No email is sent before a purge.
+
+**Nothing already inactive is deleted straight away.** Migration
+`feecd81eef2d` adds `prospective_members.inactive_since` and sets it to the
+time the migration runs for every application inactive at that moment — not
+to the date it actually went inactive. So an application that has sat
+inactive for years in a pipeline with Auto-Purge switched on is purged only
+after a full grace period has passed **after the upgrade**. The **Deactivated**
+date shown on the application is unchanged. An application with no
+`inactive_since` is never auto-purged.
+
+If a pipeline had Auto-Purge switched on without anyone expecting it to act,
+review it during that grace period: turn it off, or reactivate the
+applications you want to keep. Reactivating an application stops its clock;
+if it goes inactive again, the clock starts afresh.
 
 ### Document folders open to module rights; who sees what changes (2026-10-09)
 
@@ -1152,7 +1245,8 @@ inactive, removes their uploaded documents from the server, and records the
 purge in the audit log (count and ids only); the message reports how many were
 really deleted. Withdrawn, rejected and on-hold applications are never purged.
 The pipeline's **Auto-Purge** setting is still stored but nothing reads it, so
-no application is ever deleted automatically.
+no application is ever deleted automatically. _(Wired on 2026-10-09 — see
+"Auto-Purge now deletes" above.)_
 
 ### Each pipeline decides what a converted applicant becomes (2026-09-30)
 

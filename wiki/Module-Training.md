@@ -78,17 +78,27 @@ The Training module tracks courses, certifications, training requirements, progr
 
 ### Training Admin Tabs
 
-_(Rewritten 2026-10-04: this table listed thirteen flat tabs from before the
-hub gained its page/tab layout. `?page=` selects the group and `&tab=` the tab.)_
+_(Rewritten 2026-10-09: the hub's six sections, three of them behind a "More"
+menu, became seven areas shown as cards. `?page=` selects the area and `&tab=`
+the destination; the areas are declared in
+`frontend/src/components/training/trainingAdminAreas.ts`.)_
 
-| Page (`?page=`)                         | Tabs (`&tab=`)                                                                                                             |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| **Dashboard** (`dashboard`)             | Overview (Training Officer Dashboard, with the first-run setup guide), Compliance Matrix, Expiring Certs, Training Waivers |
-| **Records** (`records`)                 | Submissions, Sessions, Course Cohorts, Shift Reports, Monthly Status                                                       |
-| **Setup** (`setup`)                     | Requirements, Course Library, Pipelines, Manual Entry, Integrations, Import History, Headline Metrics                      |
-| **Skills Testing** (`skills-testing`)   | Templates, Test Records                                                                                                    |
-| **Program Management** (`enhancements`) | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports                                             |
-| **Compliance** (`compliance`)           | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast                                                       |
+| Area (`?page=`)                         | Destinations (`&tab=`)                                                                                 |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Overview** (`dashboard`)              | Dashboard (`overview`), Compliance Matrix, Expiring Certs, Training Waivers                            |
+| **Records** (`records`)                 | Submissions to Review, Sessions, Course Cohorts, Shift Reports, Monthly Status                         |
+| **Curriculum** (`curriculum`)           | Requirements, Course Library, Programs (`pipelines`)                                                   |
+| **Evaluations** (`evaluations`)         | Skill Evaluations, Knowledge Tests, Skills Test Templates (`templates`), Skills Test Records (`tests`) |
+| **Program Management** (`enhancements`) | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports                         |
+| **Compliance Reporting** (`compliance`) | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast                                   |
+| **Settings & Data** (`settings`)        | Manual Entry Rules, Integrations, Import History, Headline Metrics (`metrics`)                         |
+
+Destination ids are unique across the hub, so a link is resolved by its
+`&tab=` first. Links that name the retired `setup` and `skills-testing`
+sections, or carry only a flat `?tab=`, open the area that now holds that
+destination. A bare `?page=setup` opens Curriculum and `?page=skills-testing`
+opens Evaluations. A red count on an area card or destination is the number of
+open items in the hub's Needs Attention queue that link to it.
 
 ### Legacy Redirects
 

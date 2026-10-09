@@ -80,6 +80,8 @@ describe('learning path content', () => {
     const quoted: [step: string, label: string, source: string][] = [
       ['getting-started.dashboard', 'Next 30 Days', 'pages/Dashboard.tsx'],
       ['getting-started.notifications', 'My Notifications', 'pages/NotificationsPage.tsx'],
+      ['events.missed-checkin', 'I was there', 'components/event-detail/EventAttendancePetitionPrompt.tsx'],
+      ['events.missed-checkin', 'Withdraw request', 'components/event-detail/EventAttendancePetitionPrompt.tsx'],
       ['mobile.push', 'Push Notifications on This Device', 'pages/UserSettingsPage.tsx'],
       ['scheduling.my-shifts', 'Confirm', 'pages/scheduling/MyShiftsTab.tsx'],
       ['scheduling.open-shifts', 'Sign Up', 'pages/scheduling/OpenShiftsTab.tsx'],

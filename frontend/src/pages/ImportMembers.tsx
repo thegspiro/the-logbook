@@ -972,7 +972,9 @@ const ImportMembers: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen">
+    // Top padding matches the hub's other tabs; without it this header sat
+    // flush against the section cards above it.
+    <div className="min-h-screen pt-6">
       {/* Header */}
       <header className="bg-theme-input-bg border-theme-surface-border border-b px-6 py-4 backdrop-blur-xs">
         <div className="mx-auto max-w-4xl">

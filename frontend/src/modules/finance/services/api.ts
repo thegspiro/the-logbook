@@ -49,6 +49,8 @@ import type {
   ExportReadiness,
   FiscalYearOption,
   FiscalYearAdoptionPayload,
+  FiscalYearLockPayload,
+  FiscalYearOpenItem,
   FiscalYearUpdatePayload,
   FinanceNamedOption,
   MemberDues,
@@ -108,9 +110,26 @@ export const fiscalYearService = {
     return response.data;
   },
 
-  /** A draft is adopted: it must be in board review, and `adoption` is the board's vote. */
-  async activate(id: string, adoption?: FiscalYearAdoptionPayload): Promise<FiscalYear> {
-    const response = await api.post<FiscalYear>(`/finance/fiscal-years/${id}/activate`, adoption);
+  /** Record the board's vote on a draft in board review; the year stays a draft until started. */
+  async adopt(id: string, adoption: FiscalYearAdoptionPayload): Promise<FiscalYear> {
+    const response = await api.post<FiscalYear>(`/finance/fiscal-years/${id}/adopt`, adoption);
+    return response.data;
+  },
+
+  /** Start an adopted draft on or after its start date, or reopen a year in its year-end close. */
+  async activate(id: string): Promise<FiscalYear> {
+    const response = await api.post<FiscalYear>(`/finance/fiscal-years/${id}/activate`);
+    return response.data;
+  },
+
+  async beginClose(id: string): Promise<FiscalYear> {
+    const response = await api.post<FiscalYear>(`/finance/fiscal-years/${id}/begin-close`);
+    return response.data;
+  },
+
+  /** What still stops a closing year from locking. */
+  async openItems(id: string): Promise<FiscalYearOpenItem[]> {
+    const response = await api.get<FiscalYearOpenItem[]>(`/finance/fiscal-years/${id}/open-items`);
     return response.data;
   },
 
@@ -120,8 +139,8 @@ export const fiscalYearService = {
     return response.data;
   },
 
-  async lock(id: string): Promise<FiscalYear> {
-    const response = await api.post<FiscalYear>(`/finance/fiscal-years/${id}/lock`);
+  async lock(id: string, signOff: FiscalYearLockPayload): Promise<FiscalYear> {
+    const response = await api.post<FiscalYear>(`/finance/fiscal-years/${id}/lock`, signOff);
     return response.data;
   },
 };

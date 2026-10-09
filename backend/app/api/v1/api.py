@@ -78,6 +78,7 @@ from app.api.v1.endpoints import (
     scheduling_module_config,
     security_monitoring,
     shift_completion,
+    shift_history_import,
     skill_evaluations,
     skills_testing,
     station_documents,
@@ -365,6 +366,12 @@ api_router.include_router(
 api_router.include_router(
     external_shift_hours.router,
     prefix="/scheduling/external-hours",
+    tags=["scheduling"],
+    dependencies=module_gate("scheduling", "Scheduling"),
+)
+api_router.include_router(
+    shift_history_import.router,
+    prefix="/scheduling/history-import",
     tags=["scheduling"],
     dependencies=module_gate("scheduling", "Scheduling"),
 )

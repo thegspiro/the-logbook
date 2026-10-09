@@ -150,29 +150,43 @@ The new fiscal year is created in **Draft** status.
 
 ![Fiscal year settings listing fiscal years with status badges](./images/11-02-fiscal-year-settings.png)
 
-### Adopting and Activating a Fiscal Year
+### Adopting and Starting a Fiscal Year
 
-A draft year's budget becomes spendable when the board adopts it, and recording that adoption is what activates the year _(2026-10-09)_:
+Adopting the budget and starting the year are separate steps _(2026-10-09)_. The board usually adopts next year's budget before the year begins; the year becomes spendable when you start it.
+
+**Record the board's adoption:**
 
 1. Move the draft year to **Board review** (see [Planning Next Year](#planning-next-year-treasurer), step 4).
 2. Once the board has voted, click **Record adoption** on the year's row.
 3. Enter the date the board adopted it (not in the future) and the motion or minutes reference, and optionally notes such as the vote count.
-4. Click **Adopt and activate**.
+4. Click **Record adoption**.
 
-The year becomes the current period for all financial operations, its row shows _"Adopted by the board {date} · {reference}"_, and each line owner is emailed the lines their position owns with the adopted amounts. Only one fiscal year can be active at a time -- activating a new one automatically closes the previously active one. A draft cannot be activated any other way.
+The year's badge reads **Adopted** and its row shows _"Adopted by the board {date} · {reference}"_. Its budget is final from here: the stage can no longer be moved back.
 
-### Locking a Fiscal Year
+**Start the year** on or after its start date:
 
-When a fiscal year is complete:
+1. Begin the current year's year-end close first (below) — only one year can be active, and starting a new one never closes the old one for you.
+2. Click **Start the year** on the adopted draft and confirm.
 
-1. Click **Lock** on the active fiscal year.
-2. Confirm the lock.
+The year becomes the current period for all financial operations, and each line owner is emailed the lines their position owns with the adopted amounts. Starting is refused before the year's start date, while another year is still active, or if the board's adoption has not been recorded.
 
-A draft year cannot be locked: it has never been adopted, so locking it would close it unused.
+### Closing and Locking a Fiscal Year
 
-Locking transitions the fiscal year to **Closed** status and sets the `isLocked` flag. A locked fiscal year cannot be modified or re-opened, and its budget amounts are final: a line's amount can no longer be changed or amended. A line's notes, station and owner can still be edited. This is typically done after year-end reconciliation.
+When the year ends, the Treasurer closes it in two steps _(2026-10-09)_. Once the end date has passed, a banner on **Finance > Settings** reminds you.
 
-> **Hint:** Create and set up your new fiscal year (including budgets) in Draft status before the current one ends. When the new period begins, activate it. This ensures a seamless transition with no gap in financial tracking.
+**1. Begin year-end close.** Click **Begin year-end close** on the active year and confirm. The year's badge reads **Closing**. From now on:
+
+- No new purchase requests, expense reports or check requests can be raised or submitted against it.
+- What was already submitted can still be approved, and what was approved can still be paid, issued, voided or cancelled.
+- Budget amendments are still allowed.
+
+If you began the close by mistake, **Reopen** makes it the active year again (as long as no other year has been started).
+
+**2. Lock it.** Once everything is settled, click **Lock**. The dialog lists anything still open — submitted requests awaiting a decision, approved purchases or reports not yet paid, approved checks not yet issued — each linked so you can finish it. The lock stays disabled until the list is empty. Then enter your **reconciliation notes** (for example, _"Reconciled to the June 30 bank statement; reviewed by the audit committee"_) and click **Lock the year**.
+
+A locked year's badge reads **Closed**, and its row shows _"Locked {date} · {notes}"_ with who locked it kept on record. A locked year cannot be reopened, nothing in it can be paid or changed, and its budget amounts are final. A line's notes, station and owner can still be edited. A draft year cannot be locked.
+
+> **Hint:** Create and set up your new fiscal year (including budgets) in Draft status before the current one ends, and have the board adopt it. When the new year begins, begin the old year's close, then start the new one — the two can overlap, so last year's bills can still be paid while this year's spending starts.
 
 ### Planning Next Year (Treasurer)
 
@@ -193,17 +207,17 @@ Each copy keeps the line's category, station, notes and its own owner position, 
 
 The year's row then reads _"Requests close {date}"_ with a **Requests open** or **Requests closed** badge. Requests stay open through the **end of that day in your department's time zone**. After it, owners can no longer make, change, submit or withdraw a request (they see _"The request deadline for {year} has passed."_); you can still enter or change them on their behalf. A deadline can only be set while the year is a draft.
 
-**3. Decide the requests.** Each request is approved as asked, adjusted to a different amount (a note saying why is required), or declined (a note is required). Approving or adjusting writes the amount into the draft year's line — or, for a proposed new line, creates it. You can change a decision while the year is still a draft; once you activate it, decisions are final and the budget changes through amendments. See [Reviewing Budget Requests](#reviewing-budget-requests-treasurer) below.
+**3. Decide the requests.** Each request is approved as asked, adjusted to a different amount (a note saying why is required), or declined (a note is required). Approving or adjusting writes the amount into the draft year's line — or, for a proposed new line, creates it. You can change a decision while the year is taking requests; once it moves on, and after it is adopted and started, decisions are final and the budget changes through amendments. See [Reviewing Budget Requests](#reviewing-budget-requests-treasurer) below.
 
 **4. Move it through review to the board.** A draft year shows its stage on its row: **Taking requests**, **Leadership review** or **Board review**. Move it one stage at a time with the buttons beside it; each move asks you to confirm, and each can be undone with the **Back to…** button.
 
 - **Start leadership review** closes the year to line owners whatever the deadline says, and to your own decisions. Senior leadership — the positions your department has granted **`finance.budget_review`**, typically the President and the Chief — opens **Finance > Budget requests** and uses **Change amount** on any request you approved or adjusted to set a different amount with a note. Their amount becomes the line's budget; your decision stays on record beside it. A leader cannot change a request for a line their own position owns, or one they submitted.
 - **Send to the board** freezes everything while the board considers the budget.
-- **Record adoption** (in board review) makes it the active year — see [Adopting and Activating a Fiscal Year](#adopting-and-activating-a-fiscal-year).
+- **Record adoption** (in board review) records the board's vote, and **Start the year** makes it active — see [Adopting and Starting a Fiscal Year](#adopting-and-starting-a-fiscal-year).
 
 Moving back to **Taking requests** reopens the year to owners until the deadline. Deciding a request again then replaces any leadership change to it.
 
-> **Hint:** A sensible order is: create the draft year, **Start from last year**, adjust the lines you already know, set the deadline, let owners request, decide, start leadership review, send it to the board, then record the board's adoption when it votes.
+> **Hint:** A sensible order is: create the draft year, **Start from last year**, adjust the lines you already know, set the deadline, let owners request, decide, start leadership review, send it to the board, then record the board's adoption when it votes and start the year when it begins.
 
 ### Requesting Next Year's Budget (Line Owners)
 
@@ -236,14 +250,14 @@ If the API refuses (for example, an amount below what the line has already spent
 
 ### Edge Cases
 
-| Scenario                                                | Behavior                                                                                                                                 |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Activating a fiscal year when another is already active | The previously active fiscal year is automatically set to Closed status                                                                  |
-| Submitting a request with no active fiscal year         | The request form will not allow submission -- the fiscal year dropdown will be empty                                                     |
-| Editing a locked fiscal year                            | Not permitted -- the system rejects modifications with "Fiscal year is locked and cannot be modified"                                    |
-| Setting a request deadline on an active or closed year  | Not permitted -- "The request deadline can only be set while the fiscal year is a draft."                                                |
-| Copying lines into an active year                       | Not permitted -- **Start from last year** only copies into a draft year that is not locked                                               |
-| Deleting a fiscal year with existing budgets            | Not permitted -- budgets cascade with the fiscal year, but the application blocks deletion of fiscal years that have associated requests |
+| Scenario                                               | Behavior                                                                                                                                 |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Starting a fiscal year when another is already active  | Not permitted -- begin the active year's year-end close first; starting a year never closes another                                      |
+| Submitting a request with no active fiscal year        | The request form will not allow submission -- the fiscal year dropdown will be empty                                                     |
+| Editing a locked fiscal year                           | Not permitted -- the system rejects modifications with "Fiscal year is locked and cannot be modified"                                    |
+| Setting a request deadline on an active or closed year | Not permitted -- "The request deadline can only be set while the fiscal year is a draft."                                                |
+| Copying lines into an active year                      | Not permitted -- **Start from last year** only copies into a draft year that is not locked                                               |
+| Deleting a fiscal year with existing budgets           | Not permitted -- budgets cascade with the fiscal year, but the application blocks deletion of fiscal years that have associated requests |
 
 ---
 
@@ -1026,9 +1040,10 @@ Expense report numbers are auto-generated in the format **ER-YYYY-0001**, where 
 | **Expense Type**  | Yes      | Category of expense (default: General; see table below)  |
 | **Budget**        | No       | Which budget to charge this line item against            |
 | **Merchant**      | No       | Where the purchase was made                              |
-| **Receipt URL**   | No       | Link to or upload of the receipt                         |
 
-5. Click **Create Report**. The report is saved as a **Draft**; open it and click **Submit for Approval** to send it into the approval chain. The total amount is automatically calculated as the sum of all line items.
+5. Click **Create Report**. The report is saved as a **Draft** and opens on its detail page. The total amount is automatically calculated as the sum of all line items.
+6. **Attach a receipt to every line** _(2026-10-09)_. In the **Receipt** column, click **Attach receipt** on each line and choose the file — a PDF or a photo. **Replace** attaches a different file; the earlier one stays on record. For a mileage line, attach your trip log (dates, destinations, purpose and miles).
+7. Click **Submit for Approval**. The button stays disabled, with _"Attach a receipt to … before submitting"_ beside it, until every line has a receipt.
 
 ![Create Expense Report form with header fields and the line items section](./images/11-10-create-expense-report.png)
 
@@ -1055,7 +1070,7 @@ Each line item on an expense report has an expense type that classifies the spen
 
 ### Submitting an Expense Report
 
-Only **Draft** reports can be submitted. The system validates that the `totalAmount` is greater than zero (i.e., at least one line item must exist with a positive amount). The approval chain is resolved based on the `expense_report` entity type, total amount, and budget category (derived from line items).
+Only **Draft** reports can be submitted. The system validates that the `totalAmount` is greater than zero (i.e., at least one line item must exist with a positive amount) and that **every line has a receipt attached** — otherwise it is refused, naming the lines that are missing one. A member can still replace a receipt while the report is only submitted; once it is in approval, only the finance office can, and a replaced receipt stays on record. The approval chain is resolved based on the `expense_report` entity type, total amount, and budget category (derived from line items).
 
 ### Tracking and Payment
 
@@ -1063,8 +1078,10 @@ Open an expense report to see its detail page at `/finance/expenses/:id`. The de
 
 - Report number, title, and total amount (sum of all line items)
 - Current status with approval chain progress
-- All line items with their individual details
+- All line items with their individual details, and each line's receipt (click **Receipt** to download it)
 - Payment status and method (once paid)
+
+The report — receipts included — can be read by the member who submitted it, a finance manager (`finance.manage`), and its **approvers**: whoever its approval chain names, anyone who has already acted on one of its steps, an approvals administrator, and, for a report no chain applies to, any `finance.approve` holder. Everyone else is told the report does not exist.
 
 ![Expense report detail with its line items and approval status](./images/11-14-expense-report-detail.png)
 
@@ -1083,7 +1100,7 @@ Once an expense report is approved:
 
 The paid amount is recorded against the associated budgets for each line item that has a `budgetId` set.
 
-> **Hint:** Encourage members to attach receipts to each line item via the receipt URL field. This speeds up the approval process and provides an audit trail for your department's financial records.
+> **Hint:** Receipts are required on every line, which is what an IRS accountable plan expects of a reimbursement. Reports submitted before receipts were required (2026-10-09) show _"No receipt"_ on their lines and are otherwise unaffected.
 
 ### Edge Cases
 
@@ -1408,63 +1425,63 @@ The summary can be filtered by a specific dues schedule using the optional `sche
 
 **Required Permission:** `finance.manage`
 
-The QuickBooks export feature generates CSV files compatible with QuickBooks and other accounting software, allowing you to transfer financial data from The Logbook into your accounting system.
+The export produces a **QuickBooks Online journal-entry import file** (CSV). Each paid purchase request, issued check request and paid expense report becomes one balanced journal entry: a debit to the budget category's expense account and an equal credit to the account it was paid from.
 
 ### Account Mappings
 
-Before exporting, set up mappings between your Logbook budget categories and your QuickBooks chart of accounts:
+Open **Finance › QuickBooks Export** (`/finance/settings/quickbooks`). The **Budget categories** table shows, for every category, the account its spending posts to, the account it is paid from, and whether an export would accept it:
 
-1. Navigate to the export settings (accessible from the Finance module).
-2. For each internal category, configure:
-   - **Internal Category** -- The budget category name from The Logbook
-   - **QB Account Name** -- The corresponding QuickBooks account name
-   - **QB Account Number** -- Optional QuickBooks account number for additional precision
-   - **Mapping Type** -- The account type: Expense, Income, or Asset
+| Status                         | What to do                                                                                     |
+| ------------------------------ | ---------------------------------------------------------------------------------------------- |
+| **Ready**                      | Nothing — its spending exports                                                                 |
+| **No account**                 | Add a mapping, or enter a **QuickBooks account** on the category in Finance Settings           |
+| **No paid-from account**       | Add the account it is paid from to its mapping                                                 |
+| **More than one mapping**      | Delete all but one of its mappings                                                             |
+| **Payable/receivable account** | Change it: QuickBooks can't import journal lines to Accounts Payable or Receivable (see below) |
 
-3. Click **Save**.
+Click **Add mapping** (or **Edit mapping**) on a category and enter:
 
-> **Corrected 2026-08-12.** Not built. See
-> [Finance — Five Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#finance--five-guide-sections-with-no-screen-2026-08-09),
-> which records what exists behind each of these: an API, a store
-> action, or types — but no page and no control that reaches them.
-> The steps above describe the intended design.
->
-> `GET/POST/PUT /finance/export/mappings` and the `qbAccountName` types
-> exist; there is no page, no route and no consumer.
+- **QuickBooks account** — the expense account its spending posts to, spelled exactly as in your chart of accounts. Write a subaccount as `Parent:Child` (for example `Vehicle Expense:Fuel`); the subaccount name alone fails with "Line Account invalid".
+- **Paid from account** — the bank or credit card account the money comes out of (for example `Operating Checking`).
 
-> **Hint:** You can also set the QuickBooks account name directly on each budget category (the `qbAccountName` field in Budget Category settings). The export mapping page provides a separate, more granular mapping layer.
+A category's own **QuickBooks account** (set in its dialog on Finance Settings) takes precedence over its mapping's.
 
-### Generating an Export
+> **Accounts Payable and Accounts Receivable can't be used** _(2026-10-09)_. QuickBooks requires a vendor or customer on every journal line posting to those accounts, and the export carries none, so the import would fail. The mapping and category dialogs refuse them, and a mapping saved before that shows **Payable/receivable account**. The check recognizes QuickBooks' standard names ("Accounts Payable (A/P)", "Accounts Receivable (A/R)"); if you renamed those accounts, the check can't tell, so don't use them.
 
-1. Navigate to the export section.
-2. Select the **date range start** and **date range end** for the transactions to include.
-3. Select the **file format** (CSV is the default; IIF is also supported as a format type).
-4. Click **Generate Export**.
-5. A CSV file named `finance_export.csv` is downloaded to your computer.
+### The File
 
-The CSV includes these columns:
+| Column           | Contents                                                                                     |
+| ---------------- | -------------------------------------------------------------------------------------------- |
+| **Journal No**   | The request number (`PR-…`, `CR-…`, `ER-…`); every line of one entry shares it               |
+| **Journal Date** | The payment or check date, MM/DD/YYYY, on the department's calendar                          |
+| **Memo**         | The request's title, or the check's memo or purpose                                          |
+| **Account Name** | The expense account (debit line) or the paid-from account (credit line)                      |
+| **Debits**       | The amount, on the expense line                                                              |
+| **Credits**      | The same amount, on the paid-from line                                                       |
+| **Description**  | The vendor, payee (with check number), or merchant and description of an expense-report line |
 
-| Column      | Description                                                                                                       |
-| ----------- | ----------------------------------------------------------------------------------------------------------------- |
-| **Date**    | Transaction date in MM/DD/YYYY format, on the department's calendar (see below)                                   |
-| **Type**    | Transaction type: `Bill Pmt` (purchase request), `Check` (check request), or `Expense` (expense report line item) |
-| **Num**     | Reference number (request number, check number, or report number)                                                 |
-| **Name**    | Vendor, payee, or merchant name                                                                                   |
-| **Memo**    | Transaction description (title, memo, or line item description)                                                   |
-| **Account** | Reserved for account mapping (currently empty in export)                                                          |
-| **Debit**   | Transaction amount                                                                                                |
-| **Credit**  | Reserved (currently empty in export)                                                                              |
+An expense report is one entry with a debit and credit pair for each of its lines, each charged to that line's budget.
 
-The export includes:
+An export is **refused** — with a message naming what to fix, and no file — when any transaction in the period has no budget line, when a category it uses is not **Ready**, or when the file would reach **1,000 rows**, QuickBooks Online's import limit. Each transaction is two rows, so that is about 499 transactions; export a shorter period, then the rest.
 
-- **Purchase Requests** with Paid status, filtered by `paidAt` date
-- **Check Requests** with Issued status, filtered by `checkDate`
-- **Expense Reports** with Paid status (one row per line item), filtered by `paidAt` date
+Running an export (`POST /finance/export/transactions`) has no screen yet; see [Finance — QuickBooks Export Gaps](../KNOWN_LIMITATIONS.md#finance--quickbooks-export-gaps-2026-10-08).
+
+### Importing into QuickBooks Online
+
+Intuit's requirements for a journal-entry import _(checked 2026-10-09)_. They are also listed at the bottom of **Finance › QuickBooks Export**:
+
+1. **Create every account first.** Each account named in the file must already exist in your chart of accounts, spelled the same.
+2. **Turn account numbers off** while you import (**Settings › Account and settings › Advanced › Chart of accounts**). The file uses account names. You can turn them back on afterwards.
+3. **Turn off "Warn if duplicate journal number is used"** (**Settings › Account and settings › Advanced › Other preferences**). Each entry carries its request number, and with the warning on, an entry whose number already exists is not imported.
+4. In QuickBooks, go to **Settings › Import data › Journal entries**, choose the file, and map its columns to QuickBooks' fields. Choose the **MM/DD/YYYY** date format.
+5. Start the import, then compare the totals with the Finance dashboard.
+
+> **Hint:** Journal entries do not appear on a vendor's record in QuickBooks, and may not be counted on its 1099 report. If you pay contractors who need a 1099, check QuickBooks' 1099 report against your payments before filing, or record those payments in QuickBooks as checks or expenses.
 
 > **Dates are the department's day** _(2026-09-25)_. Payment and check dates are
 > stored as UTC timestamps, and the export used to print the UTC date — so a
 > payment recorded on a US evening was booked on the next day in QuickBooks.
-> The **Date** column now uses the timezone set under **Settings → Organization
+> The **Journal Date** column uses the timezone set under **Settings → Organization
 > → Profile → Timezone** (America/New_York when none is set). An export taken
 > before this date may disagree with a new one for evening payments.
 
@@ -1494,13 +1511,14 @@ Every export is logged with:
 
 ### Edge Cases
 
-| Scenario                                                     | Behavior                                                                                                        |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| No transactions in the selected date range                   | An empty CSV file is generated (headers only, no data rows). An export log is still created with record count 0 |
-| Date range spanning multiple fiscal years                    | All matching transactions are included regardless of fiscal year boundaries                                     |
-| Expense report with multiple line items                      | Each line item becomes a separate row in the CSV, all sharing the same report number                            |
-| Purchase request with actual amount different from estimated | The export uses the actual amount if set, otherwise falls back to the estimated amount                          |
-| Check request without a check number                         | The export uses the request number (CK-YYYY-NNNN) as the Num column value                                       |
+| Scenario                                                     | Behavior                                                                                                                        |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| No transactions in the selected date range                   | A file with only the header row. An export log is still created with record count 0                                             |
+| Date range spanning multiple fiscal years                    | All matching transactions are included regardless of fiscal year boundaries                                                     |
+| Expense report with multiple line items                      | One journal entry under the report number, with a debit and credit pair per line item                                           |
+| Purchase request with actual amount different from estimated | The export uses the actual amount if set, otherwise falls back to the estimated amount                                          |
+| Check request                                                | The Journal No is the request number; the check number appears in the Description, since the request number is unique per entry |
+| A period with 500 or more transactions                       | Refused: the file would reach QuickBooks' 1,000-row limit. Export it in shorter periods                                         |
 
 ---
 
@@ -1543,13 +1561,14 @@ The Falls Church Fire Department operates on a July 1 -- June 30 fiscal year. In
 
 6. **Set up QuickBooks mappings:** Navigate to the export mappings and map each category to the corresponding QuickBooks account (e.g., "Fuel" to "6200 - Vehicle Fuel").
 
-### Phase 2: Activating the New Year (July 1)
+### Phase 2: Starting the New Year (July 1)
 
-On July 1, the Treasurer:
+At the June board meeting the board adopts FY 2027, and the Treasurer clicks **Record adoption** on FY 2027 in **Finance > Settings** with the meeting date and motion number. On July 1, the Treasurer:
 
-1. **Records the board's adoption of FY 2027:** Navigate to **Finance > Settings**, click **Record adoption** on FY 2027 (in board review since the June board meeting), and enter the meeting date and motion number. FY 2027 becomes active and the previously active FY 2026 is automatically closed.
-2. **Generates member dues:** Navigate to **Finance > Dues**, find the annual dues schedule, and click **Generate Dues**. Every active member receives a Pending dues record for $150 due August 1.
-3. **Checks the dashboard:** Navigate to **Finance** and verify the dashboard shows the new fiscal year's budgets with $0 spent and $0 encumbered.
+1. **Begins FY 2026's year-end close:** click **Begin year-end close** on FY 2026. Nothing new can be submitted against it, but its last bills can still be paid.
+2. **Starts FY 2027:** click **Start the year** on FY 2027. It becomes active and each line owner is emailed their adopted amounts.
+3. **Generates member dues:** Navigate to **Finance > Dues**, find the annual dues schedule, and click **Generate Dues**. Every active member receives a Pending dues record for $150 due August 1.
+4. **Checks the dashboard:** Navigate to **Finance** and verify the dashboard shows the new fiscal year's budgets with $0 spent and $0 encumbered.
 
 ### Phase 3: Day-to-Day Operations (July--June)
 
@@ -1602,17 +1621,14 @@ The Treasurer regularly:
 3. Monitors **dues collection** -- following up with members who are overdue after the grace period.
 4. Runs **QuickBooks exports** monthly -- selecting the previous month's date range, generating the CSV, and importing it into QuickBooks for reconciliation.
 
-### Phase 5: Year-End Reconciliation (June)
+### Phase 5: Year-End Reconciliation (June–July)
 
-Before closing the fiscal year:
-
-1. Ensure all pending purchase requests are either completed (paid) or cancelled.
-2. Ensure all expense reports are processed and paid.
-3. Ensure all check requests are issued or cancelled.
+1. Have the board adopt FY 2028 and record it (**Record adoption**).
+2. On July 1, click **Begin year-end close** on FY 2027, then **Start the year** on FY 2028.
+3. Finish FY 2027's open items: pay or cancel purchase requests, pay expense reports, and issue or cancel check requests. The **Lock** dialog lists whatever is still open.
 4. Run a final QuickBooks export for the last month.
 5. Review the budget summary on the dashboard for any discrepancies between The Logbook and QuickBooks.
-6. Lock FY 2027: navigate to **Finance > Settings** and click **Lock**. All FY 2027 data becomes read-only.
-7. Activate FY 2028 (already set up in Draft during the previous month).
+6. Lock FY 2027: click **Lock**, enter the reconciliation notes, and click **Lock the year**. All FY 2027 data becomes read-only.
 
 ---
 

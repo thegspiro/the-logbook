@@ -1,11 +1,11 @@
 /**
- * Record the board's adoption of next year's budget, which activates it.
+ * Record the board's adoption of next year's budget.
  *
  * The Treasurer's screen (`finance.manage`), offered on a draft year in board
  * review. The meeting date (not in the future) and the motion or minutes
- * reference are required; the backend refuses activation without them and
- * keeps them with the year. Activating makes the budget spendable and emails
- * each line owner their adopted lines, so the dialog says so.
+ * reference are required; the backend keeps them with the year. The year
+ * stays a draft, adopted, until the Treasurer starts it on or after its start
+ * date — that is when it becomes spendable and line owners are emailed.
  *
  * The checks here only spare a round trip; the backend makes the same ones
  * (the date against the department's calendar) and its message is what the
@@ -58,8 +58,8 @@ export const BudgetAdoptionDialog: React.FC<BudgetAdoptionDialogProps> = ({ fisc
   const save = async (payload: FiscalYearAdoptionPayload) => {
     setSaving(true);
     try {
-      const year = await fiscalYearService.activate(fiscalYear.id, payload);
-      toast.success(`${fiscalYear.name} adopted and active`);
+      const year = await fiscalYearService.adopt(fiscalYear.id, payload);
+      toast.success(`${fiscalYear.name} adopted`);
       onAdopted(year);
     } catch (err: unknown) {
       // The API's own words: not in board review, a future date.
@@ -94,7 +94,7 @@ export const BudgetAdoptionDialog: React.FC<BudgetAdoptionDialogProps> = ({ fisc
       footer={
         <>
           <button type="submit" disabled={saving} className="btn-primary">
-            Adopt and activate
+            Record adoption
           </button>
           <button type="button" onClick={onClose} className="btn-secondary">
             Cancel
@@ -104,9 +104,9 @@ export const BudgetAdoptionDialog: React.FC<BudgetAdoptionDialogProps> = ({ fisc
     >
       <div className="space-y-4">
         <p id="adoption-form-description" className="text-theme-text-secondary text-sm">
-          Record the board&apos;s vote. {fiscalYear.name} becomes the active fiscal year, its budget lines can be spent
-          against, and each line owner is emailed their adopted amounts. The adoption is kept with the year and cannot
-          be edited afterwards.
+          Record the board&apos;s vote. The adoption is kept with {fiscalYear.name} and cannot be edited afterwards, and
+          the budget can no longer change. Start the year on or after its start date to make it spendable; line owners
+          are emailed their adopted amounts then.
         </p>
 
         <div>

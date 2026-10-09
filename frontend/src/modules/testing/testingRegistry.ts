@@ -33,6 +33,8 @@ import {
 /** The finance request routes' gates — see modules/finance/routes.tsx. */
 const FINANCE_REQUEST_READ_GATE = ['finance.request', 'finance.view', 'finance.manage'];
 const FINANCE_REQUEST_WRITE_GATE = ['finance.request', 'finance.manage'];
+// An expense report is also read by its approvers (the approvals queue links them to it).
+const FINANCE_EXPENSE_READ_GATE = [...FINANCE_REQUEST_READ_GATE, 'finance.approve'];
 
 export interface TestPageEntry {
   /** Route pattern exactly as declared in App.tsx or a module's routes.tsx. */
@@ -1035,7 +1037,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/finance/expenses/:id',
         label: 'Expense report detail',
-        anyPermission: FINANCE_REQUEST_READ_GATE,
+        anyPermission: FINANCE_EXPENSE_READ_GATE,
         module: 'finance',
       },
       {

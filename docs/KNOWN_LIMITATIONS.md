@@ -432,24 +432,31 @@ Closing the gap would need cards that cannot be copied by reading them
 then, a department that needs attendance it can rely on for credit should keep
 those events on a staffed station, or on members' own signed-in phones.
 
-## Prospective Members — Purge Is Manual; Auto-Purge Is Not Wired (2026-09-30)
+## Prospective Members — Purge Scope and Auto-Purge (2026-09-30, wired 2026-10-09)
 
 **Purge Selected** on the Inactive Applications tab permanently deletes the
 selected applications that are still `inactive`, with their uploaded documents,
-and records the purge in the audit log. Until this date it matched `withdrawn`
+and records the purge in the audit log. Until 2026-09-30 it matched `withdrawn`
 instead, so it deleted nothing while the page reported success. Withdrawn,
-rejected and on-hold applications are never purged; the owner chose to keep the
-button to exactly what its tab lists.
+rejected and on-hold applications are never purged, manually or automatically;
+the owner chose to keep purging to exactly what the Inactive tab lists.
 
-**Open: the pipeline's Auto-Purge setting has no reader.** The settings page
-stores `auto_purge_enabled` and `purge_days_after_inactive`, and the user guide
-(`docs/training/15-prospective-members.md`) says inactive applicants are
-deleted after the grace period, but no scheduled task reads either value --
-nothing is ever purged automatically (CLAUDE.md pitfall #19). Wiring it means a
-nightly job calling `purge_inactive_prospects` per pipeline for applications
-inactive longer than the grace period, which needs the date an application went
-inactive (`deactivated_at`) and a decision on notifying coordinators first.
-Until then, departments purge from the Inactive tab.
+**Auto-Purge is in effect since 2026-10-09.** The daily `membership_auto_purge`
+task deletes, through the same code path as the manual button, the `inactive`
+applications in each pipeline with `auto_purge_enabled: true` whose
+`inactive_since` is at least `purge_days_after_inactive` days old (UTC, clamped
+to 30–1095; a missing or non-numeric value skips the pipeline). Decisions the
+owner made, recorded so they are not mistaken for gaps:
+
+- **No warning email before a purge.** Coordinators are not notified; the
+  audit log (`membership_pipeline.prospects_purged`, `trigger: auto_purge`)
+  records each purge with the pipeline, threshold and purged ids.
+- **The clock restarted at the upgrade.** Applications already inactive when
+  migration `feecd81eef2d` ran count from that moment, not from their real
+  deactivation date, so the first run could not delete a backlog at once.
+  `inactive_since` is separate from the drawer's historical `deactivated_at`,
+  which is untouched; an application with no `inactive_since` is never
+  auto-purged.
 
 ## Email Link Address — How a Change Reaches Every Worker (2026-09-25)
 
@@ -1330,12 +1337,48 @@ review to an adoption the Treasurer records (see `docs/FINANCE_MODULE.md`,
   makes the change there, and returns it to board review before recording the
   adoption.
 
+## Finance — The Year-End Close: What It Does Not Cover (2026-10-09)
+
+Adoption, starting a year, its year-end close and the lock sign-off are
+separate steps (see `docs/FINANCE_MODULE.md`, "Starting, closing and locking a
+year"). Three gaps remain, pending a decision:
+
+- **The Treasurer's own line edit still changes an adopted draft.** Board
+  review and the adopted stage freeze requests and leadership changes, but
+  _Edit_ on a budget line (`PUT /finance/budgets/{id}`) still sets the amount
+  of a draft year's line in any stage. After adoption a change should be an
+  amendment the board can see; that belongs with the second-officer amendment
+  confirmation planned next, so it is not changed here.
+- **Nothing starts or closes a year on its own.** The Treasurer is reminded by
+  a banner once the end date passes (`closeDue`), but no email goes out and the
+  year stays active until its close is begun; likewise an adopted year waits
+  for **Start the year**. Both are deliberate — each step is an officer's
+  decision on the record.
+- **Drafts left in a closing year stay as drafts.** A purchase request, expense
+  report or check request never submitted cannot be submitted once the close
+  begins, and does not stop the lock. A requester who still needs it raises it
+  again in the new year; nothing moves it across.
+
+## Finance — Expense Receipts: What the Requirement Does Not Cover (2026-10-09)
+
+Every expense line needs an uploaded receipt before its report is submitted
+(see `docs/FINANCE_MODULE.md`, "Expense receipts are required"). Gaps,
+pending a decision:
+
+- **One receipt per line.** A hotel folio covering several lines is attached
+  to each of them.
+- **Mileage has no log of its own.** A mileage line needs a file like any
+  other; the guide asks for the trip log. Nothing checks what the file is.
+- **Purchase requests and check requests do not require one.** A purchase
+  request can carry an uploaded receipt, but nothing requires it before
+  payment, and check requests take none.
+
 ## Finance — QuickBooks Export Gaps (2026-10-08)
 
 The transactions export is now a valid QuickBooks Online journal-entry import
 (see `docs/FINANCE_MODULE.md`, "QuickBooks Export"). Its accounts are set on
 **Finance › QuickBooks Export** _(2026-10-09)_, which also shows each budget
-category's export readiness, and in the budget category dialog. Four gaps
+category's export readiness, and in the budget category dialog. Five gaps
 remain, and each needs a decision or a follow-up change rather than a fix
 inside that one:
 
@@ -1354,6 +1397,20 @@ inside that one:
   per-organization tokens, and a background sync, and it is planned as its own
   change. The API cannot create or edit QuickBooks budgets; it can only read
   them, and QuickBooks budgets need QuickBooks Online Plus or higher.
+  Decided for that change _(2026-10-09)_: it posts each payment as a
+  QuickBooks **Purchase** (a Check, or a cash or credit card Expense) to a
+  vendor, not as a journal entry, so it appears on the vendor's record and in
+  1099 reporting, which journal entries do not reliably reach. The Accounting
+  API also has no read-only scope (`com.intuit.quickbooks.accounting` grants
+  read and write), so the connection must confine itself to the calls it
+  needs.
+- **The CSV import is journal entries, with the limits that brings.** They do
+  not appear on a vendor's record in QuickBooks and may not be counted on its
+  1099 report; a department paying contractors checks that report before
+  filing. Accounts Payable and Receivable are refused because the import needs
+  a vendor or customer on those lines and the file has no Name column. The
+  check recognizes QuickBooks' standard names only, so a renamed A/P or A/R
+  account passes and fails at import instead.
 
 ## Finance — Nobody Could Approve Anything (2026-08-12, narrowed 2026-09-06)
 

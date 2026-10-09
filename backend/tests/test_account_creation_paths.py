@@ -17,6 +17,15 @@ Onboarding's ``create_system_owner`` is the sixth caller and needs no separate
 entry: it delegates to ``AuthService.register_user``, so it shares the register
 path's construction site.
 
+A seventh site constructs ``User`` rows that are records rather than logins:
+the shift history import (``POST /scheduling/history-import/{id}/commit``,
+gated on ``scheduling.manage``) creates former members a department's old
+shift spreadsheet names. They are written ``inactive`` with no password hash,
+so password sign-in and OAuth refuse them (``User.is_active``), and a reset
+request finds no local password to reset. One becomes a login only when an
+administrator changes its status through the member screens, which answer to
+their own permissions.
+
 None of this is a hole. The transfer paths enforce the same rank and role grant
 ceilings as ``POST /users`` (``tests/test_privilege_ceiling_wiring.py``) and
 refuse the administrative-class-plus-rank pair the same way
@@ -39,6 +48,7 @@ import pytest
 
 from app.api.v1.endpoints.auth import router as auth_router
 from app.api.v1.endpoints.membership_pipeline import router as pipeline_router
+from app.api.v1.endpoints.shift_history_import import router as history_router
 from app.api.v1.endpoints.users import router as users_router
 from app.core.config import settings
 
@@ -51,6 +61,7 @@ KNOWN_CONSTRUCTION_SITES = {
     "api/v1/endpoints/users.py:create_member",
     "services/auth_service.py:register_user",
     "services/membership_pipeline_service.py:_do_transfer",
+    "services/shift_history_import_service.py:_create_members",
 }
 
 
@@ -177,3 +188,14 @@ def test_self_registration_is_gated_by_settings_and_off_by_default() -> None:
     """
     assert _permissions(auth_router, "/register", "POST") == []
     assert settings.REGISTRATION_ENABLED is False
+
+
+def test_history_import_commit_requires_scheduling_manage() -> None:
+    """The import writes inactive, passwordless member records, not logins.
+
+    Pinned so the gate cannot widen silently: a scheduling officer may record
+    who worked a shift years ago, which is not the same as granting access.
+    """
+    assert _permissions(history_router, "/{import_id}/commit", "POST") == [
+        ["scheduling.manage"]
+    ]

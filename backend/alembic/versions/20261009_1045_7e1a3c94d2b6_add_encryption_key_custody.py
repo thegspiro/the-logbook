@@ -1,8 +1,8 @@
 """Record administrators' confirmation that the encryption key is kept safe.
 
 Revision ID: 7e1a3c94d2b6
-Revises: c0bf0b155719
-Create Date: 2026-10-09 05:00:00.000000
+Revises: c6c4ffcfdfb3
+Create Date: 2026-10-09 10:45:00.000000
 
 Stored files are now encrypted with a key derived from ENCRYPTION_KEY
 (docs/FILE_STORAGE_HARDENING.md decision 23). Lose that key and every file
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "7e1a3c94d2b6"
-down_revision = "c0bf0b155719"
+down_revision = "c6c4ffcfdfb3"
 branch_labels = None
 depends_on = None
 

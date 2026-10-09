@@ -10,7 +10,7 @@
 
 import React, { Suspense, useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
-import { ScanLine, Upload, UserPlus } from 'lucide-react';
+import { BadgeCheck, ScanLine, Settings, Upload, UserPlus, Users } from 'lucide-react';
 import { AdminHubFrame, AdminMetricsSettings } from '../components/admin';
 import type { AdminHubAction, AdminHubTab } from '../components/admin';
 import { useAuthStore } from '../stores/authStore';
@@ -39,13 +39,35 @@ type AdminTab = 'manage' | 'add' | 'import' | 'qualifications' | 'settings';
  * same seeded positions, so this corrects the name rather than anyone's access.
  */
 const ALL_TABS: (AdminHubTab<AdminTab> & { permission?: string })[] = [
-  { id: 'manage', label: 'Member Management' },
-  { id: 'add', label: 'Add Member', permission: 'users.create' },
-  { id: 'import', label: 'Import Members', permission: 'users.create' },
+  {
+    id: 'manage',
+    label: 'Member Management',
+    description: 'Edit members, assign roles and reset passwords',
+    icon: Users,
+  },
+  {
+    id: 'add',
+    label: 'Add Member',
+    description: 'Put one new person on the roster',
+    icon: UserPlus,
+    permission: 'users.create',
+  },
+  {
+    id: 'import',
+    label: 'Import Members',
+    description: 'Add many members at once from a CSV file',
+    icon: Upload,
+    permission: 'users.create',
+  },
   // members.manage, which reaching this hub already requires: the endpoint
   // writes qualifications onto existing members, it creates nobody.
-  { id: 'qualifications', label: 'Import Qualifications' },
-  { id: 'settings', label: 'Settings' },
+  {
+    id: 'qualifications',
+    label: 'Import Qualifications',
+    description: 'Licences and cards members already hold, from a CSV file',
+    icon: BadgeCheck,
+  },
+  { id: 'settings', label: 'Settings', description: 'Roster settings and headline metrics', icon: Settings },
 ];
 
 const TabLoading = () => (

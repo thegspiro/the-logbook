@@ -196,7 +196,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const [platoonRoster, setPlatoonRoster] = useState<PlatoonRosterEntry[]>([]);
 
   /** Extract HH:MM from an ISO datetime or time string in the user's local timezone. */
-  const toTimeValue = (v?: string): string => {
+  const toTimeValue = (v?: string | null): string => {
     if (!v) return '';
     // If it contains 'T', it's an ISO datetime — convert to local timezone
     if (v.includes('T')) {
