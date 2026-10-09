@@ -1306,12 +1306,48 @@ review to an adoption the Treasurer records (see `docs/FINANCE_MODULE.md`,
   makes the change there, and returns it to board review before recording the
   adoption.
 
+## Finance — The Year-End Close: What It Does Not Cover (2026-10-09)
+
+Adoption, starting a year, its year-end close and the lock sign-off are
+separate steps (see `docs/FINANCE_MODULE.md`, "Starting, closing and locking a
+year"). Three gaps remain, pending a decision:
+
+- **The Treasurer's own line edit still changes an adopted draft.** Board
+  review and the adopted stage freeze requests and leadership changes, but
+  _Edit_ on a budget line (`PUT /finance/budgets/{id}`) still sets the amount
+  of a draft year's line in any stage. After adoption a change should be an
+  amendment the board can see; that belongs with the second-officer amendment
+  confirmation planned next, so it is not changed here.
+- **Nothing starts or closes a year on its own.** The Treasurer is reminded by
+  a banner once the end date passes (`closeDue`), but no email goes out and the
+  year stays active until its close is begun; likewise an adopted year waits
+  for **Start the year**. Both are deliberate — each step is an officer's
+  decision on the record.
+- **Drafts left in a closing year stay as drafts.** A purchase request, expense
+  report or check request never submitted cannot be submitted once the close
+  begins, and does not stop the lock. A requester who still needs it raises it
+  again in the new year; nothing moves it across.
+
+## Finance — Expense Receipts: What the Requirement Does Not Cover (2026-10-09)
+
+Every expense line needs an uploaded receipt before its report is submitted
+(see `docs/FINANCE_MODULE.md`, "Expense receipts are required"). Gaps,
+pending a decision:
+
+- **One receipt per line.** A hotel folio covering several lines is attached
+  to each of them.
+- **Mileage has no log of its own.** A mileage line needs a file like any
+  other; the guide asks for the trip log. Nothing checks what the file is.
+- **Purchase requests and check requests do not require one.** A purchase
+  request can carry an uploaded receipt, but nothing requires it before
+  payment, and check requests take none.
+
 ## Finance — QuickBooks Export Gaps (2026-10-08)
 
 The transactions export is now a valid QuickBooks Online journal-entry import
 (see `docs/FINANCE_MODULE.md`, "QuickBooks Export"). Its accounts are set on
 **Finance › QuickBooks Export** _(2026-10-09)_, which also shows each budget
-category's export readiness, and in the budget category dialog. Four gaps
+category's export readiness, and in the budget category dialog. Five gaps
 remain, and each needs a decision or a follow-up change rather than a fix
 inside that one:
 
@@ -1330,6 +1366,20 @@ inside that one:
   per-organization tokens, and a background sync, and it is planned as its own
   change. The API cannot create or edit QuickBooks budgets; it can only read
   them, and QuickBooks budgets need QuickBooks Online Plus or higher.
+  Decided for that change _(2026-10-09)_: it posts each payment as a
+  QuickBooks **Purchase** (a Check, or a cash or credit card Expense) to a
+  vendor, not as a journal entry, so it appears on the vendor's record and in
+  1099 reporting, which journal entries do not reliably reach. The Accounting
+  API also has no read-only scope (`com.intuit.quickbooks.accounting` grants
+  read and write), so the connection must confine itself to the calls it
+  needs.
+- **The CSV import is journal entries, with the limits that brings.** They do
+  not appear on a vendor's record in QuickBooks and may not be counted on its
+  1099 report; a department paying contractors checks that report before
+  filing. Accounts Payable and Receivable are refused because the import needs
+  a vendor or customer on those lines and the file has no Name column. The
+  check recognizes QuickBooks' standard names only, so a renamed A/P or A/R
+  account passes and fails at import instead.
 
 ## Finance — Nobody Could Approve Anything (2026-08-12, narrowed 2026-09-06)
 

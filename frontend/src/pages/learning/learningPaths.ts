@@ -160,8 +160,9 @@ export const learningPaths: LearningPath[] = [
     module: 'events',
     title: 'Events: RSVP and Check In',
     audience: 'Every member',
-    duration: '10 minutes',
-    outcome: 'Say whether you are coming, and get your attendance on the record when you arrive.',
+    duration: '12 minutes',
+    outcome:
+      'Say whether you are coming, get your attendance on the record when you arrive, and fix it if your check-in never happened.',
     guideUrl: `${GUIDE_BASE}/04-events-meetings.md#viewing-and-rsvping-to-events`,
     steps: [
       {
@@ -198,6 +199,19 @@ export const learningPaths: LearningPath[] = [
           'Confirm the event shows you as attended afterwards.',
         ],
         success: 'The event lists you as checked in, not merely as having RSVPed.',
+      },
+      {
+        id: 'missed-checkin',
+        label: 'Ask to be marked present if your check-in never happened',
+        path: '/events',
+        why: 'A dead phone or a QR code nobody put up should not cost you the credit. Once check-in closes you have 30 days to ask the organizer to vouch for you — and they are notified each time you ask, so get the request right rather than sending it repeatedly.',
+        how: [
+          'Open the event after its check-in has closed and press I was there.',
+          'Say why there is no check-in and, if you can, when you arrived and left, then send it.',
+          'Sent it with the wrong times? Press Withdraw request while it is still waiting and send a corrected one. You can do this twice per event; after that the request stays as it is until the organizer answers.',
+        ],
+        success:
+          'The event shows your request as waiting, then as confirmed or declined — and you know a decided request is final.',
       },
     ],
   },

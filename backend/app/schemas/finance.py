@@ -118,14 +118,25 @@ class FiscalYearResponse(UTCResponseBase):
     # A draft year in the requests stage whose deadline (if any) has not
     # passed in the org's timezone — requests_open decides it.
     requests_open: bool = False
-    # requests, leadership_review or board_review; null unless a draft.
+    # requests, leadership_review, board_review or adopted; null unless a
+    # draft.
     planning_stage: Optional[str] = None
-    # The board's adoption, recorded when the draft was activated.
+    # The board's adoption, recorded from board review.
     adopted_on: Optional[date] = None
     adoption_reference: Optional[str] = None
     adoption_notes: Optional[str] = None
     adoption_recorded_by: Optional[str] = None
     adoption_recorded_at: Optional[datetime] = None
+    # Set when the year-end close began; a closed year without the lock is in
+    # its closing period.
+    closing_started_at: Optional[datetime] = None
+    # The active year's end date has passed on the department's calendar and
+    # its close has not been begun.
+    close_due: bool = False
+    # The Treasurer's reconciliation sign-off that locked the year.
+    locked_by: Optional[str] = None
+    locked_at: Optional[datetime] = None
+    lock_notes: Optional[str] = None
     created_by: str
     created_at: datetime
     updated_at: datetime
@@ -143,23 +154,57 @@ class FiscalYearStageChange(BaseModel):
     )
 
 
-class FiscalYearActivate(BaseModel):
-    """The board's adoption, required to activate a draft year.
-
-    Optional so re-activating a year that is not a draft needs no body; the
-    service refuses a draft without the date and reference.
-    """
+class FiscalYearAdoption(BaseModel):
+    """The board's adoption of a draft year's budget."""
 
     model_config = _REQUEST_CONFIG
 
-    adopted_on: Optional[date] = None
-    adoption_reference: Optional[str] = Field(None, max_length=500)
+    adopted_on: date
+    adoption_reference: str = Field(..., max_length=500)
     adoption_notes: Optional[str] = Field(None, max_length=4000)
 
-    @field_validator("adoption_reference", "adoption_notes")
+    @field_validator("adoption_reference")
+    @classmethod
+    def _reference_required(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Enter the motion or minutes reference.")
+        return value
+
+    @field_validator("adoption_notes")
     @classmethod
     def _blank_is_none(cls, value: Optional[str]) -> Optional[str]:
         return _strip_or_none(value)
+
+
+class FiscalYearLock(BaseModel):
+    """The Treasurer's reconciliation sign-off that locks a closing year."""
+
+    model_config = _REQUEST_CONFIG
+
+    notes: str = Field(..., max_length=4000)
+
+    @field_validator("notes")
+    @classmethod
+    def _notes_required(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Add the reconciliation notes for the sign-off.")
+        return value
+
+
+class FiscalYearOpenItemResponse(UTCResponseBase):
+    """A request still in flight that stops a closing year from locking."""
+
+    model_config = _RESPONSE_CONFIG
+
+    # purchase_request, expense_report or check_request
+    kind: str
+    entity_id: str
+    number: str
+    description: str
+    status: str
+    amount: Optional[Decimal] = None
 
 
 class StartFromLastYearResponse(BaseModel):
@@ -1440,7 +1485,7 @@ class ExportReadinessCategoryResponse(UTCResponseBase):
     category_id: str
     category_name: str
     is_active: bool
-    # ready, no_account, no_offset or duplicate_mappings
+    # ready, no_account, no_offset, duplicate_mappings or payable_receivable
     status: str
     account_name: Optional[str] = None
     # category (its own qb_account_name) or mapping

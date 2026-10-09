@@ -820,10 +820,16 @@ client API cache.
   (`EVENT_REMINDERS`).
 - **Withdrawing** _(2026-10-09)_: `DELETE …/attendance-petitions/mine`
   removes the member's own request while it is pending — **Withdraw request**
-  on the waiting notice, behind a confirmation. The row is deleted rather than
-  marked, so the one-per-member index lets them ask again; the reviewers'
-  prompts are archived and the audit log keeps the record. A decided request
-  cannot be withdrawn.
+  on the waiting notice, behind a confirmation. The reviewers' prompts are
+  archived and the audit log keeps the record. A decided request cannot be
+  withdrawn.
+- **Withdrawal limit** _(2026-10-09)_: at most `MAX_PETITION_WITHDRAWALS = 2`
+  per member per event, so a request cannot be cycled to re-notify the
+  organizer; the third request is final and **Withdraw request** is no longer
+  offered (`can_withdraw` on `GET …/mine`; the API answers 400). A withdrawn
+  request is kept with status `withdrawn` and a `withdrawal_count` (migration
+  `a0b34c886658`), and asking again reuses that row. Reviewers never see
+  withdrawn rows.
 - **Across events** _(2026-10-09)_: `/events/attendance-requests` lists every
   pending request on events the viewer organizes or is alternate for, oldest
   first, with **Approve** / **Decline** in place (the same dialogs as the event

@@ -46,8 +46,9 @@ from app.schemas.finance import (
     ExportMappingCreate,
     ExportMappingUpdate,
     ExportRequest,
-    FiscalYearActivate,
+    FiscalYearAdoption,
     FiscalYearCreate,
+    FiscalYearLock,
     FiscalYearStageChange,
     FiscalYearUpdate,
     ManualDenyRequest,
@@ -158,7 +159,8 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
     },
     BudgetRequestReview: {"amount": "1800.00", "note": "Chief's priorities"},
     FiscalYearStageChange: {"stage": "leadership_review"},
-    FiscalYearActivate: {
+    FiscalYearLock: {"notes": "Bank statements reconciled through June"},
+    FiscalYearAdoption: {
         "adopted_on": "2026-01-05",
         "adoption_reference": "Motion 2026-01",
         "adoption_notes": "Unanimous",

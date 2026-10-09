@@ -412,6 +412,73 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### QuickBooks exports follow Intuit's import limits (2026-10-09)
+
+- **An export that would reach 1,000 rows is refused** (400), since QuickBooks
+  Online does not import a file that long. That is about 499 transactions;
+  export a shorter period. The limit was 10,000 transactions, which produced
+  files QuickBooks rejected.
+- **Accounts Payable and Accounts Receivable are refused** as a category's
+  QuickBooks account or a mapping's account or paid-from account, because the
+  import needs a vendor or customer on those lines. A mapping already saved
+  with one shows **Payable/receivable account** on **Finance › QuickBooks
+  Export**, and an export using it is refused until it is changed to the bank
+  or card account the money is paid from.
+
+### Expense reports need a receipt on every line (2026-10-09)
+
+Builds on the uploaded receipts below (migration `c0bf0b155719`); no
+migration of its own.
+
+- **Submitting an expense report now refuses (400)** until every line has an
+  uploaded receipt. Members attach them on the report's page after saving it.
+  Drafts saved before the upgrade need receipts before they are submitted;
+  reports already submitted, approved or paid are unaffected.
+- **Approvers can now open the reports they decide on.** An approver without
+  `finance.manage` was linked from the approvals queue to a report that
+  answered 404; the report and its receipts now open for the people its chain
+  names (and for any `finance.approve` holder on a report no chain applies
+  to). Other members' reports stay hidden as before.
+- **A closing year takes no new receipts from members**, and a locked year
+  none at all; the finance office can still attach receipts in a closing year
+  for what it is settling.
+
+### Adopting, starting and closing a fiscal year are separate steps (2026-10-09)
+
+The year-end close is now a period the Treasurer begins, and the budget's
+adoption no longer starts the year. Migration `af92f1496c43`. This supersedes
+the activate behaviour described in the next entry:
+
+- **Adoption has its own endpoint.** `POST /finance/fiscal-years/{id}/adopt`
+  takes the board's vote (`{"adoptedOn", "adoptionReference",
+"adoptionNotes"?}`) on a draft in board review and moves it to a new
+  `adopted` stage. The year stays a draft; nobody is emailed yet.
+- **`POST /finance/fiscal-years/{id}/activate` takes no body.** On a draft it
+  now refuses (400) unless the year was adopted and the department's today is
+  on or after its start date; starting it emails the line owners. A client
+  still sending the adoption body to `activate` gets that refusal — send it to
+  `adopt` first.
+- **Starting a year no longer closes the active one.** It is refused while
+  another year is active: `POST /finance/fiscal-years/{id}/begin-close` on the
+  current year first. A year in its close can be reopened with `activate`.
+- **A closing year takes nothing new.** Purchase requests, expense reports and
+  check requests can no longer be created, edited, given line items or
+  submitted against a closed year (400). Approving, paying, issuing, voiding
+  and cancelling what is already in it still work, as do budget amendments. A
+  **locked** year refuses all of those.
+- **`POST /finance/fiscal-years/{id}/lock` needs a body and a clear year:**
+  `{"notes": "..."}` (the reconciliation sign-off, required), only from a year
+  in its close, and refused (400) while any request is still submitted or
+  approved-but-unpaid — `GET /finance/fiscal-years/{id}/open-items` lists them.
+  Locking an active year directly is no longer possible.
+- **Years closed before the upgrade but never locked** — the ones a newer year
+  replaced — now show as **Closing** and take no new requests. Lock them from
+  _Finance › Settings_ once their open items are cleared, or reopen one if it
+  was closed by mistake. They have no close date recorded, and years locked
+  before the upgrade have no sign-off; none is invented.
+- **Downgrading** drops the close date and sign-off columns and returns any
+  adopted draft to board review (its adoption record stays).
+
 ### Prospective members: Auto-Purge now deletes — the clock starts at this upgrade (2026-10-09)
 
 The pipeline **Auto-Purge** setting (Pipeline Settings → inactivity) used to be

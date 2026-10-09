@@ -5450,7 +5450,7 @@ Expected: 10 system folders (SOPs, Policies, Forms & Templates, Reports, Trainin
 - the event ended **more than 30 days ago**;
 - the event is **cancelled** or a **draft**;
 - the member is **already recorded as present**, including an officer's back-filled check-in time;
-- the member **already asked**. There is one request per member per event, so the page shows the earlier request instead. While it is still waiting the member can press **Withdraw request** on it and ask again; once it has been approved or declined, the decision is final.
+- the member **already asked**. There is one request per member per event, so the page shows the earlier request instead. While it is still waiting the member can press **Withdraw request** on it and ask again — twice per event; after the second withdrawal the button is gone and the request waits for an answer. Once it has been approved or declined, the decision is final.
 
 **Solution**: For a case the request cannot cover (more than 30 days, or a declined request that was wrong), an event manager records the attendance directly with **Check In** and **Edit Times** — reopening attendance first if it is finalized.
 

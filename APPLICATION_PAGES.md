@@ -1195,30 +1195,30 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Finance _(documented 2026-08-10)_
 
-| URL                                   | Page                       | Permission                                            |
-| ------------------------------------- | -------------------------- | ----------------------------------------------------- |
-| `/finance`                            | Finance Dashboard          | `finance.view`                                        |
-| `/finance/budgets`                    | Budgets                    | `finance.view`                                        |
-| `/finance/budgets/:id`                | Budget Detail              | Authenticated                                         |
-| `/finance/my-budgets`                 | My Budgets                 | Authenticated                                         |
-| `/finance/budget-requests`            | Next Year's Budget         | Authenticated                                         |
-| `/finance/budget-requests/review`     | Budget Requests (review)   | `finance.manage` or `finance.budget_review`           |
-| `/finance/purchase-requests`          | Purchase Requests          | `finance.request`, `finance.view` or `finance.manage` |
-| `/finance/purchase-requests/new`      | New Purchase Request       | `finance.request` or `finance.manage`                 |
-| `/finance/purchase-requests/:id`      | Purchase Request Detail    | `finance.request`, `finance.view` or `finance.manage` |
-| `/finance/purchase-requests/:id/edit` | Edit Purchase Request      | `finance.request` or `finance.manage`                 |
-| `/finance/expenses`                   | Expense Reports            | `finance.request`, `finance.view` or `finance.manage` |
-| `/finance/expenses/new`               | New Expense Report         | `finance.request` or `finance.manage`                 |
-| `/finance/expenses/:id`               | Expense Report Detail      | `finance.request`, `finance.view` or `finance.manage` |
-| `/finance/check-requests`             | Check Requests             | `finance.request`, `finance.view` or `finance.manage` |
-| `/finance/check-requests/new`         | New Check Request          | `finance.request` or `finance.manage`                 |
-| `/finance/check-requests/:id`         | Check Request Detail       | `finance.request`, `finance.view` or `finance.manage` |
-| `/finance/dues`                       | Dues                       | `finance.view`                                        |
-| `/finance/approvals`                  | Approvals                  | `finance.approve`                                     |
-| `/finance/settings`                   | Finance Settings           | `finance.manage`                                      |
-| `/finance/settings/approval-chains`   | Approval Chains            | `finance.configure_approvals`                         |
-| `/finance/settings/quickbooks`        | QuickBooks Export          | `finance.manage`                                      |
-| `/finance/approvals/:token`           | Tokenized Approval Landing | Token-based                                           |
+| URL                                   | Page                       | Permission                                                               |
+| ------------------------------------- | -------------------------- | ------------------------------------------------------------------------ |
+| `/finance`                            | Finance Dashboard          | `finance.view`                                                           |
+| `/finance/budgets`                    | Budgets                    | `finance.view`                                                           |
+| `/finance/budgets/:id`                | Budget Detail              | Authenticated                                                            |
+| `/finance/my-budgets`                 | My Budgets                 | Authenticated                                                            |
+| `/finance/budget-requests`            | Next Year's Budget         | Authenticated                                                            |
+| `/finance/budget-requests/review`     | Budget Requests (review)   | `finance.manage` or `finance.budget_review`                              |
+| `/finance/purchase-requests`          | Purchase Requests          | `finance.request`, `finance.view` or `finance.manage`                    |
+| `/finance/purchase-requests/new`      | New Purchase Request       | `finance.request` or `finance.manage`                                    |
+| `/finance/purchase-requests/:id`      | Purchase Request Detail    | `finance.request`, `finance.view` or `finance.manage`                    |
+| `/finance/purchase-requests/:id/edit` | Edit Purchase Request      | `finance.request` or `finance.manage`                                    |
+| `/finance/expenses`                   | Expense Reports            | `finance.request`, `finance.view` or `finance.manage`                    |
+| `/finance/expenses/new`               | New Expense Report         | `finance.request` or `finance.manage`                                    |
+| `/finance/expenses/:id`               | Expense Report Detail      | `finance.request`, `finance.view`, `finance.manage` or `finance.approve` |
+| `/finance/check-requests`             | Check Requests             | `finance.request`, `finance.view` or `finance.manage`                    |
+| `/finance/check-requests/new`         | New Check Request          | `finance.request` or `finance.manage`                                    |
+| `/finance/check-requests/:id`         | Check Request Detail       | `finance.request`, `finance.view` or `finance.manage`                    |
+| `/finance/dues`                       | Dues                       | `finance.view`                                                           |
+| `/finance/approvals`                  | Approvals                  | `finance.approve`                                                        |
+| `/finance/settings`                   | Finance Settings           | `finance.manage`                                                         |
+| `/finance/settings/approval-chains`   | Approval Chains            | `finance.configure_approvals`                                            |
+| `/finance/settings/quickbooks`        | QuickBooks Export          | `finance.manage`                                                         |
+| `/finance/approvals/:token`           | Tokenized Approval Landing | Token-based                                                              |
 
 > **Next year's budget requests** _(2026-10-08)_. `/finance/budget-requests`
 > is a line owner's screen for proposing next year's amounts: it lists the
