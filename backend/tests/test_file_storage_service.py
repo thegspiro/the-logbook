@@ -14,6 +14,7 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
+from app.core import file_encryption
 from app.core.error_codes import ErrorCode
 from app.services import file_storage_service as file_storage
 from app.services import upload_scanning
@@ -81,7 +82,9 @@ class TestStore:
         assert len(name) == 32 + 4
         assert stored.original_name == "Pump Test.pdf"
         assert stored.mime_type == "application/pdf"
-        assert open(stored.path, "rb").read() == PDF
+        # Encrypted at rest; the plaintext comes back intact.
+        assert PDF not in open(stored.path, "rb").read()
+        assert file_encryption.read_plaintext(stored.path) == PDF
         assert stat.S_IMODE(os.stat(stored.path).st_mode) == 0o640
         # No partial file is left behind by the write-then-rename.
         assert os.listdir(directory) == [name]
@@ -397,23 +400,29 @@ class TestScanningDisabledNotices:
             "CLAMAV_ENABLED" in w for w in settings.validate_security_config()
         )
 
-    async def test_the_admin_notice_follows_the_setting(self, monkeypatch):
-        from app.api.v1.endpoints import system_notices as endpoint
+    def test_the_admin_notice_follows_the_setting(self, monkeypatch):
+        # current_notices is what the endpoint serves; the key-custody notice
+        # it adds from the database is tested in test_key_custody.py.
         from app.services import system_notices
 
+        monkeypatch.setattr(
+            system_notices.upload_encryption, "plaintext_remains", lambda: False
+        )
         monkeypatch.setattr(system_notices.settings, "CLAMAV_ENABLED", False)
-        notices = await endpoint.list_system_notices(current_user=None)
+        notices = system_notices.current_notices()
         assert [n.key for n in notices] == [system_notices.MALWARE_SCANNING_DISABLED]
         assert notices[0].severity == "critical"
 
         monkeypatch.setattr(system_notices.settings, "CLAMAV_ENABLED", True)
-        assert await endpoint.list_system_notices(current_user=None) == []
+        assert system_notices.current_notices() == []
 
     def test_the_notice_needs_settings_manage(self):
         from fastapi.routing import APIRoute
 
         from app.api.v1.endpoints import system_notices as endpoint
 
-        (route,) = [r for r in endpoint.router.routes if isinstance(r, APIRoute)]
-        checker = route.dependant.dependencies[-1].call
-        assert checker.required_permissions == ["settings.manage"]
+        routes = [r for r in endpoint.router.routes if isinstance(r, APIRoute)]
+        assert routes
+        for route in routes:
+            checker = route.dependant.dependencies[-1].call
+            assert checker.required_permissions == ["settings.manage"]

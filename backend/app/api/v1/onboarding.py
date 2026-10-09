@@ -50,6 +50,8 @@ from app.models.onboarding import (
 )
 from app.models.user import User
 from app.schemas.organization import OrganizationSetupCreate, OrganizationSetupResponse
+from app.schemas.system_notices import KeyCustodyConfirm, KeyCustodyStatus
+from app.services import key_custody_service
 from app.services.auth_service import AuthService
 from app.services.onboarding import (
     ONBOARDING_ACCEPTED_MODULE_IDS,
@@ -2076,6 +2078,83 @@ async def save_session_stations(
         success=True,
         message=f"Saved {len(created_ids)} station(s)",
         step="stations",
+    )
+
+
+@router.get("/session/key-custody", response_model=KeyCustodyStatus)
+async def get_session_key_custody(request: Request, db: AsyncSession = Depends(get_db)):
+    """
+    The encryption key's fingerprint (an HMAC, never the key) and whether it
+    has been confirmed as stored separately.
+    """
+    await validate_session(request, db)
+    record = await key_custody_service.confirmation_for_current_key(db)
+    return KeyCustodyStatus(
+        key_fingerprint=key_custody_service.current_fingerprint(),
+        confirmed=record is not None,
+        confirmed_at=record.confirmed_at if record else None,
+        confirmed_via=record.confirmed_via if record else None,
+    )
+
+
+@router.post("/session/key-custody", response_model=SessionDataResponse)
+async def save_session_key_custody(
+    request: Request, data: KeyCustodyConfirm, db: AsyncSession = Depends(get_db)
+):
+    """
+    Confirm the encryption key is stored apart from the server and its
+    backups. Required before setup can finish
+    (docs/FILE_STORAGE_HARDENING.md decision 25); recorded against the system
+    owner created in the step before, and audited.
+    """
+    session = await validate_session(request, db)
+    service = OnboardingService(db)
+    if not await service.needs_onboarding():
+        raise CodedHTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Onboarding has already been completed",
+            error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
+        )
+    onboarding_status = await service.get_onboarding_status()
+    organization_id = (session.data or {}).get("department", {}).get("organization_id")
+    if (
+        not onboarding_status
+        or not organization_id
+        or not onboarding_status.admin_username
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Create the system owner account before confirming the key",
+        )
+    owner = (
+        await db.execute(
+            select(User).where(
+                User.organization_id == organization_id,
+                User.username == onboarding_status.admin_username,
+            )
+        )
+    ).scalar_one_or_none()
+
+    try:
+        await key_custody_service.confirm(
+            db,
+            key_fingerprint=data.key_fingerprint,
+            user_id=str(owner.id) if owner else None,
+            username=onboarding_status.admin_username,
+            via="onboarding",
+            ip_address=get_client_ip(request),
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=safe_error_detail(e)
+        )
+    await service._mark_step_completed(onboarding_status, "key_custody")
+    await db.commit()
+
+    return SessionDataResponse(
+        success=True,
+        message="Encryption key safekeeping confirmed",
+        step="key_custody",
     )
 
 

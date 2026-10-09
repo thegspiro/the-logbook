@@ -17,8 +17,7 @@ import os
 from datetime import date
 from typing import Iterable, Optional
 
-from fastapi import HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi import HTTPException, Response, UploadFile, status
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +30,7 @@ from app.services.file_storage_service import (
     FileRules,
     FileStorageService,
     StorageArea,
+    stored_file_response,
 )
 from app.utils import download_names
 
@@ -137,7 +137,7 @@ async def serve_document(
     day: Optional[date] = None,
     inline_images: bool = False,
     folder_rights: bool = True,
-) -> FileResponse:
+) -> Response:
     """Serve a module document's bytes, or 404.
 
     404 rather than 403 for a document the caller's folder rights do not
@@ -184,7 +184,7 @@ async def serve_document(
     extension = download_names.stored_extension(path)
     media_type = document.file_type or "application/octet-stream"
     inline = inline_images and media_type in _INLINE_IMAGE_TYPES
-    return FileResponse(
+    return stored_file_response(
         path=path,
         filename=download_names.descriptive_filename(
             day, *name_parts, extension=extension, fallback=fallback

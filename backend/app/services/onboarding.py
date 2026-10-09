@@ -135,8 +135,10 @@ class OnboardingService:
     #
     # Ordered by what a department can answer, not by what the system wants to
     # store. Identity is second so the remainder of setup belongs to a real
-    # account rather than to an anonymous 30-minute session; what the
-    # department uses (modules, ranks, stations, apparatus) precedes the
+    # account rather than to an anonymous 30-minute session. The encryption
+    # key is third: it is the one thing setup cannot finish without, and the
+    # account just created is the one recorded as having confirmed it. What
+    # the department uses (modules, ranks, stations, apparatus) precedes the
     # external integrations (email, storage, sign-in), which are the steps that
     # send an operator away to find credentials and are all skippable.
     #
@@ -160,69 +162,76 @@ class OnboardingService:
         },
         {
             "id": 3,
+            "name": "key_custody",
+            "title": "Encryption Key",
+            "description": "Confirm the encryption key is stored separately from the server and its backups",
+            "required": True,
+        },
+        {
+            "id": 4,
             "name": "modules",
             "title": "Select Modules",
             "description": "Choose which modules to enable for your organization",
             "required": False,
         },
         {
-            "id": 4,
+            "id": 5,
             "name": "roles",
             "title": "Ranks & Positions",
             "description": "Configure the rank ladder, positions and permissions",
             "required": False,
         },
         {
-            "id": 5,
+            "id": 6,
             "name": "stations",
             "title": "Stations",
             "description": "Add the stations beyond headquarters",
             "required": False,
         },
         {
-            "id": 6,
+            "id": 7,
             "name": "apparatus",
             "title": "Apparatus",
             "description": "Add your engines, trucks, and ambulances",
             "required": False,
         },
         {
-            "id": 7,
+            "id": 8,
             "name": "it_team",
             "title": "IT Team & Backup Access",
             "description": "Configure IT team and backup access",
             "required": False,
         },
         {
-            "id": 8,
+            "id": 9,
             "name": "email_platform",
             "title": "Email Platform",
             "description": "Select your email service provider",
             "required": False,
         },
         {
-            "id": 9,
+            "id": 10,
             "name": "email_config",
             "title": "Email Configuration",
             "description": "Configure email settings",
             "required": False,
         },
         {
-            "id": 10,
+            "id": 11,
             "name": "file_storage",
             "title": "File Storage",
             "description": "Choose your file storage solution",
             "required": False,
         },
         {
-            "id": 11,
+            "id": 12,
             "name": "authentication",
             "title": "Authentication",
             "description": "Select authentication method",
             "required": False,
         },
         {
-            "id": 12,
+            "id": 13,
             "name": "navigation",
             "title": "Navigation Layout",
             "description": "Choose your preferred navigation layout",
@@ -1583,8 +1592,10 @@ class OnboardingService:
         if status.is_completed:
             raise ValueError("Onboarding is already completed")
 
-        # Verify all critical steps are completed (only organization and admin_user are required)
-        required_steps = ["organization", "admin_user"]
+        # Verify all critical steps are completed. key_custody is required
+        # because a lost encryption key cannot be recovered from any backup
+        # (docs/FILE_STORAGE_HARDENING.md decision 25).
+        required_steps = ["organization", "admin_user", "key_custody"]
         for step in required_steps:
             step_data = status.steps_completed.get(step)
             if not step_data or not step_data.get("completed", False):

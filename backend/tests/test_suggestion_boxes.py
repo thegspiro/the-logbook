@@ -19,6 +19,7 @@ from PIL import Image
 from sqlalchemy import func, select, text
 
 from app.api.v1.endpoints import suggestions as suggestion_endpoints
+from app.core import file_encryption
 from app.models.audit import AuditLog
 from app.models.notification import NotificationLog, NotificationRule
 from app.models.suggestion import (
@@ -809,7 +810,7 @@ class TestOverHttp:
                 )
             )
         ).scalar_one()
-        stored = Path(attachment.file_path).read_bytes()
+        stored = file_encryption.read_plaintext(attachment.file_path)
         assert b"Sam Member" not in stored
         assert b"Captain" not in stored
         with Image.open(io.BytesIO(stored)) as image:

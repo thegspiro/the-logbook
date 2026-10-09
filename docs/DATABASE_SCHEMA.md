@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**300 tables · 4945 columns · 993 foreign keys**
+**301 tables · 4950 columns · 994 foreign keys**
 
 ---
 
@@ -485,6 +485,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
+| [`encryption_key_custody`](#encryption_key_custody) | `EncryptionKeyCustody` | 5 | An administrator's confirmation that the installation's encryption key is |
 | [`onboarding_sessions`](#onboarding_sessions) | `OnboardingSessionModel` | 8 | Server-side onboarding session storage |
 | [`onboarding_status`](#onboarding_status) | `OnboardingStatus` | 21 | System-wide onboarding status |
 
@@ -7104,6 +7105,24 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 ## Onboarding
 
+### `encryption_key_custody`
+
+**EncryptionKeyCustody** · `app/models/onboarding.py`
+
+> An administrator's confirmation that the installation's encryption key is stored somewhere other than the server and its backups. One row per key, identified by its fingerprint (``file_encryption.current_key_fingerprint()``), never by the key itself. A rotated key has a new fingerprint and so needs confirming again: the old confirmation was about a key that no longer protects new files. Installation-wide, like the key it describes, so it carries no organization_id.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `key_fingerprint` | VARCHAR(16) | no |  |  |  |
+| `confirmed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `confirmed_via` | VARCHAR(20) | no |  |  |  |
+| `confirmed_at` | DATETIME | no |  | `now()` |  |
+
+**Constraints**
+
+- UNIQUE `uq_encryption_key_custody_key` (`key_fingerprint`)
+
 ### `onboarding_sessions`
 
 **OnboardingSessionModel** · `app/models/onboarding.py`
@@ -10456,7 +10475,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (363 references)
+### → `users` (364 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10543,6 +10562,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `email_attachments` | `uploaded_by` | SET NULL | yes |
 | `email_templates` | `created_by` | SET NULL | yes |
 | `email_templates` | `updated_by` | SET NULL | yes |
+| `encryption_key_custody` | `confirmed_by` | SET NULL | yes |
 | `equipment_check_templates` | `created_by` | SET NULL | yes |
 | `equipment_kits` | `created_by` | RESTRICT | yes |
 | `equipment_requests` | `fulfilled_by` | SET NULL | yes |
@@ -12055,6 +12075,7 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `department_message_deliveries` | `department_messages`, `users` |
 | `department_message_reads` | `department_messages`, `users` |
 | `email_attachments` | `email_templates`, `users` |
+| `encryption_key_custody` | `users` |
 | `equipment_kit_items` | `equipment_kits`, `inventory_categories`, `inventory_items` |
 | `event_request_activity` | `event_requests`, `users` |
 | `expense_line_items` | `budgets`, `documents`, `expense_reports` |

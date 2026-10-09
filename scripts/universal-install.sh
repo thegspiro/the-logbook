@@ -624,6 +624,9 @@ ENABLE_MINIO=false
 ENABLE_MAILHOG=false
 EOF
 
+    # The file holds every secret the installation has, the encryption key
+    # among them: readable by its owner only.
+    chmod 600 "$INSTALL_DIR/.env"
     log_success ".env file created"
     log_warning "SECURITY_REQUIRE_TLS=false written to .env: the bundled MySQL/Redis do"
     log_warning "not terminate TLS, so DB/cache traffic on the internal Docker network is"
@@ -803,6 +806,13 @@ print_success_message() {
     echo -e "  Profile:         ${GREEN}$PROFILE${NC}"
     echo -e "  Architecture:    ${GREEN}$ARCH${NC}"
     echo -e "  Config file:     ${GREEN}$INSTALL_DIR/.env${NC}"
+    echo
+    echo -e "${YELLOW}Encryption key — do this now:${NC}"
+    echo "  Every stored file and sensitive field is encrypted with ENCRYPTION_KEY and"
+    echo "  ENCRYPTION_SALT in $INSTALL_DIR/.env. Copy both to a password manager or a"
+    echo "  sealed record, somewhere other than this server and its backups. Lose them"
+    echo "  and no backup can be read; keep them with the backups and anyone holding a"
+    echo "  backup can read it. Setup asks you to confirm this. See docs/BACKUP.md."
     echo
     if [[ "$INSTALL_DOCKER" == "true" ]] && [[ "$OS_FAMILY" != "darwin" ]]; then
         echo -e "${YELLOW}Note: You may need to log out and back in for Docker group changes.${NC}"

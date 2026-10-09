@@ -408,8 +408,18 @@ EOF
     prompt_public_url
     reconcile_frontend_url "$SCRIPT_DIR/.env" || exit 1
 
+    # The file holds every secret the installation has, the encryption key
+    # among them: readable by its owner only.
+    chmod 600 "$SCRIPT_DIR/.env"
+
     print_success "Environment configured with secure secrets"
     print_warning "Please review and update .env file with your specific settings"
+    print_warning "ENCRYPTION KEY: every stored file and sensitive field is encrypted with"
+    print_warning "ENCRYPTION_KEY and ENCRYPTION_SALT in $SCRIPT_DIR/.env. Copy both to a"
+    print_warning "password manager or sealed record NOW, somewhere other than this server"
+    print_warning "and its backups: lose them and no backup can be read; store them with"
+    print_warning "the backups and anyone holding a backup can read it. Setup asks you to"
+    print_warning "confirm this. See docs/BACKUP.md."
 }
 
 # True when the .env at $1 pins docker-compose.proxy.yml in COMPOSE_FILE: the
