@@ -192,6 +192,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         isPublic: true,
       },
       { path: '/onboarding/system-owner', label: 'System owner creation', isPublic: true },
+      { path: '/onboarding/encryption-key', label: 'Encryption key safekeeping', isPublic: true },
       {
         path: '/onboarding/admin-user',
         label: 'Admin user (legacy URL)',

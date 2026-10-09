@@ -7,7 +7,16 @@ Tracks onboarding progress and stores initial setup information.
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -150,3 +159,34 @@ class OnboardingSessionModel(Base):
 
     def __repr__(self):
         return f"<OnboardingSession(id={self.id}, session_id={self.session_id[:8]}...)>"
+
+
+class EncryptionKeyCustody(Base):
+    """
+    An administrator's confirmation that the installation's encryption key is
+    stored somewhere other than the server and its backups.
+
+    One row per key, identified by its fingerprint
+    (``file_encryption.current_key_fingerprint()``), never by the key itself.
+    A rotated key has a new fingerprint and so needs confirming again: the
+    old confirmation was about a key that no longer protects new files.
+
+    Installation-wide, like the key it describes, so it carries no
+    organization_id.
+    """
+
+    __tablename__ = "encryption_key_custody"
+    __table_args__ = (
+        UniqueConstraint("key_fingerprint", name="uq_encryption_key_custody_key"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    key_fingerprint: Mapped[str] = mapped_column(String(16), nullable=False)
+    confirmed_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # "onboarding" or "settings": where the confirmation was given.
+    confirmed_via: Mapped[str] = mapped_column(String(20), nullable=False)
+    confirmed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

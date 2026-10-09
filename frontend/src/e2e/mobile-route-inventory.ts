@@ -1079,6 +1079,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'legacy redirect; destination is inventoried',
   },
   {
+    path: '/onboarding/encryption-key',
+    source: 'src/modules/onboarding/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
     path: '/onboarding/admin-user',
     source: 'src/modules/onboarding/routes.tsx',
     coverage: 'exempt',

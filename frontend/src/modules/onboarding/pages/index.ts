@@ -15,5 +15,6 @@ export { default as PositionSetup } from './RoleSetup';
 export { default as ModuleOverview } from './ModuleOverview';
 // SystemOwnerCreation is the canonical name (source file is still AdminUserCreation.tsx)
 export { default as SystemOwnerCreation } from './AdminUserCreation';
+export { default as KeyCustody } from './KeyCustody';
 export { default as SetupComplete } from './SetupComplete';
 export { default as SetupPrerequisites } from './SetupPrerequisites';

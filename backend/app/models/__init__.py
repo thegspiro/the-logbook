@@ -321,7 +321,7 @@ from app.models.notification import (
     NotificationTrigger,
     PushSubscription,
 )
-from app.models.onboarding import OnboardingStatus
+from app.models.onboarding import EncryptionKeyCustody, OnboardingStatus
 from app.models.operational_rank import OperationalRank
 from app.models.org_chart import OrgChartNode, OrgChartNodeHolder
 from app.models.organization_lock import OrganizationLock
@@ -445,6 +445,7 @@ __all__ = [
     "OrgCallResponse",
     # Onboarding models
     "OnboardingStatus",
+    "EncryptionKeyCustody",
     # Email template models
     "EmailTemplate",
     "EmailTemplateBackup",

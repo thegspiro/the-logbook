@@ -42,6 +42,7 @@ _STEPS_FILE = (
 _FRONTEND_TO_BACKEND = {
     "organization": "organization",
     "system_owner": "admin_user",
+    "key_custody": "key_custody",
     "modules": "modules",
     "positions": "roles",
     "stations": "stations",
@@ -100,8 +101,8 @@ class TestStepOrderParity:
         assert names.index("email_config") == names.index("email_platform") + 1
 
     def test_required_steps_are_reachable_first(self):
-        # complete_onboarding refuses without these, so a flow that put either
-        # late would let an operator walk most of the wizard and then fail.
+        # complete_onboarding refuses without these, so a flow that put any
+        # of them late would let an operator walk most of the wizard and then fail.
         names = _backend_step_names()
-        for required in ("organization", "admin_user"):
+        for required in ("organization", "admin_user", "key_custody"):
             assert names.index(required) < len(names) / 2

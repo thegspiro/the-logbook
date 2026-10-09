@@ -12,6 +12,8 @@ from app.services import upload_encryption
 
 MALWARE_SCANNING_DISABLED = "malware_scanning_disabled"
 FILES_NOT_ENCRYPTED = "files_not_encrypted"
+# Needs the database, so the endpoint adds it (see endpoints/system_notices.py).
+KEY_CUSTODY_UNCONFIRMED = "encryption_key_custody_unconfirmed"
 
 
 def current_notices() -> list[SystemNotice]:
