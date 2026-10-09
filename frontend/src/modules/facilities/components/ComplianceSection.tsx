@@ -28,7 +28,7 @@ export default function ComplianceSection({ facilityId, canCreate, canDelete }: 
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
     compliance_type: 'nfpa',
-    title: '',
+    checklist_name: '',
     description: '',
     due_date: '',
   });
@@ -50,7 +50,7 @@ export default function ComplianceSection({ facilityId, canCreate, canDelete }: 
   }, [loadChecklists]);
 
   const handleCreate = async () => {
-    if (!formData.title.trim()) {
+    if (!formData.checklist_name.trim()) {
       toast.error('Title is required');
       return;
     }
@@ -59,7 +59,7 @@ export default function ComplianceSection({ facilityId, canCreate, canDelete }: 
       const payload: ComplianceChecklistCreate = {
         facility_id: facilityId,
         compliance_type: formData.compliance_type,
-        title: formData.title.trim(),
+        checklist_name: formData.checklist_name.trim(),
       };
       if (formData.description.trim()) payload.description = formData.description.trim();
       if (formData.due_date) payload.due_date = formData.due_date;
@@ -67,7 +67,7 @@ export default function ComplianceSection({ facilityId, canCreate, canDelete }: 
       await facilitiesService.createComplianceChecklist(payload);
       toast.success('Checklist created');
       setShowForm(false);
-      setFormData({ compliance_type: 'nfpa', title: '', description: '', due_date: '' });
+      setFormData({ compliance_type: 'nfpa', checklist_name: '', description: '', due_date: '' });
       void loadChecklists();
     } catch {
       toast.error('Failed to create checklist');
@@ -80,7 +80,7 @@ export default function ComplianceSection({ facilityId, canCreate, canDelete }: 
     if (
       !(await confirm({
         title: 'Delete checklist',
-        message: `Delete the compliance checklist "${checklist.title}"? This cannot be undone.`,
+        message: `Delete the compliance checklist "${checklist.checklistName}"? This cannot be undone.`,
         confirmLabel: 'Delete',
         cancelLabel: 'Keep it',
       }))
@@ -117,19 +117,25 @@ export default function ComplianceSection({ facilityId, canCreate, canDelete }: 
             <h3 className="text-theme-text-primary text-sm font-medium">New Compliance Checklist</h3>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={labelCls}>Title *</label>
+                <label htmlFor="compliance-checklist-name" className={labelCls}>
+                  Title *
+                </label>
                 <input
+                  id="compliance-checklist-name"
                   type="text"
-                  value={formData.title}
-                  onChange={(e) => setFormData((p) => ({ ...p, title: e.target.value }))}
+                  value={formData.checklist_name}
+                  onChange={(e) => setFormData((p) => ({ ...p, checklist_name: e.target.value }))}
                   placeholder="e.g., NFPA 1500 Annual Review"
                   className={inputCls}
                   autoFocus
                 />
               </div>
               <div>
-                <label className={labelCls}>Type</label>
+                <label htmlFor="compliance-checklist-type" className={labelCls}>
+                  Type
+                </label>
                 <select
+                  id="compliance-checklist-type"
                   value={formData.compliance_type}
                   onChange={(e) => setFormData((p) => ({ ...p, compliance_type: e.target.value }))}
                   className={inputCls}
@@ -142,8 +148,11 @@ export default function ComplianceSection({ facilityId, canCreate, canDelete }: 
                 </select>
               </div>
               <div>
-                <label className={labelCls}>Due Date</label>
+                <label htmlFor="compliance-checklist-due-date" className={labelCls}>
+                  Due Date
+                </label>
                 <input
+                  id="compliance-checklist-due-date"
                   type="date"
                   value={formData.due_date}
                   onChange={(e) => setFormData((p) => ({ ...p, due_date: e.target.value }))}
@@ -151,8 +160,11 @@ export default function ComplianceSection({ facilityId, canCreate, canDelete }: 
                 />
               </div>
               <div>
-                <label className={labelCls}>Description</label>
+                <label htmlFor="compliance-checklist-description" className={labelCls}>
+                  Description
+                </label>
                 <input
+                  id="compliance-checklist-description"
                   type="text"
                   value={formData.description}
                   onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
@@ -204,7 +216,7 @@ export default function ComplianceSection({ facilityId, canCreate, canDelete }: 
                     <Circle className="text-theme-text-muted h-4 w-4" />
                   )}
                   <div>
-                    <p className="text-theme-text-primary text-sm font-medium">{checklist.title}</p>
+                    <p className="text-theme-text-primary text-sm font-medium">{checklist.checklistName}</p>
                     <div className="text-theme-text-muted flex items-center gap-2 text-xs">
                       <span>{enumLabel(checklist.complianceType)}</span>
                       {checklist.dueDate && (
@@ -229,7 +241,7 @@ export default function ComplianceSection({ facilityId, canCreate, canDelete }: 
                       void handleDelete(checklist);
                     }}
                     className="text-theme-text-muted rounded-lg p-1.5 transition-all hover:bg-red-500/10 hover:text-red-500 pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100"
-                    aria-label={`Delete ${checklist.title}`}
+                    aria-label={`Delete ${checklist.checklistName}`}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
