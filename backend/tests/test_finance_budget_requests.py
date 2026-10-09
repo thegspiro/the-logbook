@@ -40,6 +40,7 @@ from app.api.v1.endpoints import finance as finance_endpoints
 from app.models.finance import (
     Budget,
     BudgetAmendment,
+    BudgetAmendmentStatus,
     BudgetCategory,
     CheckRequest,
     CheckRequestStatus,
@@ -227,6 +228,7 @@ async def dept(db_session: AsyncSession):
             approved_by="Board",
             approved_on=date(2026, 3, 1),
             created_by=treasurer_id,
+            status=BudgetAmendmentStatus.CONFIRMED,
         )
     )
     await db_session.flush()

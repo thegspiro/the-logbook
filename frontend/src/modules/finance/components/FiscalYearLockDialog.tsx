@@ -3,7 +3,8 @@
  * sign-off (`finance.manage`).
  *
  * Lists what is still open — submitted requests not yet decided, approved ones
- * not yet paid or issued — because the backend refuses the lock until there is
+ * not yet paid or issued, budget amendments not yet confirmed or rejected —
+ * because the backend refuses the lock until there is
  * nothing. The reconciliation notes are required and kept with the year. The
  * list is the backend's (`GET /fiscal-years/{id}/open-items`), not worked out
  * here, and its refusal is shown in its own words if something was submitted
@@ -26,12 +27,15 @@ const ITEM_PATHS: Record<FiscalYearOpenItem['kind'], string> = {
   purchase_request: '/finance/purchase-requests',
   expense_report: '/finance/expenses',
   check_request: '/finance/check-requests',
+  // An amendment is decided on its line's page; the item's id is the line's.
+  budget_amendment: '/finance/budgets',
 };
 
 const ITEM_KINDS: Record<FiscalYearOpenItem['kind'], string> = {
   purchase_request: 'Purchase request',
   expense_report: 'Expense report',
   check_request: 'Check request',
+  budget_amendment: 'Budget amendment',
 };
 
 interface FiscalYearLockDialogProps {

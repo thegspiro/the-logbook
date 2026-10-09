@@ -353,7 +353,9 @@ All monetary fields use `Numeric(12, 2)` precision (12 digits total, 2 decimal p
 5. Optionally select a **station** to scope the line to one facility. Leave it
    on **Department-wide** for a line that belongs to no station. The station's
    name is what members see when they pick the line on a request.
-6. Enter the **amount budgeted** (zero or greater).
+6. Enter the **amount budgeted** (zero or greater). Once the year's budget has
+   gone to the board — board review, adopted, active or closing — a new line
+   must start at **zero**; add it, then record an amendment for its amount.
 7. Optionally select an **owner position** — see
    [Budget Owners](#budget-owners). Left empty, the form says which owner the
    line takes from its category ("Uses the category's owner: Training
@@ -370,8 +372,13 @@ owner back to the category's clears the value. Lowering the amount below what
 is already spent and encumbered is refused with _Insufficient available
 budget_, and the dialog stays open with that message.
 
-In a **locked** fiscal year the amount is shown read-only with the hint _This
-fiscal year is locked._; the other fields still save.
+The amount can be edited directly only while next year's budget is still
+**taking requests** or in **leadership review**. Once the budget goes before
+the board, and in an active or closing year, the amount is shown read-only with
+the hint _This budget has gone before the board. Change the amount with an
+amendment, which another officer confirms._ — use **Add amendment** instead.
+In a **locked** fiscal year the hint reads _This fiscal year is locked._ The
+station, owner position and notes still save in every case.
 
 When leadership has approved **extra money** for a line, record an amendment
 instead of editing the amount (below) — the amendment keeps the record of who
@@ -380,8 +387,8 @@ approved it and why.
 ### Budget Amendments
 
 An amendment records extra money approved for a budget line — by a board vote,
-the Chief, the membership — and raises the line's budget by that amount.
-Requires `finance.manage`.
+the Chief, the membership — and, once a **second officer confirms it**, raises
+the line's budget by that amount. Entering one requires `finance.manage`.
 
 1. Open the budget line from **Finance > Budgets**.
 2. Click **Add amendment**.
@@ -393,51 +400,83 @@ Requires `finance.manage`.
      cannot be in the future).
 4. Click **Record amendment**.
 
-The line's budget goes up by the amount at once. Once a line has amendments its
-page shows the **Original budget**, the **Current budget** and **Amendments:
+The amendment is saved as **Pending confirmation** and the line's budget does
+not change yet; the page says how many amendments are awaiting confirmation and
+that the figures do not include them. See
+[Confirming an Amendment](#confirming-an-amendment) below. Once a line has
+confirmed amendments its page shows the **Original budget**, the **Current budget** and **Amendments:
 +$X (n)**, and the **Amendments** section lists each one with its approval
 date, amount, who approved it, the reason, and who entered it and when. The
 Budgets list marks the line _(amended)_.
 
 - Amendments can be added in **draft**, **active** and **closed** fiscal years,
-  but not in a **locked** one — the button is hidden there.
+  but not in a **locked** one — the button is hidden there. Pending amendments
+  hold a closing year open: the year cannot be locked until each one is
+  confirmed or rejected.
 - An amendment cannot be edited or removed afterwards; it is the record of what
   was approved. If one was entered by mistake, **reverse** it (below).
 - A purchase or check request that was refused for lack of funds is **not**
   re-run when the budget goes up, and nobody is emailed. The member submits it
   again.
 
+### Confirming an Amendment
+
+An amendment (or a reversal, below) moves money only once a second officer
+confirms it. Anyone holding `finance.budget_review` (the role given to whoever
+reviews the budget for leadership — the President, for example) or
+`finance.manage` may confirm, **except whoever entered it**.
+
+1. Open the budget line. Amendments awaiting confirmation are marked
+   **Pending confirmation**.
+2. Check the amount and approval against the minutes or the approval itself.
+3. Click **Confirm**, read the note — _This raises the line's budget by $X…_ —
+   and click **Confirm amendment**. The budget changes at once and the
+   amendment shows **Confirmed {date} by {name}**.
+4. If it does not match what was approved, click **Reject** instead and give
+   the reason. It stays on the list, struck through, with **Rejected {date} by
+   {name}: {reason}**, and the budget does not change.
+
+Whoever entered an amendment does not get **Confirm** on it, but gets
+**Withdraw** — the same as Reject, for taking back one's own mistake. Nothing is
+emailed when an amendment is waiting; tell the confirming officer, or they will
+see it on the line and in the year's open items at year-end.
+
 ### Correcting a Mistaken Amendment
 
-If an amendment was entered wrongly — $2,500 typed for $250, or the wrong line —
-reverse it, then record the correct amendment if one is needed. A reversal is a
+If a **confirmed** amendment was wrong — $2,500 typed for $250, or the wrong
+line — reverse it (one still pending is simply rejected or withdrawn instead), then record the correct amendment if one is needed. A reversal is a
 new entry with its own reason and approval; the original stays on the list.
 Requires `finance.manage`.
 
 1. Open the budget line from **Finance > Budgets**.
 2. In the **Amendments** section, click **Reverse** on the amendment.
-3. Read the note — _This lowers the current budget by $X. The original
-   amendment stays on record._ — and fill in:
+3. Read the note — _Once a second officer confirms it, this lowers the current
+   budget by $X. The original amendment stays on record._ — and fill in:
    - **Reason** — what went wrong, for example _Entered $2,500 instead of
      $250_.
    - **Approved by** — who approved the correction.
    - **Approval date** — defaults to today; it cannot be in the future.
 4. Click **Record reversal**.
 
-The current budget drops by the amendment's amount at once; the **Original
-budget** does not change. The list then shows the reversal as **−$X · Reverses
-the {date} amendment of +$Y**, and the original amendment struck through with
-**Reversed {date} by {name}**.
+The reversal is saved **pending**, like any amendment; until a second officer
+confirms it the original reads **Reversal entered {date} by {name}, awaiting
+confirmation** and the budget is unchanged. Once confirmed, the current budget
+drops by the amendment's amount; the **Original budget** does not change. The
+list then shows the reversal as **−$X · Reverses the {date} amendment of +$Y**,
+and the original amendment struck through with **Reversed {date} by {name}**.
+If the reversal is rejected instead, the original can be reversed again.
 
 - The whole amendment is reversed — there is no partial reversal. To lower it
   from $2,500 to $250, reverse it and record a new $250 amendment.
+- Only a confirmed amendment can be reversed.
 - An amendment can be reversed only once, and a reversal cannot itself be
   reversed. If the money turns out to be needed after all, record a new
   amendment.
 - Not available in a **locked** fiscal year (the button is hidden there); fine
   in draft, active and closed years.
 - Refused with _Insufficient available budget_ if the lower budget would no
-  longer cover what the line has already spent and committed.
+  longer cover what the line has already spent and committed — checked when it
+  is entered and again when it is confirmed.
 - Line owners see reversals on their line's page but cannot make one.
 
 ### Budget Owners

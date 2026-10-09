@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**301 tables · 4950 columns · 994 foreign keys**
+**301 tables · 4954 columns · 995 foreign keys**
 
 ---
 
@@ -253,7 +253,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`approval_chain_steps`](#approval_chain_steps) | `ApprovalChainStep` | 13 | A single step in an approval chain |
 | [`approval_chains`](#approval_chains) | `ApprovalChain` | 13 | Configurable approval chain template |
 | [`approval_step_records`](#approval_step_records) | `ApprovalStepRecord` | 13 | Tracks actual approval step progression for a specific entity |
-| [`budget_amendments`](#budget_amendments) | `BudgetAmendment` | 10 | Extra money leadership approved for a budget line, as recorded. |
+| [`budget_amendments`](#budget_amendments) | `BudgetAmendment` | 14 | Extra money leadership approved for a budget line, as recorded. |
 | [`budget_categories`](#budget_categories) | `BudgetCategory` | 11 | Budget category (hierarchical) |
 | [`budget_requests`](#budget_requests) | `BudgetRequest` | 22 | A line owner's proposed amount for a budget line in a draft year. |
 | [`budgets`](#budgets) | `Budget` | 13 | Budget line for a category within a fiscal year |
@@ -3734,7 +3734,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **BudgetAmendment** · `app/models/finance.py`
 
-> Extra money leadership approved for a budget line, as recorded. Each row is an audit record of one increase: how much, why, who approved it and when, and which member entered it. Adding one raises the line's ``amount_budgeted`` by ``amount`` in the same transaction, so ``amount_budgeted`` stays the single live ceiling the spend checks read. The line's *original* budget is not stored anywhere; it is ``amount_budgeted`` minus the sum of these rows (``FinanceService._budget_row``). There is no edit or delete path: an amendment is what the department approved. A mistaken one is corrected by a **reversing entry** (owner decision, 2026-10-09): a new row whose ``amount`` is the original's, negated, and whose ``reverses_amendment_id`` names it. The original stays on record, ``amount_budgeted`` drops by the amount, and the original budget -- current less the sum of every row, reversals included -- is unchanged. ``FinanceService.reverse_budget_amendment`` holds the rules.
+> Extra money leadership approved for a budget line, as recorded. Each row is an audit record of one increase: how much, why, who approved it and when, and which member entered it. An amendment is entered ``pending`` and moves nothing; a second officer -- a ``finance.budget_review`` or ``finance.manage`` holder other than the member who entered it -- confirms it, which raises the line's ``amount_budgeted`` by ``amount`` in the same transaction, or rejects it. ``amount_budgeted`` stays the single live ceiling the spend checks read. The line's *original* budget is not stored anywhere; it is ``amount_budgeted`` minus the sum of the *confirmed* rows (``FinanceService._budget_row``). There is no edit or delete path: an amendment is what the department approved. A mistaken one is corrected by a **reversing entry** (owner decision, 2026-10-09): a new row whose ``amount`` is the original's, negated, and whose ``reverses_amendment_id`` names it. The original stays on record, ``amount_budgeted`` drops by the amount, and the original budget -- current less the sum of every row, reversals included -- is unchanged. ``FinanceService.reverse_budget_amendment`` holds the rules.
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
@@ -3748,6 +3748,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `reverses_amendment_id` | VARCHAR(36) | yes | FK, UQ |  | → `budget_amendments.id` ON DELETE SET NULL |
+| `status` | ENUM(`pending`, `confirmed`, `rejected`) | no |  | `'pending'` |  |
+| `decided_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `decided_at` | DATETIME | yes |  |  |  |
+| `decision_note` | TEXT | yes |  |  |  |
 
 **Indexes**
 
@@ -10475,7 +10479,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (364 references)
+### → `users` (365 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10513,6 +10517,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `approval_step_records` | `assigned_to` | SET NULL | yes |
 | `blocked_access_attempts` | `user_id` | RESTRICT | yes |
 | `budget_amendments` | `created_by` | SET NULL | yes |
+| `budget_amendments` | `decided_by` | SET NULL | yes |
 | `budget_requests` | `decided_by` | SET NULL | yes |
 | `budget_requests` | `reviewed_by` | SET NULL | yes |
 | `budget_requests` | `submitted_by` | SET NULL | yes |

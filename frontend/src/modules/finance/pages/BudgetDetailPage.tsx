@@ -11,9 +11,13 @@
  * 404 to anyone else — rather than found in the budget list, which an owner
  * without `finance.view` cannot fetch.
  *
- * An amendment is extra money leadership approved for the line. The backend
- * raises `amountBudgeted` by it and reports the original (`originalAmount`);
- * this page shows both rather than working either out (CLAUDE.md pitfall #29).
+ * An amendment is extra money leadership approved for the line. It is entered
+ * pending and moves nothing until a second officer confirms it here: a
+ * `finance.budget_review` or `finance.manage` holder other than whoever
+ * entered it (the backend enforces both; this page only hides the button it
+ * would refuse). Once confirmed, the backend raises `amountBudgeted` by it and
+ * reports the original (`originalAmount`); this page shows both rather than
+ * working either out (CLAUDE.md pitfall #29).
  * A mistaken amendment is corrected by a reversing entry, never edited: the
  * backend reports which rows are reversals and which are reversed, and this
  * page only renders that.
@@ -34,10 +38,14 @@ import { budgetOwnerLabel } from '../utils/budgetOwnership';
 import { formatCurrency, formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { formatDate, formatDateTime } from '@/utils/dateFormatting';
 import { getErrorMessage, toAppError } from '@/utils/errorHandling';
+import { useConfirm } from '@/contexts/ConfirmContext';
+import { PromptDialog } from '@/components/ux/PromptDialog';
+import toast from 'react-hot-toast';
 import { useTimezone } from '@/hooks/useTimezone';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
+import { BudgetAmendmentStatus } from '../types';
 import type { Budget, BudgetAmendment } from '../types';
 
 // =============================================================================
@@ -53,6 +61,7 @@ interface BudgetInfoProps {
 
 const BudgetInfoCard: React.FC<BudgetInfoProps> = ({ budget, categoryName, actions }) => {
   const amendmentCount = budget.amendmentCount ?? 0;
+  const pendingCount = budget.pendingAmendmentCount ?? 0;
   const amended = amendmentCount > 0;
   const remaining = Number(budget.amountBudgeted) - Number(budget.amountSpent) - Number(budget.amountEncumbered);
   const pctUsed =
@@ -111,6 +120,14 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({ budget, categoryName, actio
             </dd>
           </div>
         </dl>
+      )}
+
+      {pendingCount > 0 && (
+        <p className="alert-warning mb-6 text-sm" role="status">
+          {pendingCount === 1
+            ? '1 amendment is awaiting confirmation by a second officer and is not yet in these figures.'
+            : `${String(pendingCount)} amendments are awaiting confirmation by a second officer and are not yet in these figures.`}
+        </p>
       )}
 
       {/* Amounts grid */}
@@ -180,9 +197,27 @@ interface AmendmentListProps {
   error: string | null;
   /** Offered only to a finance manager, and only while the year is unlocked. */
   onReverse?: ((amendment: BudgetAmendment) => void) | undefined;
+  /**
+   * Offered to a budget reviewer or finance manager while the year is
+   * unlocked. Confirm is hidden on the viewer's own entries; reject is not,
+   * since withdrawing one's own mistaken entry is how it is taken back.
+   */
+  onConfirm?: ((amendment: BudgetAmendment) => void) | undefined;
+  onReject?: ((amendment: BudgetAmendment) => void) | undefined;
+  currentUserId?: string | undefined;
 }
 
-const AmendmentList: React.FC<AmendmentListProps> = ({ amendments, loading, error, onReverse }) => {
+const statusOf = (a: BudgetAmendment): BudgetAmendmentStatus => a.status ?? BudgetAmendmentStatus.CONFIRMED;
+
+const AmendmentList: React.FC<AmendmentListProps> = ({
+  amendments,
+  loading,
+  error,
+  onReverse,
+  onConfirm,
+  onReject,
+  currentUserId,
+}) => {
   const tz = useTimezone();
   const byId = new Map(amendments.map((a) => [a.id, a]));
   let body: React.ReactNode;
@@ -196,8 +231,17 @@ const AmendmentList: React.FC<AmendmentListProps> = ({ amendments, loading, erro
     body = (
       <ul className="divide-theme-surface-border divide-y" aria-label="Amendments">
         {amendments.map((a) => {
-          const reversed = Boolean(a.reversedByAmendmentId);
+          const status = statusOf(a);
+          const pending = status === BudgetAmendmentStatus.PENDING;
+          const rejected = status === BudgetAmendmentStatus.REJECTED;
+          const reversalPending = a.reversalStatus === BudgetAmendmentStatus.PENDING;
+          // Struck through only once the reversal is confirmed and has moved the budget.
+          const reversed = Boolean(a.reversedByAmendmentId) && !reversalPending;
           const original = a.reversesAmendmentId ? byId.get(a.reversesAmendmentId) : undefined;
+          const ownEntry = Boolean(currentUserId) && a.createdBy === currentUserId;
+          const label = a.isReversal
+            ? `reversal of ${formatCurrency(Math.abs(Number(a.amount)))}`
+            : `${formatDate(a.approvedOn, tz)} amendment of +${formatCurrency(a.amount)}`;
           return (
             <li key={a.id} className="py-3 first:pt-0 last:pb-0">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -216,12 +260,18 @@ const AmendmentList: React.FC<AmendmentListProps> = ({ amendments, loading, erro
                 ) : (
                   <p
                     className={`text-sm font-semibold ${
-                      reversed ? 'text-theme-text-secondary line-through' : 'text-theme-text-primary'
+                      reversed || rejected ? 'text-theme-text-secondary line-through' : 'text-theme-text-primary'
                     }`}
                   >
                     +{formatCurrency(a.amount)}
                   </p>
                 )}
+                {pending && (
+                  <span className="badge bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-white">
+                    Pending confirmation
+                  </span>
+                )}
+                {rejected && <span className="badge bg-theme-surface-secondary text-theme-text-primary">Rejected</span>}
                 <p className="text-theme-text-secondary text-sm">
                   Approved {formatDate(a.approvedOn, tz)} by {a.approvedBy}
                 </p>
@@ -231,22 +281,66 @@ const AmendmentList: React.FC<AmendmentListProps> = ({ amendments, loading, erro
                   Reversed {formatDate(a.reversedAt, tz)} by {a.reversedByName || 'a former member'}
                 </p>
               )}
+              {reversalPending && (
+                <p className="text-theme-text-secondary mt-1 text-sm font-medium">
+                  Reversal entered {formatDate(a.reversedAt, tz)} by {a.reversedByName || 'a former member'}, awaiting
+                  confirmation
+                </p>
+              )}
+              {status === BudgetAmendmentStatus.CONFIRMED && a.decidedAt && (
+                <p className="text-theme-text-secondary mt-1 text-sm">
+                  Confirmed {formatDate(a.decidedAt, tz)} by {a.decidedByName || 'a former member'}
+                </p>
+              )}
+              {rejected && (
+                <p className="text-theme-text-secondary mt-1 text-sm break-words whitespace-pre-line">
+                  Rejected {formatDate(a.decidedAt, tz)} by {a.decidedByName || 'a former member'}
+                  {a.decisionNote ? `: ${a.decisionNote}` : ''}
+                </p>
+              )}
               <p className="text-theme-text-primary mt-1 text-sm break-words whitespace-pre-line">{a.reason}</p>
               <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
                 <p className="text-theme-text-secondary text-xs">
                   Entered by {a.enteredByName || 'a former member'} on {formatDateTime(a.createdAt, tz)}
                 </p>
-                {onReverse && !a.isReversal && !reversed && (
-                  <button
-                    type="button"
-                    onClick={() => onReverse(a)}
-                    className="btn-secondary btn-sm"
-                    // Every row has one; the name says which amendment it reverses.
-                    aria-label={`Reverse the ${formatDate(a.approvedOn, tz)} amendment of +${formatCurrency(a.amount)}`}
-                  >
-                    Reverse
-                  </button>
+                {pending && (onConfirm || onReject) && (
+                  <div className="flex flex-wrap gap-2">
+                    {onConfirm && !ownEntry && (
+                      <button
+                        type="button"
+                        onClick={() => onConfirm(a)}
+                        className="btn-primary btn-sm"
+                        aria-label={`Confirm the ${label}`}
+                      >
+                        Confirm
+                      </button>
+                    )}
+                    {onReject && (
+                      <button
+                        type="button"
+                        onClick={() => onReject(a)}
+                        className="btn-secondary btn-sm"
+                        aria-label={`${ownEntry ? 'Withdraw' : 'Reject'} the ${label}`}
+                      >
+                        {ownEntry ? 'Withdraw' : 'Reject'}
+                      </button>
+                    )}
+                  </div>
                 )}
+                {onReverse &&
+                  status === BudgetAmendmentStatus.CONFIRMED &&
+                  !a.isReversal &&
+                  !a.reversedByAmendmentId && (
+                    <button
+                      type="button"
+                      onClick={() => onReverse(a)}
+                      className="btn-secondary btn-sm"
+                      // Every row has one; the name says which amendment it reverses.
+                      aria-label={`Reverse the ${formatDate(a.approvedOn, tz)} amendment of +${formatCurrency(a.amount)}`}
+                    >
+                      Reverse
+                    </button>
+                  )}
               </div>
             </li>
           );
@@ -307,6 +401,14 @@ const BudgetDetailPage: React.FC = () => {
   // finance.view lists every line; without it the member reached this line as
   // its owner, so the way back is their own list.
   const seesAllBudgets = useAuthStore((s) => s.checkPermission('finance.view'));
+  // The second officer: whoever may confirm or reject a pending amendment.
+  const canDecide = useAuthStore(
+    (s) => s.checkPermission('finance.budget_review') || s.checkPermission('finance.manage')
+  );
+  const currentUserId = useAuthStore((s) => s.user?.id);
+  const { confirm } = useConfirm();
+  const [rejecting, setRejecting] = useState<BudgetAmendment | null>(null);
+  const [deciding, setDeciding] = useState(false);
   const [budget, setBudget] = useState<Budget | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -369,6 +471,45 @@ const BudgetDetailPage: React.FC = () => {
     void loadBudget();
     void loadAmendments();
     setRevision((r) => r + 1);
+  };
+
+  const confirmAmendment = async (amendment: BudgetAmendment) => {
+    if (!id) return;
+    const ok = await confirm({
+      title: 'Confirm amendment',
+      message: amendment.isReversal
+        ? `This lowers the line's budget by ${formatCurrency(Math.abs(Number(amendment.amount)))}. Confirm only if the reversal matches what was approved.`
+        : `This raises the line's budget by ${formatCurrency(amendment.amount)}. Confirm only if it matches what ${amendment.approvedBy} approved.`,
+      confirmLabel: 'Confirm amendment',
+      cancelLabel: 'Not yet',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    setDeciding(true);
+    try {
+      await budgetService.confirmAmendment(id, amendment.id);
+      toast.success('Amendment confirmed');
+      reload();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not confirm the amendment'));
+    } finally {
+      setDeciding(false);
+    }
+  };
+
+  const rejectAmendment = async (amendment: BudgetAmendment, note: string) => {
+    if (!id) return;
+    setDeciding(true);
+    try {
+      await budgetService.rejectAmendment(id, amendment.id, { note: note.trim() });
+      toast.success('Amendment rejected');
+      setRejecting(null);
+      reload();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not reject the amendment'));
+    } finally {
+      setDeciding(false);
+    }
   };
 
   const backLink = seesAllBudgets ? (
@@ -511,6 +652,26 @@ const BudgetDetailPage: React.FC = () => {
         // Owners read the list too (#3010) but never reverse; a locked year
         // takes no reversal, and the backend refuses one regardless.
         onReverse={canManage && !yearLocked ? setReversing : undefined}
+        onConfirm={canDecide && !yearLocked && !deciding ? (a) => void confirmAmendment(a) : undefined}
+        onReject={canDecide && !yearLocked && !deciding ? setRejecting : undefined}
+        currentUserId={currentUserId}
+      />
+
+      <PromptDialog
+        isOpen={rejecting !== null}
+        onClose={() => setRejecting(null)}
+        onSubmit={(note) => {
+          if (rejecting) void rejectAmendment(rejecting, note);
+        }}
+        title={rejecting && rejecting.createdBy === currentUserId ? 'Withdraw amendment' : 'Reject amendment'}
+        message="The amendment stays on record, marked rejected with this reason, and the budget does not change."
+        label="Reason"
+        required
+        multiline
+        hint="Kept with the amendment and in the audit log."
+        confirmLabel={rejecting && rejecting.createdBy === currentUserId ? 'Withdraw' : 'Reject'}
+        confirmVariant="warning"
+        loading={deciding}
       />
 
       <BudgetTransactionList

@@ -27,6 +27,7 @@ from app.schemas.finance import (
     ApprovalChainStepUpdate,
     ApprovalChainUpdate,
     BudgetAmendmentCreate,
+    BudgetAmendmentReject,
     BudgetAmendmentReverse,
     BudgetCategoryCreate,
     BudgetCategoryUpdate,
@@ -134,6 +135,7 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "approved_by": "Board vote 10/7",
         "approved_on": "2026-10-07",
     },
+    BudgetAmendmentReject: {"note": "The board did not vote on this"},
     BudgetAmendmentReverse: {
         "reason": "Entered $2,500 for $250",
         "approved_by": "Treasurer's correction",

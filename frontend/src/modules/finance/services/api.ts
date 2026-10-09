@@ -20,6 +20,7 @@ import type {
   BudgetAmendment,
   BudgetAmendmentCreatePayload,
   BudgetAmendmentCreated,
+  BudgetAmendmentRejectPayload,
   BudgetAmendmentReversePayload,
   BudgetCategory,
   BudgetCategoryUpdatePayload,
@@ -248,13 +249,13 @@ export const budgetService = {
     return response.data;
   },
 
-  /** Record extra money approved for a line; raises its budget by the amount. */
+  /** Record extra money approved for a line; pending until a second officer confirms it. */
   async addAmendment(id: string, data: BudgetAmendmentCreatePayload): Promise<BudgetAmendmentCreated> {
     const response = await api.post<BudgetAmendmentCreated>(`/finance/budgets/${id}/amendments`, data);
     return response.data;
   },
 
-  /** Cancel a mistaken amendment with a reversing entry; lowers the budget by it. */
+  /** Cancel a mistaken amendment with a reversing entry, pending like any amendment. */
   async reverseAmendment(
     id: string,
     amendmentId: string,
@@ -262,6 +263,25 @@ export const budgetService = {
   ): Promise<BudgetAmendmentCreated> {
     const response = await api.post<BudgetAmendmentCreated>(
       `/finance/budgets/${id}/amendments/${amendmentId}/reverse`,
+      data
+    );
+    return response.data;
+  },
+
+  /** Confirm a pending amendment; this is what moves the line's budget. */
+  async confirmAmendment(id: string, amendmentId: string): Promise<BudgetAmendmentCreated> {
+    const response = await api.post<BudgetAmendmentCreated>(`/finance/budgets/${id}/amendments/${amendmentId}/confirm`);
+    return response.data;
+  },
+
+  /** Reject a pending amendment, with the reason. The line is left as it was. */
+  async rejectAmendment(
+    id: string,
+    amendmentId: string,
+    data: BudgetAmendmentRejectPayload
+  ): Promise<BudgetAmendmentCreated> {
+    const response = await api.post<BudgetAmendmentCreated>(
+      `/finance/budgets/${id}/amendments/${amendmentId}/reject`,
       data
     );
     return response.data;

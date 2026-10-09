@@ -1318,6 +1318,28 @@ What remains limited, by design:
 **Owner decision needed** only if partial reversals, or reversals in a locked
 year, are wanted.
 
+## Finance — Amendment Confirmation: What It Does Not Cover (2026-10-09)
+
+Amendments and reversals are entered pending and move money only once a
+`finance.budget_review` or `finance.manage` holder other than whoever entered
+them confirms them (`docs/FINANCE_MODULE.md`, "Second-officer confirmation").
+Three gaps are deliberate, pending a decision:
+
+- **Nobody is told an amendment is waiting.** No email, bell entry or queue
+  lists pending amendments across lines; the confirmer finds them on the line's
+  page (marked _Pending confirmation_) or, at year-end, in the open items that
+  hold the lock. The Treasurer tells the confirming officer.
+- **A department with one finance officer cannot confirm anything.** Someone
+  other than the entering member must hold `finance.budget_review` or
+  `finance.manage`; until one does, amendments stay pending and a closing year
+  cannot be locked. This is the control working as intended, but a very small
+  department has to grant `finance.budget_review` to a second officer first.
+- **A rejected reversal loses its link on the row.** Rejecting a pending
+  reversal clears `reverses_amendment_id` so the original can be reversed
+  again; the rejected row then reads "Reverses an earlier amendment" rather
+  than naming it. The audit event `finance.budget_amendment_rejected` keeps
+  `reversed_amendment_id`.
+
 ## Finance — Budget Adoption Stages: What They Do Not Cover (2026-10-09)
 
 Next year's budget moves through taking requests, leadership review and board
@@ -1343,12 +1365,10 @@ Adoption, starting a year, its year-end close and the lock sign-off are
 separate steps (see `docs/FINANCE_MODULE.md`, "Starting, closing and locking a
 year"). Three gaps remain, pending a decision:
 
-- **The Treasurer's own line edit still changes an adopted draft.** Board
-  review and the adopted stage freeze requests and leadership changes, but
-  _Edit_ on a budget line (`PUT /finance/budgets/{id}`) still sets the amount
-  of a draft year's line in any stage. After adoption a change should be an
-  amendment the board can see; that belongs with the second-officer amendment
-  confirmation planned next, so it is not changed here.
+- ~~**The Treasurer's own line edit still changes an adopted draft.**~~
+  **Resolved 2026-10-09:** from board review on, and in an active or closing
+  year, a line's amount changes only through an amendment a second officer
+  confirms (`docs/FINANCE_MODULE.md`, "Second-officer confirmation").
 - **Nothing starts or closes a year on its own.** The Treasurer is reminded by
   a banner once the end date passes (`closeDue`), but no email goes out and the
   year stays active until its close is begun; likewise an adopted year waits
