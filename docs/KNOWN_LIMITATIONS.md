@@ -778,6 +778,24 @@ The deployment-level `STORAGE_TYPE` / `UPLOAD_DIR` / `AWS_*` / `AZURE_*` /
 `GCS_*` settings are the same gap at the environment level (see the CI3-33-4
 row above).
 
+## File Storage — Folder Rights Phase 3 Left Open (2026-10-09)
+
+**Open, both deliberate.** Phase 3 of `docs/FILE_STORAGE_HARDENING.md` gated
+each module folder on that module's rights. Two things it did not do:
+
+- **No screen sets a custom folder's rights** (owner decision 22, later
+  change). `required_permissions` and `allowed_roles` are not in the folder
+  API's schemas at all, and the Documents page offers only name and
+  description when creating a folder. A department that wants a folder for,
+  say, the quartermaster alone cannot make one; it can mark a folder
+  leadership-only, which now means `documents.manage` holders.
+- **Facility files still need `documents.manage` to upload.** The facility
+  Files section uploads through `POST /documents/upload` and then links the
+  document, so a facilities manager holding `facilities.edit` but not
+  `documents.manage` is refused at the first step. Apparatus and finance
+  upload through their own module endpoints since this change; facilities
+  would need the same (`app/services/module_documents.py` is the shared path).
+
 ## Self-Report Attachments — What Happens to the File (2026-08-23)
 
 A member can attach a certificate (PDF/JPG/PNG, 10 MB) to a self-reported

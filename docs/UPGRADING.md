@@ -412,6 +412,55 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Document folders open to module rights; who sees what changes (2026-10-09)
+
+Phase 3 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).
+Nothing here stops the stack from starting, but people will find folders
+appear and disappear, so tell the department before you upgrade.
+
+**Only a full administrator (`*`) still sees every folder.** Holding
+`documents.manage` or `members.manage` no longer opens everything. Browsing
+Documents still needs `documents.view`; on top of that, a folder now asks for
+its module's rights. Computed from the seeded positions alone — a member who
+also holds the **Member** position (every member does, by default) keeps
+`training.view` and `events.view` from it:
+
+| Folder                              | Opens to (any one)                                     | Changes, seeded positions on their own                                                                                                                                                                                                                                             |
+| ----------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Apparatus Files                     | `apparatus.view`, `apparatus.edit`, `apparatus.manage` | Gained by lieutenant, engineer and training officer. Lost by treasurer, historian, compliance officer and assistant secretary. The apparatus officer and quartermaster have no `documents.view`; they reach vehicle files on the apparatus screens, which now upload and open them |
+| Training Materials                  | `training.view`, `training.manage`                     | Lost by treasurer, board of directors, communications officer, historian, fundraising chair and assistant secretary, unless they also hold Member                                                                                                                                  |
+| Event Attachments                   | `events.view`, `events.edit`, `events.manage`          | Lost by treasurer and board of directors, unless they also hold Member                                                                                                                                                                                                             |
+| Member Separations                  | `members.manage`                                       | Lost by treasurer, historian, safety officer and compliance officer                                                                                                                                                                                                                |
+| Finance (new), with Receipts        | `finance.view`, `finance.manage`, `finance.approve`    | Opens to the treasurer. A member opens their own receipt from the purchase request or expense report, not from Documents                                                                                                                                                           |
+| A member's personal folder          | that member                                            | Lost by captains, chiefs, president, vice president, secretaries, membership coordinator and every other `members.manage` or `documents.manage` holder                                                                                                                             |
+| A custom "leadership only" folder   | `documents.manage`                                     | Lost by `members.manage` holders without `documents.manage`                                                                                                                                                                                                                        |
+| A custom folder restricted to roles | holders of those roles                                 | `documents.manage` no longer passes the role check                                                                                                                                                                                                                                 |
+
+Changing what is in a module folder (upload, move, rename, delete through
+Documents) still needs `documents.manage` **and** a non-view right from that
+folder's list. Facility folders are unchanged.
+
+**Apparatus files and finance receipts are uploaded, not typed:**
+
+- `POST /apparatus/{id}/photos` and `/documents` no longer accept a URL in
+  `file_path`; it must be `document:<id>` of a stored document, or use the new
+  `.../photos/upload` and `.../documents/upload`. Rows already on file keep
+  their link; responses now carry `fileUrl`, which is the link only if it is
+  HTTP(S). A stored `javascript:` or other value is no longer handed to the
+  page.
+- `receipt_url` on purchase requests and expense lines must be an HTTP(S)
+  URL; anything else is a 422. Existing values that are not are withheld from
+  responses, and left in the database untouched.
+
+**Migrations.** `b38df38d849b` stamps the rights onto each department's
+existing system folders, `6c25b7d68965` adds `document_id` to apparatus
+photos and documents, `c0bf0b155719` adds `receipt_document_id` to purchase
+requests and expense lines. All three run on `alembic upgrade head` and are
+reversible: `alembic downgrade 9effb8790488`, then redeploy the previous
+image. Downgrading closes the Finance folder to leadership-only (the earlier
+code has no finance gate) and drops the receipt and apparatus links; the
+uploaded files remain in Documents.
+
 ### Every upload is malware-scanned, and the scanner starts with the stack (2026-10-08)
 
 Phase 2 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).
