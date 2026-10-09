@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { CallVolumeReport } from '../../types';
 import { CallVolumeRenderer, getCallVolumeExportData } from './CallVolumeRenderer';
+import { withoutKeys } from '../../../../test/withoutKeys';
 
 const report = (over: Partial<CallVolumeReport> = {}): CallVolumeReport =>
   ({
@@ -38,7 +39,7 @@ describe('CallVolumeRenderer call type labels', () => {
   it('falls back to the stored value when no label is served', () => {
     // An older backend, or a type deleted outright. Showing the stored value
     // beats showing nothing.
-    render(<CallVolumeRenderer data={report({ call_type_labels: undefined })} />);
+    render(<CallVolumeRenderer data={withoutKeys(report(), 'call_type_labels')} />);
     expect(screen.getAllByText(/mutual aid/).length).toBeGreaterThan(0);
   });
 });
@@ -59,7 +60,7 @@ describe('getCallVolumeExportData', () => {
   });
 
   it('falls back to the prettified slug with no labels served', () => {
-    const { columns } = getCallVolumeExportData(report({ call_type_labels: undefined }));
+    const { columns } = getCallVolumeExportData(withoutKeys(report(), 'call_type_labels'));
     expect(columns.map((c) => c.header)).toContain('mutual aid');
   });
 });

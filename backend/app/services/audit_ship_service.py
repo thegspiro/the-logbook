@@ -65,7 +65,7 @@ async def _get_or_create_state(db: AsyncSession) -> AuditShipState:
     # at the cost of re-shipping a whole run after any mid-run failure.
     # Closing the gap properly needs a run-scoped claim rather than a row lock
     # -- recorded as OPS-7 rather than bolted on here.
-    state = (
+    state: AuditShipState | None = (
         await db.execute(select(AuditShipState).limit(1).with_for_update())
     ).scalar_one_or_none()
     if state is None:
@@ -125,7 +125,7 @@ async def ship_new_audit_logs(
 
     state = await _get_or_create_state(db)
     own_client = client is None
-    if own_client:
+    if client is None:
         # The shared factory, not a bare AsyncClient: the check above narrows
         # DNS rebinding, but only the factory's pinned transport closes it, by
         # connecting to the address it validated rather than re-resolving

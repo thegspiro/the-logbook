@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import log_audit_event
 from app.core.config import settings
+from app.core.database import Base
 from app.models.email_template import MessageHistory
 from app.models.error_log import ErrorLog
 from app.models.event import EventExternalAttendee
@@ -48,7 +49,7 @@ _DELETE_BATCH_SIZE = 1000
 class RecordClass:
     key: str
     description: str
-    model: type
+    model: type[Base]
     timestamp_attr: str
     default_days: int | None  # None = keep forever unless the org opts in
     min_days: int  # floor a department cannot go below
@@ -56,7 +57,7 @@ class RecordClass:
     # table with records this service must never touch. Receives the model and
     # returns a SQLAlchemy criterion ANDed onto the expiry query. None sweeps
     # every row, which is what a dedicated table wants.
-    row_filter: Callable[[type], Any] | None = None
+    row_filter: Callable[[type[Base]], Any] | None = None
 
 
 # Org-scoped record classes. Adding one here is the whole registration:
@@ -224,11 +225,11 @@ class RetentionService:
 
     async def _delete_expired(
         self,
-        model: type,
+        model: type[Base],
         timestamp_attr: str,
         cutoff: datetime,
         org_id: str | None,
-        row_filter: Callable[[type], Any] | None = None,
+        row_filter: Callable[[type[Base]], Any] | None = None,
     ) -> int:
         """Batch-delete expired rows (bounded batches, like the original
         message-history cleanup, to avoid long table locks)."""

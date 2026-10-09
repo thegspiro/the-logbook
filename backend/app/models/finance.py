@@ -7,11 +7,13 @@ and QuickBooks export mappings.
 """
 
 import enum
+from datetime import date, datetime
+from decimal import Decimal
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
     JSON,
     Boolean,
-    Column,
     Date,
     DateTime,
 )
@@ -26,10 +28,16 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
+
+if TYPE_CHECKING:
+    from app.models.apparatus import Apparatus
+    from app.models.email_template import EmailTemplate
+    from app.models.facilities import Facility
+    from app.models.user import Organization, Position, User
 
 # ============================================
 # Enums
@@ -221,16 +229,18 @@ class FiscalYear(Base):
 
     __tablename__ = "fiscal_years"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    name = Column(String(100), nullable=False)
-    start_date = Column(DateTime(timezone=True), nullable=False)
-    end_date = Column(DateTime(timezone=True), nullable=False)
-    status = Column(
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    start_date: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    end_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[FiscalYearStatus] = mapped_column(
         SQLEnum(
             FiscalYearStatus,
             values_callable=lambda x: [e.value for e in x],
@@ -238,14 +248,14 @@ class FiscalYear(Base):
         nullable=False,
         default=FiscalYearStatus.DRAFT,
     )
-    is_locked = Column(Boolean, nullable=False, default=False)
+    is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # The last day line owners may propose amounts for this (draft) year, on
     # the department's calendar: requests stay open through the end of that
     # day in the org's timezone. NULL means no deadline.
-    request_deadline = Column(Date, nullable=True)
+    request_deadline: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     # NULL on a draft year reads as REQUESTS, so a year drafted before stages
     # existed keeps taking requests; non-draft years carry NULL.
-    planning_stage = Column(
+    planning_stage: Mapped[Optional[BudgetPlanningStage]] = mapped_column(
         SQLEnum(
             BudgetPlanningStage,
             values_callable=lambda x: [e.value for e in x],
@@ -255,28 +265,36 @@ class FiscalYear(Base):
     # The board's adoption of the budget, recorded from board review: the
     # vote is what allows the year to be started and its budget spent, so it
     # is kept with the year rather than only in the audit log.
-    adopted_on = Column(Date, nullable=True)
-    adoption_reference = Column(String(500), nullable=True)
-    adoption_notes = Column(Text, nullable=True)
-    adoption_recorded_by = Column(
+    adopted_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    adoption_reference: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True
+    )
+    adoption_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    adoption_recorded_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    adoption_recorded_at = Column(DateTime(timezone=True), nullable=True)
+    adoption_recorded_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # When the Treasurer began the year-end close (status became CLOSED
     # without the lock), and the reconciliation sign-off that locked it.
-    closing_started_at = Column(DateTime(timezone=True), nullable=True)
-    locked_by = Column(
+    closing_started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    locked_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    locked_at = Column(DateTime(timezone=True), nullable=True)
-    lock_notes = Column(Text, nullable=True)
-    created_by = Column(
+    locked_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    lock_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -284,10 +302,14 @@ class FiscalYear(Base):
     )
 
     # Relationships
-    organization = relationship("Organization", foreign_keys=[organization_id])
-    creator = relationship("User", foreign_keys=[created_by])
-    adoption_recorder = relationship("User", foreign_keys=[adoption_recorded_by])
-    budgets = relationship(
+    organization: Mapped["Organization"] = relationship(
+        "Organization", foreign_keys=[organization_id]
+    )
+    creator: Mapped["User"] = relationship("User", foreign_keys=[created_by])
+    adoption_recorder: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[adoption_recorded_by]
+    )
+    budgets: Mapped[list["Budget"]] = relationship(
         "Budget", back_populates="fiscal_year", cascade="all, delete-orphan"
     )
 
@@ -299,34 +321,34 @@ class BudgetCategory(Base):
 
     __tablename__ = "budget_categories"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    name = Column(String(200), nullable=False)
-    description = Column(Text, nullable=True)
-    parent_category_id = Column(
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    parent_category_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("budget_categories.id", ondelete="SET NULL"),
         nullable=True,
     )
-    sort_order = Column(Integer, nullable=False, default=0)
-    is_active = Column(Boolean, nullable=False, default=True)
-    qb_account_name = Column(String(200), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    qb_account_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     # The position answerable for this category's lines. A line with no owner
     # of its own inherits this one (app/services/finance_budget_ownership.py).
-    owner_position_id = Column(
+    owner_position_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("positions.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -334,15 +356,19 @@ class BudgetCategory(Base):
     )
 
     # Relationships
-    organization = relationship("Organization", foreign_keys=[organization_id])
-    owner_position = relationship("Position", foreign_keys=[owner_position_id])
-    parent = relationship(
+    organization: Mapped["Organization"] = relationship(
+        "Organization", foreign_keys=[organization_id]
+    )
+    owner_position: Mapped[Optional["Position"]] = relationship(
+        "Position", foreign_keys=[owner_position_id]
+    )
+    parent: Mapped[Optional["BudgetCategory"]] = relationship(
         "BudgetCategory",
         remote_side=[id],
         foreign_keys=[parent_category_id],
         back_populates="children",
     )
-    children = relationship(
+    children: Mapped[list["BudgetCategory"]] = relationship(
         "BudgetCategory",
         foreign_keys=[parent_category_id],
         back_populates="parent",
@@ -356,46 +382,52 @@ class Budget(Base):
 
     __tablename__ = "budgets"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    fiscal_year_id = Column(
+    fiscal_year_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("fiscal_years.id", ondelete="CASCADE"),
         nullable=False,
     )
-    category_id = Column(
+    category_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("budget_categories.id", ondelete="CASCADE"),
         nullable=False,
     )
-    amount_budgeted = Column(Numeric(12, 2), nullable=False, default=0)
-    amount_spent = Column(Numeric(12, 2), nullable=False, default=0)
-    amount_encumbered = Column(Numeric(12, 2), nullable=False, default=0)
-    notes = Column(Text, nullable=True)
-    station_id = Column(
+    amount_budgeted: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, default=0
+    )
+    amount_spent: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, default=0
+    )
+    amount_encumbered: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, default=0
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    station_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("facilities.id", ondelete="SET NULL"),
         nullable=True,
     )
     # The line's own owner. NULL means "inherit the category's owner", not
     # "no owner" — app/services/finance_budget_ownership.py resolves which.
-    owner_position_id = Column(
+    owner_position_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("positions.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    created_by = Column(
+    created_by: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -403,13 +435,23 @@ class Budget(Base):
     )
 
     # Relationships
-    organization = relationship("Organization", foreign_keys=[organization_id])
-    fiscal_year = relationship("FiscalYear", back_populates="budgets")
-    category = relationship("BudgetCategory", foreign_keys=[category_id])
-    station = relationship("Facility", foreign_keys=[station_id])
-    owner_position = relationship("Position", foreign_keys=[owner_position_id])
-    creator = relationship("User", foreign_keys=[created_by])
-    amendments = relationship(
+    organization: Mapped["Organization"] = relationship(
+        "Organization", foreign_keys=[organization_id]
+    )
+    fiscal_year: Mapped["FiscalYear"] = relationship(
+        "FiscalYear", back_populates="budgets"
+    )
+    category: Mapped["BudgetCategory"] = relationship(
+        "BudgetCategory", foreign_keys=[category_id]
+    )
+    station: Mapped[Optional["Facility"]] = relationship(
+        "Facility", foreign_keys=[station_id]
+    )
+    owner_position: Mapped[Optional["Position"]] = relationship(
+        "Position", foreign_keys=[owner_position_id]
+    )
+    creator: Mapped["User"] = relationship("User", foreign_keys=[created_by])
+    amendments: Mapped[list["BudgetAmendment"]] = relationship(
         "BudgetAmendment",
         back_populates="budget",
         cascade="all, delete-orphan",
@@ -449,30 +491,30 @@ class BudgetAmendment(Base):
 
     __tablename__ = "budget_amendments"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    budget_id = Column(
+    budget_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("budgets.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    amount = Column(Numeric(12, 2), nullable=False)
-    reason = Column(Text, nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
     # Free text naming the approval, e.g. "Board vote 10/7".
-    approved_by = Column(String(200), nullable=False)
-    approved_on = Column(Date, nullable=False)
+    approved_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    approved_on: Mapped[date] = mapped_column(Date, nullable=False)
     # SET NULL rather than RESTRICT: removing a member must not be blocked by,
     # or delete, the record of money the department approved.
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     # Set only on a reversing entry: the amendment it cancels. UNIQUE so an
@@ -481,7 +523,7 @@ class BudgetAmendment(Base):
     # and the unique index also serves the foreign key. SET NULL (hence
     # nullable) because the reversal's negative amount must keep counting
     # even if the link is ever lost; only a line's own cascade removes rows.
-    reverses_amendment_id = Column(
+    reverses_amendment_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("budget_amendments.id", ondelete="SET NULL"),
         nullable=True,
@@ -489,9 +531,11 @@ class BudgetAmendment(Base):
     )
 
     # Relationships
-    organization = relationship("Organization", foreign_keys=[organization_id])
-    budget = relationship("Budget", back_populates="amendments")
-    creator = relationship("User", foreign_keys=[created_by])
+    organization: Mapped["Organization"] = relationship(
+        "Organization", foreign_keys=[organization_id]
+    )
+    budget: Mapped["Budget"] = relationship("Budget", back_populates="amendments")
+    creator: Mapped[Optional["User"]] = relationship("User", foreign_keys=[created_by])
 
 
 class BudgetRequest(Base):
@@ -509,14 +553,14 @@ class BudgetRequest(Base):
 
     __tablename__ = "budget_requests"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    fiscal_year_id = Column(
+    fiscal_year_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("fiscal_years.id", ondelete="CASCADE"),
         nullable=False,
@@ -525,31 +569,31 @@ class BudgetRequest(Base):
     # SET NULL throughout: removing a line, category, station, position or
     # member must neither be blocked by nor delete the record of what was
     # asked for and decided.
-    budget_id = Column(
+    budget_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("budgets.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    category_id = Column(
+    category_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("budget_categories.id", ondelete="SET NULL"),
         nullable=True,
     )
-    station_id = Column(
+    station_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("facilities.id", ondelete="SET NULL"),
         nullable=True,
     )
-    owner_position_id = Column(
+    owner_position_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("positions.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    requested_amount = Column(Numeric(12, 2), nullable=False)
-    justification = Column(Text, nullable=False)
-    status = Column(
+    requested_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    justification: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[BudgetRequestStatus] = mapped_column(
         SQLEnum(
             BudgetRequestStatus,
             values_callable=lambda x: [e.value for e in x],
@@ -557,29 +601,39 @@ class BudgetRequest(Base):
         nullable=False,
         default=BudgetRequestStatus.DRAFT,
     )
-    approved_amount = Column(Numeric(12, 2), nullable=True)
-    decision_note = Column(Text, nullable=True)
-    submitted_by = Column(
+    approved_amount: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
+    decision_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    submitted_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    submitted_at = Column(DateTime(timezone=True), nullable=True)
-    decided_by = Column(
+    submitted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    decided_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    decided_at = Column(DateTime(timezone=True), nullable=True)
+    decided_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # Senior leadership's change to a decided amount during leadership
     # review, kept beside the Treasurer's decision rather than over it so the
     # record shows who set which figure.
-    review_amount = Column(Numeric(12, 2), nullable=True)
-    review_note = Column(Text, nullable=True)
-    reviewed_by = Column(
+    review_amount: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
+    review_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    reviewed_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    reviewed_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -597,37 +651,37 @@ class ApprovalChain(Base):
 
     __tablename__ = "approval_chains"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    name = Column(String(200), nullable=False)
-    description = Column(Text, nullable=True)
-    applies_to = Column(
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    applies_to: Mapped[ApprovalEntityType] = mapped_column(
         SQLEnum(
             ApprovalEntityType,
             values_callable=lambda x: [e.value for e in x],
         ),
         nullable=False,
     )
-    min_amount = Column(Numeric(12, 2), nullable=True)
-    max_amount = Column(Numeric(12, 2), nullable=True)
-    budget_category_id = Column(
+    min_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
+    max_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
+    budget_category_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("budget_categories.id", ondelete="SET NULL"),
         nullable=True,
     )
-    is_default = Column(Boolean, nullable=False, default=False)
-    is_active = Column(Boolean, nullable=False, default=True)
-    created_by = Column(
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_by: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -635,10 +689,14 @@ class ApprovalChain(Base):
     )
 
     # Relationships
-    organization = relationship("Organization", foreign_keys=[organization_id])
-    budget_category = relationship("BudgetCategory", foreign_keys=[budget_category_id])
-    creator = relationship("User", foreign_keys=[created_by])
-    steps = relationship(
+    organization: Mapped["Organization"] = relationship(
+        "Organization", foreign_keys=[organization_id]
+    )
+    budget_category: Mapped[Optional["BudgetCategory"]] = relationship(
+        "BudgetCategory", foreign_keys=[budget_category_id]
+    )
+    creator: Mapped["User"] = relationship("User", foreign_keys=[created_by])
+    steps: Mapped[list["ApprovalChainStep"]] = relationship(
         "ApprovalChainStep",
         back_populates="chain",
         cascade="all, delete-orphan",
@@ -659,15 +717,15 @@ class ApprovalChainStep(Base):
 
     __tablename__ = "approval_chain_steps"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    chain_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    chain_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("approval_chains.id", ondelete="CASCADE"),
         nullable=False,
     )
-    step_order = Column(Integer, nullable=False)
-    name = Column(String(200), nullable=False)
-    step_type = Column(
+    step_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    step_type: Mapped[ApprovalStepType] = mapped_column(
         SQLEnum(
             ApprovalStepType,
             values_callable=lambda x: [e.value for e in x],
@@ -675,30 +733,40 @@ class ApprovalChainStep(Base):
         nullable=False,
         default=ApprovalStepType.APPROVAL,
     )
-    approver_type = Column(
+    approver_type: Mapped[Optional[ApproverType]] = mapped_column(
         SQLEnum(
             ApproverType,
             values_callable=lambda x: [e.value for e in x],
         ),
         nullable=True,
     )
-    approver_value = Column(String(500), nullable=True)
-    notification_emails = Column(JSON, nullable=True)
-    email_template_id = Column(
+    approver_value: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    notification_emails: Mapped[Optional[list[str]]] = mapped_column(
+        JSON, nullable=True
+    )
+    email_template_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("email_templates.id", ondelete="SET NULL"),
         nullable=True,
     )
-    allow_self_approval = Column(Boolean, nullable=False, default=False)
-    auto_approve_under = Column(Numeric(12, 2), nullable=True)
-    required = Column(Boolean, nullable=False, default=True)
-    created_at = Column(
+    allow_self_approval: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    auto_approve_under: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
+    required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
     # Relationships
-    chain = relationship("ApprovalChain", back_populates="steps")
-    email_template = relationship("EmailTemplate", foreign_keys=[email_template_id])
+    chain: Mapped["ApprovalChain"] = relationship(
+        "ApprovalChain", back_populates="steps"
+    )
+    email_template: Mapped[Optional["EmailTemplate"]] = relationship(
+        "EmailTemplate", foreign_keys=[email_template_id]
+    )
 
     __table_args__ = (Index("ix_approval_chain_steps_chain", "chain_id", "step_order"),)
 
@@ -708,26 +776,26 @@ class ApprovalStepRecord(Base):
 
     __tablename__ = "approval_step_records"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    chain_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    chain_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("approval_chains.id", ondelete="CASCADE"),
         nullable=False,
     )
-    step_id = Column(
+    step_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("approval_chain_steps.id", ondelete="CASCADE"),
         nullable=False,
     )
-    entity_type = Column(
+    entity_type: Mapped[ApprovalEntityType] = mapped_column(
         SQLEnum(
             ApprovalEntityType,
             values_callable=lambda x: [e.value for e in x],
         ),
         nullable=False,
     )
-    entity_id = Column(String(36), nullable=False)
-    status = Column(
+    entity_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    status: Mapped[ApprovalStepStatus] = mapped_column(
         SQLEnum(
             ApprovalStepStatus,
             values_callable=lambda x: [e.value for e in x],
@@ -735,25 +803,37 @@ class ApprovalStepRecord(Base):
         nullable=False,
         default=ApprovalStepStatus.PENDING,
     )
-    assigned_to = Column(
+    assigned_to: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    acted_by = Column(
+    acted_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    acted_at = Column(DateTime(timezone=True), nullable=True)
-    notes = Column(Text, nullable=True)
-    approval_token = Column(String(255), nullable=True, unique=True)
-    token_expires_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(
+    acted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    approval_token: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True, unique=True
+    )
+    token_expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
     # Relationships
-    chain = relationship("ApprovalChain", foreign_keys=[chain_id])
-    step = relationship("ApprovalChainStep", foreign_keys=[step_id])
-    assignee = relationship("User", foreign_keys=[assigned_to])
-    actor = relationship("User", foreign_keys=[acted_by])
+    chain: Mapped["ApprovalChain"] = relationship(
+        "ApprovalChain", foreign_keys=[chain_id]
+    )
+    step: Mapped["ApprovalChainStep"] = relationship(
+        "ApprovalChainStep", foreign_keys=[step_id]
+    )
+    assignee: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[assigned_to]
+    )
+    actor: Mapped[Optional["User"]] = relationship("User", foreign_keys=[acted_by])
 
     __table_args__ = (
         Index(
@@ -775,32 +855,34 @@ class PurchaseRequest(Base):
 
     __tablename__ = "purchase_requests"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    request_number = Column(String(20), nullable=False)
-    fiscal_year_id = Column(
+    request_number: Mapped[str] = mapped_column(String(20), nullable=False)
+    fiscal_year_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("fiscal_years.id", ondelete="CASCADE"),
         nullable=False,
     )
-    budget_id = Column(
+    budget_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("budgets.id", ondelete="SET NULL"),
         nullable=True,
     )
-    requested_by = Column(
+    requested_by: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
-    title = Column(String(300), nullable=False)
-    description = Column(Text, nullable=True)
-    vendor = Column(String(300), nullable=True)
-    estimated_amount = Column(Numeric(12, 2), nullable=False)
-    actual_amount = Column(Numeric(12, 2), nullable=True)
-    status = Column(
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    vendor: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    estimated_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    actual_amount: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
+    status: Mapped[PurchaseRequestStatus] = mapped_column(
         SQLEnum(
             PurchaseRequestStatus,
             values_callable=lambda x: [e.value for e in x],
@@ -808,7 +890,7 @@ class PurchaseRequest(Base):
         nullable=False,
         default=PurchaseRequestStatus.DRAFT,
     )
-    priority = Column(
+    priority: Mapped[PurchaseRequestPriority] = mapped_column(
         SQLEnum(
             PurchaseRequestPriority,
             values_callable=lambda x: [e.value for e in x],
@@ -816,32 +898,47 @@ class PurchaseRequest(Base):
         nullable=False,
         default=PurchaseRequestPriority.MEDIUM,
     )
-    approved_by = Column(
+    approved_by: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    approved_at = Column(DateTime(timezone=True), nullable=True)
-    denial_reason = Column(Text, nullable=True)
-    ordered_at = Column(DateTime(timezone=True), nullable=True)
-    received_at = Column(DateTime(timezone=True), nullable=True)
-    paid_at = Column(DateTime(timezone=True), nullable=True)
-    notes = Column(Text, nullable=True)
-    receipt_url = Column(String(500), nullable=True)
-    apparatus_id = Column(
+    approved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    denial_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    ordered_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    received_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    paid_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    receipt_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # An uploaded receipt: a Document under Finance > Receipts. receipt_url is
+    # the older typed link, kept for rows that have one.
+    receipt_document_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("documents.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    apparatus_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("apparatus.id", ondelete="SET NULL"),
         nullable=True,
     )
-    facility_id = Column(
+    facility_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("facilities.id", ondelete="SET NULL"),
         nullable=True,
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -849,13 +946,25 @@ class PurchaseRequest(Base):
     )
 
     # Relationships
-    organization = relationship("Organization", foreign_keys=[organization_id])
-    fiscal_year = relationship("FiscalYear", foreign_keys=[fiscal_year_id])
-    budget = relationship("Budget", foreign_keys=[budget_id])
-    requester = relationship("User", foreign_keys=[requested_by])
-    approver = relationship("User", foreign_keys=[approved_by])
-    apparatus = relationship("Apparatus", foreign_keys=[apparatus_id])
-    facility = relationship("Facility", foreign_keys=[facility_id])
+    organization: Mapped["Organization"] = relationship(
+        "Organization", foreign_keys=[organization_id]
+    )
+    fiscal_year: Mapped["FiscalYear"] = relationship(
+        "FiscalYear", foreign_keys=[fiscal_year_id]
+    )
+    budget: Mapped[Optional["Budget"]] = relationship(
+        "Budget", foreign_keys=[budget_id]
+    )
+    requester: Mapped["User"] = relationship("User", foreign_keys=[requested_by])
+    approver: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[approved_by]
+    )
+    apparatus: Mapped[Optional["Apparatus"]] = relationship(
+        "Apparatus", foreign_keys=[apparatus_id]
+    )
+    facility: Mapped[Optional["Facility"]] = relationship(
+        "Facility", foreign_keys=[facility_id]
+    )
 
     __table_args__ = (
         # Numbers are generated per org (PR-YYYY-NNNN), so uniqueness must be
@@ -887,25 +996,27 @@ class ExpenseReport(Base):
 
     __tablename__ = "expense_reports"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    report_number = Column(String(20), nullable=False)
-    submitted_by = Column(
+    report_number: Mapped[str] = mapped_column(String(20), nullable=False)
+    submitted_by: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
-    fiscal_year_id = Column(
+    fiscal_year_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("fiscal_years.id", ondelete="CASCADE"),
         nullable=False,
     )
-    title = Column(String(300), nullable=False)
-    description = Column(Text, nullable=True)
-    total_amount = Column(Numeric(12, 2), nullable=False, default=0)
-    status = Column(
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    total_amount: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, default=0
+    )
+    status: Mapped[ExpenseReportStatus] = mapped_column(
         SQLEnum(
             ExpenseReportStatus,
             values_callable=lambda x: [e.value for e in x],
@@ -913,20 +1024,24 @@ class ExpenseReport(Base):
         nullable=False,
         default=ExpenseReportStatus.DRAFT,
     )
-    approved_by = Column(
+    approved_by: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    approved_at = Column(DateTime(timezone=True), nullable=True)
-    denial_reason = Column(Text, nullable=True)
-    paid_at = Column(DateTime(timezone=True), nullable=True)
-    payment_method = Column(String(50), nullable=True)
-    notes = Column(Text, nullable=True)
-    created_at = Column(
+    approved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    denial_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    paid_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    payment_method: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -934,11 +1049,17 @@ class ExpenseReport(Base):
     )
 
     # Relationships
-    organization = relationship("Organization", foreign_keys=[organization_id])
-    submitter = relationship("User", foreign_keys=[submitted_by])
-    fiscal_year = relationship("FiscalYear", foreign_keys=[fiscal_year_id])
-    approver = relationship("User", foreign_keys=[approved_by])
-    line_items = relationship(
+    organization: Mapped["Organization"] = relationship(
+        "Organization", foreign_keys=[organization_id]
+    )
+    submitter: Mapped["User"] = relationship("User", foreign_keys=[submitted_by])
+    fiscal_year: Mapped["FiscalYear"] = relationship(
+        "FiscalYear", foreign_keys=[fiscal_year_id]
+    )
+    approver: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[approved_by]
+    )
+    line_items: Mapped[list["ExpenseLineItem"]] = relationship(
         "ExpenseLineItem",
         back_populates="expense_report",
         cascade="all, delete-orphan",
@@ -962,21 +1083,23 @@ class ExpenseLineItem(Base):
 
     __tablename__ = "expense_line_items"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    expense_report_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    expense_report_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("expense_reports.id", ondelete="CASCADE"),
         nullable=False,
     )
-    budget_id = Column(
+    budget_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("budgets.id", ondelete="SET NULL"),
         nullable=True,
     )
-    description = Column(String(500), nullable=False)
-    amount = Column(Numeric(12, 2), nullable=False)
-    date_incurred = Column(DateTime(timezone=True), nullable=False)
-    expense_type = Column(
+    description: Mapped[str] = mapped_column(String(500), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    date_incurred: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    expense_type: Mapped[ExpenseType] = mapped_column(
         SQLEnum(
             ExpenseType,
             values_callable=lambda x: [e.value for e in x],
@@ -984,33 +1107,28 @@ class ExpenseLineItem(Base):
         nullable=False,
         default=ExpenseType.GENERAL,
     )
-    receipt_url = Column(String(500), nullable=True)
-    merchant = Column(String(300), nullable=True)
-    # The receipt file for this line, stored by FileStorageService under the
-    # organization's finance-receipts area. The path is server-generated and
-    # never leaves the API; the name is the uploader's, for display only.
-    # Every line needs one before its report can be submitted.
-    receipt_file_path = Column(String(500), nullable=True)
-    receipt_file_name = Column(String(255), nullable=True)
-    receipt_content_type = Column(String(100), nullable=True)
-    receipt_file_size = Column(Integer, nullable=True)
-    receipt_uploaded_by = Column(
-        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    receipt_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # An uploaded receipt: a Document under Finance > Receipts. receipt_url is
+    # the older typed link, kept for rows that have one.
+    receipt_document_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("documents.id", ondelete="SET NULL"),
+        nullable=True,
     )
-    receipt_uploaded_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(
+    merchant: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
     # Relationships
-    expense_report = relationship("ExpenseReport", back_populates="line_items")
-    budget = relationship("Budget", foreign_keys=[budget_id])
+    expense_report: Mapped["ExpenseReport"] = relationship(
+        "ExpenseReport", back_populates="line_items"
+    )
+    budget: Mapped[Optional["Budget"]] = relationship(
+        "Budget", foreign_keys=[budget_id]
+    )
 
     __table_args__ = (Index("ix_expense_line_items_report", "expense_report_id"),)
-
-    @property
-    def has_receipt(self) -> bool:
-        return bool(self.receipt_file_path)
 
 
 class CheckRequest(Base):
@@ -1018,32 +1136,32 @@ class CheckRequest(Base):
 
     __tablename__ = "check_requests"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    request_number = Column(String(20), nullable=False)
-    requested_by = Column(
+    request_number: Mapped[str] = mapped_column(String(20), nullable=False)
+    requested_by: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
-    fiscal_year_id = Column(
+    fiscal_year_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("fiscal_years.id", ondelete="CASCADE"),
         nullable=False,
     )
-    budget_id = Column(
+    budget_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("budgets.id", ondelete="SET NULL"),
         nullable=True,
     )
-    payee_name = Column(String(300), nullable=False)
-    payee_address = Column(Text, nullable=True)
-    amount = Column(Numeric(12, 2), nullable=False)
-    memo = Column(String(500), nullable=True)
-    purpose = Column(Text, nullable=True)
-    status = Column(
+    payee_name: Mapped[str] = mapped_column(String(300), nullable=False)
+    payee_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    memo: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    purpose: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    status: Mapped[CheckRequestStatus] = mapped_column(
         SQLEnum(
             CheckRequestStatus,
             values_callable=lambda x: [e.value for e in x],
@@ -1051,20 +1169,24 @@ class CheckRequest(Base):
         nullable=False,
         default=CheckRequestStatus.DRAFT,
     )
-    approved_by = Column(
+    approved_by: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    approved_at = Column(DateTime(timezone=True), nullable=True)
-    denial_reason = Column(Text, nullable=True)
-    check_number = Column(String(50), nullable=True)
-    check_date = Column(DateTime(timezone=True), nullable=True)
-    notes = Column(Text, nullable=True)
-    created_at = Column(
+    approved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    denial_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    check_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    check_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -1072,11 +1194,19 @@ class CheckRequest(Base):
     )
 
     # Relationships
-    organization = relationship("Organization", foreign_keys=[organization_id])
-    requester = relationship("User", foreign_keys=[requested_by])
-    fiscal_year = relationship("FiscalYear", foreign_keys=[fiscal_year_id])
-    budget = relationship("Budget", foreign_keys=[budget_id])
-    approver = relationship("User", foreign_keys=[approved_by])
+    organization: Mapped["Organization"] = relationship(
+        "Organization", foreign_keys=[organization_id]
+    )
+    requester: Mapped["User"] = relationship("User", foreign_keys=[requested_by])
+    fiscal_year: Mapped["FiscalYear"] = relationship(
+        "FiscalYear", foreign_keys=[fiscal_year_id]
+    )
+    budget: Mapped[Optional["Budget"]] = relationship(
+        "Budget", foreign_keys=[budget_id]
+    )
+    approver: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[approved_by]
+    )
 
     __table_args__ = (
         # Per-org uniqueness — see PurchaseRequest.__table_args__.
@@ -1101,39 +1231,43 @@ class DuesSchedule(Base):
 
     __tablename__ = "dues_schedules"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    name = Column(String(200), nullable=False)
-    amount = Column(Numeric(12, 2), nullable=False)
-    frequency = Column(
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    frequency: Mapped[DuesFrequency] = mapped_column(
         SQLEnum(
             DuesFrequency,
             values_callable=lambda x: [e.value for e in x],
         ),
         nullable=False,
     )
-    due_date = Column(DateTime(timezone=True), nullable=False)
-    grace_period_days = Column(Integer, nullable=False, default=30)
-    late_fee_amount = Column(Numeric(12, 2), nullable=True)
-    fiscal_year_id = Column(
+    due_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    grace_period_days: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
+    late_fee_amount: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
+    fiscal_year_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("fiscal_years.id", ondelete="SET NULL"),
         nullable=True,
     )
-    applies_to_membership_types = Column(JSON, nullable=True)
-    is_active = Column(Boolean, nullable=False, default=True)
-    notes = Column(Text, nullable=True)
-    created_by = Column(
+    applies_to_membership_types: Mapped[Optional[list[str]]] = mapped_column(
+        JSON, nullable=True
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -1141,10 +1275,14 @@ class DuesSchedule(Base):
     )
 
     # Relationships
-    organization = relationship("Organization", foreign_keys=[organization_id])
-    fiscal_year = relationship("FiscalYear", foreign_keys=[fiscal_year_id])
-    creator = relationship("User", foreign_keys=[created_by])
-    member_dues = relationship(
+    organization: Mapped["Organization"] = relationship(
+        "Organization", foreign_keys=[organization_id]
+    )
+    fiscal_year: Mapped[Optional["FiscalYear"]] = relationship(
+        "FiscalYear", foreign_keys=[fiscal_year_id]
+    )
+    creator: Mapped["User"] = relationship("User", foreign_keys=[created_by])
+    member_dues: Mapped[list["MemberDues"]] = relationship(
         "MemberDues",
         back_populates="dues_schedule",
         cascade="all, delete-orphan",
@@ -1158,23 +1296,25 @@ class MemberDues(Base):
 
     __tablename__ = "member_dues"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    dues_schedule_id = Column(
+    dues_schedule_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("dues_schedules.id", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    amount_due = Column(Numeric(12, 2), nullable=False)
-    amount_paid = Column(Numeric(12, 2), nullable=False, default=0)
-    status = Column(
+    amount_due: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    amount_paid: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, default=0
+    )
+    status: Mapped[DuesStatus] = mapped_column(
         SQLEnum(
             DuesStatus,
             values_callable=lambda x: [e.value for e in x],
@@ -1182,23 +1322,31 @@ class MemberDues(Base):
         nullable=False,
         default=DuesStatus.PENDING,
     )
-    due_date = Column(DateTime(timezone=True), nullable=False)
-    paid_date = Column(DateTime(timezone=True), nullable=True)
-    payment_method = Column(String(50), nullable=True)
-    transaction_reference = Column(String(200), nullable=True)
-    late_fee_applied = Column(Numeric(12, 2), nullable=True)
-    waived_by = Column(
+    due_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    paid_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    payment_method: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    transaction_reference: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True
+    )
+    late_fee_applied: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
+    waived_by: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    waived_at = Column(DateTime(timezone=True), nullable=True)
-    waive_reason = Column(Text, nullable=True)
-    notes = Column(Text, nullable=True)
-    created_at = Column(
+    waived_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    waive_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -1206,11 +1354,17 @@ class MemberDues(Base):
     )
 
     # Relationships
-    organization = relationship("Organization", foreign_keys=[organization_id])
-    dues_schedule = relationship("DuesSchedule", back_populates="member_dues")
-    user = relationship("User", foreign_keys=[user_id])
-    waiver_approver = relationship("User", foreign_keys=[waived_by])
-    payments = relationship(
+    organization: Mapped["Organization"] = relationship(
+        "Organization", foreign_keys=[organization_id]
+    )
+    dues_schedule: Mapped["DuesSchedule"] = relationship(
+        "DuesSchedule", back_populates="member_dues"
+    )
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+    waiver_approver: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[waived_by]
+    )
+    payments: Mapped[list["DuesPayment"]] = relationship(
         "DuesPayment",
         back_populates="member_dues",
         cascade="all, delete-orphan",
@@ -1243,42 +1397,52 @@ class DuesPayment(Base):
 
     __tablename__ = "dues_payments"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    member_dues_id = Column(
+    member_dues_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("member_dues.id", ondelete="CASCADE"),
         nullable=False,
     )
-    amount = Column(Numeric(12, 2), nullable=False)
-    payment_method = Column(String(50), nullable=True)
-    transaction_reference = Column(String(200), nullable=True)
-    notes = Column(Text, nullable=True)
-    received_at = Column(DateTime(timezone=True), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    payment_method: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    transaction_reference: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     # SET NULL requires nullable=True (MySQL 1830). The ledger row must outlive
     # the member who entered it — losing the treasurer must not lose the money.
-    recorded_by = Column(
+    recorded_by: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
     )
 
-    member_dues = relationship("MemberDues", back_populates="payments")
-    organization = relationship("Organization", foreign_keys=[organization_id])
-    recorder = relationship("User", foreign_keys=[recorded_by])
+    member_dues: Mapped["MemberDues"] = relationship(
+        "MemberDues", back_populates="payments"
+    )
+    organization: Mapped["Organization"] = relationship(
+        "Organization", foreign_keys=[organization_id]
+    )
+    recorder: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[recorded_by]
+    )
 
     __table_args__ = (
         # Idempotency key. MySQL permits multiple NULLs in a unique index, so
@@ -1304,30 +1468,32 @@ class ExportMapping(Base):
 
     __tablename__ = "finance_export_mappings"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    internal_category = Column(String(200), nullable=False)
-    qb_account_name = Column(String(200), nullable=False)
-    qb_account_number = Column(String(50), nullable=True)
+    internal_category: Mapped[str] = mapped_column(String(200), nullable=False)
+    qb_account_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    qb_account_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     # The balancing side of each journal entry: the account the money left
     # (expenses) or arrived in. QuickBooks rejects an entry whose debits and
     # credits differ, so a category without one cannot be exported.
-    qb_offset_account_name = Column(String(200), nullable=True)
-    mapping_type = Column(
+    qb_offset_account_name: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True
+    )
+    mapping_type: Mapped[ExportMappingType] = mapped_column(
         SQLEnum(
             ExportMappingType,
             values_callable=lambda x: [e.value for e in x],
         ),
         nullable=False,
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -1335,7 +1501,9 @@ class ExportMapping(Base):
     )
 
     # Relationships
-    organization = relationship("Organization", foreign_keys=[organization_id])
+    organization: Mapped["Organization"] = relationship(
+        "Organization", foreign_keys=[organization_id]
+    )
 
     __table_args__ = (Index("ix_export_mappings_org_id", "organization_id"),)
 
@@ -1345,37 +1513,45 @@ class ExportLog(Base):
 
     __tablename__ = "finance_export_logs"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    export_type = Column(String(50), nullable=False)
-    date_range_start = Column(DateTime(timezone=True), nullable=False)
-    date_range_end = Column(DateTime(timezone=True), nullable=False)
-    record_count = Column(Integer, nullable=False, default=0)
-    file_format = Column(
+    export_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    date_range_start: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    date_range_end: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    record_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    file_format: Mapped[ExportFormat] = mapped_column(
         SQLEnum(
             ExportFormat,
             values_callable=lambda x: [e.value for e in x],
         ),
         nullable=False,
     )
-    exported_by = Column(
+    exported_by: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
-    exported_at = Column(
+    exported_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     # pending -> successful, failed (nothing delivered), or partial (some rows
     # delivered before a generator error/client disconnect).
-    status = Column(String(20), nullable=False, default="pending")
-    error_message = Column(String(500), nullable=True)
-    completed_at = Column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    error_message: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Relationships
-    organization = relationship("Organization", foreign_keys=[organization_id])
-    exporter = relationship("User", foreign_keys=[exported_by])
+    organization: Mapped["Organization"] = relationship(
+        "Organization", foreign_keys=[organization_id]
+    )
+    exporter: Mapped["User"] = relationship("User", foreign_keys=[exported_by])
 
     __table_args__ = (Index("ix_export_logs_org_id", "organization_id"),)

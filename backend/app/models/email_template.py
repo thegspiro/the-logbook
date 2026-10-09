@@ -6,15 +6,20 @@ Templates are managed by admins and used by the email service.
 """
 
 import enum
+from datetime import datetime
+from typing import TYPE_CHECKING, Any, Optional
 
-from sqlalchemy import JSON, Boolean, Column, DateTime
+from sqlalchemy import JSON, Boolean, DateTime
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Index, Integer, String, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
+
+if TYPE_CHECKING:
+    from app.models.user import Organization
 
 
 class EmailTemplateType(str, enum.Enum):
@@ -79,33 +84,33 @@ class EmailTemplate(Base):
 
     __tablename__ = "email_templates"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Template identification
-    template_type = Column(
+    template_type: Mapped[EmailTemplateType] = mapped_column(
         SQLEnum(EmailTemplateType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
-    name = Column(String(255), nullable=False)
-    description = Column(Text)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
 
     # Content
-    subject = Column(String(500), nullable=False)
-    html_body = Column(Text, nullable=False)
-    text_body = Column(Text)
-    css_styles = Column(Text)
+    subject: Mapped[str] = mapped_column(String(500), nullable=False)
+    html_body: Mapped[str] = mapped_column(Text, nullable=False)
+    text_body: Mapped[Optional[str]] = mapped_column(Text)
+    css_styles: Mapped[Optional[str]] = mapped_column(Text)
 
     # Which named footer this template closes with. NULL means "whichever
     # footer the department marked default", so a new footer becomes the
     # house style without touching every row. An unrecognised key (a footer
     # that was deleted) also falls back to the default rather than leaving
     # the message with no footer at all — see app/services/email_footers.py.
-    footer_key = Column(String(32), nullable=True)
+    footer_key: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
 
     # The notice's colourway and shape, as data rather than hexes baked into
     # the body. ``build_shell`` leaves {{header_accent}} / {{chip_tint}} /
@@ -117,43 +122,53 @@ class EmailTemplate(Base):
     # written before these columns existed, and stays valid: a body with
     # literal hexes has no tokens to fill, so it renders exactly as it did.
     # Absence must mean current behaviour, never "off".
-    header_accent = Column(String(7), nullable=True)
-    status_chip = Column(String(40), nullable=True)
-    layout = Column(String(16), nullable=True)
+    header_accent: Mapped[Optional[str]] = mapped_column(String(7), nullable=True)
+    status_chip: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    layout: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
 
     # Configuration
-    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
-    allow_attachments = Column(
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
+    allow_attachments: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="0"
     )
 
     # Default recipients (JSON list of email addresses)
-    default_cc = Column(JSON, nullable=True)  # Optional List[str]
-    default_bcc = Column(JSON, nullable=True)  # Optional List[str]
+    default_cc: Mapped[Optional[list[str]]] = mapped_column(
+        JSON, nullable=True
+    )  # Optional List[str]
+    default_bcc: Mapped[Optional[list[str]]] = mapped_column(
+        JSON, nullable=True
+    )  # Optional List[str]
 
     # Available template variables (JSON list of {name, description} objects)
     # e.g. [{"name": "first_name", "description": "Recipient's first name"}]
-    available_variables = Column(JSON, default=list)
+    available_variables: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, default=list
+    )
 
     # Timestamps
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    updated_by = Column(
+    updated_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Relationships
-    organization = relationship("Organization", backref="email_templates")
+    organization: Mapped["Organization"] = relationship(
+        "Organization", backref="email_templates"
+    )
 
     __table_args__ = (
         Index("idx_email_template_org_type", "organization_id", "template_type"),
@@ -180,35 +195,35 @@ class EmailTemplateBackup(Base):
 
     __tablename__ = "email_template_backups"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    template_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    template_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("email_templates.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    organization_id = Column(
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    template_type = Column(String(64), nullable=False)
-    name = Column(String(255), nullable=True)
+    template_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # The columns the reset overwrote, as they were.
-    subject = Column(String(500), nullable=True)
-    html_body = Column(Text, nullable=True)
-    text_body = Column(Text, nullable=True)
-    css_styles = Column(Text, nullable=True)
-    footer_key = Column(String(32), nullable=True)
-    header_accent = Column(String(7), nullable=True)
-    status_chip = Column(String(40), nullable=True)
-    layout = Column(String(16), nullable=True)
+    subject: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    html_body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    text_body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    css_styles: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    footer_key: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    header_accent: Mapped[Optional[str]] = mapped_column(String(7), nullable=True)
+    status_chip: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    layout: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
 
     # Which change took the backup: the revision id that reset the row.
-    reason = Column(String(64), nullable=False)
-    created_at = Column(
+    reason: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
@@ -224,8 +239,8 @@ class EmailAttachment(Base):
 
     __tablename__ = "email_attachments"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    template_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    template_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("email_templates.id", ondelete="CASCADE"),
         nullable=False,
@@ -233,21 +248,25 @@ class EmailAttachment(Base):
     )
 
     # File metadata
-    filename = Column(String(255), nullable=False)
-    content_type = Column(String(100), nullable=False)
-    file_size = Column(String(20))  # Human-readable size
-    storage_path = Column(String(500), nullable=False)  # Path in MinIO/S3
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    file_size: Mapped[Optional[str]] = mapped_column(String(20))  # Human-readable size
+    storage_path: Mapped[str] = mapped_column(
+        String(500), nullable=False
+    )  # Path in MinIO/S3
 
     # Timestamps
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    uploaded_by = Column(
+    uploaded_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Relationships
-    template = relationship("EmailTemplate", backref="attachments")
+    template: Mapped["EmailTemplate"] = relationship(
+        "EmailTemplate", backref="attachments"
+    )
 
     def __repr__(self):
         return f"<EmailAttachment {self.filename}>"
@@ -272,37 +291,43 @@ class ScheduledEmail(Base):
 
     __tablename__ = "scheduled_emails"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Which template to use (nullable — caller may supply raw context)
-    template_id = Column(
+    template_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("email_templates.id", ondelete="SET NULL"),
         nullable=True,
     )
-    template_type = Column(
+    template_type: Mapped[EmailTemplateType] = mapped_column(
         SQLEnum(EmailTemplateType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
 
     # Recipients
-    to_emails = Column(JSON, nullable=False)  # List[str]
-    cc_emails = Column(JSON, nullable=True)  # Optional List[str]
-    bcc_emails = Column(JSON, nullable=True)  # Optional List[str]
+    to_emails: Mapped[list[str]] = mapped_column(JSON, nullable=False)  # List[str]
+    cc_emails: Mapped[Optional[list[str]]] = mapped_column(
+        JSON, nullable=True
+    )  # Optional List[str]
+    bcc_emails: Mapped[Optional[list[str]]] = mapped_column(
+        JSON, nullable=True
+    )  # Optional List[str]
 
     # Template variables to render with
-    context = Column(JSON, nullable=False, default=dict)
+    context: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     # When to send (timezone-aware, UTC)
-    scheduled_at = Column(DateTime(timezone=True), nullable=False)
+    scheduled_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
     # Delivery tracking
-    status = Column(
+    status: Mapped[ScheduledEmailStatus] = mapped_column(
         SQLEnum(
             ScheduledEmailStatus,
             values_callable=lambda x: [e.value for e in x],
@@ -311,17 +336,19 @@ class ScheduledEmail(Base):
         default=ScheduledEmailStatus.PENDING,
         server_default="pending",
     )
-    sent_at = Column(DateTime(timezone=True), nullable=True)
-    error_message = Column(Text, nullable=True)
+    sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Audit
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
@@ -329,8 +356,8 @@ class ScheduledEmail(Base):
     )
 
     # Relationships
-    organization = relationship("Organization")
-    template = relationship("EmailTemplate")
+    organization: Mapped["Organization"] = relationship("Organization")
+    template: Mapped[Optional["EmailTemplate"]] = relationship("EmailTemplate")
 
     __table_args__ = (
         Index("idx_scheduled_email_status", "status", "scheduled_at"),
@@ -358,24 +385,24 @@ class MessageHistory(Base):
 
     __tablename__ = "message_history"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=True,
     )
 
     # Recipient info
-    to_email = Column(String(320), nullable=False)
-    cc_emails = Column(JSON, nullable=True)
-    bcc_emails = Column(JSON, nullable=True)
+    to_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    cc_emails: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
+    bcc_emails: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
 
     # Content snapshot
-    subject = Column(String(500), nullable=False)
-    template_type = Column(String(50), nullable=True)
+    subject: Mapped[str] = mapped_column(String(500), nullable=False)
+    template_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     # Delivery tracking
-    status = Column(
+    status: Mapped[MessageHistoryStatus] = mapped_column(
         SQLEnum(
             MessageHistoryStatus,
             values_callable=lambda x: [e.value for e in x],
@@ -384,17 +411,21 @@ class MessageHistory(Base):
         default=MessageHistoryStatus.SENT,
         server_default="sent",
     )
-    error_message = Column(Text, nullable=True)
-    recipient_count = Column(Integer, nullable=False, default=1, server_default="1")
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    recipient_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
 
     # Audit
-    sent_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    sent_by = Column(
+    sent_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    sent_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Relationships
-    organization = relationship("Organization")
+    organization: Mapped[Optional["Organization"]] = relationship("Organization")
 
     __table_args__ = (
         Index("idx_message_history_org", "organization_id", "sent_at"),

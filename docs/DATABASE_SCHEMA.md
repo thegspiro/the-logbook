@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**298 tables · 4918 columns · 986 foreign keys**
+**298 tables · 4917 columns · 989 foreign keys**
 
 ---
 
@@ -80,7 +80,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`apparatus_component_notes`](#apparatus_component_notes) | `ApparatusComponentNote` | 21 | Notes, observations, issues, and repair records tied to a specific |
 | [`apparatus_components`](#apparatus_components) | `ApparatusComponent` | 23 | Segments an apparatus into logical components (engine, pump, aerial, etc.) |
 | [`apparatus_custom_fields`](#apparatus_custom_fields) | `ApparatusCustomField` | 23 | Custom field definitions for apparatus |
-| [`apparatus_documents`](#apparatus_documents) | `ApparatusDocument` | 14 | Documents associated with apparatus |
+| [`apparatus_documents`](#apparatus_documents) | `ApparatusDocument` | 15 | Documents associated with apparatus |
 | [`apparatus_equipment`](#apparatus_equipment) | `ApparatusEquipment` | 17 | Equipment assigned to apparatus |
 | [`apparatus_fuel_logs`](#apparatus_fuel_logs) | `ApparatusFuelLog` | 16 | Fuel purchase and usage log for apparatus |
 | [`apparatus_location_history`](#apparatus_location_history) | `ApparatusLocationHistory` | 9 | History of station/location assignments for apparatus |
@@ -88,7 +88,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`apparatus_maintenance_types`](#apparatus_maintenance_types) | `ApparatusMaintenanceType` | 18 | Maintenance type definitions |
 | [`apparatus_nfpa_compliance`](#apparatus_nfpa_compliance) | `ApparatusNFPACompliance` | 15 | NFPA compliance tracking for apparatus |
 | [`apparatus_operators`](#apparatus_operators) | `ApparatusOperator` | 21 | Tracks which personnel are certified/qualified to operate apparatus |
-| [`apparatus_photos`](#apparatus_photos) | `ApparatusPhoto` | 14 | Photos associated with apparatus |
+| [`apparatus_photos`](#apparatus_photos) | `ApparatusPhoto` | 15 | Photos associated with apparatus |
 | [`apparatus_report_configs`](#apparatus_report_configs) | `ApparatusReportConfig` | 26 | Configuration for scheduled and custom apparatus reports |
 | [`apparatus_service_providers`](#apparatus_service_providers) | `ApparatusServiceProvider` | 28 | Service providers (companies or individuals) who perform maintenance, |
 | [`apparatus_status_history`](#apparatus_status_history) | `ApparatusStatusHistory` | 9 | History of status changes for apparatus |
@@ -260,13 +260,13 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`check_requests`](#check_requests) | `CheckRequest` | 20 | Request to cut a check for payment |
 | [`dues_payments`](#dues_payments) | `DuesPayment` | 11 | A single payment received against a member's dues (FIN-6). |
 | [`dues_schedules`](#dues_schedules) | `DuesSchedule` | 15 | Schedule for dues collection |
-| [`expense_line_items`](#expense_line_items) | `ExpenseLineItem` | 16 | Individual line item within an expense report |
+| [`expense_line_items`](#expense_line_items) | `ExpenseLineItem` | 11 | Individual line item within an expense report |
 | [`expense_reports`](#expense_reports) | `ExpenseReport` | 17 | Expense report submitted by a member for reimbursement |
 | [`finance_export_logs`](#finance_export_logs) | `ExportLog` | 12 | Log of an export attempt, including interrupted streams. |
 | [`finance_export_mappings`](#finance_export_mappings) | `ExportMapping` | 9 | Mapping between internal budget categories and QuickBooks accounts |
 | [`fiscal_years`](#fiscal_years) | `FiscalYear` | 21 | Fiscal year definition for the organization |
 | [`member_dues`](#member_dues) | `MemberDues` | 18 | Individual member dues payment record |
-| [`purchase_requests`](#purchase_requests) | `PurchaseRequest` | 25 | Purchase request submitted by a member |
+| [`purchase_requests`](#purchase_requests) | `PurchaseRequest` | 26 | Purchase request submitted by a member |
 
 ### Forms
 
@@ -455,7 +455,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`prospect_event_links`](#prospect_event_links) | `ProspectEventLink` | 6 | Links a prospective member to an upcoming event. |
 | [`prospect_interviews`](#prospect_interviews) | `ProspectInterview` | 12 | Interview record for a prospective member. |
 | [`prospect_step_progress`](#prospect_step_progress) | `ProspectStepProgress` | 10 | Tracks a prospect's progress on each pipeline step. |
-| [`prospective_members`](#prospective_members) | `ProspectiveMember` | 36 | Prospective member record, kept separate from the users table. |
+| [`prospective_members`](#prospective_members) | `ProspectiveMember` | 37 | Prospective member record, kept separate from the users table. |
 
 ### Nfc_Tag
 
@@ -1087,6 +1087,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `apparatus_id` | VARCHAR(36) | no | FK, IDX |  | → `apparatus.id` ON DELETE CASCADE |
+| `document_id` | VARCHAR(36) | yes | FK, IDX |  | → `documents.id` ON DELETE CASCADE |
 | `file_path` | TEXT | no |  |  |  |
 | `file_name` | VARCHAR(255) | no |  |  |  |
 | `file_size` | INTEGER | yes |  |  |  |
@@ -1103,6 +1104,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_apparatus_documents_expiration` (`expiration_date`)
 - `idx_apparatus_documents_type` (`apparatus_id`, `document_type`)
+- `ix_apparatus_documents_document_id` (`document_id`)
 - `ix_apparatus_documents_organization_id` (`organization_id`)
 
 ### `apparatus_equipment`
@@ -1362,6 +1364,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `apparatus_id` | VARCHAR(36) | no | FK, IDX |  | → `apparatus.id` ON DELETE CASCADE |
+| `document_id` | VARCHAR(36) | yes | FK, IDX |  | → `documents.id` ON DELETE CASCADE |
 | `file_path` | TEXT | no |  |  |  |
 | `file_name` | VARCHAR(255) | no |  |  |  |
 | `file_size` | INTEGER | yes |  |  |  |
@@ -1377,6 +1380,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_apparatus_photos_is_primary` (`apparatus_id`, `is_primary`)
+- `ix_apparatus_photos_document_id` (`document_id`)
 - `ix_apparatus_photos_organization_id` (`organization_id`)
 
 ### `apparatus_report_configs`
@@ -3943,13 +3947,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `date_incurred` | DATETIME | no |  |  |  |
 | `expense_type` | ENUM(`general`, `uniform_reimbursement`, `ppe_replacement`, `boot_allowance`, `training_reimbursement`, `certification_fee`, `conference`, `travel`, `meals`, `mileage`, `equipment_purchase`, `other`) | no |  | `'general'` |  |
 | `receipt_url` | VARCHAR(500) | yes |  |  |  |
+| `receipt_document_id` | VARCHAR(36) | yes | FK |  | → `documents.id` ON DELETE SET NULL |
 | `merchant` | VARCHAR(300) | yes |  |  |  |
-| `receipt_file_path` | VARCHAR(500) | yes |  |  |  |
-| `receipt_file_name` | VARCHAR(255) | yes |  |  |  |
-| `receipt_content_type` | VARCHAR(100) | yes |  |  |  |
-| `receipt_file_size` | INTEGER | yes |  |  |  |
-| `receipt_uploaded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
-| `receipt_uploaded_at` | DATETIME | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 
 **Indexes**
@@ -4133,6 +4132,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `paid_at` | DATETIME | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
 | `receipt_url` | VARCHAR(500) | yes |  |  |  |
+| `receipt_document_id` | VARCHAR(36) | yes | FK |  | → `documents.id` ON DELETE SET NULL |
 | `apparatus_id` | VARCHAR(36) | yes | FK |  | → `apparatus.id` ON DELETE SET NULL |
 | `facility_id` | VARCHAR(36) | yes | FK |  | → `facilities.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
@@ -6830,6 +6830,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `reactivated_at` | DATETIME | yes |  |  |  |
 | `withdrawn_at` | DATETIME | yes |  |  |  |
 | `withdrawal_reason` | TEXT | yes |  |  |  |
+| `inactive_since` | DATETIME | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
 | `active_email` | VARCHAR(255) | yes |  | server default |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
@@ -10382,7 +10383,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (362 references)
+### → `users` (361 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10491,7 +10492,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `events` | `created_by` | RESTRICT | yes |
 | `events` | `organizer_id` | SET NULL | yes |
 | `events` | `updated_by` | RESTRICT | yes |
-| `expense_line_items` | `receipt_uploaded_by` | SET NULL | yes |
 | `expense_reports` | `approved_by` | SET NULL | yes |
 | `expense_reports` | `submitted_by` | RESTRICT | no |
 | `external_category_mappings` | `mapped_by` | SET NULL | yes |
@@ -11369,6 +11369,15 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `department_message_recipients` | `message_id` | CASCADE | no |
 | `notification_logs` | `department_message_id` | CASCADE | yes |
 
+### → `documents` (4 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `apparatus_documents` | `document_id` | CASCADE | yes |
+| `apparatus_photos` | `document_id` | CASCADE | yes |
+| `expense_line_items` | `receipt_document_id` | SET NULL | yes |
+| `purchase_requests` | `receipt_document_id` | SET NULL | yes |
+
 ### → `equipment_check_templates` (4 references)
 
 | From table | Column | On delete | Nullable |
@@ -11966,7 +11975,7 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `email_attachments` | `email_templates`, `users` |
 | `equipment_kit_items` | `equipment_kits`, `inventory_categories`, `inventory_items` |
 | `event_request_activity` | `event_requests`, `users` |
-| `expense_line_items` | `budgets`, `expense_reports`, `users` |
+| `expense_line_items` | `budgets`, `documents`, `expense_reports` |
 | `form_fields` | `forms` |
 | `grant_budget_items` | `grant_applications` |
 | `grant_compliance_tasks` | `grant_applications`, `users` |

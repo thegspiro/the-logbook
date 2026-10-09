@@ -1042,7 +1042,7 @@ Expense report numbers are auto-generated in the format **ER-YYYY-0001**, where 
 | **Merchant**      | No       | Where the purchase was made                              |
 
 5. Click **Create Report**. The report is saved as a **Draft** and opens on its detail page. The total amount is automatically calculated as the sum of all line items.
-6. **Attach a receipt to every line** _(2026-10-09)_. In the **Receipt** column, click **Attach receipt** on each line and choose the file — a PDF, or a photo or scan as JPG or PNG, up to 10 MB. **Replace** swaps it for another file; **Remove** takes it off. For a mileage line, attach your trip log (dates, destinations, purpose and miles).
+6. **Attach a receipt to every line** _(2026-10-09)_. In the **Receipt** column, click **Attach receipt** on each line and choose the file — a PDF or a photo. **Replace** attaches a different file; the earlier one stays on record. For a mileage line, attach your trip log (dates, destinations, purpose and miles).
 7. Click **Submit for Approval**. The button stays disabled, with _"Attach a receipt to … before submitting"_ beside it, until every line has a receipt.
 
 ![Create Expense Report form with header fields and the line items section](./images/11-10-create-expense-report.png)
@@ -1070,7 +1070,7 @@ Each line item on an expense report has an expense type that classifies the spen
 
 ### Submitting an Expense Report
 
-Only **Draft** reports can be submitted. The system validates that the `totalAmount` is greater than zero (i.e., at least one line item must exist with a positive amount) and that **every line has a receipt attached** — otherwise it is refused, naming the lines that are missing one. Once submitted, receipts can no longer be changed: they are what the approvers decide on. The approval chain is resolved based on the `expense_report` entity type, total amount, and budget category (derived from line items).
+Only **Draft** reports can be submitted. The system validates that the `totalAmount` is greater than zero (i.e., at least one line item must exist with a positive amount) and that **every line has a receipt attached** — otherwise it is refused, naming the lines that are missing one. A member can still replace a receipt while the report is only submitted; once it is in approval, only the finance office can, and a replaced receipt stays on record. The approval chain is resolved based on the `expense_report` entity type, total amount, and budget category (derived from line items).
 
 ### Tracking and Payment
 
@@ -1078,7 +1078,7 @@ Open an expense report to see its detail page at `/finance/expenses/:id`. The de
 
 - Report number, title, and total amount (sum of all line items)
 - Current status with approval chain progress
-- All line items with their individual details, and each line's receipt (click the file name to download it)
+- All line items with their individual details, and each line's receipt (click **Receipt** to download it)
 - Payment status and method (once paid)
 
 The report — receipts included — can be read by the member who submitted it, a finance manager (`finance.manage`), and its **approvers**: whoever its approval chain names, anyone who has already acted on one of its steps, an approvals administrator, and, for a report no chain applies to, any `finance.approve` holder. Everyone else is told the report does not exist.

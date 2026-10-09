@@ -206,10 +206,10 @@ async def list_pipelines(
                 id=p.id,
                 name=p.name,
                 description=p.description,
-                is_template=p.is_template,
-                is_default=p.is_default,
-                is_active=p.is_active if hasattr(p, "is_active") else True,
-                auto_transfer_on_approval=p.auto_transfer_on_approval,
+                is_template=bool(p.is_template),
+                is_default=bool(p.is_default),
+                is_active=bool(p.is_active),
+                auto_transfer_on_approval=bool(p.auto_transfer_on_approval),
                 step_count=len(p.steps) if p.steps else 0,
                 prospect_count=getattr(p, "prospect_count", 0),
                 created_at=p.created_at,
@@ -1392,7 +1392,7 @@ async def skip_step(
 @router.post("/prospects/{prospect_id}/advance", response_model=ProspectResponse)
 async def advance_prospect(
     prospect_id: UUID,
-    data: AdvanceProspectRequest = None,
+    data: AdvanceProspectRequest | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("members.manage", "prospective_members.manage")
@@ -1642,7 +1642,7 @@ async def bulk_set_prospect_status(
 @router.post("/prospects/{prospect_id}/regress", response_model=ProspectResponse)
 async def regress_prospect(
     prospect_id: UUID,
-    data: AdvanceProspectRequest = None,
+    data: AdvanceProspectRequest | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("members.manage", "prospective_members.manage")

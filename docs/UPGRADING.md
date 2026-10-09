@@ -414,23 +414,21 @@ should not have to discover by being surprised.
 
 ### Expense reports need a receipt on every line (2026-10-09)
 
-Migration `0a159454f04b`.
+Builds on the uploaded receipts below (migration `c0bf0b155719`); no
+migration of its own.
 
 - **Submitting an expense report now refuses (400)** until every line has an
   uploaded receipt. Members attach them on the report's page after saving it.
   Drafts saved before the upgrade need receipts before they are submitted;
   reports already submitted, approved or paid are unaffected.
-- **Receipts are stored on the uploads volume** under
-  `<org>/finance-receipts/`, through the same scanned path as every other
-  upload, so the volume and ClamAV your deployment already runs are all it
-  needs. Back the volume up with the database, as for documents.
 - **Approvers can now open the reports they decide on.** An approver without
   `finance.manage` was linked from the approvals queue to a report that
   answered 404; the report and its receipts now open for the people its chain
   names (and for any `finance.approve` holder on a report no chain applies
   to). Other members' reports stay hidden as before.
-- **Downgrading** drops the receipt columns; the files stay on disk,
-  unreferenced.
+- **A closing year takes no new receipts from members**, and a locked year
+  none at all; the finance office can still attach receipts in a closing year
+  for what it is settling.
 
 ### Adopting, starting and closing a fiscal year are separate steps (2026-10-09)
 
@@ -467,6 +465,81 @@ the activate behaviour described in the next entry:
   before the upgrade have no sign-off; none is invented.
 - **Downgrading** drops the close date and sign-off columns and returns any
   adopted draft to board review (its adoption record stays).
+
+### Prospective members: Auto-Purge now deletes — the clock starts at this upgrade (2026-10-09)
+
+The pipeline **Auto-Purge** setting (Pipeline Settings → inactivity) used to be
+stored and never read. It is now in effect: a daily task
+(`membership_auto_purge`) permanently deletes, with their uploaded documents,
+the **inactive** applications in each pipeline that has Auto-Purge on, once
+they have been inactive for the configured number of days (30–1095; a value
+outside that range is treated as the nearest bound, and an unreadable one
+skips the pipeline). Each run writes a `membership_pipeline.prospects_purged`
+audit event marked `trigger: auto_purge`, with the pipeline, the threshold and
+the purged ids. No email is sent before a purge.
+
+**Nothing already inactive is deleted straight away.** Migration
+`feecd81eef2d` adds `prospective_members.inactive_since` and sets it to the
+time the migration runs for every application inactive at that moment — not
+to the date it actually went inactive. So an application that has sat
+inactive for years in a pipeline with Auto-Purge switched on is purged only
+after a full grace period has passed **after the upgrade**. The **Deactivated**
+date shown on the application is unchanged. An application with no
+`inactive_since` is never auto-purged.
+
+If a pipeline had Auto-Purge switched on without anyone expecting it to act,
+review it during that grace period: turn it off, or reactivate the
+applications you want to keep. Reactivating an application stops its clock;
+if it goes inactive again, the clock starts afresh.
+
+### Document folders open to module rights; who sees what changes (2026-10-09)
+
+Phase 3 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).
+Nothing here stops the stack from starting, but people will find folders
+appear and disappear, so tell the department before you upgrade.
+
+**Only a full administrator (`*`) still sees every folder.** Holding
+`documents.manage` or `members.manage` no longer opens everything. Browsing
+Documents still needs `documents.view`; on top of that, a folder now asks for
+its module's rights. Computed from the seeded positions alone — a member who
+also holds the **Member** position (every member does, by default) keeps
+`training.view` and `events.view` from it:
+
+| Folder                              | Opens to (any one)                                     | Changes, seeded positions on their own                                                                                                                                                                                                                                             |
+| ----------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Apparatus Files                     | `apparatus.view`, `apparatus.edit`, `apparatus.manage` | Gained by lieutenant, engineer and training officer. Lost by treasurer, historian, compliance officer and assistant secretary. The apparatus officer and quartermaster have no `documents.view`; they reach vehicle files on the apparatus screens, which now upload and open them |
+| Training Materials                  | `training.view`, `training.manage`                     | Lost by treasurer, board of directors, communications officer, historian, fundraising chair and assistant secretary, unless they also hold Member                                                                                                                                  |
+| Event Attachments                   | `events.view`, `events.edit`, `events.manage`          | Lost by treasurer and board of directors, unless they also hold Member                                                                                                                                                                                                             |
+| Member Separations                  | `members.manage`                                       | Lost by treasurer, historian, safety officer and compliance officer                                                                                                                                                                                                                |
+| Finance (new), with Receipts        | `finance.view`, `finance.manage`, `finance.approve`    | Opens to the treasurer. A member opens their own receipt from the purchase request or expense report, not from Documents                                                                                                                                                           |
+| A member's personal folder          | that member                                            | Lost by captains, chiefs, president, vice president, secretaries, membership coordinator and every other `members.manage` or `documents.manage` holder                                                                                                                             |
+| A custom "leadership only" folder   | `documents.manage`                                     | Lost by `members.manage` holders without `documents.manage`                                                                                                                                                                                                                        |
+| A custom folder restricted to roles | holders of those roles                                 | `documents.manage` no longer passes the role check                                                                                                                                                                                                                                 |
+
+Changing what is in a module folder (upload, move, rename, delete through
+Documents) still needs `documents.manage` **and** a non-view right from that
+folder's list. Facility folders are unchanged.
+
+**Apparatus files and finance receipts are uploaded, not typed:**
+
+- `POST /apparatus/{id}/photos` and `/documents` no longer accept a URL in
+  `file_path`; it must be `document:<id>` of a stored document, or use the new
+  `.../photos/upload` and `.../documents/upload`. Rows already on file keep
+  their link; responses now carry `fileUrl`, which is the link only if it is
+  HTTP(S). A stored `javascript:` or other value is no longer handed to the
+  page.
+- `receipt_url` on purchase requests and expense lines must be an HTTP(S)
+  URL; anything else is a 422. Existing values that are not are withheld from
+  responses, and left in the database untouched.
+
+**Migrations.** `b38df38d849b` stamps the rights onto each department's
+existing system folders, `6c25b7d68965` adds `document_id` to apparatus
+photos and documents, `c0bf0b155719` adds `receipt_document_id` to purchase
+requests and expense lines. All three run on `alembic upgrade head` and are
+reversible: `alembic downgrade 5c8be05f2f0f`, then redeploy the previous
+image. Downgrading closes the Finance folder to leadership-only (the earlier
+code has no finance gate) and drops the receipt and apparatus links; the
+uploaded files remain in Documents.
 
 ### A draft fiscal year is adopted through board review, not activated directly (2026-10-09)
 
@@ -1121,7 +1194,8 @@ inactive, removes their uploaded documents from the server, and records the
 purge in the audit log (count and ids only); the message reports how many were
 really deleted. Withdrawn, rejected and on-hold applications are never purged.
 The pipeline's **Auto-Purge** setting is still stored but nothing reads it, so
-no application is ever deleted automatically.
+no application is ever deleted automatically. _(Wired on 2026-10-09 — see
+"Auto-Purge now deletes" above.)_
 
 ### Each pipeline decides what a converted applicant becomes (2026-09-30)
 

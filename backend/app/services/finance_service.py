@@ -436,7 +436,7 @@ class FinanceService:
 
         Nothing new is raised or submitted against it from here; what was
         already submitted can still be approved, paid, issued or cancelled
-        (``_require_year_accepts``). Locking ends the period.
+        (``require_year_accepts``). Locking ends the period.
         """
         fy = await self._fiscal_year_for_update(fy_id, org_id)
         if fy.status != FiscalYearStatus.ACTIVE:
@@ -584,7 +584,7 @@ class FinanceService:
             raise FinanceEntityNotFoundError("Fiscal year not found")
         return fy
 
-    async def _require_year_accepts(
+    async def require_year_accepts(
         self, fiscal_year_id: Optional[str], org_id: str, *, action: str
     ) -> None:
         """Refuse finance activity a fiscal year no longer accepts.
@@ -3492,7 +3492,7 @@ class FinanceService:
     ) -> PurchaseRequest:
         await self._validate_finance_fks(org_id, kwargs)
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
-        await self._require_year_accepts(fiscal_year_id, org_id, action="new")
+        await self.require_year_accepts(fiscal_year_id, org_id, action="new")
         pr = PurchaseRequest(
             organization_id=org_id,
             requested_by=requested_by,
@@ -3513,9 +3513,9 @@ class FinanceService:
         )
         if not pr:
             _raise_not_found("Purchase request", requester_id)
-        await self._require_year_accepts(pr.fiscal_year_id, org_id, action="new")
+        await self.require_year_accepts(pr.fiscal_year_id, org_id, action="new")
         if kwargs.get("fiscal_year_id"):
-            await self._require_year_accepts(
+            await self.require_year_accepts(
                 kwargs["fiscal_year_id"], org_id, action="new"
             )
         if pr.status not in (
@@ -3537,7 +3537,7 @@ class FinanceService:
         )
         if not pr:
             _raise_not_found("Purchase request", requester_id)
-        await self._require_year_accepts(pr.fiscal_year_id, org_id, action="new")
+        await self.require_year_accepts(pr.fiscal_year_id, org_id, action="new")
         if pr.status != PurchaseRequestStatus.DRAFT:
             raise ValueError("Only draft requests can be submitted")
 
@@ -3587,7 +3587,7 @@ class FinanceService:
         pr = await self.get_purchase_request(pr_id, org_id, for_update=True)
         if not pr:
             raise ValueError("Purchase request not found")
-        await self._require_year_accepts(pr.fiscal_year_id, org_id, action="finish")
+        await self.require_year_accepts(pr.fiscal_year_id, org_id, action="finish")
         if pr.status != PurchaseRequestStatus.APPROVED:
             raise ValueError("Only approved requests can be marked as ordered")
         pr.status = PurchaseRequestStatus.ORDERED
@@ -3600,7 +3600,7 @@ class FinanceService:
         pr = await self.get_purchase_request(pr_id, org_id, for_update=True)
         if not pr:
             raise ValueError("Purchase request not found")
-        await self._require_year_accepts(pr.fiscal_year_id, org_id, action="finish")
+        await self.require_year_accepts(pr.fiscal_year_id, org_id, action="finish")
         if pr.status != PurchaseRequestStatus.ORDERED:
             raise ValueError("Only ordered requests can be marked as received")
         pr.status = PurchaseRequestStatus.RECEIVED
@@ -3646,7 +3646,7 @@ class FinanceService:
             PurchaseRequestStatus.RECEIVED,
         ):
             raise ValueError("Request cannot be marked as paid in this status")
-        await self._require_year_accepts(pr.fiscal_year_id, org_id, action="finish")
+        await self.require_year_accepts(pr.fiscal_year_id, org_id, action="finish")
 
         pr.status = PurchaseRequestStatus.PAID
         pr.paid_at = datetime.now(timezone.utc)
@@ -3696,7 +3696,7 @@ class FinanceService:
         pr: PurchaseRequest | None = result.scalar_one_or_none()
         if not pr:
             _raise_not_found("Purchase request", requester_id)
-        await self._require_year_accepts(pr.fiscal_year_id, org_id, action="finish")
+        await self.require_year_accepts(pr.fiscal_year_id, org_id, action="finish")
         if pr.status in (PurchaseRequestStatus.PAID,):
             raise ValueError("Paid requests cannot be cancelled")
         if requester_id is not None and pr.status != PurchaseRequestStatus.DRAFT:
@@ -3791,7 +3791,7 @@ class FinanceService:
         for item_data in line_items or []:
             await self._validate_finance_fks(org_id, item_data)
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
-        await self._require_year_accepts(fiscal_year_id, org_id, action="new")
+        await self.require_year_accepts(fiscal_year_id, org_id, action="new")
         er = ExpenseReport(
             organization_id=org_id,
             submitted_by=submitted_by,
@@ -3826,9 +3826,9 @@ class FinanceService:
         )
         if not er:
             _raise_not_found("Expense report", requester_id)
-        await self._require_year_accepts(er.fiscal_year_id, org_id, action="new")
+        await self.require_year_accepts(er.fiscal_year_id, org_id, action="new")
         if kwargs.get("fiscal_year_id"):
-            await self._require_year_accepts(
+            await self.require_year_accepts(
                 kwargs["fiscal_year_id"], org_id, action="new"
             )
         if er.status not in (
@@ -3848,7 +3848,7 @@ class FinanceService:
         er = await self.get_expense_report(er_id, org_id, restrict_to_user=requester_id)
         if not er:
             _raise_not_found("Expense report", requester_id)
-        await self._require_year_accepts(er.fiscal_year_id, org_id, action="new")
+        await self.require_year_accepts(er.fiscal_year_id, org_id, action="new")
         if er.status not in (ExpenseReportStatus.DRAFT,):
             raise ValueError("Can only add items to draft reports")
         await self._validate_finance_fks(org_id, kwargs)
@@ -3870,106 +3870,6 @@ class FinanceService:
         await self.db.flush()
         await self.db.refresh(item, ["created_at"])
         return item
-
-    # ========================================
-    # Expense receipts
-    # ========================================
-
-    async def _receipt_line(
-        self,
-        er_id: str,
-        item_id: str,
-        org_id: str,
-        requester_id: Optional[str],
-        *,
-        for_update: bool = False,
-    ) -> tuple[ExpenseReport, ExpenseLineItem]:
-        er = await self.get_expense_report(
-            er_id, org_id, restrict_to_user=requester_id, for_update=for_update
-        )
-        if not er:
-            raise FinanceEntityNotFoundError("Expense report not found")
-        item = next((i for i in er.line_items if str(i.id) == str(item_id)), None)
-        if item is None:
-            raise FinanceEntityNotFoundError("Line item not found")
-        return er, item
-
-    async def require_receipt_editable(
-        self, er_id: str, item_id: str, org_id: str, requester_id: Optional[str]
-    ) -> tuple[ExpenseReport, ExpenseLineItem]:
-        """The draft report's line a receipt may be attached to or removed from.
-
-        Checked before an upload is stored, so a refused request writes no
-        file, and again under the report's row lock when the change is made.
-        """
-        er, item = await self._receipt_line(er_id, item_id, org_id, requester_id)
-        await self._require_receipt_change(er, org_id)
-        return er, item
-
-    async def _require_receipt_change(self, er: ExpenseReport, org_id: str) -> None:
-        # Once submitted, the receipts are what the approvers are deciding on;
-        # they stay as submitted.
-        if er.status != ExpenseReportStatus.DRAFT:
-            raise ValueError(
-                "Receipts can only be changed while the report is a draft."
-            )
-        await self._require_year_accepts(er.fiscal_year_id, org_id, action="new")
-
-    async def attach_line_item_receipt(
-        self,
-        er_id: str,
-        item_id: str,
-        org_id: str,
-        requester_id: Optional[str],
-        *,
-        file_path: str,
-        file_name: str,
-        content_type: str,
-        file_size: int,
-        uploaded_by: str,
-    ) -> tuple[ExpenseLineItem, Optional[str]]:
-        """Record a stored receipt on a draft line; return it and the file it replaced.
-
-        The caller deletes the replaced file only after the commit, so a failed
-        save never leaves the line pointing at a file that is gone.
-        """
-        er, item = await self._receipt_line(
-            er_id, item_id, org_id, requester_id, for_update=True
-        )
-        await self._require_receipt_change(er, org_id)
-        previous = item.receipt_file_path
-        item.receipt_file_path = file_path
-        item.receipt_file_name = file_name
-        item.receipt_content_type = content_type
-        item.receipt_file_size = file_size
-        item.receipt_uploaded_by = uploaded_by
-        item.receipt_uploaded_at = datetime.now(timezone.utc)
-        await self.db.flush()
-        return item, previous
-
-    async def remove_line_item_receipt(
-        self, er_id: str, item_id: str, org_id: str, requester_id: Optional[str]
-    ) -> Optional[str]:
-        """Clear a draft line's receipt; return the stored file to delete."""
-        er, item = await self._receipt_line(
-            er_id, item_id, org_id, requester_id, for_update=True
-        )
-        await self._require_receipt_change(er, org_id)
-        previous = item.receipt_file_path
-        item.receipt_file_path = None
-        item.receipt_file_name = None
-        item.receipt_content_type = None
-        item.receipt_file_size = None
-        item.receipt_uploaded_by = None
-        item.receipt_uploaded_at = None
-        await self.db.flush()
-        return previous
-
-    async def receipt_line(
-        self, er_id: str, item_id: str, org_id: str
-    ) -> tuple[ExpenseReport, ExpenseLineItem]:
-        """A report's line, for a reader the caller has already authorized."""
-        return await self._receipt_line(er_id, item_id, org_id, None)
 
     async def reviews_entity(
         self,
@@ -4014,12 +3914,12 @@ class FinanceService:
         )
         if not er:
             _raise_not_found("Expense report", requester_id)
-        await self._require_year_accepts(er.fiscal_year_id, org_id, action="new")
+        await self.require_year_accepts(er.fiscal_year_id, org_id, action="new")
         if er.status != ExpenseReportStatus.DRAFT:
             raise ValueError("Only draft reports can be submitted")
         if er.total_amount <= 0:
             raise ValueError("Expense report must have line items")
-        missing = [item for item in er.line_items if not item.receipt_file_path]
+        missing = [item for item in er.line_items if not item.receipt_document_id]
         if missing:
             named = ", ".join(f'"{item.description}"' for item in missing[:3])
             more = f" and {len(missing) - 3} more" if len(missing) > 3 else ""
@@ -4087,7 +3987,7 @@ class FinanceService:
         )
         if er.status != ExpenseReportStatus.APPROVED:
             raise ValueError("Only approved reports can be marked as paid")
-        await self._require_year_accepts(er.fiscal_year_id, org_id, action="finish")
+        await self.require_year_accepts(er.fiscal_year_id, org_id, action="finish")
 
         er.status = ExpenseReportStatus.PAID
         er.paid_at = datetime.now(timezone.utc)
@@ -4161,7 +4061,7 @@ class FinanceService:
     ) -> CheckRequest:
         await self._validate_finance_fks(org_id, kwargs)
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
-        await self._require_year_accepts(fiscal_year_id, org_id, action="new")
+        await self.require_year_accepts(fiscal_year_id, org_id, action="new")
         cr = CheckRequest(
             organization_id=org_id,
             requested_by=requested_by,
@@ -4181,9 +4081,9 @@ class FinanceService:
         )
         if not cr:
             _raise_not_found("Check request", requester_id)
-        await self._require_year_accepts(cr.fiscal_year_id, org_id, action="new")
+        await self.require_year_accepts(cr.fiscal_year_id, org_id, action="new")
         if kwargs.get("fiscal_year_id"):
-            await self._require_year_accepts(
+            await self.require_year_accepts(
                 kwargs["fiscal_year_id"], org_id, action="new"
             )
         if cr.status not in (
@@ -4205,7 +4105,7 @@ class FinanceService:
         )
         if not cr:
             _raise_not_found("Check request", requester_id)
-        await self._require_year_accepts(cr.fiscal_year_id, org_id, action="new")
+        await self.require_year_accepts(cr.fiscal_year_id, org_id, action="new")
         if cr.status != CheckRequestStatus.DRAFT:
             raise ValueError("Only draft requests can be submitted")
 
@@ -4275,7 +4175,7 @@ class FinanceService:
         )
         if cr.status != CheckRequestStatus.APPROVED:
             raise ValueError("Only approved requests can have checks issued")
-        await self._require_year_accepts(cr.fiscal_year_id, org_id, action="finish")
+        await self.require_year_accepts(cr.fiscal_year_id, org_id, action="finish")
 
         cr.status = CheckRequestStatus.ISSUED
         cr.check_number = check_number
@@ -4303,7 +4203,7 @@ class FinanceService:
         cr: CheckRequest | None = result.scalar_one_or_none()
         if not cr:
             raise ValueError("Check request not found")
-        await self._require_year_accepts(cr.fiscal_year_id, org_id, action="finish")
+        await self.require_year_accepts(cr.fiscal_year_id, org_id, action="finish")
         if cr.status != CheckRequestStatus.ISSUED:
             raise ValueError("Only issued checks can be voided")
 

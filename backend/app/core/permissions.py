@@ -1801,7 +1801,8 @@ def get_rank_default_permissions(rank: str) -> list[str]:
     """
     rank_def = OPERATIONAL_RANKS.get(rank)
     if rank_def:
-        return rank_def["default_permissions"]
+        permissions: list[str] = rank_def["default_permissions"]
+        return permissions
     return []
 
 

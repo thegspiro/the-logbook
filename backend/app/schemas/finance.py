@@ -23,6 +23,7 @@ from app.models.finance import (
     PurchaseRequestPriority,
 )
 from app.schemas.base import UTCResponseBase
+from app.utils.external_url import safe_external_url, validate_external_http_url
 
 # applies_to / step_type / approver_type / frequency / expense_type / mapping_type /
 # priority map to strict MySQL ENUM columns, but were typed as free str and stored
@@ -1037,6 +1038,11 @@ class PurchaseRequestUpdate(BaseModel):
     apparatus_id: Optional[str] = None
     facility_id: Optional[str] = None
 
+    # The link is rendered as an anchor; only an HTTP(S) one may be stored.
+    _check_receipt_url = field_validator("receipt_url", mode="before")(
+        validate_external_http_url
+    )
+
 
 class PurchaseRequestResponse(UTCResponseBase):
     """Purchase request response"""
@@ -1064,11 +1070,25 @@ class PurchaseRequestResponse(UTCResponseBase):
     paid_at: Optional[datetime] = None
     notes: Optional[str] = None
     receipt_url: Optional[str] = None
+    receipt_document_id: Optional[str] = None
+    receipt_file_url: Optional[str] = None
     apparatus_id: Optional[str] = None
     facility_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     approval_steps: list[ApprovalStepRecordResponse] = []
+
+    # A link stored before input validation existed is withheld unless it is
+    # HTTP(S), rather than handed to an href.
+    _safe_receipt_url = field_validator("receipt_url", mode="before")(safe_external_url)
+
+    @model_validator(mode="after")
+    def _set_receipt_file_url(self):
+        if self.receipt_document_id:
+            self.receipt_file_url = (
+                f"/api/v1/finance/purchase-requests/{self.id}/receipt"
+            )
+        return self
 
 
 # ============================================
@@ -1101,6 +1121,10 @@ class ExpenseLineItemCreate(BaseModel):
     receipt_url: Optional[str] = None
     merchant: Optional[str] = None
 
+    _check_receipt_url = field_validator("receipt_url", mode="before")(
+        validate_external_http_url
+    )
+
 
 class ExpenseLineItemResponse(UTCResponseBase):
     """Expense line item response"""
@@ -1115,14 +1139,21 @@ class ExpenseLineItemResponse(UTCResponseBase):
     date_incurred: datetime
     expense_type: str
     receipt_url: Optional[str] = None
+    receipt_document_id: Optional[str] = None
+    receipt_file_url: Optional[str] = None
     merchant: Optional[str] = None
-    # The uploaded receipt, described; its stored path is never returned.
-    has_receipt: bool = False
-    receipt_file_name: Optional[str] = None
-    receipt_content_type: Optional[str] = None
-    receipt_file_size: Optional[int] = None
-    receipt_uploaded_at: Optional[datetime] = None
     created_at: datetime
+
+    _safe_receipt_url = field_validator("receipt_url", mode="before")(safe_external_url)
+
+    @model_validator(mode="after")
+    def _set_receipt_file_url(self):
+        if self.receipt_document_id:
+            self.receipt_file_url = (
+                f"/api/v1/finance/expense-reports/{self.expense_report_id}"
+                f"/items/{self.id}/receipt"
+            )
+        return self
 
 
 class ExpenseReportCreate(BaseModel):

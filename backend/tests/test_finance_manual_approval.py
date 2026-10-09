@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.routing import Match
 
 from app.api.v1.endpoints.finance import _manual_decision_error, router
+from app.models.document import Document
 from app.models.finance import (
     ApprovalEntityType,
     ApprovalStepType,
@@ -97,6 +98,11 @@ async def setup(db_session: AsyncSession):
         category_id=cat.id,
         amount_budgeted=50000.00,
     )
+    receipt = Document(
+        organization_id=org_id, name="Hotel receipt", file_name="hotel.pdf"
+    )
+    db_session.add(receipt)
+    await db_session.flush()
     other_fy = await service.create_fiscal_year(
         org_id=other_org_id,
         created_by=other_user,
@@ -114,6 +120,7 @@ async def setup(db_session: AsyncSession):
         "fy_id": fy.id,
         "budget_id": budget.id,
         "other_fy_id": other_fy.id,
+        "receipt_document_id": receipt.id,
     }
 
 
@@ -145,8 +152,8 @@ async def _submitted_er(s):
                 "date_incurred": datetime(2026, 3, 1, tzinfo=timezone.utc),
                 "expense_type": "travel",
                 # Every line needs a receipt to be submitted; these tests are
-                # about routing, not the file, so none is written.
-                "receipt_file_path": "/app/uploads/org/finance-receipts/r.pdf",
+                # about routing, not the file, so the document has no file.
+                "receipt_document_id": s["receipt_document_id"],
             }
         ],
     )

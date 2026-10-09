@@ -200,7 +200,8 @@ class MessagingService:
                 DepartmentMessage.organization_id == organization_id,
             )
         )
-        return result.scalar_one_or_none()
+        department_message: Optional[DepartmentMessage] = result.scalar_one_or_none()
+        return department_message
 
     async def update_message(
         self, message_id: str, organization_id: str, updates: Dict[str, Any]
@@ -680,7 +681,8 @@ class MessagingService:
                 User.organization_id == organization_id,
             )
         )
-        return result.scalar_one_or_none()
+        user: Optional[User] = result.scalar_one_or_none()
+        return user
 
     def _is_targeted(
         self,
@@ -781,7 +783,7 @@ class MessagingService:
                 ),
             )
         )
-        message = message_result.scalar_one_or_none()
+        message: Optional[DepartmentMessage] = message_result.scalar_one_or_none()
         if not message:
             return None
         return message

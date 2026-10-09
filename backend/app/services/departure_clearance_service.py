@@ -300,8 +300,12 @@ class DepartureClearanceService:
                     else ItemCondition.GOOD
                 )
                 if line_item.source_type == "assignment":
+                    # No item id cannot match an item; this is the result the
+                    # lookup itself would report for it.
+                    if not line_item.item_id:
+                        return None, "Failed to unassign item: Item not found"
                     success, err = await inv_svc.unassign_item(
-                        item_id=UUID(line_item.item_id) if line_item.item_id else None,
+                        item_id=UUID(line_item.item_id),
                         organization_id=UUID(organization_id),
                         returned_by=UUID(resolved_by),
                         return_condition=effective_condition,
@@ -454,7 +458,8 @@ class DepartureClearanceService:
             )
             .options(selectinload(DepartureClearance.line_items))
         )
-        return result.scalar_one_or_none()
+        departure_clearance: Optional[DepartureClearance] = result.scalar_one_or_none()
+        return departure_clearance
 
     async def get_clearance_for_user(
         self, user_id: str, organization_id: str, active_only: bool = True
@@ -481,7 +486,8 @@ class DepartureClearanceService:
 
         query = query.order_by(DepartureClearance.initiated_at.desc()).limit(1)
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        departure_clearance: Optional[DepartureClearance] = result.scalar_one_or_none()
+        return departure_clearance
 
     async def list_clearances(
         self,

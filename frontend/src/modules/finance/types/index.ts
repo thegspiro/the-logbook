@@ -809,7 +809,11 @@ export interface PurchaseRequest {
   receivedAt?: string;
   paidAt?: string;
   notes?: string;
-  receiptUrl?: string;
+  /** A typed link; the server passes it on only if it is HTTP(S). */
+  receiptUrl?: string | null;
+  /** The uploaded receipt, opened through `receiptFileUrl`. */
+  receiptDocumentId?: string | null;
+  receiptFileUrl?: string | null;
   apparatusId?: string;
   facilityId?: string;
   createdAt: string;
@@ -825,14 +829,10 @@ export interface ExpenseLineItem {
   amount: MonetaryAmount;
   dateIncurred: string;
   expenseType: ExpenseType;
-  receiptUrl?: string;
+  receiptUrl?: string | null;
+  receiptDocumentId?: string | null;
+  receiptFileUrl?: string | null;
   merchant?: string;
-  /** An uploaded receipt is on the line; every line needs one to submit. */
-  hasReceipt?: boolean;
-  receiptFileName?: string | null;
-  receiptContentType?: string | null;
-  receiptFileSize?: number | null;
-  receiptUploadedAt?: string | null;
   createdAt: string;
 }
 

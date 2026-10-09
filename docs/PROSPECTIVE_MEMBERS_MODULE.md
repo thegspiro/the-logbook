@@ -10,7 +10,7 @@ The Prospective Members module provides a complete applicant tracking system for
 
 - **Configurable Pipeline**: Drag-and-drop stage builder with twelve stage types (form submission, document upload, election/vote, manual approval, meeting, status-page toggle, automated email, reference check, checklist, interview requirement, multi-signer approval, and medical screening)
 - **Dual View Modes**: Kanban board with drag-and-drop or sortable paginated table
-- **Inactivity Timeout System**: Automatic deactivation with configurable timeouts, per-stage overrides and two-phase warnings. The auto-purge setting is stored but **not wired** (see [Auto-Purge](#auto-purge)); inactive applications are purged by hand
+- **Inactivity Timeout System**: Automatic deactivation with configurable timeouts, per-stage overrides and two-phase warnings, and an optional daily auto-purge of applications inactive past a grace period (see [Auto-Purge](#auto-purge))
 - **Applicant Lifecycle**: Six statuses (active, on_hold, withdrawn, converted, rejected, inactive) with full audit trail
 - **Withdraw / Archive**: A coordinator, or since 2026-09-24 the applicant from their status page, can withdraw; withdrawn applications are kept and reactivatable
 - **Election Package Integration**: The server creates an election package whenever an applicant enters an election_vote stage, by any route (2026-09-30), bundling applicant data for the secretary to build a ballot; no package, no advance past the vote
@@ -216,7 +216,7 @@ Normal ──(warning threshold)──> Warning ──(timeout reached)──> I
 1. **Normal**: Applicant has recent activity within the timeout window
 2. **Warning**: Applicant's idle time has passed the warning threshold percentage (default 80%)
 3. **Inactive**: Applicant's idle time has exceeded the timeout — automatically deactivated
-4. **Purged**: _Designed, not wired._ The intent is that inactive applicants are permanently deleted after the purge period, but no scheduled task reads `auto_purge_enabled` — see [Auto-Purge](#auto-purge)
+4. **Purged**: With Auto-Purge on, an application inactive for at least the purge period is permanently deleted by the daily `membership_auto_purge` task — see [Auto-Purge](#auto-purge)
 
 ### Configuration
 
@@ -230,7 +230,7 @@ Pipeline-level inactivity settings are configured on the Pipeline Settings page:
 | Notify Coordinator        | true               | Send notification to coordinator when applicant approaches timeout |
 | Notify Applicant          | false              | Send notification to applicant when approaching timeout            |
 | Auto-Purge Enabled        | false              | Automatically purge inactive applicants after a period             |
-| Purge Days After Inactive | 365                | Days after deactivation before auto-purge                          |
+| Purge Days After Inactive | 365                | Days after deactivation before auto-purge (clamped to 30–1095)     |
 
 ### Per-Stage Overrides
 
@@ -274,12 +274,29 @@ Helper function: `getEffectiveTimeoutDays(config)` returns the computed timeout 
 
 ### Auto-Purge
 
-> **Not wired** _(recorded 2026-09-30)_. The settings page stores
-> `auto_purge_enabled` and `purge_days_after_inactive`, but no scheduled task
-> reads them, so nothing is purged automatically (CLAUDE.md pitfall #19).
-> Wiring it needs `deactivated_at` (stored since `77d4aa7798dd`) and a decision
-> on notifying coordinators first. See `docs/KNOWN_LIMITATIONS.md` → "Prospective
-> Members — Purge Is Manual; Auto-Purge Is Not Wired".
+**Auto-purge** _(wired 2026-10-09)_ — the daily `membership_auto_purge` task
+calls `MembershipPipelineService.auto_purge_inactive_prospects` per
+organization. For each pipeline whose `inactivity_config` has
+`auto_purge_enabled: true` (exactly `true`; anything else is off) and a numeric
+`purge_days_after_inactive` (clamped to 30–1095; missing or non-numeric skips
+the pipeline), it deletes the `inactive` applications whose `inactive_since` is
+at least that many days before now (UTC). The delete is the manual purge's own
+`_delete_inactive_prospects` — same status filter, row lock and file removal —
+run in a savepoint per pipeline, so a pipeline that fails is rolled back and
+reported without stopping the others. Each pipeline that purged anything writes
+a `membership_pipeline.prospects_purged` audit event with `trigger:
+"auto_purge"`, the threshold, the cut-off and the purged ids, in the same
+transaction as the delete. No email is sent beforehand (owner's decision).
+
+`inactive_since` is the purge clock, distinct from the historical
+`deactivated_at` the drawer shows: it is set on every entry into `inactive`
+(`_stamp_lifecycle` for single, bulk and generic-update status changes, and
+inline in the inactivity sweep) and cleared on every exit, including transfer.
+Migration `feecd81eef2d` set it to the migration's run time for applications
+already inactive, so nothing already inactive is purged until a full grace
+period after the upgrade. A NULL `inactive_since` is never purged. See
+`docs/KNOWN_LIMITATIONS.md` → "Prospective Members — Purge Scope and
+Auto-Purge".
 
 **Manual purge** — **Purge Selected** on the Inactive Applications tab →
 `POST /prospective-members/pipelines/{pipeline_id}/purge-inactive`
@@ -293,8 +310,6 @@ finish); writes an audit event with the count and the requested ids, no
 applicant details; and returns the number actually deleted. The store rethrows
 failures and the page toasts the server's count, saying when fewer were deleted
 than selected.
-
-The design intent for auto-purge, once wired:
 
 **Security rationale:**
 

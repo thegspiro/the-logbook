@@ -420,7 +420,8 @@ class StandingShiftService:
             .where(StandingShiftClaim.id == str(claim_id))
             .where(StandingShiftClaim.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        standing_shift_claim: Optional[StandingShiftClaim] = result.scalar_one_or_none()
+        return standing_shift_claim
 
     async def claim_covering_shift(
         self,

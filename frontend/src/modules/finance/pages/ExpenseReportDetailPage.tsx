@@ -17,6 +17,8 @@ import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
+import { ReceiptControl } from '../components/ReceiptControl';
+import { expenseReportService } from '../services/api';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
@@ -32,7 +34,6 @@ import {
   EXPENSE_TYPE_LABELS,
 } from '../types';
 import { ApprovalStepActions } from '../components/ApprovalStepActions';
-import { ExpenseReceiptControl } from '../components/ExpenseReceiptControl';
 
 const STATUS_LABELS: Record<string, string> = {
   draft: 'Draft',
@@ -138,7 +139,17 @@ const ExpenseReportDetailPage: React.FC = () => {
 
   // Submitting is the requester's action (or the finance office's).
   const canSubmit = er.status === ExpenseReportStatus.DRAFT && access.canActAsRequester(er.submittedBy);
-  const missingReceipts = er.lineItems.filter((item) => !item.hasReceipt).length;
+  // Every line needs an uploaded receipt before the report is submitted;
+  // the API refuses otherwise, and this says why beside the button.
+  const missingReceipts = er.lineItems.filter((item) => !item.receiptDocumentId).length;
+  // Mirrors _ER_RECEIPT_OPEN_TO_REQUESTER / _ER_RECEIPT_CLOSED in
+  // backend/app/api/v1/endpoints/finance.py: a requester changes receipts only
+  // while the report is editable; the finance office until it is closed out.
+  const canAttachReceipt =
+    access.canActAsRequester(er.submittedBy) &&
+    (access.canManage
+      ? er.status !== ExpenseReportStatus.DENIED && er.status !== ExpenseReportStatus.CANCELLED
+      : er.status === ExpenseReportStatus.DRAFT || er.status === ExpenseReportStatus.SUBMITTED);
 
   return (
     <div className="space-y-6">
@@ -269,13 +280,22 @@ const ExpenseReportDetailPage: React.FC = () => {
                     <td className="text-theme-text-secondary px-4 py-3 text-sm capitalize">
                       {item.expenseType ? (EXPENSE_TYPE_LABELS[item.expenseType] ?? item.expenseType) : '--'}
                     </td>
-                    <td className="px-4 py-3">
-                      <ExpenseReceiptControl
-                        reportId={er.id}
-                        item={item}
-                        editable={canSubmit}
-                        onChanged={() => void fetchExpenseReport(er.id)}
-                      />
+                    <td className="px-4 py-3 text-sm">
+                      {canAttachReceipt || item.receiptFileUrl || item.receiptUrl ? (
+                        <ReceiptControl
+                          subject={item.description}
+                          receiptFileUrl={item.receiptFileUrl}
+                          receiptUrl={item.receiptUrl}
+                          canAttach={canAttachReceipt}
+                          onUpload={async (file) => {
+                            await expenseReportService.uploadLineItemReceipt(er.id, item.id, file);
+                            await fetchExpenseReport(er.id);
+                          }}
+                          onDownload={() => expenseReportService.downloadLineItemReceipt(er.id, item.id)}
+                        />
+                      ) : (
+                        <span className="text-theme-text-muted">--</span>
+                      )}
                     </td>
                     <td className="text-theme-text-primary px-4 py-3 text-right text-sm">
                       {formatCurrency(item.amount)}

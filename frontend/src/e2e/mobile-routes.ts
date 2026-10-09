@@ -187,7 +187,8 @@ export const ALL_ROUTES: RouteCheck[] = [
     permissions: ['members.manage'],
     expectText: 'Waiver Management',
   },
-  // Both read the member through `/users/:id/with-roles`; the catch-all `{}` has
+  // The edit page reads the member through `/users/:id/with-roles`, the
+  // audit history through `/users/:id/roles`; the catch-all `{}` has
   // no id, so without the record these measure their load-error states.
   {
     path: '/members/admin/edit/1',

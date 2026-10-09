@@ -157,8 +157,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const signupWindow = useSignupWindow();
   const canManage = checkPermission('scheduling.manage');
   const {
-    apparatus: apparatusList,
-    loadApparatus,
+    shiftApparatus: apparatusList,
+    loadShiftApparatus,
     members: memberOptions,
     loadMembers,
     platoonsEnabled,
@@ -196,7 +196,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const [platoonRoster, setPlatoonRoster] = useState<PlatoonRosterEntry[]>([]);
 
   /** Extract HH:MM from an ISO datetime or time string in the user's local timezone. */
-  const toTimeValue = (v?: string): string => {
+  const toTimeValue = (v?: string | null): string => {
     if (!v) return '';
     // If it contains 'T', it's an ISO datetime — convert to local timezone
     if (v.includes('T')) {
@@ -448,8 +448,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
 
   // Load apparatus list when editing
   useEffect(() => {
-    if (isEditing) void loadApparatus();
-  }, [isEditing, loadApparatus]);
+    if (isEditing) void loadShiftApparatus();
+  }, [isEditing, loadShiftApparatus]);
 
   // Load active training programs once, when the assign form is first opened,
   // for the training-slot program dropdown.

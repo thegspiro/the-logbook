@@ -7,7 +7,7 @@ Request and response schemas for training-related endpoints.
 import re
 from datetime import date, datetime
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Sequence, Union
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -207,6 +207,23 @@ class TrainingCourseResponse(TrainingCourseBase, UTCResponseBase):
 # Training Record Schemas
 
 
+class TrainingAttachment(BaseModel):
+    """One file on a training record, as clients are allowed to see it.
+
+    The stored attachment also carries `file_path` — an absolute path on the
+    server's disk — and `uploaded_by`. Neither belongs in a response, so this
+    schema lists what does and a validator drops the rest. `index` is how a
+    client names an attachment on the download route; the stored records have
+    no id of their own.
+    """
+
+    index: Optional[int] = None
+    file_name: Optional[str] = None
+    file_type: Optional[str] = None
+    file_size: Optional[int] = None
+    uploaded_at: Optional[str] = None
+
+
 class TrainingRecordBase(BaseModel):
     """Base training record schema"""
 
@@ -233,7 +250,10 @@ class TrainingRecordBase(BaseModel):
     instructor: Optional[str] = Field(None, max_length=255)
     location: Optional[str] = Field(None, max_length=255)
     notes: Optional[str] = None
-    attachments: Optional[List[str]] = None
+    # Declared here so the field keeps its place in both schemas, and as wide
+    # as either subclass needs: a create takes file names, a response returns
+    # the stored attachment records. Each subclass narrows it to its own.
+    attachments: Optional[Sequence[Union[str, TrainingAttachment]]] = None
     rank_at_completion: Optional[str] = Field(None, max_length=100)
     station_at_completion: Optional[str] = Field(None, max_length=100)
 
@@ -253,6 +273,7 @@ class TrainingRecordCreate(TrainingRecordBase):
 
     user_id: UUID
     course_id: Optional[UUID] = None
+    attachments: Optional[List[str]] = None
 
 
 class TrainingRecordUpdate(BaseModel):
@@ -292,27 +313,10 @@ class TrainingRecordUpdate(BaseModel):
         return validate_enum_value(v, ModelTrainingStatus, "status")
 
 
-class TrainingAttachment(BaseModel):
-    """One file on a training record, as clients are allowed to see it.
-
-    The stored attachment also carries `file_path` — an absolute path on the
-    server's disk — and `uploaded_by`. Neither belongs in a response, so this
-    schema lists what does and a validator drops the rest. `index` is how a
-    client names an attachment on the download route; the stored records have
-    no id of their own.
-    """
-
-    index: Optional[int] = None
-    file_name: Optional[str] = None
-    file_type: Optional[str] = None
-    file_size: Optional[int] = None
-    uploaded_at: Optional[str] = None
-
-
 class TrainingRecordResponse(TrainingRecordBase, UTCResponseBase):
     """Schema for training record response"""
 
-    # Overrides the base's `List[str]`. The upload endpoint stores a dict per
+    # Narrows the base's field to the stored shape. The upload endpoint stores a dict per
     # attachment, so a record with one file made this endpoint fail response
     # validation and return a 500 — for the whole list, not just that record.
     attachments: Optional[List[TrainingAttachment]] = None
@@ -463,6 +467,8 @@ def requirement_config_warning(obj: object) -> Optional[str]:
     (to surface the warning to officers) and the create-time validator.
     """
     rtype = getattr(obj, "requirement_type", None)
+    if rtype is None:
+        return None
     spec = _REQUIREMENT_QUANTITY_FIELDS.get(rtype)
     if not spec:
         return None
@@ -494,7 +500,10 @@ _SINGLE_TOPIC_REGISTRY_CODES = {
 def _unscoped_topic_warning(obj: object, rtype: object) -> Optional[str]:
     if rtype != RequirementType.HOURS:
         return None
-    topic = _SINGLE_TOPIC_REGISTRY_CODES.get(getattr(obj, "registry_code", None))
+    registry_code = getattr(obj, "registry_code", None)
+    if registry_code is None:
+        return None
+    topic = _SINGLE_TOPIC_REGISTRY_CODES.get(registry_code)
     if topic is None:
         return None
     # Either filter narrows what counts (hours_record_counts), so a requirement

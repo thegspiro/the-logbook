@@ -106,7 +106,7 @@ export interface ShiftRecord {
   organization_id: string;
   shift_date: string;
   start_time: string;
-  end_time?: string;
+  end_time?: string | null;
   apparatus_id?: string;
   apparatus_name?: string;
   apparatus_unit_number?: string;
@@ -456,6 +456,11 @@ export interface ApparatusOption {
   source: 'apparatus' | 'basic' | 'default';
   positions?: PositionSlot[];
   min_staffing?: number;
+}
+
+/** An apparatus option a shift can actually be put on: a real vehicle, not a type placeholder. */
+export interface ShiftApparatusOption extends ApparatusOption {
+  id: string;
 }
 
 export interface ApparatusOptionsResponse {

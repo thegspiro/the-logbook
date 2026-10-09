@@ -50,6 +50,13 @@ function makeStepProgressAt(
 /** Helper to build a minimal BackendProspectResponse */
 function makeProspectResponse(stepProgress: BackendStepProgressResponse[]): BackendProspectResponse {
   return {
+    target_role_id: null,
+    target_role_name: null,
+    deactivated_at: null,
+    deactivated_reason: null,
+    reactivated_at: null,
+    withdrawn_at: null,
+    withdrawal_reason: null,
     id: 'prospect-1',
     organization_id: 'org-1',
     pipeline_id: 'pipeline-1',

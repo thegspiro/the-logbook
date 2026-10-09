@@ -480,7 +480,10 @@ class ExternalTrainingSyncService:
             sync_log.sync_from_date = from_date
             sync_log.sync_to_date = to_date
 
-            # Fetch records from external provider
+            # Fetch records from external provider. Every sync type the
+            # callers send fills in from_date above; an unknown one does not.
+            if from_date is None:
+                raise ValueError(f"Sync type {sync_type!r} needs an explicit from_date")
             records = await self._fetch_external_records(provider, from_date, to_date)
             sync_log.records_fetched = len(records)
 
@@ -617,7 +620,7 @@ class ExternalTrainingSyncService:
             .order_by(ExternalTrainingSyncLog.started_at.desc())
             .limit(1)
         )
-        started_at = result.scalar_one_or_none()
+        started_at: Optional[datetime] = result.scalar_one_or_none()
         if started_at is not None and started_at.tzinfo is None:
             # MySQL hands DateTime(timezone=True) back naive; it is stored UTC.
             started_at = started_at.replace(tzinfo=timezone.utc)
@@ -651,7 +654,7 @@ class ExternalTrainingSyncService:
     def _get_vector_site_id(self, provider: ExternalTrainingProvider) -> str:
         """Get the Vector Solutions site_id from provider config"""
         config = provider.config or {}
-        site_id = config.get("site_id")
+        site_id: Optional[str] = config.get("site_id")
         if not site_id:
             raise ValueError(
                 "Vector Solutions site_id is required. "
@@ -1746,7 +1749,7 @@ class ExternalTrainingSyncService:
             .where(ExternalUserMapping.provider_id == provider.id)
             .where(ExternalUserMapping.external_user_id == external_user_id)
         )
-        mapping = result.scalar_one_or_none()
+        mapping: Optional[ExternalUserMapping] = result.scalar_one_or_none()
         email = self._normalize_email(record_data.get("external_email"))
 
         if mapping:
@@ -1879,7 +1882,7 @@ class ExternalTrainingSyncService:
             .where(ExternalCategoryMapping.provider_id == provider.id)
             .where(ExternalCategoryMapping.external_category_id == external_category_id)
         )
-        mapping = result.scalar_one_or_none()
+        mapping: Optional[ExternalCategoryMapping] = result.scalar_one_or_none()
 
         if mapping:
             return mapping

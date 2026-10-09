@@ -5,13 +5,11 @@ Handles fiscal years, budgets, purchase requests, expense reports,
 check requests, dues, approval chains, and QuickBooks export.
 """
 
-import asyncio
-import os
 from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -27,6 +25,7 @@ from app.models.finance import (
     ApprovalEntityType,
     ExpenseReportStatus,
     FiscalYearStatus,
+    PurchaseRequestStatus,
 )
 from app.models.user import User
 from app.schemas.finance import (
@@ -102,8 +101,8 @@ from app.schemas.finance import (
     StartFromLastYearResponse,
     UnroutedApprovalResponse,
 )
-from app.services import file_storage_service as file_storage
-from app.services.file_storage_service import FileRules, StorageArea
+from app.services import module_documents
+from app.services.documents_service import DocumentsService
 from app.services.finance_approver_matching import ApproverMismatchError
 from app.services.finance_budget_ownership import (
     user_owns_any_budget,
@@ -128,6 +127,7 @@ from app.services.finance_service import (
     ManualApprovalConflictError,
 )
 from app.utils import download_names
+from app.utils.org_timezone import resolve_scheduling_timezone
 
 router = APIRouter()
 
@@ -358,7 +358,8 @@ async def adopt_fiscal_year(
             severity="info",
             event_data={
                 "fiscal_year_id": fy_id,
-                "adopted_on": fy.adopted_on.isoformat(),
+                # Always set by adopt_fiscal_year; the guard is for the type.
+                "adopted_on": fy.adopted_on.isoformat() if fy.adopted_on else None,
                 "adoption_reference": fy.adoption_reference,
             },
             user_id=str(current_user.id),
@@ -2503,196 +2504,6 @@ async def add_expense_line_item(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
-# Receipts for expense lines: a photo or a scan.
-EXPENSE_RECEIPT_RULES = FileRules(
-    allowed_types={
-        "application/pdf": ".pdf",
-        "image/jpeg": ".jpg",
-        "image/png": ".png",
-    },
-    max_bytes=10 * 1024 * 1024,
-    description="PDF, JPG, or PNG",
-)
-
-
-def _receipt_error(e: Exception) -> HTTPException:
-    if isinstance(e, HTTPException):
-        return e
-    if isinstance(e, FinanceEntityNotFoundError):
-        return HTTPException(status_code=404, detail=str(e))
-    if isinstance(e, ValueError):
-        return HTTPException(status_code=400, detail=safe_error_detail(e))
-    return HTTPException(status_code=500, detail=safe_error_detail(e))
-
-
-def _confined_receipt(path: Optional[str], org_id: str) -> Optional[str]:
-    """The stored receipt's real path, only inside the org's receipts area."""
-    return file_storage.resolve(path, org_id, StorageArea.FINANCE_RECEIPTS)
-
-
-@router.put(
-    "/expense-reports/{er_id}/items/{item_id}/receipt",
-    response_model=ExpenseLineItemResponse,
-)
-async def upload_expense_receipt(
-    er_id: str,
-    item_id: str,
-    file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("finance.request", "finance.manage")
-    ),
-):
-    """Attach a receipt to a draft expense line, replacing any it had.
-
-    **Requires permission: finance.request or finance.manage**
-
-    Without the manage grant, only on the caller's own report. PDF, JPG or
-    PNG up to 10 MB, malware-scanned. Every line needs one before the report
-    can be submitted; once submitted, receipts no longer change.
-    """
-    service = FinanceService(db)
-    org_id = str(current_user.organization_id)
-    requester = _requester_scope(current_user)
-    try:
-        er, _ = await service.require_receipt_editable(
-            er_id, item_id, org_id, requester
-        )
-        stored = await file_storage.FileStorageService(db).store_upload(
-            file,
-            organization_id=org_id,
-            area=StorageArea.FINANCE_RECEIPTS,
-            rules=EXPENSE_RECEIPT_RULES,
-            user=current_user,
-            record_id=str(er.id),
-            upload_kind="expense_receipt",
-        )
-    except Exception as e:
-        raise _receipt_error(e)
-    try:
-        item, previous = await service.attach_line_item_receipt(
-            er_id,
-            item_id,
-            org_id,
-            requester,
-            file_path=stored.path,
-            file_name=stored.original_name,
-            content_type=stored.mime_type,
-            file_size=stored.size,
-            uploaded_by=str(current_user.id),
-        )
-        await log_audit_event(
-            db=db,
-            event_type="finance.expense_receipt_attached",
-            event_category="finance",
-            severity="info",
-            event_data={
-                "expense_report_id": er_id,
-                "line_item_id": item_id,
-                "sha256": stored.sha256,
-                "replaced": previous is not None,
-            },
-            user_id=str(current_user.id),
-            username=current_user.username,
-            organization_id=org_id,
-        )
-        await db.commit()
-    except Exception as e:
-        await db.rollback()
-        await asyncio.to_thread(file_storage.remove_quietly, stored.path)
-        raise _receipt_error(e)
-    await asyncio.to_thread(
-        file_storage.remove_quietly, _confined_receipt(previous, org_id)
-    )
-    return item
-
-
-@router.delete("/expense-reports/{er_id}/items/{item_id}/receipt", status_code=204)
-async def delete_expense_receipt(
-    er_id: str,
-    item_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("finance.request", "finance.manage")
-    ),
-):
-    """Remove a draft expense line's receipt.
-
-    **Requires permission: finance.request or finance.manage**
-
-    Without the manage grant, only on the caller's own report, and only while
-    it is a draft.
-    """
-    service = FinanceService(db)
-    org_id = str(current_user.organization_id)
-    try:
-        previous = await service.remove_line_item_receipt(
-            er_id, item_id, org_id, _requester_scope(current_user)
-        )
-        await log_audit_event(
-            db=db,
-            event_type="finance.expense_receipt_removed",
-            event_category="finance",
-            severity="info",
-            event_data={"expense_report_id": er_id, "line_item_id": item_id},
-            user_id=str(current_user.id),
-            username=current_user.username,
-            organization_id=org_id,
-        )
-        await db.commit()
-    except Exception as e:
-        raise _receipt_error(e)
-    await asyncio.to_thread(
-        file_storage.remove_quietly, _confined_receipt(previous, org_id)
-    )
-
-
-@router.get("/expense-reports/{er_id}/items/{item_id}/receipt")
-async def download_expense_receipt(
-    er_id: str,
-    item_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission(
-            "finance.request", "finance.view", "finance.manage", "finance.approve"
-        )
-    ),
-):
-    """Download an expense line's receipt.
-
-    **Requires permission: finance.request, finance.view, finance.manage or finance.approve**
-
-    Read by the report's submitter, a finance manager, or one of its
-    approvers; anyone else gets a 404.
-    """
-    service = FinanceService(db)
-    org_id = str(current_user.organization_id)
-    er = await _readable_expense_report(service, er_id, current_user)
-    item = next((i for i in er.line_items if str(i.id) == str(item_id)), None)
-    real_path = _confined_receipt(item.receipt_file_path if item else None, org_id)
-    if (
-        item is None
-        or not real_path
-        or not await asyncio.to_thread(os.path.isfile, real_path)
-    ):
-        raise HTTPException(status_code=404, detail="Receipt not found")
-    # The date incurred is entered as a calendar day and stored as that day's
-    # midnight UTC, so its UTC date is the day the member chose; converting
-    # to the department's timezone would move it to the day before.
-    filename = download_names.descriptive_filename(
-        er.report_number,
-        item.date_incurred.date() if item.date_incurred else None,
-        item.description,
-        extension=download_names.stored_extension(real_path),
-        fallback=download_names.original_stem(item.receipt_file_name) or "receipt",
-    )
-    return FileResponse(
-        real_path,
-        media_type=item.receipt_content_type or "application/octet-stream",
-        filename=filename,
-    )
-
-
 @router.post(
     "/expense-reports/{er_id}/submit",
     response_model=ExpenseReportResponse,
@@ -3405,3 +3216,256 @@ async def get_dashboard(
         return await service.get_dashboard(str(current_user.organization_id))
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+# ============================================
+# Receipts
+# ============================================
+# An uploaded receipt is a Document under Finance > Receipts
+# (docs/FILE_STORAGE_HARDENING.md decision 13). The finance record's own rules
+# decide who attaches and who opens it: the member who raised the request, or
+# a finance officer. The Finance folder itself opens only to finance rights,
+# so the member reaches their own receipt here and not by browsing Documents.
+#
+# Replacing a receipt links the new file and leaves the old one in the folder:
+# a receipt is evidence for an approval, and swapping it should not erase what
+# was there when the approver looked.
+
+# A requester may still attach while the purchase has not been settled; a
+# finance manager may until the request is closed out.
+_PR_RECEIPT_CLOSED = {PurchaseRequestStatus.DENIED, PurchaseRequestStatus.CANCELLED}
+_PR_RECEIPT_CLOSED_TO_REQUESTER = _PR_RECEIPT_CLOSED | {PurchaseRequestStatus.PAID}
+# Line-item receipts are the evidence an approver reviews, so a requester may
+# change them only while the report itself is still editable.
+_ER_RECEIPT_CLOSED = {ExpenseReportStatus.DENIED, ExpenseReportStatus.CANCELLED}
+_ER_RECEIPT_OPEN_TO_REQUESTER = {
+    ExpenseReportStatus.DRAFT,
+    ExpenseReportStatus.SUBMITTED,
+}
+
+
+async def _store_receipt(
+    db: AsyncSession, file: UploadFile, user: User, name: str, source_id: str
+):
+    folder = await DocumentsService(db).ensure_finance_receipts_folder(
+        user.organization_id
+    )
+    return await module_documents.store_as_document(
+        db,
+        file,
+        user=user,
+        folder=folder,
+        name=name,
+        rules=module_documents.RECEIPT_FILE_RULES,
+        upload_kind="finance_receipt",
+        source_type="finance_receipt",
+        source_id=source_id,
+    )
+
+
+async def _audit_receipt(db: AsyncSession, user: User, record: str, document, previous):
+    await log_audit_event(
+        db=db,
+        event_type="finance.receipt_attached",
+        event_category="finance",
+        severity="info",
+        event_data={
+            "record": record,
+            "document_id": str(document.id),
+            "replaced_document_id": previous,
+            "file_type": document.file_type,
+            "file_size": document.file_size,
+        },
+        user_id=str(user.id),
+        username=user.username,
+    )
+
+
+@router.post(
+    "/purchase-requests/{pr_id}/receipt", response_model=PurchaseRequestResponse
+)
+async def upload_purchase_request_receipt(
+    pr_id: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
+):
+    """Attach a receipt (PDF or image) to a purchase request.
+
+    **Requires permission: finance.request or finance.manage**
+
+    Without the manage grant, only to the caller's own request, and not once
+    it is paid.
+    """
+    service = FinanceService(db)
+    org_id = str(current_user.organization_id)
+    requester = _requester_scope(current_user)
+    pr = await service.get_purchase_request(
+        pr_id, org_id, for_update=True, restrict_to_user=requester
+    )
+    if not pr:
+        raise HTTPException(status_code=404, detail="Purchase request not found")
+    closed = _PR_RECEIPT_CLOSED_TO_REQUESTER if requester else _PR_RECEIPT_CLOSED
+    if pr.status in closed:
+        raise HTTPException(
+            status_code=400,
+            detail="A receipt can't be attached to a request in this status",
+        )
+
+    document = await _store_receipt(
+        db, file, current_user, f"Receipt {pr.request_number}", str(pr.id)
+    )
+    previous = pr.receipt_document_id
+    try:
+        pr.receipt_document_id = str(document.id)
+        await db.flush()
+        await db.refresh(pr, ["updated_at"])
+        await _audit_receipt(db, current_user, pr.request_number, document, previous)
+    except Exception:
+        await module_documents.discard_file(document)
+        raise
+    return await _with_approval_steps(
+        service,
+        PurchaseRequestResponse.model_validate(pr),
+        ApprovalEntityType.PURCHASE_REQUEST,
+        pr.id,
+        org_id,
+        current_user,
+    )
+
+
+@router.get("/purchase-requests/{pr_id}/receipt")
+async def download_purchase_request_receipt(
+    pr_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.view", "finance.manage")
+    ),
+):
+    """The receipt uploaded to a purchase request.
+
+    **Requires permission: finance.request, finance.view or finance.manage**
+
+    Readable by whoever may read the request itself.
+    """
+    org_id = str(current_user.organization_id)
+    pr = await FinanceService(db).get_purchase_request(
+        pr_id, org_id, restrict_to_user=_read_scope(current_user)
+    )
+    if not pr or not pr.receipt_document_id:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    tz = await resolve_scheduling_timezone(db, org_id)
+    return await module_documents.serve_document(
+        db,
+        pr.receipt_document_id,
+        current_user,
+        name_parts=(pr.request_number, pr.vendor, "Receipt"),
+        fallback="receipt",
+        day=download_names.local_day(pr.created_at, tz),
+        folder_rights=False,
+    )
+
+
+async def _expense_line_item(er, item_id: str):
+    item = next((i for i in er.line_items if str(i.id) == str(item_id)), None)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Expense line item not found")
+    return item
+
+
+@router.post(
+    "/expense-reports/{er_id}/items/{item_id}/receipt",
+    response_model=ExpenseLineItemResponse,
+)
+async def upload_expense_line_item_receipt(
+    er_id: str,
+    item_id: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
+):
+    """Attach a receipt (PDF or image) to an expense line item.
+
+    **Requires permission: finance.request or finance.manage**
+
+    Without the manage grant, only on the caller's own report, while it is a
+    draft or just submitted.
+    """
+    org_id = str(current_user.organization_id)
+    requester = _requester_scope(current_user)
+    er = await FinanceService(db).get_expense_report(
+        er_id, org_id, restrict_to_user=requester, for_update=True
+    )
+    if not er:
+        raise HTTPException(status_code=404, detail="Expense report not found")
+    if (
+        er.status not in _ER_RECEIPT_OPEN_TO_REQUESTER
+        if requester
+        else er.status in _ER_RECEIPT_CLOSED
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="A receipt can't be attached to a report in this status",
+        )
+    # A closing year takes nothing new from members; the finance office may
+    # still file the evidence for what it is settling. A locked year takes
+    # nothing at all.
+    try:
+        await FinanceService(db).require_year_accepts(
+            er.fiscal_year_id, org_id, action="new" if requester else "finish"
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    item = await _expense_line_item(er, item_id)
+
+    document = await _store_receipt(
+        db, file, current_user, f"Receipt {er.report_number}", str(item.id)
+    )
+    previous = item.receipt_document_id
+    try:
+        item.receipt_document_id = str(document.id)
+        await db.flush()
+        await _audit_receipt(db, current_user, er.report_number, document, previous)
+    except Exception:
+        await module_documents.discard_file(document)
+        raise
+    return ExpenseLineItemResponse.model_validate(item)
+
+
+@router.get("/expense-reports/{er_id}/items/{item_id}/receipt")
+async def download_expense_line_item_receipt(
+    er_id: str,
+    item_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "finance.request", "finance.view", "finance.manage", "finance.approve"
+        )
+    ),
+):
+    """The receipt uploaded to an expense line item.
+
+    **Requires permission: finance.request, finance.view, finance.manage or finance.approve**
+
+    Readable by whoever may read the report itself: its submitter, a finance
+    manager, or one of its approvers.
+    """
+    org_id = str(current_user.organization_id)
+    er = await _readable_expense_report(FinanceService(db), er_id, current_user)
+    item = await _expense_line_item(er, item_id)
+    if not item.receipt_document_id:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    tz = await resolve_scheduling_timezone(db, org_id)
+    return await module_documents.serve_document(
+        db,
+        item.receipt_document_id,
+        current_user,
+        name_parts=(er.report_number, item.merchant or item.description, "Receipt"),
+        fallback="receipt",
+        day=download_names.local_day(item.date_incurred, tz),
+        folder_rights=False,
+    )

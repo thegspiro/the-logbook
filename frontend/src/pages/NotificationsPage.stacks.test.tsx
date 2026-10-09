@@ -15,6 +15,7 @@ import { MemoryRouter } from 'react-router';
 import { ConfirmProvider } from '../contexts/ConfirmContext';
 import NotificationsPage from './NotificationsPage';
 import { notificationsService } from '../services/api';
+import type { NotificationLogRecord } from '../services/api';
 
 const { decrementBy, decrement } = vi.hoisted(() => ({ decrementBy: vi.fn(), decrement: vi.fn() }));
 
@@ -41,7 +42,12 @@ vi.mock('../hooks/useNotificationCount', () => ({
     selector({ unreadCount: 9, decrement, decrementBy, clear: vi.fn() }),
 }));
 
-const row = (id: string, category: string | undefined, subject: string, overrides: Record<string, unknown> = {}) => ({
+const row = (
+  id: string,
+  category: string,
+  subject: string,
+  overrides: Partial<NotificationLogRecord> = {}
+): NotificationLogRecord => ({
   id,
   organization_id: 'org-1',
   channel: 'in_app',

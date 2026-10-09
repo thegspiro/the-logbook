@@ -55,7 +55,7 @@ async def _get_skill(db: AsyncSession, skill_id: UUID, org_id: str) -> SkillEval
         .where(SkillEvaluation.id == str(skill_id))
         .where(SkillEvaluation.organization_id == str(org_id))
     )
-    skill = result.scalar_one_or_none()
+    skill: SkillEvaluation | None = result.scalar_one_or_none()
     if not skill:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Skill evaluation not found"

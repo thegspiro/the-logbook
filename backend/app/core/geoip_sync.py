@@ -15,6 +15,7 @@ inside the functions to avoid an import cycle (the service publishes invalidatio
 import asyncio
 
 from loguru import logger
+from redis.asyncio.client import PubSub
 
 from app.core.cache import cache_manager
 
@@ -34,7 +35,7 @@ class GeoIPInvalidationListener:
     """Per-worker subscriber that refreshes blocked countries on invalidation."""
 
     def __init__(self) -> None:
-        self._pubsub = None
+        self._pubsub: PubSub | None = None
         self._task: asyncio.Task | None = None
 
     async def start(self) -> None:
@@ -44,8 +45,9 @@ class GeoIPInvalidationListener:
                 "country-block changes will propagate to this worker on restart."
             )
             return
-        self._pubsub = cache_manager.redis_client.pubsub()
-        await self._pubsub.subscribe(GEOIP_INVALIDATION_CHANNEL)
+        pubsub = cache_manager.redis_client.pubsub()
+        self._pubsub = pubsub
+        await pubsub.subscribe(GEOIP_INVALIDATION_CHANNEL)
         self._task = asyncio.create_task(self._listen())
         logger.info("✓ GeoIP invalidation listener started")
 
@@ -58,9 +60,12 @@ class GeoIPInvalidationListener:
         logger.info("Refreshed blocked countries from DB (invalidation received)")
 
     async def _listen(self) -> None:
+        pubsub = self._pubsub
+        if pubsub is None:
+            raise RuntimeError("GeoIP listener started before subscribing")
         while True:
             try:
-                message = await self._pubsub.get_message(
+                message = await pubsub.get_message(
                     ignore_subscribe_messages=True, timeout=5.0
                 )
                 if message is None:

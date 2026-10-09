@@ -26,6 +26,7 @@ import {
   toDateKey,
   weekDates,
 } from './shiftBoard';
+import { withoutKeys } from '../../../test/withoutKeys';
 
 const ME = 'me-1';
 
@@ -138,7 +139,7 @@ describe('shiftStatusInfo', () => {
 
   it('trusts the server tally when the roster is missing', () => {
     // Responses served before the roster field existed still carry a count.
-    const info = shiftStatusInfo(shift({ roster: undefined, attendee_count: 4 }), ME);
+    const info = shiftStatusInfo(withoutKeys(shift({ attendee_count: 4 }), 'roster'), ME);
     expect(info.filled).toBe(4);
     expect(info.status).toBe(ShiftStatus.FULL);
   });
@@ -501,7 +502,7 @@ describe('memberSignupClosedReason', () => {
   });
 
   it('closes early when the department set a lead time', () => {
-    const window = { closesMinutesBefore: 30, graceMinutes: 60 };
+    const window = { ...DEFAULT_SIGNUP_WINDOW, closesMinutesBefore: 30, graceMinutes: 60 };
     expect(memberSignupClosedReason(at(31), window)).toBeNull();
     expect(memberSignupClosedReason(at(29), window)).toBe('Signup for this shift has closed.');
   });
@@ -594,12 +595,12 @@ describe('signupClosedReason by actor', () => {
   });
 
   it('never bounds a scheduling admin', () => {
-    const window = { closesMinutesBefore: 10080, graceMinutes: 0 };
+    const window = { ...DEFAULT_SIGNUP_WINDOW, closesMinutesBefore: 10080, graceMinutes: 0 };
     expect(signupClosedReason(at(-100_000), window, ADMIN)).toBeNull();
   });
 
   it('does not apply the member lead time to an officer', () => {
-    const window = { closesMinutesBefore: 10080, graceMinutes: 60 };
+    const window = { ...DEFAULT_SIGNUP_WINDOW, closesMinutesBefore: 10080, graceMinutes: 60 };
     expect(signupClosedReason(at(60), window, MEMBER)).not.toBeNull();
     expect(signupClosedReason(at(60), window, OFFICER)).toBeNull();
   });
@@ -689,7 +690,7 @@ describe('rosterLocked', () => {
   });
 
   it('locks once the grace period past the end has run out', () => {
-    const window90 = { closesMinutesBefore: 0, graceMinutes: 60 };
+    const window90 = { ...DEFAULT_SIGNUP_WINDOW, closesMinutesBefore: 0, graceMinutes: 60 };
     expect(rosterLocked(window(-12 * 60 - 90, -90), window90, OFFICER)).toBe(true);
     expect(rosterLocked(window(-12 * 60 - 30, -30), window90, OFFICER)).toBe(false);
   });
@@ -713,7 +714,7 @@ describe('rosterLocked', () => {
     // be seated on a shift months gone. The server now stands the start in plus
     // a cushion; leaving this permissive kept Reopen on screen for exactly the
     // shifts the API had begun refusing.
-    const openEnded = { ...ran, end_time: undefined };
+    const openEnded = withoutKeys(ran, 'end_time');
     expect(rosterLocked(openEnded, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(true);
     expect(rosterLocked(openEnded, DEFAULT_SIGNUP_WINDOW, MEMBER)).toBe(true);
   });
@@ -721,11 +722,10 @@ describe('rosterLocked', () => {
   it('leaves an open-ended shift alone while it is still inside the cushion', () => {
     // The half the cushion exists for: a crew still out, with nobody having
     // recorded an end time, must keep its own roster.
-    const running = {
-      ...ran,
-      end_time: undefined,
-      start_time: new Date(Date.now() - 8 * 60 * 60_000).toISOString(),
-    };
+    const running = withoutKeys(
+      { ...ran, start_time: new Date(Date.now() - 8 * 60 * 60_000).toISOString() },
+      'end_time'
+    );
     expect(rosterLocked(running, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
     expect(rosterLocked(running, DEFAULT_SIGNUP_WINDOW, MEMBER)).toBe(false);
   });
@@ -733,11 +733,10 @@ describe('rosterLocked', () => {
   it('follows the department cushion the server resolved', () => {
     // A department that widened check-in to 72 hours gets a roster window that
     // agrees with it, rather than a second number hardcoded here.
-    const openEnded = {
-      ...ran,
-      end_time: undefined,
-      start_time: new Date(Date.now() - 20 * 60 * 60_000).toISOString(),
-    };
+    const openEnded = withoutKeys(
+      { ...ran, start_time: new Date(Date.now() - 20 * 60 * 60_000).toISOString() },
+      'end_time'
+    );
     expect(rosterLocked(openEnded, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(true);
     expect(rosterLocked(openEnded, { ...DEFAULT_SIGNUP_WINDOW, openEndedCushionHours: 72 }, OFFICER)).toBe(false);
   });
@@ -813,6 +812,7 @@ describe('a stale late-signup window', () => {
     // twelve-hour floor the deadline has long passed and the claim action
     // disappears, though the server still accepts it. The unresolved window
     // uses the ceiling for exactly this reason.
+    // The API sends an explicit null for an open-ended shift.
     const openEnded = shift({
       shift_date: toDateKey(new Date(Date.now() - 20 * 60 * 60_000)),
       start_time: new Date(Date.now() - 20 * 60 * 60_000).toISOString(),
@@ -852,7 +852,7 @@ describe('a stale late-signup window', () => {
   });
 
   it('caps an open-ended shift against its cushion too', () => {
-    const openEnded = longPast({ end_time: undefined, late_signup_until: live });
+    const openEnded = withoutKeys(longPast({ late_signup_until: live }), 'end_time');
     expect(memberSignupClosedReason(openEnded)).not.toBeNull();
   });
 });

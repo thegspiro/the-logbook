@@ -8,11 +8,12 @@ pipeline stages, etc.).
 """
 
 import enum
+from datetime import date, datetime
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import (
     JSON,
     Boolean,
-    Column,
     Date,
     DateTime,
     Enum,
@@ -22,12 +23,16 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.encrypted_types import EncryptedJSON, EncryptedText
 from app.core.utils import generate_uuid
+
+if TYPE_CHECKING:
+    from app.models.membership_pipeline import ProspectiveMember
+    from app.models.user import User
 
 # --- Enums ---
 
@@ -69,14 +74,14 @@ class ScreeningRequirement(Base):
 
     __tablename__ = "screening_requirements"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    name = Column(String(255), nullable=False)
-    screening_type = Column(
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    screening_type: Mapped[ScreeningType] = mapped_column(
         Enum(
             ScreeningType,
             name="screening_type_enum",
@@ -84,27 +89,31 @@ class ScreeningRequirement(Base):
         ),
         nullable=False,
     )
-    description = Column(Text, nullable=True)
-    frequency_months = Column(
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    frequency_months: Mapped[Optional[int]] = mapped_column(
         Integer,
         nullable=True,
         comment="Recurrence in months (e.g. 12 for annual). NULL = one-time.",
     )
-    applies_to_roles = Column(
+    applies_to_roles: Mapped[Optional[list[str]]] = mapped_column(
         JSON,
         nullable=True,
         comment="JSON list of role names this requirement applies to.",
     )
-    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
-    grace_period_days = Column(
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
+    grace_period_days: Mapped[int] = mapped_column(
         Integer,
         default=30,
         nullable=False,
         comment="Days past due before flagging non-compliant.",
         server_default="30",
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
@@ -117,7 +126,7 @@ class ScreeningRequirement(Base):
     # passive_deletes=True leaves unloaded records to that SET NULL instead
     # of loading the whole collection just to null it; any already loaded
     # are nulled by the ORM, the same outcome.
-    records = relationship(
+    records: Mapped[list["ScreeningRecord"]] = relationship(
         "ScreeningRecord",
         back_populates="requirement",
         passive_deletes=True,
@@ -138,30 +147,30 @@ class ScreeningRecord(Base):
 
     __tablename__ = "screening_records"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    requirement_id = Column(
+    requirement_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("screening_requirements.id", ondelete="SET NULL"),
         nullable=True,
     )
-    user_id = Column(
+    user_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=True,
         comment="For active members. NULL if this is for a prospect.",
     )
-    prospect_id = Column(
+    prospect_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("prospective_members.id", ondelete="CASCADE"),
         nullable=True,
         comment="For prospective members. NULL if this is for an active member.",
     )
-    screening_type = Column(
+    screening_type: Mapped[ScreeningType] = mapped_column(
         Enum(
             ScreeningType,
             name="screening_type_enum",
@@ -169,7 +178,7 @@ class ScreeningRecord(Base):
         ),
         nullable=False,
     )
-    status = Column(
+    status: Mapped[ScreeningStatus] = mapped_column(
         Enum(
             ScreeningStatus,
             name="screening_status_enum",
@@ -179,50 +188,60 @@ class ScreeningRecord(Base):
         default=ScreeningStatus.SCHEDULED,
         server_default="scheduled",
     )
-    scheduled_date = Column(Date, nullable=True)
-    completed_date = Column(Date, nullable=True)
-    expiration_date = Column(Date, nullable=True)
+    scheduled_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    completed_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    expiration_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     # PHI (MS-1): provider identity, free-text summaries, structured results and
     # reviewer notes are protected health information — stored encrypted at rest
     # via the transparent EncryptedText/EncryptedJSON column types. Legacy
     # plaintext rows continue to read cleanly during the migration window.
-    provider_name = Column(EncryptedText, nullable=True)
-    result_summary = Column(EncryptedText, nullable=True)
-    result_data = Column(
+    provider_name: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    result_summary: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    result_data: Mapped[Optional[dict[str, Any]]] = mapped_column(
         EncryptedJSON,
         nullable=True,
         comment="Structured results (scores, measurements, etc.). Encrypted at rest (MS-1).",
     )
-    reviewed_by = Column(
+    reviewed_by: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # MS-7 (owner decision 2026-10-05): a medical_screening.manage holder may
     # record their own screening — in a small department they are often the
     # only person who can — but the result is marked rather than trusted
     # silently. True when the record's status was last set by the member it is
     # about: on create, or by an update that supplies a status. Compliance
     # still counts it; the compliance views show it as self-recorded.
-    self_recorded = Column(
+    self_recorded: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
         default=False,
         server_default="0",
         comment="Status last set by the record's own subject (MS-7).",
     )
-    notes = Column(EncryptedText, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    notes: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    requirement = relationship("ScreeningRequirement", back_populates="records")
-    user = relationship("User", foreign_keys=[user_id])
-    prospect = relationship("ProspectiveMember", foreign_keys=[prospect_id])
-    reviewer = relationship("User", foreign_keys=[reviewed_by])
+    requirement: Mapped[Optional["ScreeningRequirement"]] = relationship(
+        "ScreeningRequirement", back_populates="records"
+    )
+    user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[user_id])
+    prospect: Mapped[Optional["ProspectiveMember"]] = relationship(
+        "ProspectiveMember", foreign_keys=[prospect_id]
+    )
+    reviewer: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[reviewed_by]
+    )
 
     __table_args__ = (
         Index("idx_screening_rec_user", "user_id"),

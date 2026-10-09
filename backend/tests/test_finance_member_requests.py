@@ -278,7 +278,7 @@ class TestAMemberRaisesTheirOwnRequests:
             item_ids = [line["id"] for line in er["lineItems"]] + [resp.json()["id"]]
 
             for item_id in item_ids:
-                resp = await alice.put(
+                resp = await alice.post(
                     f"/finance/expense-reports/{er['id']}/items/{item_id}/receipt",
                     files={"file": ("receipt.pdf", RECEIPT_PDF, "application/pdf")},
                 )

@@ -23,7 +23,7 @@ import { applicantService } from './api';
 type ConvertData = Parameters<typeof applicantService.convertToMember>[1];
 
 const base: ConvertData = {
-  target_membership_type: 'probationary',
+  target_membership_type: 'regular',
   member_class: 'operational',
   member_status: 'probationary',
   send_welcome_email: false,

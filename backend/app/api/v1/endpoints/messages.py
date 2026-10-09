@@ -6,6 +6,7 @@ communications. Visible on member dashboards.
 """
 
 from datetime import datetime
+from typing import NoReturn
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -23,7 +24,7 @@ from app.services.messaging_service import MessagingService
 router = APIRouter()
 
 
-def _raise_message_error(error: str) -> None:
+def _raise_message_error(error: str) -> NoReturn:
     """Expose service validation failures as clear client errors."""
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
@@ -234,8 +235,8 @@ async def create_message(
         expires_at=data.expires_at,
         scheduled_at=data.scheduled_at,
     )
-    if error:
-        _raise_message_error(error)
+    if error or message is None:
+        _raise_message_error(error or "An unexpected error occurred")
     await log_audit_event(
         db=db,
         event_type="message_created",
@@ -355,8 +356,8 @@ async def update_message(
     message, error = await service.update_message(
         message_id, current_user.organization_id, updates
     )
-    if error:
-        _raise_message_error(error)
+    if error or message is None:
+        _raise_message_error(error or "An unexpected error occurred")
     if getattr(message, "_published_by_update", False):
         background_tasks.add_task(
             deliver_department_message, message.id, current_user.organization_id

@@ -91,7 +91,8 @@ class MemberAnonymizationService:
                 User.organization_id == organization_id,
             )
         )
-        return result.scalar_one_or_none()
+        user: User | None = result.scalar_one_or_none()
+        return user
 
     def _check_preconditions(self, user: User) -> None:
         if user.anonymized_at is not None:

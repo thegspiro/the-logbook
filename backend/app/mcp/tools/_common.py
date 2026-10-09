@@ -106,7 +106,7 @@ async def require_member(
             User.deleted_at.is_(None),
         )
     )
-    user = result.scalar_one_or_none()
+    user: User | None = result.scalar_one_or_none()
     if user is None:
         raise ValueError("Member not found")
     return user

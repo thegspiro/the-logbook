@@ -815,7 +815,8 @@ export interface TrainingRequirementCreate {
   allows_external_credit?: boolean | undefined;
   /** May shift attendance satisfy it on the Shift Compliance report? Omitted on create, the type decides. */
   shift_credited?: boolean | undefined;
-  training_type?: TrainingType | undefined;
+  /** `null` means every training type counts. */
+  training_type?: TrainingType | null | undefined;
   required_hours?: number | null | undefined;
   required_courses?: string[] | undefined;
   required_shifts?: number | null | undefined;
@@ -865,7 +866,8 @@ export interface TrainingRequirementUpdate {
   allows_external_credit?: boolean | undefined;
   /** May shift attendance satisfy it on the Shift Compliance report? Omitted on create, the type decides. */
   shift_credited?: boolean | undefined;
-  training_type?: TrainingType | undefined;
+  /** `null` means every training type counts. */
+  training_type?: TrainingType | null | undefined;
   required_hours?: number | null | undefined;
   required_courses?: string[] | undefined;
   required_shifts?: number | null | undefined;

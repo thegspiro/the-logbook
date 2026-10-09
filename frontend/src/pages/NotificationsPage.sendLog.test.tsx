@@ -21,6 +21,7 @@ import { MemoryRouter } from 'react-router';
 import { ConfirmProvider } from '../contexts/ConfirmContext';
 import NotificationsPage from './NotificationsPage';
 import { notificationsService } from '../services/api';
+import type { NotificationLogPage } from '../services/adminServices';
 import { NotificationLogScope } from '../constants/enums';
 
 vi.mock('../services/api', () => ({
@@ -130,7 +131,7 @@ describe('NotificationsPage send log', () => {
     // synchronously, so the page renders while this request is still in
     // flight. Without a flag of its own the tab announced "No Notifications
     // Found" about a log it had not fetched yet.
-    let release!: (value: { logs: typeof emptyPage.logs; total: number; skip: number; limit: number }) => void;
+    let release!: (value: NotificationLogPage) => void;
     vi.mocked(notificationsService.getLogs).mockReturnValue(
       new Promise((resolve) => {
         release = resolve;
@@ -292,7 +293,7 @@ describe('NotificationsPage send log', () => {
     renderLogTab();
     await screen.findByText('Drill on Thursday');
 
-    let releaseEmail!: (value: { logs: (typeof emailLog)[]; total: number; skip: number; limit: number }) => void;
+    let releaseEmail!: (value: NotificationLogPage) => void;
     vi.mocked(notificationsService.getLogs).mockReturnValueOnce(
       new Promise((resolve) => {
         releaseEmail = resolve;

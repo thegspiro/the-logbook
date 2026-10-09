@@ -1,14 +1,12 @@
-"""Receipts on expense report lines.
+"""Receipts on expense report lines: the requirement and who reads them.
 
-Every line of an expense report needs an uploaded receipt before the report
-can be submitted. A receipt is stored through FileStorageService under the
-organization's ``finance-receipts`` area, changes only while the report is a
-draft, and is read by the report's submitter, a finance manager, or one of
-its approvers — the approvals queue sends an approver to the report, so they
-can open it and its receipts without the org-wide manage grant.
+Uploading is main's document-backed receipt (``POST …/receipt``, a document
+under Finance > Receipts, covered by ``test_finance_receipts.py``). This file
+covers what is layered on it: every line needs a receipt before the report
+can be submitted, a closing year takes no new receipts from members, and the
+report's approvers can open the report and its receipts.
 """
 
-import os
 from datetime import datetime, timezone
 
 import pytest
@@ -23,13 +21,11 @@ from app.models.finance import (
 )
 from app.services import file_storage_service, upload_scanning
 from app.services.finance_service import FinanceService
-from app.services.malware_scan_service import ScanResult
 from tests.test_finance_budget_owners import _client, _org, _position, _user, _year
 
 pytestmark = [pytest.mark.integration]
 
 PDF = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n"
-OTHER_PDF = b"%PDF-1.4\n2 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n"
 
 
 @pytest.fixture
@@ -105,7 +101,7 @@ def _path(report_id, item_id) -> str:
 
 async def _upload(db, user, report_id, item_id, content=PDF, name="receipt.pdf"):
     async with _client(db, user) as client:
-        return await client.put(
+        return await client.post(
             _path(report_id, item_id),
             files={"file": (name, content, "application/pdf")},
         )
@@ -156,136 +152,20 @@ class TestTheRequirement:
 
 
 class TestUploading:
-    async def test_the_file_is_stored_in_the_orgs_receipts_area(
-        self, db_session, dept, uploads, monkeypatch
-    ):
-        audit = []
-
-        async def record(**kwargs):
-            audit.append(kwargs["event_type"])
-
-        from app.api.v1.endpoints import finance as finance_endpoints
-
-        monkeypatch.setattr(finance_endpoints, "log_audit_event", record)
-        er = await _report(db_session, dept, lines=("Hotel",))
-        (line,) = await _lines(db_session, er.id)
-
-        resp = await _upload(
-            db_session, dept["alice"], er.id, line.id, name="Hotel folio.pdf"
-        )
-
-        assert resp.status_code == 200, resp.text
-        body = resp.json()
-        assert body["hasReceipt"] is True
-        assert body["receiptFileName"] == "Hotel folio.pdf"
-        assert body["receiptContentType"] == "application/pdf"
-        assert body["receiptFileSize"] == len(PDF)
-        assert "receiptFilePath" not in body
-        (line,) = await _lines(db_session, er.id)
-        directory = uploads / dept["org_id"] / "finance-receipts" / er.id
-        assert os.path.dirname(line.receipt_file_path) == str(directory)
-        assert line.receipt_uploaded_by == dept["alice"].id
-        assert audit == ["finance.expense_receipt_attached"]
-
-    async def test_a_new_receipt_replaces_the_old_file(self, db_session, dept, uploads):
-        er = await _report(db_session, dept, lines=("Hotel",))
-        (line,) = await _lines(db_session, er.id)
-        await _upload(db_session, dept["alice"], er.id, line.id)
-        (line,) = await _lines(db_session, er.id)
-        first = line.receipt_file_path
-
-        resp = await _upload(db_session, dept["alice"], er.id, line.id, OTHER_PDF)
-
-        assert resp.status_code == 200, resp.text
-        (line,) = await _lines(db_session, er.id)
-        assert line.receipt_file_path != first
-        assert not os.path.exists(first)
-        assert os.path.exists(line.receipt_file_path)
-
-    async def test_removing_it_clears_the_line_and_the_file(
+    async def test_the_line_links_the_uploaded_document(
         self, db_session, dept, uploads
     ):
-        er = await _report(db_session, dept, lines=("Hotel",))
-        (line,) = await _lines(db_session, er.id)
-        await _upload(db_session, dept["alice"], er.id, line.id)
-        (line,) = await _lines(db_session, er.id)
-        stored = line.receipt_file_path
-
-        resp = await _call(db_session, dept["alice"], "DELETE", _path(er.id, line.id))
-
-        assert resp.status_code == 204, resp.text
-        (line,) = await _lines(db_session, er.id)
-        assert line.receipt_file_path is None
-        assert line.receipt_file_name is None
-        assert not os.path.exists(stored)
-
-    async def test_only_a_pdf_or_image_is_taken(self, db_session, dept, uploads):
-        er = await _report(db_session, dept, lines=("Hotel",))
-        (line,) = await _lines(db_session, er.id)
-
-        resp = await _upload(
-            db_session, dept["alice"], er.id, line.id, b"just text\n", "receipt.txt"
-        )
-
-        assert resp.status_code == 400
-        assert "not allowed" in resp.json()["detail"]
-        (line,) = await _lines(db_session, er.id)
-        assert line.receipt_file_path is None
-
-    async def test_an_infected_file_is_refused_and_not_kept(
-        self, db_session, dept, uploads, monkeypatch
-    ):
-        monkeypatch.setattr(upload_scanning, "is_malware_scan_enabled", lambda: True)
-
-        async def infected(content):
-            return ScanResult(infected=True, signature="Eicar-Test-Signature")
-
-        monkeypatch.setattr(upload_scanning, "scan_bytes", infected)
         er = await _report(db_session, dept, lines=("Hotel",))
         (line,) = await _lines(db_session, er.id)
 
         resp = await _upload(db_session, dept["alice"], er.id, line.id)
 
-        assert resp.status_code == 400
-        (line,) = await _lines(db_session, er.id)
-        assert line.receipt_file_path is None
-        assert not (uploads / dept["org_id"] / "finance-receipts").exists()
-
-    async def test_another_members_report_is_not_found(self, db_session, dept, uploads):
-        er = await _report(db_session, dept, lines=("Hotel",))
-        (line,) = await _lines(db_session, er.id)
-
-        for user in (dept["bob"], dept["foreign"]):
-            resp = await _upload(db_session, user, er.id, line.id)
-            assert resp.status_code == 404, resp.text
-        assert not (uploads / dept["org_id"] / "finance-receipts").exists()
-
-    async def test_a_finance_manager_may_attach_one(self, db_session, dept, uploads):
-        er = await _report(db_session, dept, lines=("Hotel",))
-        (line,) = await _lines(db_session, er.id)
-
-        resp = await _upload(db_session, dept["treasurer"], er.id, line.id)
-
         assert resp.status_code == 200, resp.text
-
-    async def test_receipts_are_fixed_once_submitted(self, db_session, dept, uploads):
-        er = await _report(db_session, dept, lines=("Hotel",))
-        await _attach_all(db_session, dept, er.id)
-        await _submit(db_session, dept, er.id)
+        assert resp.json()["receiptDocumentId"]
         (line,) = await _lines(db_session, er.id)
+        assert line.receipt_document_id == resp.json()["receiptDocumentId"]
 
-        replaced = await _upload(db_session, dept["alice"], er.id, line.id, OTHER_PDF)
-        removed = await _call(
-            db_session, dept["alice"], "DELETE", _path(er.id, line.id)
-        )
-
-        for resp in (replaced, removed):
-            assert resp.status_code == 400
-            assert "while the report is a draft" in resp.json()["detail"]
-        (after,) = await _lines(db_session, er.id)
-        assert after.receipt_file_path == line.receipt_file_path
-
-    async def test_a_closing_year_takes_no_new_receipts(
+    async def test_a_closing_year_takes_no_new_receipts_from_members(
         self, db_session, dept, uploads
     ):
         er = await _report(db_session, dept, lines=("Hotel",))
@@ -294,10 +174,30 @@ class TestUploading:
             dept["fy_id"], dept["org_id"]
         )
 
-        resp = await _upload(db_session, dept["alice"], er.id, line.id)
+        member = await _upload(db_session, dept["alice"], er.id, line.id)
+        office = await _upload(db_session, dept["treasurer"], er.id, line.id)
+
+        assert member.status_code == 400
+        assert "closing for year-end" in member.json()["detail"]
+        # The finance office may still file evidence for what it settles.
+        assert office.status_code == 200, office.text
+
+    async def test_a_locked_year_takes_none_at_all(self, db_session, dept, uploads):
+        er = await _report(db_session, dept, lines=("Hotel",))
+        (line,) = await _lines(db_session, er.id)
+        service = FinanceService(db_session)
+        await service.begin_year_end_close(dept["fy_id"], dept["org_id"])
+        await service.lock_fiscal_year(
+            dept["fy_id"],
+            dept["org_id"],
+            locked_by=dept["treasurer"].id,
+            notes="Reconciled",
+        )
+
+        resp = await _upload(db_session, dept["treasurer"], er.id, line.id)
 
         assert resp.status_code == 400
-        assert "closing for year-end" in resp.json()["detail"]
+        assert "locked" in resp.json()["detail"]
 
 
 class TestWhoReadsThem:

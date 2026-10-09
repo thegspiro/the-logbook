@@ -67,14 +67,25 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
     (`2026-10-08_Smith-John_EMT-Recert.pdf`).
 18. **Small hosts run ClamAV too.** Every profile requires it; an operator who
     cannot spare the memory turns it off afterwards, behind the warning.
+19. **A module's folder opens to that module's rights** (2026-10-09): Training
+    to `training.*`, Events to `events.*`, Apparatus to `apparatus.*`,
+    Facilities unchanged, a new Finance folder to `finance.view` /
+    `finance.manage` / `finance.approve`, Member Separations to
+    `members.manage`; the shared library stays on `documents.view` /
+    `documents.manage`.
+20. **A personal folder admits its member and full administrators only.**
+21. **"Leadership only" means the library managers** (`documents.manage`), and
+    only for the library's own folders.
+22. **A folder-access editor comes later**, in its own change; custom folders
+    keep the visibility levels they have.
 
 ## Phases
 
 | Phase | Scope                                                                                                                                           | Status       |
 | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
 | 1     | Close the access leaks                                                                                                                          | done (#3009) |
-| 2     | One storage service: org-first layout, descriptive names, size caps and malware scan everywhere (on by default)                                 | this change  |
-| 3     | A folder per module with module-specific rights; narrow `documents.view`; admin-only see-all; apparatus files and finance receipts as documents | planned      |
+| 2     | One storage service: org-first layout, descriptive names, size caps and malware scan everywhere (on by default)                                 | done (#3011) |
+| 3     | A folder per module with module-specific rights; narrow `documents.view`; admin-only see-all; apparatus files and finance receipts as documents | this change  |
 | 4     | Encryption at rest, with the onboarding key-custody confirmation                                                                                | planned      |
 
 ### Phase 1 — what changed
@@ -120,10 +131,6 @@ folds it into the storage service.
   attachments keep their uploaded name.
 - **`scripts/relocate_uploads.py`** moves existing files
   (`app/services/upload_relocation.py`).
-- **Expense receipts** _(2026-10-09)_ were built on it from the start: area
-  `finance-receipts` (`StorageArea.FINANCE_RECEIPTS`, no legacy root), PDF,
-  JPG or PNG up to 10 MB, read and deleted through `resolve()`. See
-  `docs/FINANCE_MODULE.md`, "Expense receipts".
 
 Found and fixed while there: a training-history CSV that was not UTF-8 was
 reported as "exceeds the 10MB limit" (an `except ValueError` caught the
@@ -134,13 +141,46 @@ was on are not rescanned; `UPLOADS_ROOT` is the fixed `/app/uploads` mount and
 the unread `UPLOAD_DIR` setting stays unread (`docs/KNOWN_LIMITATIONS.md`,
 CI3-33-4).
 
+### Phase 3 — what changed
+
+**The access rule** (`DocumentsService._folder_admits_user`): a full
+administrator (`*`) passes every folder and nothing else is an override. Each
+module root carries its rights in `required_permissions` (the lists live in
+`app/models/document.py`); children inherit through the ancestor walk. A
+write needs a non-view right from the list, as before. Every root is built
+from one definition, `system_folder_fields`, so a root a module creates lazily
+matches one the reconciler creates. Migration `b38df38d849b` stamps existing
+roots. `docs/UPGRADING.md` lists who gains and loses what.
+
+**Apparatus files** are uploaded at `POST /apparatus/{id}/photos/upload` and
+`/documents/upload`, scanned and filed in the vehicle's sub-folder (Photos;
+Registration & Insurance for a title, registration or insurance; Maintenance
+Records; Inspection & Compliance; Manuals & References). The apparatus row
+links the document (`document_id`, cascading). Downloads go through the
+apparatus endpoint and also check the document's current folder, so a file
+moved out of reach is not served through the module's door. Typed URLs are
+refused on the way in, and `fileUrl` passes an old one on only if it is
+HTTP(S).
+
+**Finance receipts** are uploaded at `POST /finance/purchase-requests/{id}/receipt`
+and `/expense-reports/{id}/items/{item}/receipt`, filed in Finance > Receipts,
+and linked by `receipt_document_id`. Here the record's read rule is the
+authority, not the folder's: a member opens the receipt on their own request
+without holding the rights that open the Finance folder. Replacing a receipt
+keeps the earlier file, since it may be what an approver saw.
+
+`app/services/module_documents.py` is the shared path for both: store as a
+document, serve back with a descriptive name, delete with the file.
+
+Not done here: a screen for setting a custom folder's rights (decision 22);
+facility files still upload through `/documents/upload`, which needs
+`documents.manage` on top of the facility grant.
+
 ### Found in passing, not in this change
 
 - `GET /events?include_drafts=true` returns draft events to any member. The
   flag is honoured without a permission check. Belongs with the events
   module, not file storage.
-- Apparatus photo and document records hold a client-supplied URL rather than
-  an upload; finance receipts are URL fields with no upload at all. Phase 3.
 
 ## Open questions for later phases
 

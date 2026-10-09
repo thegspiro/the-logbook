@@ -410,7 +410,7 @@ class CompetencyMatrixService:
 
             comp_date = most_recent.completion_date
             exp_date = most_recent.expiration_date
-            details = f"{total_hours:.1f}/{required:.1f} hrs"
+            details: Optional[str] = f"{total_hours:.1f}/{required:.1f} hrs"
 
             if required > 0 and total_hours >= required:
                 status = "current"

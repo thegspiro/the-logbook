@@ -432,24 +432,31 @@ Closing the gap would need cards that cannot be copied by reading them
 then, a department that needs attendance it can rely on for credit should keep
 those events on a staffed station, or on members' own signed-in phones.
 
-## Prospective Members — Purge Is Manual; Auto-Purge Is Not Wired (2026-09-30)
+## Prospective Members — Purge Scope and Auto-Purge (2026-09-30, wired 2026-10-09)
 
 **Purge Selected** on the Inactive Applications tab permanently deletes the
 selected applications that are still `inactive`, with their uploaded documents,
-and records the purge in the audit log. Until this date it matched `withdrawn`
+and records the purge in the audit log. Until 2026-09-30 it matched `withdrawn`
 instead, so it deleted nothing while the page reported success. Withdrawn,
-rejected and on-hold applications are never purged; the owner chose to keep the
-button to exactly what its tab lists.
+rejected and on-hold applications are never purged, manually or automatically;
+the owner chose to keep purging to exactly what the Inactive tab lists.
 
-**Open: the pipeline's Auto-Purge setting has no reader.** The settings page
-stores `auto_purge_enabled` and `purge_days_after_inactive`, and the user guide
-(`docs/training/15-prospective-members.md`) says inactive applicants are
-deleted after the grace period, but no scheduled task reads either value --
-nothing is ever purged automatically (CLAUDE.md pitfall #19). Wiring it means a
-nightly job calling `purge_inactive_prospects` per pipeline for applications
-inactive longer than the grace period, which needs the date an application went
-inactive (`deactivated_at`) and a decision on notifying coordinators first.
-Until then, departments purge from the Inactive tab.
+**Auto-Purge is in effect since 2026-10-09.** The daily `membership_auto_purge`
+task deletes, through the same code path as the manual button, the `inactive`
+applications in each pipeline with `auto_purge_enabled: true` whose
+`inactive_since` is at least `purge_days_after_inactive` days old (UTC, clamped
+to 30–1095; a missing or non-numeric value skips the pipeline). Decisions the
+owner made, recorded so they are not mistaken for gaps:
+
+- **No warning email before a purge.** Coordinators are not notified; the
+  audit log (`membership_pipeline.prospects_purged`, `trigger: auto_purge`)
+  records each purge with the pipeline, threshold and purged ids.
+- **The clock restarted at the upgrade.** Applications already inactive when
+  migration `feecd81eef2d` ran count from that moment, not from their real
+  deactivation date, so the first run could not delete a backlog at once.
+  `inactive_since` is separate from the drawer's historical `deactivated_at`,
+  which is untouched; an application with no `inactive_since` is never
+  auto-purged.
 
 ## Email Link Address — How a Change Reaches Every Worker (2026-09-25)
 
@@ -777,6 +784,24 @@ What has to exist before any option other than Local Storage does anything:
 The deployment-level `STORAGE_TYPE` / `UPLOAD_DIR` / `AWS_*` / `AZURE_*` /
 `GCS_*` settings are the same gap at the environment level (see the CI3-33-4
 row above).
+
+## File Storage — Folder Rights Phase 3 Left Open (2026-10-09)
+
+**Open, both deliberate.** Phase 3 of `docs/FILE_STORAGE_HARDENING.md` gated
+each module folder on that module's rights. Two things it did not do:
+
+- **No screen sets a custom folder's rights** (owner decision 22, later
+  change). `required_permissions` and `allowed_roles` are not in the folder
+  API's schemas at all, and the Documents page offers only name and
+  description when creating a folder. A department that wants a folder for,
+  say, the quartermaster alone cannot make one; it can mark a folder
+  leadership-only, which now means `documents.manage` holders.
+- **Facility files still need `documents.manage` to upload.** The facility
+  Files section uploads through `POST /documents/upload` and then links the
+  document, so a facilities manager holding `facilities.edit` but not
+  `documents.manage` is refused at the first step. Apparatus and finance
+  upload through their own module endpoints since this change; facilities
+  would need the same (`app/services/module_documents.py` is the shared path).
 
 ## Self-Report Attachments — What Happens to the File (2026-08-23)
 
@@ -1303,21 +1328,19 @@ year"). Three gaps remain, pending a decision:
   begins, and does not stop the lock. A requester who still needs it raises it
   again in the new year; nothing moves it across.
 
-## Finance — Expense Receipts: What They Do Not Cover (2026-10-09)
+## Finance — Expense Receipts: What the Requirement Does Not Cover (2026-10-09)
 
 Every expense line needs an uploaded receipt before its report is submitted
-(see `docs/FINANCE_MODULE.md`, "Expense receipts"). Gaps, pending a decision:
+(see `docs/FINANCE_MODULE.md`, "Expense receipts are required"). Gaps,
+pending a decision:
 
-- **One file per line.** A hotel folio covering several lines is attached to
-  each of them. Lines cannot share one stored file.
+- **One receipt per line.** A hotel folio covering several lines is attached
+  to each of them.
 - **Mileage has no log of its own.** A mileage line needs a file like any
   other; the guide asks for the trip log. Nothing checks what the file is.
-- **Files outlive what referenced them in two cases.** A downgrade past
-  `0a159454f04b` leaves them on disk, and so would deleting an expense
-  report — which no endpoint does today. Nothing sweeps the
-  `finance-receipts` area for unreferenced files.
-- **Purchase requests and check requests are unchanged.** They keep their
-  free-text `receipt_url` and need no file.
+- **Purchase requests and check requests do not require one.** A purchase
+  request can carry an uploaded receipt, but nothing requires it before
+  payment, and check requests take none.
 
 ## Finance — QuickBooks Export Gaps (2026-10-08)
 
