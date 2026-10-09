@@ -950,6 +950,8 @@ export const ExportReadinessStatus = {
   NO_ACCOUNT: 'no_account',
   NO_OFFSET: 'no_offset',
   DUPLICATE_MAPPINGS: 'duplicate_mappings',
+  /** Posts to Accounts Payable or Receivable, which QuickBooks' import needs a Name for. */
+  PAYABLE_RECEIVABLE: 'payable_receivable',
 } as const;
 export type ExportReadinessStatus = (typeof ExportReadinessStatus)[keyof typeof ExportReadinessStatus];
 

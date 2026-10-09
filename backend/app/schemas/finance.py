@@ -1440,7 +1440,7 @@ class ExportReadinessCategoryResponse(UTCResponseBase):
     category_id: str
     category_name: str
     is_active: bool
-    # ready, no_account, no_offset or duplicate_mappings
+    # ready, no_account, no_offset, duplicate_mappings or payable_receivable
     status: str
     account_name: Optional[str] = None
     # category (its own qb_account_name) or mapping

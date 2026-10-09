@@ -221,6 +221,38 @@ QB_JOURNAL_HEADER = [
 ]
 
 
+# QuickBooks Online imports a spreadsheet only if it has fewer than 1,000 rows,
+# the header included (Intuit, "Import journal entries"); each exported
+# transaction is two rows.
+QB_IMPORT_MAX_ROWS = 999
+
+# QuickBooks requires a customer or vendor in the Name column of any journal
+# line posting to Accounts Receivable or Accounts Payable, and the export has
+# no Name to give. These are the standard names QuickBooks Online creates the
+# two accounts with ("Accounts Payable (A/P)"); a department that renamed them
+# is not caught here, which the mapping screen's checklist covers.
+_QB_NAME_REQUIRED_PREFIXES = ("accounts payable", "accounts receivable")
+
+
+def _needs_qb_name(account: Optional[str]) -> bool:
+    top_level = (account or "").split(":", 1)[0].strip().casefold()
+    return top_level.startswith(_QB_NAME_REQUIRED_PREFIXES)
+
+
+def _refuse_name_required(*accounts: Optional[str]) -> None:
+    """Refuse an account the journal-entry import cannot post to."""
+    for account in accounts:
+        if _needs_qb_name(account):
+            # Kept under safe_error_detail's 300 characters so the reason
+            # reaches the screen.
+            raise ValueError(
+                "Accounts Payable and Accounts Receivable can't be used: "
+                "QuickBooks needs a customer or vendor on those journal lines, "
+                "which the export doesn't carry. Use the bank or card account "
+                "the money is paid from, and an expense account for the category."
+            )
+
+
 def _qb_amount(value: Decimal) -> Decimal:
     return Decimal(value).quantize(Decimal("0.01"))
 
@@ -237,8 +269,9 @@ def _classify_category_accounts(
     The one definition of how a category reaches QuickBooks: the export uses it
     to post each transaction and the readiness report uses it to show what an
     export would do, so the two cannot disagree. ``problem`` is
-    ``duplicate_mappings``, ``no_account`` or ``no_offset``; ``None`` means the
-    category exports.
+    ``duplicate_mappings``, ``no_account``, ``no_offset`` or
+    ``payable_receivable`` (an account the import cannot post to without a
+    Name); ``None`` means the category exports.
     """
     if len(matches) > 1:
         return "", "", "duplicate_mappings"
@@ -251,6 +284,8 @@ def _classify_category_accounts(
         return account, offset, "no_account"
     if not offset:
         return account, offset, "no_offset"
+    if _needs_qb_name(account) or _needs_qb_name(offset):
+        return account, offset, "payable_receivable"
     return account, offset, None
 
 
@@ -501,6 +536,7 @@ class FinanceService:
 
     async def create_budget_category(self, org_id: str, **kwargs) -> BudgetCategory:
         await self._validate_budget_category_fks(org_id, kwargs)
+        _refuse_name_required(kwargs.get("qb_account_name"))
         cat = BudgetCategory(organization_id=org_id, **kwargs)
         self.db.add(cat)
         await self.db.flush()
@@ -511,6 +547,7 @@ class FinanceService:
         self, cat_id: str, org_id: str, **kwargs
     ) -> BudgetCategory:
         await self._validate_budget_category_fks(org_id, kwargs)
+        _refuse_name_required(kwargs.get("qb_account_name"))
         cat = await self.get_budget_category(cat_id, org_id)
         if not cat:
             raise ValueError("Budget category not found")
@@ -4287,6 +4324,9 @@ class FinanceService:
         return list(result.scalars().all())
 
     async def create_export_mapping(self, org_id: str, **kwargs) -> ExportMapping:
+        _refuse_name_required(
+            kwargs.get("qb_account_name"), kwargs.get("qb_offset_account_name")
+        )
         mapping = ExportMapping(organization_id=org_id, **kwargs)
         self.db.add(mapping)
         await self.db.flush()
@@ -4305,6 +4345,9 @@ class FinanceService:
         mapping: ExportMapping | None = result.scalar_one_or_none()
         if not mapping:
             raise ValueError("Export mapping not found")
+        _refuse_name_required(
+            kwargs.get("qb_account_name"), kwargs.get("qb_offset_account_name")
+        )
         apply_updates(mapping, kwargs)
         await self.db.flush()
         await self.db.refresh(mapping, ["updated_at"])
@@ -4438,6 +4481,8 @@ class FinanceService:
                 problems[name] = f"'{label}' has no account"
             elif problem == "no_offset":
                 problems[name] = f"'{label}' has no offset account"
+            elif problem == "payable_receivable":
+                problems[name] = f"'{label}' posts to Accounts Payable or Receivable"
             else:
                 resolved[budget_id] = (account, offset)
 
@@ -4472,7 +4517,7 @@ class FinanceService:
         date_end: datetime,
         file_format: str = "csv",
         batch_size: int = 500,
-        max_records: int = 10_000,
+        max_rows: int = QB_IMPORT_MAX_ROWS,
     ) -> AsyncIterator[str]:
         """Prepare a bounded export and return its incremental CSV stream."""
         filters = (
@@ -4506,10 +4551,15 @@ class FinanceService:
             .where(*er_filters)
         )
         total = int(pr_count or 0) + int(cr_count or 0) + int(line_count or 0)
-        if total > max_records:
+        # Two rows per transaction (or expense line) plus the header. A file
+        # QuickBooks will not import is no use, and splitting one would let an
+        # expense report's entry straddle two files, so refuse instead.
+        rows = 2 * total + 1
+        if rows > max_rows:
             raise ValueError(
-                f"Synchronous exports support at most {max_records} rows; "
-                f"this request contains {total}. Narrow the date range"
+                f"QuickBooks Online imports files of fewer than {max_rows + 1:,} "
+                f"rows; this period would produce {rows:,}. Export a shorter "
+                "period, then the rest."
             )
         # Resolved before the log row so a refusal leaves no pending export.
         accounts = await self._resolve_export_accounts(

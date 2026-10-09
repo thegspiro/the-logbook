@@ -412,6 +412,19 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### QuickBooks exports follow Intuit's import limits (2026-10-09)
+
+- **An export that would reach 1,000 rows is refused** (400), since QuickBooks
+  Online does not import a file that long. That is about 499 transactions;
+  export a shorter period. The limit was 10,000 transactions, which produced
+  files QuickBooks rejected.
+- **Accounts Payable and Accounts Receivable are refused** as a category's
+  QuickBooks account or a mapping's account or paid-from account, because the
+  import needs a vendor or customer on those lines. A mapping already saved
+  with one shows **Payable/receivable account** on **Finance › QuickBooks
+  Export**, and an export using it is refused until it is changed to the bank
+  or card account the money is paid from.
+
 ### Prospective members: Auto-Purge now deletes — the clock starts at this upgrade (2026-10-09)
 
 The pipeline **Auto-Purge** setting (Pipeline Settings → inactivity) used to be
