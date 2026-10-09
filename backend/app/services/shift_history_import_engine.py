@@ -414,6 +414,7 @@ class RowInput:
     edits: Optional[Mapping[str, Any]]
     excluded: bool
     match_decision: Optional[str]
+    keep_separate: bool = False
 
 
 @dataclass
@@ -441,6 +442,7 @@ class ParsedRow:
     call_count: Optional[int] = None
     skipped_reason: Optional[str] = None
     errors: List[str] = field(default_factory=list)
+    keep_separate: bool = False
 
     @property
     def active(self) -> bool:
@@ -509,6 +511,7 @@ def parse_row(
         values=values,
         excluded=row.excluded,
         match_decision=row.match_decision,
+        keep_separate=row.keep_separate,
         identity=identity,
         unit_key=unit_key(values["unit"], values["agency"]),
         position_key=position_key(values["position"]),
@@ -643,6 +646,11 @@ class AnalysisContext:
     # removed members included: a new member may not take an email, username
     # or membership number from one of those either. Defaults to ``members``.
     identifier_holders: Sequence[MemberRecord] = ()
+    # Decisions committed with earlier imports, keyed like the draft's own.
+    # They apply only where the draft has made no decision of its own.
+    saved_member_mappings: Mapping[str, Any] = field(default_factory=dict)
+    saved_unit_mappings: Mapping[str, Any] = field(default_factory=dict)
+    saved_position_mappings: Mapping[str, Any] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -681,6 +689,8 @@ class MemberResolution:
     candidate_ids: List[str] = field(default_factory=list)
     reason: str = ""
     row_ids: List[str] = field(default_factory=list)
+    # Settled by a decision remembered from an earlier import.
+    remembered: bool = False
 
     @property
     def ref(self) -> Optional[str]:
@@ -705,6 +715,7 @@ class UnitResolution:
     new_agency_name: str = ""
     new_unit_name: str = ""
     row_ids: List[str] = field(default_factory=list)
+    remembered: bool = False
 
     @property
     def ref(self) -> Optional[Tuple[str, str]]:
@@ -722,6 +733,7 @@ class PositionResolution:
     status: str
     seat: Optional[str] = None
     row_ids: List[str] = field(default_factory=list)
+    remembered: bool = False
 
 
 def _names_compatible(identity: MemberIdentity, record: MemberRecord) -> bool:
@@ -1058,7 +1070,7 @@ def _join(
                 )
                 joined.append(current)
                 current = piece
-            elif piece.start - current.end <= gap:
+            elif piece.start - current.end <= gap and not piece.seed.keep_separate:
                 current.rows.extend(piece.rows)
                 current.end = max(current.end, piece.end)
                 if piece.call_count is not None:
@@ -1285,6 +1297,18 @@ def _check_new_members(
                 taken[(kind, _squash(value))] = identity.display_name
 
 
+def _decision(
+    draft: Mapping[str, Any], saved: Mapping[str, Any], key: str
+) -> Tuple[Any, bool]:
+    """The draft's decision for ``key``, else the remembered one, and whether
+    the remembered one is what was used."""
+    if key in draft:
+        return draft[key], False
+    if key in saved:
+        return saved[key], True
+    return None, False
+
+
 def analyze(parsed: List[ParsedRow], context: AnalysisContext) -> Analysis:
     issues: List[Issue] = []
     members: Dict[str, MemberResolution] = {}
@@ -1306,22 +1330,29 @@ def analyze(parsed: List[ParsedRow], context: AnalysisContext) -> Analysis:
         if row.identity.has_any:
             resolution = members.get(row.identity.key)
             if resolution is None:
-                resolution = resolve_member(
-                    row.identity,
-                    context.members,
-                    context.member_mappings.get(row.identity.key),
+                mapping, from_saved = _decision(
+                    context.member_mappings,
+                    context.saved_member_mappings,
+                    row.identity.key,
+                )
+                resolution = resolve_member(row.identity, context.members, mapping)
+                # A remembered mapping to a member since removed is ignored by
+                # resolve_member; it then settles nothing and is not credited.
+                resolution.remembered = (
+                    from_saved and resolution.status == MEMBER_MAPPED
                 )
                 members[row.identity.key] = resolution
             resolution.row_ids.append(row.id)
         if row.values["unit"]:
             unit = units.get(row.unit_key)
             if unit is None:
-                unit = resolve_unit(
-                    row.values["unit"],
-                    row.values["agency"],
-                    context,
-                    context.unit_mappings.get(row.unit_key),
+                mapping, from_saved = _decision(
+                    context.unit_mappings, context.saved_unit_mappings, row.unit_key
                 )
+                unit = resolve_unit(
+                    row.values["unit"], row.values["agency"], context, mapping
+                )
+                unit.remembered = from_saved and unit.status == UNIT_MAPPED
                 units[row.unit_key] = unit
             unit.row_ids.append(row.id)
 
@@ -1377,11 +1408,15 @@ def analyze(parsed: List[ParsedRow], context: AnalysisContext) -> Analysis:
         if unit_ref[0] == OWN:
             position = positions.get(row.position_key)
             if position is None:
-                position = resolve_position(
-                    row.values["position"],
-                    context.department_seats,
-                    context.position_mappings.get(row.position_key),
+                mapping, from_saved = _decision(
+                    context.position_mappings,
+                    context.saved_position_mappings,
+                    row.position_key,
                 )
+                position = resolve_position(
+                    row.values["position"], context.department_seats, mapping
+                )
+                position.remembered = from_saved and position.status == POSITION_MAPPED
                 positions[row.position_key] = position
             position.row_ids.append(row.id)
             if position.seat is None:

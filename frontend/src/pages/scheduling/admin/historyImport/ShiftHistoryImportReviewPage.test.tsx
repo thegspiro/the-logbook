@@ -93,6 +93,7 @@ const draft = (overrides: Partial<NonNullable<HistoryImportDetail['analysis']>> 
         candidate_ids: [],
         reason: '',
         row_count: 1,
+        remembered: false,
       },
     ],
     units: [],
@@ -238,5 +239,69 @@ describe('ShiftHistoryImportReviewPage', () => {
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Keep reviewing' }));
 
     expect(mockCommit).not.toHaveBeenCalled();
+  });
+  it('splits a joined entry by keeping every later row apart', async () => {
+    const joined = attendance({
+      key: 'r5',
+      row_ids: ['r5', 'r6'],
+      line_numbers: [5, 6],
+      minutes: 1530,
+      joined: true,
+    });
+    mockGet.mockResolvedValue(
+      draft({
+        shifts: [
+          {
+            key: 'r5',
+            apparatus_id: 'app-1',
+            shift_date: '2025-10-09',
+            start: '2025-10-09T10:00:00Z',
+            end: '2025-10-10T11:30:00Z',
+            existing_status: 'none',
+            attendances: [joined],
+          },
+        ],
+      })
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('tab', { name: /Shifts/ }));
+
+    expect(screen.getByText('Joined from 2 entries')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Split apart' }));
+
+    await waitFor(() => expect(mockRow).toHaveBeenCalledWith('imp-1', 'r6', { keep_separate: true }));
+    expect(mockRow).not.toHaveBeenCalledWith('imp-1', 'r5', expect.anything());
+  });
+
+  it('marks a decision remembered from an earlier import', async () => {
+    mockGet.mockResolvedValue(
+      draft({
+        members: [
+          {
+            key: 'name:a. ng',
+            display_name: 'A. Ng',
+            first_name: 'A.',
+            last_name: 'Ng',
+            membership_number: '',
+            email: '',
+            username: '',
+            status: 'mapped',
+            user_id: 'u-alice',
+            candidate_ids: [],
+            reason: '',
+            row_count: 1,
+            remembered: true,
+          },
+        ],
+      })
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('tab', { name: /Members/ }));
+    await user.click(screen.getByRole('checkbox', { name: 'Show settled' }));
+
+    expect(screen.getByText('Remembered')).toBeInTheDocument();
+    expect(screen.getByText('Recorded as Alice Ng')).toBeInTheDocument();
   });
 });

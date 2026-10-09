@@ -155,6 +155,15 @@ const ShiftHistoryImportReviewPage: React.FC = () => {
     apply(() => historyImportService.updateRow(importId, rowId, payload));
   const onRowDecision = (rowId: string, decision: MatchDecision | null) =>
     void onRowUpdate(rowId, { match_decision: decision });
+  /** One request per row; the last response is the draft with all of them applied. */
+  const onSplit = (rowIds: string[]) =>
+    void apply(async () => {
+      let latest: HistoryImportDetail | null = null;
+      for (const rowId of rowIds) {
+        latest = await historyImportService.updateRow(importId, rowId, { keep_separate: true });
+      }
+      return latest ?? historyImportService.getImport(importId);
+    });
 
   const handleCommit = async (analysis: HistoryImportAnalysis) => {
     const writing = analysis.counts.attendances + analysis.counts.external_entries - analysis.counts.duplicates;
@@ -356,6 +365,7 @@ const ShiftHistoryImportReviewPage: React.FC = () => {
             busy={busy}
             onMappings={onMappings}
             onRowDecision={onRowDecision}
+            onSplit={onSplit}
           />
         )}
         {tab === 'rows' && (

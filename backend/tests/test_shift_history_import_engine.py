@@ -296,6 +296,52 @@ class TestMembers:
         assert "new_member_identifier_taken" in _codes(analysis)
 
 
+class TestRememberedDecisions:
+    def test_a_remembered_mapping_settles_a_name_the_draft_has_not(self):
+        analysis = _analyze(
+            [_row(2, member_name="A. Ng")],
+            saved_member_mappings={
+                "name:a. ng": {"action": "map", "user_id": "u-alice"}
+            },
+        )
+        member = analysis.members[0]
+        assert member.ref == "u-alice"
+        assert member.remembered
+        assert analysis.can_commit
+
+    def test_the_drafts_own_decision_wins(self):
+        analysis = _analyze(
+            [_row(2, member_name="A. Ng")],
+            member_mappings={"name:a. ng": {"action": "map", "user_id": "u-bob"}},
+            saved_member_mappings={
+                "name:a. ng": {"action": "map", "user_id": "u-alice"}
+            },
+        )
+        assert analysis.members[0].ref == "u-bob"
+        assert not analysis.members[0].remembered
+
+    def test_a_remembered_mapping_to_someone_gone_settles_nothing(self):
+        analysis = _analyze(
+            [_row(2, member_name="A. Ng")],
+            saved_member_mappings={
+                "name:a. ng": {"action": "map", "user_id": "u-gone"}
+            },
+        )
+        assert analysis.members[0].ref is None
+        assert not analysis.members[0].remembered
+
+    def test_units_and_positions_are_remembered_too(self):
+        analysis = _analyze(
+            [_row(2, membership_number="101", unit="Rig 9", position="Nozzle")],
+            saved_unit_mappings={"|rig 9": {"action": "own", "id": "app-e1"}},
+            saved_position_mappings={"nozzle": {"seat": "firefighter"}},
+        )
+        assert analysis.units[0].ref == (engine.OWN, "app-e1")
+        assert analysis.units[0].remembered
+        assert analysis.positions[0].remembered
+        assert analysis.can_commit
+
+
 class TestUnits:
     def test_a106_and_a106e_are_different_vehicles(self):
         analysis = _analyze(
@@ -416,6 +462,29 @@ class TestJoining:
             (date(2025, 10, 9), ["u-alice"]),
             (date(2025, 10, 10), ["u-bob"]),
         ]
+
+    def test_a_reviewer_can_split_a_joined_entry_back_apart(self):
+        rows = [
+            _row(
+                2,
+                membership_number="101",
+                date="2025-10-09",
+                start_time="06:00",
+                end_time="06:00",
+            ),
+            _row(
+                3,
+                membership_number="101",
+                date="2025-10-10",
+                start_time="06:00",
+                end_time="07:30",
+            ),
+        ]
+        rows[1].keep_separate = True
+        analysis = _analyze(rows)
+        attendances = [a for s in analysis.shifts for a in s.attendances]
+        assert sorted(a.minutes for a in attendances) == [90, 24 * 60]
+        assert not any(a.joined for a in attendances)
 
     def test_a_gap_over_thirty_minutes_does_not_join(self):
         analysis = _analyze(

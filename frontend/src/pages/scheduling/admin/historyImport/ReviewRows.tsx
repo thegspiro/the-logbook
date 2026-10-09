@@ -252,6 +252,19 @@ const ReviewRows: React.FC<ReviewRowsProps> = ({ analysis, fields, busy, onRowUp
                       ) : (
                         'Ready'
                       )}
+                      {row.keep_separate && (
+                        <div className="text-theme-text-secondary mt-1">
+                          Kept apart from the entry before it{' '}
+                          <button
+                            type="button"
+                            className="underline"
+                            disabled={busy}
+                            onClick={() => void onRowUpdate(row.id, { keep_separate: false })}
+                          >
+                            Rejoin
+                          </button>
+                        </div>
+                      )}
                       {row.match_decision && (
                         <div className="text-theme-text-secondary mt-1">
                           Decided: {row.match_decision === 'accept' ? 'same shift' : 'separate shift'}{' '}

@@ -236,6 +236,7 @@ async def update_import_row(
                 "match_decision" in payload.model_fields_set
                 and payload.match_decision is None
             ),
+            keep_separate=payload.keep_separate,
         )
         return await _detail_after(service, org, str(import_id))
     except Exception as exc:
