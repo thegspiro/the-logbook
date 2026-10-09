@@ -17,12 +17,13 @@ Integrity rests on three rules the endpoints keep:
   sends is taken as a score.
 """
 
+from datetime import datetime
 from enum import Enum
+from typing import Any, Optional
 
 from sqlalchemy import (
     JSON,
     Boolean,
-    Column,
     DateTime,
     Float,
     ForeignKey,
@@ -31,6 +32,7 @@ from sqlalchemy import (
     String,
     Text,
 )
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -59,37 +61,45 @@ class KnowledgeTest(Base):
 
     __tablename__ = "knowledge_tests"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    name = Column(String(255), nullable=False)
-    description = Column(Text, nullable=True)
-    instructions = Column(Text, nullable=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    instructions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # The knowledge_test requirement a submitted attempt is credited to.
-    requirement_id = Column(
+    requirement_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_requirements.id", ondelete="SET NULL"),
         nullable=True,
     )
     # Null: the linked requirement's passing_score, else 70.
-    passing_score = Column(Float, nullable=True)
-    time_limit_minutes = Column(Integer, nullable=True)
+    passing_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    time_limit_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Null: every active question. Otherwise this many, drawn at random per
     # attempt, so two members sitting together do not see the same paper.
-    question_count = Column(Integer, nullable=True)
-    shuffle_questions = Column(Boolean, nullable=False, default=True)
+    question_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    shuffle_questions: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
+    )
     # Whether a member sees which answers were right once they submit.
-    show_correct_answers = Column(Boolean, nullable=False, default=False)
-    status = Column(String(20), nullable=False, default=KnowledgeTestStatus.DRAFT.value)
-    created_by = Column(
+    show_correct_answers: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=KnowledgeTestStatus.DRAFT.value
+    )
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
@@ -103,31 +113,33 @@ class KnowledgeTestQuestion(Base):
 
     __tablename__ = "knowledge_test_questions"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    test_id = Column(
+    test_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("knowledge_tests.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    prompt = Column(Text, nullable=False)
-    question_type = Column(String(20), nullable=False)
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    question_type: Mapped[str] = mapped_column(String(20), nullable=False)
     # [{"id": str, "text": str}]
-    options = Column(JSON, nullable=False)
+    options: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
     # Option ids. Never serialized to a member before they submit.
-    correct_option_ids = Column(JSON, nullable=False)
-    explanation = Column(Text, nullable=True)
-    points = Column(Float, nullable=False, default=1.0)
-    sort_order = Column(Integer, nullable=False, default=0)
-    active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    correct_option_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    explanation: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    points: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
@@ -137,50 +149,62 @@ class KnowledgeTestAttempt(Base):
 
     __tablename__ = "knowledge_test_attempts"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    test_id = Column(
+    test_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("knowledge_tests.id", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    status = Column(
+    status: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
         default=KnowledgeAttemptStatus.IN_PROGRESS.value,
     )
-    started_at = Column(DateTime(timezone=True), nullable=False)
-    expires_at = Column(DateTime(timezone=True), nullable=True)
-    submitted_at = Column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    submitted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # The questions exactly as delivered — order, option order, answers and
     # points — so grading and review never read the live bank.
-    questions_snapshot = Column(JSON, nullable=False)
+    questions_snapshot: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False
+    )
     # {question_id: [option_id, ...]}
-    answers = Column(JSON, nullable=True)
-    score = Column(Float, nullable=True)
-    points_earned = Column(Float, nullable=True)
-    points_possible = Column(Float, nullable=True)
-    passed = Column(Boolean, nullable=True)
-    passing_score = Column(Float, nullable=False)
-    requirement_id = Column(
+    answers: Mapped[Optional[dict[str, list[str]]]] = mapped_column(JSON, nullable=True)
+    score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    points_earned: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    points_possible: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    passed: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    passing_score: Mapped[float] = mapped_column(Float, nullable=False)
+    requirement_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_requirements.id", ondelete="SET NULL"),
         nullable=True,
     )
-    show_correct_answers = Column(Boolean, nullable=False, default=False)
+    show_correct_answers: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     # Whether the result reached a pipeline requirement, and if not, why.
-    credited = Column(Boolean, nullable=False, default=False)
-    credit_note = Column(String(500), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    credited: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    credit_note: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 

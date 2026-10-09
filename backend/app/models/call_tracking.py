@@ -31,15 +31,11 @@ point at, which makes "one call, two units" representable:
   because a member who came on at 0300 was not on the 2200 call.
 """
 
-from sqlalchemy import (
-    Column,
-    Date,
-    DateTime,
-    ForeignKey,
-    Index,
-    String,
-    UniqueConstraint,
-)
+from datetime import date, datetime
+from typing import Optional
+
+from sqlalchemy import Date, DateTime, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -139,8 +135,8 @@ class OrgCall(Base):
 
     __tablename__ = "org_calls"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
@@ -149,13 +145,13 @@ class OrgCall(Base):
 
     # Date only. A timestamp would let response times be reconstructed, which
     # is the first step back toward an incident record.
-    call_date = Column(Date, nullable=False, index=True)
+    call_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
 
     # Slug into the org's configured call types. Nullable: a department that
     # tracks only a total still gets rows, they are simply untyped.
-    call_type = Column(String(50), nullable=True)
+    call_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
-    source = Column(
+    source: Mapped[str] = mapped_column(
         String(20), nullable=False, default=CallSource.MANUAL, server_default="manual"
     )
 
@@ -163,10 +159,12 @@ class OrgCall(Base):
     # Its only jobs are idempotent re-sync and cross-unit dedup; it is never
     # displayed, because a CAD incident number is a lookup key into a system
     # that does hold PII.
-    external_ref = Column(String(100), nullable=True)
+    external_ref: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    created_by = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
@@ -194,14 +192,14 @@ class OrgCallResponse(Base):
 
     __tablename__ = "org_call_responses"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    call_id = Column(
+    call_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("org_calls.id", ondelete="CASCADE"),
         nullable=False,
@@ -211,7 +209,7 @@ class OrgCallResponse(Base):
     # The shift whose close-out reported this response. SET NULL rather than
     # CASCADE: deleting a shift must not silently reduce the department's
     # historical call volume. Nullable per pitfall #2.
-    shift_id = Column(
+    shift_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("shifts.id", ondelete="SET NULL"),
         nullable=True,
@@ -222,9 +220,13 @@ class OrgCallResponse(Base):
     # apparatus table via utils/apparatus_ref. No FK for the same reason that
     # column has none: a department on BasicApparatus has no ``apparatus.id``
     # to point at, and constraining to one table locks the other out.
-    apparatus_id = Column(String(36), nullable=True, index=True)
+    apparatus_id: Mapped[Optional[str]] = mapped_column(
+        String(36), nullable=True, index=True
+    )
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     __table_args__ = (
         # A unit responds to a given call once. Without this, re-finalizing a

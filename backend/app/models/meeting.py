@@ -6,10 +6,11 @@ attendees, and action items.
 """
 
 import enum
+from datetime import date, datetime, time
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
     Boolean,
-    Column,
     Date,
     DateTime,
     Enum,
@@ -20,11 +21,16 @@ from sqlalchemy import (
     Text,
     Time,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
+
+if TYPE_CHECKING:
+    from app.models.event import Event
+    from app.models.location import Location
+    from app.models.user import User
 
 
 class MeetingType(str, enum.Enum):
@@ -63,34 +69,34 @@ class Meeting(Base):
 
     __tablename__ = "meetings"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Meeting Information
-    title = Column(String(255), nullable=False)
-    meeting_type = Column(
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    meeting_type: Mapped[MeetingType] = mapped_column(
         Enum(MeetingType, values_callable=lambda x: [e.value for e in x]),
         default=MeetingType.BUSINESS,
         nullable=False,
         server_default="business",
     )
-    meeting_date = Column(Date, nullable=False, index=True)
-    start_time = Column(Time)
-    end_time = Column(Time)
-    location = Column(String(255))
+    meeting_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    start_time: Mapped[Optional[time]] = mapped_column(Time)
+    end_time: Mapped[Optional[time]] = mapped_column(Time)
+    location: Mapped[Optional[str]] = mapped_column(String(255))
 
     # Cross-module links
-    event_id = Column(
+    event_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("events.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    location_id = Column(
+    location_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("locations.id", ondelete="SET NULL"),
         nullable=True,
@@ -98,8 +104,8 @@ class Meeting(Base):
     )
 
     # Meeting Details
-    called_by = Column(String(255))
-    status = Column(
+    called_by: Mapped[Optional[str]] = mapped_column(String(255))
+    status: Mapped[MeetingStatus] = mapped_column(
         Enum(MeetingStatus, values_callable=lambda x: [e.value for e in x]),
         default=MeetingStatus.DRAFT,
         nullable=False,
@@ -107,32 +113,42 @@ class Meeting(Base):
     )
 
     # Minutes Content
-    agenda = Column(Text)
-    notes = Column(Text)
-    motions = Column(Text)
+    agenda: Mapped[Optional[str]] = mapped_column(Text)
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    motions: Mapped[Optional[str]] = mapped_column(Text)
 
     # Approval
-    approved_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
-    approved_at = Column(DateTime(timezone=True))
+    approved_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
 
     # Relationships
-    attendees = relationship(
+    attendees: Mapped[list["MeetingAttendee"]] = relationship(
         "MeetingAttendee", back_populates="meeting", cascade="all, delete-orphan"
     )
-    action_items = relationship(
+    action_items: Mapped[list["MeetingActionItem"]] = relationship(
         "MeetingActionItem", back_populates="meeting", cascade="all, delete-orphan"
     )
-    creator = relationship("User", foreign_keys=[created_by])
-    approver = relationship("User", foreign_keys=[approved_by])
-    event = relationship("Event", foreign_keys=[event_id])
-    location_obj = relationship("Location", foreign_keys=[location_id])
+    creator: Mapped[Optional["User"]] = relationship("User", foreign_keys=[created_by])
+    approver: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[approved_by]
+    )
+    event: Mapped[Optional["Event"]] = relationship("Event", foreign_keys=[event_id])
+    location_obj: Mapped[Optional["Location"]] = relationship(
+        "Location", foreign_keys=[location_id]
+    )
 
     __table_args__ = (
         Index("idx_meetings_org_date", "organization_id", "meeting_date"),
@@ -153,39 +169,47 @@ class MeetingAttendee(Base):
 
     __tablename__ = "meeting_attendees"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    meeting_id = Column(
+    meeting_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("meetings.id", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Attendance
-    present = Column(Boolean, default=True)
-    excused = Column(Boolean, default=False)
+    present: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
+    excused: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
 
     # Waiver — excuses the member from attendance % penalty (can't vote in this meeting)
-    waiver_reason = Column(Text)
-    waiver_granted_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
-    waiver_granted_at = Column(DateTime(timezone=True))
+    waiver_reason: Mapped[Optional[str]] = mapped_column(Text)
+    waiver_granted_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    waiver_granted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     # Relationships
-    meeting = relationship("Meeting", back_populates="attendees")
-    user = relationship("User", foreign_keys=[user_id])
-    waiver_grantor = relationship("User", foreign_keys=[waiver_granted_by])
+    meeting: Mapped["Meeting"] = relationship("Meeting", back_populates="attendees")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+    waiver_grantor: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[waiver_granted_by]
+    )
 
     __table_args__ = (
         Index("idx_meeting_attendees_meeting", "meeting_id"),
@@ -208,53 +232,61 @@ class MeetingActionItem(Base):
 
     __tablename__ = "meeting_action_items"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    meeting_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    meeting_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("meetings.id", ondelete="CASCADE"),
         nullable=False,
     )
-    organization_id = Column(
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Action Item Details
-    description = Column(Text, nullable=False)
-    assigned_to = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
-    due_date = Column(Date)
-    status = Column(
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    assigned_to: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    due_date: Mapped[Optional[date]] = mapped_column(Date)
+    status: Mapped[ActionItemStatus] = mapped_column(
         Enum(ActionItemStatus, values_callable=lambda x: [e.value for e in x]),
         default=ActionItemStatus.OPEN,
         nullable=False,
         server_default="open",
     )
-    priority = Column(Integer, default=0)  # 0=normal, 1=high, 2=urgent
+    priority: Mapped[Optional[int]] = mapped_column(
+        Integer, default=0
+    )  # 0=normal, 1=high, 2=urgent
 
     # Completion
-    completed_at = Column(DateTime(timezone=True))
-    completion_notes = Column(Text)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    completion_notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Provenance. ``created_by`` is who the item is attributed to and
     # ``source`` names an automated path that created it ("mcp" for the
     # Claude connection); both are NULL for an item a person entered in the
     # app, so existing rows need no backfill.
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    source = Column(String(32), nullable=True)
+    source: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    meeting = relationship("Meeting", back_populates="action_items")
-    assignee = relationship("User", foreign_keys=[assigned_to])
-    creator = relationship("User", foreign_keys=[created_by])
+    meeting: Mapped["Meeting"] = relationship("Meeting", back_populates="action_items")
+    assignee: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[assigned_to]
+    )
+    creator: Mapped[Optional["User"]] = relationship("User", foreign_keys=[created_by])
 
     __table_args__ = (
         Index("idx_action_items_meeting", "meeting_id"),
