@@ -214,8 +214,10 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
         ? { shift_credited: formData.shift_credited ?? formData.requirement_type === 'shifts' }
         : {}),
       applies_to_all: formData.applies_to_all,
-      required_membership_types:
-        formData.required_membership_types.length > 0 ? formData.required_membership_types : undefined,
+      // Sent on every save, as [] when none is selected: an omitted key leaves
+      // the stored list in place, and a stale member category outranks role
+      // and position targeting when the requirement decides who it applies to.
+      required_membership_types: formData.required_membership_types,
       ...(formData.due_date ? { due_date: formData.due_date } : {}),
       ...(formData.start_date ? { start_date: formData.start_date } : {}),
       due_date_type: formData.due_date_type,
@@ -227,7 +229,9 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
       period_end_day: usesCalendarPeriod ? formData.period_end_day : undefined,
       include_current_month:
         formData.include_current_month_mode === 'inherit' ? null : formData.include_current_month_mode === 'include',
-      category_ids: formData.category_ids.length > 0 ? formData.category_ids : undefined,
+      // Sent on every save, as [] when none is selected, so removing the last
+      // category stops it from crediting training rather than keeping it.
+      category_ids: formData.category_ids,
       // Sent on every save, as an explicit null when unset, so switching back
       // to "apply to everyone" actually clears a stored cutoff.
       new_member_cutoff_date: grandfathers ? cutoffDate : null,

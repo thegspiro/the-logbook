@@ -54,6 +54,21 @@ _PROGRESS_RECORD_COLUMNS = (
 )
 
 
+def _same_requirement_value(stored: Any, sent: Any) -> bool:
+    """Whether a requirement edit leaves a field as it is.
+
+    The edit form sends list fields (categories, member categories, courses,
+    call types) on every save, as ``[]`` when nothing is selected, while rows
+    written by older clients or by create hold ``NULL`` for the same state.
+    Every grader treats the two alike, so a new-members-only save must too —
+    otherwise a save that changes nothing creates a copy instead of being
+    refused.
+    """
+    if stored in (None, []) and sent in (None, []):
+        return True
+    return stored == sent
+
+
 class TrainingService:
     """Service for training management"""
 
@@ -1658,7 +1673,7 @@ class TrainingService:
             key: value
             for key, value in updates.items()
             if key not in self._SPLIT_FORBIDDEN_FIELDS
-            and getattr(requirement, key) != value
+            and not _same_requirement_value(getattr(requirement, key), value)
         }
         if not changed:
             raise ValueError(

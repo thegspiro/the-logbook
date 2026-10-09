@@ -7,7 +7,7 @@ vi.mock('../../hooks/useCourseLibrary', () => ({
 }));
 
 import { RequirementModal } from './RequirementModal';
-import type { TrainingRequirement } from '../../types/training';
+import type { TrainingCategory, TrainingRequirement } from '../../types/training';
 
 const existing = (overrides: Partial<TrainingRequirement> = {}): TrainingRequirement => ({
   id: 'req-1',
@@ -180,6 +180,61 @@ describe('RequirementModal', () => {
 
       expect(onSave).toHaveBeenCalledWith(
         expect.objectContaining({ apply_to: 'everyone', training_type: null }),
+        true,
+        'req-1'
+      );
+    });
+
+    it('sends an empty category list when the last category is removed', async () => {
+      onSave.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      const category: TrainingCategory = {
+        id: 'cat-1',
+        organization_id: 'org-1',
+        name: 'Fire Suppression',
+        sort_order: 0,
+        active: true,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      };
+      render(
+        <RequirementModal
+          requirement={existing({ category_ids: ['cat-1'] })}
+          categories={[category]}
+          onClose={vi.fn()}
+          onSave={onSave}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /Fire Suppression/, pressed: true }));
+      await user.click(screen.getByRole('button', { name: 'Update Requirement' }));
+      await user.click(screen.getByRole('button', { name: 'Save for everyone' }));
+
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ category_ids: [] }), true, 'req-1');
+    });
+
+    it('sends an empty member category list when the last one is unchecked', async () => {
+      onSave.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(
+        <RequirementModal
+          requirement={existing({
+            applies_to_all: false,
+            required_membership_types: ['probationary'],
+            required_roles: ['captain'],
+          })}
+          categories={[]}
+          onClose={vi.fn()}
+          onSave={onSave}
+        />
+      );
+
+      await user.click(screen.getByRole('checkbox', { name: 'Probationary' }));
+      await user.click(screen.getByRole('button', { name: 'Update Requirement' }));
+      await user.click(screen.getByRole('button', { name: 'Save for everyone' }));
+
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ applies_to_all: false, required_membership_types: [] }),
         true,
         'req-1'
       );

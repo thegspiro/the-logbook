@@ -1,12 +1,12 @@
 """
-Widening a training requirement back to "any training type" must persist.
+Clearing a training requirement's filters must persist.
 
 RequirementModal.tsx used to omit ``training_type`` when the officer chose
-"Any Type", and an update omits a key to mean "leave it alone", so a
-requirement narrowed to continuing education stayed narrowed after the
-officer widened it and saved for everyone. The form now sends an explicit
-``null``; these tests pin the backend half of that contract for both the
-"everyone" and the "new members only" save paths.
+"Any Type", and omit ``category_ids`` / ``required_membership_types`` when
+the last one was deselected. An update omits a key to mean "leave it
+alone", so each clear kept the old value behind a success toast. The form
+now sends ``null`` / ``[]``; these tests pin the backend half of that
+contract on both the "everyone" and the "new members only" save paths.
 """
 
 import uuid
@@ -15,6 +15,7 @@ from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -59,8 +60,18 @@ async def current_user(db_session: AsyncSession):
     )
 
 
-async def _insert_ce_rolling_requirement(db_session: AsyncSession, org_id: str) -> str:
-    """72 hours over a rolling 12 months, continuing education only."""
+async def _insert_ce_rolling_requirement(
+    db_session: AsyncSession,
+    org_id: str,
+    *,
+    category_ids: str | None = None,
+    membership_types: str | None = None,
+) -> str:
+    """72 hours over a rolling 12 months, continuing education only.
+
+    ``category_ids`` / ``membership_types`` are JSON text; giving
+    ``membership_types`` also scopes the requirement to them.
+    """
     req_id = _uid()
     now = datetime.now(timezone.utc)
     await db_session.execute(
@@ -68,12 +79,21 @@ async def _insert_ce_rolling_requirement(db_session: AsyncSession, org_id: str) 
             "INSERT INTO training_requirements "
             "(id, organization_id, name, requirement_type, source, training_type, "
             "required_hours, frequency, due_date_type, rolling_period_months, "
+            "category_ids, required_membership_types, required_roles, "
             "applies_to_all, active, created_at, updated_at) "
             "VALUES (:id, :org, 'Annual Hours', 'hours', 'department', "
             "'continuing_education', 72, 'annual', 'rolling', 12, "
-            "1, 1, :now, :now)"
+            ":cats, :mtypes, :roles, :all, 1, :now, :now)"
         ),
-        {"id": req_id, "org": org_id, "now": now},
+        {
+            "id": req_id,
+            "org": org_id,
+            "cats": category_ids,
+            "mtypes": membership_types,
+            "roles": '["captain"]' if membership_types else None,
+            "all": membership_types is None,
+            "now": now,
+        },
     )
     await db_session.flush()
     return req_id
@@ -149,3 +169,93 @@ class TestWideningTrainingType:
         assert (await _load(db_session, req_id)).training_type == (
             "continuing_education"
         )
+
+
+class TestClearingListFilters:
+    async def test_an_empty_category_list_clears_the_categories(
+        self, db_session: AsyncSession, current_user
+    ):
+        req_id = await _insert_ce_rolling_requirement(
+            db_session, current_user.organization_id, category_ids='["cat-1"]'
+        )
+
+        await update_requirement(
+            requirement_id=UUID(req_id),
+            requirement_update=TrainingRequirementUpdate(category_ids=[]),
+            db=db_session,
+            current_user=current_user,
+        )
+
+        db_session.expire_all()
+        assert not (await _load(db_session, req_id)).category_ids
+
+    async def test_an_empty_member_category_list_clears_the_member_categories(
+        self, db_session: AsyncSession, current_user
+    ):
+        req_id = await _insert_ce_rolling_requirement(
+            db_session,
+            current_user.organization_id,
+            membership_types='["probationary"]',
+        )
+
+        await update_requirement(
+            requirement_id=UUID(req_id),
+            requirement_update=TrainingRequirementUpdate(required_membership_types=[]),
+            db=db_session,
+            current_user=current_user,
+        )
+
+        db_session.expire_all()
+        updated = await _load(db_session, req_id)
+        assert not updated.required_membership_types
+        assert updated.required_roles == ["captain"]
+
+
+class TestNewMembersSplitTreatsEmptyListsAsUnset:
+    async def test_empty_lists_against_null_columns_change_nothing(
+        self, db_session: AsyncSession, current_user
+    ):
+        """The form sends [] for an empty selection; a row holding NULL for the
+        same state must not make a no-op save look like a change."""
+        req_id = await _insert_ce_rolling_requirement(
+            db_session, current_user.organization_id
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            await update_requirement(
+                requirement_id=UUID(req_id),
+                requirement_update=TrainingRequirementUpdate(
+                    apply_to="new_members_only",
+                    effective_date=date(2026, 11, 1),
+                    category_ids=[],
+                    required_membership_types=[],
+                ),
+                db=db_session,
+                current_user=current_user,
+            )
+
+        assert exc.value.status_code == 400
+        assert "Nothing would change" in exc.value.detail
+
+    async def test_clearing_categories_for_new_members_reaches_the_copy_only(
+        self, db_session: AsyncSession, current_user
+    ):
+        req_id = await _insert_ce_rolling_requirement(
+            db_session, current_user.organization_id, category_ids='["cat-1"]'
+        )
+
+        response = await update_requirement(
+            requirement_id=UUID(req_id),
+            requirement_update=TrainingRequirementUpdate(
+                apply_to="new_members_only",
+                effective_date=date(2026, 11, 1),
+                category_ids=[],
+            ),
+            db=db_session,
+            current_user=current_user,
+        )
+
+        new_id = str(response.id)
+        db_session.expire_all()
+        assert not (await _load(db_session, new_id)).category_ids
+        assert (await _load(db_session, req_id)).category_ids == ["cat-1"]
