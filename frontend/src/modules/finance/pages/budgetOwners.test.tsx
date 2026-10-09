@@ -363,6 +363,26 @@ describe('BudgetDetailPage', () => {
     await waitFor(() => expect(getBudget).toHaveBeenCalledWith('b-chief'));
   });
 
+  it('leaves the amount alone once the budget has gone before the board', async () => {
+    const user = userEvent.setup();
+    const adopted = line({ id: 'b-chief', amountEditable: false });
+    getBudget.mockResolvedValue(adopted);
+    updateBudget.mockResolvedValue(adopted);
+    await openChief();
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    const dialog = await screen.findByRole('dialog');
+    const amount = within(dialog).getByLabelText('Amount budgeted');
+    expect(amount).toHaveAttribute('readonly');
+    expect(amount).toHaveAccessibleDescription(
+      'This budget has gone before the board. Change the amount with an amendment, which another officer confirms.'
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Save budget line' }));
+
+    await waitFor(() => expect(updateBudget).toHaveBeenCalled());
+    expect(updateBudget.mock.calls[0]?.[1]).not.toHaveProperty('amountBudgeted');
+  });
+
   it("shows the API's message when the amount is refused", async () => {
     const user = userEvent.setup();
     updateBudget.mockRejectedValue({

@@ -11,6 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
+import { ConfirmProvider } from '@/contexts/ConfirmContext';
 import type { BudgetTransaction, MyBudget } from '../types';
 
 let storeState: Record<string, unknown> = {};
@@ -119,10 +120,12 @@ const page = (items: BudgetTransaction[], total = items.length, offset = 0) => (
 const renderAt = (path: string) =>
   render(
     <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/finance/my-budgets" element={<MyBudgetsPage />} />
-        <Route path="/finance/budgets/:id" element={<BudgetDetailPage />} />
-      </Routes>
+      <ConfirmProvider>
+        <Routes>
+          <Route path="/finance/my-budgets" element={<MyBudgetsPage />} />
+          <Route path="/finance/budgets/:id" element={<BudgetDetailPage />} />
+        </Routes>
+      </ConfirmProvider>
     </MemoryRouter>
   );
 

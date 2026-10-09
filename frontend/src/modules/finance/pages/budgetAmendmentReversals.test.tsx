@@ -14,6 +14,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
+import { ConfirmProvider } from '@/contexts/ConfirmContext';
 import type { Budget, BudgetAmendment, FiscalYear } from '../types';
 
 let storeState: Record<string, unknown> = {};
@@ -137,9 +138,11 @@ const rows: BudgetAmendment[] = [
 const openLine = async (id: string) => {
   render(
     <MemoryRouter initialEntries={[`/finance/budgets/${id}`]}>
-      <Routes>
-        <Route path="/finance/budgets/:id" element={<BudgetDetailPage />} />
-      </Routes>
+      <ConfirmProvider>
+        <Routes>
+          <Route path="/finance/budgets/:id" element={<BudgetDetailPage />} />
+        </Routes>
+      </ConfirmProvider>
     </MemoryRouter>
   );
   await screen.findByRole('heading', { name: 'Gear' });
@@ -244,7 +247,9 @@ describe('Reverse amendment dialog', () => {
   it('states the consequence before anything is saved', async () => {
     const { dialog } = await open();
     expect(
-      dialog.getByText('This lowers the current budget by $250.00. The original amendment stays on record.')
+      dialog.getByText(
+        'Once a second officer confirms it, this lowers the current budget by $250.00. The original amendment stays on record.'
+      )
     ).toBeInTheDocument();
     expect(dialog.getByLabelText('Approval date')).toHaveValue(today());
   });
@@ -267,7 +272,7 @@ describe('Reverse amendment dialog', () => {
         approvedOn: '2026-10-08',
       })
     );
-    expect(toastSuccess).toHaveBeenCalledWith('Amendment reversed');
+    expect(toastSuccess).toHaveBeenCalledWith('Reversal recorded — awaiting confirmation by a second officer');
     await waitFor(() => expect(getBudget).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(listAmendments).toHaveBeenCalledTimes(2));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

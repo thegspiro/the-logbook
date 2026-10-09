@@ -40,6 +40,7 @@ from app.schemas.finance import (
     ApproverCoverageResponse,
     BudgetAmendmentCreate,
     BudgetAmendmentCreatedResponse,
+    BudgetAmendmentReject,
     BudgetAmendmentResponse,
     BudgetAmendmentReverse,
     BudgetCategoryCreate,
@@ -121,6 +122,7 @@ from app.services.finance_budget_request_service import (
 )
 from app.services.finance_service import (
     AmendmentAlreadyReversedError,
+    AmendmentDecidedError,
     BudgetLimitExceededError,
     FinanceEntityNotFoundError,
     FinanceService,
@@ -918,9 +920,10 @@ async def add_budget_amendment(
 
     **Requires permission: finance.manage**
 
-    Raises the line's budget by ``amount`` and logs who approved it, when and
-    why. Refused in a locked fiscal year; allowed in a draft, active or closed
-    one. A line in another department is 404.
+    Entered ``pending``: the line's budget rises by ``amount`` only when
+    another officer confirms it (``…/amendments/{id}/confirm``). Logs who
+    approved it, when and why. Refused in a locked fiscal year; allowed in a
+    draft, active or closed one. A line in another department is 404.
     """
     service = FinanceService(db)
     org_id = str(current_user.organization_id)
@@ -973,9 +976,11 @@ async def reverse_budget_amendment(
     **Requires permission: finance.manage**
 
     Records a new amendment for the whole amount, negated, with its own
-    reason and approval, and lowers the line's budget by it; the original
-    stays on record and the original budget is unchanged. Refused: an
-    amendment already reversed (409), the reversal itself (400), a locked
+    reason and approval, entered ``pending``: the line's budget drops by it
+    only when another officer confirms it. The original stays on record and
+    the original budget is unchanged. Refused: an amendment already reversed
+    or with a reversal pending (409), the reversal itself or an amendment not
+    yet confirmed (400), a locked
     fiscal year (400), a future approval date (400), and a budget that would
     no longer cover what is spent and committed (409 "Insufficient available
     budget"). A line in another department, or an amendment not on this
@@ -1016,6 +1021,128 @@ async def reverse_budget_amendment(
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+def _amendment_decision_error(e: Exception) -> HTTPException:
+    if isinstance(e, FinanceEntityNotFoundError):
+        return HTTPException(status_code=404, detail=str(e))
+    if isinstance(e, (AmendmentDecidedError, BudgetLimitExceededError)):
+        return HTTPException(status_code=409, detail=str(e))
+    if isinstance(e, ValueError):
+        return HTTPException(status_code=400, detail=safe_error_detail(e))
+    return HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.post(
+    "/budgets/{budget_id}/amendments/{amendment_id}/confirm",
+    response_model=BudgetAmendmentCreatedResponse,
+)
+async def confirm_budget_amendment(
+    budget_id: str,
+    amendment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.budget_review", "finance.manage")
+    ),
+):
+    """Confirm a pending amendment or reversal, which applies it to the line.
+
+    **Requires permission: finance.budget_review or finance.manage**
+
+    The second officer: never the member who entered it (400). Refused in a
+    locked year (400); a reversal that would leave the line short of what is
+    spent and committed, or an amendment already decided, is 409. A line in
+    another department, or an amendment not on this line, is 404.
+    """
+    service = FinanceService(db)
+    org_id = str(current_user.organization_id)
+    try:
+        amendment = await service.confirm_budget_amendment(
+            budget_id, amendment_id, org_id, str(current_user.id)
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.budget_amendment_confirmed",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "budget_id": budget_id,
+                "amendment_id": amendment.id,
+                "amount": str(amendment.amount),
+                "entered_by": amendment.created_by,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=org_id,
+        )
+        rows = await service.list_budget_amendments(budget_id, org_id)
+        return {
+            "amendment": next(r for r in rows if r["id"] == amendment.id),
+            "budget": await service.get_budget_detail(budget_id, org_id),
+        }
+    except Exception as e:
+        raise _amendment_decision_error(e)
+
+
+@router.post(
+    "/budgets/{budget_id}/amendments/{amendment_id}/reject",
+    response_model=BudgetAmendmentCreatedResponse,
+)
+async def reject_budget_amendment(
+    budget_id: str,
+    amendment_id: str,
+    data: BudgetAmendmentReject,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.budget_review", "finance.manage")
+    ),
+):
+    """Reject a pending amendment or reversal; the line does not move.
+
+    **Requires permission: finance.budget_review or finance.manage**
+
+    ``note`` (required) says why, and stays with the amendment. The member who
+    entered it may reject it too -- that is withdrawing it. A rejected
+    reversal frees its amendment to be reversed again. An amendment already
+    decided is 409; a line in another department, or an amendment not on this
+    line, is 404.
+    """
+    service = FinanceService(db)
+    org_id = str(current_user.organization_id)
+    try:
+        before = await service.list_budget_amendments(budget_id, org_id)
+        reversed_id = next(
+            (r["reverses_amendment_id"] for r in before if r["id"] == amendment_id),
+            None,
+        )
+        amendment = await service.reject_budget_amendment(
+            budget_id, amendment_id, org_id, str(current_user.id), note=data.note
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.budget_amendment_rejected",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "budget_id": budget_id,
+                "amendment_id": amendment.id,
+                "amount": str(amendment.amount),
+                "entered_by": amendment.created_by,
+                # Cleared on the row so the amendment can be reversed again;
+                # kept here so the record says which it was.
+                "reversed_amendment_id": reversed_id,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=org_id,
+        )
+        rows = await service.list_budget_amendments(budget_id, org_id)
+        return {
+            "amendment": next(r for r in rows if r["id"] == amendment.id),
+            "budget": await service.get_budget_detail(budget_id, org_id),
+        }
+    except Exception as e:
+        raise _amendment_decision_error(e)
 
 
 @router.get(

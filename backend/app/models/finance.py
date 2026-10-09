@@ -84,6 +84,20 @@ class BudgetPlanningStage(str, enum.Enum):
     ADOPTED = "adopted"
 
 
+class BudgetAmendmentStatus(str, enum.Enum):
+    """Whether an amendment (or a reversal) has moved the line's budget.
+
+    Entering one records it ``pending``; a second officer confirms it, which
+    applies the amount, or rejects it, which never does. Amendments entered
+    before confirmation existed were applied when entered, and migrate as
+    ``confirmed``.
+    """
+
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    REJECTED = "rejected"
+
+
 class PurchaseRequestStatus(str, enum.Enum):
     """Status of a purchase request"""
 
@@ -473,12 +487,14 @@ class BudgetAmendment(Base):
     """Extra money leadership approved for a budget line, as recorded.
 
     Each row is an audit record of one increase: how much, why, who approved
-    it and when, and which member entered it. Adding one raises the line's
-    ``amount_budgeted`` by ``amount`` in the same transaction, so
-    ``amount_budgeted`` stays the single live ceiling the spend checks read.
-    The line's *original* budget is not stored anywhere; it is
-    ``amount_budgeted`` minus the sum of these rows
-    (``FinanceService._budget_row``).
+    it and when, and which member entered it. An amendment is entered
+    ``pending`` and moves nothing; a second officer -- a ``finance.budget_review``
+    or ``finance.manage`` holder other than the member who entered it --
+    confirms it, which raises the line's ``amount_budgeted`` by ``amount`` in
+    the same transaction, or rejects it. ``amount_budgeted`` stays the single
+    live ceiling the spend checks read. The line's *original* budget is not
+    stored anywhere; it is ``amount_budgeted`` minus the sum of the
+    *confirmed* rows (``FinanceService._budget_row``).
 
     There is no edit or delete path: an amendment is what the department
     approved. A mistaken one is corrected by a **reversing entry** (owner
@@ -529,6 +545,23 @@ class BudgetAmendment(Base):
         nullable=True,
         unique=True,
     )
+    status: Mapped[BudgetAmendmentStatus] = mapped_column(
+        SQLEnum(
+            BudgetAmendmentStatus,
+            values_callable=lambda x: [e.value for e in x],
+        ),
+        nullable=False,
+        default=BudgetAmendmentStatus.PENDING,
+    )
+    # The second officer's decision: who confirmed or rejected it, when, and
+    # (required on a rejection) why.
+    decided_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    decided_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    decision_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationships
     organization: Mapped["Organization"] = relationship(

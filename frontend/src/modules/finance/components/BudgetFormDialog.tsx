@@ -72,6 +72,10 @@ export const BudgetFormDialog: React.FC<BudgetFormDialogProps> = ({
   // A locked year's amounts are final; the backend refuses a change, so the
   // form neither offers one nor sends the amount (omitted = left alone).
   const amountLocked = isEdit && fiscalYears.some((fy) => fy.id === budget?.fiscalYearId && fy.isLocked);
+  // From board review on, the amount moves only through a confirmed amendment.
+  // The backend decides that and reports it per line (`amountEditable`).
+  const amountByAmendment = isEdit && !amountLocked && budget?.amountEditable === false;
+  const amountFixed = amountLocked || amountByAmendment;
 
   const validate = (): string | null => {
     const next: Record<string, string> = {};
@@ -100,7 +104,7 @@ export const BudgetFormDialog: React.FC<BudgetFormDialogProps> = ({
         // Every field the form owns, blanks as null, so a cleared owner or
         // station is cleared rather than left behind (CLAUDE.md pitfall #1).
         const payload: BudgetUpdatePayload = {
-          ...(amountLocked ? {} : { amountBudgeted }),
+          ...(amountFixed ? {} : { amountBudgeted }),
           notes: blankToNull(notes),
           stationId: blankToNull(stationId),
           ownerPositionId: blankToNull(ownerPositionId),
@@ -240,13 +244,15 @@ export const BudgetFormDialog: React.FC<BudgetFormDialogProps> = ({
             className="form-input"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            readOnly={amountLocked}
+            readOnly={amountFixed}
             aria-invalid={Boolean(errors.amount)}
-            aria-describedby={amountLocked ? 'budget-amount-locked' : undefined}
+            aria-describedby={amountFixed ? 'budget-amount-fixed' : undefined}
           />
-          {amountLocked && (
-            <p id="budget-amount-locked" className="text-theme-text-secondary mt-1 text-xs">
-              This fiscal year is locked.
+          {amountFixed && (
+            <p id="budget-amount-fixed" className="text-theme-text-secondary mt-1 text-xs">
+              {amountLocked
+                ? 'This fiscal year is locked.'
+                : 'This budget has gone before the board. Change the amount with an amendment, which another officer confirms.'}
             </p>
           )}
           {errors.amount && <p className="mt-1 text-xs text-red-700 dark:text-red-400">{errors.amount}</p>}

@@ -201,15 +201,87 @@ check (mapped to the same 409).
   `reversedByName` (who entered it), from one more in-org self-join. Existing
   fields are unchanged.
 
-**Screen.** In the Amendments list a manager gets **Reverse** on an amendment
-that is neither a reversal nor already reversed, unless the year is locked; an
+**Screen.** In the Amendments list a manager gets **Reverse** on a confirmed
+amendment that is neither a reversal nor already reversed, unless the year is
+locked; an
 owner sees the list but no button. `ReverseAmendmentDialog` says "This lowers
-the current budget by $X. The original amendment stays on record.", takes
-Reason, Approved by and Approval date (today by default), and confirms with
-**Record reversal** (toast "Amendment reversed"), after which the page re-reads
+the current budget by $X. The original amendment stays on record." (prefixed
+"Once a second officer confirms it," since 2026-10-09, below), takes Reason,
+Approved by and Approval date (today by default), and confirms with **Record
+reversal**, after which the page re-reads
 the line and the list. A reversal reads "−$X · Reverses the {date} amendment of
 +$Y"; a reversed amendment's amount is struck through, with "Reversed {date} by
 {name}".
+
+### Second-officer confirmation _(2026-10-09)_
+
+Owner decision, 2026-10-09: an amendment, or a reversal, is entered **pending**
+and moves no money until a second officer confirms it. The confirmer holds
+`finance.budget_review` or `finance.manage` and is **not** whoever entered it
+(`assert_different_person`, the same separation-of-duties check the approval
+steps use — 400). Migration `0a55dae43a0a` adds to `budget_amendments`:
+`status` (`pending` / `confirmed` / `rejected`, `BudgetAmendmentStatus`;
+server default `confirmed`, so every row that existed before the upgrade, which
+had already moved the budget, stays confirmed), `decided_by` (FK users,
+`ON DELETE SET NULL`), `decided_at` and `decision_note`.
+
+**What changed from the sections above.** Entering an amendment or a reversal
+no longer touches `amount_budgeted`; confirming it does, under the same locks
+(the line `FOR UPDATE`, then the amendment). `originalAmount`,
+`amendmentsTotal` and `amendmentCount` count **confirmed** rows only, and every
+budget response adds `pendingAmendmentCount`. Only a confirmed amendment is
+reversed; a pending reversal holds its target (a second reversal is 409) until
+it is rejected, which clears its `reverses_amendment_id` so the target can be
+reversed again — the audit event `finance.budget_amendment_rejected` keeps
+`reversed_amendment_id`.
+
+**Confirming** (`FinanceService.confirm_budget_amendment`) re-checks what entry
+checked, because the year and the line may have moved since: a locked year is
+400, a total past the column's limit is 400, and a negative amount that would
+leave spent + committed uncovered is 409 "Insufficient available budget". An
+amendment already decided is **409** ("That amendment has already been
+confirmed or rejected. Refresh to see where it stands."). **Rejecting** requires a note (≤ 2000, not blank —
+422); whoever entered it may reject (withdraw) their own.
+
+**The amount freezes once the budget goes before the board.** A direct
+`PUT /finance/budgets/{id}` that changes `amountBudgeted` is 400 ("Once a
+budget goes before the board, a line's amount changes only through an
+amendment, which another officer confirms.") when the year is active or
+closing, or a draft at `board_review` or `adopted`; a draft taking requests or
+in leadership review still takes it. Every budget response reports this as
+`amountEditable`. A new line in such a year is created at zero only (400
+otherwise); its amount then comes by amendment. Owner, station and notes stay
+editable throughout. This closes the gap where the Treasurer's line edit could
+change an adopted draft.
+
+**Year-end.** A pending amendment holds the year open: `GET
+/fiscal-years/{id}/open-items` lists it as kind `budget_amendment` (its
+`entityId` is the **line**, "Amendment to {category}"), and the lock is refused
+until each one is confirmed or rejected.
+
+**API** (camelCase both ways; another department's line or amendment is 404):
+
+- `POST /finance/budgets/{id}/amendments/{amendmentId}/confirm`
+  (`finance.budget_review` or `finance.manage`) — no body. Returns
+  `{amendment, budget}` (200). Audited as `finance.budget_amendment_confirmed`.
+- `POST /finance/budgets/{id}/amendments/{amendmentId}/reject` (same gate) —
+  `{note}`. Returns `{amendment, budget}` (200). Audited as
+  `finance.budget_amendment_rejected`.
+- Amendment rows add `status`, `decidedBy`, `decidedByName`, `decidedAt`,
+  `decisionNote`, and on a reversed amendment `reversalStatus`.
+
+**Screens.** The line's page marks a pending amendment **Pending
+confirmation**, says above the figures how many are awaiting confirmation and
+that the figures exclude them, and offers **Confirm** (through the app's
+confirmation dialog, stating what it raises or lowers) and **Reject** (a
+reason, `PromptDialog`) to a reviewer or manager while the year is unlocked —
+Confirm is hidden on the viewer's own entry, where Reject reads **Withdraw**. A
+confirmed row reads "Confirmed {date} by {name}"; a rejected one is struck
+through with "Rejected {date} by {name}: {reason}"; an amendment whose reversal
+is pending reads "Reversal entered {date} by {name}, awaiting confirmation" and
+is not struck through. The Edit dialog shows the amount read-only when
+`amountEditable` is false, and the lock dialog links a pending amendment to its
+line.
 
 ## My Budgets: the owner's view, and the transaction list _(2026-10-08)_
 
