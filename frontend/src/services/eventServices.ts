@@ -420,6 +420,13 @@ export const eventService = {
     return response.data;
   },
 
+  /**
+   * Withdraw the caller's own attendance request while it is still pending.
+   */
+  async withdrawAttendancePetition(eventId: string): Promise<void> {
+    await api.delete(`/events/${eventId}/attendance-petitions/mine`);
+  },
+
   async rejectAttendancePetition(
     eventId: string,
     petitionId: string,

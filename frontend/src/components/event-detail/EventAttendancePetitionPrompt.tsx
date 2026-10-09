@@ -9,12 +9,13 @@
  * would accept rather than re-deriving the rules.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Hand } from 'lucide-react';
 import { Modal } from '../Modal';
 import DateTimeQuarterHour from '../ux/DateTimeQuarterHour';
 import { eventService } from '../../services/api';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import { AttendancePetitionStatus } from '../../constants/enums';
 import type { MyAttendancePetition } from '../../types/event';
 import { formatDateTime, localToUTC } from '../../utils/dateFormatting';
@@ -35,23 +36,54 @@ export const EventAttendancePetitionPrompt: React.FC<EventAttendancePetitionProm
   const [leftAt, setLeftAt] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const { confirm } = useConfirm();
+
+  const loadStanding = useCallback(
+    async (isCancelled: () => boolean = () => false) => {
+      try {
+        const result = await eventService.getMyAttendancePetition(eventId);
+        if (!isCancelled()) setStanding(result);
+      } catch {
+        // Non-critical: without an answer the page simply offers nothing,
+        // rather than a button the server may refuse.
+        if (!isCancelled()) setStanding(null);
+      }
+    },
+    [eventId]
+  );
 
   useEffect(() => {
     let cancelled = false;
-    eventService
-      .getMyAttendancePetition(eventId)
-      .then((result) => {
-        if (!cancelled) setStanding(result);
-      })
-      .catch(() => {
-        // Non-critical: without an answer the page simply offers nothing,
-        // rather than a button the server may refuse.
-        if (!cancelled) setStanding(null);
-      });
+    void loadStanding(() => cancelled);
     return () => {
       cancelled = true;
     };
-  }, [eventId]);
+  }, [loadStanding]);
+
+  const handleWithdraw = async () => {
+    const confirmed = await confirm({
+      title: 'Withdraw your request?',
+      message:
+        'The organizer will no longer be asked to mark you present. You can send a new request afterwards if you still need one.',
+      confirmLabel: 'Withdraw request',
+      cancelLabel: 'Keep it',
+      variant: 'warning',
+    });
+    if (!confirmed) return;
+    setWithdrawing(true);
+    try {
+      await eventService.withdrawAttendancePetition(eventId);
+      toast.success('Request withdrawn');
+    } catch (err) {
+      toast.error(getErrorDetail(err) || 'Failed to withdraw your request');
+    } finally {
+      setWithdrawing(false);
+    }
+    // Either way the server's answer replaces ours: after a refusal the
+    // request may have been decided in the meantime.
+    await loadStanding();
+  };
 
   const openForm = () => {
     setReason('');
@@ -98,9 +130,22 @@ export const EventAttendancePetitionPrompt: React.FC<EventAttendancePetitionProm
     const reviewer = petition.reviewed_by_name || 'the event organizer';
     if (petition.status === AttendancePetitionStatus.PENDING) {
       return (
-        <div className="alert-info rounded-lg p-4 text-sm" role="status">
-          You asked to be marked present on {formatDateTime(petition.created_at, timezone)}. The event organizer has
-          been notified and will confirm or decline it.
+        <div
+          className="alert-info flex flex-col gap-3 rounded-lg p-4 text-sm sm:flex-row sm:items-center sm:justify-between"
+          role="status"
+        >
+          <span>
+            You asked to be marked present on {formatDateTime(petition.created_at, timezone)}. The event organizer has
+            been notified and will confirm or decline it.
+          </span>
+          <button
+            type="button"
+            onClick={() => void handleWithdraw()}
+            disabled={withdrawing}
+            className="btn-secondary shrink-0 text-sm font-medium disabled:opacity-50"
+          >
+            {withdrawing ? 'Withdrawing...' : 'Withdraw request'}
+          </button>
         </div>
       );
     }
@@ -165,8 +210,8 @@ export const EventAttendancePetitionPrompt: React.FC<EventAttendancePetitionProm
           }
         >
           <p id="attendance-petition-description" className="text-theme-text-secondary mb-4 text-sm">
-            The event organizer will be notified and can confirm your attendance or decline the request. You can ask
-            once per event.
+            The event organizer will be notified and can confirm your attendance or decline the request. You can
+            withdraw it while it is waiting; once it has been decided, the decision stands.
           </p>
 
           {formError && (

@@ -817,6 +817,12 @@ client API cache.
 - **Notices:** the request goes to reviewers in-app and by email
   (`EmailKind.EVENT_DUTIES`); the decision goes to the member
   (`EVENT_REMINDERS`).
+- **Withdrawing** _(2026-10-09)_: `DELETE …/attendance-petitions/mine`
+  removes the member's own request while it is pending — **Withdraw request**
+  on the waiting notice, behind a confirmation. The row is deleted rather than
+  marked, so the one-per-member index lets them ask again; the reviewers'
+  prompts are archived and the audit log keeps the record. A decided request
+  cannot be withdrawn.
 
 ## Organizer, alternate and transfer _(2026-10-03)_
 

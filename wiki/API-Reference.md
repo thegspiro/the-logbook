@@ -1180,6 +1180,7 @@ GET    /api/v1/events/{event_id}/attendance-petitions/mine                    # 
 GET    /api/v1/events/{event_id}/attendance-petitions                         # Every request, pending first (reviewers)
 POST   /api/v1/events/{event_id}/attendance-petitions/{petition_id}/approve   # Record the confirmed times (reviewers)
 POST   /api/v1/events/{event_id}/attendance-petitions/{petition_id}/reject    # Decline with a reason (reviewers)
+DELETE /api/v1/events/{event_id}/attendance-petitions/mine                    # Withdraw the caller's pending request (204, 2026-10-09)
 ```
 
 | Route         | Body                                                                                                                                        |
@@ -1198,20 +1199,28 @@ exactly when `can_request` is true, so the rules below live only on the server:
 - it ended (`actual_end_time`, else `end_datetime`) no more than **30 days** ago;
 - the caller is not already present (`checked_in`, or an officer's
   `override_check_in_at`);
-- the caller has not asked before — one request per member per event, enforced
-  by a unique index, so a declined request is final.
+- the caller has no request on file — one request per member per event,
+  enforced by a unique index, so a decided request is final.
+
+**Withdrawing** (`DELETE .../mine`) removes the caller's own request while it
+is still pending, so they may ask again under the same rules; the reviewers'
+in-app prompts are archived and the audit log records it
+(`event_attendance_petition_withdrawn`). An approved or declined request cannot
+be withdrawn (400), and with no request on file the answer is 404. The row lock
+it shares with approve and reject means a withdrawal and a decision arriving
+together resolve to one or the other.
 
 Approval writes the same RSVP override **Edit Times** writes
 (`override_check_in_at`, `override_check_out_at`, `override_duration_minutes`)
 and sets `checked_in`; finalize credits it. It is therefore refused while
 attendance is finalized; declining is not. Nobody decides their own request.
 
-| Status | When                                                                                                      |
-| ------ | --------------------------------------------------------------------------------------------------------- |
-| `400`  | Not eligible (the sentence says why), invalid times, or the request is already decided                    |
-| `403`  | The caller is not the organizer, alternate or an `events.manage` holder, or is deciding their own request |
-| `404`  | Event or request not in the caller's organization, or the event is a draft                                |
-| `409`  | Approve while attendance is finalized — reopen attendance first                                           |
+| Status | When                                                                                                           |
+| ------ | -------------------------------------------------------------------------------------------------------------- |
+| `400`  | Not eligible (the sentence says why), invalid times, or the request is already decided (including on withdraw) |
+| `403`  | The caller is not the organizer, alternate or an `events.manage` holder, or is deciding their own request      |
+| `404`  | Event or request not in the caller's organization, or the event is a draft                                     |
+| `409`  | Approve while attendance is finalized — reopen attendance first                                                |
 
 Responses carry member names and free-text reasons, so the frontend never
 caches them (`/attendance-petitions` in `UNCACHEABLE_SUBSTRINGS`).
