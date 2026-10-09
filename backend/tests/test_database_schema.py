@@ -532,6 +532,9 @@ class TestColumnConstraints:
             # integration_sync_logs: the row is the run, server-stamped when
             # it begins; a separate created_at would always equal it.
             "started_at",
+            # encryption_key_custody: the row is the confirmation, stamped
+            # when it is given and never updated.
+            "confirmed_at",
         }
         missing_timestamp = []
         for table_name, table in _tables.items():

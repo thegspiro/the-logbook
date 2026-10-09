@@ -11,7 +11,6 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,6 +37,7 @@ from app.services.file_storage_service import (
     FileRules,
     FileStorageService,
     StorageArea,
+    stored_file_response,
 )
 from app.utils import download_names
 from app.utils.org_timezone import resolve_scheduling_timezone
@@ -577,7 +577,7 @@ async def download_document(
 
     extension = download_names.stored_extension(resolved_path)
     tz = await resolve_scheduling_timezone(db, current_user.organization_id)
-    return FileResponse(
+    return stored_file_response(
         path=resolved_path,
         filename=download_names.descriptive_filename(
             download_names.local_day(document.created_at, tz),

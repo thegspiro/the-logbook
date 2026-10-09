@@ -33,9 +33,9 @@ from fastapi import (
     Form,
     HTTPException,
     Query,
+    Response,
     UploadFile,
 )
-from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import PaginationParams, get_current_user, require_permission
@@ -66,6 +66,7 @@ from app.schemas.suggestion import (
     SuggestionBoxPublic,
     SuggestionBoxWrite,
 )
+from app.services.file_storage_service import stored_file_response
 from app.services.notification_rules import NotificationRuleResolver
 from app.services.suggestion_service import (
     MAX_SCREENSHOT_BYTES,
@@ -135,7 +136,7 @@ async def _read_screenshots(files: List[UploadFile], db: AsyncSession) -> List[b
 
 async def _serve_attachment(
     db: AsyncSession, suggestion: Suggestion, attachment_id: str
-) -> FileResponse:
+) -> Response:
     attachment = SuggestionService.find_attachment(suggestion, attachment_id)
     if attachment is None:
         raise HTTPException(status_code=404, detail="Attachment not found")
@@ -152,7 +153,7 @@ async def _serve_attachment(
         extension=download_names.stored_extension(real_path),
         fallback="screenshot",
     )
-    return FileResponse(
+    return stored_file_response(
         real_path, media_type=attachment.content_type, filename=filename
     )
 

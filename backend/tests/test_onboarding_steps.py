@@ -38,9 +38,9 @@ def test_required_steps_exist():
 
 
 @pytest.mark.unit
-def test_only_organization_and_admin_user_are_required():
+def test_only_organization_admin_user_and_key_custody_are_required():
     required = {step["name"] for step in STEPS if step["required"]}
-    assert required == {"organization", "admin_user"}
+    assert required == {"organization", "admin_user", "key_custody"}
 
 
 @pytest.mark.unit

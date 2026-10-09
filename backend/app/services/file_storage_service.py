@@ -37,10 +37,15 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any, Mapping, Optional
+from urllib.parse import quote
 
+from fastapi import Response
+from fastapi.responses import FileResponse, StreamingResponse
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import iterate_in_threadpool
 
+from app.core import file_encryption
 from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.services.upload_scanning import reject_if_malicious
 from app.utils.mime_validation import detect_mime_type, extension_matches_mime
@@ -188,9 +193,15 @@ def resolve(file_path: Any, organization_id: Any, *areas: StorageArea) -> Option
 
 
 def write_atomically(directory: str, name: str, data: bytes) -> str:
-    """Write *data* to ``directory/name`` via a temporary name and a rename,
-    creating the directory with restricted permissions. Blocking: call it
-    through ``asyncio.to_thread``."""
+    """Encrypt *data* and write it to ``directory/name`` via a temporary name
+    and a rename, creating the directory with restricted permissions.
+    Blocking: call it through ``asyncio.to_thread``.
+
+    Every stored file is encrypted at rest (owner decision 26: always on).
+    Callers hand over plaintext; :func:`stored_file_response` and
+    ``file_encryption.read_plaintext`` give it back.
+    """
+    data = file_encryption.encrypt_bytes(data)
     os.makedirs(directory, mode=_DIR_MODE, exist_ok=True)
     final_path = os.path.join(directory, name)
     partial = os.path.join(directory, f".{name}.partial")
@@ -208,6 +219,44 @@ def write_atomically(directory: str, name: str, data: bytes) -> str:
             pass
         raise
     return final_path
+
+
+def stored_file_response(
+    path: str,
+    *,
+    filename: str,
+    media_type: str,
+    content_disposition_type: str = "attachment",
+) -> Response:
+    """The response that hands a stored file to its reader.
+
+    An encrypted file is decrypted as it streams; a file stored before
+    encryption (no header) is served from disk as before. Either way the
+    reader gets the plaintext with its true length.
+    """
+    if not file_encryption.is_encrypted(path):
+        return FileResponse(
+            path=path,
+            filename=filename,
+            media_type=media_type,
+            content_disposition_type=content_disposition_type,
+        )
+    size, chunks = file_encryption.open_plaintext_stream(path)
+    # Starlette's FileResponse rule for the filename, so both branches send
+    # the same header for the same name.
+    quoted = quote(filename)
+    if quoted != filename:
+        disposition = f"{content_disposition_type}; filename*=utf-8''{quoted}"
+    else:
+        disposition = f'{content_disposition_type}; filename="{filename}"'
+    return StreamingResponse(
+        iterate_in_threadpool(chunks),
+        media_type=media_type,
+        headers={
+            "content-disposition": disposition,
+            "content-length": str(size),
+        },
+    )
 
 
 def remove_quietly(path: Optional[str]) -> None:

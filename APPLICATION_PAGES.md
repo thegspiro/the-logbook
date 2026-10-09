@@ -69,6 +69,7 @@ Complete reference of all pages in the application, organized by module.
 | `/onboarding/module-selection`         | Module Selection (alias) | Renders the same page as `/onboarding/modules` — **not** a redirect, so the URL stays as typed |
 | `/onboarding/modules/:moduleId/config` | Module Config            | Configure individual module                                                                    |
 | `/onboarding/system-owner`             | System Owner Creation    | Create initial system owner account                                                            |
+| `/onboarding/encryption-key`           | Encryption Key           | Confirm the encryption key is stored apart from the server and its backups (required)          |
 | `/onboarding/security-check`           | Security Check           | Security verification                                                                          |
 | `/onboarding/stations`                 | Station Setup            | Create the department's stations                                                               |
 | `/onboarding/apparatus`                | Apparatus Setup          | Create the department's apparatus                                                              |

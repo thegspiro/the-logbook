@@ -67,10 +67,10 @@ describe('onboarding step order', () => {
     expect(keys.indexOf('modules')).toBeLessThan(keys.indexOf('positions'));
   });
 
-  it('marks only the organization and the administrator account as required', () => {
+  it('marks only the organization, the administrator account and the encryption key as required', () => {
     // Mirrors `required_steps` in OnboardingService.complete_onboarding.
     const required = ONBOARDING_STEPS.filter((s) => !s.optional).map((s) => s.key);
-    expect(required).toEqual(['organization', 'system_owner']);
+    expect(required).toEqual(['organization', 'system_owner', 'key_custody']);
   });
 
   it('has no duplicate keys or paths', () => {

@@ -46,7 +46,11 @@ from app.schemas.training_submission import (
     sanitize_attachments,
 )
 from app.services import file_storage_service as file_storage
-from app.services.file_storage_service import FileRules, StorageArea
+from app.services.file_storage_service import (
+    FileRules,
+    StorageArea,
+    stored_file_response,
+)
 from app.services.training_submission_service import TrainingSubmissionService
 from app.utils import download_names
 
@@ -661,7 +665,6 @@ async def download_submission_attachment(
     current_user: User = Depends(get_current_user),
 ):
     """Stream one stored attachment by its index."""
-    from fastapi.responses import FileResponse
 
     submission = await _load_submission_for_attachment(db, submission_id, current_user)
     attachments = submission.attachments or []
@@ -686,7 +689,7 @@ async def download_submission_attachment(
         fallback=download_names.original_stem(attachment.get("file_name"))
         or "certificate",
     )
-    return FileResponse(
+    return stored_file_response(
         real_path,
         media_type=attachment.get("file_type") or "application/octet-stream",
         filename=filename,

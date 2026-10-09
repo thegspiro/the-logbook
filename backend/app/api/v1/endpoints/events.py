@@ -23,7 +23,6 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse
 from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import String, cast, func, or_, select
@@ -111,6 +110,7 @@ from app.services.file_storage_service import (
     FileRules,
     FileStorageService,
     StorageArea,
+    stored_file_response,
 )
 from app.services.guest_check_in_service import GuestCheckInService
 from app.services.integration_services.notification_dispatch import (
@@ -3090,7 +3090,7 @@ async def download_event_attachment(
     )
     extension = download_names.stored_extension(resolved_path)
     tz = await resolve_scheduling_timezone(db, current_user.organization_id)
-    return FileResponse(
+    return stored_file_response(
         path=resolved_path,
         filename=download_names.descriptive_filename(
             download_names.local_day(event.start_datetime, tz),

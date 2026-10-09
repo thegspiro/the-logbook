@@ -16,6 +16,7 @@ import {
   PositionSetup,
   ModuleOverview,
   SystemOwnerCreation,
+  KeyCustody,
   SetupComplete,
   SetupPrerequisites,
 } from './pages';
@@ -95,6 +96,10 @@ export const getOnboardingRoutes = () => {
 
       {/* Step 2 - System Owner Creation. Identity before the rest of setup. */}
       <Route path="/onboarding/system-owner" element={<SystemOwnerCreation />} />
+
+      {/* Encryption key safekeeping - required; there is no skip */}
+      <Route path="/onboarding/encryption-key" element={<KeyCustody />} />
+
       {/* Legacy route redirect for admin-user */}
       <Route path="/onboarding/admin-user" element={<Navigate to="/onboarding/system-owner" replace />} />
 
