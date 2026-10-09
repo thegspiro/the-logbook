@@ -288,6 +288,14 @@ Requires `members.manage` permission. Tab-based admin interface.
 | `/events/analytics` | Event Analytics Dashboard  | `analytics.view` |
 | `/events/templates` | Event Templates Management | `events.manage`  |
 
+### Attendance Requests _(2026-10-09)_
+
+| URL                           | Page                              | Permission    |
+| ----------------------------- | --------------------------------- | ------------- |
+| `/events/attendance-requests` | Attendance requests across events | Authenticated |
+
+> Authenticated rather than `events.manage` on purpose: an event's organizer or alternate decides its "I was there" requests whether or not they hold `events.manage`. The server scopes the list to the events the viewer organizes; **All events** needs `events.manage`.
+
 ### Check-In Settings _(2026-08-09)_
 
 Set per event on **Edit Event → Check-In Settings**. Both default to off.
@@ -1209,6 +1217,7 @@ lot's number or expiration date require `inventory.check_manage` or
 | `/finance/approvals`                  | Approvals                  | `finance.approve`                                     |
 | `/finance/settings`                   | Finance Settings           | `finance.manage`                                      |
 | `/finance/settings/approval-chains`   | Approval Chains            | `finance.configure_approvals`                         |
+| `/finance/settings/quickbooks`        | QuickBooks Export          | `finance.manage`                                      |
 | `/finance/approvals/:token`           | Tokenized Approval Landing | Token-based                                           |
 
 > **Next year's budget requests** _(2026-10-08)_. `/finance/budget-requests`

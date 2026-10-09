@@ -85,7 +85,7 @@ def encode_state(
         "nonce": nonce,
         "exp": int(time.time()) + _STATE_TTL_SECONDS,
     }
-    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return str(jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM))
 
 
 def decode_state(token: str) -> dict[str, Any]:
@@ -94,7 +94,7 @@ def decode_state(token: str) -> dict[str, Any]:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
     except jwt.PyJWTError as exc:
         raise SalesforceOAuthError("invalid_state") from exc
-    if payload.get("purpose") != _STATE_PURPOSE:
+    if not isinstance(payload, dict) or payload.get("purpose") != _STATE_PURPOSE:
         raise SalesforceOAuthError("invalid_state")
     return payload
 

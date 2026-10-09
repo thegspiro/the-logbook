@@ -549,3 +549,80 @@ class TestWithdraw:
         petition, _ = await service.get_own(event_id, member)
         assert petition is not None
         assert petition.id == theirs.id
+
+
+class TestPendingAcrossEvents:
+    async def _ask_on(self, db_session, dept, event_id, user_key="member"):
+        member = await _load(db_session, dept[user_key])
+        return await EventAttendancePetitionService(db_session).submit(
+            event_id, member, _ask()
+        )
+
+    async def test_an_organizer_sees_their_events_oldest_first(self, db_session, dept):
+        first_event = await _event(db_session, dept["org"], dept["organizer"])
+        second_event = await _event(
+            db_session, dept["org"], dept["manager"], alternate=dept["organizer"]
+        )
+        someone_elses = await _event(db_session, dept["org"], dept["manager"])
+        older = await self._ask_on(db_session, dept, first_event)
+        newer = await self._ask_on(db_session, dept, second_event, "bystander")
+        await self._ask_on(db_session, dept, someone_elses)
+        # Both land in the same second otherwise; created_at has no fraction.
+        await db_session.execute(
+            text(
+                "UPDATE event_attendance_petitions SET created_at = :at WHERE id = :id"
+            ),
+            {"at": datetime.now(timezone.utc) - timedelta(hours=1), "id": older.id},
+        )
+        await db_session.flush()
+
+        organizer = await _load(db_session, dept["organizer"])
+        rows = await EventAttendancePetitionService(
+            db_session
+        ).list_pending_for_reviewer(organizer)
+
+        # Organizer of the first, alternate on the second, nothing else.
+        assert [petition.id for petition, _ in rows] == [older.id, newer.id]
+        assert [event.id for _, event in rows] == [first_event, second_event]
+
+    async def test_decided_requests_drop_off(self, db_session, dept):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        petition = await self._ask_on(db_session, dept, event_id)
+        organizer = await _load(db_session, dept["organizer"])
+        service = EventAttendancePetitionService(db_session)
+        await service.reject(
+            event_id, petition.id, organizer, AttendancePetitionReject(review_note="No")
+        )
+
+        organizer = await _load(db_session, dept["organizer"])
+        assert await service.list_pending_for_reviewer(organizer) == []
+
+    async def test_a_manager_may_widen_to_the_whole_department(self, db_session, dept):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        petition = await self._ask_on(db_session, dept, event_id)
+        other_org = await _org(db_session)
+        await _event(db_session, other_org, None)
+        manager = await _load(db_session, dept["manager"])
+        service = EventAttendancePetitionService(db_session)
+
+        assert await service.list_pending_for_reviewer(manager) == []
+        rows = await service.list_pending_for_reviewer(manager, include_all=True)
+        assert [p.id for p, _ in rows] == [petition.id]
+
+    async def test_everyone_else_may_not_widen_it(self, db_session, dept):
+        organizer = await _load(db_session, dept["organizer"])
+
+        with pytest.raises(PermissionError):
+            await EventAttendancePetitionService(db_session).list_pending_for_reviewer(
+                organizer, include_all=True
+            )
+
+    async def test_your_own_request_is_never_listed(self, db_session, dept):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        await self._ask_on(db_session, dept, event_id, "manager")
+
+        manager = await _load(db_session, dept["manager"])
+        rows = await EventAttendancePetitionService(
+            db_session
+        ).list_pending_for_reviewer(manager, include_all=True)
+        assert rows == []

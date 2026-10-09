@@ -114,7 +114,7 @@ async def get_access_token(base_url: str, client_id: str, client_secret: str) ->
         raise PayPalError(f"PayPal returned {response.status_code} requesting a token")
 
     token = response.json().get("access_token")
-    if not token:
+    if not isinstance(token, str) or not token:
         raise PayPalError("PayPal did not return an access token")
     return token
 
@@ -192,7 +192,7 @@ async def verify_webhook_signature(
     if response.status_code >= 400:
         logger.error(f"PayPal verify-webhook-signature returned {response.status_code}")
         return False
-    return response.json().get("verification_status") == "SUCCESS"
+    return bool(response.json().get("verification_status") == "SUCCESS")
 
 
 # ======================================================================
