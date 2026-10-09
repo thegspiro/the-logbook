@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**298 tables · 4918 columns · 989 foreign keys**
+**300 tables · 4945 columns · 993 foreign keys**
 
 ---
 
@@ -555,6 +555,15 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`security_alerts`](#security_alerts) | `SecurityAlertRecord` | 17 | Persistent security alert records |
+
+### Shift_History_Import
+
+<sub>`app/models/shift_history_import.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`shift_history_import_rows`](#shift_history_import_rows) | `ShiftHistoryImportRow` | 9 | One data row of the file, kept as read plus the reviewer's edits. |
+| [`shift_history_imports`](#shift_history_imports) | `ShiftHistoryImport` | 18 | One uploaded file and the review state around it. |
 
 ### Skills Testing
 
@@ -7465,6 +7474,69 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_security_alerts_threat_level` (`threat_level`)
 - `ix_security_alerts_user_id` (`user_id`)
 
+## Shift_History_Import
+
+### `shift_history_import_rows`
+
+**ShiftHistoryImportRow** · `app/models/shift_history_import.py`
+
+> One data row of the file, kept as read plus the reviewer's edits. Tenant-scoped only through its import: it has no tenant column of its own, so every lookup by id must constrain ``import_id`` to an import already resolved in the caller's organization (pitfall #14, the parent-resolution shape).
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `import_id` | VARCHAR(36) | no | FK, IDX |  | → `shift_history_imports.id` ON DELETE CASCADE |
+| `line_number` | INTEGER | no |  |  |  |
+| `raw` | JSON | no |  |  |  |
+| `edits` | JSON | yes |  |  |  |
+| `excluded` | BOOL | no |  | `0` |  |
+| `match_decision` | VARCHAR(20) | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_shift_history_import_rows_import_line` (`import_id`, `line_number`)
+
+**Constraints**
+
+- CHECK `ck_shift_history_import_rows_ck_shift_history_import_rows_match_decision`: `match_decision IS NULL OR match_decision IN ('accept', 'separate')`
+
+### `shift_history_imports`
+
+**ShiftHistoryImport** · `app/models/shift_history_import.py`
+
+> One uploaded file and the review state around it.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `status` | VARCHAR(20) | no |  | `draft` |  |
+| `source_filename` | VARCHAR(255) | no |  |  |  |
+| `timezone` | VARCHAR(64) | no |  |  |  |
+| `headers` | JSON | no |  |  |  |
+| `column_mapping` | JSON | no |  |  |  |
+| `member_mappings` | JSON | yes |  |  |  |
+| `unit_mappings` | JSON | yes |  |  |  |
+| `position_mappings` | JSON | yes |  |  |  |
+| `existing_shift_decisions` | JSON | yes |  |  |  |
+| `row_count` | INTEGER | no |  | `0` |  |
+| `summary` | JSON | yes |  |  |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `committed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `committed_at` | DATETIME | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_shift_history_imports_org_status` (`organization_id`, `status`)
+
+**Constraints**
+
+- CHECK `ck_shift_history_imports_ck_shift_history_imports_status`: `status IN ('draft', 'committed')`
+
 ## Skills Testing
 
 ### `skill_templates`
@@ -10384,7 +10456,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (361 references)
+### → `users` (363 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10675,6 +10747,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_completion_reports` | `reviewed_by` | SET NULL | yes |
 | `shift_completion_reports` | `trainee_id` | CASCADE | no |
 | `shift_equipment_checks` | `checked_by` | SET NULL | yes |
+| `shift_history_imports` | `committed_by` | SET NULL | yes |
+| `shift_history_imports` | `created_by` | SET NULL | yes |
 | `shift_patterns` | `created_by` | SET NULL | yes |
 | `shift_swap_requests` | `requesting_user_id` | CASCADE | no |
 | `shift_swap_requests` | `reviewed_by` | SET NULL | yes |
@@ -10750,7 +10824,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (244 references)
+### → `organizations` (245 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10949,6 +11023,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_calls` | `organization_id` | CASCADE | no |
 | `shift_completion_reports` | `organization_id` | CASCADE | no |
 | `shift_equipment_checks` | `organization_id` | CASCADE | no |
+| `shift_history_imports` | `organization_id` | CASCADE | no |
 | `shift_patterns` | `organization_id` | CASCADE | no |
 | `shift_swap_requests` | `organization_id` | CASCADE | no |
 | `shift_template_equipment_checks` | `organization_id` | CASCADE | no |
@@ -11929,6 +12004,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `screening_records` | `requirement_id` | SET NULL | yes |
 
+### → `shift_history_imports` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `shift_history_import_rows` | `import_id` | CASCADE | no |
+
 ### → `skill_templates` (1 references)
 
 | From table | Column | On delete | Nullable |
@@ -12007,6 +12088,7 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `shift_attendance` | `shifts`, `users` |
 | `shift_equipment_check_items` | `check_template_items`, `shift_equipment_checks` |
 | `shift_equipment_check_seals` | `check_template_compartments`, `shift_equipment_checks` |
+| `shift_history_import_rows` | `shift_history_imports` |
 | `skill_test_viewers` | `skill_tests`, `users` |
 | `user_positions` | `positions`, `users` |
 | `votes` | `candidates`, `elections`, `users` |
