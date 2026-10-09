@@ -6,7 +6,13 @@
  * it and add up what the screens list (CLAUDE.md pitfall #29).
  */
 
-import type { BudgetRequest, BudgetRequestStatus, FiscalYearOption, MonetaryAmount } from '../types';
+import type {
+  BudgetPlanningStage,
+  BudgetRequest,
+  BudgetRequestStatus,
+  FiscalYearOption,
+  MonetaryAmount,
+} from '../types';
 import { formatCalendarDate } from '@/utils/dateFormatting';
 
 export const BUDGET_REQUEST_STATUS_LABELS: Record<BudgetRequestStatus, string> = {
@@ -38,8 +44,19 @@ export const BUDGET_REQUEST_STATUS_ORDER: BudgetRequestStatus[] = [
 export const isDecided = (request: BudgetRequest): boolean =>
   request.status === 'approved' || request.status === 'adjusted' || request.status === 'declined';
 
+/** A draft year's planning stage, as the screens name it. */
+export const PLANNING_STAGE_LABELS: Record<BudgetPlanningStage, string> = {
+  requests: 'Taking requests',
+  leadership_review: 'Leadership review',
+  board_review: 'Board review',
+};
+
 /** The banner line for a draft year's request window. */
-export function requestWindowText(year: Pick<FiscalYearOption, 'requestDeadline' | 'requestsOpen'>): string {
+export function requestWindowText(
+  year: Pick<FiscalYearOption, 'requestDeadline' | 'requestsOpen' | 'planningStage'>
+): string {
+  if (year.planningStage === 'leadership_review') return 'Requests are closed for leadership review';
+  if (year.planningStage === 'board_review') return 'Requests are closed: the budget is before the board';
   if (!year.requestsOpen) return 'Requests are closed';
   if (year.requestDeadline) return `Requests close ${formatCalendarDate(year.requestDeadline)}`;
   return 'No deadline set';

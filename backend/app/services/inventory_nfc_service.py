@@ -682,10 +682,11 @@ class InventoryNfcService:
 
         results: List[Dict[str, Any]] = []
         for index, tap in enumerate(taps):
-            area: Optional[StorageArea] = None
+            area = None
             tapped: Optional[Tuple[InventoryItem, Optional[str]]] = None
-            if tap.get("storage_area_id"):
-                area = await self._find_storage_area(tap["storage_area_id"], org_id)
+            tap_area_id = tap.get("storage_area_id")
+            if tap_area_id:
+                area = await self._find_storage_area(tap_area_id, org_id)
                 if area is None or not area.is_active:
                     results.append(
                         {
@@ -830,8 +831,9 @@ class InventoryNfcService:
         unread = other_shelf = 0
         for tap in taps:
             area: Optional[StorageArea] = None
-            if tap.get("storage_area_id"):
-                area = await self._find_storage_area(tap["storage_area_id"], org_id)
+            tap_area_id = tap.get("storage_area_id")
+            if tap_area_id:
+                area = await self._find_storage_area(tap_area_id, org_id)
                 if area is None or not area.is_active:
                     unread += 1
                     continue
@@ -1121,7 +1123,7 @@ class InventoryNfcService:
                 InventoryItem.organization_id == str(organization_id),
             )
         )
-        item = result.scalar_one_or_none()
+        item: InventoryItem | None = result.scalar_one_or_none()
         if item is None:
             raise LookupError("Item not found")
         return item
@@ -1135,7 +1137,8 @@ class InventoryNfcService:
                 StorageArea.organization_id == str(organization_id),
             )
         )
-        return result.scalar_one_or_none()
+        storage_area: Optional[StorageArea] = result.scalar_one_or_none()
+        return storage_area
 
     async def _get_storage_area(
         self, storage_area_id: str, organization_id: str
@@ -1161,7 +1164,10 @@ class InventoryNfcService:
                 EquipmentCheckTemplate.organization_id == str(organization_id),
             )
         )
-        return result.scalar_one_or_none()
+        check_template_compartment: Optional[CheckTemplateCompartment] = (
+            result.scalar_one_or_none()
+        )
+        return check_template_compartment
 
     async def _get_compartment(
         self, compartment_id: str, organization_id: str
@@ -1207,7 +1213,7 @@ class InventoryNfcService:
             )
             .options(selectinload(InventoryItem.category))
         )
-        item = result.scalar_one_or_none()
+        item: InventoryItem | None = result.scalar_one_or_none()
         # Matches the barcode lookup, which only finds active items: a tag on a
         # retired helmet should not quietly put it back into circulation.
         if item is None or not item.active:
@@ -1223,7 +1229,7 @@ class InventoryNfcService:
                 InventoryNfcTag.organization_id == str(organization_id),
             )
         )
-        tag = result.scalar_one_or_none()
+        tag: InventoryNfcTag | None = result.scalar_one_or_none()
         if tag is None:
             raise LookupError("NFC tag not found")
         return tag
@@ -1240,7 +1246,7 @@ class InventoryNfcService:
             .options(selectinload(InventoryNfcAudit.items))
             .execution_options(populate_existing=True)
         )
-        audit = result.scalar_one_or_none()
+        audit: InventoryNfcAudit | None = result.scalar_one_or_none()
         if audit is None:
             raise LookupError("Audit not found")
         return audit
@@ -1284,7 +1290,8 @@ class InventoryNfcService:
                 InventoryNfcTag.organization_id == str(organization_id),
             )
         )
-        return result.scalar_one_or_none()
+        verified_tag_id: Optional[str] = result.scalar_one_or_none()
+        return verified_tag_id
 
     async def _find_by_hash(
         self, organization_id: str, uid_hash: str
@@ -1295,7 +1302,8 @@ class InventoryNfcService:
                 InventoryNfcTag.uid_hash == uid_hash,
             )
         )
-        return result.scalar_one_or_none()
+        inventory_nfc_tag: Optional[InventoryNfcTag] = result.scalar_one_or_none()
+        return inventory_nfc_tag
 
     async def _already_linked_message(
         self,

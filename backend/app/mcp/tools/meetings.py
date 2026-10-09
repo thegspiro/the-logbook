@@ -129,7 +129,7 @@ def _clip(value: Any) -> tuple[Any, bool]:
     return value[:MINUTES_TEXT_CHARS], True
 
 
-def _motion(mo: Any, movers: dict[str, str]) -> dict:
+def _motion(mo: Any, movers: dict[str, Optional[str]]) -> dict:
     motion_text, text_cut = _clip(mo.motion_text)
     discussion, discussion_cut = _clip(mo.discussion_notes)
     return {

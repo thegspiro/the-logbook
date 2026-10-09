@@ -313,6 +313,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/events/:id/check-in', label: 'Event self check-in' },
       { path: '/events/admin', label: 'Events administration hub', permission: 'events.manage' },
       { path: '/events/templates', label: 'Event templates', permission: 'events.manage' },
+      { path: '/events/attendance-requests', label: 'Attendance requests across events' },
       { path: '/events/:id/edit', label: 'Edit event', permission: 'events.manage' },
       { path: '/events/:id/monitoring', label: 'Check-in monitoring', permission: 'events.manage' },
       { path: '/events/analytics', label: 'Attendance trends', permission: 'analytics.view' },
@@ -991,7 +992,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/finance/budget-requests/review',
         label: 'Budget requests (review)',
-        permission: 'finance.manage',
+        anyPermission: ['finance.manage', 'finance.budget_review'],
         module: 'finance',
       },
       {

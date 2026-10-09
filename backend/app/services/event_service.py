@@ -257,7 +257,7 @@ def attendance_is_settled(event: Event, now: datetime) -> bool:
     if attendance_is_finalized(event):
         return True
 
-    effective_end = event.actual_end_time or event.end_datetime
+    effective_end: Optional[datetime] = event.actual_end_time or event.end_datetime
     if effective_end is None:
         return False
     if effective_end.tzinfo is None:
@@ -444,7 +444,7 @@ class EventService:
         )
 
         self.db.add(event)
-        if training is not None:
+        if training is not None and training_details is not None:
             # One commit for both, so an event is never left behind without
             # the details the officer picked for it.
             await self.db.flush()
@@ -473,7 +473,7 @@ class EventService:
         organization_id: UUID,
         user_id: Optional[UUID] = None,
         load_rsvps: bool = True,
-    ) -> Optional[Tuple[Event, Optional[EventRSVP]]]:
+    ) -> Tuple[Optional[Event], Optional[EventRSVP]]:
         """
         Get an event by ID
 
@@ -930,7 +930,7 @@ class EventService:
             .with_for_update()
             .execution_options(populate_existing=True)
         )
-        event = result.scalar_one_or_none()
+        event: Optional[Event] = result.scalar_one_or_none()
 
         if not event:
             return None
@@ -1054,7 +1054,7 @@ class EventService:
             .where(Event.organization_id == str(organization_id))
             .options(selectinload(Event.location_obj))
         )
-        event = result.scalar_one_or_none()
+        event: Optional[Event] = result.scalar_one_or_none()
 
         if not event:
             return None
@@ -1279,7 +1279,7 @@ class EventService:
             .with_for_update()
             .execution_options(populate_existing=True)
         )
-        event = result.scalar_one_or_none()
+        event: Optional[Event] = result.scalar_one_or_none()
 
         if not event:
             return None
@@ -2116,7 +2116,7 @@ class EventService:
             .limit(1)
             .with_for_update()
         )
-        waitlisted_rsvp = result.scalar_one_or_none()
+        waitlisted_rsvp: Optional[EventRSVP] = result.scalar_one_or_none()
 
         if not waitlisted_rsvp:
             return None
@@ -3216,7 +3216,7 @@ class EventService:
         # releases the row lock. _record_attendance_finalized re-stamps (a
         # no-op), commits, and archives the validation prompt.
         await self._record_attendance_finalized(event, organization_id, finalized_by)
-        if credit is not None:
+        if training is not None and credit is not None:
             await training.after_event_attendance_recorded(
                 credit, organization_id, finalized_by, can_manage_training
             )
@@ -3739,7 +3739,8 @@ class EventService:
         this to tell a member their attendance will be recorded (pitfall #29),
         so the two cannot disagree.
         """
-        return event.event_type == EventType.TRAINING
+        flag: bool = event.event_type == EventType.TRAINING
+        return flag
 
     @classmethod
     def effective_end(cls, event: Event) -> Optional[datetime]:
@@ -4332,7 +4333,7 @@ class EventService:
         eligible_members_result = await self.db.execute(
             select(func.count(User.id))
             .where(User.organization_id == str(organization_id))
-            .where(User.is_active.is_(True))
+            .where(User.is_active)
         )
         total_eligible_members = eligible_members_result.scalar() or 0
 
@@ -4352,8 +4353,8 @@ class EventService:
         # list: it is the whole point of the panel above it, and a manager who
         # can only see the ten most recent taps cannot act on the one from an
         # hour ago that is still wrong.
-        recent_check_ins = []
-        early_check_ins = []
+        recent_check_ins: List[Dict[str, Any]] = []
+        early_check_ins: List[Dict[str, Any]] = []
         for rsvp, user in rsvps_with_users:
             if not (rsvp.checked_in and rsvp.checked_in_at):
                 continue
@@ -4485,7 +4486,8 @@ class EventService:
             .where(EventTemplate.id == str(template_id))
             .where(EventTemplate.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        event_template: Optional[EventTemplate] = result.scalar_one_or_none()
+        return event_template
 
     async def update_template(
         self,
@@ -4880,7 +4882,7 @@ class EventService:
             self.db.add(child_event)
             created_events.append(child_event)
 
-        if training is not None:
+        if training is not None and training_details is not None:
             await self.db.flush()
             for occurrence in created_events:
                 self.db.add(
@@ -5111,7 +5113,7 @@ class EventService:
         members_result = await self.db.execute(
             select(User.id).where(
                 User.organization_id == str(organization_id),
-                User.is_active.is_(True),
+                User.is_active,
             )
         )
         all_member_ids = [str(row[0]) for row in members_result.all()]
@@ -5374,7 +5376,7 @@ class EventService:
         members_result = await self.db.execute(
             select(User.id).where(
                 User.organization_id == str(organization_id),
-                User.is_active.is_(True),
+                User.is_active,
             )
         )
         all_member_ids = {str(row[0]) for row in members_result.all()}

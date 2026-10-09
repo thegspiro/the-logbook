@@ -13,7 +13,7 @@ Zero-Trust Security Model:
 """
 
 import enum
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import (
     Boolean,
@@ -230,7 +230,7 @@ class IPException(Base):
             if self.valid_until.tzinfo is None
             else self.valid_until
         )
-        return datetime.now(timezone.utc) > valid_until
+        return bool(datetime.now(timezone.utc) > valid_until)
 
     def days_remaining(self) -> int:
         """Get number of days remaining until expiration."""
@@ -241,7 +241,7 @@ class IPException(Base):
             if self.valid_until.tzinfo is None
             else self.valid_until
         )
-        delta = valid_until - datetime.now(timezone.utc)
+        delta: timedelta = valid_until - datetime.now(timezone.utc)
         return max(0, delta.days)
 
 

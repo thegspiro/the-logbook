@@ -6,6 +6,7 @@ read-only API access to selected organization data for public websites.
 """
 
 from datetime import datetime, timezone
+from typing import Optional
 
 from sqlalchemy import (
     JSON,
@@ -177,13 +178,14 @@ class PublicPortalAPIKey(Base):
             if self.expires_at.tzinfo is None
             else self.expires_at
         )
-        return datetime.now(timezone.utc) > expiry
+        return bool(datetime.now(timezone.utc) > expiry)
 
     @property
     def effective_rate_limit(self) -> int:
         """Get the effective rate limit for this key"""
-        if self.rate_limit_override is not None:
-            return self.rate_limit_override
+        override: Optional[int] = self.rate_limit_override
+        if override is not None:
+            return override
         # Fallback to config default or 1000
         return self.config.default_rate_limit if self.config else 1000
 

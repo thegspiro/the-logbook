@@ -103,7 +103,10 @@ class FundraisingService:
                 FundraisingCampaign.organization_id == organization_id,
             )
         )
-        return result.scalar_one_or_none()
+        fundraising_campaign: Optional[FundraisingCampaign] = (
+            result.scalar_one_or_none()
+        )
+        return fundraising_campaign
 
     async def create_campaign(
         self, organization_id: str, data: Dict[str, Any], user_id: str
@@ -198,7 +201,8 @@ class FundraisingService:
                 Donor.organization_id == organization_id,
             )
         )
-        return result.scalar_one_or_none()
+        donor: Optional[Donor] = result.scalar_one_or_none()
+        return donor
 
     async def create_donor(self, organization_id: str, data: Dict[str, Any]) -> Donor:
         donor = Donor(organization_id=organization_id, **data)
@@ -350,7 +354,7 @@ class FundraisingService:
                 Donation.organization_id == organization_id,
             )
         )
-        donation = result.scalar_one_or_none()
+        donation: Optional[Donation] = result.scalar_one_or_none()
         if not donation:
             return None
 
@@ -565,7 +569,7 @@ class FundraisingService:
                 Pledge.organization_id == organization_id,
             )
         )
-        pledge = result.scalar_one_or_none()
+        pledge: Optional[Pledge] = result.scalar_one_or_none()
         if not pledge:
             return None
         await self._validate_pledge_fks(data, organization_id)
@@ -650,7 +654,7 @@ class FundraisingService:
                 FundraisingEvent.organization_id == organization_id,
             )
         )
-        event = result.scalar_one_or_none()
+        event: Optional[FundraisingEvent] = result.scalar_one_or_none()
         if not event:
             return None
         await self._validate_fundraising_event_fks(data, organization_id)

@@ -627,6 +627,16 @@ def _coerce_criteria(value: Any) -> Optional[List[str]]:
     return out
 
 
+def _clean_criteria(v: Optional[List[str]]) -> Optional[List[str]]:
+    """Drop blank criteria and cap each one's length (create and update alike)."""
+    if v is None:
+        return None
+    cleaned = [c.strip() for c in v if c and c.strip()]
+    if any(len(c) > 500 for c in cleaned):
+        raise ValueError("A criterion may be at most 500 characters")
+    return cleaned
+
+
 class SkillEvaluationBase(BaseModel):
     """Base skill evaluation schema"""
 
@@ -652,12 +662,7 @@ class SkillEvaluationBase(BaseModel):
     @field_validator("evaluation_criteria")
     @classmethod
     def _check_criteria(cls, v: Optional[List[str]]) -> Optional[List[str]]:
-        if v is None:
-            return None
-        cleaned = [c.strip() for c in v if c and c.strip()]
-        if any(len(c) > 500 for c in cleaned):
-            raise ValueError("A criterion may be at most 500 characters")
-        return cleaned
+        return _clean_criteria(v)
 
 
 class SkillEvaluationCreate(SkillEvaluationBase):
@@ -693,7 +698,7 @@ class SkillEvaluationUpdate(BaseModel):
     @field_validator("evaluation_criteria")
     @classmethod
     def _check_criteria(cls, v: Optional[List[str]]) -> Optional[List[str]]:
-        return SkillEvaluationBase._check_criteria(v)
+        return _clean_criteria(v)
 
 
 class SkillEvaluatorMember(BaseModel):

@@ -1269,6 +1269,25 @@ What remains limited, by design:
 **Owner decision needed** only if partial reversals, or reversals in a locked
 year, are wanted.
 
+## Finance — Budget Adoption Stages: What They Do Not Cover (2026-10-09)
+
+Next year's budget moves through taking requests, leadership review and board
+review to an adoption the Treasurer records (see `docs/FINANCE_MODULE.md`,
+"Adopting the budget"). Three gaps are deliberate, pending a decision:
+
+- **Leadership changes only what the Treasurer decided.** A request still
+  submitted or declined, and a draft line nobody requested (one copied from
+  last year and never requested), cannot be changed in leadership review. The
+  Treasurer moves the year back to taking requests, or edits the line.
+- **Owners are not emailed when leadership changes their amount.** They see the
+  change and its note on _Next year's budget_, and the adoption email lists the
+  final amounts.
+- **The board's changes are entered by moving the year back.** Board review
+  freezes the draft; if the board amends the budget at its meeting, the
+  Treasurer moves the year back to leadership review (or taking requests),
+  makes the change there, and returns it to board review before recording the
+  adoption.
+
 ## Finance — QuickBooks Export Gaps (2026-10-08)
 
 The transactions export is now a valid QuickBooks Online journal-entry import

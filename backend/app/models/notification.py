@@ -166,7 +166,7 @@ def _delivered_default(context) -> bool:
     """
     params = context.get_current_parameters()
     channel = params.get("channel")
-    return getattr(channel, "value", channel) == NotificationChannel.IN_APP.value
+    return bool(getattr(channel, "value", channel) == NotificationChannel.IN_APP.value)
 
 
 class NotificationLog(Base):

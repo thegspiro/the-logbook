@@ -50,6 +50,16 @@ def _migration():
 
 MIGRATION = _migration()
 
+# Columns the model has gained since this revision, each added by a later
+# migration that owns its own test; this revision builds the table without them.
+_ADDED_BY_LATER_REVISIONS = {
+    # 5c8be05f2f0f: senior leadership's review of a decided request.
+    "review_amount",
+    "review_note",
+    "reviewed_by",
+    "reviewed_at",
+}
+
 _KEYS = {
     "organization_id": ("organizations", "CASCADE", "FK_ORGANIZATION"),
     "fiscal_year_id": ("fiscal_years", "CASCADE", "FK_FISCAL_YEAR"),
@@ -208,7 +218,11 @@ class TestAgainstARealDatabase:
                 indexed = sorted(
                     i["column_names"][0] for i in inspector.get_indexes(table)
                 )
-            assert set(columns) == {c.name for c in BudgetRequest.__table__.columns}
+            assert (
+                set(columns)
+                == {c.name for c in BudgetRequest.__table__.columns}
+                - _ADDED_BY_LATER_REVISIONS
+            )
             for column, (referred, ondelete, _attr) in _KEYS.items():
                 assert keys[column]["referred_table"] == f"{p}{referred}"
                 assert keys[column]["options"].get("ondelete") == ondelete

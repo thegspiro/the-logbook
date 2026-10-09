@@ -52,7 +52,11 @@ export function financeNavItems(
     ...(options.plansNextYear
       ? [{ label: "Next year's budget", path: '/finance/budget-requests', anyPermission: [...FINANCE_NAV_PERMISSIONS] }]
       : []),
-    { label: 'Budget requests', path: '/finance/budget-requests/review', anyPermission: ['finance.manage'] },
+    {
+      label: 'Budget requests',
+      path: '/finance/budget-requests/review',
+      anyPermission: ['finance.manage', 'finance.budget_review'],
+    },
     {
       label: mine('Purchase Requests', 'My Purchase Requests', seesAllRequests),
       path: '/finance/purchase-requests',

@@ -712,6 +712,15 @@ FINANCE_CONFIGURE_APPROVALS = Permission(
     "Manage approval chains and routing configuration",
     PermissionCategory.FINANCE,
 )
+# Senior leadership's part in adopting next year's budget: adjusting the
+# amounts the Treasurer decided while a draft year is in leadership review.
+# Seeded to no position; a department grants it to the positions that sit in
+# that review (typically the President and the Chief).
+FINANCE_BUDGET_REVIEW = Permission(
+    "finance.budget_review",
+    "Adjust next year's budget requests during leadership review",
+    PermissionCategory.FINANCE,
+)
 # The member-side grant. It opens the requester's own purchase requests,
 # expense reports and check requests and nothing else: the list and detail
 # endpoints confine a holder without finance.view/finance.manage to records
@@ -868,6 +877,7 @@ ALL_PERMISSIONS: list[Permission] = [
     FINANCE_APPROVE,
     FINANCE_CONFIGURE_APPROVALS,
     FINANCE_REQUEST,
+    FINANCE_BUDGET_REVIEW,
     # Prospective Members
     PROSPECTIVE_MEMBERS_VIEW,
     PROSPECTIVE_MEMBERS_MANAGE,
@@ -1791,7 +1801,8 @@ def get_rank_default_permissions(rank: str) -> list[str]:
     """
     rank_def = OPERATIONAL_RANKS.get(rank)
     if rank_def:
-        return rank_def["default_permissions"]
+        permissions: list[str] = rank_def["default_permissions"]
+        return permissions
     return []
 
 

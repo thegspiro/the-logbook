@@ -66,4 +66,4 @@ class McpServiceKey(Base):
         expires = self.expires_at
         if expires.tzinfo is None:
             expires = expires.replace(tzinfo=timezone.utc)
-        return expires > datetime.now(timezone.utc)
+        return bool(expires > datetime.now(timezone.utc))

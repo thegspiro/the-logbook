@@ -66,7 +66,10 @@ def _get_access_token(
         raise Exception(
             f"Failed to acquire token: {result.get('error_description', 'unknown')}"
         )
-    return result["access_token"]
+    token = result["access_token"]
+    if not isinstance(token, str):
+        raise Exception("Failed to acquire token: malformed access token")
+    return token
 
 
 class OutlookCalendarService(CalendarSyncInterface):
@@ -106,7 +109,8 @@ class OutlookCalendarService(CalendarSyncInterface):
                     url, json=outlook_event, headers=self._headers()
                 )
                 response.raise_for_status()
-                return response.json().get("id")
+                event_id = response.json().get("id")
+                return event_id if isinstance(event_id, str) else None
         except Exception:
             logger.exception("Failed to push event to Outlook Calendar")
             return None

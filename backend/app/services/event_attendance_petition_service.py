@@ -17,13 +17,14 @@ the deliberate step that lets credited records change.
 import html as _html
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
-from typing import Dict, Iterable, List, Optional, Set, Tuple
+from typing import Dict, Iterable, List, Optional, Set, Tuple, overload
 
 from loguru import logger
-from sqlalchemy import case, or_, select
+from sqlalchemy import and_, case, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependencies import user_has_permission
 from app.core.config import settings
 from app.core.utils import generate_uuid
 from app.models.event import (
@@ -46,6 +47,7 @@ from app.services.email_policy import (
     member_receives_email,
 )
 from app.services.event_organizer_service import (
+    EVENT_MANAGER_PERMISSION,
     EventOrganizerService,
     can_manage_organizers,
 )
@@ -72,6 +74,16 @@ class PetitionNotFound(LookupError):
     """The event or petition does not exist in the caller's organization."""
 
 
+@overload
+def _utc(value: datetime) -> datetime:
+    """A stored time read as UTC; a naive one is UTC by convention."""
+
+
+@overload
+def _utc(value: None) -> None:
+    """No time in, no time out."""
+
+
 def _utc(value: Optional[datetime]) -> Optional[datetime]:
     if value is None:
         return None
@@ -80,7 +92,8 @@ def _utc(value: Optional[datetime]) -> Optional[datetime]:
 
 def effective_end(event: Event) -> datetime:
     """When the event ended: its recorded end if one was set, else scheduled."""
-    return _utc(event.actual_end_time or event.end_datetime)
+    ended: datetime = event.actual_end_time or event.end_datetime
+    return _utc(ended)
 
 
 def can_review(event: Event, reviewer: User) -> bool:
@@ -106,7 +119,7 @@ class EventAttendancePetitionService:
         )
         if for_update:
             query = query.with_for_update().execution_options(populate_existing=True)
-        event = (await self.db.execute(query)).scalar_one_or_none()
+        event: Optional[Event] = (await self.db.execute(query)).scalar_one_or_none()
         if event is None:
             raise PetitionNotFound("Event not found")
         return event
@@ -188,6 +201,51 @@ class EventAttendancePetitionService:
             .order_by(pending_first, EventAttendancePetition.created_at)
         )
         return list(result.scalars().all())
+
+    async def list_pending_for_reviewer(
+        self, reviewer: User, *, include_all: bool = False
+    ) -> List[Tuple[EventAttendancePetition, Event]]:
+        """Pending requests the reviewer can act on, oldest first.
+
+        By default, the events they organize or are alternate for — the same
+        pair a request is routed to. ``include_all`` widens it to every event
+        in the department and is for ``events.manage`` holders only, who may
+        decide any of them. Their own requests are left out either way, since
+        nobody decides their own.
+        """
+        if include_all and not user_has_permission(reviewer, EVENT_MANAGER_PERMISSION):
+            raise PermissionError(
+                "Only an event manager can list every department's attendance "
+                "requests"
+            )
+        organization_id = str(reviewer.organization_id)
+        query = (
+            select(EventAttendancePetition, Event)
+            .join(
+                Event,
+                and_(
+                    Event.id == EventAttendancePetition.event_id,
+                    Event.organization_id == organization_id,
+                ),
+            )
+            .where(
+                EventAttendancePetition.organization_id == organization_id,
+                EventAttendancePetition.status == AttendancePetitionStatus.PENDING,
+                EventAttendancePetition.user_id != str(reviewer.id),
+            )
+            # created_at is stored to the second, so the id breaks ties and
+            # keeps the order stable between loads.
+            .order_by(EventAttendancePetition.created_at, EventAttendancePetition.id)
+        )
+        if not include_all:
+            query = query.where(
+                or_(
+                    Event.organizer_id == str(reviewer.id),
+                    Event.alternate_organizer_id == str(reviewer.id),
+                )
+            )
+        result = await self.db.execute(query)
+        return [(petition, event) for petition, event in result.all()]
 
     async def display_names(
         self, user_ids: Iterable[Optional[str]], organization_id: str
@@ -404,7 +462,7 @@ class EventAttendancePetitionService:
             .with_for_update()
             .execution_options(populate_existing=True)
         )
-        petition = result.scalar_one_or_none()
+        petition: Optional[EventAttendancePetition] = result.scalar_one_or_none()
         if petition is None:
             raise PetitionNotFound("Attendance request not found")
         return petition
@@ -544,11 +602,12 @@ class EventAttendancePetitionService:
         return list(result.scalars().all())
 
     async def _organization(self, organization_id: str) -> Optional[Organization]:
-        return (
+        organization: Optional[Organization] = (
             await self.db.execute(
                 select(Organization).where(Organization.id == str(organization_id))
             )
         ).scalar_one_or_none()
+        return organization
 
     async def _notify_reviewers(
         self,

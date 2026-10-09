@@ -549,7 +549,7 @@ async def daily_cap_exceeded(scope: str, limit: int) -> bool:
             ttl = await cache_manager.redis_client.ttl(key)
             if ttl < 0:
                 await cache_manager.redis_client.expire(key, 93600)
-        return count > limit
+        return bool(count > limit)
     except Exception as exc:
         logger.warning("Daily-cap check failed (allowing): {}", exc)
         return False
@@ -1255,7 +1255,7 @@ def get_client_ip(request: Request) -> str:
     if not settings.is_trusted_proxy(direct_ip):
         return direct_ip
 
-    forwarded_for = request.headers.get("X-Forwarded-For")
+    forwarded_for: str | None = request.headers.get("X-Forwarded-For")
     if forwarded_for:
         hops = [h.strip() for h in forwarded_for.split(",") if h.strip()]
         # The right-most entry is appended by our trusted proxy; the first hop
@@ -1267,7 +1267,7 @@ def get_client_ip(request: Request) -> str:
 
     # XFF absent or entirely trusted proxies — fall back to X-Real-IP (nginx
     # sets it to $remote_addr, which clients cannot append to), then the peer.
-    real_ip = request.headers.get("X-Real-IP")
+    real_ip: str | None = request.headers.get("X-Real-IP")
     if real_ip:
         return real_ip.strip()
     return direct_ip
@@ -1275,7 +1275,8 @@ def get_client_ip(request: Request) -> str:
 
 def get_user_agent(request: Request) -> str | None:
     """Get user agent from request"""
-    return request.headers.get("User-Agent")
+    user_agent: str | None = request.headers.get("User-Agent")
+    return user_agent
 
 
 # ============================================

@@ -23,14 +23,23 @@ vi.mock('react-hot-toast', () => ({
   },
 }));
 
+// The Treasurer unless a block says otherwise; leadership's blocks swap it.
+let granted = new Set<string>(['finance.manage']);
+vi.mock('@/stores/authStore', () => ({
+  useAuthStore: (selector: (s: { checkPermission: (p: string) => boolean }) => unknown) =>
+    selector({ checkPermission: (p) => granted.has(p) }),
+}));
+
 const options = vi.fn();
 const list = vi.fn();
 const decide = vi.fn();
+const review = vi.fn();
 vi.mock('../services/api', () => ({
   fiscalYearService: { options: (...args: unknown[]) => options(...args) as unknown },
   budgetRequestService: {
     list: (...args: unknown[]) => list(...args) as unknown,
     decide: (...args: unknown[]) => decide(...args) as unknown,
+    review: (...args: unknown[]) => review(...args) as unknown,
   },
 }));
 
@@ -42,6 +51,7 @@ const draftYear: FiscalYearOption = {
   status: 'draft',
   requestDeadline: '2026-11-15',
   requestsOpen: true,
+  planningStage: 'requests',
 };
 
 const request = (id: string, status: BudgetRequest['status'], extra: Partial<BudgetRequest> = {}): BudgetRequest => ({
@@ -83,10 +93,12 @@ const renderPage = () =>
 const row = (label: string) => screen.findByRole('row', { name: new RegExp(`^${label}\\b`) });
 
 beforeEach(() => {
-  for (const mock of [options, list, decide, toastError, toastSuccess]) mock.mockReset();
+  for (const mock of [options, list, decide, review, toastError, toastSuccess]) mock.mockReset();
+  granted = new Set(['finance.manage']);
   options.mockResolvedValue([draftYear, { id: 'fy-26', name: 'FY2026', status: 'active' }]);
   list.mockResolvedValue(requests);
   decide.mockResolvedValue({});
+  review.mockResolvedValue({});
 });
 
 describe('Budget request review — the list', () => {
@@ -218,5 +230,81 @@ describe('Budget request review — deciding', () => {
     await user.selectOptions(screen.getByLabelText('Status'), 'all');
     expect(within(await row('Line c')).getByRole('button', { name: 'Change decision on Line c' })).toBeInTheDocument();
     expect(within(await row('Line e')).queryByRole('button')).not.toBeInTheDocument();
+  });
+});
+
+describe('Budget request review — leadership review', () => {
+  const inLeadershipReview: FiscalYearOption = {
+    ...draftYear,
+    requestsOpen: false,
+    planningStage: 'leadership_review',
+  };
+
+  beforeEach(() => {
+    granted = new Set(['finance.budget_review']);
+    options.mockReset();
+    options.mockResolvedValue([inLeadershipReview]);
+  });
+
+  it('offers leadership a change on what the Treasurer approved, and nothing else', async () => {
+    renderPage();
+    const approved = await row('Line c');
+    expect(within(approved).getByRole('button', { name: 'Change the amount for Line c' })).toBeInTheDocument();
+    expect(within(await row('Line a')).queryByRole('button')).not.toBeInTheDocument();
+    expect(within(await row('Line d')).queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.getByText('Requests are closed for leadership review')).toBeInTheDocument();
+  });
+
+  it('records the amount and why, then fetches again', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(within(await row('Line c')).getByRole('button', { name: 'Change the amount for Line c' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('The Treasurer approved $500.00');
+    const amount = within(dialog).getByLabelText('Amount for this line');
+    await user.clear(amount);
+    await user.type(amount, '450');
+    await user.type(within(dialog).getByLabelText('Why'), 'Held flat across the board');
+    await user.click(within(dialog).getByRole('button', { name: 'Record change' }));
+
+    await waitFor(() =>
+      expect(review).toHaveBeenCalledWith('c', { amount: '450.00', note: 'Held flat across the board' })
+    );
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+  });
+
+  it('needs a reason before it sends anything', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(within(await row('Line c')).getByRole('button', { name: 'Change the amount for Line c' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Record change' }));
+
+    expect(await within(dialog).findByText('Say why the amount was changed.')).toBeInTheDocument();
+    expect(review).not.toHaveBeenCalled();
+  });
+
+  it('shows what leadership set beside the Treasurer’s amount', async () => {
+    list.mockResolvedValue([
+      request('c', 'approved', {
+        approvedAmount: '500.00',
+        reviewAmount: '450.00',
+        reviewedByName: 'Chris President',
+      }),
+    ]);
+    renderPage();
+    const tr = await row('Line c');
+    expect(tr).toHaveTextContent('$500.00');
+    expect(tr).toHaveTextContent('$450.00');
+    expect(tr).toHaveTextContent('Chris President');
+  });
+
+  it('gives the Treasurer no decisions once the year is in leadership review', async () => {
+    granted = new Set(['finance.manage']);
+    renderPage();
+    // The Treasurer's view opens on what is submitted, which they would
+    // otherwise decide.
+    expect(within(await row('Line a')).queryByRole('button')).not.toBeInTheDocument();
+    expect(within(await row('Line b')).queryByRole('button')).not.toBeInTheDocument();
   });
 });

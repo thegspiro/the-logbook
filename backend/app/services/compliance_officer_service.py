@@ -9,7 +9,7 @@ validation for the compliance officer dashboard.
 import calendar
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TypedDict
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -53,6 +53,15 @@ from app.services.training_waiver_service import fetch_org_waivers
 from app.utils.hours import hours_from_minutes, round_hours_exact
 from app.utils.org_timezone import resolve_org_today
 
+
+class IsoCategory(TypedDict):
+    name: str
+    nfpa_standard: str
+    required_hours: int
+    training_types: List[str]
+    category_keywords: List[str]
+
+
 # ISO/FSRS training hour requirements per category (annual, per member).
 #
 # A record counts toward a category when either its `training_type` is in
@@ -68,7 +77,8 @@ from app.utils.org_timezone import resolve_org_today
 # training_type, so that is what this reads. The old lists are kept because a
 # department may carry legacy imported records whose type came from an external
 # provider's vocabulary.
-ISO_CATEGORIES = [
+
+ISO_CATEGORIES: List[IsoCategory] = [
     {
         "name": "Company Training",
         "nfpa_standard": "NFPA 1001",
