@@ -106,7 +106,7 @@ export interface ShiftRecord {
   organization_id: string;
   shift_date: string;
   start_time: string;
-  end_time?: string;
+  end_time?: string | null;
   apparatus_id?: string;
   apparatus_name?: string;
   apparatus_unit_number?: string;
