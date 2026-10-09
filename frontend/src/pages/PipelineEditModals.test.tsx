@@ -308,6 +308,7 @@ const program = {
   is_template: false,
   active: true,
   recert_enabled: false,
+  enrolled_count: 0,
   created_at: '',
   updated_at: '',
 };

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { FormsListResponse } from '@/services/inventoryService';
+import type { FormsListResponse } from '@/services/formTypes';
 
 const mockGetForms = vi.fn();
 const mockGetEvents = vi.fn();
@@ -37,7 +37,13 @@ vi.mock('@/utils/dateFormatting', () => ({
 }));
 
 import { StageConfigModal } from './StageConfigModal';
-import type { PipelineStageCreate } from '../types';
+import type { AutomatedEmailStageConfig, PipelineStage, PipelineStageCreate } from '../types';
+
+/** The saved config, narrowed to the automated-email shape these tests assert on. */
+const emailConfigOf = (saved: PipelineStageCreate | undefined): AutomatedEmailStageConfig | undefined => {
+  const config = saved?.config;
+  return config && 'email_subject' in config ? config : undefined;
+};
 
 const mockForms: FormsListResponse = {
   forms: [
@@ -578,7 +584,7 @@ describe('StageConfigModal', () => {
 
     expect(onSave).toHaveBeenCalledTimes(1);
     const savedData = onSave.mock.calls[0]?.[0] as PipelineStageCreate | undefined;
-    const customSections = savedData?.config?.custom_sections as Array<Record<string, unknown>> | undefined;
+    const customSections = emailConfigOf(savedData)?.custom_sections;
     expect(customSections).toHaveLength(1);
     expect(customSections?.[0]).toMatchObject({
       title: 'Important',
@@ -636,10 +642,10 @@ describe('StageConfigModal', () => {
 
     expect(onSave).toHaveBeenCalledTimes(1);
     const savedData = onSave.mock.calls[0]?.[0] as PipelineStageCreate | undefined;
-    expect(savedData?.config?.section_order).toEqual(
+    expect(emailConfigOf(savedData)?.section_order).toEqual(
       expect.arrayContaining(['welcome', 'faq_link', 'next_meeting', 'status_tracker'])
     );
-    expect(savedData?.config?.section_order).toHaveLength(4);
+    expect(emailConfigOf(savedData)?.section_order).toHaveLength(4);
   });
 
   it('adds custom section IDs to section_order when custom sections are added', async () => {
@@ -658,7 +664,7 @@ describe('StageConfigModal', () => {
     await user.click(screen.getByText('Add Stage'));
 
     const savedData = onSave.mock.calls[0]?.[0] as PipelineStageCreate | undefined;
-    const sectionOrder = savedData?.config?.section_order as string[] | undefined;
+    const sectionOrder = emailConfigOf(savedData)?.section_order;
     // 4 built-in + 2 custom
     expect(sectionOrder).toHaveLength(6);
     // First 4 are the built-in ones
@@ -682,7 +688,7 @@ describe('StageConfigModal', () => {
 
     const savedData = onSave.mock.calls[0]?.[0] as PipelineStageCreate | undefined;
     // Should be back to just 4 built-in
-    expect(savedData?.config?.section_order).toHaveLength(4);
+    expect(emailConfigOf(savedData)?.section_order).toHaveLength(4);
   });
 
   it('handles editing a stage saved without section_order (backward compat)', async () => {
@@ -721,10 +727,10 @@ describe('StageConfigModal', () => {
 
     const savedData = onSave.mock.calls[0]?.[0] as PipelineStageCreate | undefined;
     // section_order should be auto-populated with default + custom IDs
-    expect(savedData?.config?.section_order).toEqual(
+    expect(emailConfigOf(savedData)?.section_order).toEqual(
       expect.arrayContaining(['welcome', 'faq_link', 'next_meeting', 'status_tracker', 'cs-1'])
     );
-    expect(savedData?.config?.section_order).toHaveLength(5);
+    expect(emailConfigOf(savedData)?.section_order).toHaveLength(5);
   });
 
   // =========================================================================
@@ -964,7 +970,7 @@ describe('StageConfigModal', () => {
 
   it('does not inject package_fields defaults when editing an existing election-vote stage that never had them', async () => {
     const user = userEvent.setup();
-    const editingStage = {
+    const editingStage: PipelineStage = {
       id: 'stage-1',
       pipeline_id: 'pipeline-1',
       name: 'Membership Vote',

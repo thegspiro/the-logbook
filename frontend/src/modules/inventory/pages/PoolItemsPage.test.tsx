@@ -71,6 +71,8 @@ const category: InventoryCategory = {
   requires_serial_number: false,
   requires_maintenance: false,
   nfpa_tracking_enabled: false,
+  allow_self_checkout: false,
+  self_checkout_loan_days: null,
   active: true,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',

@@ -63,6 +63,7 @@ const settings: EventModuleSettings = {
     tasks: [],
     email_triggers: {},
   },
+  attendance_request_fallback_positions: {},
 };
 
 const category: AdminHoursCategory = {
