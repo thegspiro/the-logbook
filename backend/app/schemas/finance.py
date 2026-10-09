@@ -1116,6 +1116,12 @@ class ExpenseLineItemResponse(UTCResponseBase):
     expense_type: str
     receipt_url: Optional[str] = None
     merchant: Optional[str] = None
+    # The uploaded receipt, described; its stored path is never returned.
+    has_receipt: bool = False
+    receipt_file_name: Optional[str] = None
+    receipt_content_type: Optional[str] = None
+    receipt_file_size: Optional[int] = None
+    receipt_uploaded_at: Optional[datetime] = None
     created_at: datetime
 
 

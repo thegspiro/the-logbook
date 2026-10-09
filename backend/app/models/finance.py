@@ -986,6 +986,18 @@ class ExpenseLineItem(Base):
     )
     receipt_url = Column(String(500), nullable=True)
     merchant = Column(String(300), nullable=True)
+    # The receipt file for this line, stored by FileStorageService under the
+    # organization's finance-receipts area. The path is server-generated and
+    # never leaves the API; the name is the uploader's, for display only.
+    # Every line needs one before its report can be submitted.
+    receipt_file_path = Column(String(500), nullable=True)
+    receipt_file_name = Column(String(255), nullable=True)
+    receipt_content_type = Column(String(100), nullable=True)
+    receipt_file_size = Column(Integer, nullable=True)
+    receipt_uploaded_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    receipt_uploaded_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -995,6 +1007,10 @@ class ExpenseLineItem(Base):
     budget = relationship("Budget", foreign_keys=[budget_id])
 
     __table_args__ = (Index("ix_expense_line_items_report", "expense_report_id"),)
+
+    @property
+    def has_receipt(self) -> bool:
+        return bool(self.receipt_file_path)
 
 
 class CheckRequest(Base):

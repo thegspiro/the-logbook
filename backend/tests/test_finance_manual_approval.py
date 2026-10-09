@@ -144,6 +144,9 @@ async def _submitted_er(s):
                 "amount": 300.00,
                 "date_incurred": datetime(2026, 3, 1, tzinfo=timezone.utc),
                 "expense_type": "travel",
+                # Every line needs a receipt to be submitted; these tests are
+                # about routing, not the file, so none is written.
+                "receipt_file_path": "/app/uploads/org/finance-receipts/r.pdf",
             }
         ],
     )

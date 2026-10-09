@@ -827,6 +827,12 @@ export interface ExpenseLineItem {
   expenseType: ExpenseType;
   receiptUrl?: string;
   merchant?: string;
+  /** An uploaded receipt is on the line; every line needs one to submit. */
+  hasReceipt?: boolean;
+  receiptFileName?: string | null;
+  receiptContentType?: string | null;
+  receiptFileSize?: number | null;
+  receiptUploadedAt?: string | null;
   createdAt: string;
 }
 

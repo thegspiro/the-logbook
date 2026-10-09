@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**298 tables · 4912 columns · 985 foreign keys**
+**298 tables · 4918 columns · 986 foreign keys**
 
 ---
 
@@ -260,7 +260,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`check_requests`](#check_requests) | `CheckRequest` | 20 | Request to cut a check for payment |
 | [`dues_payments`](#dues_payments) | `DuesPayment` | 11 | A single payment received against a member's dues (FIN-6). |
 | [`dues_schedules`](#dues_schedules) | `DuesSchedule` | 15 | Schedule for dues collection |
-| [`expense_line_items`](#expense_line_items) | `ExpenseLineItem` | 10 | Individual line item within an expense report |
+| [`expense_line_items`](#expense_line_items) | `ExpenseLineItem` | 16 | Individual line item within an expense report |
 | [`expense_reports`](#expense_reports) | `ExpenseReport` | 17 | Expense report submitted by a member for reimbursement |
 | [`finance_export_logs`](#finance_export_logs) | `ExportLog` | 12 | Log of an export attempt, including interrupted streams. |
 | [`finance_export_mappings`](#finance_export_mappings) | `ExportMapping` | 9 | Mapping between internal budget categories and QuickBooks accounts |
@@ -3944,6 +3944,12 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `expense_type` | ENUM(`general`, `uniform_reimbursement`, `ppe_replacement`, `boot_allowance`, `training_reimbursement`, `certification_fee`, `conference`, `travel`, `meals`, `mileage`, `equipment_purchase`, `other`) | no |  | `'general'` |  |
 | `receipt_url` | VARCHAR(500) | yes |  |  |  |
 | `merchant` | VARCHAR(300) | yes |  |  |  |
+| `receipt_file_path` | VARCHAR(500) | yes |  |  |  |
+| `receipt_file_name` | VARCHAR(255) | yes |  |  |  |
+| `receipt_content_type` | VARCHAR(100) | yes |  |  |  |
+| `receipt_file_size` | INTEGER | yes |  |  |  |
+| `receipt_uploaded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `receipt_uploaded_at` | DATETIME | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 
 **Indexes**
@@ -10376,7 +10382,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (361 references)
+### → `users` (362 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10485,6 +10491,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `events` | `created_by` | RESTRICT | yes |
 | `events` | `organizer_id` | SET NULL | yes |
 | `events` | `updated_by` | RESTRICT | yes |
+| `expense_line_items` | `receipt_uploaded_by` | SET NULL | yes |
 | `expense_reports` | `approved_by` | SET NULL | yes |
 | `expense_reports` | `submitted_by` | RESTRICT | no |
 | `external_category_mappings` | `mapped_by` | SET NULL | yes |
@@ -11959,7 +11966,7 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `email_attachments` | `email_templates`, `users` |
 | `equipment_kit_items` | `equipment_kits`, `inventory_categories`, `inventory_items` |
 | `event_request_activity` | `event_requests`, `users` |
-| `expense_line_items` | `budgets`, `expense_reports` |
+| `expense_line_items` | `budgets`, `expense_reports`, `users` |
 | `form_fields` | `forms` |
 | `grant_budget_items` | `grant_applications` |
 | `grant_compliance_tasks` | `grant_applications`, `users` |

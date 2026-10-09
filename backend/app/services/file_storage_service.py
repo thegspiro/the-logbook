@@ -75,6 +75,7 @@ class StorageArea(str, Enum):
     APPLICANTS = "applicants"
     EMAIL_ATTACHMENTS = "email-attachments"
     SUGGESTIONS = "suggestions"
+    FINANCE_RECEIPTS = "finance-receipts"
 
 
 # Where each area wrote files before the org-first layout, relative to
@@ -87,6 +88,8 @@ _LEGACY_ROOTS: Mapping[StorageArea, tuple[str, ...]] = {
     StorageArea.APPLICANTS: ("prospect-documents",),
     StorageArea.EMAIL_ATTACHMENTS: ("email-attachments",),
     StorageArea.SUGGESTIONS: ("suggestions",),
+    # Introduced with the org-first layout; there is nothing older to find.
+    StorageArea.FINANCE_RECEIPTS: (),
 }
 
 

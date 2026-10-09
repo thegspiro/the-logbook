@@ -623,6 +623,42 @@ closing year offers **Reopen** and **Lock**, which opens
 required reconciliation notes, with the lock disabled while anything is open.
 A locked year shows _"Locked {date} · {notes}"_.
 
+## Expense receipts _(2026-10-09)_
+
+Every expense line needs an uploaded receipt before its report can be
+submitted. Migration `0a159454f04b`.
+
+- **Storage.** `PUT /finance/expense-reports/{id}/items/{item_id}/receipt`
+  (multipart `file`; `finance.request` on one's own report, or
+  `finance.manage`) stores through `FileStorageService` under
+  `/app/uploads/<org>/finance-receipts/<report_id>/` — PDF, JPG or PNG up to
+  10 MB, magic-byte checked and malware-scanned (`upload_kind`
+  `expense_receipt`). The line records `receipt_file_path`,
+  `receipt_file_name`, `receipt_content_type`, `receipt_file_size`,
+  `receipt_uploaded_by` and `receipt_uploaded_at`; the response carries
+  `hasReceipt` and the name, type, size and time — never the path. A new
+  receipt replaces the old one, whose file is deleted after the commit.
+  `DELETE` on the same path removes it. Both only while the report is a draft
+  in a year that takes new requests; audited `finance.expense_receipt_attached`
+  (with the file's SHA-256) and `finance.expense_receipt_removed`.
+- **The requirement.** `submit_expense_report` refuses (400) a report with any
+  line lacking a receipt, naming up to three of them. Reports submitted before
+  the migration are unaffected; the old free-text `receipt_url` column is left
+  as it was and not read.
+- **Who reads a report and its receipts**
+  (`GET /finance/expense-reports/{id}` and
+  `GET …/items/{item_id}/receipt`): its submitter, `finance.manage`, and its
+  approvers (`FinanceService.reviews_entity`) — anyone its chain's steps name
+  (`user_matches_step`, the rule approve/deny enforce), anyone who has acted
+  on one of its steps, an approvals administrator, and, for a submitted report
+  no chain applies to, any `finance.approve` holder (they approve it by hand).
+  A draft has no approvers. Everyone else gets 404. Before this, the approvals
+  queue linked an approver without `finance.manage` to a report that answered 404.
+- **Screen.** _Expense report_ shows a **Receipt** column
+  (`ExpenseReceiptControl`): the file name downloads it; on a draft the
+  requester gets **Attach receipt** / **Replace** / **Remove**, and **Submit
+  for Approval** is disabled with the count of lines still missing one.
+
 ## Context
 
 Fire departments need internal financial workflows (budgets, purchase approvals, dues, expense reimbursements) but most use external accounting software like QuickBooks for actual bookkeeping. This module fills the gap: it provides the **internal operational finance workflows** that QuickBooks doesn't handle, with export capabilities to feed data into external accounting tools.
