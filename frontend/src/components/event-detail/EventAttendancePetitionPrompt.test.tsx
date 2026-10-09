@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 import EventAttendancePetitionPrompt from './EventAttendancePetitionPrompt';
@@ -7,10 +7,12 @@ import type { AttendancePetition } from '../../types/event';
 
 const mockGetMine = vi.fn();
 const mockSubmit = vi.fn();
+const mockWithdraw = vi.fn();
 vi.mock('../../services/api', () => ({
   eventService: {
     getMyAttendancePetition: (...args: unknown[]) => mockGetMine(...args) as unknown,
     submitAttendancePetition: (...args: unknown[]) => mockSubmit(...args) as unknown,
+    withdrawAttendancePetition: (...args: unknown[]) => mockWithdraw(...args) as unknown,
   },
 }));
 
@@ -32,6 +34,7 @@ describe('EventAttendancePetitionPrompt', () => {
   beforeEach(() => {
     mockGetMine.mockReset();
     mockSubmit.mockReset();
+    mockWithdraw.mockReset();
     mockGetMine.mockResolvedValue({ petition: null, can_request: false, unavailable_reason: 'Already present' });
   });
 
@@ -94,5 +97,50 @@ describe('EventAttendancePetitionPrompt', () => {
     render();
 
     expect(await screen.findByText('Your attendance was confirmed by Olive Member.')).toBeInTheDocument();
+  });
+
+  describe('withdrawing a pending request', () => {
+    beforeEach(() => {
+      mockGetMine.mockResolvedValue({ petition: petition(), can_request: false });
+      mockWithdraw.mockResolvedValue(undefined);
+    });
+
+    it('withdraws once confirmed and offers the request again', async () => {
+      const user = userEvent.setup();
+      render();
+
+      await user.click(await screen.findByRole('button', { name: 'Withdraw request' }));
+      mockGetMine.mockResolvedValue({ petition: null, can_request: true });
+      await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Withdraw request' }));
+
+      expect(mockWithdraw).toHaveBeenCalledWith('evt-1');
+      expect(await screen.findByRole('button', { name: /I was there/ })).toBeInTheDocument();
+    });
+
+    it('keeps the request when the member changes their mind', async () => {
+      const user = userEvent.setup();
+      render();
+
+      await user.click(await screen.findByRole('button', { name: 'Withdraw request' }));
+      await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Keep it' }));
+
+      expect(mockWithdraw).not.toHaveBeenCalled();
+      expect(screen.getByText(/You asked to be marked present/)).toBeInTheDocument();
+    });
+
+    it('shows the decision when the request was decided in the meantime', async () => {
+      mockWithdraw.mockRejectedValue({ response: { status: 400, data: { detail: 'Already decided' } } });
+      const user = userEvent.setup();
+      render();
+
+      await user.click(await screen.findByRole('button', { name: 'Withdraw request' }));
+      mockGetMine.mockResolvedValue({
+        petition: petition({ status: 'approved', reviewed_by_name: 'Olive Member' }),
+        can_request: false,
+      });
+      await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Withdraw request' }));
+
+      expect(await screen.findByText('Your attendance was confirmed by Olive Member.')).toBeInTheDocument();
+    });
   });
 });

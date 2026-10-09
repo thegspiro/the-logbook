@@ -145,6 +145,13 @@ confirmed by …"**, or **"Your request to be marked present was not approved by
 …"** with the organizer's reason. A declined member cannot ask again for that
 event.
 
+**Withdrawing it.** While the request is still waiting, the notice carries a
+**Withdraw request** button — for a request sent for the wrong event, or with
+the wrong times. Confirm with **Withdraw request** (or **Keep it** to back
+out); the organizer is no longer asked, and **I was there** comes back so you
+can send a corrected request. Once the organizer has approved or declined it,
+the decision stands and can no longer be withdrawn.
+
 **Deciding it (organizers).** The event's organizer, its alternate and anyone
 holding `events.manage` see an **Attendance Requests** card on the event page —
 _"Members with no check-in who say they were here. Approving records the times
