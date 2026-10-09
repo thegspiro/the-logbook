@@ -575,7 +575,7 @@ const VIEWPORT_WIDTHS = { phone: 390, laptop: 1440 } as const;
  * hard-coded query, so it keeps working if the header gains another breakpoint.
  */
 let currentWidth: number = VIEWPORT_WIDTHS.phone;
-let mediaListeners: ((event: MediaQueryListEvent) => void)[] = [];
+let mediaListeners: EventListenerOrEventListenerObject[] = [];
 
 const matches = (query: string) => {
   const minWidth = /min-width:\s*(\d+)px/.exec(query);
@@ -593,10 +593,10 @@ const mockViewport = (width: keyof typeof VIEWPORT_WIDTHS) => {
     // Real listeners, so a test can cross the breakpoint rather than only
     // choose one side of it: useMediaQuery re-reads on `change`, so a
     // re-render alone would leave its state where it started.
-    addEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) => {
+    addEventListener: (_type: string, listener: EventListenerOrEventListenerObject) => {
       mediaListeners.push(listener);
     },
-    removeEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) => {
+    removeEventListener: (_type: string, listener: EventListenerOrEventListenerObject) => {
       mediaListeners = mediaListeners.filter((registered) => registered !== listener);
     },
     dispatchEvent: vi.fn(),
@@ -608,7 +608,12 @@ const resizeTo = async (width: keyof typeof VIEWPORT_WIDTHS) => {
   mockViewport(width);
   await act(async () => {
     for (const listener of [...mediaListeners]) {
-      listener({ matches: matches('(min-width: 640px)') } as MediaQueryListEvent);
+      const event = Object.assign(new Event('change'), {
+        matches: matches('(min-width: 640px)'),
+        media: '(min-width: 640px)',
+      });
+      if (typeof listener === 'function') listener(event);
+      else listener.handleEvent(event);
     }
   });
 };

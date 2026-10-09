@@ -134,16 +134,19 @@ class RecertificationService:
         if active_only:
             query = query.where(RecertificationPathway.active.is_(True))
         result = await self.db.execute(query.order_by(RecertificationPathway.name))
-        return result.scalars().all()
+        return list(result.scalars().all())
 
-    async def get_pathway(self, pathway_id: str, organization_id: str):
+    async def get_pathway(
+        self, pathway_id: str, organization_id: str
+    ) -> Optional[RecertificationPathway]:
         """Get a specific recertification pathway"""
         result = await self.db.execute(
             select(RecertificationPathway)
             .where(RecertificationPathway.id == pathway_id)
             .where(RecertificationPathway.organization_id == organization_id)
         )
-        return result.scalar_one_or_none()
+        pathway: Optional[RecertificationPathway] = result.scalar_one_or_none()
+        return pathway
 
     async def _validate_references(self, organization_id: str, data: dict) -> None:
         """Ensure every client-supplied pathway FK belongs to the current tenant."""
@@ -243,7 +246,7 @@ class RecertificationService:
         result = await self.db.execute(
             query.order_by(RenewalTask.certification_expiration_date)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def generate_renewal_tasks(self, organization_id: str) -> int:
         """
@@ -343,16 +346,19 @@ class CompetencyService:
         if position:
             query = query.where(CompetencyMatrix.position == position)
         result = await self.db.execute(query.order_by(CompetencyMatrix.name))
-        return result.scalars().all()
+        return list(result.scalars().all())
 
-    async def get_matrix(self, matrix_id: str, organization_id: str):
+    async def get_matrix(
+        self, matrix_id: str, organization_id: str
+    ) -> Optional[CompetencyMatrix]:
         """Get a specific competency matrix"""
         result = await self.db.execute(
             select(CompetencyMatrix)
             .where(CompetencyMatrix.id == matrix_id)
             .where(CompetencyMatrix.organization_id == organization_id)
         )
-        return result.scalar_one_or_none()
+        matrix: Optional[CompetencyMatrix] = result.scalar_one_or_none()
+        return matrix
 
     async def create_matrix(
         self, organization_id: str, data: dict, created_by: str
@@ -573,7 +579,7 @@ class InstructorQualificationService:
             .where(InstructorQualification.id == qual_id)
             .where(InstructorQualification.organization_id == organization_id)
         )
-        qual = result.scalar_one_or_none()
+        qual: Optional[InstructorQualification] = result.scalar_one_or_none()
         if not qual:
             raise ValueError("Qualification not found")
         data = _stringify_uuids(data)
@@ -624,7 +630,7 @@ class InstructorQualificationService:
                 | (InstructorQualification.expiration_date >= today)
             )
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
 
 class TrainingEffectivenessService:
@@ -704,7 +710,7 @@ class TrainingEffectivenessService:
         result = await self.db.execute(
             query.order_by(TrainingEffectivenessEvaluation.created_at.desc())
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_course_effectiveness_summary(
         self, course_id: str, organization_id: str
@@ -780,7 +786,7 @@ class MultiAgencyService:
         result = await self.db.execute(
             query.order_by(MultiAgencyTraining.exercise_date.desc())
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def _validate_references(self, organization_id: str, data: dict) -> None:
         """Ensure client-supplied exercise FKs belong to the current tenant."""
@@ -836,7 +842,7 @@ class MultiAgencyService:
             .where(MultiAgencyTraining.id == exercise_id)
             .where(MultiAgencyTraining.organization_id == organization_id)
         )
-        exercise = result.scalar_one_or_none()
+        exercise: Optional[MultiAgencyTraining] = result.scalar_one_or_none()
         if not exercise:
             raise ValueError("Exercise not found")
 
@@ -1055,7 +1061,7 @@ class XAPIService:
             return None
         try:
             # Simple parser for common formats: PT1H30M, PT45M, PT3600S
-            seconds = 0
+            seconds: float = 0
             time_part = duration_str.split("T")[-1] if "T" in duration_str else ""
             import re
 

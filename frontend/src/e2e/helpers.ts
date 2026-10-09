@@ -377,8 +377,8 @@ export interface MockOptions {
    */
   platoonsEnabled?: boolean;
   /**
-   * Serve a member record at `/users/:id/with-roles` and an empty audit
-   * history beside it.
+   * Serve a member record at `/users/:id/with-roles` (and its name at
+   * `/users/:id/roles`) and an empty audit history beside it.
    *
    * Opt-in because the catch-all `{}` is what every other ratcheted page that
    * reads a member was measured against; the member edit and audit-history
@@ -719,6 +719,17 @@ const memberRecordRoutes = (): [string, () => unknown][] => [
       status: 'active',
       membership_type: 'active',
       emergency_contacts: [],
+      roles: [],
+    }),
+  ],
+  // The audit-history page reads the member's name here rather than from
+  // `with-roles`, which records a profile view.
+  [
+    '**/api/v1/users/*/roles',
+    () => ({
+      user_id: TEST_USER.id,
+      username: TEST_USER.username,
+      full_name: `${TEST_USER.first_name} ${TEST_USER.last_name}`,
       roles: [],
     }),
   ],

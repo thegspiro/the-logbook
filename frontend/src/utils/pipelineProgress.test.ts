@@ -15,7 +15,7 @@ function record(
     progress_percentage: 0,
     created_at: '',
     updated_at: '',
-    requirement: requirement as TrainingRequirementEnhanced | undefined,
+    ...(requirement ? { requirement: requirement as TrainingRequirementEnhanced } : {}),
   };
 }
 

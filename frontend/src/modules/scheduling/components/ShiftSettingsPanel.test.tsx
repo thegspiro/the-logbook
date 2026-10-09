@@ -119,10 +119,10 @@ describe('ShiftSettingsPanel', () => {
     });
   });
 
-  // 'equipment' belongs in this list, not the one above: its four settings were
-  // stored and read by nothing, so they were deleted and the section is now a
-  // signpost to Inventory. A Save button there would write nothing.
-  describe.each<SettingsTab>(['platoons', 'eligibility', 'notifications', 'shift-reports', 'equipment'])(
+  // Every section outside LOCALLY_SAVED_SECTIONS owns its own save control.
+  // (An 'equipment' section used to be listed here; its settings were stored
+  // and read by nothing, so the section was removed from SettingsTab outright.)
+  describe.each<SettingsTab>(['platoons', 'eligibility', 'notifications', 'shift-reports', 'outside-apparatus'])(
     'on the %s section',
     (tab) => {
       it('hides the Save/Reset footer it would not act on', () => {

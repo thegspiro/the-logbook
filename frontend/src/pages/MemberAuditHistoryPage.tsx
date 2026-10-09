@@ -19,7 +19,7 @@ import { formatDateTime } from '../utils/dateFormatting';
 import { toDisplayString } from '../utils/displayValue';
 import { useTimezone } from '../hooks/useTimezone';
 import type { MemberAuditLogEntry } from '../types/user';
-import type { UserWithRoles } from '../types/role';
+import type { UserRoleResponse } from '../types/role';
 import { Breadcrumbs } from '../components/ux';
 
 type EventTypeFilter =
@@ -65,7 +65,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
 
-  const [user, setUser] = useState<UserWithRoles | null>(null);
+  const [user, setUser] = useState<UserRoleResponse | null>(null);
   const [entries, setEntries] = useState<MemberAuditLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -108,13 +108,18 @@ export const MemberAuditHistoryPage: React.FC = () => {
     [userId]
   );
 
-  // Loaded once per member, never per filter. This read is not free: the
-  // profile endpoint writes a "Member profile viewed" audit entry on every
-  // call, into the very history this page shows. Keying it on the filter as
-  // well wrote a fresh entry each time the officer changed the dropdown. The
-  // ref also holds it to one call under StrictMode, whose dev-only re-run of
-  // effects would otherwise record two views for one visit; it is compared on
-  // arrival so a response for a member navigated away from is dropped.
+  // The header needs only the member's name, so it is read from
+  // `GET /users/{id}/roles` — org-scoped, open to `members.manage` (which the
+  // history endpoint already demands), and it writes no audit entry. The full
+  // profile (`getUserWithRoles`) is deliberately NOT used here: it records a
+  // "Member profile viewed" entry on every call, so each visit to this page
+  // added a row to the very history it shows, and the owner has ruled such
+  // view entries out for this page.
+  //
+  // Loaded once per member, never per filter. The ref holds it to one call
+  // under StrictMode, whose dev-only re-run of effects would otherwise read
+  // it twice; it is compared on arrival so a response for a member navigated
+  // away from is dropped.
   const requestedUserIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!userId || requestedUserIdRef.current === userId) return;
@@ -124,13 +129,13 @@ export const MemberAuditHistoryPage: React.FC = () => {
     setLoading(true);
     setError(null);
     userService
-      .getUserWithRoles(userId)
+      .getUserRoles(userId)
       .then((userData) => {
         if (requestedUserIdRef.current !== userId) return;
         // The history is fetched only once a member with an id has loaded, so
         // a body without one (a captive portal's 200) left this page on its
         // spinner for good: nothing ever cleared the loading state.
-        if (!userData?.id) {
+        if (!userData?.user_id) {
           setError('Unable to load member information.');
           setLoading(false);
           return;
@@ -146,7 +151,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
 
   // The history itself is fetched here alone. It used to be fetched by the
   // effect above as well, so every visit read it twice.
-  const loadedUserId = user?.id;
+  const loadedUserId = user?.user_id;
   useEffect(() => {
     if (!loadedUserId) return;
 

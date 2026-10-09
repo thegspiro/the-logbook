@@ -269,7 +269,7 @@ def _require_self_or_quartermaster(user_id: UUID, current_user: User) -> None:
     )
 
 
-async def _publish_inventory_event(org_id: str, action: str, data: dict = None):
+async def _publish_inventory_event(org_id: str, action: str, data: dict | None = None):
     """Publish a real-time inventory event to WebSocket clients."""
     try:
         await ws_manager.publish_event(
@@ -334,10 +334,18 @@ async def list_categories(
     **Authentication required**
     **Requires permission: inventory.view**
     """
+    item_type_enum: ItemType | None = None
+    if item_type:
+        try:
+            item_type_enum = ItemType(item_type)
+        except ValueError:
+            # No category can carry a type the enum does not define, so an
+            # unknown filter value matches nothing rather than erroring.
+            return []
     service = InventoryService(db)
     categories = await service.get_categories(
         organization_id=current_user.organization_id,
-        item_type=item_type,
+        item_type=item_type_enum,
         # Medical supplies have their own page and their own officer; listing
         # them here too would put the same stock under two owners and let a
         # gear-only quartermaster edit an EMS category by accident.
@@ -370,10 +378,10 @@ async def create_category(
         created_by=current_user.id,
     )
 
-    if error:
+    if error or new_category is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=sanitize_error_message(error),
+            detail=sanitize_error_message(error or ""),
         )
 
     await log_audit_event(
@@ -482,7 +490,7 @@ async def delete_category(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=sanitize_error_message(error),
+            detail=sanitize_error_message(error or ""),
         )
 
     await log_audit_event(
@@ -602,7 +610,7 @@ def _item_response(item: InventoryItem) -> InventoryItemResponse:
     under asyncio. A missing key just means "no name to show", and the UI falls
     back to the legacy free-text ``vendor``.
     """
-    payload = InventoryItemResponse.model_validate(item)
+    payload: InventoryItemResponse = InventoryItemResponse.model_validate(item)
     vendor = item.__dict__.get("vendor_record")
     if vendor is not None:
         payload.vendor_name = vendor.name
@@ -802,10 +810,10 @@ async def create_item(
         created_by=current_user.id,
     )
 
-    if error:
+    if error or new_item is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=sanitize_error_message(error),
+            detail=sanitize_error_message(error or ""),
         )
 
     await log_audit_event(
@@ -1923,10 +1931,10 @@ async def update_item(
         update_data=update_data.model_dump(exclude_unset=True),
     )
 
-    if error:
+    if error or updated_item is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=sanitize_error_message(error),
+            detail=sanitize_error_message(error or ""),
         )
 
     await log_audit_event(
@@ -2372,10 +2380,10 @@ async def checkout_item(
         reason=checkout_data.checkout_reason,
     )
 
-    if error:
+    if error or checkout is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=sanitize_error_message(error),
+            detail=sanitize_error_message(error or ""),
         )
 
     await log_audit_event(
@@ -2997,7 +3005,7 @@ async def update_impact_plan(
     """
     service = InventoryService(db)
     data = payload.model_dump(exclude_unset=True)
-    if "filters" in data and data["filters"] is not None:
+    if "filters" in data and payload.filters is not None:
         data["filters"] = payload.filters.model_dump(mode="json")
     plan, error = await service.update_impact_plan(
         plan_id=plan_id,
@@ -3651,10 +3659,10 @@ async def initiate_departure_clearance(
         notes=clearance_data.notes,
     )
 
-    if error:
+    if error or clearance is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=sanitize_error_message(error),
+            detail=sanitize_error_message(error or ""),
         )
 
     await log_audit_event(
@@ -3808,10 +3816,10 @@ async def resolve_clearance_item(
         resolution_notes=resolve_data.resolution_notes,
     )
 
-    if error:
+    if error or line_item is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=sanitize_error_message(error),
+            detail=sanitize_error_message(error or ""),
         )
 
     await log_audit_event(
@@ -3864,10 +3872,10 @@ async def complete_departure_clearance(
         notes=complete_data.notes,
     )
 
-    if error:
+    if error or clearance is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=sanitize_error_message(error),
+            detail=sanitize_error_message(error or ""),
         )
 
     await log_audit_event(
@@ -4315,10 +4323,10 @@ async def fulfill_equipment_request(
         substitution_override_reason=fulfill_data.substitution_override_reason,
     )
 
-    if error:
+    if error or req is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=sanitize_error_message(error),
+            detail=sanitize_error_message(error or ""),
         )
 
     await log_audit_event(
@@ -4746,7 +4754,7 @@ def _vendor_response(
     commercial fields below leave the building the moment a call site forgets
     it, and a wrong default is silent. Callers state the caller's clearance.
     """
-    payload = InventoryVendorResponse.model_validate(vendor)
+    payload: InventoryVendorResponse = InventoryVendorResponse.model_validate(vendor)
     if stats:
         payload.item_count = stats.get("item_count", 0)
         payload.open_reorder_count = stats.get("open_reorder_count", 0)
@@ -4869,8 +4877,8 @@ async def create_vendor(
         data=data.model_dump(exclude_unset=True),
         created_by=current_user.id,
     )
-    if error:
-        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
+    if error or vendor is None:
+        raise HTTPException(status_code=400, detail=sanitize_error_message(error or ""))
 
     await log_audit_event(
         db=db,
@@ -4905,10 +4913,10 @@ async def update_vendor(
         organization_id=current_user.organization_id,
         data=data.model_dump(exclude_unset=True),
     )
-    if error:
+    if error or vendor is None:
         status_code = 404 if error == "Vendor not found" else 400
         raise HTTPException(
-            status_code=status_code, detail=sanitize_error_message(error)
+            status_code=status_code, detail=sanitize_error_message(error or "")
         )
 
     await log_audit_event(
@@ -4949,7 +4957,7 @@ async def deactivate_vendor(
     if not success:
         status_code = 404 if error == "Vendor not found" else 400
         raise HTTPException(
-            status_code=status_code, detail=sanitize_error_message(error)
+            status_code=status_code, detail=sanitize_error_message(error or "")
         )
 
     await log_audit_event(
@@ -5087,10 +5095,10 @@ async def attach_vendor_name(
         organization_id=current_user.organization_id,
         name=data.name,
     )
-    if error:
+    if error or result is None:
         status_code = 404 if error == "Vendor not found" else 400
         raise HTTPException(
-            status_code=status_code, detail=sanitize_error_message(error)
+            status_code=status_code, detail=sanitize_error_message(error or "")
         )
 
     await log_audit_event(
@@ -5132,10 +5140,10 @@ async def merge_vendors(
         source_id=data.source_vendor_id,
         organization_id=current_user.organization_id,
     )
-    if error:
-        status_code = 404 if error.endswith("not found") else 400
+    if error or result is None:
+        status_code = 404 if error and error.endswith("not found") else 400
         raise HTTPException(
-            status_code=status_code, detail=sanitize_error_message(error)
+            status_code=status_code, detail=sanitize_error_message(error or "")
         )
 
     await log_audit_event(
@@ -5188,10 +5196,10 @@ async def create_write_off_request(
         description=data.description,
     )
 
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=sanitize_error_message(error),
+            detail=sanitize_error_message(error or ""),
         )
 
     await log_audit_event(
@@ -5260,10 +5268,10 @@ async def review_write_off_request(
         expected_holder_signature=review_data.expected_holder_signature,
     )
 
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=sanitize_error_message(error),
+            detail=sanitize_error_message(error or ""),
         )
 
     await log_audit_event(
@@ -5809,9 +5817,9 @@ async def create_size_variants(
         organization_id=current_user.organization_id,
         created_by=current_user.id,
         base_name=data.base_name,
-        sizes=data.sizes,
+        sizes=list(data.sizes),
         colors=data.colors,
-        styles=data.styles,
+        styles=list(data.styles) if data.styles is not None else None,
         create_variant_group=data.create_variant_group,
         category_id=data.category_id,
         quantity_per_variant=data.quantity_per_variant,
@@ -6409,7 +6417,7 @@ def _reorder_response(req) -> ReorderRequestResponse:
     trigger a lazy load, which raises under asyncio. A missing key means the
     caller did not eager-load it, so the name is simply left unset.
     """
-    resp = ReorderRequestResponse.model_validate(req)
+    resp: ReorderRequestResponse = ReorderRequestResponse.model_validate(req)
     resp.quantity_outstanding = max(
         0, req.quantity_requested - (req.quantity_received or 0)
     )
@@ -6490,8 +6498,8 @@ async def create_reorder_request(
         data=data.model_dump(exclude_unset=True),
         requested_by=current_user.id,
     )
-    if error:
-        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
+    if error or reorder is None:
+        raise HTTPException(status_code=400, detail=sanitize_error_message(error or ""))
     await db.commit()
 
     await log_audit_event(
@@ -6652,8 +6660,8 @@ async def update_reorder_request(
         data=data.model_dump(exclude_unset=True),
         current_user_id=current_user.id,
     )
-    if error:
-        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
+    if error or reorder is None:
+        raise HTTPException(status_code=400, detail=sanitize_error_message(error or ""))
     await db.commit()
 
     await log_audit_event(
@@ -6834,7 +6842,7 @@ async def delete_variant_group(
         group_id, current_user.organization_id
     )
     if not success:
-        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
+        raise HTTPException(status_code=400, detail=sanitize_error_message(error or ""))
 
     await log_audit_event(
         db=db,
@@ -6898,8 +6906,8 @@ async def create_equipment_kit(
         data=data.model_dump(),
         created_by=UUID(current_user.id),
     )
-    if error:
-        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
+    if error or kit is None:
+        raise HTTPException(status_code=400, detail=sanitize_error_message(error or ""))
     await db.commit()
     # Re-fetch with relationships
     kit = await service.get_equipment_kit_by_id(
@@ -6970,7 +6978,7 @@ async def delete_equipment_kit(
         kit_id, current_user.organization_id
     )
     if not success:
-        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
+        raise HTTPException(status_code=400, detail=sanitize_error_message(error or ""))
 
     await log_audit_event(
         db=db,
@@ -7003,8 +7011,8 @@ async def issue_kit_to_member(
         organization_id=current_user.organization_id,
         issued_by=UUID(current_user.id),
     )
-    if error:
-        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
+    if error or issuances is None:
+        raise HTTPException(status_code=400, detail=sanitize_error_message(error or ""))
     await db.commit()
 
     await log_audit_event(

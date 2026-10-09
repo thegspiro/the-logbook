@@ -1,7 +1,7 @@
 """Keep withdrawn attendance requests, and count the withdrawals.
 
 Revision ID: a0b34c886658
-Revises: 5c8be05f2f0f
+Revises: c0bf0b155719
 Create Date: 2026-10-09 05:38:00
 
 A withdrawn request used to be deleted, which left nothing to count, so a
@@ -25,7 +25,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "a0b34c886658"
-down_revision: Union[str, None] = "5c8be05f2f0f"
+down_revision: Union[str, None] = "c0bf0b155719"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

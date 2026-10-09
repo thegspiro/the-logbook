@@ -44,7 +44,8 @@ class ComplianceConfigService:
             .options(selectinload(ComplianceConfig.profiles))
             .where(ComplianceConfig.organization_id == organization_id)
         )
-        return result.scalars().first()
+        compliance_config: Optional[ComplianceConfig] = result.scalars().first()
+        return compliance_config
 
     async def create_or_update_config(
         self,
@@ -164,7 +165,7 @@ class ComplianceConfigService:
                 ComplianceConfig.organization_id == organization_id,
             )
         )
-        profile = result.scalars().first()
+        profile: Optional[ComplianceProfile] = result.scalars().first()
         if not profile:
             raise ValueError("Profile not found")
 
@@ -512,7 +513,8 @@ class ComplianceReportService:
                 ComplianceReport.organization_id == organization_id,
             )
         )
-        return result.scalars().first()
+        compliance_report: Optional[ComplianceReport] = result.scalars().first()
+        return compliance_report
 
     async def delete_report(
         self,

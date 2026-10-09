@@ -211,9 +211,10 @@ def position_slugs_for_offices(*office_keys: str) -> list[str]:
     slugs: list[str] = []
     for key in office_keys:
         office = by_key.get(key)
+        position_slugs = office["position_slugs"] if office else None
         expanded = (
-            [str(slug) for slug in office["position_slugs"]]  # type: ignore[union-attr]
-            if office
+            [str(slug) for slug in position_slugs]
+            if isinstance(position_slugs, list)
             else [key]
         )
         for slug in expanded:

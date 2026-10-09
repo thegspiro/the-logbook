@@ -260,7 +260,8 @@ class OperationalRankService:
                 OperationalRank.organization_id == organization_id,
             )
         )
-        return result.scalar_one_or_none()
+        operational_rank: Optional[OperationalRank] = result.scalar_one_or_none()
+        return operational_rank
 
     async def create_rank(
         self,
@@ -446,7 +447,7 @@ class OperationalRankService:
                 OperationalRank.organization_id == organization_id,
             )
         )
-        stored = [row[0] for row in result.all() if row[0]]
+        stored: List[str] = [row[0] for row in result.all() if row[0]]
         for stored_code in stored:
             if stored_code.strip().lower() == folded:
                 return stored_code
@@ -486,7 +487,8 @@ class OperationalRankService:
                 func.lower(OperationalRank.rank_code) == code.lower(),
             )
         )
-        return result.scalar_one_or_none()
+        matched: Optional[str] = result.scalar_one_or_none()
+        return matched
 
     async def is_known_rank(self, organization_id: str, rank_code: str) -> bool:
         """Whether ``rank_code`` names a rank this organization has.

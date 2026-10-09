@@ -36,6 +36,8 @@ from app.models.training import (
     ShiftPosition,
     StandingShiftPattern,
     StandingShiftPeriod,
+    SwapRequestStatus,
+    TimeOffStatus,
 )
 from app.models.user import Organization, User
 from app.schemas.scheduling import (
@@ -106,8 +108,6 @@ from app.schemas.scheduling import StandingShiftPeriod as SchemaStandingShiftPer
 from app.schemas.scheduling import (
     StandingShiftPreviewResponse,
     StandingShiftResponse,
-    SwapRequestStatus,
-    TimeOffStatus,
     TradeCandidateResponse,
 )
 from app.services.call_tracking_service import CallTrackingService
@@ -164,7 +164,8 @@ def _enum_value(value) -> str | None:
     """
     if value is None:
         return None
-    return getattr(value, "value", value)
+    unwrapped: str = getattr(value, "value", value)
+    return unwrapped
 
 
 def _safe_detail(prefix: str, error: str | None) -> str:
@@ -1279,7 +1280,7 @@ async def add_attendance(
     result, error = await service.add_attendance(
         shift_id, current_user.organization_id, attendance.model_dump(exclude_none=True)
     )
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to add attendance.", error)
         )
@@ -1325,7 +1326,7 @@ async def update_attendance(
         current_user.organization_id,
         attendance.model_dump(exclude_unset=True),
     )
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to update attendance.", error)
         )
@@ -2278,7 +2279,7 @@ async def create_assignment(
         )
     except CodedValueError as e:
         raise _curated_refusal(e)
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to create assignment.", error)
         )
@@ -2322,7 +2323,7 @@ async def update_assignment(
         )
     except CodedValueError as e:
         raise _curated_refusal(e)
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to update assignment.", error)
         )
@@ -2375,7 +2376,7 @@ async def confirm_assignment(
         current_user.organization_id,
         actor=_roster_actor(current_user),
     )
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to confirm assignment.", error)
         )
@@ -2406,7 +2407,7 @@ async def decline_assignment(
         current_user.organization_id,
         actor=_roster_actor(current_user),
     )
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to decline assignment.", error)
         )
@@ -2498,7 +2499,7 @@ async def create_swap_request(
         )
     except UnknownSeatError as e:
         raise _curated_refusal(e)
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400,
             detail=_safe_detail("Unable to create swap request.", error),
@@ -2613,7 +2614,7 @@ async def review_swap_request(
             request_id,
             current_user.organization_id,
             current_user.id,
-            review.status,
+            SwapRequestStatus(review.status.value),
             review.reviewer_notes,
             override_qualification=review.override_qualification,
         )
@@ -2621,7 +2622,7 @@ async def review_swap_request(
         # Keeps the curated code: LB-SCHED-001 (EVOC) and LB-SCHED-002
         # (exchange qualification) are what the screen keys its offers off.
         raise _curated_refusal(exc)
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400,
             detail=_safe_detail("Unable to review swap request.", error),
@@ -2695,7 +2696,7 @@ async def cancel_swap_request(
     result, error = await service.cancel_swap_request(
         request_id, current_user.organization_id, current_user.id
     )
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400,
             detail=_safe_detail("Unable to cancel swap request.", error),
@@ -2778,7 +2779,7 @@ async def create_time_off_request(
     result, error = await service.create_time_off(
         current_user.organization_id, current_user.id, time_off_data
     )
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400,
             detail=_safe_detail("Unable to create time-off request.", error),
@@ -2823,10 +2824,10 @@ async def review_time_off_request(
         time_off_id,
         current_user.organization_id,
         current_user.id,
-        review.status,
+        TimeOffStatus(review.status.value),
         review.reviewer_notes,
     )
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400,
             detail=_safe_detail("Unable to review time-off request.", error),
@@ -2846,7 +2847,7 @@ async def cancel_time_off_request(
     result, error = await service.cancel_time_off(
         time_off_id, current_user.organization_id, current_user.id
     )
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400,
             detail=_safe_detail("Unable to cancel time-off request.", error),
@@ -3182,7 +3183,7 @@ async def signup_for_shift(
         )
     except CodedValueError as e:
         raise _curated_refusal(e)
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to sign up for shift.", error)
         )
@@ -3319,8 +3320,10 @@ async def get_standing_claim_for_shift(
     a series they never set up.
     """
     service = SchedulingService(db)
-    shift = await service.get_shift_by_id(shift_id, current_user.organization_id)
-    ensure_found(shift, "Shift")
+    shift = ensure_found(
+        await service.get_shift_by_id(shift_id, current_user.organization_id),
+        "Shift",
+    )
     return await StandingShiftService(db).claim_covering_shift(
         current_user.organization_id, current_user.id, shift
     )
@@ -3380,13 +3383,17 @@ async def create_standing_shift(
             detail=_safe_detail("Unable to create the standing shift.", error),
         )
     await log_audit_event(
-        db,
+        db=db,
+        event_type="standing_shift_created",
+        event_category="scheduling",
+        severity="INFO",
+        event_data={
+            "standing_shift_claim_id": str(claim.id),
+            "claimed": summary.get("claimed", 0),
+        },
         user_id=str(current_user.id),
+        username=current_user.username,
         organization_id=str(current_user.organization_id),
-        action="standing_shift.create",
-        resource_type="standing_shift_claim",
-        resource_id=str(claim.id),
-        details={"claimed": summary.get("claimed", 0)},
     )
     return {"claim": claim, **summary}
 
@@ -3406,8 +3413,10 @@ async def end_standing_shift(
     short with nobody notified.
     """
     standing = StandingShiftService(db)
-    claim = await standing.get_claim(claim_id, current_user.organization_id)
-    ensure_found(claim, "Standing shift")
+    claim = ensure_found(
+        await standing.get_claim(claim_id, current_user.organization_id),
+        "Standing shift",
+    )
     # A claim is the member's own commitment; an officer changing someone
     # else's belongs on the roster, not here.
     if str(claim.user_id) != str(current_user.id):
@@ -3422,13 +3431,14 @@ async def end_standing_shift(
         claim, release_future=release_future, withdraw=_withdraw
     )
     await log_audit_event(
-        db,
+        db=db,
+        event_type="standing_shift_ended",
+        event_category="scheduling",
+        severity="INFO",
+        event_data={"standing_shift_claim_id": str(claim.id), **result},
         user_id=str(current_user.id),
+        username=current_user.username,
         organization_id=str(current_user.organization_id),
-        action="standing_shift.end",
-        resource_type="standing_shift_claim",
-        resource_id=str(claim.id),
-        details=result,
     )
     return result
 
@@ -4125,7 +4135,9 @@ async def update_scheduling_feature_settings(
     # a 500 — reported to the admin as a failure, with the write already
     # committed. It also mishandled a stored null, which `or 0` silently
     # turned into "closes at the start" rather than the built-in default.
-    saved_org = await service._get_org(current_user.organization_id)
+    saved_org = ensure_found(
+        await service._get_org(current_user.organization_id), "Organization"
+    )
     window = service.get_signup_window_settings(saved_org)
     return SchedulingFeatureSettings(
         platoons_enabled=bool(result.get("platoons_enabled", False)),

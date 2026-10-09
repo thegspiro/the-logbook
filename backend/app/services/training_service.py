@@ -54,6 +54,21 @@ _PROGRESS_RECORD_COLUMNS = (
 )
 
 
+def _same_requirement_value(stored: Any, sent: Any) -> bool:
+    """Whether a requirement edit leaves a field as it is.
+
+    The edit form sends list fields (categories, member categories, courses,
+    call types) on every save, as ``[]`` when nothing is selected, while rows
+    written by older clients or by create hold ``NULL`` for the same state.
+    Every grader treats the two alike, so a new-members-only save must too —
+    otherwise a save that changes nothing creates a copy instead of being
+    refused.
+    """
+    if stored in (None, []) and sent in (None, []):
+        return True
+    return stored == sent
+
+
 class TrainingService:
     """Service for training management"""
 
@@ -427,7 +442,7 @@ class TrainingService:
         # match, or the requirement name appearing in the record's course
         # name -- the same two criteria the fallback branch itself uses.
         if requirement.training_type:
-            return record.training_type == requirement.training_type
+            return bool(record.training_type == requirement.training_type)
         return bool(
             requirement.name
             and record.course_name
@@ -550,7 +565,8 @@ class TrainingService:
         if not anchors:
             return None
         latest = max(anchors, key=lambda r: r.completion_date or date.min)
-        return latest.expiration_date
+        expiration: Optional[date] = latest.expiration_date
+        return expiration
 
     @staticmethod
     def evaluate_requirement_detail(
@@ -1658,7 +1674,7 @@ class TrainingService:
             key: value
             for key, value in updates.items()
             if key not in self._SPLIT_FORBIDDEN_FIELDS
-            and getattr(requirement, key) != value
+            and not _same_requirement_value(getattr(requirement, key), value)
         }
         if not changed:
             raise ValueError(
@@ -1791,4 +1807,4 @@ class TrainingService:
             query = query.where(TrainingRecord.user_id == str(user_id))
 
         result = await self.db.execute(query)
-        return result.scalars().all()
+        return list(result.scalars().all())

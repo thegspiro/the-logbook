@@ -280,7 +280,7 @@ class StorefrontService:
                 StoreSettings.organization_id == str(organization_id)
             )
         )
-        settings = result.scalar_one_or_none()
+        settings: Optional[StoreSettings] = result.scalar_one_or_none()
         if settings:
             return settings
 
@@ -305,7 +305,7 @@ class StorefrontService:
                     StoreSettings.organization_id == str(organization_id)
                 )
             )
-            existing = result.scalar_one_or_none()
+            existing: Optional[StoreSettings] = result.scalar_one_or_none()
             if existing is None:
                 raise
             return existing
@@ -391,7 +391,8 @@ class StorefrontService:
                 StoreProduct.organization_id == str(organization_id),
             )
         )
-        return result.scalar_one_or_none()
+        store_product: Optional[StoreProduct] = result.scalar_one_or_none()
+        return store_product
 
     async def create_product(
         self, organization_id: str, data: Dict[str, Any], created_by: Optional[str]
@@ -500,7 +501,10 @@ class StorefrontService:
 
         Labels that are not sizes (colors, fits) keep their entered order.
         """
-        return sort_by_size(list(variants), lambda payload: payload.get("label"))
+        ordered: List[Dict[str, Any]] = sort_by_size(
+            list(variants), lambda payload: payload.get("label")
+        )
+        return ordered
 
     async def _replace_variants(
         self, product: StoreProduct, variants: Sequence[Dict[str, Any]]
@@ -581,7 +585,8 @@ class StorefrontService:
             updated = _as_aware(product.updated_at)
             version = int(updated.timestamp()) if updated else 0
             return f"/api/v1/store/products/{product.id}/image?v={version}"
-        return product.image_url
+        image_url: Optional[str] = product.image_url
+        return image_url
 
     async def get_product_image(
         self, product_id: str, organization_id: str
@@ -593,7 +598,8 @@ class StorefrontService:
                 StoreProductImage.organization_id == str(organization_id),
             )
         )
-        return result.scalar_one_or_none()
+        store_product_image: Optional[StoreProductImage] = result.scalar_one_or_none()
+        return store_product_image
 
     async def set_product_image(
         self,
@@ -682,7 +688,8 @@ class StorefrontService:
                 StoreOrderWindow.organization_id == str(organization_id),
             )
         )
-        return result.scalar_one_or_none()
+        store_order_window: Optional[StoreOrderWindow] = result.scalar_one_or_none()
+        return store_order_window
 
     async def create_window(
         self, organization_id: str, data: Dict[str, Any], created_by: Optional[str]
@@ -1188,7 +1195,7 @@ class StorefrontService:
         ordered = sum(
             qty for (_pid, vid), qty in window_totals.items() if vid == variant.id
         )
-        remaining = max(variant.stock_quantity - ordered, 0)
+        remaining: int = max(variant.stock_quantity - ordered, 0)
         if product_remaining is None:
             return remaining
         return min(remaining, product_remaining)
@@ -1769,7 +1776,8 @@ class StorefrontService:
         if for_update:
             query = query.with_for_update().execution_options(populate_existing=True)
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        store_order: Optional[StoreOrder] = result.scalar_one_or_none()
+        return store_order
 
     async def list_orders(
         self,
@@ -2540,7 +2548,7 @@ class StorefrontService:
                 StorePaymentEvent.external_id == external_id,
             )
         )
-        already = existing.scalar_one_or_none()
+        already: Optional[StorePaymentEvent] = existing.scalar_one_or_none()
         if already is not None:
             # Providers retry until they get a 2xx, so redelivery is normal
             # traffic rather than an error — acknowledge without re-applying.
@@ -2630,7 +2638,7 @@ class StorefrontService:
                     StorePaymentEvent.external_id == external_id,
                 )
             )
-            winner = existing.scalar_one_or_none()
+            winner: Optional[StorePaymentEvent] = existing.scalar_one_or_none()
             if winner is None:
                 raise
             return winner
@@ -2739,7 +2747,8 @@ class StorefrontService:
         if for_update:
             query = query.with_for_update().execution_options(populate_existing=True)
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        store_payment_event: Optional[StorePaymentEvent] = result.scalar_one_or_none()
+        return store_payment_event
 
     async def count_unresolved_payment_events(self, organization_id: str) -> int:
         """How many inbound payments still need somebody to look at them."""
@@ -3399,7 +3408,8 @@ class StorefrontService:
         result = await self.db.execute(
             select(Organization).where(Organization.id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        organization: Optional[Organization] = result.scalar_one_or_none()
+        return organization
 
     async def run_window_lifecycle(self, organization_id: str) -> int:
         """Open/close windows that have reached their scheduled time.

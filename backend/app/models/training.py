@@ -5,11 +5,12 @@ SQLAlchemy models for training management including courses, records, and requir
 """
 
 import enum
+from datetime import date, datetime, time
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import (
     JSON,
     Boolean,
-    Column,
     Date,
     DateTime,
     Enum,
@@ -23,13 +24,18 @@ from sqlalchemy import (
     TypeDecorator,
     UniqueConstraint,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from sqlalchemy.sql import true as sa_true
 
 from app.core.database import Base
 from app.core.encrypted_types import EncryptedText
 from app.core.utils import generate_uuid
+
+if TYPE_CHECKING:
+    from app.models.event import Event
+    from app.models.location import Location
+    from app.models.user import User
 
 
 class TrainingStatus(str, enum.Enum):
@@ -139,25 +145,29 @@ class TrainingCategory(Base):
 
     __tablename__ = "training_categories"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Category Details
-    name = Column(String(255), nullable=False)
-    code = Column(String(50))  # Short code like "FIRE", "EMS", "DRIVER"
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    code: Mapped[Optional[str]] = mapped_column(
+        String(50)
+    )  # Short code like "FIRE", "EMS", "DRIVER"
     # National/state standard identifier for linking to external registries.
     # Examples: "NCCR-11" (NREMT topic area 11), "NFPA-1001" (NFPA standard).
     # Used to auto-map external provider categories to national requirements.
-    registry_code = Column(String(100), nullable=True)
-    description = Column(Text)
-    color = Column(String(7))  # Hex color for UI display, e.g., "#FF5733"
+    registry_code: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    color: Mapped[Optional[str]] = mapped_column(
+        String(7)
+    )  # Hex color for UI display, e.g., "#FF5733"
 
     # Parent Category (for hierarchical categories)
-    parent_category_id = Column(
+    parent_category_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_categories.id", ondelete="SET NULL"),
         nullable=True,
@@ -167,18 +177,20 @@ class TrainingCategory(Base):
     # When training is completed in this category, it counts towards requirements linked to it
 
     # Display Settings
-    sort_order = Column(Integer, default=0)
-    icon = Column(String(50))  # Icon name for UI
+    sort_order: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    icon: Mapped[Optional[str]] = mapped_column(String(50))  # Icon name for UI
 
     # Status
-    active = Column(Boolean, default=True, index=True)
+    active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True, index=True)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
@@ -187,12 +199,12 @@ class TrainingCategory(Base):
     # parent and ``parent_category`` into the child list. No cascade: a parent
     # going away leaves its children as top-level categories, which is what
     # the FK's SET NULL says too.
-    parent_category = relationship(
+    parent_category: Mapped[Optional["TrainingCategory"]] = relationship(
         "TrainingCategory",
         remote_side=[id],
         back_populates="subcategories",
     )
-    subcategories = relationship(
+    subcategories: Mapped[list["TrainingCategory"]] = relationship(
         "TrainingCategory",
         back_populates="parent_category",
     )
@@ -216,29 +228,37 @@ class TrainingCourse(Base):
 
     __tablename__ = "training_courses"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Course Information
-    name = Column(String(255), nullable=False)
-    code = Column(String(50))  # Course code like "FF1", "EMT-B", etc.
-    description = Column(Text)
-    training_type = Column(
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    code: Mapped[Optional[str]] = mapped_column(
+        String(50)
+    )  # Course code like "FF1", "EMT-B", etc.
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    training_type: Mapped[TrainingType] = mapped_column(
         Enum(TrainingType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
 
     # Duration and Credits
-    duration_hours = Column(Float)  # How long the course takes
-    credit_hours = Column(Float)  # How many training hours it's worth
+    duration_hours: Mapped[Optional[float]] = mapped_column(
+        Float
+    )  # How long the course takes
+    credit_hours: Mapped[Optional[float]] = mapped_column(
+        Float
+    )  # How many training hours it's worth
 
     # Requirements
-    prerequisites = Column(JSON)  # List of prerequisite course IDs
-    expiration_months = Column(
+    prerequisites: Mapped[Optional[list[str]]] = mapped_column(
+        JSON
+    )  # List of prerequisite course IDs
+    expiration_months: Mapped[Optional[int]] = mapped_column(
         Integer
     )  # How long before recertification needed (null = doesn't expire)
 
@@ -252,43 +272,47 @@ class TrainingCourse(Base):
     # two drift the first time somebody forgets the second. The course already
     # knows what it certifies; the record already knows when it was completed
     # and when it expires.
-    grants_qualification = Column(String(50), index=True)
+    grants_qualification: Mapped[Optional[str]] = mapped_column(String(50), index=True)
 
     # Course Details
-    instructor = Column(String(255))
-    max_participants = Column(Integer)
-    materials_required = Column(JSON)  # List of required materials
+    instructor: Mapped[Optional[str]] = mapped_column(String(255))
+    max_participants: Mapped[Optional[int]] = mapped_column(Integer)
+    materials_required: Mapped[Optional[list[str]]] = mapped_column(
+        JSON
+    )  # List of required materials
 
     # Categories - training can count towards multiple categories
-    category_ids = Column(
+    category_ids: Mapped[Optional[list[str]]] = mapped_column(
         JSON
     )  # List of TrainingCategory IDs this course counts towards
 
     # Multi-class courses (e.g. a recruit school) carry a syllabus of
     # CourseClass rows and generate cohorts against this pipeline.
-    program_id = Column(
+    program_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_programs.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Status
-    active = Column(Boolean, default=True, index=True)
+    active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True, index=True)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Relationships
-    training_records = relationship(
+    training_records: Mapped[list["TrainingRecord"]] = relationship(
         "TrainingRecord", back_populates="course", cascade="all, delete-orphan"
     )
-    classes = relationship(
+    classes: Mapped[list["CourseClass"]] = relationship(
         "CourseClass",
         foreign_keys="CourseClass.course_id",
         back_populates="course",
@@ -312,19 +336,19 @@ class TrainingRecord(Base):
 
     __tablename__ = "training_records"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    course_id = Column(
+    course_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_courses.id", ondelete="SET NULL"),
         nullable=True,
@@ -332,62 +356,62 @@ class TrainingRecord(Base):
     )
 
     # Training category for recertification tracking (e.g., NCCR areas)
-    category_id = Column(
+    category_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_categories.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Training Details
-    course_name = Column(
+    course_name: Mapped[str] = mapped_column(
         String(255), nullable=False
     )  # Stored in case course is deleted
-    course_code = Column(String(50))
-    training_type = Column(
+    course_code: Mapped[Optional[str]] = mapped_column(String(50))
+    training_type: Mapped[TrainingType] = mapped_column(
         Enum(TrainingType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
 
     # Dates
-    scheduled_date = Column(Date)
-    completion_date = Column(Date)
-    expiration_date = Column(Date)
+    scheduled_date: Mapped[Optional[date]] = mapped_column(Date)
+    completion_date: Mapped[Optional[date]] = mapped_column(Date)
+    expiration_date: Mapped[Optional[date]] = mapped_column(Date)
     # Time of day the training ran. Nullable: rows predating self-report's
     # start-time field, and every record entered from a roster rather than a
     # clock, genuinely do not have one.
-    start_time = Column(Time)
+    start_time: Mapped[Optional[time]] = mapped_column(Time)
 
     # Hours and Credits
-    hours_completed = Column(Float, nullable=False)
-    credit_hours = Column(Float)
+    hours_completed: Mapped[float] = mapped_column(Float, nullable=False)
+    credit_hours: Mapped[Optional[float]] = mapped_column(Float)
 
     # Certification
-    certification_number = Column(String(100))
-    issuing_agency = Column(String(255))
+    certification_number: Mapped[Optional[str]] = mapped_column(String(100))
+    issuing_agency: Mapped[Optional[str]] = mapped_column(String(255))
 
     # Status and Scores
-    status = Column(
+    status: Mapped[Optional[TrainingStatus]] = mapped_column(
         Enum(TrainingStatus, values_callable=lambda x: [e.value for e in x]),
         default=TrainingStatus.SCHEDULED,
         index=True,
     )
-    score = Column(Float)  # Percentage or points
-    passing_score = Column(Float)
-    passed = Column(Boolean)
+    score: Mapped[Optional[float]] = mapped_column(Float)  # Percentage or points
+    passing_score: Mapped[Optional[float]] = mapped_column(Float)
+    passed: Mapped[Optional[bool]] = mapped_column(Boolean)
 
     # Instructor and Location
-    instructor = Column(String(255))
-    location_id = Column(
+    instructor: Mapped[Optional[str]] = mapped_column(String(255))
+    location_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("locations.id", ondelete="SET NULL"),
         nullable=True,
     )
-    location = Column(
+    location: Mapped[Optional[str]] = mapped_column(
         String(255)
     )  # Free-text fallback for "Other Location" or legacy records
 
     # Cross-module link: which apparatus was used for this training
-    apparatus_id = Column(
+    apparatus_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("apparatus.id", ondelete="SET NULL"),
         nullable=True,
@@ -395,16 +419,20 @@ class TrainingRecord(Base):
     )
 
     # Snapshot of member's rank and station at time of training completion
-    rank_at_completion = Column(String(100), nullable=True)
-    station_at_completion = Column(String(100), nullable=True)
+    rank_at_completion: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
+    station_at_completion: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
 
     # External training provider linkage (populated by provider imports)
-    external_provider_id = Column(
+    external_provider_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("external_training_providers.id", ondelete="SET NULL"),
         nullable=True,
     )
-    external_record_id = Column(
+    external_record_id: Mapped[Optional[str]] = mapped_column(
         String(255), nullable=True
     )  # Provider's unique ID for this record
 
@@ -414,50 +442,69 @@ class TrainingRecord(Base):
     # re-finalizing a reopened event updates this row in place instead of
     # adding a second one, however the event's title or date was edited in
     # between. NULL for manual, self-reported and imported records.
-    source_event_id = Column(
+    source_event_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("events.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Additional Information
-    notes = Column(Text)
-    attachments = Column(JSON)  # List of file URLs or references
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    # Older rows hold bare file URL strings; uploads store attachment dicts.
+    attachments: Mapped[Optional[list[str | dict[str, Any]]]] = mapped_column(JSON)
 
     # Set when an officer voids the record (status becomes CANCELLED), for
     # example on finding a member cheated. The reason is shown to the member,
     # who is told of the void. A voided record cannot be edited back into
     # credit, and it keeps external_record_id, so a later import of the same
     # provider completion links to it instead of crediting it again.
-    voided_at = Column(DateTime(timezone=True), nullable=True)
-    voided_by = Column(
+    voided_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    voided_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    void_reason = Column(Text, nullable=True)
+    void_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Certification expiration alert tracking — records when each tier was sent
-    alert_90_sent_at = Column(DateTime(timezone=True), nullable=True)
-    alert_60_sent_at = Column(DateTime(timezone=True), nullable=True)
-    alert_30_sent_at = Column(DateTime(timezone=True), nullable=True)
-    alert_7_sent_at = Column(DateTime(timezone=True), nullable=True)
-    escalation_sent_at = Column(
+    alert_90_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    alert_60_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    alert_30_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    alert_7_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    escalation_sent_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )  # CC to training/compliance officers
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Relationships
-    course = relationship("TrainingCourse", back_populates="training_records")
-    category = relationship("TrainingCategory", foreign_keys=[category_id])
-    location_obj = relationship("Location", foreign_keys=[location_id])
-    external_provider = relationship(
+    course: Mapped[Optional["TrainingCourse"]] = relationship(
+        "TrainingCourse", back_populates="training_records"
+    )
+    category: Mapped[Optional["TrainingCategory"]] = relationship(
+        "TrainingCategory", foreign_keys=[category_id]
+    )
+    location_obj: Mapped[Optional["Location"]] = relationship(
+        "Location", foreign_keys=[location_id]
+    )
+    external_provider: Mapped[Optional["ExternalTrainingProvider"]] = relationship(
         "ExternalTrainingProvider", foreign_keys=[external_provider_id]
     )
 
@@ -499,43 +546,45 @@ class TrainingRequirement(Base):
 
     __tablename__ = "training_requirements"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Requirement Details
-    name = Column(String(255), nullable=False)
-    description = Column(Text)
-    requirement_type = Column(
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    requirement_type: Mapped[RequirementType] = mapped_column(
         Enum(RequirementType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )  # hours, courses, certification, etc.
-    training_type = Column(
+    training_type: Mapped[Optional[TrainingType]] = mapped_column(
         Enum(TrainingType, values_callable=lambda x: [e.value for e in x])
     )  # certification, continuing_education, etc.
 
     # Source Information
-    source = Column(
+    source: Mapped[RequirementSource] = mapped_column(
         Enum(RequirementSource, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=RequirementSource.DEPARTMENT,
         server_default="department",
     )
-    registry_name = Column(
+    registry_name: Mapped[Optional[str]] = mapped_column(
         String(100)
     )  # e.g., "NFPA", "NREMT", "Pro Board", state name
-    registry_code = Column(String(50))  # e.g., "NFPA 1001", "EMR"
+    registry_code: Mapped[Optional[str]] = mapped_column(
+        String(50)
+    )  # e.g., "NFPA 1001", "EMR"
     # CERTIFICATION only: a record completed on or before this date may still
     # satisfy the requirement because its course name contains the
     # requirement's name; a later one needs a linked course, the training type
     # or the registry code. Set by migration 60aaf273de27 to the day it ran,
     # for the requirements that existed then; NULL (every requirement created
     # since) means no name matching. See certification_record_matches.
-    name_match_until = Column(Date, nullable=True)
-    is_editable = Column(
+    name_match_until: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    is_editable: Mapped[Optional[bool]] = mapped_column(
         Boolean, default=True
     )  # Department can override registry requirements
 
@@ -545,7 +594,7 @@ class TrainingRequirement(Base):
     # Officers opt a requirement in when online/third-party delivery is acceptable
     # (e.g. HIPAA CE), and leave it off for in-house-only competencies (e.g. a
     # hands-on radios drill that a Vector course must not check off).
-    allows_external_credit = Column(
+    allows_external_credit: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="0"
     )
 
@@ -557,7 +606,7 @@ class TrainingRequirement(Base):
     # shifts while every training screen said otherwise (W37-2). A SHIFTS
     # requirement counts shifts by definition, so it defaults on; an HOURS
     # requirement is shift-credited only when an officer says so.
-    shift_credited = Column(
+    shift_credited: Mapped[bool] = mapped_column(
         Boolean,
         default=_default_shift_credited,
         nullable=False,
@@ -565,27 +614,37 @@ class TrainingRequirement(Base):
     )
 
     # Requirement Quantities (based on requirement_type)
-    required_hours = Column(Float)  # For HOURS type
-    required_courses = Column(JSON)  # For COURSES type - list of course IDs
-    required_shifts = Column(Integer)  # For SHIFTS type
-    required_calls = Column(Integer)  # For CALLS type
-    required_call_types = Column(JSON)  # Specific incident types required
-    required_skills = Column(JSON)  # For SKILLS_EVALUATION type - skill IDs
-    checklist_items = Column(JSON)  # For CHECKLIST type - list of items
-    passing_score = Column(
+    required_hours: Mapped[Optional[float]] = mapped_column(Float)  # For HOURS type
+    required_courses: Mapped[Optional[list[str]]] = mapped_column(
+        JSON
+    )  # For COURSES type - list of course IDs
+    required_shifts: Mapped[Optional[int]] = mapped_column(Integer)  # For SHIFTS type
+    required_calls: Mapped[Optional[int]] = mapped_column(Integer)  # For CALLS type
+    required_call_types: Mapped[Optional[list[str]]] = mapped_column(
+        JSON
+    )  # Specific incident types required
+    required_skills: Mapped[Optional[list[str]]] = mapped_column(
+        JSON
+    )  # For SKILLS_EVALUATION type - skill IDs
+    checklist_items: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON
+    )  # For CHECKLIST type - list of items
+    passing_score: Mapped[Optional[float]] = mapped_column(
         Float
     )  # For KNOWLEDGE_TEST type - minimum passing percentage
-    max_attempts = Column(Integer)  # For KNOWLEDGE_TEST type - max number of attempts
+    max_attempts: Mapped[Optional[int]] = mapped_column(
+        Integer
+    )  # For KNOWLEDGE_TEST type - max number of attempts
 
     # Frequency
-    frequency = Column(
+    frequency: Mapped[RequirementFrequency] = mapped_column(
         Enum(RequirementFrequency, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
-    year = Column(Integer)  # For annual requirements
+    year: Mapped[Optional[int]] = mapped_column(Integer)  # For annual requirements
 
     # Due Date Calculation Type
-    due_date_type = Column(
+    due_date_type: Mapped[Optional[DueDateType]] = mapped_column(
         Enum(DueDateType, values_callable=lambda x: [e.value for e in x]),
         default=DueDateType.CALENDAR_PERIOD,
     )
@@ -595,19 +654,21 @@ class TrainingRequirement(Base):
     # - FIXED_DATE: Due by a specific fixed date
 
     # Rolling Period (for ROLLING due_date_type)
-    rolling_period_months = Column(
+    rolling_period_months: Mapped[Optional[int]] = mapped_column(
         Integer
     )  # Number of months between required completions
 
     # Calendar Period Settings (for CALENDAR_PERIOD)
-    period_start_month = Column(
+    period_start_month: Mapped[Optional[int]] = mapped_column(
         Integer, default=1
     )  # Month the period starts (1=January)
-    period_start_day = Column(Integer, default=1)  # Day the period starts
-    period_end_month = Column(
+    period_start_day: Mapped[Optional[int]] = mapped_column(
+        Integer, default=1
+    )  # Day the period starts
+    period_end_month: Mapped[Optional[int]] = mapped_column(
         Integer
     )  # Month the period ends (e.g., 1=January); NULL = use default for frequency
-    period_end_day = Column(
+    period_end_day: Mapped[Optional[int]] = mapped_column(
         Integer
     )  # Day the period ends (e.g., 31); NULL = last day of period_end_month
 
@@ -615,7 +676,9 @@ class TrainingRequirement(Base):
     #   NULL  -> inherit the organization's compliance setting
     #   True  -> always count the in-progress current month for this requirement
     #   False -> stop at the end of the previous month for this requirement
-    include_current_month = Column(Boolean, nullable=True)
+    include_current_month: Mapped[Optional[bool]] = mapped_column(
+        Boolean, nullable=True
+    )
 
     # Freshness window: a completion older than this many days does not count
     # toward the requirement, even though it happened.
@@ -628,20 +691,22 @@ class TrainingRequirement(Base):
     #
     # When both apply, the narrower window wins: this only ever removes records
     # from consideration, never adds them.
-    recency_days = Column(Integer, nullable=True)
+    recency_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Categories - which training categories count towards this requirement
-    category_ids = Column(
+    category_ids: Mapped[Optional[list[str]]] = mapped_column(
         JSON
     )  # List of TrainingCategory IDs that satisfy this requirement
 
     # Applicability
-    applies_to_all = Column(Boolean, default=True)
-    required_roles = Column(JSON)  # List of role slugs this applies to (if not all)
-    required_positions = Column(
+    applies_to_all: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
+    required_roles: Mapped[Optional[list[str]]] = mapped_column(
+        JSON
+    )  # List of role slugs this applies to (if not all)
+    required_positions: Mapped[Optional[list[str]]] = mapped_column(
         JSON
     )  # Positions: probationary, driver_candidate, officer, aic, etc.
-    required_membership_types = Column(
+    required_membership_types: Mapped[Optional[list[str]]] = mapped_column(
         JSON
     )  # List of MembershipType values this applies to (e.g. ["active", "administrative"])
 
@@ -658,27 +723,35 @@ class TrainingRequirement(Base):
     #                                        cutoff must meet it by the deadline,
     #                                        and an unmet one does not count
     #                                        against them until it passes
-    new_member_cutoff_date = Column(Date, nullable=True)
-    existing_member_deadline = Column(Date, nullable=True)
+    new_member_cutoff_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    existing_member_deadline: Mapped[Optional[date]] = mapped_column(
+        Date, nullable=True
+    )
     # Upper bound, set on the original when an edit is saved for "new members
     # only": the original keeps grading members who joined before this date,
     # and a copy carrying the new standard grades everyone who joined after.
-    applies_to_joined_before = Column(Date, nullable=True)
+    applies_to_joined_before: Mapped[Optional[date]] = mapped_column(
+        Date, nullable=True
+    )
 
     # Deadlines
-    start_date = Column(Date)
-    due_date = Column(Date)
-    time_limit_days = Column(Integer)  # Days to complete from enrollment/assignment
+    start_date: Mapped[Optional[date]] = mapped_column(Date)
+    due_date: Mapped[Optional[date]] = mapped_column(Date)
+    time_limit_days: Mapped[Optional[int]] = mapped_column(
+        Integer
+    )  # Days to complete from enrollment/assignment
 
     # Status
-    active = Column(Boolean, default=True, index=True)
+    active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True, index=True)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
@@ -703,70 +776,72 @@ class TrainingSession(Base):
 
     __tablename__ = "training_sessions"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Links to Event and Course
-    event_id = Column(
+    event_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("events.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
         index=True,
     )
-    course_id = Column(
+    course_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_courses.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Category and Program linkage — connects this session to the training pipeline
-    category_id = Column(
+    category_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_categories.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    program_id = Column(
+    program_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_programs.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    phase_id = Column(
+    phase_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("program_phases.id", ondelete="SET NULL"), nullable=True
     )
-    requirement_id = Column(
+    requirement_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_requirements.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Training Details (stored here for quick access)
-    course_name = Column(String(255), nullable=False)
-    course_code = Column(String(50))
-    training_type = Column(
+    course_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    course_code: Mapped[Optional[str]] = mapped_column(String(50))
+    training_type: Mapped[TrainingType] = mapped_column(
         Enum(TrainingType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
-    credit_hours = Column(Float, nullable=False)
-    instructor = Column(String(255))  # Legacy free-text instructor name
+    credit_hours: Mapped[float] = mapped_column(Float, nullable=False)
+    instructor: Mapped[Optional[str]] = mapped_column(
+        String(255)
+    )  # Legacy free-text instructor name
 
     # Cross-module links for richer tracking
-    instructor_id = Column(
+    instructor_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    co_instructors = Column(
+    co_instructors: Mapped[Optional[list[str]]] = mapped_column(
         JSON, nullable=True
     )  # List of user IDs for additional instructors
-    apparatus_id = Column(
+    apparatus_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("apparatus.id", ondelete="SET NULL"),
         nullable=True,
@@ -774,56 +849,62 @@ class TrainingSession(Base):
     )
 
     # Certification Details
-    issues_certification = Column(Boolean, default=False)
-    certification_number_prefix = Column(
+    issues_certification: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    certification_number_prefix: Mapped[Optional[str]] = mapped_column(
         String(50)
     )  # Prefix for auto-generated cert numbers
-    issuing_agency = Column(String(255))
-    expiration_months = Column(Integer)
+    issuing_agency: Mapped[Optional[str]] = mapped_column(String(255))
+    expiration_months: Mapped[Optional[int]] = mapped_column(Integer)
 
     # When False, attendance still creates a TrainingRecord (the member gets
     # credit toward general training compliance) but does NOT feed the linked
     # pipeline/certificate requirements. Used for sessions that count toward a
     # program but aren't delivered in a way the certifying body (NFPA/NREMT)
     # would accept, so ineligible hours don't inflate a member's certificate.
-    counts_toward_certification = Column(
+    counts_toward_certification: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False, server_default="1"
     )
 
     # Auto-completion Settings
-    auto_create_records = Column(
+    auto_create_records: Mapped[Optional[bool]] = mapped_column(
         Boolean, default=True
     )  # Create TrainingRecord on check-in
-    require_completion_confirmation = Column(
+    require_completion_confirmation: Mapped[Optional[bool]] = mapped_column(
         Boolean, default=False
     )  # Instructor must confirm completion
 
     # Approval Settings
-    approval_deadline_days = Column(
+    approval_deadline_days: Mapped[Optional[int]] = mapped_column(
         Integer, default=7
     )  # Days to approve after event ends
 
     # Status
-    is_finalized = Column(
+    is_finalized: Mapped[Optional[bool]] = mapped_column(
         Boolean, default=False
     )  # Event ended, approval workflow triggered
-    finalized_at = Column(DateTime(timezone=True))
-    finalized_by = Column(
+    finalized_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    finalized_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Relationships
-    event = relationship("Event", foreign_keys=[event_id], lazy="select")
-    course = relationship("TrainingCourse", foreign_keys=[course_id], lazy="select")
+    event: Mapped["Event"] = relationship(
+        "Event", foreign_keys=[event_id], lazy="select"
+    )
+    course: Mapped[Optional["TrainingCourse"]] = relationship(
+        "TrainingCourse", foreign_keys=[course_id], lazy="select"
+    )
 
     __table_args__ = (Index("idx_training_session_org", "organization_id"),)
 
@@ -884,8 +965,8 @@ class CourseClass(Base):
 
     __tablename__ = "course_classes"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
@@ -893,7 +974,7 @@ class CourseClass(Base):
     )
 
     # The container course this syllabus belongs to (e.g. "Recruit School")
-    course_id = Column(
+    course_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("training_courses.id", ondelete="CASCADE"),
         nullable=False,
@@ -904,69 +985,81 @@ class CourseClass(Base):
     # settings, and category tagging. CASCADE rather than SET NULL because the
     # column is NOT NULL and MySQL rejects SET NULL on NOT NULL (error 1830);
     # in practice courses are only ever soft-deleted (active=False).
-    class_course_id = Column(
+    class_course_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("training_courses.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
 
-    sequence = Column(Integer, nullable=False)
-    section_name = Column(String(255))  # groups classes into program phases
-    title = Column(String(255))  # display override; defaults to the course name
-    description = Column(Text)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    section_name: Mapped[Optional[str]] = mapped_column(
+        String(255)
+    )  # groups classes into program phases
+    title: Mapped[Optional[str]] = mapped_column(
+        String(255)
+    )  # display override; defaults to the course name
+    description: Mapped[Optional[str]] = mapped_column(Text)
 
     # Relative schedule. ``start_time`` is a local wall-clock "HH:MM" resolved
     # against the organization timezone at generation time, so a cohort that
     # spans a DST transition still meets at the same clock time.
-    day_offset = Column(Integer, nullable=False, default=0)
-    start_time = Column(String(5))
-    duration_minutes = Column(Integer, nullable=False, default=60)
+    day_offset: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    start_time: Mapped[Optional[str]] = mapped_column(String(5))
+    duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
 
-    credit_hours = Column(Float)  # override; defaults to the course's value
-    instructor_id = Column(
+    credit_hours: Mapped[Optional[float]] = mapped_column(
+        Float
+    )  # override; defaults to the course's value
+    instructor_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    instructor = Column(String(255))  # free-text fallback, matches TrainingSession
-    location_id = Column(
+    instructor: Mapped[Optional[str]] = mapped_column(
+        String(255)
+    )  # free-text fallback, matches TrainingSession
+    location_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
     )
-    location = Column(String(300))
+    location: Mapped[Optional[str]] = mapped_column(String(300))
 
     # Pipeline linkage copied onto every generated session
-    category_id = Column(
+    category_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_categories.id", ondelete="SET NULL"),
         nullable=True,
     )
-    requirement_id = Column(
+    requirement_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_requirements.id", ondelete="SET NULL"),
         nullable=True,
     )
-    phase_id = Column(
+    phase_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("program_phases.id", ondelete="SET NULL"), nullable=True
     )
 
-    is_required = Column(Boolean, default=True, nullable=False)
-    counts_toward_certification = Column(Boolean, default=True, nullable=False)
-    active = Column(Boolean, default=True, nullable=False)
+    is_required: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    counts_toward_certification: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
-    course = relationship(
+    course: Mapped["TrainingCourse"] = relationship(
         "TrainingCourse",
         foreign_keys=[course_id],
         back_populates="classes",
         lazy="select",
     )
-    class_course = relationship(
+    class_course: Mapped["TrainingCourse"] = relationship(
         "TrainingCourse", foreign_keys=[class_course_id], lazy="select"
     )
 
@@ -990,25 +1083,25 @@ class CourseCohort(Base):
 
     __tablename__ = "course_cohorts"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    course_id = Column(
+    course_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("training_courses.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
 
-    name = Column(String(255), nullable=False)
-    code = Column(String(50))
-    description = Column(Text)
-    start_date = Column(Date, nullable=False)
-    status = Column(
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    code: Mapped[Optional[str]] = mapped_column(String(50))
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    status: Mapped[CohortStatus] = mapped_column(
         Enum(CohortStatus, values_callable=lambda x: [e.value for e in x]),
         default=CohortStatus.DRAFT,
         nullable=False,
@@ -1016,7 +1109,7 @@ class CourseCohort(Base):
     )
 
     # Pipeline the roster is enrolled in (may be generated alongside the cohort)
-    program_id = Column(
+    program_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_programs.id", ondelete="SET NULL"),
         nullable=True,
@@ -1025,10 +1118,10 @@ class CourseCohort(Base):
     # Schedule configuration. ``meeting_days`` is a list of weekday numbers
     # (0=Monday) used both for meeting-pattern autofill and for the
     # NEXT_MEETING_DAY roll policy.
-    meeting_days = Column(JSON)
-    default_start_time = Column(String(5))
-    default_duration_minutes = Column(Integer)
-    date_roll_policy = Column(
+    meeting_days: Mapped[Optional[list[int]]] = mapped_column(JSON)
+    default_start_time: Mapped[Optional[str]] = mapped_column(String(5))
+    default_duration_minutes: Mapped[Optional[int]] = mapped_column(Integer)
+    date_roll_policy: Mapped[DateRollPolicy] = mapped_column(
         Enum(DateRollPolicy, values_callable=lambda x: [e.value for e in x]),
         default=DateRollPolicy.NONE,
         nullable=False,
@@ -1036,38 +1129,44 @@ class CourseCohort(Base):
     # ISO date strings the schedule must skip (holidays, department blackouts).
     # There is no holiday model in the platform, so these live on the cohort and
     # are pre-filled from the US federal holiday helper in the wizard.
-    blackout_dates = Column(JSON)
+    blackout_dates: Mapped[Optional[list[str]]] = mapped_column(JSON)
 
-    location_id = Column(
+    location_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
     )
-    location = Column(String(300))
-    requires_rsvp = Column(Boolean, default=True, nullable=False)
-    auto_create_records = Column(Boolean, default=True, nullable=False)
+    location: Mapped[Optional[str]] = mapped_column(String(300))
+    requires_rsvp: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    auto_create_records: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
 
-    generated_at = Column(DateTime(timezone=True))
-    generated_by = Column(
+    generated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    generated_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    notes = Column(Text)
+    notes: Mapped[Optional[str]] = mapped_column(Text)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
-    course = relationship("TrainingCourse", foreign_keys=[course_id], lazy="select")
-    classes = relationship(
+    course: Mapped["TrainingCourse"] = relationship(
+        "TrainingCourse", foreign_keys=[course_id], lazy="select"
+    )
+    classes: Mapped[list["CourseCohortClass"]] = relationship(
         "CourseCohortClass",
         back_populates="cohort",
         cascade="all, delete-orphan",
         order_by="CourseCohortClass.sequence",
         lazy="select",
     )
-    members = relationship(
+    members: Mapped[list["CourseCohortMember"]] = relationship(
         "CourseCohortMember",
         back_populates="cohort",
         cascade="all, delete-orphan",
@@ -1094,14 +1193,14 @@ class CourseCohortClass(Base):
 
     __tablename__ = "course_cohort_classes"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    cohort_id = Column(
+    cohort_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("course_cohorts.id", ondelete="CASCADE"),
         nullable=False,
@@ -1109,88 +1208,98 @@ class CourseCohortClass(Base):
     )
     # Nullable so ad-hoc classes added mid-cohort have no syllabus row, and so
     # deleting a syllabus row later does not destroy cohort history.
-    course_class_id = Column(
+    course_class_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("course_classes.id", ondelete="SET NULL"), nullable=True
     )
 
-    sequence = Column(Integer, nullable=False)
-    title = Column(String(255), nullable=False)
-    description = Column(Text)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
 
     # Stored as UTC, like every other datetime in the platform
-    scheduled_start = Column(DateTime(timezone=True), nullable=False)
-    scheduled_end = Column(DateTime(timezone=True), nullable=False)
+    scheduled_start: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    scheduled_end: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
     # SET NULL rather than CASCADE: deleting an event through the events UI must
     # not silently erase the cohort's record of the class. It leaves a visibly
     # unlinked row the officer can regenerate.
-    event_id = Column(
+    event_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("events.id", ondelete="SET NULL"),
         nullable=True,
         unique=True,
     )
-    training_session_id = Column(
+    training_session_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_sessions.id", ondelete="SET NULL"),
         nullable=True,
     )
 
-    status = Column(
+    status: Mapped[CohortClassStatus] = mapped_column(
         Enum(CohortClassStatus, values_callable=lambda x: [e.value for e in x]),
         default=CohortClassStatus.SCHEDULED,
         nullable=False,
         index=True,
     )
 
-    class_course_id = Column(
+    class_course_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_courses.id", ondelete="SET NULL"),
         nullable=True,
     )
-    credit_hours = Column(Float)
-    instructor_id = Column(
+    credit_hours: Mapped[Optional[float]] = mapped_column(Float)
+    instructor_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    instructor = Column(String(255))
-    location_id = Column(
+    instructor: Mapped[Optional[str]] = mapped_column(String(255))
+    location_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
     )
-    location = Column(String(300))
-    category_id = Column(
+    location: Mapped[Optional[str]] = mapped_column(String(300))
+    category_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_categories.id", ondelete="SET NULL"),
         nullable=True,
     )
-    requirement_id = Column(
+    requirement_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_requirements.id", ondelete="SET NULL"),
         nullable=True,
     )
-    phase_id = Column(
+    phase_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("program_phases.id", ondelete="SET NULL"), nullable=True
     )
     # Copied from the syllabus row onto the generated TrainingSession. Recruit
     # schools are exactly where this matters: an informal in-house drill still
     # earns hours but should not advance a certificate a certifying body would
     # not accept it for.
-    counts_toward_certification = Column(Boolean, default=True, nullable=False)
-    cancellation_reason = Column(Text)
+    counts_toward_certification: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
+    cancellation_reason: Mapped[Optional[str]] = mapped_column(Text)
     # Set on a make-up session scheduled for one late-joining member (W27-3).
     # Such a class is never itself a class a later joiner "missed": it was
     # somebody else's catch-up, not part of the course.
-    makeup_for_class_id = Column(
+    makeup_for_class_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("course_cohort_classes.id", ondelete="SET NULL"),
         nullable=True,
     )
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    cohort = relationship("CourseCohort", back_populates="classes", lazy="select")
+    cohort: Mapped["CourseCohort"] = relationship(
+        "CourseCohort", back_populates="classes", lazy="select"
+    )
 
     __table_args__ = (
         UniqueConstraint("cohort_id", "sequence", name="uq_cohort_class_sequence"),
@@ -1214,45 +1323,49 @@ class CourseCohortMember(Base):
 
     __tablename__ = "course_cohort_members"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    cohort_id = Column(
+    cohort_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("course_cohorts.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    enrollment_id = Column(
+    enrollment_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("program_enrollments.id", ondelete="SET NULL"),
         nullable=True,
     )
 
-    status = Column(
+    status: Mapped[CohortMemberStatus] = mapped_column(
         Enum(CohortMemberStatus, values_callable=lambda x: [e.value for e in x]),
         default=CohortMemberStatus.ACTIVE,
         nullable=False,
     )
-    notes = Column(Text)
-    withdrawn_at = Column(DateTime(timezone=True))
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    withdrawn_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
-    added_at = Column(DateTime(timezone=True), server_default=func.now())
-    added_by = Column(
+    added_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    added_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
-    cohort = relationship("CourseCohort", back_populates="members", lazy="select")
+    cohort: Mapped["CourseCohort"] = relationship(
+        "CourseCohort", back_populates="members", lazy="select"
+    )
 
     __table_args__ = (
         UniqueConstraint("cohort_id", "user_id", name="uq_cohort_member_user"),
@@ -1271,47 +1384,49 @@ class CohortMissedClass(Base):
 
     __tablename__ = "course_cohort_missed_classes"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    cohort_id = Column(
+    cohort_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("course_cohorts.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    cohort_member_id = Column(
+    cohort_member_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("course_cohort_members.id", ondelete="CASCADE"),
         nullable=False,
     )
-    cohort_class_id = Column(
+    cohort_class_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("course_cohort_classes.id", ondelete="CASCADE"),
         nullable=False,
     )
-    resolution = Column(
+    resolution: Mapped[MissedClassResolution] = mapped_column(
         Enum(MissedClassResolution, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
-    training_record_id = Column(
+    training_record_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_records.id", ondelete="SET NULL"),
         nullable=True,
     )
-    makeup_class_id = Column(
+    makeup_class_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("course_cohort_classes.id", ondelete="SET NULL"),
         nullable=True,
     )
-    recorded_by = Column(
+    recorded_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    recorded_at = Column(DateTime(timezone=True), server_default=func.now())
+    recorded_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     __table_args__ = (
         UniqueConstraint(
@@ -1321,7 +1436,8 @@ class CohortMissedClass(Base):
 
     def __repr__(self):
         return (
-            f"<CourseCohortMember(cohort_id={self.cohort_id}, user_id={self.user_id})>"
+            f"<CohortMissedClass(cohort_member_id={self.cohort_member_id}, "
+            f"cohort_class_id={self.cohort_class_id})>"
         )
 
 
@@ -1344,8 +1460,8 @@ class TrainingApproval(Base):
 
     __tablename__ = "training_approvals"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
@@ -1353,12 +1469,12 @@ class TrainingApproval(Base):
     )
 
     # Links
-    training_session_id = Column(
+    training_session_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("training_sessions.id", ondelete="CASCADE"),
         nullable=False,
     )
-    event_id = Column(
+    event_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("events.id", ondelete="CASCADE"),
         nullable=False,
@@ -1366,35 +1482,41 @@ class TrainingApproval(Base):
     )
 
     # Approval Token (for email link)
-    approval_token = Column(
+    approval_token: Mapped[str] = mapped_column(
         String(64), unique=True, nullable=False, index=True
     )  # Random token for secure access
-    token_expires_at = Column(
+    token_expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )  # Token expiration
 
     # Approval Details
-    status = Column(
+    status: Mapped[Optional[ApprovalStatus]] = mapped_column(
         Enum(ApprovalStatus, values_callable=lambda x: [e.value for e in x]),
         default=ApprovalStatus.PENDING,
     )
-    approved_by = Column(
+    approved_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    approved_at = Column(DateTime(timezone=True))
-    approval_notes = Column(Text)
+    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    approval_notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Deadline
-    approval_deadline = Column(DateTime(timezone=True), nullable=False)
-    reminder_sent_at = Column(DateTime(timezone=True))  # Track when reminder was sent
+    approval_deadline: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )  # Track when reminder was sent
 
     # Attendee Data (JSONB for flexibility)
     # Format: [{"user_id": "...", "check_in": "...", "check_out": "...", "duration": 120, ...}]
-    attendee_data = Column(JSON, nullable=False)
+    attendee_data: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
@@ -1418,27 +1540,33 @@ class TrainingProgram(Base):
 
     __tablename__ = "training_programs"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Program Details
-    name = Column(String(255), nullable=False)
-    description = Column(Text)
-    code = Column(String(50))  # e.g., "PROB-2024", "DRIVER-CERT"
-    version = Column(Integer, default=1)  # Version number for template duplication
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    code: Mapped[Optional[str]] = mapped_column(
+        String(50)
+    )  # e.g., "PROB-2024", "DRIVER-CERT"
+    version: Mapped[Optional[int]] = mapped_column(
+        Integer, default=1
+    )  # Version number for template duplication
 
     # Target Audience
-    target_position = Column(
+    target_position: Mapped[Optional[str]] = mapped_column(
         String(100)
     )  # probationary, driver_candidate, officer, aic, etc.
-    target_roles = Column(JSON)  # Role slugs this program applies to
+    target_roles: Mapped[Optional[list[str]]] = mapped_column(
+        JSON
+    )  # Role slugs this program applies to
 
     # Structure
-    structure_type = Column(
+    structure_type: Mapped[ProgramStructureType] = mapped_column(
         Enum(ProgramStructureType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=ProgramStructureType.FLEXIBLE,
@@ -1446,23 +1574,27 @@ class TrainingProgram(Base):
     )
 
     # Prerequisites
-    prerequisite_program_ids = Column(
+    prerequisite_program_ids: Mapped[Optional[list[str]]] = mapped_column(
         JSON
     )  # Programs that must be completed before enrollment
 
     # Enrollment Settings
-    allows_concurrent_enrollment = Column(
+    allows_concurrent_enrollment: Mapped[Optional[bool]] = mapped_column(
         Boolean, default=True
     )  # Can member be in multiple programs
 
     # Time Limits
-    time_limit_days = Column(Integer)  # Overall program completion deadline
-    warning_days_before = Column(
+    time_limit_days: Mapped[Optional[int]] = mapped_column(
+        Integer
+    )  # Overall program completion deadline
+    warning_days_before: Mapped[Optional[int]] = mapped_column(
         Integer, default=30
     )  # Send warning X days before deadline
 
     # Reminder Settings
-    reminder_conditions = Column(JSON)  # Conditional reminder rules
+    reminder_conditions: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON
+    )  # Conditional reminder rules
     # Example: {"milestone_threshold": 50, "days_before_deadline": 90, "send_if_below_percentage": 40}
 
     # Recertification Cycle (auto-reset)
@@ -1471,39 +1603,49 @@ class TrainingProgram(Base):
     # biennial recert, which is due every other March 30. recert_interval_months
     # sets the cadence; recert_anchor_month/day optionally pin the reset to a
     # fixed calendar date rather than rolling from the enrollment date.
-    recert_enabled = Column(Boolean, default=False, nullable=False, server_default="0")
-    recert_interval_months = Column(Integer)  # e.g. 24 for a two-year cycle
-    recert_anchor_month = Column(Integer)  # 1-12, optional fixed reset month
-    recert_anchor_day = Column(Integer)  # 1-31, optional fixed reset day
+    recert_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
+    recert_interval_months: Mapped[Optional[int]] = mapped_column(
+        Integer
+    )  # e.g. 24 for a two-year cycle
+    recert_anchor_month: Mapped[Optional[int]] = mapped_column(
+        Integer
+    )  # 1-12, optional fixed reset month
+    recert_anchor_day: Mapped[Optional[int]] = mapped_column(
+        Integer
+    )  # 1-31, optional fixed reset day
 
     # Status
-    active = Column(Boolean, default=True, index=True)
-    is_template = Column(
+    active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True, index=True)
+    is_template: Mapped[Optional[bool]] = mapped_column(
         Boolean, default=False
     )  # Can be used as template for new programs
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Relationships
-    phases = relationship(
+    phases: Mapped[list["ProgramPhase"]] = relationship(
         "ProgramPhase",
         back_populates="program",
         cascade="all, delete-orphan",
         order_by="ProgramPhase.phase_number",
     )
-    program_requirements = relationship(
+    program_requirements: Mapped[list["ProgramRequirement"]] = relationship(
         "ProgramRequirement",
         back_populates="program",
         cascade="all, delete-orphan",
     )
-    enrollments = relationship(
+    enrollments: Mapped[list["ProgramEnrollment"]] = relationship(
         "ProgramEnrollment", back_populates="program", cascade="all, delete-orphan"
     )
 
@@ -1532,41 +1674,51 @@ class ProgramPhase(Base):
         ),
     )
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    program_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    program_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("training_programs.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Phase Details
-    phase_number = Column(Integer, nullable=False)  # Order in program
-    name = Column(String(255), nullable=False)
-    description = Column(Text)
+    phase_number: Mapped[int] = mapped_column(
+        Integer, nullable=False
+    )  # Order in program
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
 
     # Prerequisites
-    prerequisite_phase_ids = Column(JSON)  # Phases that must be completed first
+    prerequisite_phase_ids: Mapped[Optional[list[str]]] = mapped_column(
+        JSON
+    )  # Phases that must be completed first
 
     # Advancement Settings
-    requires_manual_advancement = Column(
+    requires_manual_advancement: Mapped[Optional[bool]] = mapped_column(
         Boolean, default=False
     )  # Officer must approve advancement to next phase
 
     # Time Limits
-    time_limit_days = Column(Integer)  # Deadline from phase start
+    time_limit_days: Mapped[Optional[int]] = mapped_column(
+        Integer
+    )  # Deadline from phase start
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    program = relationship("TrainingProgram", back_populates="phases")
-    requirements = relationship(
+    program: Mapped["TrainingProgram"] = relationship(
+        "TrainingProgram", back_populates="phases"
+    )
+    requirements: Mapped[list["ProgramRequirement"]] = relationship(
         "ProgramRequirement", back_populates="phase", cascade="all, delete-orphan"
     )
-    milestones = relationship(
+    milestones: Mapped[list["ProgramMilestone"]] = relationship(
         "ProgramMilestone", back_populates="phase", cascade="all, delete-orphan"
     )
 
@@ -1583,18 +1735,18 @@ class ProgramRequirement(Base):
 
     __tablename__ = "program_requirements"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    program_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    program_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("training_programs.id", ondelete="CASCADE"),
         nullable=False,
     )
-    phase_id = Column(
+    phase_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("program_phases.id", ondelete="CASCADE"),
         nullable=True,
     )  # Null if not phase-based
-    requirement_id = Column(
+    requirement_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("training_requirements.id", ondelete="CASCADE"),
         nullable=False,
@@ -1602,11 +1754,15 @@ class ProgramRequirement(Base):
     )
 
     # Requirement Settings
-    is_required = Column(Boolean, default=True)  # Required vs optional
-    is_prerequisite = Column(
+    is_required: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True
+    )  # Required vs optional
+    is_prerequisite: Mapped[Optional[bool]] = mapped_column(
         Boolean, default=False
     )  # Must complete before other requirements
-    sort_order = Column(Integer, default=0)  # Display order within program/phase
+    sort_order: Mapped[Optional[int]] = mapped_column(
+        Integer, default=0
+    )  # Display order within program/phase
 
     # Does this link *own* the requirement it points at? True when the
     # requirement was created for this program (the inline "create a new
@@ -1616,28 +1772,36 @@ class ProgramRequirement(Base):
     # department's CPR requirement out from under every other user of it.
     # Defaults True because every link that predates this column was created by
     # the inline flow.
-    owns_requirement = Column(
+    owns_requirement: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=sa_true()
     )
 
     # Program-Specific Customization
-    program_specific_description = Column(
+    program_specific_description: Mapped[Optional[str]] = mapped_column(
         Text
     )  # Override/supplement the requirement description
-    custom_deadline_days = Column(
+    custom_deadline_days: Mapped[Optional[int]] = mapped_column(
         Integer
     )  # Override requirement's default time_limit_days
 
     # Notification Message
-    notification_message = Column(Text)  # Custom message when assigned this requirement
+    notification_message: Mapped[Optional[str]] = mapped_column(
+        Text
+    )  # Custom message when assigned this requirement
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     # Relationships
-    program = relationship("TrainingProgram", back_populates="program_requirements")
-    phase = relationship("ProgramPhase", back_populates="requirements")
-    requirement = relationship("TrainingRequirement")
+    program: Mapped["TrainingProgram"] = relationship(
+        "TrainingProgram", back_populates="program_requirements"
+    )
+    phase: Mapped[Optional["ProgramPhase"]] = relationship(
+        "ProgramPhase", back_populates="requirements"
+    )
+    requirement: Mapped["TrainingRequirement"] = relationship("TrainingRequirement")
 
     __table_args__ = (
         Index("idx_prog_req_program", "program_id"),
@@ -1657,13 +1821,13 @@ class ProgramMilestone(Base):
 
     __tablename__ = "program_milestones"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    program_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    program_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("training_programs.id", ondelete="CASCADE"),
         nullable=False,
     )
-    phase_id = Column(
+    phase_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("program_phases.id", ondelete="CASCADE"),
         nullable=True,
@@ -1671,28 +1835,34 @@ class ProgramMilestone(Base):
     )
 
     # Milestone Details
-    name = Column(String(255), nullable=False)
-    description = Column(Text)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
 
     # Trigger
-    completion_percentage_threshold = Column(
+    completion_percentage_threshold: Mapped[Optional[float]] = mapped_column(
         Float
     )  # Trigger at X% complete (e.g., 50.0)
 
     # Notification
-    notification_message = Column(
+    notification_message: Mapped[Optional[str]] = mapped_column(
         Text
     )  # Message to display/send when milestone reached
 
     # Verification
-    requires_verification = Column(Boolean, default=False)  # Officer must verify
-    verification_notes = Column(Text)
+    requires_verification: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=False
+    )  # Officer must verify
+    verification_notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     # Relationships
-    phase = relationship("ProgramPhase", back_populates="milestones")
+    phase: Mapped[Optional["ProgramPhase"]] = relationship(
+        "ProgramPhase", back_populates="milestones"
+    )
 
     __table_args__ = (Index("idx_milestone_program", "program_id"),)
 
@@ -1709,86 +1879,106 @@ class ProgramEnrollment(Base):
 
     __tablename__ = "program_enrollments"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    program_id = Column(
+    program_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("training_programs.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Enrollment Details
-    enrolled_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
-    target_completion_date = Column(Date)  # Calculated from time_limit_days
+    enrolled_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=func.now()
+    )
+    target_completion_date: Mapped[Optional[date]] = mapped_column(
+        Date
+    )  # Calculated from time_limit_days
 
     # Current Progress
-    current_phase_id = Column(
+    current_phase_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("program_phases.id", ondelete="SET NULL"), nullable=True
     )
-    progress_percentage = Column(
+    progress_percentage: Mapped[Optional[float]] = mapped_column(
         Float, default=0.0
     )  # Overall program completion percentage
 
     # Status
-    status = Column(
+    status: Mapped[Optional[EnrollmentStatus]] = mapped_column(
         Enum(EnrollmentStatus, values_callable=lambda x: [e.value for e in x]),
         default=EnrollmentStatus.ACTIVE,
         index=True,
     )
-    completed_at = Column(DateTime(timezone=True))
-    withdrawn_at = Column(DateTime(timezone=True))
-    withdrawal_reason = Column(Text)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    withdrawn_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    withdrawal_reason: Mapped[Optional[str]] = mapped_column(Text)
 
     # Free-text note captured when an officer enrols the member. Part of the
     # enrollment request/response contract (ProgramEnrollmentBase.notes) since
     # the schema was written, but the column was never added — so
     # enroll_member()'s `notes=` kwarg raised TypeError and every enrollment
     # attempt 500'd.
-    notes = Column(Text)
+    notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Deadline Tracking
-    deadline_warning_sent = Column(Boolean, default=False)
-    deadline_warning_sent_at = Column(DateTime(timezone=True))
+    deadline_warning_sent: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=False
+    )
+    deadline_warning_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
     # Throttle for "falling behind" alerts so the weekly sweep doesn't re-notify
     # the same struggling member every run.
-    struggling_alert_sent_at = Column(DateTime(timezone=True))
+    struggling_alert_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
 
     # Start of the CURRENT cycle. Equal to enrolled_at until a recert reset, then
     # advanced to the reset time so pace/behind-schedule heuristics measure the
     # fresh cycle rather than the original enrollment (which would flag a member
     # as instantly overdue the moment their new cycle begins). Falls back to
     # enrolled_at when null (pre-existing enrollments).
-    cycle_started_at = Column(DateTime(timezone=True))
+    cycle_started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
 
     # Recertification cycle tracking (see TrainingProgram.recert_enabled).
     # When today reaches next_recert_reset_at, the enrollment is auto-reset for
     # a new cycle and the date is advanced to the following deadline.
-    next_recert_reset_at = Column(Date, index=True)
-    last_recert_reset_at = Column(DateTime(timezone=True))
+    next_recert_reset_at: Mapped[Optional[date]] = mapped_column(Date, index=True)
+    last_recert_reset_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    enrolled_by = Column(
+    enrolled_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )  # Who enrolled the member
 
     # Relationships
-    program = relationship("TrainingProgram", back_populates="enrollments")
-    current_phase = relationship("ProgramPhase", foreign_keys=[current_phase_id])
-    requirement_progress = relationship(
+    program: Mapped["TrainingProgram"] = relationship(
+        "TrainingProgram", back_populates="enrollments"
+    )
+    current_phase: Mapped[Optional["ProgramPhase"]] = relationship(
+        "ProgramPhase", foreign_keys=[current_phase_id]
+    )
+    requirement_progress: Mapped[list["RequirementProgress"]] = relationship(
         "RequirementProgress", back_populates="enrollment", cascade="all, delete-orphan"
     )
 
@@ -1811,58 +2001,62 @@ class RequirementProgress(Base):
 
     __tablename__ = "requirement_progress"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    enrollment_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    enrollment_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("program_enrollments.id", ondelete="CASCADE"),
         nullable=False,
     )
-    requirement_id = Column(
+    requirement_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("training_requirements.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Progress Tracking
-    status = Column(
+    status: Mapped[Optional[RequirementProgressStatus]] = mapped_column(
         Enum(RequirementProgressStatus, values_callable=lambda x: [e.value for e in x]),
         default=RequirementProgressStatus.NOT_STARTED,
         index=True,
     )
-    progress_value = Column(
+    progress_value: Mapped[Optional[float]] = mapped_column(
         Float, default=0.0
     )  # Hours completed, calls responded, etc.
-    progress_percentage = Column(Float, default=0.0)  # Calculated percentage
+    progress_percentage: Mapped[Optional[float]] = mapped_column(
+        Float, default=0.0
+    )  # Calculated percentage
 
     # Details
-    progress_notes = Column(JSON)
+    progress_notes: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON)
 
     # Completion
-    started_at = Column(DateTime(timezone=True))
-    completed_at = Column(DateTime(timezone=True))
-    verified_at = Column(DateTime(timezone=True))
-    verified_by = Column(
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    verified_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    verification_notes = Column(Text)
+    verification_notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
     )
 
     # Relationships
-    enrollment = relationship(
+    enrollment: Mapped["ProgramEnrollment"] = relationship(
         "ProgramEnrollment",
         back_populates="requirement_progress",
     )
     # The TrainingRequirement this progress tracks (FK: requirement_id).
     # update_requirement_progress() eager-loads this to compute the
     # type-aware completion percentage, so the relationship must exist.
-    requirement = relationship("TrainingRequirement")
+    requirement: Mapped["TrainingRequirement"] = relationship("TrainingRequirement")
 
     __table_args__ = (
         Index(
@@ -1907,13 +2101,13 @@ class RequirementProgressCredit(Base):
 
     __tablename__ = "requirement_progress_credits"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    progress_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    progress_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("requirement_progress.id", ondelete="CASCADE"),
         nullable=False,
     )
-    source_type = Column(
+    source_type: Mapped[ProgressCreditSource] = mapped_column(
         Enum(
             ProgressCreditSource,
             values_callable=lambda x: [e.value for e in x],
@@ -1923,19 +2117,23 @@ class RequirementProgressCredit(Base):
     # Id of the originating record (training session, shift report, imported
     # training record, etc.). Kept as a plain string so any feed's identifier
     # fits without a cross-table FK.
-    source_id = Column(String(64), nullable=False)
-    units = Column(Float, nullable=False, default=0.0, server_default="0.0")
+    source_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    units: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0, server_default="0.0"
+    )
 
     # Provenance snapshots for zero-unit sign-offs. These let reversal restore
     # only state that this entry actually changed.
-    previous_status = Column(String(50), nullable=True)
-    phase_before_id = Column(String(36), nullable=True)
-    phase_after_id = Column(String(36), nullable=True)
+    previous_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    phase_before_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    phase_after_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
 
-    applied_by = Column(
+    applied_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     __table_args__ = (
         UniqueConstraint(
@@ -1962,40 +2160,52 @@ class SkillEvaluation(Base):
 
     __tablename__ = "skill_evaluations"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Skill Details
-    name = Column(String(255), nullable=False)
-    description = Column(Text)
-    category = Column(String(100))  # e.g., "Firefighting", "EMS", "Driver", "Officer"
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    category: Mapped[Optional[str]] = mapped_column(
+        String(100)
+    )  # e.g., "Firefighting", "EMS", "Driver", "Officer"
 
     # Evaluation Criteria
-    evaluation_criteria = Column(JSON)  # List of criteria to evaluate
-    passing_requirements = Column(Text)  # What constitutes passing
+    evaluation_criteria: Mapped[Optional[list[str]]] = mapped_column(
+        JSON
+    )  # List of criteria to evaluate
+    passing_requirements: Mapped[Optional[str]] = mapped_column(
+        Text
+    )  # What constitutes passing
 
     # Linked Programs
-    required_for_programs = Column(JSON)  # Program IDs that require this skill
+    required_for_programs: Mapped[Optional[list[str]]] = mapped_column(
+        JSON
+    )  # Program IDs that require this skill
 
     # Configurable evaluator permissions — training officer/chief sets who may sign off
     # Format: {"type": "roles", "roles": ["shift_leader", "driver_trainer"]}
     #      or {"type": "specific_users", "user_ids": ["uuid1", "uuid2"]}
     #      or null → any user with training.manage permission
-    allowed_evaluators = Column(JSON, nullable=True)
+    allowed_evaluators: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Status
-    active = Column(Boolean, default=True, index=True)
+    active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True, index=True)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
@@ -2014,55 +2224,63 @@ class SkillCheckoff(Base):
 
     __tablename__ = "skill_checkoffs"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    skill_evaluation_id = Column(
+    skill_evaluation_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("skill_evaluations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Evaluation Details
-    evaluator_id = Column(
+    evaluator_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    status = Column(String(20), nullable=False)  # pending, passed, failed
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )  # pending, passed, failed
 
     # Training context — links checkoff to the session and apparatus used
-    session_id = Column(
+    session_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_sessions.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    apparatus_id = Column(
+    apparatus_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("apparatus.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    conditions = Column(
+    conditions: Mapped[Optional[dict[str, Any]]] = mapped_column(
         JSON, nullable=True
     )  # Environmental context: {"time_of_day", "weather", "road_conditions", etc.}
 
     # Results
-    evaluation_results = Column(JSON)  # Detailed results for each criterion
-    score = Column(Float)  # Overall score if applicable
-    notes = Column(Text)
+    evaluation_results: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON
+    )  # Detailed results for each criterion
+    score: Mapped[Optional[float]] = mapped_column(Float)  # Overall score if applicable
+    notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Timestamps
-    evaluated_at = Column(DateTime(timezone=True), default=func.now())
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    evaluated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), default=func.now()
+    )
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     __table_args__ = (
         Index("idx_checkoff_user", "user_id"),
@@ -2088,93 +2306,111 @@ class ShiftCompletionReport(Base):
 
     __tablename__ = "shift_completion_reports"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Shift context
-    shift_id = Column(
+    shift_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("shifts.id", ondelete="SET NULL"), nullable=True
     )
-    shift_date = Column(Date, nullable=False)
+    shift_date: Mapped[date] = mapped_column(Date, nullable=False)
 
     # People
-    trainee_id = Column(
+    trainee_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    officer_id = Column(
+    officer_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Shift details
-    hours_on_shift = Column(Float, nullable=False)
-    calls_responded = Column(Integer, default=0)
-    call_types = Column(JSON)  # Array of incident types responded to
+    hours_on_shift: Mapped[float] = mapped_column(Float, nullable=False)
+    calls_responded: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    call_types: Mapped[Optional[list[str]]] = mapped_column(
+        JSON
+    )  # Array of incident types responded to
 
     # Performance observations (narratives encrypted at rest via AES-256)
-    performance_rating = Column(Integer)  # 1-5 scale
-    areas_of_strength = Column(EncryptedText)
-    areas_for_improvement = Column(EncryptedText)
-    officer_narrative = Column(
+    performance_rating: Mapped[Optional[int]] = mapped_column(Integer)  # 1-5 scale
+    areas_of_strength: Mapped[Optional[str]] = mapped_column(EncryptedText)
+    areas_for_improvement: Mapped[Optional[str]] = mapped_column(EncryptedText)
+    officer_narrative: Mapped[Optional[str]] = mapped_column(
         EncryptedText
     )  # Free-form description of the shift experience
 
     # Skills observed
-    skills_observed = Column(JSON)  # Array of { skill_name, demonstrated: bool, notes }
-    tasks_performed = Column(JSON)  # Array of { task, description }
+    skills_observed: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON
+    )  # Array of { skill_name, demonstrated: bool, notes }
+    tasks_performed: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON
+    )  # Array of { task, description }
 
     # Audit trail for auto-populated fields
-    data_sources = Column(
+    data_sources: Mapped[Optional[dict[str, str]]] = mapped_column(
         JSON
     )  # e.g. {"hours_on_shift": "shift_attendance", "calls_responded": "shift_calls"}
 
     # Pipeline linkage
-    enrollment_id = Column(
+    enrollment_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("program_enrollments.id", ondelete="SET NULL"),
         nullable=True,
     )
-    requirements_progressed = Column(
+    requirements_progressed: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
         JSON
     )  # Array of { requirement_progress_id, value_added }
 
     # Review workflow — reports can require approval before trainee visibility
-    review_status = Column(
+    review_status: Mapped[Optional[str]] = mapped_column(
         String(20), default="approved"
     )  # draft, pending_review, approved, flagged
-    reviewed_by = Column(
+    reviewed_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    reviewed_at = Column(DateTime(timezone=True), nullable=True)
-    reviewer_notes = Column(
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    reviewer_notes: Mapped[Optional[str]] = mapped_column(
         EncryptedText, nullable=True
     )  # Internal notes from reviewer, never shown to trainee
-    review_history = Column(
+    review_history: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
         JSON, nullable=True
     )  # Array of { status, reviewer_id, reviewer_name, notes, timestamp }
 
     # Trainee acknowledgment
-    trainee_acknowledged = Column(Boolean, default=False)
-    trainee_acknowledged_at = Column(DateTime(timezone=True))
-    trainee_comments = Column(Text)
+    trainee_acknowledged: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    trainee_acknowledged_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
+    trainee_comments: Mapped[Optional[str]] = mapped_column(Text)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships for name resolution
-    trainee = relationship("User", foreign_keys=[trainee_id], lazy="joined")
-    officer = relationship("User", foreign_keys=[officer_id], lazy="joined")
-    reviewer = relationship("User", foreign_keys=[reviewed_by], lazy="joined")
+    trainee: Mapped["User"] = relationship(
+        "User", foreign_keys=[trainee_id], lazy="joined"
+    )
+    officer: Mapped["User"] = relationship(
+        "User", foreign_keys=[officer_id], lazy="joined"
+    )
+    reviewer: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[reviewed_by], lazy="joined"
+    )
 
     __table_args__ = (
         Index("idx_shift_report_trainee", "trainee_id", "shift_date"),
@@ -2229,8 +2465,8 @@ class TrainingModuleConfig(Base):
 
     __tablename__ = "training_module_configs"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
@@ -2241,28 +2477,48 @@ class TrainingModuleConfig(Base):
     # -- Member visibility: what members see on their own training page --
 
     # Training records & history
-    show_training_history = Column(Boolean, default=True, server_default="1")
-    show_training_hours = Column(Boolean, default=True, server_default="1")
-    show_certification_status = Column(Boolean, default=True, server_default="1")
+    show_training_history: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
+    show_training_hours: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
+    show_certification_status: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
 
     # Pipeline / program progress
-    show_pipeline_progress = Column(Boolean, default=True, server_default="1")
-    show_requirement_details = Column(Boolean, default=True, server_default="1")
+    show_pipeline_progress: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
+    show_requirement_details: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
 
     # Shift completion reports
-    show_shift_reports = Column(Boolean, default=True, server_default="1")
-    show_shift_stats = Column(Boolean, default=True, server_default="1")
+    show_shift_reports: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
+    show_shift_stats: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
 
     # Officer-written content visibility to members
-    show_officer_narrative = Column(
+    show_officer_narrative: Mapped[Optional[bool]] = mapped_column(
         Boolean, default=False, server_default="0"
     )  # Officer narrative on shift reports
-    show_performance_rating = Column(
+    show_performance_rating: Mapped[Optional[bool]] = mapped_column(
         Boolean, default=True, server_default="1"
     )  # 1-5 star ratings
-    show_areas_of_strength = Column(Boolean, default=True, server_default="1")
-    show_areas_for_improvement = Column(Boolean, default=True, server_default="1")
-    show_skills_observed = Column(Boolean, default=True, server_default="1")
+    show_areas_of_strength: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
+    show_areas_for_improvement: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
+    show_skills_observed: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
 
     # Skills-test results: the department-wide default for what the person
     # tested may see of their own scorecard, and when. Templates and individual
@@ -2270,84 +2526,118 @@ class TrainingModuleConfig(Base):
     # have — the full scorecard as soon as the examiner submits — so enabling
     # nothing changes nothing; a department that wants results withheld or
     # redacted opts in.
-    skills_result_disclosure = Column(String(20), default="full", server_default="full")
-    skills_result_release = Column(
+    skills_result_disclosure: Mapped[Optional[str]] = mapped_column(
+        String(20), default="full", server_default="full"
+    )
+    skills_result_release: Mapped[Optional[str]] = mapped_column(
         String(20), default="on_completion", server_default="on_completion"
     )
 
     # Self-reported submissions
-    show_submission_history = Column(Boolean, default=True, server_default="1")
+    show_submission_history: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
 
     # Reports access
-    allow_member_report_export = Column(
+    allow_member_report_export: Mapped[Optional[bool]] = mapped_column(
         Boolean, default=False, server_default="0"
     )  # Can members download their own data
 
     # Shift report review workflow
-    report_review_required = Column(
+    report_review_required: Mapped[Optional[bool]] = mapped_column(
         Boolean, default=False, server_default="0"
     )  # Must reports be approved before trainee can see?
-    report_review_role = Column(
+    report_review_role: Mapped[Optional[str]] = mapped_column(
         String(50), default="training_officer"
     )  # Who reviews: training_officer, captain, chief
 
     # Rating customization
-    rating_label = Column(
+    rating_label: Mapped[Optional[str]] = mapped_column(
         String(100), default="Performance Rating"
     )  # Custom label for the rating field
-    rating_scale_type = Column(String(20), default="stars")  # stars, competency, custom
-    rating_scale_labels = Column(
+    rating_scale_type: Mapped[Optional[str]] = mapped_column(
+        String(20), default="stars"
+    )  # stars, competency, custom
+    rating_scale_labels: Mapped[Optional[dict[str, str]]] = mapped_column(
         JSON, nullable=True
     )  # {"1":"Unsatisfactory","2":"Developing","3":"Competent","4":"Proficient","5":"Exemplary"}
 
     # Per-apparatus-type skills and tasks mapping
     # {"engine": ["Pump operations", ...], "ladder": ["Ventilation", ...]}
-    apparatus_type_skills = Column(JSON, nullable=True)
-    apparatus_type_tasks = Column(JSON, nullable=True)
+    apparatus_type_skills: Mapped[Optional[dict[str, list[str]]]] = mapped_column(
+        JSON, nullable=True
+    )
+    apparatus_type_tasks: Mapped[Optional[dict[str, list[str]]]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Report form sections — which optional sections appear on the form
-    form_show_performance_rating = Column(Boolean, default=True, server_default="1")
-    form_show_areas_of_strength = Column(Boolean, default=True, server_default="1")
-    form_show_areas_for_improvement = Column(Boolean, default=True, server_default="1")
-    form_show_officer_narrative = Column(Boolean, default=True, server_default="1")
-    form_show_skills_observed = Column(Boolean, default=True, server_default="1")
-    form_show_tasks_performed = Column(Boolean, default=True, server_default="1")
-    form_show_call_types = Column(Boolean, default=True, server_default="1")
+    form_show_performance_rating: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
+    form_show_areas_of_strength: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
+    form_show_areas_for_improvement: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
+    form_show_officer_narrative: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
+    form_show_skills_observed: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
+    form_show_tasks_performed: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
+    form_show_call_types: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
 
     # Feature toggles
-    shift_reports_enabled = Column(Boolean, default=True, server_default="1")
-    shift_reports_include_training = Column(Boolean, default=True, server_default="1")
+    shift_reports_enabled: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
+    shift_reports_include_training: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
 
     # Shift review defaults (configurable by training officers)
-    shift_review_call_types = Column(
+    shift_review_call_types: Mapped[Optional[list[str]]] = mapped_column(
         JSON, nullable=True
     )  # Org-approved incident types, e.g. ["Structure Fire", "EMS/Medical", ...]
-    shift_review_default_skills = Column(
+    shift_review_default_skills: Mapped[Optional[list[str]]] = mapped_column(
         JSON, nullable=True
     )  # Default skills checklist, e.g. ["SCBA donning/doffing", ...]
-    shift_review_default_tasks = Column(
+    shift_review_default_tasks: Mapped[Optional[list[str]]] = mapped_column(
         JSON, nullable=True
     )  # Default tasks to track, e.g. ["Apparatus check-off", ...]
 
     # Manual shift entry (fallback for orgs without scheduling module)
-    manual_entry_enabled = Column(Boolean, default=False, server_default="0")
-    manual_entry_require_apparatus = Column(Boolean, default=True, server_default="1")
-    manual_entry_apparatus_ids = Column(
+    manual_entry_enabled: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=False, server_default="0"
+    )
+    manual_entry_require_apparatus: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
+    manual_entry_apparatus_ids: Mapped[Optional[list[str]]] = mapped_column(
         JSON, nullable=True
     )  # BasicApparatus IDs available for selection; null = all active
-    manual_entry_default_start_time = Column(
+    manual_entry_default_start_time: Mapped[Optional[str]] = mapped_column(
         String(5), nullable=True
     )  # HH:MM format, e.g. "08:00"
-    manual_entry_default_duration_hours = Column(
+    manual_entry_default_duration_hours: Mapped[Optional[float]] = mapped_column(
         Float, nullable=True
     )  # Default shift duration for pre-fill
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    updated_by = Column(
+    updated_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
@@ -2415,8 +2705,8 @@ class SelfReportConfig(Base):
 
     __tablename__ = "self_report_configs"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
@@ -2425,26 +2715,28 @@ class SelfReportConfig(Base):
     )
 
     # Approval Settings
-    require_approval = Column(
+    require_approval: Mapped[Optional[bool]] = mapped_column(
         Boolean, default=True
     )  # Require training officer approval
-    auto_approve_under_hours = Column(
+    auto_approve_under_hours: Mapped[Optional[float]] = mapped_column(
         Float, nullable=True
     )  # Auto-approve if under X hours (null = never auto-approve)
-    approval_deadline_days = Column(Integer, default=14)  # Days officers have to review
+    approval_deadline_days: Mapped[Optional[int]] = mapped_column(
+        Integer, default=14
+    )  # Days officers have to review
 
     # Notification Settings
-    notify_officer_on_submit = Column(
+    notify_officer_on_submit: Mapped[Optional[bool]] = mapped_column(
         Boolean, default=True
     )  # Email training officer when submission arrives
-    notify_member_on_decision = Column(
+    notify_member_on_decision: Mapped[Optional[bool]] = mapped_column(
         Boolean, default=True
     )  # Email member when approved/rejected
 
     # Field Configuration (JSON)
     # Each key is a field name, value is { "visible": bool, "required": bool, "label": str }
     # e.g. {"course_name": {"visible": true, "required": true, "label": "Course/Class Name"}, ...}
-    field_config = Column(
+    field_config: Mapped[dict[str, dict[str, Any]]] = mapped_column(
         JSON,
         nullable=False,
         default=lambda: {
@@ -2512,27 +2804,35 @@ class SelfReportConfig(Base):
     )
 
     # Allowed training types for self-reporting (null = all types allowed)
-    allowed_training_types = Column(JSON, nullable=True)
+    allowed_training_types: Mapped[Optional[list[str]]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Maximum hours per submission (null = no limit)
-    max_hours_per_submission = Column(Float, nullable=True)
+    max_hours_per_submission: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )
 
     # Instructions displayed to members
-    member_instructions = Column(Text, nullable=True)
+    member_instructions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Days a decided (approved or rejected) submission's certificate files
     # are kept after the decision; null = keep indefinitely, which is what
     # every department had before this setting existed. Read by the
     # self_report_attachment_retention scheduled task
     # (app/services/self_report_attachment_retention.py).
-    attachment_retention_days = Column(Integer, nullable=True)
+    attachment_retention_days: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    updated_by = Column(
+    updated_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
@@ -2550,57 +2850,58 @@ class TrainingSubmission(Base):
 
     __tablename__ = "training_submissions"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    submitted_by = Column(
+    submitted_by: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Training Details
-    course_name = Column(String(255), nullable=False)
-    course_code = Column(String(50))
-    training_type = Column(
+    course_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    course_code: Mapped[Optional[str]] = mapped_column(String(50))
+    training_type: Mapped[TrainingType] = mapped_column(
         Enum(TrainingType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
-    description = Column(Text)
+    description: Mapped[Optional[str]] = mapped_column(Text)
 
     # Dates and Hours
-    completion_date = Column(Date, nullable=False)
+    completion_date: Mapped[date] = mapped_column(Date, nullable=False)
     # The member reports a start time and a length; hours are derived from the
     # pair. Keeping the start means the officer sees when the class ran, and
     # an edit does not have to invent one.
-    start_time = Column(Time)
-    hours_completed = Column(Float, nullable=False)
-    credit_hours = Column(Float)
+    start_time: Mapped[Optional[time]] = mapped_column(Time)
+    hours_completed: Mapped[float] = mapped_column(Float, nullable=False)
+    credit_hours: Mapped[Optional[float]] = mapped_column(Float)
 
     # Instructor and Location
-    instructor = Column(String(255))
-    location = Column(String(255))
+    instructor: Mapped[Optional[str]] = mapped_column(String(255))
+    location: Mapped[Optional[str]] = mapped_column(String(255))
 
     # Certification Details
-    certification_number = Column(String(100))
-    issuing_agency = Column(String(255))
-    expiration_date = Column(Date)
+    certification_number: Mapped[Optional[str]] = mapped_column(String(100))
+    issuing_agency: Mapped[Optional[str]] = mapped_column(String(255))
+    expiration_date: Mapped[Optional[date]] = mapped_column(Date)
 
     # Category Linkage
-    category_id = Column(
+    category_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_categories.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Supporting Documents
-    attachments = Column(JSON)  # List of file URLs or references
+    # Older rows hold bare file URL strings; uploads store attachment dicts.
+    attachments: Mapped[Optional[list[str | dict[str, Any]]]] = mapped_column(JSON)
 
     # Submission Status
-    status = Column(
+    status: Mapped[SubmissionStatus] = mapped_column(
         Enum(SubmissionStatus, values_callable=lambda x: [e.value for e in x]),
         default=SubmissionStatus.PENDING_REVIEW,
         nullable=False,
@@ -2609,27 +2910,31 @@ class TrainingSubmission(Base):
     )
 
     # Review Details
-    reviewed_by = Column(
+    reviewed_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    reviewed_at = Column(DateTime(timezone=True))
-    reviewer_notes = Column(Text)  # Officer notes on approval/rejection
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    reviewer_notes: Mapped[Optional[str]] = mapped_column(
+        Text
+    )  # Officer notes on approval/rejection
 
     # Link to created TrainingRecord (populated on approval)
-    training_record_id = Column(
+    training_record_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_records.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Timestamps
-    submitted_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    submitted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    training_record = relationship("TrainingRecord")
+    training_record: Mapped[Optional["TrainingRecord"]] = relationship("TrainingRecord")
 
     __table_args__ = (
         Index("idx_submission_org_status", "organization_id", "status"),
@@ -2676,82 +2981,102 @@ class ExternalTrainingProvider(Base):
 
     __tablename__ = "external_training_providers"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Provider Details
-    name = Column(
+    name: Mapped[str] = mapped_column(
         String(255), nullable=False
     )  # Display name: "Vector Solutions", "Target Solutions"
-    provider_type = Column(
+    provider_type: Mapped[ExternalProviderType] = mapped_column(
         Enum(ExternalProviderType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
-    description = Column(Text)
+    description: Mapped[Optional[str]] = mapped_column(Text)
 
     # API Configuration (encrypted)
-    api_base_url = Column(String(500))  # Base URL for API calls
-    api_key = Column(Text)  # Encrypted API key
-    api_secret = Column(Text)  # Encrypted API secret (if needed)
-    client_id = Column(String(255))  # OAuth client ID (if needed)
-    client_secret = Column(Text)  # Encrypted OAuth client secret (if needed)
+    api_base_url: Mapped[Optional[str]] = mapped_column(
+        String(500)
+    )  # Base URL for API calls
+    api_key: Mapped[Optional[str]] = mapped_column(Text)  # Encrypted API key
+    api_secret: Mapped[Optional[str]] = mapped_column(
+        Text
+    )  # Encrypted API secret (if needed)
+    client_id: Mapped[Optional[str]] = mapped_column(
+        String(255)
+    )  # OAuth client ID (if needed)
+    client_secret: Mapped[Optional[str]] = mapped_column(
+        Text
+    )  # Encrypted OAuth client secret (if needed)
 
     # Authentication Type
-    auth_type = Column(String(50), default="api_key")  # api_key, oauth2, basic
+    auth_type: Mapped[Optional[str]] = mapped_column(
+        String(50), default="api_key"
+    )  # api_key, oauth2, basic
 
     # Additional Configuration (JSON)
-    config = Column(JSON)  # Provider-specific config like endpoints, headers, etc.
+    config: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON
+    )  # Provider-specific config like endpoints, headers, etc.
     # Example: {"records_endpoint": "/api/v1/records", "users_endpoint": "/api/v1/users"}
 
     # Sync Settings
-    auto_sync_enabled = Column(Boolean, default=False)
-    sync_interval_hours = Column(Integer, default=24)  # How often to auto-sync
-    last_sync_at = Column(DateTime(timezone=True))
-    next_sync_at = Column(DateTime(timezone=True))
+    auto_sync_enabled: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    sync_interval_hours: Mapped[Optional[int]] = mapped_column(
+        Integer, default=24
+    )  # How often to auto-sync
+    last_sync_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    next_sync_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     # Default Category Mapping
-    default_category_id = Column(
+    default_category_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_categories.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Status
-    active = Column(Boolean, default=True, index=True)
-    connection_verified = Column(Boolean, default=False)
-    last_connection_test = Column(DateTime(timezone=True))
-    connection_error = Column(Text)  # Last connection error message
+    active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True, index=True)
+    connection_verified: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    last_connection_test: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
+    connection_error: Mapped[Optional[str]] = mapped_column(
+        Text
+    )  # Last connection error message
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Relationships
-    category_mappings = relationship(
+    category_mappings: Mapped[list["ExternalCategoryMapping"]] = relationship(
         "ExternalCategoryMapping",
         back_populates="provider",
         cascade="all, delete-orphan",
     )
-    course_mappings = relationship(
+    course_mappings: Mapped[list["ExternalCourseMapping"]] = relationship(
         "ExternalCourseMapping",
         back_populates="provider",
         cascade="all, delete-orphan",
     )
-    sync_history = relationship(
+    sync_history: Mapped[list["ExternalTrainingSyncLog"]] = relationship(
         "ExternalTrainingSyncLog",
         back_populates="provider",
         cascade="all, delete-orphan",
     )
-    imported_records = relationship(
+    imported_records: Mapped[list["ExternalTrainingImport"]] = relationship(
         "ExternalTrainingImport",
         back_populates="provider",
         cascade="all, delete-orphan",
@@ -2777,13 +3102,13 @@ class ExternalCategoryMapping(Base):
 
     __tablename__ = "external_category_mappings"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    provider_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    provider_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("external_training_providers.id", ondelete="CASCADE"),
         nullable=False,
     )
-    organization_id = Column(
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
@@ -2791,41 +3116,49 @@ class ExternalCategoryMapping(Base):
     )
 
     # External Category Info
-    external_category_id = Column(
+    external_category_id: Mapped[str] = mapped_column(
         String(255), nullable=False
     )  # ID from external system
-    external_category_name = Column(
+    external_category_name: Mapped[str] = mapped_column(
         String(255), nullable=False
     )  # Name from external system
-    external_category_code = Column(
+    external_category_code: Mapped[Optional[str]] = mapped_column(
         String(100)
     )  # Code from external system (if available)
 
     # Internal Category Mapping
-    internal_category_id = Column(
+    internal_category_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_categories.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Mapping Status
-    is_mapped = Column(Boolean, default=False)  # Has been mapped to internal category
-    auto_mapped = Column(Boolean, default=False)  # Was mapped automatically vs manually
+    is_mapped: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=False
+    )  # Has been mapped to internal category
+    auto_mapped: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=False
+    )  # Was mapped automatically vs manually
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    mapped_by = Column(
+    mapped_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Relationships
-    provider = relationship(
+    provider: Mapped["ExternalTrainingProvider"] = relationship(
         "ExternalTrainingProvider", back_populates="category_mappings"
     )
-    internal_category = relationship("TrainingCategory")
+    internal_category: Mapped[Optional["TrainingCategory"]] = relationship(
+        "TrainingCategory"
+    )
 
     __table_args__ = (
         Index("idx_ext_mapping_external", "provider_id", "external_category_id"),
@@ -2848,40 +3181,44 @@ class ExternalCourseMapping(Base):
 
     __tablename__ = "external_course_mappings"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    provider_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    provider_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("external_training_providers.id", ondelete="CASCADE"),
         nullable=False,
     )
-    organization_id = Column(
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    external_course_id = Column(String(255), nullable=False)
-    external_course_name = Column(String(500), nullable=False)
+    external_course_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    external_course_name: Mapped[str] = mapped_column(String(500), nullable=False)
 
-    internal_course_id = Column(
+    internal_course_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_courses.id", ondelete="SET NULL"),
         nullable=True,
     )
-    is_mapped = Column(Boolean, default=False, nullable=False)
+    is_mapped: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # When training officers were emailed about this course, so a later sync
     # does not email them again.
-    notified_at = Column(DateTime(timezone=True), nullable=True)
+    notified_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    mapped_by = Column(
+    mapped_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
-    provider = relationship(
+    provider: Mapped["ExternalTrainingProvider"] = relationship(
         "ExternalTrainingProvider", back_populates="course_mappings"
     )
 
@@ -2911,13 +3248,13 @@ class ExternalUserMapping(Base):
 
     __tablename__ = "external_user_mappings"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    provider_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    provider_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("external_training_providers.id", ondelete="CASCADE"),
         nullable=False,
     )
-    organization_id = Column(
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
@@ -2925,26 +3262,38 @@ class ExternalUserMapping(Base):
     )
 
     # External User Info
-    external_user_id = Column(String(255), nullable=False)  # ID from external system
-    external_username = Column(String(255))  # Username from external system
-    external_email = Column(String(255))  # Email from external system
-    external_name = Column(String(255))  # Full name from external system
+    external_user_id: Mapped[str] = mapped_column(
+        String(255), nullable=False
+    )  # ID from external system
+    external_username: Mapped[Optional[str]] = mapped_column(
+        String(255)
+    )  # Username from external system
+    external_email: Mapped[Optional[str]] = mapped_column(
+        String(255)
+    )  # Email from external system
+    external_name: Mapped[Optional[str]] = mapped_column(
+        String(255)
+    )  # Full name from external system
 
     # Internal User Mapping
-    internal_user_id = Column(
+    internal_user_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Mapping Status
-    is_mapped = Column(Boolean, default=False)
-    auto_mapped = Column(Boolean, default=False)  # Mapped automatically by email match
+    is_mapped: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    auto_mapped: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=False
+    )  # Mapped automatically by email match
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    mapped_by = Column(
+    mapped_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
@@ -2966,13 +3315,13 @@ class ExternalTrainingSyncLog(Base):
 
     __tablename__ = "external_training_sync_logs"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    provider_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    provider_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("external_training_providers.id", ondelete="CASCADE"),
         nullable=False,
     )
-    organization_id = Column(
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
@@ -2980,42 +3329,62 @@ class ExternalTrainingSyncLog(Base):
     )
 
     # Sync Details
-    sync_type = Column(String(50), nullable=False)  # full, incremental, manual
-    status = Column(
+    sync_type: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # full, incremental, manual
+    status: Mapped[Optional[SyncStatus]] = mapped_column(
         Enum(SyncStatus, values_callable=lambda x: [e.value for e in x]),
         default=SyncStatus.PENDING,
         index=True,
     )
 
     # Timing
-    started_at = Column(DateTime(timezone=True), default=func.now())
-    completed_at = Column(DateTime(timezone=True))
+    started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), default=func.now()
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     # Results
-    records_fetched = Column(
+    records_fetched: Mapped[Optional[int]] = mapped_column(
         Integer, default=0
     )  # Records retrieved from external system
-    records_imported = Column(Integer, default=0)  # Records successfully imported
-    records_updated = Column(Integer, default=0)  # Existing records updated
-    records_skipped = Column(Integer, default=0)  # Records skipped (duplicates, etc.)
-    records_failed = Column(Integer, default=0)  # Records that failed to import
+    records_imported: Mapped[Optional[int]] = mapped_column(
+        Integer, default=0
+    )  # Records successfully imported
+    records_updated: Mapped[Optional[int]] = mapped_column(
+        Integer, default=0
+    )  # Existing records updated
+    records_skipped: Mapped[Optional[int]] = mapped_column(
+        Integer, default=0
+    )  # Records skipped (duplicates, etc.)
+    records_failed: Mapped[Optional[int]] = mapped_column(
+        Integer, default=0
+    )  # Records that failed to import
 
     # Error Information
-    error_message = Column(Text)
-    error_details = Column(JSON)  # Detailed error info for debugging
+    error_message: Mapped[Optional[str]] = mapped_column(Text)
+    error_details: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON
+    )  # Detailed error info for debugging
 
     # Date Range Synced
-    sync_from_date = Column(Date)  # Records from this date
-    sync_to_date = Column(Date)  # Records to this date
+    sync_from_date: Mapped[Optional[date]] = mapped_column(
+        Date
+    )  # Records from this date
+    sync_to_date: Mapped[Optional[date]] = mapped_column(Date)  # Records to this date
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    initiated_by = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    initiated_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )  # Null for auto-sync
 
     # Relationships
-    provider = relationship("ExternalTrainingProvider", back_populates="sync_history")
+    provider: Mapped["ExternalTrainingProvider"] = relationship(
+        "ExternalTrainingProvider", back_populates="sync_history"
+    )
 
     __table_args__ = (
         Index("idx_sync_log_provider", "provider_id", "status"),
@@ -3036,19 +3405,19 @@ class ExternalTrainingImport(Base):
 
     __tablename__ = "external_training_imports"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    provider_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    provider_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("external_training_providers.id", ondelete="CASCADE"),
         nullable=False,
     )
-    organization_id = Column(
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    sync_log_id = Column(
+    sync_log_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("external_training_sync_logs.id", ondelete="SET NULL"),
         nullable=True,
@@ -3056,60 +3425,76 @@ class ExternalTrainingImport(Base):
     )
 
     # External Record Data
-    external_record_id = Column(String(255), nullable=False)  # ID from external system
-    external_user_id = Column(String(255))  # User ID from external system
-    external_course_id = Column(String(255))  # Course ID from external system
-    external_category_id = Column(String(255))  # Category ID from external system
+    external_record_id: Mapped[str] = mapped_column(
+        String(255), nullable=False
+    )  # ID from external system
+    external_user_id: Mapped[Optional[str]] = mapped_column(
+        String(255)
+    )  # User ID from external system
+    external_course_id: Mapped[Optional[str]] = mapped_column(
+        String(255)
+    )  # Course ID from external system
+    external_category_id: Mapped[Optional[str]] = mapped_column(
+        String(255)
+    )  # Category ID from external system
 
     # Training Details (from external system)
-    course_title = Column(String(500), nullable=False)  # Title/name of the training
-    course_code = Column(String(100))
-    description = Column(Text)
-    duration_minutes = Column(Integer)  # Duration in minutes
-    credit_hours = Column(
+    course_title: Mapped[str] = mapped_column(
+        String(500), nullable=False
+    )  # Title/name of the training
+    course_code: Mapped[Optional[str]] = mapped_column(String(100))
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    duration_minutes: Mapped[Optional[int]] = mapped_column(
+        Integer
+    )  # Duration in minutes
+    credit_hours: Mapped[Optional[float]] = mapped_column(
         Float
     )  # Credit hours (from providers that report hours directly)
-    completion_date = Column(DateTime(timezone=True))  # When completed
-    score = Column(Float)  # Score if applicable
-    passed = Column(Boolean)
+    completion_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )  # When completed
+    score: Mapped[Optional[float]] = mapped_column(Float)  # Score if applicable
+    passed: Mapped[Optional[bool]] = mapped_column(Boolean)
 
     # External Category Info
-    external_category_name = Column(String(255))
+    external_category_name: Mapped[Optional[str]] = mapped_column(String(255))
 
     # Raw Data (JSON) - Store complete response for reference
-    raw_data = Column(JSON)
+    raw_data: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON)
 
     # Internal Record Link
-    training_record_id = Column(
+    training_record_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_records.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    user_id = Column(
+    user_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )  # Mapped internal user
 
     # Import Status
-    import_status = Column(
+    import_status: Mapped[Optional[str]] = mapped_column(
         String(50), default="pending", index=True
     )  # pending, imported, failed, skipped, duplicate
-    import_error = Column(Text)
-    imported_at = Column(DateTime(timezone=True))
+    import_error: Mapped[Optional[str]] = mapped_column(Text)
+    imported_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    provider = relationship(
+    provider: Mapped["ExternalTrainingProvider"] = relationship(
         "ExternalTrainingProvider", back_populates="imported_records"
     )
-    training_record = relationship("TrainingRecord")
+    training_record: Mapped[Optional["TrainingRecord"]] = relationship("TrainingRecord")
 
     __table_args__ = (
         Index("idx_ext_import_provider", "provider_id", "import_status"),
@@ -3155,21 +3540,27 @@ class Shift(Base):
 
     __tablename__ = "shifts"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Shift Details
-    shift_date = Column(Date, nullable=False, index=True)
-    start_time = Column(DateTime(timezone=True), nullable=False)
-    end_time = Column(DateTime(timezone=True))
+    shift_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    start_time: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    end_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     # Assignment
-    apparatus_id = Column(String(36))  # Link to apparatus (future)
-    station_id = Column(String(36))  # Link to station (future)
+    apparatus_id: Mapped[Optional[str]] = mapped_column(
+        String(36)
+    )  # Link to apparatus (future)
+    station_id: Mapped[Optional[str]] = mapped_column(
+        String(36)
+    )  # Link to station (future)
 
     # The ShiftTemplate this shift was created from, when it came from one.
     #
@@ -3184,41 +3575,45 @@ class Shift(Base):
     # the link must not take the shift with it. Shifts created before this
     # column existed carry NULL and fall back to apparatus-based checklist
     # resolution, which is the behaviour they have today.
-    template_id = Column(
+    template_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("shift_templates.id", ondelete="SET NULL"),
         nullable=True,
     )
     # Duty platoon this shift belongs to (A/B/C…) when generated from a platoon
     # rotation. Lets the UI label the shift and show the platoon roster.
-    platoon = Column(String(20), nullable=True)
+    platoon: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     # Leadership
-    shift_officer_id = Column(
+    shift_officer_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Display
-    color = Column(String(7))  # Hex color from shift template, e.g. "#4f46e5"
+    color: Mapped[Optional[str]] = mapped_column(
+        String(7)
+    )  # Hex color from shift template, e.g. "#4f46e5"
 
     # Staffing (from template)
     # Canonical form includes position, required, and the opt-in
     # allow_administrative_members flag — one entry per seat. See
     # app/utils/positions.py.
-    positions = Column(JSON)
-    min_staffing = Column(Integer)
+    positions: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSON)
+    min_staffing: Mapped[Optional[int]] = mapped_column(Integer)
 
     # Notes
-    notes = Column(Text)
-    activities = Column(JSON)  # Training, station duties, etc.
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    activities: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON
+    )  # Training, station duties, etc.
     # Crew-to-crew handoff / pass-down captured at finalization and surfaced to
     # the next crew on the same apparatus (staffing changes, apparatus issues,
     # ongoing incidents, etc.).
-    pass_down_notes = Column(Text, nullable=True)
+    pass_down_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # When True, all members (including non-operational types) can self-signup.
     # Copied from ShiftTemplate when a shift is created from a template.
-    open_to_all_members = Column(
+    open_to_all_members: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="0"
     )
 
@@ -3227,11 +3622,13 @@ class Shift(Base):
     # commitment to the department's regular coverage, and honouring it here
     # would seat a member on a school visit they never volunteered for and
     # spend one of the sheet's limited seats doing it.
-    is_outreach = Column(Boolean, default=False, nullable=False, server_default="0")
+    is_outreach: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
     # Summary totals — computed on finalization, also served live via API
-    call_count = Column(Integer, nullable=True)
-    total_hours = Column(Float, nullable=True)
+    call_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    total_hours: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     # How far the officer got through the close-out wizard. NULL/0 = not
     # started, 1 = attendance times saved, 2 = calls saved; finalizing clears
@@ -3240,7 +3637,7 @@ class Shift(Base):
     # Without it a phone locking on step 2 sends the officer back to step 1,
     # and a shift with a genuine zero calls is indistinguishable from one whose
     # count was never asked for.
-    closeout_step = Column(Integer, nullable=True)
+    closeout_step: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Leadership reopening signup after the department's cutoff has passed:
     # an absolute UTC instant until which this shift still accepts additions,
@@ -3250,36 +3647,46 @@ class Shift(Base):
     # Stored as an instant rather than a duration because the officer's
     # decision is "until quarter past", not "for fifteen minutes from whenever
     # this row is next read".
-    late_signup_until = Column(DateTime(timezone=True), nullable=True)
+    late_signup_until: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Finalization — officer formally closes the shift after review
-    is_finalized = Column(Boolean, default=False, nullable=False, server_default="0")
-    finalized_at = Column(DateTime(timezone=True), nullable=True)
-    finalized_by = Column(
+    is_finalized: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
+    finalized_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    finalized_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Lifecycle — a cancelled shift is kept (with its history) instead of
     # being hard-deleted, so assigned crew can be notified and reporting
     # can distinguish "called off" from "never existed".
-    status = Column(
+    status: Mapped[ShiftStatus] = mapped_column(
         Enum(ShiftStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=ShiftStatus.SCHEDULED,
         server_default=ShiftStatus.SCHEDULED.value,
     )
-    cancelled_at = Column(DateTime(timezone=True), nullable=True)
-    cancelled_by = Column(
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    cancelled_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    cancellation_reason = Column(Text, nullable=True)
+    cancellation_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
@@ -3298,26 +3705,32 @@ class ShiftAttendance(Base):
 
     __tablename__ = "shift_attendance"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    shift_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    shift_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("shifts.id", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Timing
-    checked_in_at = Column(DateTime(timezone=True))
-    checked_out_at = Column(DateTime(timezone=True))
-    duration_minutes = Column(Integer)  # Calculated from check-in/check-out
-    call_count = Column(Integer, nullable=True)  # Snapshotted at finalization
+    checked_in_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    checked_out_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    duration_minutes: Mapped[Optional[int]] = mapped_column(
+        Integer
+    )  # Calculated from check-in/check-out
+    call_count: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )  # Snapshotted at finalization
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     __table_args__ = (
         Index("idx_shift_att_shift", "shift_id"),
@@ -3337,13 +3750,13 @@ class ShiftCall(Base):
 
     __tablename__ = "shift_calls"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    shift_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    shift_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("shifts.id", ondelete="CASCADE"),
         nullable=False,
     )
-    organization_id = Column(
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
@@ -3351,26 +3764,32 @@ class ShiftCall(Base):
     )
 
     # Incident Details
-    incident_number = Column(String(100))
-    incident_type = Column(String(100))  # Structure fire, medical, MVA, etc.
+    incident_number: Mapped[Optional[str]] = mapped_column(String(100))
+    incident_type: Mapped[Optional[str]] = mapped_column(
+        String(100)
+    )  # Structure fire, medical, MVA, etc.
 
     # Timing
-    dispatched_at = Column(DateTime(timezone=True))
-    on_scene_at = Column(DateTime(timezone=True))
-    cleared_at = Column(DateTime(timezone=True))
+    dispatched_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    on_scene_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    cleared_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     # Outcome
-    cancelled_en_route = Column(Boolean, default=False)
-    medical_refusal = Column(Boolean, default=False)
+    cancelled_en_route: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    medical_refusal: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
 
     # Responding Members
-    responding_members = Column(JSON)  # Array of user IDs
+    responding_members: Mapped[Optional[list[str]]] = mapped_column(
+        JSON
+    )  # Array of user IDs
 
     # Notes
-    notes = Column(Text)
+    notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     __table_args__ = (
         Index("idx_call_shift", "shift_id"),
@@ -3483,55 +3902,63 @@ class ShiftTemplate(Base):
 
     __tablename__ = "shift_templates"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    name = Column(String(200), nullable=False)
-    description = Column(Text)
-    start_time_of_day = Column(String(5), nullable=False)  # "07:00" HH:MM format
-    end_time_of_day = Column(String(5), nullable=False)  # "19:00"
-    duration_hours = Column(Float, nullable=False)  # 12.0
-    color = Column(String(7))  # Hex color for calendar display
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    start_time_of_day: Mapped[str] = mapped_column(
+        String(5), nullable=False
+    )  # "07:00" HH:MM format
+    end_time_of_day: Mapped[str] = mapped_column(String(5), nullable=False)  # "19:00"
+    duration_hours: Mapped[float] = mapped_column(Float, nullable=False)  # 12.0
+    color: Mapped[Optional[str]] = mapped_column(
+        String(7)
+    )  # Hex color for calendar display
 
     # Staffing
     # Canonical form includes position, required, and the opt-in
     # allow_administrative_members flag — see app/utils/positions.py.
     # Event-category templates instead store event
     # metadata here ({"event_type", "resources", "flat_positions"}).
-    positions = Column(JSON)
-    min_staffing = Column(Integer, default=1)
+    positions: Mapped[Optional[list[dict[str, Any]] | dict[str, Any]]] = mapped_column(
+        JSON
+    )
+    min_staffing: Mapped[Optional[int]] = mapped_column(Integer, default=1)
 
     # Categorization
-    category = Column(
+    category: Mapped[Optional[str]] = mapped_column(
         String(20), default="standard"
     )  # "standard", "specialty", "event"
-    apparatus_type = Column(
+    apparatus_type: Mapped[Optional[str]] = mapped_column(
         String(50)
     )  # Links template to a vehicle type (e.g., "engine", "ambulance")
-    apparatus_id = Column(
+    apparatus_id: Mapped[Optional[str]] = mapped_column(
         String(36)
     )  # Links template to a specific vehicle (BasicApparatus or full Apparatus)
 
     # Defaults
-    is_default = Column(Boolean, default=False)
-    is_active = Column(Boolean, default=True)
+    is_default: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    is_active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
 
     # When True, all members (including non-operational membership types)
     # can self-signup for positions defined on this template/shift.
-    open_to_all_members = Column(
+    open_to_all_members: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="0"
     )
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
@@ -3542,7 +3969,7 @@ class ShiftTemplate(Base):
     # selectin, not lazy: ShiftTemplateResponse is a from_attributes model, and
     # a lazy load during serialization raises MissingGreenlet under async
     # SQLAlchemy.
-    equipment_check_links = relationship(
+    equipment_check_links: Mapped[list["ShiftTemplateEquipmentCheck"]] = relationship(
         "ShiftTemplateEquipmentCheck",
         cascade="all, delete-orphan",
         lazy="selectin",
@@ -3581,26 +4008,30 @@ class ShiftTemplateEquipmentCheck(Base):
 
     __tablename__ = "shift_template_equipment_checks"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    shift_template_id = Column(
+    shift_template_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("shift_templates.id", ondelete="CASCADE"),
         nullable=False,
     )
-    equipment_check_template_id = Column(
+    equipment_check_template_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("equipment_check_templates.id", ondelete="CASCADE"),
         nullable=False,
     )
-    sort_order = Column(Integer, default=0, nullable=False, server_default="0")
+    sort_order: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False, server_default="0"
+    )
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
@@ -3634,51 +4065,53 @@ class ShiftPattern(Base):
 
     __tablename__ = "shift_patterns"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    name = Column(String(200), nullable=False)
-    description = Column(Text)
-    pattern_type = Column(
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    pattern_type: Mapped[PatternType] = mapped_column(
         Enum(PatternType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=PatternType.WEEKLY,
     )
 
     # Pattern definition
-    template_id = Column(
+    template_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("shift_templates.id", ondelete="SET NULL"), nullable=True
     )
-    rotation_days = Column(
+    rotation_days: Mapped[Optional[int]] = mapped_column(
         Integer
     )  # Days in the rotation cycle (e.g., 3 for platoon A/B/C)
-    days_on = Column(Integer)  # Days on duty per cycle
-    days_off = Column(Integer)  # Days off per cycle
-    schedule_config = Column(
+    days_on: Mapped[Optional[int]] = mapped_column(Integer)  # Days on duty per cycle
+    days_off: Mapped[Optional[int]] = mapped_column(Integer)  # Days off per cycle
+    schedule_config: Mapped[Optional[dict[str, Any]]] = mapped_column(
         JSON
     )  # Flexible config: {"platoons": ["A","B","C"], "weekdays": [0,1,2,3,4]}
 
     # Active period
-    start_date = Column(Date, nullable=False)
-    end_date = Column(Date)  # Null = indefinite
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[Optional[date]] = mapped_column(Date)  # Null = indefinite
 
     # Members assigned to this pattern
-    assigned_members = Column(
+    assigned_members: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
         JSON
     )  # [{"user_id": "...", "platoon": "A", "position": "firefighter"}]
 
-    is_active = Column(Boolean, default=True)
+    is_active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
@@ -3700,18 +4133,18 @@ class ShiftAssignment(Base):
 
     __tablename__ = "shift_assignments"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    shift_id = Column(
+    shift_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("shifts.id", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
@@ -3720,13 +4153,13 @@ class ShiftAssignment(Base):
     # VARCHAR, not ENUM: a department's own seats are assigned verbatim
     # alongside the built-ins. Which seats are valid is decided per shift by
     # ``app.utils.positions.resolve_seat``, not by the column.
-    position = Column(
+    position: Mapped[str] = mapped_column(
         SeatName(),
         nullable=False,
         default=ShiftPosition.FIREFIGHTER.value,
         server_default="firefighter",
     )
-    assignment_status = Column(
+    assignment_status: Mapped[AssignmentStatus] = mapped_column(
         Enum(AssignmentStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=AssignmentStatus.ASSIGNED,
@@ -3739,32 +4172,36 @@ class ShiftAssignment(Base):
     # outreach role is not a crew seat: capacity, coverage and eligibility
     # read ``position``, so it stays ``volunteer`` for these seats and this
     # column carries what the member actually signed up to do.
-    outreach_role = Column(String(100), nullable=True)
+    outreach_role: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Training slot — when True this seat is a supervised training/rider
     # position. Optionally links the trainee's program and the evaluating
     # officer so shift finalization drafts a completion report against the
     # right program with the right reviewer.
-    is_training = Column(Boolean, default=False, nullable=False, server_default="0")
-    training_program_id = Column(
+    is_training: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
+    training_program_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_programs.id", ondelete="SET NULL"),
         nullable=True,
     )
-    training_evaluator_id = Column(
+    training_evaluator_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Tracking
-    assigned_by = Column(
+    assigned_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    confirmed_at = Column(DateTime(timezone=True))
-    notes = Column(Text)
+    confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
@@ -3793,48 +4230,50 @@ class ShiftSwapRequest(Base):
 
     __tablename__ = "shift_swap_requests"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # The member requesting the swap
-    requesting_user_id = Column(
+    requesting_user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     # The shift they want to give up
-    offering_shift_id = Column(
+    offering_shift_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("shifts.id", ondelete="CASCADE"), nullable=False
     )
     # The shift they want to pick up (optional — can be open request)
-    requesting_shift_id = Column(
+    requesting_shift_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("shifts.id", ondelete="SET NULL"), nullable=True
     )
     # The member they want to swap with (optional — can be open request)
-    target_user_id = Column(
+    target_user_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
-    status = Column(
+    status: Mapped[SwapRequestStatus] = mapped_column(
         Enum(SwapRequestStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=SwapRequestStatus.PENDING,
         server_default="pending",
     )
-    reason = Column(Text)
+    reason: Mapped[Optional[str]] = mapped_column(Text)
 
     # Review
-    reviewed_by = Column(
+    reviewed_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    reviewed_at = Column(DateTime(timezone=True))
-    reviewer_notes = Column(Text)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    reviewer_notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
@@ -3862,37 +4301,39 @@ class ShiftTimeOff(Base):
 
     __tablename__ = "shift_time_off"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    start_date = Column(Date, nullable=False)
-    end_date = Column(Date, nullable=False)
-    reason = Column(Text)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    reason: Mapped[Optional[str]] = mapped_column(Text)
 
-    status = Column(
+    status: Mapped[TimeOffStatus] = mapped_column(
         Enum(TimeOffStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=TimeOffStatus.PENDING,
         server_default="pending",
     )
-    approved_by = Column(
+    approved_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    approved_at = Column(DateTime(timezone=True))
-    reviewer_notes = Column(Text)
+    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    reviewer_notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
@@ -3951,19 +4392,19 @@ class StandingShiftClaim(Base):
 
     __tablename__ = "standing_shift_claims"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    pattern = Column(
+    pattern: Mapped[StandingShiftPattern] = mapped_column(
         Enum(StandingShiftPattern, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=StandingShiftPattern.WEEKLY,
@@ -3971,8 +4412,8 @@ class StandingShiftClaim(Base):
     )
     # 0 = Sunday … 6 = Saturday, matching the weekday picker the member sees
     # (S M T W T F S) rather than Python's Monday-first convention.
-    weekday = Column(Integer, nullable=False)
-    period = Column(
+    weekday: Mapped[int] = mapped_column(Integer, nullable=False)
+    period: Mapped[StandingShiftPeriod] = mapped_column(
         Enum(StandingShiftPeriod, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=StandingShiftPeriod.DAY,
@@ -3981,7 +4422,7 @@ class StandingShiftClaim(Base):
     # VARCHAR, not ENUM: a department's own seats are assigned verbatim
     # alongside the built-ins. Which seats are valid is decided per shift by
     # ``app.utils.positions.resolve_seat``, not by the column.
-    position = Column(
+    position: Mapped[str] = mapped_column(
         SeatName(),
         nullable=False,
         default=ShiftPosition.FIREFIGHTER.value,
@@ -3989,16 +4430,22 @@ class StandingShiftClaim(Base):
     )
     # Optional narrowing to one unit. NULL means "whichever shift runs in that
     # window", which is the right default for a single-apparatus department.
-    apparatus_id = Column(String(36), nullable=True)
+    apparatus_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
 
-    start_date = Column(Date, nullable=False)
-    end_date = Column(Date, nullable=False)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False)
 
-    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
-    ended_at = Column(DateTime(timezone=True), nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
+    ended_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
@@ -4031,27 +4478,29 @@ class BasicApparatus(Base):
 
     __tablename__ = "basic_apparatus"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    unit_number = Column(String(20), nullable=False)
-    name = Column(String(100), nullable=False)
-    apparatus_type = Column(
+    unit_number: Mapped[str] = mapped_column(String(20), nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    apparatus_type: Mapped[str] = mapped_column(
         String(50), nullable=False, default="engine", server_default="engine"
     )
-    min_staffing = Column(Integer, default=1)
+    min_staffing: Mapped[Optional[int]] = mapped_column(Integer, default=1)
     # Canonical form: [{"position": "officer", "required": True}, ...] — see
     # app/utils/positions.py.
-    positions = Column(JSON)
-    is_active = Column(Boolean, default=True)
+    positions: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSON)
+    is_active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
@@ -4083,51 +4532,59 @@ class TrainingWaiver(Base):
 
     __tablename__ = "training_waivers"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
 
-    waiver_type = Column(
+    waiver_type: Mapped[TrainingWaiverType] = mapped_column(
         Enum(TrainingWaiverType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=TrainingWaiverType.LEAVE_OF_ABSENCE,
         server_default="leave_of_absence",
     )
-    reason = Column(Text, nullable=True)
+    reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # The period the member is excused (inclusive)
-    start_date = Column(Date, nullable=False)
-    end_date = Column(Date, nullable=True)  # None = permanent waiver
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[Optional[date]] = mapped_column(
+        Date, nullable=True
+    )  # None = permanent waiver
 
     # Which requirements this waiver applies to (null = all requirements)
-    requirement_ids = Column(JSON, nullable=True)
+    requirement_ids: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
 
     # Approval
-    granted_by = Column(
+    granted_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    granted_at = Column(DateTime(timezone=True), nullable=True)
+    granted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
-    active = Column(Boolean, default=True, nullable=False, server_default="1")
+    active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    user = relationship("User", foreign_keys=[user_id])
-    grantor = relationship("User", foreign_keys=[granted_by])
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+    grantor: Mapped[Optional["User"]] = relationship("User", foreign_keys=[granted_by])
 
     __table_args__ = (
         Index("idx_training_waivers_org_user", "organization_id", "user_id"),
@@ -4154,69 +4611,77 @@ class RecertificationPathway(Base):
 
     __tablename__ = "recertification_pathways"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Which certification this pathway renews
-    name = Column(String(255), nullable=False)
-    description = Column(Text)
-    source_requirement_id = Column(
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    source_requirement_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_requirements.id", ondelete="CASCADE"),
         nullable=True,
     )  # The certification requirement this renews
 
     # Renewal requirements
-    renewal_type = Column(
+    renewal_type: Mapped[str] = mapped_column(
         String(50), nullable=False, default="hours"
     )  # hours, courses, assessment, combination
-    required_hours = Column(Float)  # Total renewal hours needed
-    required_courses = Column(JSON)  # Specific course IDs needed for renewal
-    category_hour_requirements = Column(
+    required_hours: Mapped[Optional[float]] = mapped_column(
+        Float
+    )  # Total renewal hours needed
+    required_courses: Mapped[Optional[list[str]]] = mapped_column(
+        JSON
+    )  # Specific course IDs needed for renewal
+    category_hour_requirements: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
         JSON
     )  # Category-specific hours: [{"category_id": "...", "hours": 10, "label": "Trauma"}]
-    requires_assessment = Column(Boolean, default=False)
-    assessment_course_id = Column(
+    requires_assessment: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    assessment_course_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_courses.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Timing
-    renewal_window_days = Column(
+    renewal_window_days: Mapped[Optional[int]] = mapped_column(
         Integer, default=90
     )  # Days before expiration that renewal opens
-    grace_period_days = Column(
+    grace_period_days: Mapped[Optional[int]] = mapped_column(
         Integer, default=0
     )  # Days after expiration where renewal is still possible
-    max_lapse_days = Column(
+    max_lapse_days: Mapped[Optional[int]] = mapped_column(
         Integer
     )  # Days after which full recertification is needed (null = no limit)
 
     # Prerequisite pathways (must complete these renewals first)
-    prerequisite_pathway_ids = Column(JSON)  # e.g., CPR must be current before ACLS
+    prerequisite_pathway_ids: Mapped[Optional[list[str]]] = mapped_column(
+        JSON
+    )  # e.g., CPR must be current before ACLS
 
     # What happens on successful renewal
-    new_expiration_months = Column(
+    new_expiration_months: Mapped[Optional[int]] = mapped_column(
         Integer
     )  # Months from renewal completion to new expiration
-    auto_create_record = Column(
+    auto_create_record: Mapped[Optional[bool]] = mapped_column(
         Boolean, default=True
     )  # Auto-create a new TrainingRecord on completion
 
     # Status
-    active = Column(Boolean, default=True, index=True)
+    active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True, index=True)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
@@ -4249,61 +4714,67 @@ class RenewalTask(Base):
 
     __tablename__ = "renewal_tasks"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Links
-    pathway_id = Column(
+    pathway_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("recertification_pathways.id", ondelete="CASCADE"),
         nullable=False,
     )
-    training_record_id = Column(
+    training_record_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_records.id", ondelete="SET NULL"),
         nullable=True,
     )  # The expiring record
 
     # Status
-    status = Column(
+    status: Mapped[Optional[RenewalTaskStatus]] = mapped_column(
         Enum(RenewalTaskStatus, values_callable=lambda x: [e.value for e in x]),
         default=RenewalTaskStatus.PENDING,
         index=True,
     )
 
     # Certification dates
-    certification_expiration_date = Column(Date, nullable=False)
-    renewal_window_opens = Column(Date, nullable=False)
-    grace_period_ends = Column(Date)
+    certification_expiration_date: Mapped[date] = mapped_column(Date, nullable=False)
+    renewal_window_opens: Mapped[date] = mapped_column(Date, nullable=False)
+    grace_period_ends: Mapped[Optional[date]] = mapped_column(Date)
 
     # Progress
-    hours_completed = Column(Float, default=0)
-    courses_completed = Column(JSON)  # List of completed course IDs
-    category_hours_completed = Column(JSON)  # {"category_id": hours_completed} tracking
-    assessment_passed = Column(Boolean, default=False)
-    progress_percentage = Column(Float, default=0.0)
+    hours_completed: Mapped[Optional[float]] = mapped_column(Float, default=0)
+    courses_completed: Mapped[Optional[list[str]]] = mapped_column(
+        JSON
+    )  # List of completed course IDs
+    category_hours_completed: Mapped[Optional[dict[str, float]]] = mapped_column(
+        JSON
+    )  # {"category_id": hours_completed} tracking
+    assessment_passed: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    progress_percentage: Mapped[Optional[float]] = mapped_column(Float, default=0.0)
 
     # Completion
-    completed_at = Column(DateTime(timezone=True))
-    new_record_id = Column(
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    new_record_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_records.id", ondelete="SET NULL"),
         nullable=True,
     )  # The new certification record created
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
@@ -4342,34 +4813,40 @@ class CompetencyMatrix(Base):
 
     __tablename__ = "competency_matrices"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Target
-    name = Column(String(255), nullable=False)
-    description = Column(Text)
-    position = Column(
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    position: Mapped[str] = mapped_column(
         String(100), nullable=False, index=True
     )  # firefighter, driver, officer, etc.
-    role_id = Column(String(36), nullable=True, index=True)  # Optional link to role
+    role_id: Mapped[Optional[str]] = mapped_column(
+        String(36), nullable=True, index=True
+    )  # Optional link to role
 
     # Requirements: list of skill/competency pairs
     # Format: [{"skill_evaluation_id": "...", "required_level": "competent", "priority": "required"}]
-    skill_requirements = Column(JSON, nullable=False, default=list)
+    skill_requirements: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
 
     # Status
-    active = Column(Boolean, default=True, index=True)
+    active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True, index=True)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
@@ -4392,18 +4869,18 @@ class MemberCompetency(Base):
 
     __tablename__ = "member_competencies"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    skill_evaluation_id = Column(
+    skill_evaluation_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("skill_evaluations.id", ondelete="CASCADE"),
         nullable=False,
@@ -4411,37 +4888,45 @@ class MemberCompetency(Base):
     )
 
     # Current level
-    current_level = Column(
+    current_level: Mapped[CompetencyLevel] = mapped_column(
         Enum(CompetencyLevel, values_callable=lambda x: [e.value for e in x]),
         default=CompetencyLevel.NOVICE,
         nullable=False,
     )
-    previous_level = Column(
+    previous_level: Mapped[Optional[CompetencyLevel]] = mapped_column(
         Enum(CompetencyLevel, values_callable=lambda x: [e.value for e in x]),
         nullable=True,
     )
 
     # Evaluation history
-    last_evaluated_at = Column(DateTime(timezone=True))
-    last_evaluator_id = Column(
+    last_evaluated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
+    last_evaluator_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    evaluation_count = Column(Integer, default=0)
-    last_score = Column(Float)
+    evaluation_count: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    last_score: Mapped[Optional[float]] = mapped_column(Float)
 
     # Skill decay tracking
-    decay_months = Column(
+    decay_months: Mapped[Optional[int]] = mapped_column(
         Integer
     )  # After this many months without evaluation, level decays
-    decay_warning_sent = Column(Boolean, default=False)
-    next_evaluation_due = Column(Date)  # When re-evaluation is needed
+    decay_warning_sent: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    next_evaluation_due: Mapped[Optional[date]] = mapped_column(
+        Date
+    )  # When re-evaluation is needed
 
     # Score trend (last 5 scores for trend analysis)
-    score_history = Column(JSON)  # [{"date": "...", "score": 85, "level": "competent"}]
+    score_history: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON
+    )  # [{"date": "...", "score": 85, "level": "competent"}]
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
@@ -4470,62 +4955,64 @@ class InstructorQualification(Base):
 
     __tablename__ = "instructor_qualifications"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # What they're qualified for
-    qualification_type = Column(
+    qualification_type: Mapped[str] = mapped_column(
         String(50), nullable=False
     )  # instructor, evaluator, lead_instructor, mentor
-    course_id = Column(
+    course_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_courses.id", ondelete="CASCADE"),
         nullable=True,
     )  # Specific course authorization
-    skill_evaluation_id = Column(
+    skill_evaluation_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("skill_evaluations.id", ondelete="CASCADE"),
         nullable=True,
     )  # Specific skill they can evaluate
-    category_id = Column(
+    category_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_categories.id", ondelete="CASCADE"),
         nullable=True,
     )  # Broad category authorization
 
     # Certification details
-    certification_number = Column(String(100))
-    issuing_agency = Column(String(255))
-    certification_level = Column(
+    certification_number: Mapped[Optional[str]] = mapped_column(String(100))
+    issuing_agency: Mapped[Optional[str]] = mapped_column(String(255))
+    certification_level: Mapped[Optional[str]] = mapped_column(
         String(50)
     )  # e.g., "Fire Instructor I", "Fire Instructor II"
-    issued_date = Column(Date)
-    expiration_date = Column(Date)
+    issued_date: Mapped[Optional[date]] = mapped_column(Date)
+    expiration_date: Mapped[Optional[date]] = mapped_column(Date)
 
     # Status
-    active = Column(Boolean, default=True, index=True)
-    verified = Column(Boolean, default=False)
-    verified_by = Column(
+    active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True, index=True)
+    verified: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    verified_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    verified_at = Column(DateTime(timezone=True))
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
@@ -4567,70 +5054,78 @@ class TrainingEffectivenessEvaluation(Base):
 
     __tablename__ = "training_effectiveness_evaluations"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # What was evaluated
-    training_record_id = Column(
+    training_record_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_records.id", ondelete="CASCADE"),
         nullable=True,
     )
-    training_session_id = Column(
+    training_session_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_sessions.id", ondelete="SET NULL"),
         nullable=True,
     )
-    course_id = Column(
+    course_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_courses.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Evaluation details
-    evaluation_level = Column(
+    evaluation_level: Mapped[EvaluationLevel] = mapped_column(
         Enum(EvaluationLevel, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
 
     # Level 1: Reaction (survey responses)
     # Format: {"overall_rating": 4, "relevance": 5, "instructor_quality": 4, "would_recommend": true, "comments": "..."}
-    survey_responses = Column(JSON)
-    overall_rating = Column(Float)  # 1-5 scale
+    survey_responses: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON)
+    overall_rating: Mapped[Optional[float]] = mapped_column(Float)  # 1-5 scale
 
     # Level 2: Learning (pre/post scores)
-    pre_assessment_score = Column(Float)
-    post_assessment_score = Column(Float)
-    knowledge_gain_percentage = Column(Float)  # Calculated: (post - pre) / pre * 100
+    pre_assessment_score: Mapped[Optional[float]] = mapped_column(Float)
+    post_assessment_score: Mapped[Optional[float]] = mapped_column(Float)
+    knowledge_gain_percentage: Mapped[Optional[float]] = mapped_column(
+        Float
+    )  # Calculated: (post - pre) / pre * 100
 
     # Level 3: Behavior (observed application)
-    behavior_observations = Column(JSON)  # From shift reports, skill checkoffs
-    behavior_rating = Column(Float)  # 1-5 scale
+    behavior_observations: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON
+    )  # From shift reports, skill checkoffs
+    behavior_rating: Mapped[Optional[float]] = mapped_column(Float)  # 1-5 scale
 
     # Level 4: Results (organizational metrics)
-    results_metrics = Column(
+    results_metrics: Mapped[Optional[dict[str, Any]]] = mapped_column(
         JSON
     )  # {"response_time_improvement": -5, "incident_outcome_score": 4.2}
-    results_notes = Column(Text)
+    results_notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Evaluator
-    evaluated_by = Column(
+    evaluated_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    evaluated_at = Column(DateTime(timezone=True), server_default=func.now())
+    evaluated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
@@ -4664,59 +5159,61 @@ class MultiAgencyTraining(Base):
 
     __tablename__ = "multi_agency_trainings"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Training link
-    training_session_id = Column(
+    training_session_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_sessions.id", ondelete="CASCADE"),
         nullable=True,
     )
-    training_record_id = Column(
+    training_record_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_records.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Exercise details
-    exercise_name = Column(String(255), nullable=False)
-    exercise_type = Column(
+    exercise_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    exercise_type: Mapped[str] = mapped_column(
         String(50), nullable=False
     )  # joint_training, mutual_aid_drill, regional_exercise, tabletop
-    description = Column(Text)
+    description: Mapped[Optional[str]] = mapped_column(Text)
 
     # Participating organizations
-    participating_organizations = Column(
+    participating_organizations: Mapped[list[dict[str, Any]]] = mapped_column(
         JSON, nullable=False
     )  # [{"name": "...", "role": "host/participant", "contact": "..."}]
-    lead_agency = Column(String(255))
-    total_participants = Column(Integer)
+    lead_agency: Mapped[Optional[str]] = mapped_column(String(255))
+    total_participants: Mapped[Optional[int]] = mapped_column(Integer)
 
     # NIMS/ICS compliance
-    ics_position_assignments = Column(
+    ics_position_assignments: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
         JSON
     )  # [{"position": "IC", "user_id": "...", "agency": "..."}]
-    nims_compliant = Column(Boolean, default=False)
-    after_action_report = Column(Text)
-    lessons_learned = Column(
+    nims_compliant: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    after_action_report: Mapped[Optional[str]] = mapped_column(Text)
+    lessons_learned: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
         JSON
     )  # [{"area": "communication", "finding": "...", "recommendation": "..."}]
 
     # Agreement tracking
-    mutual_aid_agreement_id = Column(String(100))
+    mutual_aid_agreement_id: Mapped[Optional[str]] = mapped_column(String(100))
 
     # Timestamps
-    exercise_date = Column(Date, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    exercise_date: Mapped[date] = mapped_column(Date, nullable=False)
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
@@ -4746,17 +5243,17 @@ class XAPIStatement(Base):
 
     __tablename__ = "xapi_statements"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Actor (who did it)
-    actor_email = Column(String(255))
-    actor_name = Column(String(255))
-    user_id = Column(
+    actor_email: Mapped[Optional[str]] = mapped_column(String(255))
+    actor_name: Mapped[Optional[str]] = mapped_column(String(255))
+    user_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
@@ -4764,54 +5261,70 @@ class XAPIStatement(Base):
     )  # Mapped internal user
 
     # Verb (what they did)
-    verb_id = Column(
+    verb_id: Mapped[str] = mapped_column(
         String(500), nullable=False
     )  # IRI like "http://adlnet.gov/expapi/verbs/completed"
-    verb_display = Column(String(100))  # Human-readable: "completed", "passed", etc.
+    verb_display: Mapped[Optional[str]] = mapped_column(
+        String(100)
+    )  # Human-readable: "completed", "passed", etc.
 
     # Object (what they did it to)
-    object_id = Column(String(500), nullable=False)  # IRI for the activity
-    object_name = Column(String(500))
-    object_type = Column(String(100))  # Activity, Agent, etc.
+    object_id: Mapped[str] = mapped_column(
+        String(500), nullable=False
+    )  # IRI for the activity
+    object_name: Mapped[Optional[str]] = mapped_column(String(500))
+    object_type: Mapped[Optional[str]] = mapped_column(
+        String(100)
+    )  # Activity, Agent, etc.
 
     # Result
-    score_scaled = Column(Float)  # -1 to 1
-    score_raw = Column(Float)
-    score_min = Column(Float)
-    score_max = Column(Float)
-    success = Column(Boolean)
-    completion = Column(Boolean)
-    duration_seconds = Column(Integer)  # ISO 8601 duration converted to seconds
+    score_scaled: Mapped[Optional[float]] = mapped_column(Float)  # -1 to 1
+    score_raw: Mapped[Optional[float]] = mapped_column(Float)
+    score_min: Mapped[Optional[float]] = mapped_column(Float)
+    score_max: Mapped[Optional[float]] = mapped_column(Float)
+    success: Mapped[Optional[bool]] = mapped_column(Boolean)
+    completion: Mapped[Optional[bool]] = mapped_column(Boolean)
+    duration_seconds: Mapped[Optional[int]] = mapped_column(
+        Integer
+    )  # ISO 8601 duration converted to seconds
 
     # Context
-    context_registration = Column(String(36))  # Registration UUID
-    context_platform = Column(String(255))  # LMS name
-    context_extensions = Column(JSON)
+    context_registration: Mapped[Optional[str]] = mapped_column(
+        String(36)
+    )  # Registration UUID
+    context_platform: Mapped[Optional[str]] = mapped_column(String(255))  # LMS name
+    context_extensions: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON)
 
     # Full statement (raw JSON for reference)
-    raw_statement = Column(JSON, nullable=False)
+    raw_statement: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
 
     # Processing
-    processed = Column(Boolean, default=False)
-    training_record_id = Column(
+    processed: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    training_record_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_records.id", ondelete="SET NULL"),
         nullable=True,
     )  # Created training record
 
     # Source
-    source_provider_id = Column(
+    source_provider_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("external_training_providers.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Timestamp from xAPI statement
-    statement_timestamp = Column(DateTime(timezone=True), nullable=False)
-    stored_at = Column(DateTime(timezone=True), server_default=func.now())
+    statement_timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    stored_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     __table_args__ = (
         Index("idx_xapi_org", "organization_id"),
@@ -4840,18 +5353,18 @@ class ShiftEquipmentCheck(Base):
 
     __tablename__ = "shift_equipment_checks"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    shift_id = Column(
+    shift_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("shifts.id", ondelete="SET NULL"),
         nullable=True,
     )
-    template_id = Column(
+    template_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("equipment_check_templates.id", ondelete="SET NULL"),
         nullable=True,
@@ -4863,40 +5376,50 @@ class ShiftEquipmentCheck(Base):
     # app/utils/apparatus_ref.py. A foreign key to apparatus.id therefore cannot
     # hold for every value the column legitimately carries, and used to fail on
     # every check submitted for a shift with an apparatus assigned.
-    apparatus_id = Column(String(36), nullable=True)
-    checked_by = Column(
+    apparatus_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    checked_by: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    checked_at = Column(DateTime(timezone=True), server_default=func.now())
-    check_timing = Column(String(30), nullable=False)  # start_of_shift, end_of_shift
-    check_context = Column(
+    checked_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    check_timing: Mapped[str] = mapped_column(
+        String(30), nullable=False
+    )  # start_of_shift, end_of_shift
+    check_context: Mapped[str] = mapped_column(
         String(30), nullable=False, default="shift_based", server_default="shift_based"
     )  # shift_based, standalone
-    overall_status = Column(String(30), nullable=False)  # pass, fail, incomplete
-    total_items = Column(Integer, nullable=False, default=0)
-    completed_items = Column(Integer, nullable=False, default=0)
-    failed_items = Column(Integer, nullable=False, default=0)
-    notes = Column(Text, nullable=True)
-    signature_data = Column(Text, nullable=True)
+    overall_status: Mapped[str] = mapped_column(
+        String(30), nullable=False
+    )  # pass, fail, incomplete
+    total_items: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completed_items: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failed_items: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    signature_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Stable key generated by the client before the first attempt.  A retry
     # after a lost response can therefore be distinguished from a second,
     # genuinely conflicting submission.
-    client_submission_id = Column(String(100), nullable=True)
+    client_submission_id: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    items = relationship(
+    items: Mapped[list["ShiftEquipmentCheckItem"]] = relationship(
         "ShiftEquipmentCheckItem",
         back_populates="check",
         cascade="all, delete-orphan",
     )
-    seals = relationship(
+    seals: Mapped[list["ShiftEquipmentCheckSeal"]] = relationship(
         "ShiftEquipmentCheckSeal",
         back_populates="check",
         cascade="all, delete-orphan",
@@ -4949,46 +5472,56 @@ class ShiftEquipmentCheckItem(Base):
 
     __tablename__ = "shift_equipment_check_items"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    check_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    check_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("shift_equipment_checks.id", ondelete="CASCADE"),
         nullable=False,
     )
-    template_item_id = Column(
+    template_item_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("check_template_items.id", ondelete="SET NULL"),
         nullable=True,
     )
     # Full nested storage paths may exceed the per-compartment name limit.
-    compartment_name = Column(Text, nullable=False)
-    item_name = Column(String(200), nullable=False)
-    check_type = Column(String(30), nullable=True)
-    status = Column(String(30), nullable=False)  # pass, fail, not_checked
-    quantity_found = Column(Integer, nullable=True)
-    required_quantity = Column(Integer, nullable=True)
-    critical_minimum_quantity = Column(Integer, nullable=True)
-    level_reading = Column(Float, nullable=True)
-    level_unit = Column(String(50), nullable=True)
-    serial_number = Column(String(100), nullable=True)
-    lot_number = Column(String(100), nullable=True)
-    serial_found = Column(String(100), nullable=True)
-    lot_found = Column(String(100), nullable=True)
+    compartment_name: Mapped[str] = mapped_column(Text, nullable=False)
+    item_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    check_type: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(30), nullable=False
+    )  # pass, fail, not_checked
+    quantity_found: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    required_quantity: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    critical_minimum_quantity: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
+    level_reading: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    level_unit: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    serial_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    lot_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    serial_found: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    lot_found: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     # The expiration printed on the replacement unit the crew put on the truck.
     # Its counterpart to serial_found/lot_found: without it a unit replaced in
     # the field from untracked stock keeps the template's old date, so the item
     # auto-fails every later check and never clears the supply worklist.
-    expiration_found = Column(Date, nullable=True)
-    updated_serial = Column(Boolean, default=False, nullable=False, server_default="0")
-    photo_urls = Column(JSON, nullable=True)
-    is_expired = Column(Boolean, default=False, nullable=False)
-    expiration_date = Column(Date, nullable=True)
-    notes = Column(Text, nullable=True)
+    expiration_found: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    updated_serial: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
+    photo_urls: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
+    is_expired: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    expiration_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     # Relationships
-    check = relationship("ShiftEquipmentCheck", back_populates="items")
+    check: Mapped["ShiftEquipmentCheck"] = relationship(
+        "ShiftEquipmentCheck", back_populates="items"
+    )
 
     __table_args__ = (
         Index("idx_shift_equip_check_item_check", "check_id"),
@@ -5014,28 +5547,36 @@ class ShiftEquipmentCheckSeal(Base):
 
     __tablename__ = "shift_equipment_check_seals"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    check_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    check_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("shift_equipment_checks.id", ondelete="CASCADE"),
         nullable=False,
     )
-    template_compartment_id = Column(
+    template_compartment_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("check_template_compartments.id", ondelete="SET NULL"),
         nullable=True,
     )
     # Full nested storage paths may exceed the per-compartment name limit.
-    compartment_name = Column(Text, nullable=False)
-    seal_number = Column(String(100), nullable=True)
-    intact = Column(Boolean, default=True, nullable=False, server_default="1")
+    compartment_name: Mapped[str] = mapped_column(Text, nullable=False)
+    seal_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    intact: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
     #: Positions the seal cleared rather than the crew counting them.
-    cleared_item_count = Column(Integer, nullable=False, default=0, server_default="0")
-    notes = Column(Text, nullable=True)
+    cleared_item_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
-    check = relationship("ShiftEquipmentCheck", back_populates="seals")
+    check: Mapped["ShiftEquipmentCheck"] = relationship(
+        "ShiftEquipmentCheck", back_populates="seals"
+    )
 
     __table_args__ = (
         Index("idx_shift_equip_check_seal_check", "check_id"),

@@ -167,7 +167,12 @@ class TestTheGateIsStampedOnTheFolderTreeItGuards:
     async def test_shared_system_folder_definitions_have_consistent_root_acls(self):
         definitions = {folder["slug"]: folder for folder in SYSTEM_FOLDERS}
         assert definitions["members"]["visibility"] == FolderVisibility.ORGANIZATION
-        assert definitions["apparatus"]["visibility"] == FolderVisibility.LEADERSHIP
+        assert definitions["apparatus"]["visibility"] == FolderVisibility.ORGANIZATION
+        assert definitions["apparatus"]["required_permissions"] == [
+            "apparatus.view",
+            "apparatus.edit",
+            "apparatus.manage",
+        ]
         assert definitions["facilities"]["visibility"] == FolderVisibility.ORGANIZATION
         assert set(definitions["facilities"]["required_permissions"]) == set(
             FACILITY_SENSITIVE_PERMISSIONS

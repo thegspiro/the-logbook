@@ -12,6 +12,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithRouter } from '../test/utils';
 import type { UserWithRoles } from '../types/role';
+import type { memberStatusService } from '../services/api';
 import { UserStatus } from '../constants/enums';
 
 const VIEWER_ID = 'viewer-1';
@@ -59,7 +60,7 @@ const reactivateMember = vi.fn();
 const anonymizeMember = vi.fn();
 const getServiceHistory = vi.fn();
 const changeStatus = vi.fn();
-const getMemberLeaves = vi.fn(() => Promise.resolve([]));
+const getMemberLeaves = vi.fn<typeof memberStatusService.getMemberLeaves>(() => Promise.resolve([]));
 const updateContactInfo = vi.fn();
 const updateUserProfile = vi.fn();
 let nfcIdCardsConnected = false;
@@ -104,7 +105,7 @@ vi.mock('../services/api', () => ({
     getUserInventory: (...args: unknown[]) => getUserInventory(...args) as unknown,
   },
   memberStatusService: {
-    getMemberLeaves: (...args: unknown[]) => getMemberLeaves(...args) as unknown,
+    getMemberLeaves: (...args: Parameters<typeof getMemberLeaves>) => getMemberLeaves(...args),
     reactivateMember: (...args: unknown[]) => reactivateMember(...args) as unknown,
     anonymizeMember: (...args: unknown[]) => anonymizeMember(...args) as unknown,
     getServiceHistory: (...args: unknown[]) => getServiceHistory(...args) as unknown,

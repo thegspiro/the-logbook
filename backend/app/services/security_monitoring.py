@@ -207,7 +207,8 @@ class SecurityMonitoringService:
             if not entries:
                 return datetime.min.replace(tzinfo=timezone.utc)
             last = entries[-1]
-            return last[1] if isinstance(last, tuple) else last
+            ts: datetime = last[1] if isinstance(last, tuple) else last
+            return ts
 
         target_keys = int(self._MAX_TRACKING_KEYS * self._EVICTION_TARGET_RATIO)
         for tracker in (
@@ -274,21 +275,21 @@ class SecurityMonitoringService:
 
         # Evict _session_ips keys with no recent entries
         for key in list(self._session_ips):
-            entries = self._session_ips[key]
-            if not entries or entries[-1][1] < cutoff:
+            ip_entries = self._session_ips[key]
+            if not ip_entries or ip_entries[-1][1] < cutoff:
                 del self._session_ips[key]
 
         # Evict _session_trusted_ip keys with no recent entries
         for key in list(self._session_trusted_ip):
-            entries = self._session_trusted_ip[key]
-            if not entries or entries[-1][1] < cutoff:
+            trusted_entries = self._session_trusted_ip[key]
+            if not trusted_entries or trusted_entries[-1][1] < cutoff:
                 del self._session_trusted_ip[key]
 
         # Evict _data_transfers keys with no recent entries
         day_cutoff = datetime.now(timezone.utc) - timedelta(days=2)
         for key in list(self._data_transfers):
-            entries = self._data_transfers[key]
-            if not entries or entries[-1][1] < day_cutoff:
+            transfer_entries = self._data_transfers[key]
+            if not transfer_entries or transfer_entries[-1][1] < day_cutoff:
                 del self._data_transfers[key]
 
         # _external_endpoints is capped by the unconditional
@@ -1314,7 +1315,10 @@ class SecurityMonitoringService:
             )
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        security_alert_record: Optional[SecurityAlertRecord] = (
+            result.scalar_one_or_none()
+        )
+        return security_alert_record
 
     async def acknowledge_alert(
         self,

@@ -14,6 +14,7 @@ from fastapi.security import APIKeyHeader
 from loguru import logger
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -50,7 +51,7 @@ def hash_api_key(api_key: str) -> str:
         The bcrypt hash of the API key
     """
     salt = bcrypt.gensalt()
-    hashed = bcrypt.hashpw(api_key.encode("utf-8"), salt)
+    hashed: bytes = bcrypt.hashpw(api_key.encode("utf-8"), salt)
     return hashed.decode("utf-8")
 
 
@@ -66,7 +67,10 @@ def verify_api_key(api_key: str, key_hash: str) -> bool:
         True if the key matches, False otherwise
     """
     try:
-        return bcrypt.checkpw(api_key.encode("utf-8"), key_hash.encode("utf-8"))
+        matches: bool = bcrypt.checkpw(
+            api_key.encode("utf-8"), key_hash.encode("utf-8")
+        )
+        return matches
     except Exception as e:
         logger.error(f"Error verifying API key: {e}")
         return False
@@ -79,17 +83,29 @@ _LEGACY_PREFIX_LEN = 8  # constant "logbook_" stored by keys created before PP-4
 _LAST_USED_THROTTLE_SECONDS = 60
 
 
-def _last_used_is_stale(stored_iso: str | None, now: datetime) -> bool:
-    """True if last_used_at is missing or older than the throttle window."""
-    if not stored_iso:
+def as_utc(value: datetime) -> datetime:
+    """Return ``value`` as an aware UTC datetime, reading a naive one as UTC.
+
+    The portal's ``DateTime(timezone=True)`` columns are DATETIME on MySQL,
+    which stores wall time and drops any offset the driver is handed: a value
+    has to be UTC *before* it is written, and comes back naive.
+    """
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _last_used_is_stale(stored: datetime | None, now: datetime) -> bool:
+    """True if last_used_at is missing or older than the throttle window.
+
+    ``last_used_at`` is a DateTime column, so this receives a datetime. It
+    used to ``fromisoformat`` the value, from when the column was a string;
+    a datetime made that raise, the ``except`` answered "stale", and the
+    throttle never throttled (PP-7 regression).
+    """
+    if stored is None:
         return True
-    try:
-        prev = datetime.fromisoformat(stored_iso)
-    except (ValueError, TypeError):
-        return True
-    if prev.tzinfo is None:
-        prev = prev.replace(tzinfo=timezone.utc)
-    return (now - prev).total_seconds() >= _LAST_USED_THROTTLE_SECONDS
+    return (now - as_utc(stored)).total_seconds() >= _LAST_USED_THROTTLE_SECONDS
 
 
 def generate_api_key() -> tuple[str, str]:
@@ -182,7 +198,7 @@ async def _access_log_count(
         select(func.count(PublicPortalAccessLog.id)).where(
             and_(
                 PublicPortalAccessLog.api_key_id == api_key_id,
-                PublicPortalAccessLog.timestamp >= hour_start.isoformat(),
+                PublicPortalAccessLog.timestamp >= hour_start,
             )
         )
     )
@@ -412,7 +428,7 @@ async def detect_anomalies(
         ).where(
             and_(
                 PublicPortalAccessLog.ip_address == ip_address,
-                PublicPortalAccessLog.timestamp >= one_minute_ago.isoformat(),
+                PublicPortalAccessLog.timestamp >= one_minute_ago,
             )
         )
     )
@@ -430,7 +446,7 @@ async def detect_anomalies(
             and_(
                 PublicPortalAccessLog.ip_address == ip_address,
                 PublicPortalAccessLog.status_code == 401,
-                PublicPortalAccessLog.timestamp >= five_minutes_ago.isoformat(),
+                PublicPortalAccessLog.timestamp >= five_minutes_ago,
             )
         )
     )
@@ -526,12 +542,17 @@ async def authenticate_api_key(
     # selective prefix keeps that candidate set at one row for modern keys.
     selective_prefix = api_key[:_SELECTIVE_PREFIX_LEN]
     legacy_prefix = api_key[:_LEGACY_PREFIX_LEN] if len(api_key) >= 8 else api_key
+    # ``effective_rate_limit`` falls back to ``config.default_rate_limit`` for a
+    # key with no override. A lazy load of that relationship is synchronous IO,
+    # which an AsyncSession refuses (MissingGreenlet → 500 on every request
+    # such a key made), so the config is joined into the same query — no extra
+    # round trip on the hot path (PP-7).
     result = await db.execute(
-        select(PublicPortalAPIKey).where(
-            PublicPortalAPIKey.key_prefix.in_({selective_prefix, legacy_prefix})
-        )
+        select(PublicPortalAPIKey)
+        .where(PublicPortalAPIKey.key_prefix.in_({selective_prefix, legacy_prefix}))
+        .options(joinedload(PublicPortalAPIKey.config))
     )
-    api_key_obj = None
+    api_key_obj: PublicPortalAPIKey | None = None
     for candidate in result.scalars().all():
         if verify_api_key(api_key, candidate.key_hash):
             api_key_obj = candidate
@@ -595,7 +616,7 @@ async def authenticate_api_key(
     now = datetime.now(timezone.utc)
     needs_commit = False
     if _last_used_is_stale(api_key_obj.last_used_at, now):
-        api_key_obj.last_used_at = now.isoformat()
+        api_key_obj.last_used_at = now
         needs_commit = True
 
     # Self-heal legacy keys: upgrade the non-selective "logbook_" prefix to the

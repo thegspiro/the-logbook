@@ -129,8 +129,11 @@ async def create_training_session(
         created_by=current_user.id,
     )
 
-    if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    if error or training_session is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
 
     await log_audit_event(
         db=db,
@@ -259,8 +262,8 @@ async def attach_training_details(
         created_by=current_user.id,
     )
 
-    if error:
-        raise _session_error(error)
+    if error or training_session is None:
+        raise _session_error(error or "An unexpected error occurred")
 
     await log_audit_event(
         db=db,
@@ -338,8 +341,8 @@ async def update_training_session_linkage(
         organization_id=current_user.organization_id,
     )
 
-    if error:
-        raise _session_error(error)
+    if error or training_session is None:
+        raise _session_error(error or "An unexpected error occurred")
 
     await log_audit_event(
         db=db,
@@ -384,13 +387,14 @@ async def finalize_training_session(
         can_manage_training=user_has_permission(current_user, "training.manage"),
     )
 
-    if error:
+    if error or approval is None:
         # Only the lock refusal is remapped. Everything else keeps this
         # route's 400: two of its "not found" returns come after the event's
         # finalize has committed, and a 404 would tell the caller nothing
         # happened.
-        raise attendance_lock_http_error(error) or HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=error
+        message = error or "An unexpected error occurred"
+        raise attendance_lock_http_error(message) or HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=message
         )
 
     await log_audit_event(
@@ -449,14 +453,14 @@ async def reopen_training_session(
         organization_id=current_user.organization_id,
     )
 
-    if error:
+    if error or training_session is None:
         raise HTTPException(
             status_code=(
                 status.HTTP_404_NOT_FOUND
                 if error == "Training session not found"
                 else status.HTTP_409_CONFLICT
             ),
-            detail=error,
+            detail=error or "An unexpected error occurred",
         )
 
     await log_audit_event(
@@ -500,8 +504,11 @@ async def get_training_approval(
         organization_id=current_user.organization_id,
     )
 
-    if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    if error or approval_data is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
 
     return TrainingApprovalResponse(**approval_data)
 

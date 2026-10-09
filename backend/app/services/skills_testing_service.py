@@ -261,10 +261,11 @@ def _criterion_outcome(criterion: dict[str, Any], result: dict[str, Any] | None)
     if result is None:
         return "not_scored"
     if ctype == "score":
-        if result.get("score") is None:
+        score = result.get("score")
+        if score is None:
             return "not_scored"
         passing_score = criterion.get("passing_score") or 0
-        return "passed" if result.get("score") >= passing_score else "failed"
+        return "passed" if score >= passing_score else "failed"
 
     passed = result.get("passed")
     if passed is None:

@@ -154,7 +154,8 @@ class CourseCohortService:
                 TrainingCourse.organization_id == str(organization_id),
             )
         )
-        return result.scalar_one_or_none()
+        training_course: Optional[TrainingCourse] = result.scalar_one_or_none()
+        return training_course
 
     async def get_cohort(
         self, cohort_id: UUID, organization_id: UUID
@@ -165,7 +166,8 @@ class CourseCohortService:
                 CourseCohort.organization_id == str(organization_id),
             )
         )
-        return result.scalar_one_or_none()
+        course_cohort: Optional[CourseCohort] = result.scalar_one_or_none()
+        return course_cohort
 
     async def _get_cohort_class(
         self,
@@ -180,7 +182,8 @@ class CourseCohortService:
         if cohort_id is not None:
             conditions.append(CourseCohortClass.cohort_id == str(cohort_id))
         result = await self.db.execute(select(CourseCohortClass).where(*conditions))
-        return result.scalar_one_or_none()
+        course_cohort_class: Optional[CourseCohortClass] = result.scalar_one_or_none()
+        return course_cohort_class
 
     async def _syllabus(
         self, course_id: UUID, organization_id: UUID
@@ -1558,7 +1561,7 @@ class CourseCohortService:
                 CourseCohortMember.status == CohortMemberStatus.ACTIVE,
             )
         )
-        member = result.scalar_one_or_none()
+        member: Optional[CourseCohortMember] = result.scalar_one_or_none()
         if member is None:
             raise ValueError("That member is not on this cohort's roster")
         return member
@@ -1746,7 +1749,7 @@ class CourseCohortService:
             cohort_id, user_id, cohort_class_id, organization_id
         )
         assert_different_person(
-            actor_id, member.user_id, action="credit", record="missed class"
+            str(actor_id), member.user_id, action="credit", record="missed class"
         )
 
         course = (

@@ -11,7 +11,7 @@ import json
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 from uuid import UUID
 
 from loguru import logger
@@ -712,7 +712,7 @@ class TrainingProgramService:
             )
 
         result = await self.db.execute(query.order_by(TrainingRequirement.name))
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def update_training_requirement(
         self,
@@ -1072,7 +1072,8 @@ class TrainingProgramService:
             )
 
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        training_program: Optional[TrainingProgram] = result.scalar_one_or_none()
+        return training_program
 
     async def get_programs(
         self,
@@ -1251,7 +1252,7 @@ class TrainingProgramService:
         set of step ids feeds the completion math, so that is all we compare.
         """
         if field != "checklist_items":
-            return stored != new
+            return bool(stored != new)
         stored_ids = sorted(i["id"] for i in normalize_checklist_items(stored))
         new_ids = sorted(i["id"] for i in normalize_checklist_items(new))
         return stored_ids != new_ids
@@ -1454,7 +1455,7 @@ class TrainingProgramService:
             return None, "A phase cannot be its own prerequisite"
 
         if phase_id is not None:
-            graph: Dict[str, List[str]] = {
+            graph: Dict[str, Sequence[str]] = {
                 str(p.id): normalize_id_list(p.prerequisite_phase_ids) for p in phases
             }
             graph[str(phase_id)] = ids
@@ -1540,7 +1541,8 @@ class TrainingProgramService:
                 TrainingProgram.organization_id == str(organization_id),
             )
         )
-        return result.scalar_one_or_none()
+        program_phase: Optional[ProgramPhase] = result.scalar_one_or_none()
+        return program_phase
 
     async def update_program_phase(
         self,
@@ -1718,7 +1720,7 @@ class TrainingProgramService:
             .where(ProgramPhase.program_id == str(program_id))
             .order_by(ProgramPhase.phase_number)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     # ==================== Program Requirement Methods ====================
 
@@ -1736,7 +1738,8 @@ class TrainingProgramService:
             .options(selectinload(ProgramRequirement.requirement))
             .where(ProgramRequirement.id == str(program_requirement_id))
         )
-        return result.scalar_one_or_none()
+        program_requirement: Optional[ProgramRequirement] = result.scalar_one_or_none()
+        return program_requirement
 
     async def add_requirement_to_program(
         self,
@@ -2100,7 +2103,7 @@ class TrainingProgramService:
         query = query.order_by(ProgramRequirement.sort_order)
 
         result = await self.db.execute(query)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     # ==================== Program Milestone Methods ====================
 
@@ -2159,7 +2162,8 @@ class TrainingProgramService:
                 TrainingProgram.organization_id == str(organization_id),
             )
         )
-        return result.scalar_one_or_none()
+        program_milestone: Optional[ProgramMilestone] = result.scalar_one_or_none()
+        return program_milestone
 
     async def update_program_milestone(
         self,
@@ -2513,7 +2517,7 @@ class TrainingProgramService:
                 populate_existing=True
             )
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_program_enrollments(
         self,
@@ -2579,7 +2583,8 @@ class TrainingProgramService:
             # holds (expire_on_commit is off).
             .execution_options(populate_existing=True)
         )
-        return result.scalar_one_or_none()
+        program_enrollment: Optional[ProgramEnrollment] = result.scalar_one_or_none()
+        return program_enrollment
 
     # ==================== Linked Requirements Read Compliance ====================
 
@@ -3145,10 +3150,10 @@ class TrainingProgramService:
             claimed = prune_done_ids(
                 requirement.checklist_items, updates.checklist_claimed
             )
-            done = set((progress.progress_notes or {}).get("checklist_done") or [])
+            done_ids = set((progress.progress_notes or {}).get("checklist_done") or [])
             notes = copy.deepcopy(progress.progress_notes or {})
             notes["checklist_claimed"] = [
-                item_id for item_id in claimed if item_id not in done
+                item_id for item_id in claimed if item_id not in done_ids
             ]
             progress.progress_notes = notes
 
@@ -3345,7 +3350,10 @@ class TrainingProgramService:
                 TrainingProgram.organization_id == str(organization_id),
             )
         )
-        return result.scalar_one_or_none()
+        requirement_progress: Optional[RequirementProgress] = (
+            result.scalar_one_or_none()
+        )
+        return requirement_progress
 
     async def apply_requirement_credit(
         self,
@@ -3977,7 +3985,8 @@ class TrainingProgramService:
         row, error = await self._resolve_apply_target(
             user_id, organization_id, program_id, requirement_id, completed_on
         )
-        if error:
+        # Every error return carries row=None, so this is the error branch.
+        if row is None:
             return False, error
 
         progress, requirement = row
@@ -4150,7 +4159,8 @@ class TrainingProgramService:
                 TrainingProgram.id == str(enrollment.program_id)
             )
         )
-        return result.scalar_one_or_none()
+        training_program: Optional[TrainingProgram] = result.scalar_one_or_none()
+        return training_program
 
     async def _perform_enrollment_reset(
         self,
@@ -5543,16 +5553,16 @@ class TrainingProgramService:
         # department. Numbers that aren't in the file are dropped rather than
         # imported as dangling references.
         for phase_data in data.get("phases", []):
-            phase = phases_by_number.get(phase_data.get("phase_number", 0))
-            if phase is None:
+            linked_phase = phases_by_number.get(phase_data.get("phase_number", 0))
+            if linked_phase is None:
                 continue
             linked = [
                 str(phases_by_number[number].id)
                 for number in phase_data.get("prerequisite_phase_numbers") or []
-                if number in phases_by_number and number != phase.phase_number
+                if number in phases_by_number and number != linked_phase.phase_number
             ]
             if linked:
-                phase.prerequisite_phase_ids = linked
+                linked_phase.prerequisite_phase_ids = linked
 
         # Program-level requirements
         program_requirement_count = 0

@@ -318,7 +318,8 @@ class OnboardingService:
                 .order_by(OnboardingStatus.created_at.desc())
                 .limit(1)
             )
-            return result.scalar_one_or_none()
+            onboarding_status: Optional[OnboardingStatus] = result.scalar_one_or_none()
+            return onboarding_status
         except (ProgrammingError, OperationalError):
             await self.db.rollback()
             return None
@@ -834,7 +835,8 @@ class OnboardingService:
             if name:
                 query = query.where(FacilityType.name == name)
             result = await self.db.execute(query.limit(1))
-            return result.scalars().first()
+            facility_type: Optional[FacilityType] = result.scalars().first()
+            return facility_type
 
         facility_type = await _find_type(default_type_name) or await _find_type(None)
 
@@ -855,7 +857,8 @@ class OnboardingService:
             if name:
                 query = query.where(FacilityStatus.name == name)
             result = await self.db.execute(query.limit(1))
-            return result.scalars().first()
+            facility_status: Optional[FacilityStatus] = result.scalars().first()
+            return facility_status
 
         facility_status = await _find_status("Operational") or await _find_status(None)
 
@@ -1116,7 +1119,8 @@ class OnboardingService:
         result = await self.db.execute(
             select(Organization).where(Organization.id == organization_id)
         )
-        return result.scalar_one_or_none()
+        organization: Optional[Organization] = result.scalar_one_or_none()
+        return organization
 
     async def _deferred_rank(
         self,
@@ -1629,7 +1633,10 @@ class OnboardingService:
         """
         for step in cls.STEPS:
             if step["name"] == step_name:
-                return int(step["id"])
+                step_id = step["id"]
+                if not isinstance(step_id, int):
+                    raise TypeError(f"Onboarding step {step_name!r} has no integer id")
+                return step_id
         raise ValueError(f"Unknown onboarding step: {step_name}")
 
     async def _mark_step_completed(self, status: OnboardingStatus, step_name: str):

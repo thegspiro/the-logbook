@@ -6,23 +6,17 @@ read-only API access to selected organization data for public websites.
 """
 
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any, Optional
 
-from sqlalchemy import (
-    JSON,
-    Boolean,
-    Column,
-    DateTime,
-    ForeignKey,
-    Index,
-    Integer,
-    String,
-    Text,
-)
-from sqlalchemy.orm import relationship
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
+
+if TYPE_CHECKING:
+    from app.models.user import Organization, User
 
 
 class PublicPortalConfig(Base):
@@ -35,8 +29,8 @@ class PublicPortalConfig(Base):
 
     __tablename__ = "public_portal_config"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
@@ -45,29 +39,33 @@ class PublicPortalConfig(Base):
     )
 
     # Enable/disable entire public portal
-    enabled = Column(Boolean, default=False, nullable=False, server_default="0")
+    enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
     # CORS configuration - list of allowed origins
-    allowed_origins = Column(JSON, default=list, nullable=False)
+    allowed_origins: Mapped[list[str]] = mapped_column(
+        JSON, default=list, nullable=False
+    )
 
     # Default rate limit (requests per hour per API key)
-    default_rate_limit = Column(
+    default_rate_limit: Mapped[int] = mapped_column(
         Integer, default=1000, nullable=False, server_default="1000"
     )
 
     # Cache TTL in seconds
-    cache_ttl_seconds = Column(
+    cache_ttl_seconds: Mapped[int] = mapped_column(
         Integer, default=300, nullable=False, server_default="300"
     )  # 5 minutes
 
     # Additional settings (flexible JSON column)
-    settings = Column(JSON, default=dict, nullable=False)
+    settings: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
 
     # Timestamps
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -75,14 +73,16 @@ class PublicPortalConfig(Base):
     )
 
     # Relationships
-    organization = relationship("Organization", back_populates="public_portal_config")
-    api_keys = relationship(
+    organization: Mapped["Organization"] = relationship(
+        "Organization", back_populates="public_portal_config"
+    )
+    api_keys: Mapped[list["PublicPortalAPIKey"]] = relationship(
         "PublicPortalAPIKey", back_populates="config", cascade="all, delete-orphan"
     )
-    access_logs = relationship(
+    access_logs: Mapped[list["PublicPortalAccessLog"]] = relationship(
         "PublicPortalAccessLog", back_populates="config", cascade="all, delete-orphan"
     )
-    data_whitelist = relationship(
+    data_whitelist: Mapped[list["PublicPortalDataWhitelist"]] = relationship(
         "PublicPortalDataWhitelist",
         back_populates="config",
         cascade="all, delete-orphan",
@@ -103,58 +103,68 @@ class PublicPortalAPIKey(Base):
 
     __tablename__ = "public_portal_api_keys"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    config_id = Column(
+    config_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("public_portal_config.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # API key (hashed with bcrypt)
-    key_hash = Column(String(255), nullable=False, unique=True, index=True)
+    key_hash: Mapped[str] = mapped_column(
+        String(255), nullable=False, unique=True, index=True
+    )
 
     # Selective lookup prefix (first 16 chars: "logbook_" + 8 key chars) so a
     # by-prefix lookup returns a single candidate rather than every key. Legacy
     # keys created before this change stored only the constant "logbook_" (8
     # chars); they are self-healed to the 16-char selective prefix on next use.
-    key_prefix = Column(String(20), nullable=False)
+    key_prefix: Mapped[str] = mapped_column(String(20), nullable=False)
 
     # Friendly name for this API key
-    name = Column(String(100), nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
 
     # Override default rate limit (NULL = use default)
-    rate_limit_override = Column(Integer, nullable=True)
+    rate_limit_override: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Optional expiration date
-    expires_at = Column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Last time this key was used
-    last_used_at = Column(DateTime(timezone=True), nullable=True)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Active/revoked status
-    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
 
     # Who created this key
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Timestamps
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
     # Relationships
-    organization = relationship("Organization")
-    config = relationship("PublicPortalConfig", back_populates="api_keys")
-    creator = relationship("User")
-    access_logs = relationship(
+    organization: Mapped["Organization"] = relationship("Organization")
+    config: Mapped["PublicPortalConfig"] = relationship(
+        "PublicPortalConfig", back_populates="api_keys"
+    )
+    creator: Mapped[Optional["User"]] = relationship("User")
+    access_logs: Mapped[list["PublicPortalAccessLog"]] = relationship(
         "PublicPortalAccessLog", back_populates="api_key", cascade="all, delete-orphan"
     )
 
@@ -177,13 +187,14 @@ class PublicPortalAPIKey(Base):
             if self.expires_at.tzinfo is None
             else self.expires_at
         )
-        return datetime.now(timezone.utc) > expiry
+        return bool(datetime.now(timezone.utc) > expiry)
 
     @property
     def effective_rate_limit(self) -> int:
         """Get the effective rate limit for this key"""
-        if self.rate_limit_override is not None:
-            return self.rate_limit_override
+        override: Optional[int] = self.rate_limit_override
+        if override is not None:
+            return override
         # Fallback to config default or 1000
         return self.config.default_rate_limit if self.config else 1000
 
@@ -198,20 +209,20 @@ class PublicPortalAccessLog(Base):
 
     __tablename__ = "public_portal_access_log"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    config_id = Column(
+    config_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("public_portal_config.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # API key used (NULL if invalid/missing key)
-    api_key_id = Column(
+    api_key_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("public_portal_api_keys.id", ondelete="SET NULL"),
         nullable=True,
@@ -219,31 +230,37 @@ class PublicPortalAccessLog(Base):
     )
 
     # Request details
-    ip_address = Column(String(45), nullable=False)  # IPv4/IPv6
-    endpoint = Column(String(255), nullable=False, index=True)
-    method = Column(String(10), nullable=False)  # GET, POST, etc.
-    status_code = Column(Integer, nullable=False, index=True)
-    response_time_ms = Column(Integer, nullable=True)  # Response time in milliseconds
+    ip_address: Mapped[str] = mapped_column(String(45), nullable=False)  # IPv4/IPv6
+    endpoint: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    method: Mapped[str] = mapped_column(String(10), nullable=False)  # GET, POST, etc.
+    status_code: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    response_time_ms: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )  # Response time in milliseconds
 
     # User agent and other headers
-    user_agent = Column(Text, nullable=True)
-    referer = Column(String(500), nullable=True)
+    user_agent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    referer: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     # Timestamp of the request
-    timestamp = Column(
+    timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
     # Security flags
-    flagged_suspicious = Column(
+    flagged_suspicious: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="0"
     )
-    flag_reason = Column(Text, nullable=True)
+    flag_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationships
-    organization = relationship("Organization")
-    config = relationship("PublicPortalConfig", back_populates="access_logs")
-    api_key = relationship("PublicPortalAPIKey", back_populates="access_logs")
+    organization: Mapped["Organization"] = relationship("Organization")
+    config: Mapped["PublicPortalConfig"] = relationship(
+        "PublicPortalConfig", back_populates="access_logs"
+    )
+    api_key: Mapped[Optional["PublicPortalAPIKey"]] = relationship(
+        "PublicPortalAPIKey", back_populates="access_logs"
+    )
 
     # Indexes for common queries
     __table_args__ = (
@@ -267,32 +284,34 @@ class PublicPortalDataWhitelist(Base):
 
     __tablename__ = "public_portal_data_whitelist"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    config_id = Column(
+    config_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("public_portal_config.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Data category (e.g., 'organization', 'events', 'personnel')
-    data_category = Column(String(50), nullable=False)
+    data_category: Mapped[str] = mapped_column(String(50), nullable=False)
 
     # Specific field name within the category
-    field_name = Column(String(100), nullable=False)
+    field_name: Mapped[str] = mapped_column(String(100), nullable=False)
 
     # Whether this field is enabled for public access
-    is_enabled = Column(Boolean, default=False, nullable=False, server_default="0")
+    is_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
     # Timestamps
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -300,8 +319,10 @@ class PublicPortalDataWhitelist(Base):
     )
 
     # Relationships
-    organization = relationship("Organization")
-    config = relationship("PublicPortalConfig", back_populates="data_whitelist")
+    organization: Mapped["Organization"] = relationship("Organization")
+    config: Mapped["PublicPortalConfig"] = relationship(
+        "PublicPortalConfig", back_populates="data_whitelist"
+    )
 
     # Unique constraint: one entry per org+category+field combination
     __table_args__ = (

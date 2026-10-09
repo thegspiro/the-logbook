@@ -68,7 +68,7 @@ class LogbookMcpServer(MCPServer):
             raise
 
     async def list_tools(self) -> list[MCPTool]:
-        tools = await super().list_tools()
+        tools: list[MCPTool] = await super().list_tools()
         principal = peek_principal()
         if principal is None:
             return tools

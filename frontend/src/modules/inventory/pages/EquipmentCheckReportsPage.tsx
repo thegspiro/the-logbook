@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router';
 import {
   ClipboardCheck,
   AlertTriangle,
@@ -46,6 +47,10 @@ const PAGE_SIZE = 25;
 
 // ─── Helper: default date range (last 30 days) ─────────────────────────────
 
+function isReportTab(value: string | null): value is ReportTab {
+  return TABS.some((tab) => tab.id === value);
+}
+
 function defaultDateRange(tz: string): { start: string; end: string } {
   const now = new Date();
   const thirtyDaysAgo = new Date(now);
@@ -60,9 +65,19 @@ function defaultDateRange(tz: string): { start: string; end: string } {
 
 const EquipmentCheckReportsPage: React.FC = () => {
   const tz = useTimezone();
-  const [activeTab, setActiveTab] = useState<ReportTab>('compliance');
+  // ?tab= and ?from= let another screen link to one report. The apparatus
+  // page's Deficiency badge sends a chief to the failure that set it, which
+  // can predate the default 30-day window.
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const requestedFrom = searchParams.get('from');
+  const [activeTab, setActiveTab] = useState<ReportTab>(isReportTab(requestedTab) ? requestedTab : 'compliance');
   const defaults = defaultDateRange(tz);
-  const [startDate, setStartDate] = useState(defaults.start);
+  const [startDate, setStartDate] = useState(
+    requestedFrom && /^\d{4}-\d{2}-\d{2}$/.test(requestedFrom) && requestedFrom < defaults.start
+      ? requestedFrom
+      : defaults.start
+  );
   const [endDate, setEndDate] = useState(defaults.end);
 
   return (

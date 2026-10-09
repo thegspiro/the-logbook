@@ -6,7 +6,7 @@ training summary, event attendance, and compliance reports.
 """
 
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, Optional, Set, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Set, Tuple, TypeGuard
 from uuid import UUID
 
 from sqlalchemy import case, func, select
@@ -72,7 +72,7 @@ def _safe_int(value: Any, default: int) -> int:
         return default
 
 
-def _is_valid_stage_groups(value: Any) -> bool:
+def _is_valid_stage_groups(value: Any) -> TypeGuard[List[Dict[str, Any]]]:
     """True iff ``value`` is a well-formed client-supplied stage-groups
     override: a non-empty list of dicts, each with a string ``name`` and a
     list of string ``step_ids``. Anything else (missing, wrong shape, a
@@ -157,7 +157,7 @@ class ReportsService:
         passing it unconditionally here (rather than threading it through all
         thirteen signatures) keeps that asymmetry in one place.
         """
-        generators = {
+        generators: Dict[str, Callable[..., Awaitable[Dict[str, Any]]]] = {
             "member_roster": self._generate_member_roster,
             "training_summary": self._generate_training_summary,
             "event_attendance": self._generate_event_attendance,
@@ -317,7 +317,7 @@ class ReportsService:
         total_courses = courses_result.scalar() or 0
 
         # Aggregate per member
-        member_stats = {}
+        member_stats: Dict[str, Dict[str, Any]] = {}
         for user in users:
             member_stats[str(user.id)] = {
                 "member_id": str(user.id),
@@ -526,7 +526,7 @@ class ReportsService:
                 rsvp_stats[str(row[0])] = (row[1], int(row[2] or 0))
 
         event_entries = []
-        total_attendance_rate = 0
+        total_attendance_rate: float = 0
 
         for event in events:
             total_rsvps, attended = rsvp_stats.get(str(event.id), (0, 0))
@@ -607,7 +607,7 @@ class ReportsService:
             for u in users
         }
 
-        entries = []
+        entries: List[Dict[str, Any]] = []
         status_summary = {"active": 0, "completed": 0, "expired": 0, "withdrawn": 0}
 
         for enrollment in enrollments:
@@ -744,7 +744,7 @@ class ReportsService:
         shift_reports = shift_reports_result.scalars().all()
 
         # Aggregate per member
-        member_data = {}
+        member_data: Dict[str, Dict[str, Any]] = {}
         for uid, user in member_map.items():
             member_data[uid] = {
                 "member_id": uid,
@@ -762,7 +762,7 @@ class ReportsService:
         # Process training records
         total_hours = 0.0
         total_completions = 0
-        by_type = {}
+        by_type: Dict[str, int] = {}
 
         for record in records:
             uid = str(record.user_id)
@@ -805,7 +805,7 @@ class ReportsService:
                 ratings.append(sr.performance_rating)
 
         # Calculate per-member average ratings
-        member_ratings = {}
+        member_ratings: Dict[str, List[int]] = {}
         for sr in shift_reports:
             uid = str(sr.trainee_id)
             if sr.performance_rating:
@@ -1006,7 +1006,7 @@ class ReportsService:
                 )
                 .where(
                     ApparatusMaintenance.apparatus_id.in_(apparatus_ids),
-                    ApparatusMaintenance.status != "completed",
+                    ApparatusMaintenance.is_completed.is_(False),
                 )
                 .group_by(ApparatusMaintenance.apparatus_id)
             )
@@ -1220,7 +1220,7 @@ class ReportsService:
                 ):
                     user_completed[uid].add(str(rp.requirement_id))
 
-        report_entries = []
+        report_entries: List[Dict[str, Any]] = []
         fully_compliant = 0
         partially_compliant = 0
         non_compliant = 0
@@ -2352,10 +2352,14 @@ class ReportsService:
                     if progress_map.get(f"{p.id}:{step.id}", {}).get("status")
                     == StepProgressStatus.COMPLETED.value
                 )
-                reached = sum(
+                reached_count = sum(
                     1 for p in prospects if f"{p.id}:{step.id}" in progress_map
                 )
-                rate = round(completed / reached * 100, 1) if reached > 0 else 0
+                rate = (
+                    round(completed / reached_count * 100, 1)
+                    if reached_count > 0
+                    else 0
+                )
 
                 groups_data.append(
                     {

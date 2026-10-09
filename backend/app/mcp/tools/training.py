@@ -119,7 +119,8 @@ def register(server: Any) -> None:
         stats = await TrainingService(db).get_user_training_stats(
             UUID(member.id), org_uuid(principal)
         )
-        return stats.model_dump(mode="json")
+        dumped: dict = stats.model_dump(mode="json")
+        return dumped
 
     @logbook_tool(
         server,

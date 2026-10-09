@@ -195,4 +195,5 @@ def register(server: Any) -> None:
         )
         if results is None:
             raise ValueError("Results are not available until the election closes")
-        return results.model_dump(mode="json")
+        dumped: dict = results.model_dump(mode="json")
+        return dumped

@@ -15,7 +15,7 @@ test('every registered route has mobile coverage or a documented exemption', () 
     const source = `src/${relative(src, file).replace(/\\/g, '/')}`;
     const text = readFileSync(file, 'utf8');
     return [...text.matchAll(/<Route\b[^>]*?\bpath=["']([^"']+)["']/gs)]
-      .map((match) => ({ path: match[1], source }))
+      .map((match) => ({ path: match[1] ?? '', source }))
       .filter(({ path }) => path !== '*');
   });
 

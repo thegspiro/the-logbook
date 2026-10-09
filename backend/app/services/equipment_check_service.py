@@ -149,7 +149,10 @@ class EquipmentCheckService:
             await self._create_compartment(template.id, organization_id, comp_data)
 
         await self.db.commit()
-        return await self.get_template(template.id, organization_id)
+        reloaded = await self.get_template(template.id, organization_id)
+        # The reload is for its eager-loaded compartments; the row was just
+        # committed, so it is only ever missing where the session is stubbed.
+        return reloaded if reloaded is not None else template
 
     @staticmethod
     def _validate_publishable_data(template: Any, compartments: List[Any]) -> None:
@@ -259,7 +262,7 @@ class EquipmentCheckService:
                 )
             )
         )
-        template = result.scalars().first()
+        template: Optional[EquipmentCheckTemplate] = result.scalars().first()
         if template is not None and not self._template_visible_to_submitter(
             template, visible_positions
         ):
@@ -606,7 +609,8 @@ class EquipmentCheckService:
             .options(selectinload(CheckTemplateCompartment.items))
             .where(CheckTemplateCompartment.id == compartment.id)
         )
-        return result.scalars().first()
+        reloaded: Optional[CheckTemplateCompartment] = result.scalars().first()
+        return reloaded
 
     async def update_compartment(
         self,
@@ -638,7 +642,8 @@ class EquipmentCheckService:
             .options(selectinload(CheckTemplateCompartment.items))
             .where(CheckTemplateCompartment.id == compartment.id)
         )
-        return result.scalars().first()
+        reloaded: Optional[CheckTemplateCompartment] = result.scalars().first()
+        return reloaded
 
     async def delete_compartment(
         self, compartment_id: str, organization_id: str
@@ -942,7 +947,8 @@ class EquipmentCheckService:
             .options(selectinload(CheckTemplateCompartment.items))
             .where(CheckTemplateCompartment.id == clone.id)
         )
-        return result.scalars().first()
+        reloaded: Optional[CheckTemplateCompartment] = result.scalars().first()
+        return reloaded
 
     async def reorder_compartments(
         self,
@@ -1862,7 +1868,7 @@ class EquipmentCheckService:
         checked_by: str,
         data: Dict[str, Any],
         allow_manage: bool = False,
-    ) -> ShiftEquipmentCheck:
+    ) -> Optional[ShiftEquipmentCheck]:
         """Submit an equipment check for a shift.
 
         The database unique constraint is the concurrency authority.  The
@@ -1939,8 +1945,7 @@ class EquipmentCheckService:
 
         if template_id:
             position = getattr(assignment, "position", None)
-            if hasattr(position, "value"):
-                position = position.value
+            position = getattr(position, "value", position)
             applicable_templates = await self._resolve_templates(
                 shift,
                 organization_id,
@@ -2172,7 +2177,7 @@ class EquipmentCheckService:
         organization_id: str,
         checked_by: str,
         data: Dict[str, Any],
-    ) -> ShiftEquipmentCheck:
+    ) -> Optional[ShiftEquipmentCheck]:
         """Submit a standalone equipment check not tied to a shift."""
         template_id = data.get("template_id")
         if not template_id:
@@ -2277,7 +2282,7 @@ class EquipmentCheckService:
         checked_by: str,
         data: Dict[str, Any],
         allow_any: bool = False,
-    ) -> ShiftEquipmentCheck:
+    ) -> Optional[ShiftEquipmentCheck]:
         """Complete remaining items on an incomplete check.
 
         Only the member who originally performed the check may complete it,
@@ -2506,7 +2511,7 @@ class EquipmentCheckService:
             )
             .options(selectinload(ShiftEquipmentCheck.items))
         )
-        check = result.scalars().first()
+        check: Optional[ShiftEquipmentCheck] = result.scalars().first()
         if check is None:
             return check
 
@@ -3149,7 +3154,8 @@ class EquipmentCheckService:
         department's own ``expected_quantity`` where both are set — being short
         of the legal minimum is the fact that matters.
         """
-        return item.required_quantity or item.expected_quantity
+        count: Optional[int] = item.required_quantity or item.expected_quantity
+        return count
 
     @staticmethod
     def _deployed_lots(item: CheckTemplateItem) -> List[CheckItemDeployedLot]:
@@ -3199,8 +3205,10 @@ class EquipmentCheckService:
         """
         lot = cls._soonest_dated_lot(item)
         if lot is not None:
-            return lot.lot_number
-        return item.lot_number
+            lot_number: Optional[str] = lot.lot_number
+            return lot_number
+        item_lot_number: Optional[str] = item.lot_number
+        return item_lot_number
 
     @classmethod
     def _on_truck(cls, item: CheckTemplateItem) -> Optional[int]:
@@ -3216,9 +3224,11 @@ class EquipmentCheckService:
         """
         lots = cls._deployed_lots(item)
         if lots:
-            return sum(lot.quantity for lot in lots)
+            lot_total: int = sum(lot.quantity for lot in lots)
+            return lot_total
         if item.quantity_on_truck is not None:
-            return item.quantity_on_truck
+            on_truck: Optional[int] = item.quantity_on_truck
+            return on_truck
         return cls._target_quantity(item)
 
     @classmethod
@@ -3914,7 +3924,14 @@ class EquipmentCheckService:
                     )
             else:
                 target = self._target_quantity(item)
-                shortfall = max(target - self._on_truck(item), 0) if target else 0
+                on_truck = self._on_truck(item)
+                # _on_truck falls back to the target when nothing is counted,
+                # so with a target set it is never None; the fallback says so.
+                shortfall = (
+                    max(target - (target if on_truck is None else on_truck), 0)
+                    if target
+                    else 0
+                )
                 if quantity > shortfall:
                     raise PermissionError(
                         "Check submitters may deploy only enough stock to fill "
@@ -4151,7 +4168,8 @@ class EquipmentCheckService:
                 EquipmentCheckTemplate.organization_id == organization_id,
             )
         )
-        return result.scalars().first()
+        template: Optional[EquipmentCheckTemplate] = result.scalars().first()
+        return template
 
     async def _linkable_items(
         self, template_id: str, organization_id: str
@@ -4623,7 +4641,8 @@ class EquipmentCheckService:
             )
             .options(selectinload(CheckTemplateCompartment.items))
         )
-        return result.scalars().first()
+        compartment: Optional[CheckTemplateCompartment] = result.scalars().first()
+        return compartment
 
     async def _get_item(
         self, item_id: str, organization_id: str
@@ -4645,7 +4664,8 @@ class EquipmentCheckService:
             )
             .options(selectinload(CheckTemplateItem.compartment))
         )
-        return result.scalars().first()
+        check_template_item: Optional[CheckTemplateItem] = result.scalars().first()
+        return check_template_item
 
     async def _get_user_name_map(
         self, user_ids: List[str], legal: bool = False
@@ -5060,9 +5080,9 @@ class EquipmentCheckService:
         total_items_sum = 0
         user_ids: set[str] = set()
         for c in checks:
-            aid = str(c.apparatus_id) if c.apparatus_id else None
-            if aid and aid in app_stats:
-                stats = app_stats[aid]
+            check_aid = str(c.apparatus_id) if c.apparatus_id else None
+            if check_aid and check_aid in app_stats:
+                stats = app_stats[check_aid]
                 stats["checks_completed"] += 1
                 if c.overall_status == "pass":
                     stats["pass_count"] += 1

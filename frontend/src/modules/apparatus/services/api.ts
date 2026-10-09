@@ -5,6 +5,7 @@
  */
 
 import { createApiClient } from '../../../utils/createApiClient';
+import { fetchFile, type DownloadedFile } from '../../../utils/fileDownload';
 import type {
   Apparatus,
   ApparatusCreate,
@@ -38,6 +39,7 @@ import type {
   ApparatusEquipmentUpdate,
   ApparatusPhoto,
   ApparatusDocument,
+  ApparatusDocumentUpload,
   EvocLevel,
   EvocLevelCreate,
   EvocLevelUpdate,
@@ -435,6 +437,16 @@ export const apparatusPhotoService = {
     return response.data;
   },
 
+  async uploadPhoto(apparatusId: string, file: File, title?: string): Promise<ApparatusPhoto> {
+    const form = new FormData();
+    form.append('file', file);
+    if (title) form.append('title', title);
+    const response = await api.post<ApparatusPhoto>(`/apparatus/${apparatusId}/photos/upload`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
   async deletePhoto(apparatusId: string, photoId: string): Promise<void> {
     await api.delete(`/apparatus/${apparatusId}/photos/${photoId}`);
   },
@@ -453,6 +465,23 @@ export const apparatusDocumentService = {
   async createDocument(apparatusId: string, documentData: Partial<ApparatusDocument>): Promise<ApparatusDocument> {
     const response = await api.post<ApparatusDocument>(`/apparatus/${apparatusId}/documents`, documentData);
     return response.data;
+  },
+
+  async uploadDocument(apparatusId: string, upload: ApparatusDocumentUpload): Promise<ApparatusDocument> {
+    const form = new FormData();
+    form.append('file', upload.file);
+    form.append('title', upload.title);
+    form.append('document_type', upload.documentType);
+    if (upload.expirationDate) form.append('expiration_date', upload.expirationDate);
+    const response = await api.post<ApparatusDocument>(`/apparatus/${apparatusId}/documents/upload`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  /** The stored file, with the name the server gave it. */
+  async downloadDocument(apparatusId: string, documentId: string): Promise<DownloadedFile> {
+    return fetchFile(api, `/apparatus/${apparatusId}/documents/${documentId}/file`, 'document');
   },
 
   async deleteDocument(apparatusId: string, documentId: string): Promise<void> {

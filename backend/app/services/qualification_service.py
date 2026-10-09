@@ -420,7 +420,7 @@ class QualificationService:
                 MemberQualification.qualification_code == qualification_code,
             )
         )
-        existing = result.scalar_one_or_none()
+        existing: Optional[MemberQualification] = result.scalar_one_or_none()
 
         if existing:
             existing.granted_on = granted_on
@@ -448,7 +448,7 @@ class QualificationService:
         Only such grants are removed when the supporting records are voided;
         see ``sync_from_training_record``.
         """
-        return row.notes == cls.RECORD_SOURCED_NOTE
+        return bool(row.notes == cls.RECORD_SOURCED_NOTE)
 
     async def grant_manual(
         self,

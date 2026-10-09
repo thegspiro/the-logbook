@@ -10,6 +10,7 @@ import * as apiModule from '../services/api';
 import type { Event, EventStats, RSVP } from '../types/event';
 import type { CurrentUser } from '../types/auth';
 import type { TrainingSessionResponse } from '../services/api';
+import { withoutKeys } from '../test/withoutKeys';
 
 /** Create a mock API error object (not a Promise) */
 function makeApiError(message: string, status = 400) {
@@ -1614,11 +1615,15 @@ describe('EventDetailPage', () => {
       // requires_rsvp means a response is expected, not that responses are
       // accepted. Gating the button on it left members with nothing to do on
       // the majority of events.
-      vi.mocked(eventService.getEvent).mockResolvedValue({
-        ...mockEvent,
-        requires_rsvp: false,
-        rsvp_deadline: undefined,
-      });
+      vi.mocked(eventService.getEvent).mockResolvedValue(
+        withoutKeys(
+          {
+            ...mockEvent,
+            requires_rsvp: false,
+          },
+          'rsvp_deadline'
+        )
+      );
 
       renderWithRouter(<EventDetailPage />);
 
@@ -1823,13 +1828,17 @@ describe('EventDetailPage', () => {
     });
 
     it('is not drawn when the event has nothing for it to say', async () => {
-      vi.mocked(eventService.getEvent).mockResolvedValue({
-        ...mockEvent,
-        requires_rsvp: false,
-        rsvp_deadline: undefined,
-        max_attendees: undefined,
-        allow_guests: false,
-      });
+      vi.mocked(eventService.getEvent).mockResolvedValue(
+        withoutKeys(
+          {
+            ...mockEvent,
+            requires_rsvp: false,
+            allow_guests: false,
+          },
+          'rsvp_deadline',
+          'max_attendees'
+        )
+      );
 
       renderWithRouter(<EventDetailPage />);
 
@@ -1840,14 +1849,18 @@ describe('EventDetailPage', () => {
     // The RSVP path waitlists past the cap whether or not a response is
     // required, so the capacity that explains a waitlist has to show too.
     it('shows capacity on a capped event that does not require an RSVP', async () => {
-      vi.mocked(eventService.getEvent).mockResolvedValue({
-        ...mockEvent,
-        requires_rsvp: false,
-        rsvp_deadline: undefined,
-        max_attendees: 3,
-        occupied_seats: 3,
-        allow_guests: false,
-      });
+      vi.mocked(eventService.getEvent).mockResolvedValue(
+        withoutKeys(
+          {
+            ...mockEvent,
+            requires_rsvp: false,
+            max_attendees: 3,
+            occupied_seats: 3,
+            allow_guests: false,
+          },
+          'rsvp_deadline'
+        )
+      );
 
       renderWithRouter(<EventDetailPage />);
 
@@ -1894,13 +1907,17 @@ describe('EventDetailPage', () => {
     });
 
     it('offers neither once the event is over and check-in has closed', async () => {
-      vi.mocked(eventService.getEvent).mockResolvedValue({
-        ...mockEvent,
-        start_datetime: '2020-04-15T18:00:00Z',
-        end_datetime: '2020-04-15T20:00:00Z',
-        rsvp_deadline: undefined,
-        check_in_closes_at: '2020-04-15T20:00:00Z',
-      });
+      vi.mocked(eventService.getEvent).mockResolvedValue(
+        withoutKeys(
+          {
+            ...mockEvent,
+            start_datetime: '2020-04-15T18:00:00Z',
+            end_datetime: '2020-04-15T20:00:00Z',
+            check_in_closes_at: '2020-04-15T20:00:00Z',
+          },
+          'rsvp_deadline'
+        )
+      );
 
       renderWithRouter(<EventDetailPage />);
 
@@ -1912,15 +1929,19 @@ describe('EventDetailPage', () => {
     // A "window" event keeps accepting check-ins after its scheduled end, so
     // the QR code outlives the calendar button until the backend's close.
     it('keeps the QR code while check-in is still open past the scheduled end', async () => {
-      vi.mocked(eventService.getEvent).mockResolvedValue({
-        ...mockEvent,
-        start_datetime: minutesFromNow(-120),
-        end_datetime: minutesFromNow(-5),
-        rsvp_deadline: undefined,
-        check_in_window_type: 'window',
-        check_in_minutes_after: 15,
-        check_in_closes_at: minutesFromNow(10),
-      });
+      vi.mocked(eventService.getEvent).mockResolvedValue(
+        withoutKeys(
+          {
+            ...mockEvent,
+            start_datetime: minutesFromNow(-120),
+            end_datetime: minutesFromNow(-5),
+            check_in_window_type: 'window',
+            check_in_minutes_after: 15,
+            check_in_closes_at: minutesFromNow(10),
+          },
+          'rsvp_deadline'
+        )
+      );
 
       renderWithRouter(<EventDetailPage />);
 
@@ -1943,14 +1964,16 @@ describe('EventDetailPage', () => {
   });
 
   describe('Attendance requests', () => {
-    const pastEvent: Event = {
-      ...mockEvent,
-      start_datetime: '2020-04-15T18:00:00Z',
-      end_datetime: '2020-04-15T20:00:00Z',
-      rsvp_deadline: undefined,
-      check_in_closes_at: '2020-04-15T20:00:00Z',
-      created_by: 'organizer-1',
-    };
+    const pastEvent: Event = withoutKeys(
+      {
+        ...mockEvent,
+        start_datetime: '2020-04-15T18:00:00Z',
+        end_datetime: '2020-04-15T20:00:00Z',
+        check_in_closes_at: '2020-04-15T20:00:00Z',
+        created_by: 'organizer-1',
+      },
+      'rsvp_deadline'
+    );
 
     beforeEach(() => {
       vi.mocked(eventService.getEvent).mockReset();

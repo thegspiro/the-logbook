@@ -31,7 +31,7 @@ from app.services.email_policy import (
 )
 
 # Reminder thresholds in days
-REMINDER_THRESHOLDS = [
+REMINDER_THRESHOLDS: List[Dict[str, Any]] = [
     {"days": 30, "type": "30_day", "label": "30-Day"},
     {"days": 90, "type": "90_day", "label": "90-Day"},
 ]
@@ -345,9 +345,9 @@ class PropertyReturnReminderService:
             "return_deadline": return_deadline_display,
         }
 
-        subject = None
-        html_body = None
-        text_body = None
+        subject: Optional[str] = None
+        html_body: Optional[str] = None
+        text_body: Optional[str] = None
 
         # Try loading the admin-configured template
         try:
@@ -370,7 +370,7 @@ class PropertyReturnReminderService:
         # Fall back to the shipped default, rendered the same way a stored
         # template is — which also escapes the member's name, as the
         # template path always did.
-        if not subject:
+        if not subject or html_body is None:
             from app.models.email_template import EmailTemplateType
             from app.services.email_template_service import EmailTemplateService
 
