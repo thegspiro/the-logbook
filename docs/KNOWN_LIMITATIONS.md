@@ -1200,12 +1200,12 @@ placeholders picture screens the frontend does not render; their placeholders
 are left open. Four defects found alongside them were fixed — see the commit
 that added the purchase request, expense report and check request shots.
 
-| Guide section             | What exists                                                                                                    | State                |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------- |
-| Create Budget form        | _Resolved 2026-10-08:_ **Add budget line** and **Edit** open `BudgetFormDialog` (`finance.manage`). See below. | ✅ Built             |
-| Create Dues Schedule form | `financeStore.createDuesSchedule`, **no component calls it**.                                                  | ❌ Store action only |
-| QuickBooks export mapping | `GET/POST/PUT /finance/export/mappings` and the `qbAccountName` types exist; no page, no route, no consumer.   | ❌ API + types only  |
-| Export logs               | `GET /finance/export/logs` and an `ExportLog` interface; no page, no route, no consumer.                       | ❌ API + types only  |
+| Guide section             | What exists                                                                                                           | State                |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| Create Budget form        | _Resolved 2026-10-08:_ **Add budget line** and **Edit** open `BudgetFormDialog` (`finance.manage`). See below.        | ✅ Built             |
+| Create Dues Schedule form | `financeStore.createDuesSchedule`, **no component calls it**.                                                         | ❌ Store action only |
+| QuickBooks export mapping | _Resolved 2026-10-09:_ **Finance › QuickBooks Export** (`/finance/settings/quickbooks`, `finance.manage`). See below. | ✅ Built             |
+| Export logs               | `GET /finance/export/logs` and an `ExportLog` interface; no page, no route, no consumer.                              | ❌ API + types only  |
 
 **Budget detail's transaction history** — _resolved 2026-10-08._ It was a
 stub that said "No transactions yet" unconditionally. It now lists what moved
@@ -1265,15 +1265,15 @@ year, are wanted.
 ## Finance — QuickBooks Export Gaps (2026-10-08)
 
 The transactions export is now a valid QuickBooks Online journal-entry import
-(see `docs/FINANCE_MODULE.md`, "QuickBooks Export"). Four gaps remain, and each
-needs a decision or a follow-up change rather than a fix inside that one:
+(see `docs/FINANCE_MODULE.md`, "QuickBooks Export"). Its accounts are set on
+**Finance › QuickBooks Export** _(2026-10-09)_, which also shows each budget
+category's export readiness, and in the budget category dialog. Four gaps
+remain, and each needs a decision or a follow-up change rather than a fix
+inside that one:
 
-- **Accounts can only be set through the API.** The export refuses until every
-  exported budget category has an account and an offset account. That makes
-  the "QuickBooks export mapping" row in the table above more than a missing
-  screen: until a mapping screen exists, a treasurer can only configure the
-  export with `POST`/`PUT /finance/export/mappings` and
-  `PUT /finance/budget-categories/{id}`.
+- **Running the export has no screen.** `POST /finance/export/transactions`
+  and its history (`GET /finance/export/logs`, the "Export logs" row above)
+  are still API only.
 - **Dues payments are not exported.** `DuesSchedule` and `DuesPayment` carry no
   budget category, so the export has nothing to resolve an income account or a
   deposit account from. Adding them needs a decision about where those two

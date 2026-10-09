@@ -1209,6 +1209,7 @@ lot's number or expiration date require `inventory.check_manage` or
 | `/finance/approvals`                  | Approvals                  | `finance.approve`                                     |
 | `/finance/settings`                   | Finance Settings           | `finance.manage`                                      |
 | `/finance/settings/approval-chains`   | Approval Chains            | `finance.configure_approvals`                         |
+| `/finance/settings/quickbooks`        | QuickBooks Export          | `finance.manage`                                      |
 | `/finance/approvals/:token`           | Tokenized Approval Landing | Token-based                                           |
 
 > **Next year's budget requests** _(2026-10-08)_. `/finance/budget-requests`
