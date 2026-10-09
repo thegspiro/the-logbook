@@ -382,6 +382,8 @@ class TestCommit:
             )
         ).scalar_one()
         assert created.status == UserStatus.INACTIVE
+        # A record of someone who served, not a login.
+        assert not created.is_active
         assert created.password_hash is None
         assert (created.first_name, created.last_name) == ("Dana", "Former")
         assert created.email.endswith("@import.invalid")
