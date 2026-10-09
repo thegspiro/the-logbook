@@ -9,7 +9,9 @@ describe('AdminMetricsRow', () => {
   // absence of the class that prevented it.
   it('lets a metric label wrap instead of truncating it', () => {
     render(
-      <AdminMetricsRow metrics={[{ key: 'to_close', label: 'To close out', value: '1', context: 'waiting 1 day' }]} />
+      <AdminMetricsRow
+        metrics={[{ key: 'to_close', label: 'To close out', value: '1', context: 'waiting 1 day', fixed: false }]}
+      />
     );
     const label = screen.getByText('To close out');
     expect(label).not.toHaveClass('truncate');

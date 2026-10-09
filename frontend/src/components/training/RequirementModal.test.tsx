@@ -37,7 +37,7 @@ describe('RequirementModal', () => {
     let finish: () => void = () => undefined;
     onSave.mockImplementation(() => new Promise<void>((resolve) => (finish = resolve)));
     const user = userEvent.setup();
-    render(<RequirementModal categories={[]} onClose={vi.fn()} onSave={onSave} />);
+    render(<RequirementModal requirement={null} categories={[]} onClose={vi.fn()} onSave={onSave} />);
 
     await user.type(screen.getByLabelText(/^Name/), 'Annual Hazmat Hours');
     await user.type(screen.getByLabelText(/^Required Hours/), '8');
@@ -192,7 +192,7 @@ describe('RequirementModal', () => {
   });
 
   it('can target policy acknowledgments, so an annual policy can be tracked', () => {
-    render(<RequirementModal categories={[]} onClose={vi.fn()} onSave={onSave} />);
+    render(<RequirementModal requirement={null} categories={[]} onClose={vi.fn()} onSave={onSave} />);
 
     expect(screen.getByRole('option', { name: 'Policy Acknowledgment' })).toHaveAttribute(
       'value',

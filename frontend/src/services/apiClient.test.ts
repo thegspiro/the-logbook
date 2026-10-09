@@ -206,7 +206,11 @@ describe('apiClient — background revalidation of a stale entry', () => {
 
   afterEach(() => {
     vi.useRealTimers();
-    api.defaults.adapter = originalAdapter;
+    if (originalAdapter === undefined) {
+      delete api.defaults.adapter;
+    } else {
+      api.defaults.adapter = originalAdapter;
+    }
     clearCache();
   });
 
@@ -230,7 +234,7 @@ describe('apiClient — background revalidation of a stale entry', () => {
       // measures the abort rather than racing it.
       return new Promise((resolve, reject) => {
         releaseBackground = () => resolve(ok({ generation: 2 }));
-        config.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        config.signal?.addEventListener?.('abort', () => reject(new Error('aborted')));
       });
     });
 
