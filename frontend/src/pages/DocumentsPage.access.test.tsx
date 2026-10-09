@@ -57,7 +57,7 @@ describe('DocumentsPage access cues and keyboard upload (W53)', () => {
     mockGetFolders.mockResolvedValue({
       folders: [
         folder('f1', 'SOPs & Procedures', 'organization'),
-        folder('f2', 'Member Separations', 'leadership'),
+        folder('f2', 'Officer Board', 'leadership'),
         folder('f3', 'Pat Doe', 'owner'),
       ],
       total: 3,
@@ -97,11 +97,9 @@ describe('DocumentsPage access cues and keyboard upload (W53)', () => {
   it('marks the folders members cannot open, and leaves the rest unmarked', async () => {
     renderWithRouter(<DocumentsPage />);
 
-    const separations = await screen.findByRole('button', { name: /Member Separations/ });
-    expect(within(separations).getByText('Leadership only')).toBeInTheDocument();
-    expect(
-      within(screen.getByRole('button', { name: /Pat Doe/ })).getByText('Owner and leadership only')
-    ).toBeInTheDocument();
+    const separations = await screen.findByRole('button', { name: /Officer Board/ });
+    expect(within(separations).getByText('Document managers only')).toBeInTheDocument();
+    expect(within(screen.getByRole('button', { name: /Pat Doe/ })).getByText('Only its owner')).toBeInTheDocument();
     expect(
       within(screen.getByRole('button', { name: /SOPs & Procedures/ })).queryByText(/only/)
     ).not.toBeInTheDocument();
@@ -115,7 +113,7 @@ describe('DocumentsPage access cues and keyboard upload (W53)', () => {
     const options = within(screen.getByLabelText('Folder'))
       .getAllByRole('option')
       .map((o) => o.textContent);
-    expect(options).toContain('Member Separations (leadership only)');
+    expect(options).toContain('Officer Board (document managers only)');
     expect(options).toContain('SOPs & Procedures');
   });
 

@@ -157,8 +157,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const signupWindow = useSignupWindow();
   const canManage = checkPermission('scheduling.manage');
   const {
-    apparatus: apparatusList,
-    loadApparatus,
+    shiftApparatus: apparatusList,
+    loadShiftApparatus,
     members: memberOptions,
     loadMembers,
     platoonsEnabled,
@@ -448,8 +448,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
 
   // Load apparatus list when editing
   useEffect(() => {
-    if (isEditing) void loadApparatus();
-  }, [isEditing, loadApparatus]);
+    if (isEditing) void loadShiftApparatus();
+  }, [isEditing, loadShiftApparatus]);
 
   // Load active training programs once, when the assign form is first opened,
   // for the training-slot program dropdown.

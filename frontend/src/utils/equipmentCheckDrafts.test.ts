@@ -45,7 +45,10 @@ describe('equipment-check drafts', () => {
       db.transaction(STORE_EQUIPMENT_CHECK_DRAFTS, 'readonly').objectStore(STORE_EQUIPMENT_CHECK_DRAFTS)
     ) as IDBObjectStore;
     const realDelete = proto.delete;
-    const spy = vi.spyOn(proto, 'delete').mockImplementation(function (this: IDBObjectStore, key: IDBValidKey) {
+    const spy = vi.spyOn(proto, 'delete').mockImplementation(function (
+      this: IDBObjectStore,
+      key: IDBValidKey | IDBKeyRange
+    ) {
       const request = realDelete.call(this, key);
       this.transaction.abort();
       return request;

@@ -137,6 +137,6 @@ describe('electionCanEmailBallots', () => {
   // Plain positions are on the emailed ballot since the 2026-10-05 convergence.
   it('is true for ballot items or plain positions, false with neither', () => {
     expect(electionCanEmailBallots({ ballot_items: [], positions: ['Chief'] })).toBe(true);
-    expect(electionCanEmailBallots({ ballot_items: undefined, positions: [] })).toBe(false);
+    expect(electionCanEmailBallots({ positions: [] })).toBe(false);
   });
 });

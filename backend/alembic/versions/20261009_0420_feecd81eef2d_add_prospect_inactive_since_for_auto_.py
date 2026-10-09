@@ -30,7 +30,7 @@ status change after the upgrade is lost, and on a later re-upgrade restarts at
 that re-upgrade, which errs towards keeping records rather than deleting them.
 
 Revision ID: feecd81eef2d
-Revises: 5c8be05f2f0f
+Revises: c0bf0b155719
 Create Date: 2026-10-09 04:20:38.440559
 
 """
@@ -43,7 +43,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "feecd81eef2d"
-down_revision: Union[str, None] = "5c8be05f2f0f"
+down_revision: Union[str, None] = "c0bf0b155719"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

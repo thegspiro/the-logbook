@@ -47,17 +47,22 @@ vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() 
 
 import { ConversionModal } from './ConversionModal';
 
-const applicant = {
+const applicant: Applicant = {
   id: 'p1',
   pipeline_id: 'pipe-1',
   first_name: 'Devon',
   last_name: 'Marsh',
   email: 'devon@example.org',
+  current_stage_id: 'stage-3',
+  stage_entered_at: '2026-09-01T12:00:00Z',
+  status: 'active',
   stage_history: [],
   total_stages: 3,
+  last_activity_at: '2026-09-01T12:00:00Z',
   target_membership_type: 'regular',
   created_at: '2026-09-01T12:00:00Z',
-} as Applicant;
+  updated_at: '2026-09-01T12:00:00Z',
+};
 
 const openStepTwo = async (user: ReturnType<typeof userEvent.setup>) => {
   render(<ConversionModal isOpen onClose={vi.fn()} applicant={applicant} />);

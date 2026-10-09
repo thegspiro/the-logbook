@@ -119,7 +119,7 @@ describe('PipelineKanban drag-and-drop', () => {
   });
 
   it('does not move an applicant who is not active', () => {
-    const held = { ...applicant, status: 'on_hold' };
+    const held: ApplicantListItem = { ...applicant, status: 'on_hold' };
     renderWithRouter(
       <PipelineKanban pipelineId="pipe-1" stages={stages} applicants={[held]} onApplicantClick={vi.fn()} />
     );

@@ -4,16 +4,22 @@ Meeting Minutes Models
 Database models for meeting minutes, motions, action items, and templates.
 """
 
+from datetime import datetime
 from enum import Enum
+from typing import TYPE_CHECKING, Any, Optional
 
-from sqlalchemy import JSON, Boolean, Column, DateTime
+from sqlalchemy import JSON, Boolean, DateTime
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import Float, ForeignKey, Index, Integer, String, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
+
+if TYPE_CHECKING:
+    from app.models.event import Event
+    from app.models.meeting import Meeting
 
 
 class MinutesMeetingType(str, Enum):
@@ -489,37 +495,39 @@ class MinutesTemplate(Base):
 
     __tablename__ = "minutes_templates"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
 
-    name = Column(String(200), nullable=False)
-    description = Column(Text, nullable=True)
-    meeting_type = Column(
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    meeting_type: Mapped[MinutesMeetingType] = mapped_column(
         SQLEnum(MinutesMeetingType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=MinutesMeetingType.BUSINESS,
         server_default="business",
     )
-    is_default = Column(Boolean, nullable=False, default=False, server_default="0")
+    is_default: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
 
     # Sections definition: JSON array of {order, key, title, default_content, required}
-    sections = Column(JSON, nullable=False)
+    sections: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
 
     # Document header config: {org_name, logo_url, subtitle, show_date, show_type}
-    header_config = Column(JSON, nullable=True)
+    header_config: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
 
     # Document footer config: {left_text, center_text, right_text, show_page_numbers, confidentiality_notice}
-    footer_config = Column(JSON, nullable=True)
+    footer_config: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
 
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -542,105 +550,125 @@ class MeetingMinutes(Base):
 
     __tablename__ = "meeting_minutes"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
 
     # Meeting details
-    title = Column(String(300), nullable=False)
-    meeting_type = Column(
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    meeting_type: Mapped[MinutesMeetingType] = mapped_column(
         SQLEnum(MinutesMeetingType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=MinutesMeetingType.BUSINESS,
         server_default="business",
     )
-    meeting_date = Column(DateTime(timezone=True), nullable=False)
-    location = Column(String(300), nullable=True)
-    called_by = Column(String(200), nullable=True)
-    called_to_order_at = Column(DateTime(timezone=True), nullable=True)
-    adjourned_at = Column(DateTime(timezone=True), nullable=True)
+    meeting_date: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    location: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    called_by: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    called_to_order_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    adjourned_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Attendees (stored as JSON array of {user_id, name, role, present})
-    attendees = Column(JSON, nullable=True)
-    quorum_met = Column(Boolean, nullable=True)
-    quorum_count = Column(Integer, nullable=True)
+    attendees: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, nullable=True
+    )
+    quorum_met: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    quorum_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Quorum configuration for this meeting
     # quorum_type: "count" (absolute headcount) or "percentage" (of active members)
     # quorum_threshold: the required value (e.g. 10 members or 50.0 percent)
     # These default from org settings but can be overridden per-meeting.
-    quorum_type = Column(String(20), nullable=True)  # "count" or "percentage"
-    quorum_threshold = Column(Float, nullable=True)
+    quorum_type: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True
+    )  # "count" or "percentage"
+    quorum_threshold: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     # Dynamic content sections: JSON array of {order, key, title, content}
     # When present, this is the authoritative source for content.
     # Legacy fields below are retained for backward compatibility.
-    sections = Column(JSON, nullable=True)
+    sections: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Template used to create these minutes
-    template_id = Column(
+    template_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("minutes_templates.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Document header/footer overrides (inherits from template if null)
-    header_config = Column(JSON, nullable=True)
-    footer_config = Column(JSON, nullable=True)
+    header_config: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    footer_config: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
 
     # Published document reference
-    published_document_id = Column(String(36), nullable=True)
+    published_document_id: Mapped[Optional[str]] = mapped_column(
+        String(36), nullable=True
+    )
 
     # Legacy content sections (kept for backward compat with existing data)
-    agenda = Column(Text, nullable=True)
-    old_business = Column(Text, nullable=True)
-    new_business = Column(Text, nullable=True)
-    treasurer_report = Column(Text, nullable=True)
-    chief_report = Column(Text, nullable=True)
-    committee_reports = Column(Text, nullable=True)
-    announcements = Column(Text, nullable=True)
-    notes = Column(Text, nullable=True)
+    agenda: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    old_business: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    new_business: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    treasurer_report: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    chief_report: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    committee_reports: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    announcements: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Approval workflow
-    status = Column(
+    status: Mapped[MinutesStatus] = mapped_column(
         SQLEnum(MinutesStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=MinutesStatus.DRAFT,
         server_default="draft",
     )
-    submitted_at = Column(DateTime(timezone=True), nullable=True)
-    submitted_by = Column(
+    submitted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    submitted_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
-    approved_at = Column(DateTime(timezone=True), nullable=True)
-    approved_by = Column(
+    approved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    approved_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
-    rejected_at = Column(DateTime(timezone=True), nullable=True)
-    rejected_by = Column(
+    rejected_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    rejected_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
-    rejection_reason = Column(Text, nullable=True)
+    rejection_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Link to event (optional — minutes can be linked to a business_meeting event)
-    event_id = Column(
+    event_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("events.id", ondelete="SET NULL"), nullable=True
     )
 
     # Link to meeting record (optional — pre-fills date, attendees, agenda from Meeting)
-    meeting_id = Column(
+    meeting_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("meetings.id", ondelete="SET NULL"), nullable=True
     )
 
     # Metadata
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -648,16 +676,20 @@ class MeetingMinutes(Base):
     )
 
     # Relationships
-    template = relationship("MinutesTemplate", foreign_keys=[template_id])
-    event = relationship("Event", foreign_keys=[event_id])
-    meeting = relationship("Meeting", foreign_keys=[meeting_id])
-    motions = relationship(
+    template: Mapped[Optional["MinutesTemplate"]] = relationship(
+        "MinutesTemplate", foreign_keys=[template_id]
+    )
+    event: Mapped[Optional["Event"]] = relationship("Event", foreign_keys=[event_id])
+    meeting: Mapped[Optional["Meeting"]] = relationship(
+        "Meeting", foreign_keys=[meeting_id]
+    )
+    motions: Mapped[list["Motion"]] = relationship(
         "Motion",
         back_populates="minutes",
         cascade="all, delete-orphan",
         order_by="Motion.order",
     )
-    action_items = relationship(
+    action_items: Mapped[list["ActionItem"]] = relationship(
         "ActionItem",
         back_populates="minutes",
         cascade="all, delete-orphan",
@@ -723,34 +755,36 @@ class Motion(Base):
 
     __tablename__ = "meeting_motions"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    minutes_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    minutes_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("meeting_minutes.id", ondelete="CASCADE"), nullable=False
     )
 
     # Motion details
-    order = Column(Integer, nullable=False, default=0, server_default="0")
-    motion_text = Column(Text, nullable=False)
-    moved_by = Column(String(200), nullable=True)
-    seconded_by = Column(String(200), nullable=True)
-    discussion_notes = Column(Text, nullable=True)
+    order: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    motion_text: Mapped[str] = mapped_column(Text, nullable=False)
+    moved_by: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    seconded_by: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    discussion_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Vote result
-    status = Column(
+    status: Mapped[MotionStatus] = mapped_column(
         SQLEnum(MotionStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=MotionStatus.PASSED,
         server_default="passed",
     )
-    votes_for = Column(Integer, nullable=True)
-    votes_against = Column(Integer, nullable=True)
-    votes_abstain = Column(Integer, nullable=True)
+    votes_for: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    votes_against: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    votes_abstain: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Metadata
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -758,7 +792,9 @@ class Motion(Base):
     )
 
     # Relationships
-    minutes = relationship("MeetingMinutes", back_populates="motions")
+    minutes: Mapped["MeetingMinutes"] = relationship(
+        "MeetingMinutes", back_populates="motions"
+    )
 
     __table_args__ = (Index("ix_meeting_motions_minutes_id", "minutes_id"),)
 
@@ -773,19 +809,21 @@ class ActionItem(Base):
 
     __tablename__ = "minutes_action_items"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    minutes_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    minutes_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("meeting_minutes.id", ondelete="CASCADE"), nullable=False
     )
 
     # Item details
-    description = Column(Text, nullable=False)
-    assignee_id = Column(
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    assignee_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
-    assignee_name = Column(String(200), nullable=True)
-    due_date = Column(DateTime(timezone=True), nullable=True)
-    priority = Column(
+    assignee_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    due_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    priority: Mapped[ActionItemPriority] = mapped_column(
         SQLEnum(ActionItemPriority, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=ActionItemPriority.MEDIUM,
@@ -793,7 +831,7 @@ class ActionItem(Base):
     )
 
     # Status tracking
-    status = Column(
+    status: Mapped[MinutesActionItemStatus] = mapped_column(
         SQLEnum(
             MinutesActionItemStatus, values_callable=lambda x: [e.value for e in x]
         ),
@@ -801,14 +839,16 @@ class ActionItem(Base):
         default=MinutesActionItemStatus.PENDING,
         server_default="pending",
     )
-    completed_at = Column(DateTime(timezone=True), nullable=True)
-    completion_notes = Column(Text, nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completion_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Metadata
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -816,7 +856,9 @@ class ActionItem(Base):
     )
 
     # Relationships
-    minutes = relationship("MeetingMinutes", back_populates="action_items")
+    minutes: Mapped["MeetingMinutes"] = relationship(
+        "MeetingMinutes", back_populates="action_items"
+    )
 
     __table_args__ = (
         Index("ix_minutes_action_items_minutes_id", "minutes_id"),

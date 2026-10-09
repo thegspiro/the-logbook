@@ -16,6 +16,7 @@ vi.mock('../../../services/api', () => ({
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 
 import { PutAwayPanel } from './PutAwayPanel';
+import { withoutKeys } from '../../../test/withoutKeys';
 
 const area = (id: string, name: string, barcode: string): StorageAreaResponse => ({
   id,
@@ -28,6 +29,7 @@ const area = (id: string, name: string, barcode: string): StorageAreaResponse =>
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
   children: [],
+  item_count: 0,
 });
 
 const shelf1 = area('shelf-1', 'Shelf 1', 'SA-000001');
@@ -158,7 +160,7 @@ describe('PutAwayPanel', () => {
     });
 
     it('says a shelf with no barcode has no label to scan', async () => {
-      const bare = { ...shelf1, barcode: undefined };
+      const bare = withoutKeys(shelf1, 'barcode');
       const user = userEvent.setup();
       open(bare, [bare, shelf2]);
       await scan(user, 'INV-1');

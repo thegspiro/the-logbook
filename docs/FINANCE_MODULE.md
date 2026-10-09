@@ -18,16 +18,18 @@ caller's own records: the endpoints scope reads to `requested_by` /
 `submitted_by` and refuse another member's record with **404**, exactly as for
 an id that does not exist.
 
-| Action                                                                         | Gate                                                  | Scope without `finance.manage`                                                                              |
-| ------------------------------------------------------------------------------ | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| List / read purchase and check requests                                        | `finance.request`, `finance.view` or `finance.manage` | own only, unless the caller holds `finance.view`                                                            |
-| List / read expense reports                                                    | `finance.request`, `finance.view` or `finance.manage` | own only — including for `finance.view` (FIN-5)                                                             |
-| Create, edit (draft / submitted), submit; add an expense line                  | `finance.request` or `finance.manage`                 | own only; `finance.view` alone cannot write                                                                 |
-| Cancel a purchase request                                                      | `finance.request` or `finance.manage`                 | own **draft** only — a submitted request has approval steps and possibly an encumbrance; the office cancels |
-| Mark ordered / received / paid, mark an expense paid, issue / void             | `finance.manage`                                      | —                                                                                                           |
-| `GET /finance/budgets/options?fiscal_year_id=` — id, label, amount left        | `finance.request`, `finance.view` or `finance.manage` | org-scoped; the label is the category, plus the station when set, numbered if two still read the same       |
-| `GET /finance/fiscal-years/options` — active and draft years: id, name, status | `finance.request`, `finance.view` or `finance.manage` | org-scoped                                                                                                  |
-| Budgets, budget summary, fiscal-year list, dashboard, dues                     | unchanged (`finance.view` and up)                     | —                                                                                                           |
+| Action                                                                                                       | Gate                                                  | Scope without `finance.manage`                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| List / read purchase and check requests                                                                      | `finance.request`, `finance.view` or `finance.manage` | own only, unless the caller holds `finance.view`                                                                                                                                           |
+| List / read expense reports                                                                                  | `finance.request`, `finance.view` or `finance.manage` | own only — including for `finance.view` (FIN-5)                                                                                                                                            |
+| Create, edit (draft / submitted), submit; add an expense line                                                | `finance.request` or `finance.manage`                 | own only; `finance.view` alone cannot write                                                                                                                                                |
+| Cancel a purchase request                                                                                    | `finance.request` or `finance.manage`                 | own **draft** only — a submitted request has approval steps and possibly an encumbrance; the office cancels                                                                                |
+| Mark ordered / received / paid, mark an expense paid, issue / void                                           | `finance.manage`                                      | —                                                                                                                                                                                          |
+| Attach a receipt — `POST /purchase-requests/{id}/receipt`, `POST /expense-reports/{id}/items/{item}/receipt` | `finance.request` or `finance.manage`                 | own only; a purchase request until paid, an expense line while the report is a draft or submitted. `finance.manage`: until denied or cancelled. Replacing a receipt keeps the earlier file |
+| Open a receipt — `GET` on the same paths                                                                     | `finance.request`, `finance.view` or `finance.manage` | whoever may read the record. The file is a document under **Finance > Receipts**, a folder only finance rights open                                                                        |
+| `GET /finance/budgets/options?fiscal_year_id=` — id, label, amount left                                      | `finance.request`, `finance.view` or `finance.manage` | org-scoped; the label is the category, plus the station when set, numbered if two still read the same                                                                                      |
+| `GET /finance/fiscal-years/options` — active and draft years: id, name, status                               | `finance.request`, `finance.view` or `finance.manage` | org-scoped                                                                                                                                                                                 |
+| Budgets, budget summary, fiscal-year list, dashboard, dues                                                   | unchanged (`finance.view` and up)                     | —                                                                                                                                                                                          |
 
 Approval chains, separation of duties and the named-approver enforcement are
 unchanged: a member's request goes through the same chain as anyone else's, and
@@ -830,7 +832,7 @@ Where `PENDING_APPROVAL` means "at least one approval step is pending." The serv
 
 **Additional tables in `finance.py`:**
 
-- **`purchase_requests`** — id, organization_id, request_number (auto: "PR-YYYY-0001"), fiscal_year_id, budget_id (FK), requested_by (FK users), title, description, vendor, estimated_amount `Numeric(12,2)`, actual_amount `Numeric(12,2)` (nullable), status (enum), priority, approved_by (FK users, nullable), approved_at, ordered_at, received_at, paid_at, denial_reason, notes, receipt_url, created_at, updated_at
+- **`purchase_requests`** — id, organization_id, request_number (auto: "PR-YYYY-0001"), fiscal_year_id, budget_id (FK), requested_by (FK users), title, description, vendor, estimated_amount `Numeric(12,2)`, actual_amount `Numeric(12,2)` (nullable), status (enum), priority, approved_by (FK users, nullable), approved_at, ordered_at, received_at, paid_at, denial_reason, notes, receipt_url (typed link, HTTP(S) only), receipt_document_id (FK documents, SET NULL — the uploaded receipt), created_at, updated_at
 
 Enums:
 
@@ -871,7 +873,7 @@ Pages:
 **Additional tables in `finance.py`:**
 
 - **`expense_reports`** — id, organization_id, report_number (auto: "ER-YYYY-0001"), submitted_by (FK users), fiscal_year_id, title, description, total_amount `Numeric(12,2)`, status (enum), approved_by (FK users, nullable), approved_at, paid_at, payment_method, notes, created_at, updated_at
-- **`expense_line_items`** — id, expense_report_id (FK), budget_id (FK, nullable), description, amount `Numeric(12,2)`, date_incurred, category, receipt_url, merchant
+- **`expense_line_items`** — id, expense_report_id (FK), budget_id (FK, nullable), description, amount `Numeric(12,2)`, date_incurred, category, receipt_url (typed link, HTTP(S) only), receipt_document_id (FK documents, SET NULL), merchant
 - **`check_requests`** — id, organization_id, request_number (auto: "CK-YYYY-0001"), requested_by (FK users), fiscal_year_id, budget_id (FK), payee_name, payee_address, amount `Numeric(12,2)`, memo, purpose, status (enum), approved_by, approved_at, check_number (nullable — filled after cut), check_date, notes, created_at, updated_at
 
 Enums:

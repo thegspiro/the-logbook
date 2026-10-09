@@ -12,6 +12,10 @@ vi.mock('react-router', async () => {
 
 let readers: FakeNDEFReader[] = [];
 
+/** A reading event as the browser delivers it: a real Event carrying the tag. */
+const readingEvent = (serialNumber: string, records: NDEFRecord[]): NDEFReadingEvent =>
+  Object.assign(new Event('reading'), { serialNumber, message: { records } });
+
 class FakeNDEFReader {
   onreading: ((event: NDEFReadingEvent) => void) | null = null;
   onreadingerror: ((event: Event) => void) | null = null;
@@ -40,10 +44,7 @@ class FakeNDEFReader {
 
   emitUrl(value: string) {
     const bytes = new TextEncoder().encode(value);
-    this.onreading?.({
-      serialNumber: '00:11:22',
-      message: { records: [{ recordType: 'url', data: new DataView(bytes.buffer) }] },
-    } as NDEFReadingEvent);
+    this.onreading?.(readingEvent('00:11:22', [{ recordType: 'url', data: new DataView(bytes.buffer) }]));
   }
 }
 
