@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router';
 import type { LucideIcon } from 'lucide-react';
 import { adminHubService } from '../../services/adminHubService';
 import { getErrorMessage } from '../../utils/errorHandling';
 import type { AdminHubSummary } from '../../types/adminHub';
+import { attentionCountsForTabs } from './attentionCounts';
 import AdminAttentionQueue from './AdminAttentionQueue';
 import AdminMetricsRow from './AdminMetricsRow';
+import AdminHubCardTabs from './AdminHubCardTabs';
 import { Breadcrumbs, type BreadcrumbItem } from '../ux/Breadcrumbs';
 
 /**
@@ -20,14 +23,24 @@ import { Breadcrumbs, type BreadcrumbItem } from '../ux/Breadcrumbs';
  * worth a phone visit. Both live in one flex column so the swap is a CSS
  * `order`, not a second render path that could drift from the first.
  *
- * A caller supplies its own tab bar through `tabs` (the standard underline bar,
- * URL-synced by the caller) or `nav` for a module whose navigation is already
- * something else. Neither is required — Inventory's body is a card grid.
+ * A caller supplies its own tab bar through `tabs` (URL-synced by the caller)
+ * or `nav` for a module whose navigation is already something else. Neither is
+ * required — Inventory's body is a card grid. Tabs given a `description` and an
+ * `icon` each are drawn as described cards with attention counts
+ * (`AdminHubCardTabs`, which Training's area row also uses); otherwise the
+ * standard underline bar.
  */
 
 export interface AdminHubTab<K extends string = string> {
   id: K;
   label: string;
+  /**
+   * One line saying what the tab holds. When every tab has one and an `icon`,
+   * the bar is drawn as described cards (`AdminHubCardTabs`) instead of bare
+   * underline tabs, each badged with the attention items that link to it.
+   */
+  description?: string | undefined;
+  icon?: LucideIcon | undefined;
 }
 
 export interface AdminHubAction {
@@ -90,6 +103,12 @@ interface AdminHubFrameProps<K extends string> {
   refreshToken?: number | string | undefined;
   /** A module with a richer, record-level queue in its body can hide the aggregate queue. */
   showAttentionQueue?: boolean | undefined;
+  /**
+   * Hands the caller each summary the frame loads (null when none could be),
+   * so a hub can badge its own navigation from the attention queue without a
+   * second request for the same data.
+   */
+  onSummaryChange?: ((summary: AdminHubSummary | null) => void) | undefined;
 
   children: React.ReactNode;
 }
@@ -110,28 +129,39 @@ export function AdminHubFrame<K extends string>({
   nav,
   refreshToken,
   showAttentionQueue = true,
+  onSummaryChange,
   children,
 }: AdminHubFrameProps<K>) {
   const [summary, setSummary] = useState<AdminHubSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  // Held in a ref so a caller passing an inline callback does not re-run the
+  // fetch on every render.
+  const onSummaryChangeRef = useRef(onSummaryChange);
+  useEffect(() => {
+    onSummaryChangeRef.current = onSummaryChange;
+  });
 
   const load = useCallback(async () => {
     if (!wantsSummary) {
       setSummary(null);
       setError(null);
       setLoading(false);
+      onSummaryChangeRef.current?.(null);
       return;
     }
     setLoading(true);
     try {
-      setSummary(await adminHubService.getSummary(moduleKey));
+      const loaded = await adminHubService.getSummary(moduleKey);
+      setSummary(loaded);
       setError(null);
+      onSummaryChangeRef.current?.(loaded);
     } catch (err: unknown) {
       // The frame is a summary of the work, not the work. A failed summary
       // leaves a quiet line and the tab body below it still usable.
       setSummary(null);
+      onSummaryChangeRef.current?.(null);
       setError(getErrorMessage(err, 'Could not load this page’s summary.'));
     } finally {
       setLoading(false);
@@ -158,6 +188,16 @@ export function AdminHubFrame<K extends string>({
     if (tabRect.left >= stripRect.left && tabRect.right <= stripRect.right) return;
     strip.scrollLeft += tabRect.left - stripRect.left - (stripRect.width - tabRect.width) / 2;
   }, [activeTab]);
+
+  const { pathname } = useLocation();
+  const idPrefix = `admin-hub-${moduleKey}`;
+  // Cards only when every tab is described: a half-described bar would be a
+  // mix of two designs, so a hub opts in completely or not at all.
+  const attentionCounts = attentionCountsForTabs(summary?.attention ?? [], pathname);
+  const describedTabs = (tabs ?? []).flatMap(({ id, label, description, icon }) =>
+    description && icon ? [{ id, label, description, icon, count: attentionCounts[id] }] : []
+  );
+  const cardTabs = tabs && tabs.length > 0 && describedTabs.length === tabs.length ? describedTabs : undefined;
 
   const handleTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (!tabs || !activeTab || !onTabChange) return;
@@ -277,7 +317,16 @@ export function AdminHubFrame<K extends string>({
             declares that scroll as intentional to the mobile overflow check; no
             tabIndex, because a tablist stays out of the tab order (its tabs use
             roving tabindex) and the tabs themselves reach the hidden end. */}
-        {tabs && activeTab && onTabChange && (
+        {cardTabs && activeTab && onTabChange && (
+          <AdminHubCardTabs<K>
+            tabs={cardTabs}
+            activeTab={activeTab}
+            onTabChange={onTabChange}
+            label={`${title} sections`}
+            idPrefix={idPrefix}
+          />
+        )}
+        {tabs && !cardTabs && activeTab && onTabChange && (
           <div className="border-theme-surface-border border-b">
             <div
               className="tab-scroll border-b-0"
@@ -315,8 +364,20 @@ export function AdminHubFrame<K extends string>({
         {nav}
       </div>
 
-      {/* 5 — Body. Free: table, form, calendar, card grid — the module's own. */}
-      {children}
+      {/* 5 — Body. Free: table, form, calendar, card grid — the module's own.
+          Under card tabs it is their tabpanel, so the selected card's
+          aria-controls resolves to it. */}
+      {cardTabs && activeTab ? (
+        <div
+          id={`${idPrefix}-panel-${activeTab}`}
+          role="tabpanel"
+          aria-labelledby={`${idPrefix}-tab-${activeTab}-label`}
+        >
+          {children}
+        </div>
+      ) : (
+        children
+      )}
     </div>
   );
 }

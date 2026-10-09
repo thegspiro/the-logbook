@@ -333,4 +333,41 @@ describe('StoreAdminPage — tabs in the URL', () => {
 
     expect(await screen.findByText(/Orders filter: ordered/)).toBeInTheDocument();
   });
+
+  // The backend links its "payments to match" item to this tab; the card for
+  // that tab carries the count, read from the same queue the frame shows.
+  it('describes each section and badges the one the attention queue points at', async () => {
+    mockGetAdminHubSummary.mockResolvedValue({
+      moduleKey: 'storefront',
+      generatedAt: '2026-09-01T12:00:00Z',
+      timezone: 'UTC',
+      metrics: [],
+      attention: [
+        {
+          key: 'unmatched_payments',
+          title: '2 payments need matching',
+          detail: '',
+          actionLabel: 'Review',
+          href: '/inventory/admin/store?tab=payments',
+          severity: 'warning',
+          count: 2,
+          oldestAgeDays: null,
+        },
+      ],
+    });
+    render(
+      <MemoryRouter initialEntries={['/inventory/admin/store']}>
+        <StoreAdminPage />
+      </MemoryRouter>
+    );
+
+    const payments = screen.getByRole('tab', { name: 'Payments' });
+    expect(payments).toHaveAccessibleDescription('Payments that need matching by hand');
+    await waitFor(() =>
+      expect(payments).toHaveAccessibleDescription('Payments that need matching by hand. 2 need attention')
+    );
+    expect(screen.getByRole('tab', { name: 'Orders' })).toHaveAccessibleDescription(
+      'Move orders along and export them for the vendor'
+    );
+  });
 });
