@@ -12,7 +12,7 @@ import re
 import secrets
 import unicodedata
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import (
     AbstractSet,
     Any,
@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
+from app.core.audit import log_audit_event
 from app.core.constants import OFFICE_CATALOG
 from app.models.election import Election, ElectionStatus
 from app.models.email_template import EmailTemplate
@@ -154,6 +155,13 @@ ELECTION_PACKAGE_CALLER_STATUSES = frozenset({"draft", "ready"})
 ELECTION_PACKAGE_SYSTEM_STATUSES = frozenset(
     {"added_to_ballot", "elected", "not_elected"}
 )
+
+
+# Auto-purge grace period bounds, in days. They match the settings screen's
+# own input limits (PipelineSettingsPage), and a stored value outside them is
+# clamped on read rather than trusted: the setting permanently deletes records.
+AUTO_PURGE_MIN_DAYS = 30
+AUTO_PURGE_MAX_DAYS = 1095
 
 
 # The detailed duplicate-match message names the existing member and their
@@ -1818,6 +1826,7 @@ class MembershipPipelineService:
             "reactivated_at",
             "withdrawn_at",
             "withdrawal_reason",
+            "inactive_since",
             "target_role",
         }
     )
@@ -1920,8 +1929,25 @@ class MembershipPipelineService:
             k: v for k, v in data.items() if k not in self._PROSPECT_PROTECTED_FIELDS
         }
         old_values = {k: getattr(prospect, k, None) for k in updates}
+        previous_status = None
+        if updates.get("status") is not None:
+            previous_status = (
+                prospect.status.value
+                if hasattr(prospect.status, "value")
+                else str(prospect.status)
+            )
 
         written = apply_updates(prospect, updates)
+
+        # A status written through this generic update is still a transition,
+        # so it is stamped like one; otherwise an application deactivated here
+        # would carry no inactive_since and never be auto-purged, and one
+        # reactivated here would keep a running purge clock.
+        if "status" in written and updates.get("status") is not None:
+            raw_status = updates["status"]
+            target_status = self._parse_status(getattr(raw_status, "value", raw_status))
+            if target_status.value != previous_status:
+                self._stamp_lifecycle(prospect, previous_status, target_status, None)
 
         changes = {}
         for key in written:
@@ -3598,11 +3624,18 @@ class MembershipPipelineService:
         others as the history they are. `20260924_1540_77d4aa7798dd` backfilled
         existing rows from the activity log on exactly this rule.
 
-        Called from ``_apply_status_change``, which is the single choke point
-        for every transition, single and bulk alike, so there is no path that
-        changes a status without passing through here.
+        ``inactive_since`` is the one exception, and deliberately: it is the
+        auto-purge clock, not history, so it follows ``status`` — set on entry
+        into inactive, cleared on every exit. An application reactivated and
+        later deactivated again starts a fresh grace period.
+
+        Called from ``_apply_status_change`` (every chosen transition, single
+        and bulk) and from ``update_prospect``'s generic status write. The
+        inactivity sweep and the transfer path set status without a chosen
+        target and stamp the same columns inline; keep all four in step.
         """
         now = datetime.now(timezone.utc)
+        prospect.inactive_since = now if target == ProspectStatus.INACTIVE else None
         if target == ProspectStatus.WITHDRAWN:
             prospect.withdrawn_at = now
             prospect.withdrawal_reason = reason
@@ -4411,6 +4444,7 @@ class MembershipPipelineService:
 
         # Update prospect record
         prospect.status = ProspectStatus.TRANSFERRED
+        prospect.inactive_since = None
         prospect.transferred_user_id = user_id
         prospect.transferred_at = datetime.now(timezone.utc)
 
@@ -6219,7 +6253,30 @@ class MembershipPipelineService:
         pipeline = await self.get_pipeline(pipeline_id, organization_id)
         if not pipeline:
             return 0
+        ids = await self._delete_inactive_prospects(
+            pipeline_id, organization_id, prospect_ids=prospect_ids
+        )
+        if ids:
+            await self.db.commit()
+        return len(ids)
 
+    async def _delete_inactive_prospects(
+        self,
+        pipeline_id: str,
+        organization_id: str,
+        prospect_ids: Optional[List[str]] = None,
+        inactive_before: Optional[datetime] = None,
+    ) -> List[str]:
+        """Delete the matching inactive applications and their files; no commit.
+
+        Shared by the manual purge and the scheduled auto-purge so the two
+        cannot drift on what may be deleted or how the files go. The caller
+        commits, which lets auto-purge write its audit entry in the same
+        transaction as the delete. ``inactive_before`` restricts the purge to
+        applications whose current inactive spell began at or before it; a
+        NULL ``inactive_since`` never matches, which is what keeps an
+        application with no known start date out of auto-purge.
+        """
         conditions = [
             ProspectiveMember.pipeline_id == pipeline_id,
             ProspectiveMember.organization_id == organization_id,
@@ -6227,6 +6284,9 @@ class MembershipPipelineService:
         ]
         if prospect_ids:
             conditions.append(ProspectiveMember.id.in_(prospect_ids))
+        if inactive_before is not None:
+            conditions.append(ProspectiveMember.inactive_since.isnot(None))
+            conditions.append(ProspectiveMember.inactive_since <= inactive_before)
 
         # Locked so an applicant reactivated mid-purge is either purged before
         # the reactivation or not at all.
@@ -6242,7 +6302,7 @@ class MembershipPipelineService:
             .all()
         )
         if not ids:
-            return 0
+            return []
 
         paths = (
             (
@@ -6281,8 +6341,123 @@ class MembershipPipelineService:
         await self.db.execute(
             delete(ProspectiveMember).where(ProspectiveMember.id.in_(ids))
         )
-        await self.db.commit()
-        return len(ids)
+        return [str(i) for i in ids]
+
+    @staticmethod
+    def auto_purge_threshold_days(inactivity_config: Any) -> Optional[int]:
+        """The pipeline's auto-purge grace period in days, or None to skip it.
+
+        ``inactivity_config`` is unvalidated JSON (CLAUDE.md pitfall #19), so
+        only an explicit ``auto_purge_enabled: true`` turns purging on, and a
+        missing or non-numeric ``purge_days_after_inactive`` skips the pipeline
+        rather than guessing a period that permanently deletes records. A
+        numeric value is clamped to the settings screen's own bounds, so a
+        hand-edited 1 cannot purge an application the day after it goes
+        inactive.
+        """
+        if not isinstance(inactivity_config, dict):
+            return None
+        if inactivity_config.get("auto_purge_enabled") is not True:
+            return None
+        days = inactivity_config.get("purge_days_after_inactive")
+        if isinstance(days, bool):
+            return None
+        if isinstance(days, float) and days.is_integer():
+            days = int(days)
+        if not isinstance(days, int):
+            return None
+        return max(AUTO_PURGE_MIN_DAYS, min(AUTO_PURGE_MAX_DAYS, days))
+
+    async def auto_purge_inactive_prospects(
+        self, organization_id: str, now: Optional[datetime] = None
+    ) -> Dict[str, Any]:
+        """Purge each auto-purge pipeline's applications past its grace period.
+
+        Runs from the daily scheduled task. For every pipeline in the
+        organization whose inactivity config enables auto-purge, deletes the
+        ``inactive`` applications whose ``inactive_since`` is at least
+        ``purge_days_after_inactive`` days old, measured in UTC, through the
+        same delete the manual Purge button uses. Each pipeline is its own
+        transaction and its own audit entry; one that fails is rolled back to
+        its savepoint and reported without stopping the rest.
+
+        The candidate read inside the delete is a locking read, so a
+        concurrent manual purge or a second run of this job blocks on the same
+        rows and then finds them gone rather than deleting them twice, and an
+        application reactivated while the purge waits is no longer inactive
+        when the lock is granted.
+        """
+        now = now or datetime.now(timezone.utc)
+        pipelines = (
+            await self.db.execute(
+                select(
+                    MembershipPipeline.id, MembershipPipeline.inactivity_config
+                ).where(MembershipPipeline.organization_id == organization_id)
+            )
+        ).all()
+
+        purged = 0
+        pipelines_purged = 0
+        errors: List[Dict[str, str]] = []
+        for pipeline_id, config in pipelines:
+            days = self.auto_purge_threshold_days(config)
+            if days is None:
+                continue
+            cutoff = now - timedelta(days=days)
+            # A savepoint per pipeline rather than a session rollback: a failed
+            # pipeline undoes only its own work, whereas a full rollback would
+            # expire every object the scheduler's shared session holds (the
+            # organization rows _for_each_org iterates), which then cannot
+            # lazy-load outside the async context.
+            ids: List[str] = []
+            try:
+                async with self.db.begin_nested():
+                    ids = await self._delete_inactive_prospects(
+                        str(pipeline_id), organization_id, inactive_before=cutoff
+                    )
+                    if ids:
+                        await log_audit_event(
+                            db=self.db,
+                            event_type="membership_pipeline.prospects_purged",
+                            event_category="membership",
+                            severity="warning",
+                            event_data={
+                                "pipeline_id": str(pipeline_id),
+                                "purged_count": len(ids),
+                                "purged_ids": ids,
+                                "trigger": "auto_purge",
+                                "purge_days_after_inactive": days,
+                                "inactive_before": cutoff.isoformat(),
+                            },
+                            username="system",
+                            organization_id=organization_id,
+                        )
+            except Exception as exc:
+                logger.error(
+                    f"Auto-purge failed for pipeline {pipeline_id} in "
+                    f"organization {organization_id}: {exc}"
+                )
+                errors.append({"pipeline_id": str(pipeline_id), "error": str(exc)})
+                ids = []
+            # Commits the deletion together with its audit entry, and in every
+            # case ends the transaction, so the candidate read's row locks are
+            # released before the next pipeline.
+            await self.db.commit()
+            if ids:
+                purged += len(ids)
+                pipelines_purged += 1
+
+        if purged or errors:
+            logger.info(
+                f"Auto-purge for organization {organization_id}: purged "
+                f"{purged} inactive application(s) from {pipelines_purged} "
+                f"pipeline(s); {len(errors)} pipeline(s) failed"
+            )
+        return {
+            "purged": purged,
+            "pipelines_purged": pipelines_purged,
+            "errors": errors,
+        }
 
     # =========================================================================
     # Document Management
@@ -7142,8 +7317,6 @@ class MembershipPipelineService:
         off for this applicant (see ``public_status_enabled_for``), grants
         neither.  Requires ``prospect.pipeline.steps`` loaded.
         """
-        from datetime import timedelta
-
         if prospect.status_token_created_at:
             age = datetime.now(timezone.utc) - prospect.status_token_created_at
             if age > timedelta(days=self._STATUS_TOKEN_TTL_DAYS):
@@ -7696,11 +7869,24 @@ class MembershipPipelineService:
 
         to_mark = [w for w in critical if w["prospect_id"] not in already_marked]
         if to_mark:
-            # One UPDATE for the whole batch instead of one per prospect.
+            # One UPDATE for the whole batch instead of one per prospect. It
+            # bypasses _stamp_lifecycle, so it stamps the same columns that
+            # would: without inactive_since an application the sweep
+            # deactivated would never reach auto-purge. The status guard keeps
+            # it from re-stamping a row a coordinator moved in the meantime.
             await self.db.execute(
                 update(ProspectiveMember)
-                .where(ProspectiveMember.id.in_([w["prospect_id"] for w in to_mark]))
-                .values(status=ProspectStatus.INACTIVE)
+                .where(
+                    ProspectiveMember.id.in_([w["prospect_id"] for w in to_mark]),
+                    ProspectiveMember.organization_id == organization_id,
+                    ProspectiveMember.status == ProspectStatus.ACTIVE,
+                )
+                .values(
+                    status=ProspectStatus.INACTIVE,
+                    deactivated_at=now,
+                    deactivated_reason=None,
+                    inactive_since=now,
+                )
             )
             for w in to_mark:
                 await self._log_activity(

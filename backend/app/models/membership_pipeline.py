@@ -348,15 +348,25 @@ class ProspectiveMember(Base):
 
     # Lifecycle stamps. `status` says where an application stands now; these
     # say when it got there and what was given as the reason, which is what
-    # the drawer and the applicant table report. Every transition runs through
-    # MembershipPipelineService._apply_status_change, which is what writes
-    # them -- the reason itself is also logged as activity, and that log is
-    # where the migration backfilled these columns from.
+    # the drawer and the applicant table report. They are written by
+    # MembershipPipelineService._stamp_lifecycle (chosen transitions, single,
+    # bulk and generic update) and inline by the inactivity sweep -- the reason
+    # itself is also logged as activity, and that log is where the migration
+    # backfilled these columns from.
     deactivated_at = Column(DateTime(timezone=True))
     deactivated_reason = Column(Text)
     reactivated_at = Column(DateTime(timezone=True))
     withdrawn_at = Column(DateTime(timezone=True))
     withdrawal_reason = Column(Text)
+
+    # When the application's *current* inactive spell began, for the
+    # auto-purge clock. Unlike deactivated_at it mirrors status: set on every
+    # entry into inactive, cleared on every exit. It is a separate column
+    # because deactivated_at is history the drawer displays, and the upgrade
+    # that introduced auto-purge had to restart the clock for applications
+    # already inactive (feecd81eef2d) without rewriting the date
+    # a department sees as "Deactivated". NULL is never purged.
+    inactive_since = Column(DateTime(timezone=True))
 
     notes = Column(Text)
 

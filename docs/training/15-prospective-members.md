@@ -855,25 +855,30 @@ Pipelines can be configured to automatically flag or deactivate stale applicatio
 
 Navigate to **Settings > Pipeline** and configure:
 
-| Setting                | Options                                   | Description                                                  |
-| ---------------------- | ----------------------------------------- | ------------------------------------------------------------ |
-| **Timeout Preset**     | 3 months, 6 months, 1 year, Never, Custom | How long before an applicant is considered inactive          |
-| **Warning Threshold**  | Percentage (default 80%)                  | Show warning when this percentage of timeout has elapsed     |
-| **Notify Coordinator** | Yes/No                                    | Send notification when applicant approaches timeout          |
-| **Auto-Purge**         | Yes/No                                    | Stored, but **not in effect** — nothing reads it (see below) |
+| Setting                | Options                                    | Description                                                                 |
+| ---------------------- | ------------------------------------------ | --------------------------------------------------------------------------- |
+| **Timeout Preset**     | 3 months, 6 months, 1 year, Never, Custom  | How long before an applicant is considered inactive                         |
+| **Warning Threshold**  | Percentage (default 80%)                   | Show warning when this percentage of timeout has elapsed                    |
+| **Notify Coordinator** | Yes/No                                     | Send notification when applicant approaches timeout                         |
+| **Auto-Purge**         | Yes/No, plus a grace period (30–1095 days) | Permanently delete inactive applications after the grace period (see below) |
 
 ### How It Works
 
 1. System checks `last_activity_at` for each active applicant nightly
 2. If elapsed time > warning threshold: applicant flagged with warning
 3. If elapsed time > timeout: applicant marked as **Inactive**
-4. ~~If auto-purge enabled and inactive for > purge days: applicant deleted~~ — **not wired.** See below
+4. If Auto-Purge is on and an application has been **Inactive** for at least the grace period: the application and its uploaded documents are permanently deleted (checked once a day)
 
-> **Auto-Purge does nothing yet** _(recorded 2026-09-30)_. The **Auto-Purge**
-> setting and its grace period are stored, but no scheduled task reads them —
-> nothing is ever purged automatically. Purge by hand from the **Inactive
-> Applications** tab (below). Tracked in
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#prospective-members--purge-is-manual-auto-purge-is-not-wired-2026-09-30).
+> **How the Auto-Purge grace period is counted** _(since 2026-10-09)_. It
+> counts from when the application last became **Inactive**. Reactivating it
+> stops the clock, and if it goes inactive again the period starts over. Only
+> inactive applications are purged — never withdrawn, rejected or on-hold ones.
+> No email is sent beforehand; each purge is recorded in the audit log.
+> Applications that were already inactive when your department upgraded to the
+> version that switched Auto-Purge on count from that upgrade, not from their
+> original deactivation date, so nothing was deleted the first night. You can
+> still purge by hand from the **Inactive Applications** tab (below). See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#prospective-members--purge-scope-and-auto-purge-2026-09-30-wired-2026-10-09).
 
 ### Per-Stage Override
 
@@ -1217,21 +1222,21 @@ Alex Rivera is now a full member of the Oakville Fire Department.
 
 ## Troubleshooting
 
-| Issue                                                | Solution                                                                                                                                                                                                                                            |
-| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Applicant stuck at form submission stage             | Check that the form is linked correctly. Verify the applicant received the form email.                                                                                                                                                              |
-| Election package not created                         | Since 2026-09-30 every route onto an `election_vote` stage creates one. An applicant who reached the stage before then has none: use **Create Package** in the drawer's Election Package section.                                                   |
-| Cannot convert applicant                             | The refusal names the reason: an unfinished or skipped **Required** stage, an unsigned sign-off ("Approval still needed from: …"), the ballot, an existing or deactivated member with the same email, or a Target Role granting more than you hold. |
-| A signer cannot find where to sign                   | **Sign-offs** (`/prospective-members/sign-offs`), linked from their dashboard. It lists only stages asking for a role they hold — check the stage names their position.                                                                             |
-| Converted member cannot sign in                      | If **Set it later** was chosen, or the welcome email failed, they have no password yet: set one with **Reset Password** in Member Management.                                                                                                       |
-| Purge Selected removed nothing (before 2026-09-30)   | Purge matched withdrawn applications by mistake. Purge again; it now deletes the inactive applications you select.                                                                                                                                  |
-| Inactive applications are never purged automatically | Expected: the Auto-Purge setting is not wired. Purge from the Inactive Applications tab.                                                                                                                                                            |
-| Applicant stuck on an automated email stage          | The email did not send. Check Settings → Email and the applicant's address, then complete the stage by hand.                                                                                                                                        |
-| Duplicate detection false positive                   | If the existing member is archived/dropped, you can create the new applicant and note the relationship.                                                                                                                                             |
-| Public status page shows wrong stage                 | Token may be for a different applicant. Verify the token in the applicant's detail view.                                                                                                                                                            |
-| Inactivity warning not triggering                    | Check pipeline inactivity settings. Verify the scheduled task is running.                                                                                                                                                                           |
-| Documents not downloading                            | Check file storage configuration. Verify the document was uploaded successfully.                                                                                                                                                                    |
-| Bulk advance fails for some applicants               | Applicants at the final stage cannot advance further. Check individual error messages.                                                                                                                                                              |
+| Issue                                              | Solution                                                                                                                                                                                                                                                                           |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Applicant stuck at form submission stage           | Check that the form is linked correctly. Verify the applicant received the form email.                                                                                                                                                                                             |
+| Election package not created                       | Since 2026-09-30 every route onto an `election_vote` stage creates one. An applicant who reached the stage before then has none: use **Create Package** in the drawer's Election Package section.                                                                                  |
+| Cannot convert applicant                           | The refusal names the reason: an unfinished or skipped **Required** stage, an unsigned sign-off ("Approval still needed from: …"), the ballot, an existing or deactivated member with the same email, or a Target Role granting more than you hold.                                |
+| A signer cannot find where to sign                 | **Sign-offs** (`/prospective-members/sign-offs`), linked from their dashboard. It lists only stages asking for a role they hold — check the stage names their position.                                                                                                            |
+| Converted member cannot sign in                    | If **Set it later** was chosen, or the welcome email failed, they have no password yet: set one with **Reset Password** in Member Management.                                                                                                                                      |
+| Purge Selected removed nothing (before 2026-09-30) | Purge matched withdrawn applications by mistake. Purge again; it now deletes the inactive applications you select.                                                                                                                                                                 |
+| An inactive application was not auto-purged        | Auto-Purge must be on for its pipeline, and the grace period counts from when it last became inactive — or from your upgrade to the version that switched Auto-Purge on, if it was already inactive then. Purge it by hand from the Inactive Applications tab if it should go now. |
+| Applicant stuck on an automated email stage        | The email did not send. Check Settings → Email and the applicant's address, then complete the stage by hand.                                                                                                                                                                       |
+| Duplicate detection false positive                 | If the existing member is archived/dropped, you can create the new applicant and note the relationship.                                                                                                                                                                            |
+| Public status page shows wrong stage               | Token may be for a different applicant. Verify the token in the applicant's detail view.                                                                                                                                                                                           |
+| Inactivity warning not triggering                  | Check pipeline inactivity settings. Verify the scheduled task is running.                                                                                                                                                                                                          |
+| Documents not downloading                          | Check file storage configuration. Verify the document was uploaded successfully.                                                                                                                                                                                                   |
+| Bulk advance fails for some applicants             | Applicants at the final stage cannot advance further. Check individual error messages.                                                                                                                                                                                             |
 
 ---
 

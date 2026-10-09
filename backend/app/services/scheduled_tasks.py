@@ -497,6 +497,12 @@ SCHEDULE = {
         "recommended_time": "06:30",
         "cron": "30 6 * * *",
     },
+    "membership_auto_purge": {
+        "description": "Permanently delete inactive prospective-member applications once they have been inactive longer than their pipeline's Auto-Purge grace period (only pipelines with Auto-Purge on; applications with no recorded inactive date are never purged)",
+        "frequency": "daily",
+        "recommended_time": "06:45",
+        "cron": "45 6 * * *",
+    },
 }
 
 
@@ -646,14 +652,29 @@ async def _for_each_org(
     organizations = list(orgs.scalars().all())
     results = []
     total = 0
+    rolled_back = False
     for org in organizations:
+        # A session rollback expires every loaded instance, these Organization
+        # rows included, and an expired attribute cannot lazy-load outside the
+        # async context (MissingGreenlet). Without the refresh, the first
+        # failing org turned every later org's callback into a failure too.
+        # Tolerant in the same way as the rollback below: a session that cannot
+        # refresh cannot run the callback either, and that failure is reported
+        # per org rather than ending the loop.
+        if rolled_back:
+            try:
+                await db.refresh(org)
+            except Exception as e:
+                logger.warning(f"{task_name}: could not reload org after rollback: {e}")
+        org_id = str(org.id)
         try:
             count = await callback(db, org)
             total += count
         except Exception as e:
-            logger.error(f"{task_name} failed for org {org.id}: {e}")
-            await persist_task_error_log(str(org.id), task_name, e)
-            results.append({"org_id": str(org.id), "error": str(e)})
+            logger.error(f"{task_name} failed for org {org_id}: {e}")
+            await persist_task_error_log(org_id, task_name, e)
+            results.append({"org_id": org_id, "error": str(e)})
+            rolled_back = True
             # The orgs share one session; roll back the failed unit of work so a
             # broken commit doesn't leave the session in a failed state that
             # cascades into every later org's callback.
@@ -933,6 +954,37 @@ async def run_membership_inactivity_warnings(db: AsyncSession) -> Dict[str, Any]
         return result.get("warnings_sent", 0) + result.get("marked_inactive", 0)
 
     return await _for_each_org(db, "membership_inactivity_warnings", _process)
+
+
+async def run_membership_auto_purge(db: AsyncSession) -> Dict[str, Any]:
+    """Apply each pipeline's Auto-Purge setting to its inactive applications.
+
+    Before this runner the setting was stored and never read (CLAUDE.md
+    pitfall #19). The rules — which pipelines, how long, which applications —
+    live in ``MembershipPipelineService.auto_purge_inactive_prospects``, which
+    commits each pipeline itself and reports a failed pipeline rather than
+    raising, so one bad pipeline does not stop its siblings. ``_for_each_org``
+    isolates organizations from each other the same way.
+    """
+    from app.services.membership_pipeline_service import MembershipPipelineService
+
+    async def _process(db_session, org):
+        service = MembershipPipelineService(db_session)
+        result = await service.auto_purge_inactive_prospects(str(org.id))
+        if result["errors"]:
+            # Surface it through _for_each_org's error path (task error log,
+            # per-org entry in the result) — the purged pipelines are already
+            # committed, so the rollback there undoes nothing of theirs.
+            raise RuntimeError(
+                f"auto-purge failed for {len(result['errors'])} pipeline(s) "
+                f"after purging {result['purged']} application(s): "
+                + "; ".join(
+                    f"{e['pipeline_id']}: {e['error']}" for e in result["errors"]
+                )
+            )
+        return result["purged"]
+
+    return await _for_each_org(db, "membership_auto_purge", _process)
 
 
 async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
@@ -6814,6 +6866,7 @@ TASK_RUNNERS = {
     "reap_expired_sessions": run_reap_expired_sessions,
     "notify_expired_passwords": run_notify_expired_passwords,
     "membership_inactivity_warnings": run_membership_inactivity_warnings,
+    "membership_auto_purge": run_membership_auto_purge,
     "shift_pattern_generation": run_shift_pattern_generation,
     "swap_offer_expiry": run_swap_offer_expiry,
     "officer_directory_sync": run_officer_directory_sync,
@@ -6871,6 +6924,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "reap_expired_sessions": 86400,
     "notify_expired_passwords": 86400,
     "membership_inactivity_warnings": 86400,
+    "membership_auto_purge": 86400,
     "recert_resets": 86400,
     "enrollment_expiry": 86400,
     "shift_pattern_generation": 86400,
