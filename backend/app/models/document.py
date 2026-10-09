@@ -220,7 +220,9 @@ def system_folder_fields(slug: str) -> dict:
     fields = dict(definition)
     fields.setdefault("visibility", FolderVisibility.ORGANIZATION)
     required = fields.get("required_permissions")
-    fields["required_permissions"] = list(required) if required else None
+    fields["required_permissions"] = (
+        list(required) if isinstance(required, list) and required else None
+    )
     fields["is_system"] = True
     return fields
 
