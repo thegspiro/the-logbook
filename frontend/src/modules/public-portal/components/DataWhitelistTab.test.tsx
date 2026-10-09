@@ -41,7 +41,6 @@ const field = (
   id: `${overrides.category}.${overrides.field_name}`,
   organization_id: 'org-1',
   data_category: overrides.category,
-  field_name: overrides.field_name,
   is_enabled: false,
   is_sensitive: false,
   description: null,

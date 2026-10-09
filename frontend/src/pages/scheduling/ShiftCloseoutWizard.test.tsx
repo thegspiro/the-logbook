@@ -468,9 +468,9 @@ describe('ShiftCloseoutWizard', () => {
       const fire = screen.getByLabelText('Fire calls');
       const other = screen.getByLabelText('Not categorised calls');
       // A pre-filled "0" is what turned a typed "4" into "40".
-      expect(ems.value).toBe('');
-      expect(fire.value).toBe('');
-      expect(other.value).toBe('');
+      expect(ems).toHaveDisplayValue('');
+      expect(fire).toHaveDisplayValue('');
+      expect(other).toHaveDisplayValue('');
     });
 
     it('reads as not-tracked until something is entered', async () => {
@@ -549,8 +549,8 @@ describe('ShiftCloseoutWizard', () => {
       renderWizard();
       const a = await screen.findByLabelText('Calls credited to Capt. Morales');
       const b = screen.getByLabelText('Calls credited to FF Okonjo');
-      expect(a.value).toBe('5');
-      expect(b.value).toBe('5');
+      expect(a).toHaveDisplayValue('5');
+      expect(b).toHaveDisplayValue('5');
     });
 
     it('warns when nobody was on every call', async () => {
@@ -574,7 +574,7 @@ describe('ShiftCloseoutWizard', () => {
       const a = await screen.findByLabelText('Calls credited to Capt. Morales');
       setValue(a, '99');
       fireEvent.blur(a);
-      expect(a.value).toBe('5');
+      expect(a).toHaveDisplayValue('5');
     });
 
     it('keeps an adjustment made before stepping back and saving again', async () => {

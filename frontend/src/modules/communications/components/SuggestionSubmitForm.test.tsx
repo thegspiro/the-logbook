@@ -22,6 +22,7 @@ const box = (overrides: Partial<SuggestionBoxPublic> = {}): SuggestionBoxPublic 
   description: 'Ideas for drills',
   anonymityMode: 'allowed',
   followUpEnabled: true,
+  publicBoardEnabled: false,
   ...overrides,
 });
 
