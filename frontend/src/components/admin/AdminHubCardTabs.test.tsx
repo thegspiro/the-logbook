@@ -14,7 +14,7 @@ const tabs: AdminHubCardTab<Id>[] = [
 
 const onTabChange = vi.fn();
 
-const renderTabs = (activeTab: Id = 'overview', panelsAlwaysRendered = false) =>
+const renderTabs = (activeTab: Id = 'overview', panelsAlwaysRendered = false, showActiveDescription = true) =>
   render(
     <AdminHubCardTabs<Id>
       tabs={tabs}
@@ -23,6 +23,7 @@ const renderTabs = (activeTab: Id = 'overview', panelsAlwaysRendered = false) =>
       label="Store sections"
       idPrefix="store"
       panelsAlwaysRendered={panelsAlwaysRendered}
+      showActiveDescription={showActiveDescription}
     />
   );
 
@@ -86,5 +87,25 @@ describe('AdminHubCardTabs', () => {
     expect(onTabChange).toHaveBeenLastCalledWith('payments');
     await user.keyboard('{End}');
     expect(onTabChange).toHaveBeenLastCalledWith('settings');
+  });
+
+  // On a phone the cards are chips with no room for their line, so the
+  // selected one is spelled out under the row instead.
+  it('spells out the selected section under the row', () => {
+    renderTabs('payments');
+
+    expect(screen.getByText(/Payments to match/, { selector: 'p' })).toHaveTextContent('Payments — Payments to match');
+  });
+
+  it('leaves the line out for a caller that already says where the user is', () => {
+    renderTabs('payments', false, false);
+
+    expect(screen.queryByText(/Payments to match/, { selector: 'p' })).not.toBeInTheDocument();
+  });
+
+  it('declares the row an intentional scroll region', () => {
+    renderTabs();
+
+    expect(screen.getByRole('tablist', { name: 'Store sections' })).toHaveAttribute('data-mobile-scroll-region');
   });
 });
