@@ -177,24 +177,28 @@ class ShiftEligibilityService:
         if for_update:
             query = query.with_for_update().execution_options(populate_existing=True)
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        organization: Optional[Organization] = result.scalar_one_or_none()
+        return organization
 
     def _get_scheduling_settings(self, org: Organization) -> dict:
         """Return the scheduling sub-dict from org.settings, or defaults."""
-        return (org.settings or {}).get("scheduling", {})
+        scheduling: dict = (org.settings or {}).get("scheduling", {})
+        return scheduling
 
     def get_excluded_membership_types(self, org: Organization) -> List[str]:
         """Return the list of membership types excluded from self-signup."""
         sched = self._get_scheduling_settings(org)
-        return sched.get(
+        excluded: List[str] = sched.get(
             "excluded_membership_types",
             DEFAULT_EXCLUDED_MEMBERSHIP_TYPES,
         )
+        return excluded
 
     def get_open_positions(self, org: Organization) -> List[str]:
         """Return positions available to all eligible members."""
         sched = self._get_scheduling_settings(org)
-        return sched.get("open_positions", [])
+        open_positions: List[str] = sched.get("open_positions", [])
+        return open_positions
 
     def get_platoons_enabled(self, org: Organization) -> bool:
         """Whether platoon scheduling features are enabled for the org."""
@@ -801,7 +805,8 @@ class ShiftEligibilityService:
                 Shift.organization_id == organization_id,
             )
         )
-        return result.scalar_one_or_none()
+        shift: Optional[Shift] = result.scalar_one_or_none()
+        return shift
 
     def _shift_position_list(self, shift: Shift) -> List[str]:
         """Extract a flat list of position strings from a shift's positions JSON."""
@@ -904,7 +909,8 @@ class ShiftEligibilityService:
             return org_today(org)
         if isinstance(value, datetime):
             return local_date(value, scheduling_timezone(org))
-        return value
+        shift_day: date = value
+        return shift_day
 
     async def _get_qualification_positions(
         self, user_id: str, organization_id: str, as_of: date
@@ -1133,7 +1139,7 @@ class ShiftEligibilityService:
         types = raw.get("call_types")
         clean_types = []
         seen = set()
-        labels_seen = set()
+        labels_seen: Set[str] = set()
         if isinstance(types, list):
             for entry in types:
                 if not isinstance(entry, dict):
@@ -1243,7 +1249,8 @@ class ShiftEligibilityService:
         await self.db.commit()
         await self.db.refresh(org)
 
-        return (org.settings or {}).get("scheduling", {})
+        updated: dict = (org.settings or {}).get("scheduling", {})
+        return updated
 
     # ------------------------------------------------------------------
     # EVOC-aware driver eligibility (enforcement + soft warnings)
@@ -1379,4 +1386,5 @@ class ShiftEligibilityService:
             shift_id=shift_id,
             organization_id=organization_id,
         )
-        return outcome["warnings"]
+        warnings: List[Dict[str, Any]] = outcome["warnings"]
+        return warnings

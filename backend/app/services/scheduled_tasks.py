@@ -1145,7 +1145,7 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
 
     total_reminders = 0
     total_emails = 0
-    results = []
+    results: List[Dict[str, Any]] = []
 
     for org in organizations:
         org_reminders = 0
@@ -1438,7 +1438,7 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
 
     total_notifications = 0
     total_emails = 0
-    results = []
+    results: List[Dict[str, Any]] = []
 
     for org in organizations:
         org_notifications = 0
@@ -1646,7 +1646,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
 
     total_notifications = 0
     total_emails = 0
-    results = []
+    results: List[Dict[str, Any]] = []
 
     for org in organizations:
         org_notifications = 0
@@ -2058,7 +2058,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
 
     total_notifications = 0
     total_emails = 0
-    results = []
+    results: List[Dict[str, Any]] = []
 
     for org in organizations:
         org_notifications = 0
@@ -2558,7 +2558,7 @@ async def run_end_of_shift_checklist_reminders(
                 # Exclude inactive users — matches run_shift_reminders (a
                 # member assigned before being deactivated should not
                 # receive reminders); previously missing here (CRON2-31-5).
-                .where(User.is_active.is_(True))
+                .where(User.is_active)
             )
             for sid, uid in asres.all():
                 assigned_map.setdefault(str(sid), []).append(str(uid))
@@ -2738,7 +2738,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
 
     total_notifications = 0
     total_emails = 0
-    results = []
+    results: List[Dict[str, Any]] = []
 
     for org in organizations:
         org_notifications = 0
@@ -3238,7 +3238,7 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
 
     total_escalations = 0
     total_emails = 0
-    results = []
+    results: List[Dict[str, Any]] = []
 
     for org in organizations:
         org_escalations = 0
@@ -5297,7 +5297,7 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
 
     total_reminders = 0
     total_emails = 0
-    results = []
+    results: List[Dict[str, Any]] = []
 
     for org in organizations:
         org_reminders = 0

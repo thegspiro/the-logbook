@@ -122,7 +122,8 @@ class OrganizationService:
         result = await self.db.execute(
             select(Organization).where(Organization.id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        organization: Optional[Organization] = result.scalar_one_or_none()
+        return organization
 
     # Mapping from onboarding module IDs (hyphenated) to ModuleSettings
     # field names (snake_case).  Entries where the ID already matches the

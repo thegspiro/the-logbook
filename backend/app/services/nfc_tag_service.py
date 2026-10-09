@@ -146,7 +146,8 @@ class NfcTagService:
                 NfcTag.organization_id == str(organization_id),
             )
         )
-        return result.scalar_one_or_none()
+        nfc_tag: Optional[NfcTag] = result.scalar_one_or_none()
+        return nfc_tag
 
     async def register_tag(
         self,
@@ -429,6 +430,7 @@ class NfcTagService:
                 )
             )
 
+        event: Optional[Event]
         if len(events) == 1:
             event = events[0]
         else:
@@ -693,7 +695,7 @@ class NfcTagService:
                 target_name=target_name,
             )
 
-        clock_in_at = active["clock_in_at"] if in_this_category else None
+        clock_in_at = active["clock_in_at"] if active and in_this_category else None
         resolved = self._resolve_direction(direction, clock_in_at, None)
         if isinstance(resolved, dict):
             return {**resolved, "target_name": target_name}
