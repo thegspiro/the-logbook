@@ -1006,7 +1006,7 @@ class ReportsService:
                 )
                 .where(
                     ApparatusMaintenance.apparatus_id.in_(apparatus_ids),
-                    ApparatusMaintenance.status != "completed",
+                    ApparatusMaintenance.is_completed.is_(False),
                 )
                 .group_by(ApparatusMaintenance.apparatus_id)
             )
