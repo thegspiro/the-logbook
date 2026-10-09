@@ -577,6 +577,26 @@ export const REQUEST_STATUS_COLORS: Record<string, string> = {
   cancelled: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20',
 };
 
+/** Shift history import: a draft under review, or committed to the schedule. */
+export const HISTORY_IMPORT_STATUS_COLORS: Record<string, string> = {
+  draft: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  committed: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+};
+
+/**
+ * How a name, unit or seat in an import file was resolved. Settled states
+ * (matched, mapped, create) read green or blue; ones that still need the
+ * reviewer read amber or red.
+ */
+export const HISTORY_IMPORT_RESOLUTION_COLORS: Record<string, string> = {
+  matched: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+  mapped: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
+  create: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
+  conflict: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
+  ambiguous: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  unmatched: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+};
+
 // ============================================
 // Inventory — Item Condition
 // ============================================

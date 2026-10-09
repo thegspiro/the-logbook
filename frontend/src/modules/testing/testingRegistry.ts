@@ -470,6 +470,18 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         permission: 'scheduling.manage',
         module: 'scheduling',
       },
+      {
+        path: '/scheduling/admin/history-import',
+        label: 'Shift history import',
+        permission: 'scheduling.manage',
+        module: 'scheduling',
+      },
+      {
+        path: '/scheduling/admin/history-import/:importId',
+        label: 'Shift history import — review',
+        permission: 'scheduling.manage',
+        module: 'scheduling',
+      },
       { path: '/scheduling/admin/platoons', label: 'Platoons', permission: 'scheduling.manage', module: 'scheduling' },
       {
         path: '/scheduling/admin/reports',

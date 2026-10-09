@@ -704,6 +704,8 @@ section had no scheduling entry at all. That row is gone.
 | `/scheduling/admin/planning/templates`         | Shift Templates Management     | `scheduling.manage` |
 | `/scheduling/admin/planning/patterns`          | Shift Pattern Management       | `scheduling.manage` |
 | `/scheduling/admin/closeout`                   | Shift Close-Out — the queue    | `scheduling.manage` |
+| `/scheduling/admin/history-import`             | Shift History Import           | `scheduling.manage` |
+| `/scheduling/admin/history-import/:importId`   | Shift History Import — review  | `scheduling.manage` |
 | `/scheduling/admin/reports`                    | Scheduling Reports             | `scheduling.manage` |
 | `/scheduling/admin/platoons`                   | Platoon Management             | `scheduling.manage` |
 | `/scheduling/admin/positions`                  | Position Qualification Roster  | `scheduling.manage` |

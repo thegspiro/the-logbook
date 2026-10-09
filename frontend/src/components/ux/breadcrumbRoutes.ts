@@ -154,6 +154,8 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   // the heading two different names for one screen.
   '/scheduling/admin/closeout': { label: 'Shift Close-Out', permissions: ['scheduling.manage'] },
   '/scheduling/admin/planning': { label: 'Shift Planning', permissions: ['scheduling.manage'] },
+  // Registered for its label: the segment is "history-import".
+  '/scheduling/admin/history-import': { label: 'Shift History Import', permissions: ['scheduling.manage'] },
   // A leaf, registered only for its label: the segment is "positions" and the
   // page calls itself "Who Can Fill What", so the fallback would give the trail
   // and the heading two different names for one screen.
