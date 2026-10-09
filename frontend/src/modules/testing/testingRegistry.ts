@@ -992,7 +992,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/finance/budget-requests/review',
         label: 'Budget requests (review)',
-        permission: 'finance.manage',
+        anyPermission: ['finance.manage', 'finance.budget_review'],
         module: 'finance',
       },
       {

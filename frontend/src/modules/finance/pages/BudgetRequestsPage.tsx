@@ -129,6 +129,13 @@ const RequestCard: React.FC<RequestCardProps> = ({
         </p>
       )}
 
+      {request?.reviewAmount != null && (
+        <p className="text-theme-text-primary mt-2 text-sm break-words whitespace-pre-line">
+          <span className="font-medium">Leadership changed this to {formatCurrency(request.reviewAmount)}: </span>
+          {request.reviewNote}
+        </p>
+      )}
+
       {(canCreate || (open && request && !decided)) && (
         <div className="mt-3 flex flex-wrap gap-2">
           {canCreate && onCreate && (
@@ -387,9 +394,13 @@ const BudgetRequestsPage: React.FC = () => {
               <p className="text-theme-text-secondary text-sm">
                 {open
                   ? `Requests for ${data.fiscalYear.name} stay open through the end of the deadline day.`
-                  : data.fiscalYear.requestDeadline
-                    ? `The deadline for ${data.fiscalYear.name} was ${formatCalendarDate(data.fiscalYear.requestDeadline)}. Requests can be read but no longer changed.`
-                    : `${data.fiscalYear.name} is no longer taking requests.`}
+                  : data.fiscalYear.planningStage === 'leadership_review'
+                    ? `${data.fiscalYear.name} is in leadership review: senior leadership may change the amounts the Treasurer decided. Requests can be read but no longer changed.`
+                    : data.fiscalYear.planningStage === 'board_review'
+                      ? `${data.fiscalYear.name} is before the board for adoption. Requests can be read but no longer changed.`
+                      : data.fiscalYear.requestDeadline
+                        ? `The deadline for ${data.fiscalYear.name} was ${formatCalendarDate(data.fiscalYear.requestDeadline)}. Requests can be read but no longer changed.`
+                        : `${data.fiscalYear.name} is no longer taking requests.`}
               </p>
             </div>
           </section>

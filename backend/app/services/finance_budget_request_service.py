@@ -32,6 +32,7 @@ from app.models.facilities import Facility
 from app.models.finance import (
     Budget,
     BudgetCategory,
+    BudgetPlanningStage,
     BudgetRequest,
     BudgetRequestStatus,
     FiscalYear,
@@ -76,21 +77,53 @@ class BudgetRequestForbiddenError(PermissionError):
     """The caller may see the request but is not its line's owner."""
 
 
+# The order a draft year's budget moves through on its way to adoption. A
+# move is one step forward or back; adoption itself is activation.
+_STAGE_ORDER = (
+    BudgetPlanningStage.REQUESTS,
+    BudgetPlanningStage.LEADERSHIP_REVIEW,
+    BudgetPlanningStage.BOARD_REVIEW,
+)
+_STAGE_LABELS = {
+    BudgetPlanningStage.REQUESTS: "taking requests",
+    BudgetPlanningStage.LEADERSHIP_REVIEW: "in leadership review",
+    BudgetPlanningStage.BOARD_REVIEW: "before the board",
+}
+
+
+def planning_stage(stage) -> BudgetPlanningStage:
+    """A draft year's stage; NULL is REQUESTS, the stage before stages existed."""
+    if stage is None:
+        return BudgetPlanningStage.REQUESTS
+    return BudgetPlanningStage(stage.value if hasattr(stage, "value") else stage)
+
+
+def takes_requests_clause():
+    """SQL for "this draft year's stage takes requests", NULL included."""
+    return or_(
+        FiscalYear.planning_stage.is_(None),
+        FiscalYear.planning_stage == BudgetPlanningStage.REQUESTS,
+    )
+
+
 def requests_open(
     status: FiscalYearStatus | str,
     is_locked: bool,
     deadline: Optional[date],
     today: date,
+    stage=None,
 ) -> bool:
     """Whether owners may still make or change requests for a fiscal year.
 
-    Only a draft, unlocked year takes requests. The deadline is a calendar
-    day and is inclusive: requests stay open through the end of that day on
-    the department's calendar, so ``today`` must be the org's today
-    (``resolve_org_today``), never the server's.
+    Only a draft, unlocked year in the requests stage takes requests. The
+    deadline is a calendar day and is inclusive: requests stay open through
+    the end of that day on the department's calendar, so ``today`` must be
+    the org's today (``resolve_org_today``), never the server's.
     """
     value = status.value if isinstance(status, FiscalYearStatus) else status
     if value != FiscalYearStatus.DRAFT.value or is_locked:
+        return False
+    if planning_stage(stage) != BudgetPlanningStage.REQUESTS:
         return False
     return deadline is None or today <= deadline
 
@@ -137,8 +170,14 @@ class FinanceBudgetRequestService:
         for fy in years:
             row = {column.key: getattr(fy, column.key) for column in fy.__table__.c}
             row["requests_open"] = requests_open(
-                fy.status, bool(fy.is_locked), fy.request_deadline, today
+                fy.status,
+                bool(fy.is_locked),
+                fy.request_deadline,
+                today,
+                fy.planning_stage,
             )
+            if fy.status == FiscalYearStatus.DRAFT:
+                row["planning_stage"] = planning_stage(fy.planning_stage).value
             rows.append(row)
         return rows
 
@@ -314,6 +353,7 @@ class FinanceBudgetRequestService:
         if is_manager:
             if fy.status != FiscalYearStatus.DRAFT or fy.is_locked:
                 raise ValueError(f"{fy.name} is no longer a draft fiscal year.")
+            self._require_requests_stage(fy)
             return
         if not await self._acts_as_owner(request, org_id, user_id):
             raise BudgetRequestForbiddenError(
@@ -322,11 +362,28 @@ class FinanceBudgetRequestService:
             )
         await self._require_open(fy, org_id)
 
+    @staticmethod
+    def _require_requests_stage(fy: FiscalYear) -> None:
+        stage = planning_stage(fy.planning_stage)
+        if stage != BudgetPlanningStage.REQUESTS:
+            raise ValueError(
+                f"{fy.name} is {_STAGE_LABELS[stage]}, so its requests can no "
+                "longer change. The Treasurer can move it back to taking "
+                "requests."
+            )
+
     async def _require_open(self, fy: FiscalYear, org_id: str) -> None:
         today = await resolve_org_today(self.db, org_id)
         if fy.status != FiscalYearStatus.DRAFT or fy.is_locked:
             raise ValueError(f"{fy.name} is no longer taking budget requests.")
-        if not requests_open(fy.status, bool(fy.is_locked), fy.request_deadline, today):
+        self._require_requests_stage(fy)
+        if not requests_open(
+            fy.status,
+            bool(fy.is_locked),
+            fy.request_deadline,
+            today,
+            fy.planning_stage,
+        ):
             raise ValueError(f"The request deadline for {fy.name} has passed.")
 
     async def _assert_no_live_duplicate(
@@ -477,7 +534,9 @@ class FinanceBudgetRequestService:
                     f"{fy.name}. Request an amount for that line instead."
                 )
 
-        if not is_manager:
+        if is_manager:
+            self._require_requests_stage(fy)
+        else:
             await self._require_open(fy, org_id)
         await self._assert_no_live_duplicate(
             org_id,
@@ -597,6 +656,7 @@ class FinanceBudgetRequestService:
                 f"{fy.name} is no longer a draft, so its requests can no longer "
                 "be decided."
             )
+        self._require_requests_stage(fy)
         if request.status not in (BudgetRequestStatus.SUBMITTED, *_DECIDED):
             raise ValueError("Only a submitted request can be decided.")
         if (
@@ -634,6 +694,12 @@ class FinanceBudgetRequestService:
         request.decision_note = decision_note
         request.decided_by = decided_by
         request.decided_at = datetime.now(timezone.utc)
+        # A new decision replaces any leadership change to the old one, whose
+        # amount it has just overwritten in the line; the audit log keeps it.
+        request.review_amount = None
+        request.review_note = None
+        request.reviewed_by = None
+        request.reviewed_at = None
         await self.db.flush()
         await self.db.refresh(request, ["updated_at"])
         return request
@@ -689,6 +755,91 @@ class FinanceBudgetRequestService:
         self.db.add(line)
         await self.db.flush()
         request.budget_id = line.id
+
+    # ========================================
+    # Planning stages and leadership review
+    # ========================================
+
+    async def set_planning_stage(
+        self, fy_id: str, org_id: str, stage: str
+    ) -> tuple[FiscalYear, BudgetPlanningStage]:
+        """Move a draft year one stage forward or back (``finance.manage``).
+
+        Returns the year and the stage it left. Moving into leadership review
+        is what closes the year to owners, whatever its deadline says.
+        """
+        try:
+            target = BudgetPlanningStage(stage)
+        except ValueError:
+            raise ValueError(
+                "Choose requests, leadership_review or board_review."
+            ) from None
+        fy = await self._year_or_404(fy_id, org_id, lock=True)
+        if fy.status != FiscalYearStatus.DRAFT or fy.is_locked:
+            raise ValueError(f"{fy.name} is not a draft fiscal year.")
+        current = planning_stage(fy.planning_stage)
+        if target == current:
+            raise ValueError(f"{fy.name} is already {_STAGE_LABELS[target]}.")
+        if abs(_STAGE_ORDER.index(target) - _STAGE_ORDER.index(current)) != 1:
+            raise ValueError(
+                f"{fy.name} is {_STAGE_LABELS[current]}; it moves one stage at "
+                "a time."
+            )
+        fy.planning_stage = target
+        await self.db.flush()
+        await self.db.refresh(fy, ["updated_at"])
+        return fy, current
+
+    async def review_request(
+        self,
+        request_id: str,
+        org_id: str,
+        reviewer_id: str,
+        *,
+        amount: Decimal,
+        note: str,
+    ) -> BudgetRequest:
+        """Senior leadership sets a decided request's amount (``finance.budget_review``).
+
+        Only while the year is in leadership review, and only on a request
+        the Treasurer approved or adjusted: a declined or undecided one goes
+        back to the Treasurer by moving the year back to taking requests. The
+        amount is written into the line under the same locking read a
+        decision uses. A reviewer may not review a request for a line they
+        own or a request they submitted.
+        """
+        if not note or not note.strip():
+            raise ValueError("Say why the amount was changed.")
+        unlocked = await self._load(request_id, org_id, reviewer_id, True)
+        fy = await self._year_or_404(unlocked.fiscal_year_id, org_id, lock=True)
+        request = await self._load(request_id, org_id, reviewer_id, True, lock=True)
+        if fy.status != FiscalYearStatus.DRAFT or fy.is_locked:
+            raise ValueError(f"{fy.name} is no longer a draft fiscal year.")
+        if planning_stage(fy.planning_stage) != BudgetPlanningStage.LEADERSHIP_REVIEW:
+            raise ValueError(f"{fy.name} is not in leadership review.")
+        if request.status not in (
+            BudgetRequestStatus.APPROVED,
+            BudgetRequestStatus.ADJUSTED,
+        ):
+            raise ValueError(
+                "Only a request the Treasurer approved or adjusted can be "
+                "changed in leadership review."
+            )
+        if str(request.submitted_by or "") == str(reviewer_id) or (
+            await self._acts_as_owner(request, org_id, reviewer_id)
+        ):
+            raise BudgetRequestForbiddenError(
+                "You cannot review a request for a line you own or a request "
+                "you submitted."
+            )
+        await self._write_amount(request, fy, org_id, reviewer_id, Decimal(amount))
+        request.review_amount = Decimal(amount)
+        request.review_note = note.strip()
+        request.reviewed_by = reviewer_id
+        request.reviewed_at = datetime.now(timezone.utc)
+        await self.db.flush()
+        await self.db.refresh(request, ["updated_at"])
+        return request
 
     # ========================================
     # Reads
@@ -786,7 +937,9 @@ class FinanceBudgetRequestService:
         positions = await self._by_ids(Position, position_ids, org_id)
         users = await self._by_ids(
             User,
-            {r.submitted_by for r in requests} | {r.decided_by for r in requests},
+            {r.submitted_by for r in requests}
+            | {r.decided_by for r in requests}
+            | {r.reviewed_by for r in requests},
             org_id,
         )
         years = await self._by_ids(
@@ -843,6 +996,13 @@ class FinanceBudgetRequestService:
                         users.get(str(r.decided_by)) if r.decided_by else None
                     ),
                     "decided_at": r.decided_at,
+                    "review_amount": r.review_amount,
+                    "review_note": r.review_note,
+                    "reviewed_by": r.reviewed_by,
+                    "reviewed_by_name": _display_name(
+                        users.get(str(r.reviewed_by)) if r.reviewed_by else None
+                    ),
+                    "reviewed_at": r.reviewed_at,
                     "last_year_fiscal_year_name": (last_year_name if figures else None),
                     "last_year_budgeted": figures[0] if figures else None,
                     "last_year_spent": figures[1] if figures else None,

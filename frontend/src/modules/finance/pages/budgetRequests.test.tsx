@@ -380,3 +380,35 @@ describe("Next year's budget — proposing a new line", () => {
     expect(screen.queryByRole('button', { name: 'Propose a new line' })).not.toBeInTheDocument();
   });
 });
+
+describe("Next year's budget — after the requests stage", () => {
+  it('says the year is in leadership review rather than that the deadline passed', async () => {
+    setup(year({ requestsOpen: false, planningStage: 'leadership_review' }), []);
+    renderPage();
+    expect(await screen.findByText('Requests are closed for leadership review')).toBeInTheDocument();
+    expect(screen.getByText(/FY2027 is in leadership review/)).toBeInTheDocument();
+    expect(screen.queryByText(/The deadline for FY2027 was/)).not.toBeInTheDocument();
+  });
+
+  it('says the year is before the board', async () => {
+    setup(year({ requestsOpen: false, planningStage: 'board_review' }), []);
+    renderPage();
+    expect(await screen.findByText(/FY2027 is before the board for adoption/)).toBeInTheDocument();
+  });
+
+  it("shows the owner leadership's change and why", async () => {
+    setup(year({ requestsOpen: false, planningStage: 'leadership_review' }), [
+      {
+        budget: line('b-1', 'Training'),
+        request: request('r-1', 'approved', {
+          approvedAmount: '2400.00',
+          reviewAmount: '2000.00',
+          reviewNote: 'Held to this year’s level',
+        }),
+      },
+    ]);
+    renderPage();
+    expect(await screen.findByText(/Leadership changed this to \$2,000.00:/)).toBeInTheDocument();
+    expect(screen.getByText('Held to this year’s level')).toBeInTheDocument();
+  });
+});

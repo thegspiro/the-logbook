@@ -95,8 +95,9 @@ export const getFinanceRoutes = () => {
       {/*
         Next year's budget requests. The owner's screen needs only a session,
         like My Budgets: what a member may request is their ownership of a
-        line, which the API decides. The Treasurer's review is finance.manage,
-        the gate the decide endpoint enforces.
+        line, which the API decides. The review screen is the Treasurer's
+        (finance.manage, the decide endpoint's gate) and senior leadership's
+        (finance.budget_review, the review endpoint's gate).
       */}
       <Route
         path="/finance/budget-requests"
@@ -109,7 +110,11 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/budget-requests/review"
         element={
-          <ProtectedRoute requiredPermission="finance.manage" requiredModule="finance" moduleLabel="Finance">
+          <ProtectedRoute
+            requiredAnyPermission={['finance.manage', 'finance.budget_review']}
+            requiredModule="finance"
+            moduleLabel="Finance"
+          >
             <BudgetRequestReviewPage />
           </ProtectedRoute>
         }

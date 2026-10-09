@@ -531,6 +531,57 @@ window is not sent that reminder. Moving the deadline starts a fresh set. The
 offsets are constants (see
 [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md#finance--budget-request-reminders-go-out-7-days-and-1-day-before-for-every-department-2026-10-08)).
 
+## Adopting the budget: planning stages, leadership review and the board _(2026-10-09)_
+
+A draft year's budget now moves through stages before it is spent, matching the
+department's process: line owners request, the Treasurer decides and closes the
+draft for senior leadership's review, it goes before the board, and the board's
+adoption — recorded — is what activates it. Migration `5c8be05f2f0f`.
+
+| Stage (`fiscal_years.planning_stage`) | Owners may request | Treasurer decides | Leadership changes amounts |
+| ------------------------------------- | ------------------ | ----------------- | -------------------------- |
+| `requests` (NULL on a draft reads so) | until the deadline | yes               | no                         |
+| `leadership_review`                   | no                 | no                | yes                        |
+| `board_review`                        | no                 | no                | no                         |
+
+- **Moves** — `POST /finance/fiscal-years/{id}/planning-stage` `{stage}`
+  (`finance.manage`), one stage forward or back, draft and unlocked years only;
+  audited `finance.fiscal_year_stage_changed`. `requests_open` is false outside
+  `requests`, so the owner screen, the Treasurer's own edits and the deadline
+  reminders all stop with it. Moving back to `requests` reopens it.
+- **Leadership review** — `POST /finance/budget-requests/{id}/review`
+  `{amount, note}` (new permission **`finance.budget_review`**, seeded to no
+  position; a department grants it to e.g. the President and Chief). Only in
+  `leadership_review`, only on an `approved`/`adjusted` request, never by the
+  holder of the line's owner position or the request's submitter (403). The
+  amount is written to the line under the decision's locking read (409 below
+  spent + committed) and kept in `budget_requests.review_amount`, `review_note`,
+  `reviewed_by`, `reviewed_at` beside the Treasurer's `approved_amount`;
+  audited `finance.budget_request_reviewed`. A new Treasurer decision (after
+  moving back to `requests`) clears it. `finance.budget_review` also reads every
+  request (list and detail), as `finance.manage` does.
+- **Adoption** — `POST /finance/fiscal-years/{id}/activate` on a **draft**
+  requires `board_review` and a body `{adoptedOn, adoptionReference,
+adoptionNotes?}`; the date may not be after the department's today. Stored on
+  the year (`adopted_on`, `adoption_reference`, `adoption_notes`,
+  `adoption_recorded_by`, `adoption_recorded_at`), the stage cleared, audited
+  `finance.budget_adopted`, and each line owner emailed their lines and adopted
+  amounts (`notify_budget_adopted`, kind `budget_requests`, one email per
+  member). Re-activating a year that is not a draft is unchanged and needs no
+  body.
+- **Lock** refuses a draft year (400).
+
+**Screens.** _Finance › Settings_: a draft row shows its stage badge and the
+buttons to move it (each confirmed), with **Record adoption** in board review
+opening `BudgetAdoptionDialog`; the start-from and deadline controls show only
+while taking requests; an adopted year shows _"Adopted by the board {date} ·
+{reference}"_. _Finance › Budget requests_ (`/finance/budget-requests/review`)
+now admits `finance.budget_review`: a **Leadership** column, and **Change
+amount** (`BudgetRequestLeadershipDialog`) on approved/adjusted rows for
+leadership in leadership review; the Treasurer's decision buttons show only
+while taking requests. The owner's screen names the stage when it is closed
+and shows a leadership change with its note.
+
 ## Context
 
 Fire departments need internal financial workflows (budgets, purchase approvals, dues, expense reimbursements) but most use external accounting software like QuickBooks for actual bookkeeping. This module fills the gap: it provides the **internal operational finance workflows** that QuickBooks doesn't handle, with export capabilities to feed data into external accounting tools.

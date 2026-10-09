@@ -12,12 +12,26 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { Plus, AlertTriangle, Calendar, Lock, CheckCircle, Trash2, Tag, Pencil, Copy } from 'lucide-react';
+import {
+  Plus,
+  AlertTriangle,
+  Calendar,
+  Lock,
+  CheckCircle,
+  Trash2,
+  Tag,
+  Pencil,
+  Copy,
+  ArrowLeft,
+  ArrowRight,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { budgetCategoryService, fiscalYearService } from '../services/api';
 import { useBudgetFormOptions, withCurrent } from '../hooks/useBudgetFormOptions';
-import type { BudgetCategory, FiscalYear } from '../types';
+import type { BudgetCategory, BudgetPlanningStage, FiscalYear } from '../types';
+import { BudgetAdoptionDialog } from '../components/BudgetAdoptionDialog';
+import { PLANNING_STAGE_LABELS } from '../utils/budgetRequests';
 import { blankToNull } from '@/utils/formValues';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { SkeletonPage } from '@/components/ux/Skeleton';
@@ -459,9 +473,14 @@ const NextYearPlanning: React.FC<NextYearPlanningProps> = ({ fy, sources, onChan
   );
 };
 
-/** The draft year's deadline and whether requests are open, as the row shows it. */
+/** The draft year's stage, deadline and whether requests are open, as the row shows it. */
 const RequestWindow: React.FC<{ fy: FiscalYear }> = ({ fy }) => (
   <p className="text-theme-text-secondary mt-0.5 flex flex-wrap items-center gap-2 text-xs">
+    {fy.planningStage && (
+      <span className="badge bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300">
+        {PLANNING_STAGE_LABELS[fy.planningStage]}
+      </span>
+    )}
     <span>
       {fy.requestDeadline ? `Requests close ${formatCalendarDate(fy.requestDeadline)}` : 'No request deadline'}
     </span>
@@ -484,20 +503,129 @@ const RequestWindow: React.FC<{ fy: FiscalYear }> = ({ fy }) => (
 );
 
 // =============================================================================
+// Planning stages: requests -> leadership review -> board review -> adopted
+// =============================================================================
+
+const STAGE_BUTTON =
+  'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50';
+
+/** What each move does, worded for the confirmation. */
+const STAGE_MOVES: Record<BudgetPlanningStage, { label: string; message: (name: string) => string }> = {
+  requests: {
+    label: 'Back to requests',
+    message: (name) =>
+      `Reopen ${name} to line owners? They can make and change requests again until the deadline, and you can change your decisions. Any leadership change to a request is replaced if you decide it again.`,
+  },
+  leadership_review: {
+    label: 'Start leadership review',
+    message: (name) =>
+      `Close ${name} to line owners and open it for leadership review? Owners can no longer make or change requests, and only senior leadership can change the amounts you decided. You can move it back.`,
+  },
+  board_review: {
+    label: 'Send to the board',
+    message: (name) =>
+      `Send ${name} to the board? Nothing in it can change while it is before the board. Once the board adopts it, record the adoption here to make it the active year. You can move it back.`,
+  },
+};
+
+/** The stages a draft year can move to from where it is. */
+const NEXT_STAGES: Record<BudgetPlanningStage, { back?: BudgetPlanningStage; forward?: BudgetPlanningStage }> = {
+  requests: { forward: 'leadership_review' },
+  leadership_review: { back: 'requests', forward: 'board_review' },
+  board_review: { back: 'leadership_review' },
+};
+
+interface PlanningStageControlsProps {
+  fy: FiscalYear;
+  onChanged: () => void;
+}
+
+const PlanningStageControls: React.FC<PlanningStageControlsProps> = ({ fy, onChanged }) => {
+  const { confirm } = useConfirm();
+  const [moving, setMoving] = useState(false);
+  const [adopting, setAdopting] = useState(false);
+  // The backend reports every draft year's stage; a year that is not a draft
+  // has none, and no controls.
+  const stage = fy.planningStage;
+  if (!stage) return null;
+  const { back, forward } = NEXT_STAGES[stage];
+
+  const move = async (to: BudgetPlanningStage) => {
+    const confirmed = await confirm({
+      title: STAGE_MOVES[to].label,
+      message: STAGE_MOVES[to].message(fy.name),
+      confirmLabel: STAGE_MOVES[to].label,
+      cancelLabel: 'Not now',
+      variant: 'info',
+    });
+    if (!confirmed) return;
+    setMoving(true);
+    try {
+      await fiscalYearService.setPlanningStage(fy.id, to);
+      toast.success(`${fy.name}: ${PLANNING_STAGE_LABELS[to].toLowerCase()}`);
+      onChanged();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not change the planning stage'));
+    } finally {
+      setMoving(false);
+    }
+  };
+
+  return (
+    <>
+      {back && (
+        <button type="button" onClick={() => void move(back)} disabled={moving} className={STAGE_BUTTON}>
+          <ArrowLeft className="h-3.5 w-3.5" />
+          {STAGE_MOVES[back].label}
+        </button>
+      )}
+      {forward && (
+        <button type="button" onClick={() => void move(forward)} disabled={moving} className={STAGE_BUTTON}>
+          {STAGE_MOVES[forward].label}
+          <ArrowRight className="h-3.5 w-3.5" />
+        </button>
+      )}
+      {stage === 'board_review' && (
+        <button
+          type="button"
+          onClick={() => setAdopting(true)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800 hover:bg-green-100 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-300 dark:hover:bg-green-500/20"
+        >
+          <CheckCircle className="h-3.5 w-3.5" />
+          Record adoption
+        </button>
+      )}
+      {adopting && (
+        <BudgetAdoptionDialog
+          fiscalYear={fy}
+          onClose={() => setAdopting(false)}
+          onAdopted={() => {
+            setAdopting(false);
+            onChanged();
+          }}
+        />
+      )}
+    </>
+  );
+};
+
+/** The board's adoption, for a year that was adopted. */
+const AdoptionRecord: React.FC<{ fy: FiscalYear }> = ({ fy }) =>
+  fy.adoptedOn ? (
+    <p className="text-theme-text-secondary mt-0.5 text-xs">
+      Adopted by the board {formatCalendarDate(fy.adoptedOn)}
+      {fy.adoptionReference ? ` · ${fy.adoptionReference}` : ''}
+    </p>
+  ) : null;
+
+// =============================================================================
 // Main Page Component
 // =============================================================================
 
 const FiscalYearSettingsPage: React.FC = () => {
   const tz = useTimezone();
-  const {
-    fiscalYears,
-    budgetCategories,
-    isLoading,
-    error,
-    fetchFiscalYears,
-    fetchBudgetCategories,
-    activateFiscalYear,
-  } = useFinanceStore();
+  const { fiscalYears, budgetCategories, isLoading, error, fetchFiscalYears, fetchBudgetCategories } =
+    useFinanceStore();
 
   const [showCreateFY, setShowCreateFY] = useState(false);
   const [showCreateCategory, setShowCreateCategory] = useState(false);
@@ -509,15 +637,6 @@ const FiscalYearSettingsPage: React.FC = () => {
     void fetchFiscalYears();
     void fetchBudgetCategories();
   }, [fetchFiscalYears, fetchBudgetCategories]);
-
-  const handleActivate = async (id: string) => {
-    try {
-      await activateFiscalYear(id);
-      toast.success('Fiscal year activated');
-    } catch {
-      // Error handled by store
-    }
-  };
 
   const handleLock = async (id: string) => {
     try {
@@ -626,17 +745,11 @@ const FiscalYearSettingsPage: React.FC = () => {
                       {formatDate(fy.startDate, tz)} - {formatDate(fy.endDate, tz)}
                     </p>
                     {fy.status === 'draft' && <RequestWindow fy={fy} />}
+                    <AdoptionRecord fy={fy} />
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {fy.status === 'draft' && (
-                      <button
-                        type="button"
-                        onClick={() => void handleActivate(fy.id)}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
-                      >
-                        <CheckCircle className="h-3.5 w-3.5" />
-                        Activate
-                      </button>
+                      <PlanningStageControls fy={fy} onChanged={() => void fetchFiscalYears()} />
                     )}
                     {!fy.isLocked && fy.status !== 'draft' && (
                       <button
@@ -650,7 +763,7 @@ const FiscalYearSettingsPage: React.FC = () => {
                     )}
                   </div>
                 </div>
-                {fy.status === 'draft' && !fy.isLocked && (
+                {fy.status === 'draft' && !fy.isLocked && fy.planningStage === 'requests' && (
                   <NextYearPlanning
                     key={fy.requestDeadline ?? ''}
                     fy={fy}
