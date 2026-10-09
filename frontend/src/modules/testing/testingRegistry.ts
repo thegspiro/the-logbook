@@ -1063,6 +1063,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         permission: 'finance.configure_approvals',
         module: 'finance',
       },
+      {
+        path: '/finance/settings/quickbooks',
+        label: 'QuickBooks export settings',
+        permission: 'finance.manage',
+        module: 'finance',
+      },
     ],
   },
   {

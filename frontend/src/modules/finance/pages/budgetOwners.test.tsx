@@ -421,7 +421,48 @@ describe('FiscalYearSettingsPage category owner', () => {
         name: 'Training',
         description: null,
         ownerPositionId: null,
+        qbAccountName: null,
       })
+    );
+  });
+});
+
+describe('FiscalYearSettingsPage category QuickBooks account', () => {
+  it('creates a category with its own QuickBooks account', async () => {
+    const user = userEvent.setup();
+    createCategory.mockResolvedValue(category('cat-new', 'Fuel'));
+    renderAt('/finance/settings', '/finance/settings', FiscalYearSettingsPage);
+
+    await user.click(screen.getByRole('button', { name: /new category/i }));
+    await user.type(screen.getByLabelText('Name'), 'Fuel');
+    await user.type(screen.getByLabelText('QuickBooks account (optional)'), '  Vehicle Expense:Fuel ');
+    await user.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() =>
+      expect(createCategory).toHaveBeenCalledWith({ name: 'Fuel', qbAccountName: 'Vehicle Expense:Fuel' })
+    );
+  });
+
+  it('clears a category account on edit with null, so the mapping supplies it again', async () => {
+    const user = userEvent.setup();
+    updateCategory.mockResolvedValue(category('cat-training', 'Training'));
+    storeState = {
+      ...storeState,
+      budgetCategories: [{ ...category('cat-training', 'Training'), qbAccountName: 'Training Expense' }],
+    };
+    renderAt('/finance/settings', '/finance/settings', FiscalYearSettingsPage);
+
+    await user.click(screen.getByRole('button', { name: 'Edit Training' }));
+    const account = screen.getByLabelText('QuickBooks account (optional)');
+    expect(account).toHaveValue('Training Expense');
+    await user.clear(account);
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(updateCategory).toHaveBeenCalledWith(
+        'cat-training',
+        expect.objectContaining({ name: 'Training', qbAccountName: null })
+      )
     );
   });
 });

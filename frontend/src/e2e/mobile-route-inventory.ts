@@ -434,6 +434,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/finance/settings/quickbooks',
+    source: 'src/modules/finance/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
     path: '/finance/purchase-requests',
     source: 'src/modules/finance/routes.tsx',
     coverage: 'exempt',

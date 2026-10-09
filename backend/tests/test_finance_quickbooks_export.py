@@ -9,14 +9,20 @@ refused before anything is written.
 
 import csv
 import io
+import json
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependencies import get_current_user
+from app.api.v1.endpoints import finance as finance_endpoints
+from app.core.database import get_db
 from app.models.finance import (
     Budget,
     BudgetCategory,
@@ -33,6 +39,7 @@ from app.models.finance import (
     PurchaseRequest,
     PurchaseRequestStatus,
 )
+from app.models.user import User
 from app.services.finance_service import FinanceService
 
 pytestmark = [pytest.mark.integration]
@@ -365,3 +372,168 @@ class TestRefusedWhenAnAccountIsMissing:
         await db_session.flush()
 
         assert "'Fuel' has no account" in await self._refusal(db_session, books)
+
+
+class TestExportReadiness:
+    """The settings page's report of what an export would do, per category."""
+
+    async def _readiness(self, db_session, books) -> dict[str, dict]:
+        report = await FinanceService(db_session).get_export_readiness(books["org_id"])
+        return {row["category_name"]: row for row in report["categories"]}
+
+    async def test_ready_categories_name_their_accounts_and_source(
+        self, db_session, books
+    ):
+        rows = await self._readiness(db_session, books)
+
+        assert set(rows) == {"Training", "Fuel"}
+        training, fuel = rows["Training"], rows["Fuel"]
+        assert (training["status"], training["account_source"]) == (
+            "ready",
+            "category",
+        )
+        assert training["account_name"] == "Training Expense"
+        assert training["offset_account_name"] == "Operating Checking"
+        assert training["mapping_ids"] == [books["training_map"].id]
+        assert (fuel["status"], fuel["account_source"]) == ("ready", "mapping")
+        assert fuel["account_name"] == "Vehicle Expense:Fuel"
+
+    async def test_each_problem_the_export_refuses_on(self, db_session, books):
+        books["fuel_map"].qb_offset_account_name = None
+        books["training"].qb_account_name = None
+        books["training_map"].internal_category = "Not a category"
+        await db_session.flush()
+
+        rows = await self._readiness(db_session, books)
+
+        assert rows["Fuel"]["status"] == "no_offset"
+        assert rows["Training"]["status"] == "no_account"
+        assert rows["Training"]["account_source"] is None
+        assert rows["Training"]["mapping_ids"] == []
+
+    async def test_duplicate_mappings_are_reported_with_both_ids(
+        self, db_session, books
+    ):
+        extra = ExportMapping(
+            organization_id=books["org_id"],
+            internal_category=" fuel ",
+            qb_account_name="Fuel Two",
+            qb_offset_account_name="Savings",
+            mapping_type=ExportMappingType.EXPENSE,
+        )
+        db_session.add(extra)
+        await db_session.flush()
+
+        rows = await self._readiness(db_session, books)
+
+        assert rows["Fuel"]["status"] == "duplicate_mappings"
+        assert set(rows["Fuel"]["mapping_ids"]) == {books["fuel_map"].id, extra.id}
+
+    async def test_a_mapping_naming_no_category_is_listed_as_unmatched(
+        self, db_session, books
+    ):
+        books["fuel_map"].internal_category = "Fule"
+        await db_session.flush()
+
+        report = await FinanceService(db_session).get_export_readiness(books["org_id"])
+
+        assert report["unmatched_mapping_ids"] == [books["fuel_map"].id]
+
+    async def test_another_departments_categories_are_not_reported(
+        self, db_session, books
+    ):
+        other_org = await _org(db_session)
+        db_session.add(BudgetCategory(organization_id=other_org, name="Theirs"))
+        await db_session.flush()
+
+        assert "Theirs" not in await self._readiness(db_session, books)
+
+
+class TestDeleteExportMapping:
+    async def test_deletes_the_departments_own_mapping(self, db_session, books):
+        await FinanceService(db_session).delete_export_mapping(
+            books["fuel_map"].id, books["org_id"]
+        )
+
+        assert await db_session.get(ExportMapping, books["fuel_map"].id) is None
+
+    async def test_refuses_another_departments_mapping(self, db_session, books):
+        other_org = await _org(db_session)
+
+        with pytest.raises(ValueError, match="Export mapping not found"):
+            await FinanceService(db_session).delete_export_mapping(
+                books["fuel_map"].id, other_org
+            )
+
+        assert await db_session.get(ExportMapping, books["fuel_map"].id)
+
+
+async def _client_with(db: AsyncSession, org_id: str, permissions) -> AsyncClient:
+    user_id = await _user(db, org_id)
+    position_id = str(uuid.uuid4())
+    await db.execute(
+        text(
+            "INSERT INTO positions (id, organization_id, name, slug, permissions) "
+            "VALUES (:id, :org, :name, :slug, :perms)"
+        ),
+        {
+            "id": position_id,
+            "org": org_id,
+            "name": f"Treasurer {position_id[:6]}",
+            "slug": f"treasurer-{position_id[:8]}",
+            "perms": json.dumps(list(permissions)),
+        },
+    )
+    await db.execute(
+        text("INSERT INTO user_positions (user_id, position_id) VALUES (:u, :p)"),
+        {"u": user_id, "p": position_id},
+    )
+    await db.flush()
+    user = await db.get(User, user_id)
+    await db.refresh(user, ["positions"])
+    app = FastAPI()
+    app.include_router(finance_endpoints.router, prefix="/finance")
+    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[get_db] = lambda: db
+    return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+
+
+class TestExportSettingsEndpoints:
+    async def test_readiness_is_camelcase_for_the_settings_page(
+        self, db_session, books
+    ):
+        async with await _client_with(
+            db_session, books["org_id"], ["finance.manage"]
+        ) as client:
+            response = await client.get("/finance/export/readiness")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["unmatchedMappingIds"] == []
+        fuel = next(c for c in body["categories"] if c["categoryName"] == "Fuel")
+        assert fuel["status"] == "ready"
+        assert fuel["accountSource"] == "mapping"
+        assert fuel["offsetAccountName"] == "Operating Checking"
+
+    async def test_delete_answers_204_then_the_mapping_is_gone(self, db_session, books):
+        async with await _client_with(
+            db_session, books["org_id"], ["finance.manage"]
+        ) as client:
+            response = await client.delete(
+                f"/finance/export/mappings/{books['fuel_map'].id}"
+            )
+
+        assert response.status_code == 204
+        assert await db_session.get(ExportMapping, books["fuel_map"].id) is None
+
+    async def test_finance_view_alone_cannot_read_or_delete(self, db_session, books):
+        async with await _client_with(
+            db_session, books["org_id"], ["finance.view"]
+        ) as client:
+            readiness = await client.get("/finance/export/readiness")
+            deleted = await client.delete(
+                f"/finance/export/mappings/{books['fuel_map'].id}"
+            )
+
+        assert (readiness.status_code, deleted.status_code) == (403, 403)
+        assert await db_session.get(ExportMapping, books["fuel_map"].id)
