@@ -298,7 +298,9 @@ class EventRequestPostpone(BaseModel):
             self.new_event_date = _as_utc(self.new_event_date)
         if self.new_event_end_date:
             self.new_event_end_date = _as_utc(self.new_event_end_date)
-            if self.new_event_end_date <= self.new_event_date:
+            # new_event_date is set here — the first check refuses an end
+            # without a start — but the narrowing does not reach this line.
+            if self.new_event_date and self.new_event_end_date <= self.new_event_date:
                 raise ValueError("new_event_end_date must be after new_event_date")
         return self
 

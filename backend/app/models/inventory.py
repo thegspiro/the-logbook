@@ -6,6 +6,7 @@ assignments, checkouts, and maintenance records.
 """
 
 import enum
+from typing import Any, List
 
 from sqlalchemy import (
     JSON,
@@ -721,7 +722,8 @@ def _clear_stale_label_mark(_mapper, _connection, target: "InventoryItem") -> No
     if not changed:
         return
 
-    old_values = []
+    old_values: List[Any] = []
+    old_values_known = True
     for field in _LABEL_VALUE_FIELDS:
         history = state.attrs[field].history
         if field not in changed:
@@ -733,13 +735,13 @@ def _clear_stale_label_mark(_mapper, _connection, target: "InventoryItem") -> No
             # blind), so the label's value cannot be proven unchanged. Clearing
             # only returns the item to the worklist; keeping the mark could
             # hide an item whose label no longer scans.
-            old_values = None
+            old_values_known = False
             break
 
     new_value = printable_label_value(
         target.barcode, target.asset_tag, target.serial_number
     )
-    if old_values is not None and printable_label_value(*old_values) == new_value:
+    if old_values_known and printable_label_value(*old_values) == new_value:
         return
     target.label_printed_at = None
     target.label_printed_by = None

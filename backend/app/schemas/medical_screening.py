@@ -5,7 +5,7 @@ Request and response schemas for the medical screening endpoints.
 """
 
 from datetime import date, datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, overload
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -16,7 +16,17 @@ _SCREENING_TYPES = {e.value for e in ScreeningType}
 _SCREENING_STATUSES = {e.value for e in ScreeningStatus}
 
 
-def _validate_enum(value: Optional[str], valid: set, field: str) -> Optional[str]:
+@overload
+def _validate_enum(value: str, valid: set[str], field: str) -> str:
+    """A string in, the normalized string out."""
+
+
+@overload
+def _validate_enum(value: Optional[str], valid: set[str], field: str) -> Optional[str]:
+    """An optional value in: None passes through unchanged."""
+
+
+def _validate_enum(value: Optional[str], valid: set[str], field: str) -> Optional[str]:
     """Reject request values the DB's ENUM column can't store.
 
     ``screening_type``/``status`` map to strict MySQL ENUM columns, but the
