@@ -145,7 +145,7 @@ class BudgetCategoryCreate(BaseModel):
     description: Optional[str] = None
     parent_category_id: Optional[str] = None
     sort_order: int = 0
-    qb_account_name: Optional[str] = None
+    qb_account_name: Optional[str] = Field(None, max_length=200)
     owner_position_id: Optional[str] = None
 
 
@@ -159,7 +159,7 @@ class BudgetCategoryUpdate(BaseModel):
     parent_category_id: Optional[str] = None
     sort_order: Optional[int] = None
     is_active: Optional[bool] = None
-    qb_account_name: Optional[str] = None
+    qb_account_name: Optional[str] = Field(None, max_length=200)
     # Omitted leaves the owner alone; an explicit null clears it.
     owner_position_id: Optional[str] = None
 
@@ -1294,6 +1294,32 @@ class ExportMappingResponse(UTCResponseBase):
     mapping_type: str
     created_at: datetime
     updated_at: datetime
+
+
+class ExportReadinessCategoryResponse(UTCResponseBase):
+    """What an export would post one budget category to."""
+
+    model_config = _RESPONSE_CONFIG
+
+    category_id: str
+    category_name: str
+    is_active: bool
+    # ready, no_account, no_offset or duplicate_mappings
+    status: str
+    account_name: Optional[str] = None
+    # category (its own qb_account_name) or mapping
+    account_source: Optional[str] = None
+    offset_account_name: Optional[str] = None
+    mapping_ids: list[str]
+
+
+class ExportReadinessResponse(UTCResponseBase):
+    """Export readiness for every budget category in the organization."""
+
+    model_config = _RESPONSE_CONFIG
+
+    categories: list[ExportReadinessCategoryResponse]
+    unmatched_mapping_ids: list[str]
 
 
 MAX_SYNCHRONOUS_EXPORT_DAYS = 366

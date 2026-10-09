@@ -39,6 +39,10 @@ import type {
   ExpenseReport,
   FinanceDashboard,
   FiscalYear,
+  ExportMapping,
+  ExportMappingCreatePayload,
+  ExportMappingUpdatePayload,
+  ExportReadiness,
   FiscalYearOption,
   FiscalYearUpdatePayload,
   FinanceNamedOption,
@@ -639,6 +643,39 @@ export const duesService = {
 export const financeDashboardService = {
   async getDashboard(): Promise<FinanceDashboard> {
     const response = await api.get<FinanceDashboard>('/finance/dashboard');
+    return response.data;
+  },
+};
+
+// =============================================================================
+// QuickBooks Export
+// =============================================================================
+
+export const exportMappingService = {
+  async list(): Promise<ExportMapping[]> {
+    // The API pages at 100 by default; a department's chart of accounts is
+    // far smaller than its 1000 ceiling, and a truncated list would hide a
+    // duplicate mapping the readiness report is pointing at.
+    const response = await api.get<ExportMapping[]>('/finance/export/mappings', { params: { limit: 1000 } });
+    return asArray(response.data);
+  },
+
+  async create(data: ExportMappingCreatePayload): Promise<ExportMapping> {
+    const response = await api.post<ExportMapping>('/finance/export/mappings', data);
+    return response.data;
+  },
+
+  async update(id: string, data: ExportMappingUpdatePayload): Promise<ExportMapping> {
+    const response = await api.put<ExportMapping>(`/finance/export/mappings/${id}`, data);
+    return response.data;
+  },
+
+  async delete(id: string): Promise<void> {
+    await api.delete(`/finance/export/mappings/${id}`);
+  },
+
+  async readiness(): Promise<ExportReadiness> {
+    const response = await api.get<ExportReadiness>('/finance/export/readiness');
     return response.data;
   },
 };

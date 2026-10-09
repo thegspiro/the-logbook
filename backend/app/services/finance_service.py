@@ -214,6 +214,35 @@ def _qb_amount(value: Decimal) -> Decimal:
     return Decimal(value).quantize(Decimal("0.01"))
 
 
+def _mapping_key(name: str) -> str:
+    return name.strip().casefold()
+
+
+def _classify_category_accounts(
+    category_account: Optional[str], matches: list[ExportMapping]
+) -> tuple[str, str, Optional[str]]:
+    """Resolve a budget category to ``(account, offset, problem)``.
+
+    The one definition of how a category reaches QuickBooks: the export uses it
+    to post each transaction and the readiness report uses it to show what an
+    export would do, so the two cannot disagree. ``problem`` is
+    ``duplicate_mappings``, ``no_account`` or ``no_offset``; ``None`` means the
+    category exports.
+    """
+    if len(matches) > 1:
+        return "", "", "duplicate_mappings"
+    mapping = matches[0] if matches else None
+    account = (category_account or "").strip() or (
+        mapping.qb_account_name.strip() if mapping else ""
+    )
+    offset = (mapping.qb_offset_account_name or "").strip() if mapping else ""
+    if not account:
+        return account, offset, "no_account"
+    if not offset:
+        return account, offset, "no_offset"
+    return account, offset, None
+
+
 def _short_label(name: str, limit: int = 40) -> str:
     name = name.strip()
     return name if len(name) <= limit else name[: limit - 3] + "..."
@@ -4036,6 +4065,83 @@ class FinanceService:
         await self.db.refresh(mapping, ["updated_at"])
         return mapping
 
+    async def delete_export_mapping(self, mapping_id: str, org_id: str) -> None:
+        result = await self.db.execute(
+            select(ExportMapping).where(
+                ExportMapping.id == mapping_id,
+                ExportMapping.organization_id == org_id,
+            )
+        )
+        mapping = result.scalar_one_or_none()
+        if not mapping:
+            raise ValueError("Export mapping not found")
+        await self.db.delete(mapping)
+        await self.db.flush()
+
+    async def _export_mappings_by_category(
+        self, org_id: str
+    ) -> dict[str, list[ExportMapping]]:
+        result = await self.db.execute(
+            select(ExportMapping)
+            .where(ExportMapping.organization_id == org_id)
+            .order_by(ExportMapping.id)
+        )
+        mappings: dict[str, list[ExportMapping]] = {}
+        for mapping in result.scalars():
+            mappings.setdefault(_mapping_key(mapping.internal_category), []).append(
+                mapping
+            )
+        return mappings
+
+    async def get_export_readiness(self, org_id: str) -> dict:
+        """Report, per budget category, what an export would post it to.
+
+        Built on the export's own classifier, so a category reported ready is
+        one the export accepts. Mappings whose ``internal_category`` names no
+        category are listed separately: they are never used.
+        """
+        result = await self.db.execute(
+            select(BudgetCategory)
+            .where(BudgetCategory.organization_id == org_id)
+            .order_by(BudgetCategory.sort_order, BudgetCategory.name)
+        )
+        categories = list(result.scalars())
+        mappings = await self._export_mappings_by_category(org_id)
+
+        rows = []
+        for category in categories:
+            matches = mappings.get(_mapping_key(category.name), [])
+            account, offset, problem = _classify_category_accounts(
+                category.qb_account_name, matches
+            )
+            if not account:
+                source = None
+            elif (category.qb_account_name or "").strip():
+                source = "category"
+            else:
+                source = "mapping"
+            rows.append(
+                {
+                    "category_id": category.id,
+                    "category_name": category.name,
+                    "is_active": category.is_active,
+                    "status": problem or "ready",
+                    "account_name": account or None,
+                    "account_source": source,
+                    "offset_account_name": offset or None,
+                    "mapping_ids": [m.id for m in matches],
+                }
+            )
+
+        category_keys = {_mapping_key(c.name) for c in categories}
+        unmatched = [
+            mapping.id
+            for key, group in mappings.items()
+            if key not in category_keys
+            for mapping in group
+        ]
+        return {"categories": rows, "unmatched_mapping_ids": unmatched}
+
     async def _resolve_export_accounts(
         self, org_id: str, sources: list
     ) -> dict[str, tuple[str, str]]:
@@ -4071,30 +4177,21 @@ class FinanceService:
             {number for number, budget_id in rows if budget_id not in categories}
         )
 
-        mapping_result = await self.db.execute(
-            select(ExportMapping).where(ExportMapping.organization_id == org_id)
-        )
-        mappings: dict[str, list[ExportMapping]] = {}
-        for mapping in mapping_result.scalars():
-            key = mapping.internal_category.strip().casefold()
-            mappings.setdefault(key, []).append(mapping)
+        mappings = await self._export_mappings_by_category(org_id)
 
         resolved: dict[str, tuple[str, str]] = {}
         problems: dict[str, str] = {}
         for budget_id, (name, category_account) in categories.items():
             label = _short_label(name)
-            matches = mappings.get(name.strip().casefold(), [])
-            if len(matches) > 1:
-                problems[name] = f"'{label}' has {len(matches)} mappings"
-                continue
-            mapping = matches[0] if matches else None
-            account = (category_account or "").strip() or (
-                mapping.qb_account_name.strip() if mapping else ""
+            matches = mappings.get(_mapping_key(name), [])
+            account, offset, problem = _classify_category_accounts(
+                category_account, matches
             )
-            offset = (mapping.qb_offset_account_name or "").strip() if mapping else ""
-            if not account:
+            if problem == "duplicate_mappings":
+                problems[name] = f"'{label}' has {len(matches)} mappings"
+            elif problem == "no_account":
                 problems[name] = f"'{label}' has no account"
-            elif not offset:
+            elif problem == "no_offset":
                 problems[name] = f"'{label}' has no offset account"
             else:
                 resolved[budget_id] = (account, offset)

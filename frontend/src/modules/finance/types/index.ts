@@ -837,16 +837,68 @@ export interface DuesSummary {
   membersWaived: number;
 }
 
+export const ExportMappingType = {
+  EXPENSE: 'expense',
+  INCOME: 'income',
+  ASSET: 'asset',
+} as const;
+export type ExportMappingType = (typeof ExportMappingType)[keyof typeof ExportMappingType];
+
 export interface ExportMapping {
   id: string;
   organizationId: string;
   internalCategory: string;
   qbAccountName: string;
-  qbAccountNumber?: string;
-  qbOffsetAccountName?: string;
+  qbAccountNumber?: string | null;
+  qbOffsetAccountName?: string | null;
   mappingType: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/** `POST /finance/export/mappings`. Blank optional fields are omitted. */
+export interface ExportMappingCreatePayload {
+  internalCategory: string;
+  qbAccountName: string;
+  qbAccountNumber?: string | undefined;
+  qbOffsetAccountName?: string | undefined;
+  mappingType: ExportMappingType;
+}
+
+/** `PUT /finance/export/mappings/:id`. Omitted leaves a field alone; `null` clears it. */
+export interface ExportMappingUpdatePayload {
+  internalCategory?: string;
+  qbAccountName?: string;
+  qbAccountNumber?: string | null;
+  qbOffsetAccountName?: string | null;
+  mappingType?: ExportMappingType;
+}
+
+/** Why the export would refuse a category, as `GET /finance/export/readiness` reports it. */
+export const ExportReadinessStatus = {
+  READY: 'ready',
+  NO_ACCOUNT: 'no_account',
+  NO_OFFSET: 'no_offset',
+  DUPLICATE_MAPPINGS: 'duplicate_mappings',
+} as const;
+export type ExportReadinessStatus = (typeof ExportReadinessStatus)[keyof typeof ExportReadinessStatus];
+
+export interface ExportReadinessCategory {
+  categoryId: string;
+  categoryName: string;
+  isActive: boolean;
+  status: ExportReadinessStatus;
+  accountName?: string | null;
+  /** `category` when the category names its own account, else `mapping`. */
+  accountSource?: 'category' | 'mapping' | null;
+  offsetAccountName?: string | null;
+  mappingIds: string[];
+}
+
+export interface ExportReadiness {
+  categories: ExportReadinessCategory[];
+  /** Mappings whose category name matches no budget category: the export never uses them. */
+  unmatchedMappingIds: string[];
 }
 
 export interface ExportLog {

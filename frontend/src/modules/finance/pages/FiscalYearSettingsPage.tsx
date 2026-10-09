@@ -164,6 +164,7 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ open, onClose, onSaved, c
   const [name, setName] = useState(category?.name ?? '');
   const [description, setDescription] = useState(category?.description ?? '');
   const [ownerPositionId, setOwnerPositionId] = useState(category?.ownerPositionId ?? '');
+  const [qbAccountName, setQbAccountName] = useState(category?.qbAccountName ?? '');
   const [submitting, setSubmitting] = useState(false);
   const isEdit = Boolean(category);
   const positionOptions = withCurrent(positions, category?.ownerPositionId, category?.ownerPositionName);
@@ -183,6 +184,7 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ open, onClose, onSaved, c
           name: name.trim(),
           description: blankToNull(description),
           ownerPositionId: blankToNull(ownerPositionId),
+          qbAccountName: blankToNull(qbAccountName),
         });
         toast.success('Category saved');
       } else {
@@ -195,11 +197,15 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ open, onClose, onSaved, c
         if (ownerPositionId) {
           createData.ownerPositionId = ownerPositionId;
         }
+        if (qbAccountName.trim()) {
+          createData.qbAccountName = qbAccountName.trim();
+        }
         await budgetCategoryService.create(createData);
         toast.success('Category created');
         setName('');
         setDescription('');
         setOwnerPositionId('');
+        setQbAccountName('');
       }
       onSaved();
       onClose();
@@ -265,6 +271,29 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ open, onClose, onSaved, c
             </select>
             <p id="category-owner-hint" className="text-theme-text-secondary mt-1 text-xs">
               Budget lines in this category without an owner of their own belong to this position.
+            </p>
+          </div>
+          <div>
+            <label htmlFor="category-qb-account" className={labelClass}>
+              QuickBooks account (optional)
+            </label>
+            <input
+              id="category-qb-account"
+              type="text"
+              className={inputClass}
+              value={qbAccountName}
+              onChange={(e) => setQbAccountName(e.target.value)}
+              maxLength={200}
+              placeholder="Equipment Expense"
+              aria-describedby="category-qb-account-hint"
+            />
+            <p id="category-qb-account-hint" className="text-theme-text-secondary mt-1 text-xs">
+              The account spending in this category posts to, exactly as named in QuickBooks (a subaccount as
+              Parent:Child). Takes precedence over the account on its{' '}
+              <Link to="/finance/settings/quickbooks" className="underline">
+                QuickBooks mapping
+              </Link>
+              , which still supplies the account it is paid from.
             </p>
           </div>
           <div className="flex items-center justify-end gap-3 pt-2">
