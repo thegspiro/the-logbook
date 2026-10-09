@@ -9,7 +9,12 @@
 import { create } from 'zustand';
 import { userService } from '../../../services/api';
 import { schedulingService } from '../services/api';
-import type { SchedulingSummary, ShiftTemplateRecord, BasicApparatusRecord } from '../services/api';
+import type {
+  SchedulingSummary,
+  ShiftTemplateRecord,
+  BasicApparatusRecord,
+  ShiftApparatusOption,
+} from '../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { UserStatus } from '../../../constants/enums';
 import { DEFAULT_SIGNUP_WINDOW } from '../utils/shiftBoard';
@@ -34,6 +39,16 @@ interface SchedulingState {
 
   apparatus: BasicApparatusRecord[];
   apparatusLoaded: boolean;
+
+  /**
+   * The vehicles a shift can be put on, from /scheduling/apparatus-options:
+   * full Apparatus records first, BasicApparatus when a department has none.
+   * Distinct from `apparatus`, which is the BasicApparatus table only and is
+   * what the settings screens that manage that table edit. Shift pickers read
+   * this one, or a department on the Apparatus module had no rig to choose.
+   */
+  shiftApparatus: ShiftApparatusOption[];
+  shiftApparatusLoaded: boolean;
 
   summary: SchedulingSummary | null;
   summaryLoading: boolean;
@@ -78,6 +93,7 @@ interface SchedulingState {
   loadMembers: () => Promise<void>;
   loadTemplates: () => Promise<void>;
   loadApparatus: () => Promise<void>;
+  loadShiftApparatus: () => Promise<void>;
   loadSummary: () => Promise<void>;
   loadSettings: () => Promise<void>;
   /**
@@ -154,6 +170,9 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
 
   apparatus: [],
   apparatusLoaded: false,
+
+  shiftApparatus: [],
+  shiftApparatusLoaded: false,
 
   summary: null,
   summaryLoading: false,
@@ -244,6 +263,8 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
       templatesLoading: false,
       apparatus: [],
       apparatusLoaded: false,
+      shiftApparatus: [],
+      shiftApparatusLoaded: false,
       summary: null,
       summaryLoading: false,
       summaryError: null,
@@ -317,6 +338,23 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
     }
   },
 
+  loadShiftApparatus: async () => {
+    if (get().shiftApparatusLoaded) return;
+    const generation = accountGeneration;
+    try {
+      const { options } = await schedulingService.getApparatusOptions();
+      if (generation !== accountGeneration) return;
+      // 'default' entries are type placeholders with no id; a shift needs a
+      // real vehicle.
+      const shiftApparatus = options.filter(
+        (option): option is ShiftApparatusOption => option.source !== 'default' && Boolean(option.id)
+      );
+      set({ shiftApparatus, shiftApparatusLoaded: true });
+    } catch {
+      if (generation === accountGeneration) set({ shiftApparatusLoaded: true });
+    }
+  },
+
   loadSummary: async () => {
     if (get().summaryLoading) return;
     const generation = accountGeneration;
@@ -341,6 +379,7 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
     if (!state.membersLoaded && !state.membersLoading) promises.push(state.loadMembers());
     if (!state.templatesLoaded && !state.templatesLoading) promises.push(state.loadTemplates());
     if (!state.apparatusLoaded) promises.push(state.loadApparatus());
+    if (!state.shiftApparatusLoaded) promises.push(state.loadShiftApparatus());
     if (!state.settingsLoaded) promises.push(state.loadSettings());
     await Promise.all(promises);
   },
