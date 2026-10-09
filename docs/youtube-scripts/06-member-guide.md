@@ -255,12 +255,15 @@ card, then the short request form]**
 > "And if the event's over and you never got checked in — dead phone, nobody
 > put the code up — open the event and press **I was there**. That asks the
 > organizer to mark you present; they confirm or decline it, and you'll see
-> which. You've got thirty days."
+> which. You've got thirty days. Got the times wrong? While it's still waiting,
+> press **Withdraw request** and send a corrected one — you can do that twice.
+> After that, it waits for the organizer."
 
 **[PRODUCTION NOTE — 2026-10-04. The check-in line now names the button the
 member actually taps (pre-existing omission: scanning alone never checked
 anyone in). "I was there" is new (2026-09-30), about 15 seconds; re-time
-Chapter 3. Film it with a member who has no attendance on an ended event.]**
+Chapter 3. 2026-10-09: the withdraw-and-resend line adds about 8 seconds; show
+the waiting notice with **Withdraw request** on it. Film it with a member who has no attendance on an ended event.]**
 
 **[SCREEN: An Android phone held against an NFC sticker on a wall, then the
 check-in page opening by itself. Real phone, real tag — this cannot be faked
