@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ComponentProps } from 'react';
 
 import { StoreProductCard } from './StoreProductCard';
 import { EmbroideryThreadColor, PersonalizationMethod } from '../types';
@@ -34,11 +35,13 @@ const offer = (overrides: Partial<StorefrontProductOffer> = {}): StorefrontProdu
   ...overrides,
 });
 
+type OnAdd = ComponentProps<typeof StoreProductCard>['onAdd'];
+
 describe('StoreProductCard', () => {
-  let onAdd: ReturnType<typeof vi.fn>;
+  let onAdd: Mock<OnAdd>;
 
   beforeEach(() => {
-    onAdd = vi.fn();
+    onAdd = vi.fn<OnAdd>();
   });
 
   it('exposes every size as a pressable chip rather than a dropdown', () => {
