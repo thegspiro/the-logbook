@@ -5,6 +5,7 @@
  */
 
 import { createApiClient } from '../../../utils/createApiClient';
+import { fetchFile, type DownloadedFile } from '../../../utils/fileDownload';
 import type {
   ApprovalChain,
   ApprovalChainCreatePayload,
@@ -55,6 +56,12 @@ import type {
 import { asArray } from '../../../utils/asArray';
 
 const api = createApiClient();
+
+function receiptForm(file: File): FormData {
+  const form = new FormData();
+  form.append('file', file);
+  return form;
+}
 
 // =============================================================================
 // Fiscal Years
@@ -478,6 +485,17 @@ export const purchaseRequestService = {
     const response = await api.post<PurchaseRequest>(`/finance/purchase-requests/${id}/cancel`);
     return response.data;
   },
+
+  async uploadReceipt(id: string, file: File): Promise<PurchaseRequest> {
+    const response = await api.post<PurchaseRequest>(`/finance/purchase-requests/${id}/receipt`, receiptForm(file), {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  downloadReceipt(id: string): Promise<DownloadedFile> {
+    return fetchFile(api, `/finance/purchase-requests/${id}/receipt`, 'receipt');
+  },
 };
 
 // =============================================================================
@@ -508,6 +526,19 @@ export const expenseReportService = {
   async addLineItem(id: string, data: Partial<ExpenseLineItem>): Promise<ExpenseLineItem> {
     const response = await api.post<ExpenseLineItem>(`/finance/expense-reports/${id}/items`, data);
     return response.data;
+  },
+
+  async uploadLineItemReceipt(reportId: string, itemId: string, file: File): Promise<ExpenseLineItem> {
+    const response = await api.post<ExpenseLineItem>(
+      `/finance/expense-reports/${reportId}/items/${itemId}/receipt`,
+      receiptForm(file),
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  },
+
+  downloadLineItemReceipt(reportId: string, itemId: string): Promise<DownloadedFile> {
+    return fetchFile(api, `/finance/expense-reports/${reportId}/items/${itemId}/receipt`, 'receipt');
   },
 
   async submit(id: string): Promise<ExpenseReport> {

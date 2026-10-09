@@ -7,6 +7,8 @@
  * keeps that name instead of falling back to the uploader's.
  */
 
+import type { AxiosInstance } from 'axios';
+
 export interface DownloadedFile {
   blob: Blob;
   filename: string;
@@ -46,4 +48,14 @@ export function saveFile({ blob, filename }: DownloadedFile): void {
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(url);
+}
+
+/** GET *url* through *client* (so its auth refresh applies) as a named file. */
+export async function fetchFile(client: AxiosInstance, url: string, fallback: string): Promise<DownloadedFile> {
+  const response = await client.get<Blob>(url, { responseType: 'blob' });
+  const header: unknown = response.headers['content-disposition'];
+  return {
+    blob: response.data,
+    filename: filenameFromContentDisposition(typeof header === 'string' ? header : undefined) ?? fallback,
+  };
 }

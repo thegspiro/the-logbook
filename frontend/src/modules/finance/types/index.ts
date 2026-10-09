@@ -720,7 +720,11 @@ export interface PurchaseRequest {
   receivedAt?: string;
   paidAt?: string;
   notes?: string;
-  receiptUrl?: string;
+  /** A typed link; the server passes it on only if it is HTTP(S). */
+  receiptUrl?: string | null;
+  /** The uploaded receipt, opened through `receiptFileUrl`. */
+  receiptDocumentId?: string | null;
+  receiptFileUrl?: string | null;
   apparatusId?: string;
   facilityId?: string;
   createdAt: string;
@@ -736,7 +740,9 @@ export interface ExpenseLineItem {
   amount: MonetaryAmount;
   dateIncurred: string;
   expenseType: ExpenseType;
-  receiptUrl?: string;
+  receiptUrl?: string | null;
+  receiptDocumentId?: string | null;
+  receiptFileUrl?: string | null;
   merchant?: string;
   createdAt: string;
 }

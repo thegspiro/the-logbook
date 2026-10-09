@@ -19,7 +19,7 @@ from sqlalchemy import and_, case
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import defer
+from sqlalchemy.orm import aliased, defer
 
 from app.core.constants import FOLDER_EVENTS, FOLDER_FACILITIES
 from app.core.permissions import (
@@ -2169,6 +2169,89 @@ class DocumentsService:
             .limit(1)
         )
         return result.scalar_one_or_none()
+
+    FINANCE_ROOT_SLUG = "finance"
+    FINANCE_RECEIPTS_SLUG = "finance-receipts"
+
+    async def _finance_receipts_folder(
+        self, organization_id: UUID, *, lock: bool
+    ) -> Optional[DocumentFolder]:
+        root = aliased(DocumentFolder)
+        query = (
+            select(DocumentFolder)
+            .join(root, DocumentFolder.parent_id == root.id)
+            .where(DocumentFolder.organization_id == str(organization_id))
+            .where(DocumentFolder.slug == self.FINANCE_RECEIPTS_SLUG)
+            .where(root.slug == self.FINANCE_ROOT_SLUG)
+            .where(root.is_system.is_(True))
+            .order_by(DocumentFolder.id)
+            .limit(1)
+        )
+        if lock:
+            query = query.with_for_update()
+        return (await self.db.execute(query)).scalar_one_or_none()
+
+    async def ensure_finance_receipts_folder(
+        self, organization_id: UUID
+    ) -> DocumentFolder:
+        """Get or create Finance > Receipts.
+
+        Finance/          (system, finance.view / .manage / .approve)
+          └── Receipts/   (inherits the Finance gate)
+
+        Same read-then-write shape as ``ensure_event_folder``: no uniqueness
+        constraint backs either slug, so creation happens under the
+        organization row lock and re-checks there (Pitfall #27).
+        """
+        folder = await self._finance_receipts_folder(organization_id, lock=False)
+        if folder is not None:
+            return folder
+
+        org = await self.db.scalar(
+            select(Organization)
+            .where(Organization.id == str(organization_id))
+            .with_for_update()
+        )
+        if org is None:
+            raise ValueError("Organization not found")
+
+        folder = await self._finance_receipts_folder(organization_id, lock=True)
+        if folder is not None:
+            return folder
+
+        root = (
+            await self.db.execute(
+                select(DocumentFolder)
+                .where(DocumentFolder.organization_id == str(organization_id))
+                .where(DocumentFolder.slug == self.FINANCE_ROOT_SLUG)
+                .where(DocumentFolder.is_system.is_(True))
+                .order_by(DocumentFolder.id)
+                .limit(1)
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if root is None:
+            root = DocumentFolder(
+                organization_id=organization_id,
+                **system_folder_fields(self.FINANCE_ROOT_SLUG),
+            )
+            self.db.add(root)
+            await self.db.flush()
+
+        folder = DocumentFolder(
+            organization_id=organization_id,
+            parent_id=root.id,
+            name="Receipts",
+            slug=self.FINANCE_RECEIPTS_SLUG,
+            description="Receipts uploaded to purchase requests and expense reports",
+            icon="receipt",
+            color="text-lime-400",
+            visibility=FolderVisibility.ORGANIZATION,
+            is_system=False,
+        )
+        self.db.add(folder)
+        await self.db.flush()
+        return folder
 
     async def _lock_events_root(
         self, organization_id: UUID

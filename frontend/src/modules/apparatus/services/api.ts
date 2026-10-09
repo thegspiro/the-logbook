@@ -5,7 +5,7 @@
  */
 
 import { createApiClient } from '../../../utils/createApiClient';
-import { filenameFromContentDisposition, type DownloadedFile } from '../../../utils/fileDownload';
+import { fetchFile, type DownloadedFile } from '../../../utils/fileDownload';
 import type {
   Apparatus,
   ApparatusCreate,
@@ -481,14 +481,7 @@ export const apparatusDocumentService = {
 
   /** The stored file, with the name the server gave it. */
   async downloadDocument(apparatusId: string, documentId: string): Promise<DownloadedFile> {
-    const response = await api.get<Blob>(`/apparatus/${apparatusId}/documents/${documentId}/file`, {
-      responseType: 'blob',
-    });
-    const header: unknown = response.headers['content-disposition'];
-    return {
-      blob: response.data,
-      filename: filenameFromContentDisposition(typeof header === 'string' ? header : undefined) ?? 'document',
-    };
+    return fetchFile(api, `/apparatus/${apparatusId}/documents/${documentId}/file`, 'document');
   },
 
   async deleteDocument(apparatusId: string, documentId: string): Promise<void> {

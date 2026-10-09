@@ -49,6 +49,12 @@ IMAGE_FILE_RULES = FileRules(
     description="JPEG, PNG, GIF or WebP images",
 )
 
+RECEIPT_FILE_RULES = FileRules(
+    allowed_types={**IMAGE_FILE_RULES.allowed_types, "application/pdf": ".pdf"},
+    max_bytes=20 * 1024 * 1024,
+    description="a PDF or a JPEG, PNG, GIF or WebP image",
+)
+
 
 async def store_as_document(
     db: AsyncSession,
@@ -130,19 +136,30 @@ async def serve_document(
     fallback: str,
     day: Optional[date] = None,
     inline_images: bool = False,
+    folder_rights: bool = True,
 ) -> FileResponse:
     """Serve a module document's bytes, or 404.
 
     404 rather than 403 for a document the caller's folder rights do not
     admit, so a guessed id does not reveal that the file exists.
+
+    ``folder_rights=False`` is for a record whose own read rule is the
+    authority and deliberately reaches further than the folder's: a member
+    opens the receipt on their own expense report without holding the
+    finance rights that open the Finance folder. The caller must already have
+    authorized the record, and the link must be one only that module writes.
     """
     organization_id = str(user.organization_id)
     document = await document_in_org(db, document_id, organization_id)
-    service = DocumentsService(db)
     if (
         document is None
         or not document.file_path
-        or not await service.can_access_document(document, organization_id, user)
+        or (
+            folder_rights
+            and not await DocumentsService(db).can_access_document(
+                document, organization_id, user
+            )
+        )
     ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="File not found"
