@@ -35,9 +35,16 @@ const startFrom = vi.fn();
 const updateYear = vi.fn();
 const setPlanningStage = vi.fn();
 const activate = vi.fn();
+const adopt = vi.fn();
+const beginClose = vi.fn();
+const openItems = vi.fn();
+const lock = vi.fn();
 vi.mock('../services/api', () => ({
   fiscalYearService: {
-    lock: vi.fn(),
+    lock: (...args: unknown[]) => lock(...args) as unknown,
+    adopt: (...args: unknown[]) => adopt(...args) as unknown,
+    beginClose: (...args: unknown[]) => beginClose(...args) as unknown,
+    openItems: (...args: unknown[]) => openItems(...args) as unknown,
     startFrom: (...args: unknown[]) => startFrom(...args) as unknown,
     update: (...args: unknown[]) => updateYear(...args) as unknown,
     setPlanningStage: (...args: unknown[]) => setPlanningStage(...args) as unknown,
@@ -100,11 +107,17 @@ const years = (extra: Partial<FiscalYear> = {}) => [
 
 beforeEach(() => {
   vi.clearAllMocks();
-  for (const mock of [startFrom, updateYear, setPlanningStage, activate]) mock.mockReset();
+  for (const mock of [startFrom, updateYear, setPlanningStage, activate, adopt, beginClose, openItems, lock]) {
+    mock.mockReset();
+  }
   startFrom.mockResolvedValue({ created: 2, skipped: 1 });
   updateYear.mockResolvedValue(draft());
   setPlanningStage.mockResolvedValue(draft());
   activate.mockResolvedValue(draft());
+  adopt.mockResolvedValue(draft({ planningStage: 'adopted' }));
+  beginClose.mockResolvedValue(year('fy-active', 'FY2026', 'closed', { isLocked: false }));
+  openItems.mockResolvedValue([]);
+  lock.mockResolvedValue(year('fy-active', 'FY2026', 'closed'));
 });
 
 describe('the request window on a fiscal year row', () => {
@@ -267,10 +280,10 @@ describe('recording the board’s adoption', () => {
     await user.type(date, '2026-01-05');
     await user.type(within(dialog).getByLabelText('Motion or minutes reference'), '  Motion 2026-01 ');
     await user.type(within(dialog).getByLabelText('Notes (optional)'), 'Passed 5-0');
-    await user.click(within(dialog).getByRole('button', { name: 'Adopt and activate' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Record adoption' }));
 
     await waitFor(() =>
-      expect(activate).toHaveBeenCalledWith('fy-draft', {
+      expect(adopt).toHaveBeenCalledWith('fy-draft', {
         adoptedOn: '2026-01-05',
         adoptionReference: 'Motion 2026-01',
         adoptionNotes: 'Passed 5-0',
@@ -285,10 +298,10 @@ describe('recording the board’s adoption', () => {
 
     await user.click(screen.getByRole('button', { name: 'Record adoption' }));
     const dialog = await screen.findByRole('dialog');
-    await user.click(within(dialog).getByRole('button', { name: 'Adopt and activate' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Record adoption' }));
 
     expect(await within(dialog).findByText(/Enter the motion or minutes reference/)).toBeInTheDocument();
-    expect(activate).not.toHaveBeenCalled();
+    expect(adopt).not.toHaveBeenCalled();
   });
 
   it('never sends a date in the future', async () => {
@@ -302,10 +315,10 @@ describe('recording the board’s adoption', () => {
     // backs that up for a browser that ignores max.
     fireEvent.change(date, { target: { value: '2999-01-01' } });
     await user.type(within(dialog).getByLabelText('Motion or minutes reference'), 'Motion 9');
-    await user.click(within(dialog).getByRole('button', { name: 'Adopt and activate' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Record adoption' }));
 
     expect(date).toBeInvalid();
-    expect(activate).not.toHaveBeenCalled();
+    expect(adopt).not.toHaveBeenCalled();
   });
 
   it('shows the adoption on a year that was adopted', () => {
@@ -314,5 +327,149 @@ describe('recording the board’s adoption', () => {
     ]);
 
     expect(screen.getByText('Adopted by the board Dec 10, 2025 · Motion 2025-31')).toBeInTheDocument();
+  });
+});
+
+describe('starting an adopted year', () => {
+  const adopted = () =>
+    years({ planningStage: 'adopted', requestsOpen: false, adoptedOn: '2026-09-10', adoptionReference: 'Motion 4' });
+
+  it('starts it after confirming, and fetches again', async () => {
+    const user = userEvent.setup();
+    renderPage(adopted());
+
+    expect(screen.getByText('Adopted')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Back to|Send to the board/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Start the year' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('each line owner is emailed their adopted amounts');
+    await user.click(within(dialog).getByRole('button', { name: 'Start the year' }));
+
+    await waitFor(() => expect(activate).toHaveBeenCalledWith('fy-draft'));
+    expect(fetchFiscalYears).toHaveBeenCalled();
+  });
+
+  it('shows the API’s refusal, such as another year still active', async () => {
+    const user = userEvent.setup();
+    activate.mockRejectedValue(new Error('FY2026 is still the active fiscal year. Begin its year-end close first.'));
+    renderPage(adopted());
+
+    await user.click(screen.getByRole('button', { name: 'Start the year' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Start the year' }));
+
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('FY2026 is still the active fiscal year. Begin its year-end close first.')
+    );
+  });
+});
+
+describe('the year-end close', () => {
+  it('begins the active year’s close after confirming', async () => {
+    const user = userEvent.setup();
+    renderPage([year('fy-active', 'FY2026', 'active')]);
+
+    expect(screen.queryByRole('button', { name: 'Lock' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Begin year-end close' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('No new purchase requests, expense reports or check requests');
+    await user.click(within(dialog).getByRole('button', { name: 'Begin close' }));
+
+    await waitFor(() => expect(beginClose).toHaveBeenCalledWith('fy-active'));
+    expect(fetchFiscalYears).toHaveBeenCalled();
+  });
+
+  it('nudges the Treasurer once the year has ended', () => {
+    renderPage([year('fy-active', 'FY2026', 'active', { closeDue: true })]);
+
+    expect(screen.getByRole('status')).toHaveTextContent('FY2026 ended 12/31/2026. Begin its year-end close');
+  });
+
+  it('says nothing while the year is still running', () => {
+    renderPage([year('fy-active', 'FY2026', 'active', { closeDue: false })]);
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('shows a closing year as Closing, with reopen and lock', () => {
+    renderPage([year('fy-active', 'FY2026', 'closed', { isLocked: false, closingStartedAt: '2027-01-04T15:00:00Z' })]);
+
+    expect(screen.getByText('Closing')).toBeInTheDocument();
+    expect(screen.getByText(/Year-end close began 1\/4\/2027/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reopen' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Lock' })).toBeInTheDocument();
+  });
+
+  it('shows a locked year as Closed with its sign-off, and offers nothing', () => {
+    renderPage([
+      year('fy-closed', 'FY2025', 'closed', { lockedAt: '2026-02-01T15:00:00Z', lockNotes: 'Reconciled to the bank' }),
+    ]);
+
+    expect(screen.getByText('Closed')).toBeInTheDocument();
+    expect(screen.getByText('Locked 2/1/2026 · Reconciled to the bank')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Lock|Reopen|Begin year-end close/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('locking a closing year', () => {
+  const closing = () => [year('fy-active', 'FY2026', 'closed', { isLocked: false })];
+
+  it('lists what is still open and will not lock', async () => {
+    const user = userEvent.setup();
+    openItems.mockResolvedValue([
+      {
+        kind: 'purchase_request',
+        entityId: 'pr-1',
+        number: 'PR-2026-0042',
+        description: 'Hose',
+        status: 'approved',
+        amount: '250.00',
+      },
+    ]);
+    renderPage(closing());
+
+    await user.click(screen.getByRole('button', { name: 'Lock' }));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(await within(dialog).findByRole('link', { name: 'PR-2026-0042' })).toHaveAttribute(
+      'href',
+      '/finance/purchase-requests/pr-1'
+    );
+    expect(dialog).toHaveTextContent('1 still open');
+    expect(dialog).toHaveTextContent('Purchase request · approved · $250.00');
+    expect(within(dialog).getByRole('button', { name: 'Lock the year' })).toBeDisabled();
+    expect(openItems).toHaveBeenCalledWith('fy-active');
+  });
+
+  it('needs the reconciliation notes, then locks with them', async () => {
+    const user = userEvent.setup();
+    renderPage(closing());
+
+    await user.click(screen.getByRole('button', { name: 'Lock' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText(/Nothing is open/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Lock the year' }));
+    expect(await within(dialog).findByText('Add the reconciliation notes for the sign-off.')).toBeInTheDocument();
+    expect(lock).not.toHaveBeenCalled();
+
+    await user.type(within(dialog).getByLabelText('Reconciliation notes'), '  Reconciled to June 30  ');
+    await user.click(within(dialog).getByRole('button', { name: 'Lock the year' }));
+
+    await waitFor(() => expect(lock).toHaveBeenCalledWith('fy-active', { notes: 'Reconciled to June 30' }));
+    expect(fetchFiscalYears).toHaveBeenCalled();
+  });
+
+  it('shows the API’s refusal', async () => {
+    const user = userEvent.setup();
+    lock.mockRejectedValue(new Error('FY2026 still has 1 open item: PR-2026-0050.'));
+    renderPage(closing());
+
+    await user.click(screen.getByRole('button', { name: 'Lock' }));
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByText(/Nothing is open/);
+    await user.type(within(dialog).getByLabelText('Reconciliation notes'), 'Reconciled');
+    await user.click(within(dialog).getByRole('button', { name: 'Lock the year' }));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('FY2026 still has 1 open item: PR-2026-0050.'));
   });
 });

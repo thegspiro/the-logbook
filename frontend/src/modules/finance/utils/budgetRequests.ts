@@ -49,6 +49,7 @@ export const PLANNING_STAGE_LABELS: Record<BudgetPlanningStage, string> = {
   requests: 'Taking requests',
   leadership_review: 'Leadership review',
   board_review: 'Board review',
+  adopted: 'Adopted',
 };
 
 /** The banner line for a draft year's request window. */
@@ -57,6 +58,7 @@ export function requestWindowText(
 ): string {
   if (year.planningStage === 'leadership_review') return 'Requests are closed for leadership review';
   if (year.planningStage === 'board_review') return 'Requests are closed: the budget is before the board';
+  if (year.planningStage === 'adopted') return 'Requests are closed: the board adopted the budget';
   if (!year.requestsOpen) return 'Requests are closed';
   if (year.requestDeadline) return `Requests close ${formatCalendarDate(year.requestDeadline)}`;
   return 'No deadline set';

@@ -219,12 +219,20 @@ export interface FiscalYear {
   requestsOpen?: boolean;
   /** Where a draft year's budget is on its way to adoption; null unless a draft. */
   planningStage?: BudgetPlanningStage | null;
-  /** The board's adoption, recorded when the draft was activated (`YYYY-MM-DD`). */
+  /** The board's adoption, recorded from board review (`YYYY-MM-DD`). */
   adoptedOn?: string | null;
   adoptionReference?: string | null;
   adoptionNotes?: string | null;
   adoptionRecordedBy?: string | null;
   adoptionRecordedAt?: string | null;
+  /** When the year-end close began; a closed year that is not locked is closing. */
+  closingStartedAt?: string | null;
+  /** The active year's end date has passed and its close has not begun — backend-decided. */
+  closeDue?: boolean;
+  /** The Treasurer's reconciliation sign-off that locked the year. */
+  lockedBy?: string | null;
+  lockedAt?: string | null;
+  lockNotes?: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -233,20 +241,37 @@ export interface FiscalYear {
 /**
  * A draft year's planning stage. Owners request amounts, then the Treasurer
  * closes the draft for senior leadership's review, then it goes before the
- * board; adoption is activation.
+ * board. Recording the board's vote makes it `adopted`, where it waits for
+ * the Treasurer to start the year.
  */
 export const BudgetPlanningStage = {
   REQUESTS: 'requests',
   LEADERSHIP_REVIEW: 'leadership_review',
   BOARD_REVIEW: 'board_review',
+  ADOPTED: 'adopted',
 } as const;
 export type BudgetPlanningStage = (typeof BudgetPlanningStage)[keyof typeof BudgetPlanningStage];
 
-/** `POST /finance/fiscal-years/{id}/activate` for a draft: the board's vote. */
+/** `POST /finance/fiscal-years/{id}/adopt`: the board's vote. */
 export interface FiscalYearAdoptionPayload {
   adoptedOn: string;
   adoptionReference: string;
   adoptionNotes?: string | undefined;
+}
+
+/** `POST /finance/fiscal-years/{id}/lock`: the Treasurer's reconciliation sign-off. */
+export interface FiscalYearLockPayload {
+  notes: string;
+}
+
+/** A request still in flight that stops a closing year from locking. */
+export interface FiscalYearOpenItem {
+  kind: 'purchase_request' | 'expense_report' | 'check_request';
+  entityId: string;
+  number: string;
+  description: string;
+  status: string;
+  amount?: number | string | null;
 }
 
 export interface BudgetCategory {

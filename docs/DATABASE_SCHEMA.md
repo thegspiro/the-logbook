@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**298 tables · 4908 columns · 984 foreign keys**
+**298 tables · 4912 columns · 985 foreign keys**
 
 ---
 
@@ -264,7 +264,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`expense_reports`](#expense_reports) | `ExpenseReport` | 17 | Expense report submitted by a member for reimbursement |
 | [`finance_export_logs`](#finance_export_logs) | `ExportLog` | 12 | Log of an export attempt, including interrupted streams. |
 | [`finance_export_mappings`](#finance_export_mappings) | `ExportMapping` | 9 | Mapping between internal budget categories and QuickBooks accounts |
-| [`fiscal_years`](#fiscal_years) | `FiscalYear` | 17 | Fiscal year definition for the organization |
+| [`fiscal_years`](#fiscal_years) | `FiscalYear` | 21 | Fiscal year definition for the organization |
 | [`member_dues`](#member_dues) | `MemberDues` | 18 | Individual member dues payment record |
 | [`purchase_requests`](#purchase_requests) | `PurchaseRequest` | 25 | Purchase request submitted by a member |
 
@@ -4047,12 +4047,16 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `status` | ENUM(`draft`, `active`, `closed`) | no |  | `'draft'` |  |
 | `is_locked` | BOOL | no |  | `False` |  |
 | `request_deadline` | DATE | yes |  |  |  |
-| `planning_stage` | ENUM(`requests`, `leadership_review`, `board_review`) | yes |  |  |  |
+| `planning_stage` | ENUM(`requests`, `leadership_review`, `board_review`, `adopted`) | yes |  |  |  |
 | `adopted_on` | DATE | yes |  |  |  |
 | `adoption_reference` | VARCHAR(500) | yes |  |  |  |
 | `adoption_notes` | TEXT | yes |  |  |  |
 | `adoption_recorded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `adoption_recorded_at` | DATETIME | yes |  |  |  |
+| `closing_started_at` | DATETIME | yes |  |  |  |
+| `locked_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `locked_at` | DATETIME | yes |  |  |  |
+| `lock_notes` | TEXT | yes |  |  |  |
 | `created_by` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
@@ -10372,7 +10376,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (360 references)
+### → `users` (361 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10517,6 +10521,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `finance_export_logs` | `exported_by` | RESTRICT | no |
 | `fiscal_years` | `adoption_recorded_by` | SET NULL | yes |
 | `fiscal_years` | `created_by` | RESTRICT | no |
+| `fiscal_years` | `locked_by` | SET NULL | yes |
 | `form_submissions` | `submitted_by` | SET NULL | yes |
 | `forms` | `created_by` | RESTRICT | yes |
 | `fundraising_campaigns` | `created_by` | RESTRICT | yes |

@@ -150,29 +150,43 @@ The new fiscal year is created in **Draft** status.
 
 ![Fiscal year settings listing fiscal years with status badges](./images/11-02-fiscal-year-settings.png)
 
-### Adopting and Activating a Fiscal Year
+### Adopting and Starting a Fiscal Year
 
-A draft year's budget becomes spendable when the board adopts it, and recording that adoption is what activates the year _(2026-10-09)_:
+Adopting the budget and starting the year are separate steps _(2026-10-09)_. The board usually adopts next year's budget before the year begins; the year becomes spendable when you start it.
+
+**Record the board's adoption:**
 
 1. Move the draft year to **Board review** (see [Planning Next Year](#planning-next-year-treasurer), step 4).
 2. Once the board has voted, click **Record adoption** on the year's row.
 3. Enter the date the board adopted it (not in the future) and the motion or minutes reference, and optionally notes such as the vote count.
-4. Click **Adopt and activate**.
+4. Click **Record adoption**.
 
-The year becomes the current period for all financial operations, its row shows _"Adopted by the board {date} · {reference}"_, and each line owner is emailed the lines their position owns with the adopted amounts. Only one fiscal year can be active at a time -- activating a new one automatically closes the previously active one. A draft cannot be activated any other way.
+The year's badge reads **Adopted** and its row shows _"Adopted by the board {date} · {reference}"_. Its budget is final from here: the stage can no longer be moved back.
 
-### Locking a Fiscal Year
+**Start the year** on or after its start date:
 
-When a fiscal year is complete:
+1. Begin the current year's year-end close first (below) — only one year can be active, and starting a new one never closes the old one for you.
+2. Click **Start the year** on the adopted draft and confirm.
 
-1. Click **Lock** on the active fiscal year.
-2. Confirm the lock.
+The year becomes the current period for all financial operations, and each line owner is emailed the lines their position owns with the adopted amounts. Starting is refused before the year's start date, while another year is still active, or if the board's adoption has not been recorded.
 
-A draft year cannot be locked: it has never been adopted, so locking it would close it unused.
+### Closing and Locking a Fiscal Year
 
-Locking transitions the fiscal year to **Closed** status and sets the `isLocked` flag. A locked fiscal year cannot be modified or re-opened, and its budget amounts are final: a line's amount can no longer be changed or amended. A line's notes, station and owner can still be edited. This is typically done after year-end reconciliation.
+When the year ends, the Treasurer closes it in two steps _(2026-10-09)_. Once the end date has passed, a banner on **Finance > Settings** reminds you.
 
-> **Hint:** Create and set up your new fiscal year (including budgets) in Draft status before the current one ends. When the new period begins, activate it. This ensures a seamless transition with no gap in financial tracking.
+**1. Begin year-end close.** Click **Begin year-end close** on the active year and confirm. The year's badge reads **Closing**. From now on:
+
+- No new purchase requests, expense reports or check requests can be raised or submitted against it.
+- What was already submitted can still be approved, and what was approved can still be paid, issued, voided or cancelled.
+- Budget amendments are still allowed.
+
+If you began the close by mistake, **Reopen** makes it the active year again (as long as no other year has been started).
+
+**2. Lock it.** Once everything is settled, click **Lock**. The dialog lists anything still open — submitted requests awaiting a decision, approved purchases or reports not yet paid, approved checks not yet issued — each linked so you can finish it. The lock stays disabled until the list is empty. Then enter your **reconciliation notes** (for example, _"Reconciled to the June 30 bank statement; reviewed by the audit committee"_) and click **Lock the year**.
+
+A locked year's badge reads **Closed**, and its row shows _"Locked {date} · {notes}"_ with who locked it kept on record. A locked year cannot be reopened, nothing in it can be paid or changed, and its budget amounts are final. A line's notes, station and owner can still be edited. A draft year cannot be locked.
+
+> **Hint:** Create and set up your new fiscal year (including budgets) in Draft status before the current one ends, and have the board adopt it. When the new year begins, begin the old year's close, then start the new one — the two can overlap, so last year's bills can still be paid while this year's spending starts.
 
 ### Planning Next Year (Treasurer)
 
@@ -193,17 +207,17 @@ Each copy keeps the line's category, station, notes and its own owner position, 
 
 The year's row then reads _"Requests close {date}"_ with a **Requests open** or **Requests closed** badge. Requests stay open through the **end of that day in your department's time zone**. After it, owners can no longer make, change, submit or withdraw a request (they see _"The request deadline for {year} has passed."_); you can still enter or change them on their behalf. A deadline can only be set while the year is a draft.
 
-**3. Decide the requests.** Each request is approved as asked, adjusted to a different amount (a note saying why is required), or declined (a note is required). Approving or adjusting writes the amount into the draft year's line — or, for a proposed new line, creates it. You can change a decision while the year is still a draft; once you activate it, decisions are final and the budget changes through amendments. See [Reviewing Budget Requests](#reviewing-budget-requests-treasurer) below.
+**3. Decide the requests.** Each request is approved as asked, adjusted to a different amount (a note saying why is required), or declined (a note is required). Approving or adjusting writes the amount into the draft year's line — or, for a proposed new line, creates it. You can change a decision while the year is taking requests; once it moves on, and after it is adopted and started, decisions are final and the budget changes through amendments. See [Reviewing Budget Requests](#reviewing-budget-requests-treasurer) below.
 
 **4. Move it through review to the board.** A draft year shows its stage on its row: **Taking requests**, **Leadership review** or **Board review**. Move it one stage at a time with the buttons beside it; each move asks you to confirm, and each can be undone with the **Back to…** button.
 
 - **Start leadership review** closes the year to line owners whatever the deadline says, and to your own decisions. Senior leadership — the positions your department has granted **`finance.budget_review`**, typically the President and the Chief — opens **Finance > Budget requests** and uses **Change amount** on any request you approved or adjusted to set a different amount with a note. Their amount becomes the line's budget; your decision stays on record beside it. A leader cannot change a request for a line their own position owns, or one they submitted.
 - **Send to the board** freezes everything while the board considers the budget.
-- **Record adoption** (in board review) makes it the active year — see [Adopting and Activating a Fiscal Year](#adopting-and-activating-a-fiscal-year).
+- **Record adoption** (in board review) records the board's vote, and **Start the year** makes it active — see [Adopting and Starting a Fiscal Year](#adopting-and-starting-a-fiscal-year).
 
 Moving back to **Taking requests** reopens the year to owners until the deadline. Deciding a request again then replaces any leadership change to it.
 
-> **Hint:** A sensible order is: create the draft year, **Start from last year**, adjust the lines you already know, set the deadline, let owners request, decide, start leadership review, send it to the board, then record the board's adoption when it votes.
+> **Hint:** A sensible order is: create the draft year, **Start from last year**, adjust the lines you already know, set the deadline, let owners request, decide, start leadership review, send it to the board, then record the board's adoption when it votes and start the year when it begins.
 
 ### Requesting Next Year's Budget (Line Owners)
 
@@ -236,14 +250,14 @@ If the API refuses (for example, an amount below what the line has already spent
 
 ### Edge Cases
 
-| Scenario                                                | Behavior                                                                                                                                 |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Activating a fiscal year when another is already active | The previously active fiscal year is automatically set to Closed status                                                                  |
-| Submitting a request with no active fiscal year         | The request form will not allow submission -- the fiscal year dropdown will be empty                                                     |
-| Editing a locked fiscal year                            | Not permitted -- the system rejects modifications with "Fiscal year is locked and cannot be modified"                                    |
-| Setting a request deadline on an active or closed year  | Not permitted -- "The request deadline can only be set while the fiscal year is a draft."                                                |
-| Copying lines into an active year                       | Not permitted -- **Start from last year** only copies into a draft year that is not locked                                               |
-| Deleting a fiscal year with existing budgets            | Not permitted -- budgets cascade with the fiscal year, but the application blocks deletion of fiscal years that have associated requests |
+| Scenario                                               | Behavior                                                                                                                                 |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Starting a fiscal year when another is already active  | Not permitted -- begin the active year's year-end close first; starting a year never closes another                                      |
+| Submitting a request with no active fiscal year        | The request form will not allow submission -- the fiscal year dropdown will be empty                                                     |
+| Editing a locked fiscal year                           | Not permitted -- the system rejects modifications with "Fiscal year is locked and cannot be modified"                                    |
+| Setting a request deadline on an active or closed year | Not permitted -- "The request deadline can only be set while the fiscal year is a draft."                                                |
+| Copying lines into an active year                      | Not permitted -- **Start from last year** only copies into a draft year that is not locked                                               |
+| Deleting a fiscal year with existing budgets           | Not permitted -- budgets cascade with the fiscal year, but the application blocks deletion of fiscal years that have associated requests |
 
 ---
 
@@ -1543,13 +1557,14 @@ The Falls Church Fire Department operates on a July 1 -- June 30 fiscal year. In
 
 6. **Set up QuickBooks mappings:** Navigate to the export mappings and map each category to the corresponding QuickBooks account (e.g., "Fuel" to "6200 - Vehicle Fuel").
 
-### Phase 2: Activating the New Year (July 1)
+### Phase 2: Starting the New Year (July 1)
 
-On July 1, the Treasurer:
+At the June board meeting the board adopts FY 2027, and the Treasurer clicks **Record adoption** on FY 2027 in **Finance > Settings** with the meeting date and motion number. On July 1, the Treasurer:
 
-1. **Records the board's adoption of FY 2027:** Navigate to **Finance > Settings**, click **Record adoption** on FY 2027 (in board review since the June board meeting), and enter the meeting date and motion number. FY 2027 becomes active and the previously active FY 2026 is automatically closed.
-2. **Generates member dues:** Navigate to **Finance > Dues**, find the annual dues schedule, and click **Generate Dues**. Every active member receives a Pending dues record for $150 due August 1.
-3. **Checks the dashboard:** Navigate to **Finance** and verify the dashboard shows the new fiscal year's budgets with $0 spent and $0 encumbered.
+1. **Begins FY 2026's year-end close:** click **Begin year-end close** on FY 2026. Nothing new can be submitted against it, but its last bills can still be paid.
+2. **Starts FY 2027:** click **Start the year** on FY 2027. It becomes active and each line owner is emailed their adopted amounts.
+3. **Generates member dues:** Navigate to **Finance > Dues**, find the annual dues schedule, and click **Generate Dues**. Every active member receives a Pending dues record for $150 due August 1.
+4. **Checks the dashboard:** Navigate to **Finance** and verify the dashboard shows the new fiscal year's budgets with $0 spent and $0 encumbered.
 
 ### Phase 3: Day-to-Day Operations (July--June)
 
@@ -1602,17 +1617,14 @@ The Treasurer regularly:
 3. Monitors **dues collection** -- following up with members who are overdue after the grace period.
 4. Runs **QuickBooks exports** monthly -- selecting the previous month's date range, generating the CSV, and importing it into QuickBooks for reconciliation.
 
-### Phase 5: Year-End Reconciliation (June)
+### Phase 5: Year-End Reconciliation (June–July)
 
-Before closing the fiscal year:
-
-1. Ensure all pending purchase requests are either completed (paid) or cancelled.
-2. Ensure all expense reports are processed and paid.
-3. Ensure all check requests are issued or cancelled.
+1. Have the board adopt FY 2028 and record it (**Record adoption**).
+2. On July 1, click **Begin year-end close** on FY 2027, then **Start the year** on FY 2028.
+3. Finish FY 2027's open items: pay or cancel purchase requests, pay expense reports, and issue or cancel check requests. The **Lock** dialog lists whatever is still open.
 4. Run a final QuickBooks export for the last month.
 5. Review the budget summary on the dashboard for any discrepancies between The Logbook and QuickBooks.
-6. Lock FY 2027: navigate to **Finance > Settings** and click **Lock**. All FY 2027 data becomes read-only.
-7. Activate FY 2028 (already set up in Draft during the previous month).
+6. Lock FY 2027: click **Lock**, enter the reconciliation notes, and click **Lock the year**. All FY 2027 data becomes read-only.
 
 ---
 

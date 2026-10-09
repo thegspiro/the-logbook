@@ -1281,6 +1281,28 @@ review to an adoption the Treasurer records (see `docs/FINANCE_MODULE.md`,
   makes the change there, and returns it to board review before recording the
   adoption.
 
+## Finance — The Year-End Close: What It Does Not Cover (2026-10-09)
+
+Adoption, starting a year, its year-end close and the lock sign-off are
+separate steps (see `docs/FINANCE_MODULE.md`, "Starting, closing and locking a
+year"). Three gaps remain, pending a decision:
+
+- **The Treasurer's own line edit still changes an adopted draft.** Board
+  review and the adopted stage freeze requests and leadership changes, but
+  _Edit_ on a budget line (`PUT /finance/budgets/{id}`) still sets the amount
+  of a draft year's line in any stage. After adoption a change should be an
+  amendment the board can see; that belongs with the second-officer amendment
+  confirmation planned next, so it is not changed here.
+- **Nothing starts or closes a year on its own.** The Treasurer is reminded by
+  a banner once the end date passes (`closeDue`), but no email goes out and the
+  year stays active until its close is begun; likewise an adopted year waits
+  for **Start the year**. Both are deliberate — each step is an officer's
+  decision on the record.
+- **Drafts left in a closing year stay as drafts.** A purchase request, expense
+  report or check request never submitted cannot be submitted once the close
+  begins, and does not stop the lock. A requester who still needs it raises it
+  again in the new year; nothing moves it across.
+
 ## Finance — QuickBooks Export Gaps (2026-10-08)
 
 The transactions export is now a valid QuickBooks Online journal-entry import

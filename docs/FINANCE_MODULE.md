@@ -560,20 +560,18 @@ adoption — recorded — is what activates it. Migration `5c8be05f2f0f`.
   audited `finance.budget_request_reviewed`. A new Treasurer decision (after
   moving back to `requests`) clears it. `finance.budget_review` also reads every
   request (list and detail), as `finance.manage` does.
-- **Adoption** — `POST /finance/fiscal-years/{id}/activate` on a **draft**
-  requires `board_review` and a body `{adoptedOn, adoptionReference,
-adoptionNotes?}`; the date may not be after the department's today. Stored on
-  the year (`adopted_on`, `adoption_reference`, `adoption_notes`,
-  `adoption_recorded_by`, `adoption_recorded_at`), the stage cleared, audited
-  `finance.budget_adopted`, and each line owner emailed their lines and adopted
-  amounts (`notify_budget_adopted`, kind `budget_requests`, one email per
-  member). Re-activating a year that is not a draft is unchanged and needs no
-  body.
+- **Adoption** — `POST /finance/fiscal-years/{id}/adopt` on a draft in
+  `board_review`, body `{adoptedOn, adoptionReference, adoptionNotes?}`; the
+  date may not be after the department's today. Stored on the year
+  (`adopted_on`, `adoption_reference`, `adoption_notes`,
+  `adoption_recorded_by`, `adoption_recorded_at`), the stage set to
+  `adopted`, audited `finance.budget_adopted`. An adopted year's stage no
+  longer moves. Starting the year is a separate step — see the next section.
 - **Lock** refuses a draft year (400).
 
 **Screens.** _Finance › Settings_: a draft row shows its stage badge and the
 buttons to move it (each confirmed), with **Record adoption** in board review
-opening `BudgetAdoptionDialog`; the start-from and deadline controls show only
+opening `BudgetAdoptionDialog` and **Start the year** once adopted; the start-from and deadline controls show only
 while taking requests; an adopted year shows _"Adopted by the board {date} ·
 {reference}"_. _Finance › Budget requests_ (`/finance/budget-requests/review`)
 now admits `finance.budget_review`: a **Leadership** column, and **Change
@@ -581,6 +579,49 @@ amount** (`BudgetRequestLeadershipDialog`) on approved/adjusted rows for
 leadership in leadership review; the Treasurer's decision buttons show only
 while taking requests. The owner's screen names the stage when it is closed
 and shows a leadership change with its note.
+
+## Starting, closing and locking a year _(2026-10-09)_
+
+Adoption, the start of the year and its close are separate steps the Treasurer
+takes (`finance.manage`), each audited. Migration `af92f1496c43`.
+
+| Step                 | Endpoint                                 | Allowed from                                                 | Effect                                                                            |
+| -------------------- | ---------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| Record adoption      | `POST /fiscal-years/{id}/adopt`          | draft in `board_review`                                      | stage `adopted`; `finance.budget_adopted`                                         |
+| Start the year       | `POST /fiscal-years/{id}/activate`       | draft in `adopted`, on/after its start date; no other active | `active`; owners emailed (`notify_budget_adopted`); `finance.fiscal_year_started` |
+| Begin year-end close | `POST /fiscal-years/{id}/begin-close`    | `active`                                                     | `closed`, `closing_started_at` set; `finance.fiscal_year_close_begun`             |
+| Reopen               | `POST /fiscal-years/{id}/activate`       | `closed`, not locked; no other active                        | `active` again; `finance.fiscal_year_reopened`                                    |
+| Lock (sign-off)      | `POST /fiscal-years/{id}/lock` `{notes}` | `closed`, not locked, **no open items**                      | `is_locked`, `locked_by`, `locked_at`, `lock_notes`; `finance.fiscal_year_locked` |
+
+- **No automatic close.** Starting a year never closes the current one; it is
+  refused (400, naming the active year) until that year's close is begun. The
+  start date is compared with the department's today (`resolve_org_today`).
+- **What each status admits** (`FinanceService._require_year_accepts`, read
+  under a share lock on the year's row so it waits out a lock that is
+  landing). _New_ — create, edit, add a line item to, or submit a purchase
+  request, expense report or check request — needs a draft or active year.
+  _Finish_ — mark ordered/received/paid, cancel, pay an expense report, issue
+  or void a check — needs only a year that is not locked, so a closing year
+  settles its last bills. Approvals are not gated: a locked year has nothing
+  left to approve, which the lock's open-items rule guarantees. Budget
+  amendments keep their own rule (refused only when locked).
+- **Open items** (`GET /fiscal-years/{id}/open-items`): purchase requests
+  `submitted`, `pending_approval`, `approved`, `ordered` or `received`;
+  expense reports and check requests `submitted`, `pending_approval` or
+  `approved`. Drafts are not open items — they moved no money and can no
+  longer be submitted. The lock re-reads the list under the year's row lock
+  and refuses while it is non-empty, naming the count and the first five
+  numbers.
+- **`closeDue`** on the year response: active, not locked, and the
+  department's today is after its end date. _Finance › Settings_ shows a
+  banner for it.
+
+**Screens.** _Finance › Settings_ labels a closed, unlocked year **Closing**
+and a locked one **Closed**. The active year offers **Begin year-end close**; a
+closing year offers **Reopen** and **Lock**, which opens
+`FiscalYearLockDialog`: the open items (each linked to its request), and the
+required reconciliation notes, with the lock disabled while anything is open.
+A locked year shows _"Locked {date} · {notes}"_.
 
 ## Context
 
@@ -626,8 +667,9 @@ Enums:
 
 - `GET/POST /finance/fiscal-years`
 - `GET/PUT /finance/fiscal-years/{id}`
-- `POST /finance/fiscal-years/{id}/activate`
-- `POST /finance/fiscal-years/{id}/lock`
+- `POST /finance/fiscal-years/{id}/adopt`, `/activate`, `/begin-close`, `/lock`
+  and `GET /finance/fiscal-years/{id}/open-items` — see "Starting, closing and
+  locking a year"
 - `GET/POST /finance/budget-categories`
 - `PUT/DELETE /finance/budget-categories/{id}`
 - `GET/POST /finance/budgets`

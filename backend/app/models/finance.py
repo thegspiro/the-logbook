@@ -65,13 +65,15 @@ class BudgetPlanningStage(str, enum.Enum):
     Owners request amounts (``requests``), the Treasurer closes the draft to
     them and senior leadership adjusts the decided amounts
     (``leadership_review``), then the budget goes before the board
-    (``board_review``). Adoption is activation, which needs the board's vote
-    recorded. Only a draft year has a stage.
+    (``board_review``). Recording the board's vote moves it to ``adopted``,
+    where it waits for the Treasurer to start the year on or after its start
+    date. Only a draft year has a stage.
     """
 
     REQUESTS = "requests"
     LEADERSHIP_REVIEW = "leadership_review"
     BOARD_REVIEW = "board_review"
+    ADOPTED = "adopted"
 
 
 class PurchaseRequestStatus(str, enum.Enum):
@@ -250,9 +252,9 @@ class FiscalYear(Base):
         ),
         nullable=True,
     )
-    # The board's adoption of the budget, recorded when the year is
-    # activated from a draft: the vote is what makes the budget spendable,
-    # so it is kept with the year rather than only in the audit log.
+    # The board's adoption of the budget, recorded from board review: the
+    # vote is what allows the year to be started and its budget spent, so it
+    # is kept with the year rather than only in the audit log.
     adopted_on = Column(Date, nullable=True)
     adoption_reference = Column(String(500), nullable=True)
     adoption_notes = Column(Text, nullable=True)
@@ -260,6 +262,14 @@ class FiscalYear(Base):
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     adoption_recorded_at = Column(DateTime(timezone=True), nullable=True)
+    # When the Treasurer began the year-end close (status became CLOSED
+    # without the lock), and the reconciliation sign-off that locked it.
+    closing_started_at = Column(DateTime(timezone=True), nullable=True)
+    locked_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    locked_at = Column(DateTime(timezone=True), nullable=True)
+    lock_notes = Column(Text, nullable=True)
     created_by = Column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )

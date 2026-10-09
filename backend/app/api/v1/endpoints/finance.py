@@ -73,8 +73,10 @@ from app.schemas.finance import (
     ExportRequest,
     FinanceDashboardResponse,
     FinanceNamedOptionResponse,
-    FiscalYearActivate,
+    FiscalYearAdoption,
     FiscalYearCreate,
+    FiscalYearLock,
+    FiscalYearOpenItemResponse,
     FiscalYearOptionResponse,
     FiscalYearResponse,
     FiscalYearStageChange,
@@ -317,61 +319,149 @@ async def update_fiscal_year(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
-@router.post("/fiscal-years/{fy_id}/activate", response_model=FiscalYearResponse)
-async def activate_fiscal_year(
+@router.post("/fiscal-years/{fy_id}/adopt", response_model=FiscalYearResponse)
+async def adopt_fiscal_year(
     fy_id: str,
-    data: Optional[FiscalYearActivate] = None,
+    data: FiscalYearAdoption,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.manage")),
 ):
-    """Make a fiscal year the active one; for a draft, record its adoption.
+    """Record the board's adoption of a draft year's budget.
 
     **Requires permission: finance.manage**
 
-    A draft year is adopted here: it must be in board review, and the body
-    carries the board's vote — ``adoptedOn`` (not in the future) and
-    ``adoptionReference`` (the motion or minutes), with optional
-    ``adoptionNotes``. Each line owner is emailed their adopted lines.
-    Re-activating a year that is not a draft needs no body.
+    The year must be a draft in board review. The body carries the board's
+    vote — ``adoptedOn`` (not in the future) and ``adoptionReference`` (the
+    motion or minutes), with optional ``adoptionNotes``. The year stays a
+    draft, in the ``adopted`` stage, until it is started with
+    ``POST /fiscal-years/{id}/activate``. A year in another department is 404.
     """
     service = FinanceService(db)
     org_id = str(current_user.organization_id)
-    adoption = data.model_dump() if data else {}
     try:
-        before = await service.get_fiscal_year(fy_id, org_id)
-        adopting = before is not None and before.status == FiscalYearStatus.DRAFT
-        fy = await service.activate_fiscal_year(
-            fy_id, org_id, recorded_by=str(current_user.id), **adoption
+        fy = await service.adopt_fiscal_year(
+            fy_id, org_id, recorded_by=str(current_user.id), **data.model_dump()
         )
-        event_data: dict = {"fiscal_year_id": fy_id}
-        if adopting:
-            event_data.update(
-                adopted_on=fy.adopted_on.isoformat() if fy.adopted_on else None,
-                adoption_reference=fy.adoption_reference,
-            )
         await log_audit_event(
             db=db,
-            event_type=(
-                "finance.budget_adopted"
-                if adopting
-                else "finance.fiscal_year_activated"
-            ),
+            event_type="finance.budget_adopted",
             event_category="finance",
             severity="info",
-            event_data=event_data,
+            event_data={
+                "fiscal_year_id": fy_id,
+                "adopted_on": fy.adopted_on.isoformat(),
+                "adoption_reference": fy.adoption_reference,
+            },
             user_id=str(current_user.id),
             username=current_user.username,
             organization_id=org_id,
         )
-        if adopting:
+        return await FinanceBudgetRequestService(db).fiscal_year_row(fy, org_id)
+    except Exception as e:
+        raise _budget_request_error(e)
+
+
+@router.post("/fiscal-years/{fy_id}/activate", response_model=FiscalYearResponse)
+async def activate_fiscal_year(
+    fy_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """Start a fiscal year: make it the active one.
+
+    **Requires permission: finance.manage**
+
+    A draft must have been adopted (``POST /fiscal-years/{id}/adopt``) and
+    have reached its start date on the department's calendar; starting it
+    emails each line owner their adopted lines. A year in its year-end close
+    may be reopened; a locked year may not. Refused while another year is
+    active — begin that year's close first. A year in another department is
+    404.
+    """
+    service = FinanceService(db)
+    org_id = str(current_user.organization_id)
+    try:
+        before = await service.get_fiscal_year(fy_id, org_id)
+        starting = before is not None and before.status == FiscalYearStatus.DRAFT
+        fy = await service.activate_fiscal_year(fy_id, org_id)
+        await log_audit_event(
+            db=db,
+            event_type=(
+                "finance.fiscal_year_started"
+                if starting
+                else "finance.fiscal_year_reopened"
+            ),
+            event_category="finance",
+            severity="info",
+            event_data={"fiscal_year_id": fy_id},
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=org_id,
+        )
+        if starting:
             await notify_budget_adopted(db, org_id, fy.id)
         return await FinanceBudgetRequestService(db).fiscal_year_row(fy, org_id)
-    except BudgetLimitExceededError as e:
-        raise HTTPException(status_code=409, detail=str(e))
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+        raise _budget_request_error(e)
+
+
+@router.post("/fiscal-years/{fy_id}/begin-close", response_model=FiscalYearResponse)
+async def begin_fiscal_year_close(
+    fy_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """Begin the active year's year-end close.
+
+    **Requires permission: finance.manage**
+
+    From here no new purchase requests, expense reports or check requests can
+    be raised or submitted against the year; what was already submitted can
+    still be approved, paid, issued or cancelled, and amendments are still
+    allowed. Lock it once nothing is open. A year in another department is
+    404.
+    """
+    service = FinanceService(db)
+    org_id = str(current_user.organization_id)
+    try:
+        fy = await service.begin_year_end_close(fy_id, org_id)
+        await log_audit_event(
+            db=db,
+            event_type="finance.fiscal_year_close_begun",
+            event_category="finance",
+            severity="info",
+            event_data={"fiscal_year_id": fy_id},
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=org_id,
+        )
+        return await FinanceBudgetRequestService(db).fiscal_year_row(fy, org_id)
+    except Exception as e:
+        raise _budget_request_error(e)
+
+
+@router.get(
+    "/fiscal-years/{fy_id}/open-items",
+    response_model=list[FiscalYearOpenItemResponse],
+)
+async def list_fiscal_year_open_items(
+    fy_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """What still stops a year from locking.
+
+    **Requires permission: finance.manage**
+
+    Purchase requests, expense reports and check requests submitted but not
+    yet decided, and approved ones not yet paid or issued. A year in another
+    department is 404.
+    """
+    service = FinanceService(db)
+    try:
+        return await service.list_open_items(fy_id, str(current_user.organization_id))
+    except Exception as e:
+        raise _budget_request_error(e)
 
 
 @router.post("/fiscal-years/{fy_id}/planning-stage", response_model=FiscalYearResponse)
@@ -416,20 +506,39 @@ async def set_fiscal_year_planning_stage(
 @router.post("/fiscal-years/{fy_id}/lock", response_model=FiscalYearResponse)
 async def lock_fiscal_year(
     fy_id: str,
+    data: FiscalYearLock,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.manage")),
 ):
+    """Lock a reconciled year, with the Treasurer's sign-off.
+
+    **Requires permission: finance.manage**
+
+    Only a year in its year-end close, and only once nothing is open (see
+    ``GET /fiscal-years/{id}/open-items``). ``notes`` — the reconciliation
+    notes — are required and kept with the year, with who locked it and when.
+    A locked year's records no longer change. A year in another department is
+    404.
+    """
     service = FinanceService(db)
     org_id = str(current_user.organization_id)
     try:
-        fy = await service.lock_fiscal_year(fy_id, org_id)
+        fy = await service.lock_fiscal_year(
+            fy_id, org_id, locked_by=str(current_user.id), notes=data.notes
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.fiscal_year_locked",
+            event_category="finance",
+            severity="info",
+            event_data={"fiscal_year_id": fy_id},
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=org_id,
+        )
         return await FinanceBudgetRequestService(db).fiscal_year_row(fy, org_id)
-    except BudgetLimitExceededError as e:
-        raise HTTPException(status_code=409, detail=str(e))
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+        raise _budget_request_error(e)
 
 
 @router.post(
