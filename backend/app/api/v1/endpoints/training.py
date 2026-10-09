@@ -8,6 +8,7 @@ import calendar
 import csv
 import io
 from datetime import date, datetime, timedelta, timezone
+from typing import Any, TypedDict
 from uuid import UUID
 
 from fastapi import (
@@ -478,14 +479,17 @@ def _member_requirement_response(requirement) -> TrainingRequirementResponse:
     ``member_visible: false`` (background checks, reference calls, …) must not
     reach members through this route either.
     """
-    response = TrainingRequirementResponse.model_validate(requirement)
-    return response.model_copy(
+    response: TrainingRequirementResponse = TrainingRequirementResponse.model_validate(
+        requirement
+    )
+    member_view: TrainingRequirementResponse = response.model_copy(
         update={
             "checklist_items": [
                 item for item in (response.checklist_items or []) if item.member_visible
             ]
         }
     )
+    return member_view
 
 
 # Training Courses
@@ -1153,7 +1157,7 @@ async def update_record(
 
     await _sync_qualifications(db, [record])
 
-    event_data = {
+    event_data: dict[str, Any] = {
         "record_id": str(record_id),
         "fields_updated": list(update_fields.keys()),
     }
@@ -2192,6 +2196,12 @@ async def enroll_member_in_program(
 # ============================================
 
 
+class _UnmatchedCourseTally(TypedDict):
+    name: str
+    code: str | None
+    count: int
+
+
 @router.post("/import/parse")
 async def parse_historical_import(
     file: UploadFile = File(...),
@@ -2359,7 +2369,7 @@ async def parse_historical_import(
     # Parse rows
     rows = []
     parse_errors = []
-    unmatched_course_counts = {}
+    unmatched_course_counts: dict[str, _UnmatchedCourseTally] = {}
     members_matched_set = set()
     members_unmatched_set = set()
     row_num = 0
@@ -2672,22 +2682,22 @@ async def confirm_historical_import(
         training_type = row.training_type or request.default_training_type
 
         if not row.course_matched:
-            mapping = course_map.get(row.course_name.lower())
+            row_mapping = course_map.get(row.course_name.lower())
             mapping_error = invalid_mappings.get(row.course_name.lower())
             if mapping_error:
                 failed += 1
                 errors.append(f"Row {row.row_number}: {mapping_error}")
                 continue
-            if mapping:
-                if mapping.action == "skip":
+            if row_mapping:
+                if row_mapping.action == "skip":
                     skipped += 1
                     continue
-                elif mapping.action == "map_existing":
-                    course_id = mapping.existing_course_id
-                elif mapping.action == "create_new":
+                elif row_mapping.action == "map_existing":
+                    course_id = row_mapping.existing_course_id
+                elif row_mapping.action == "create_new":
                     course_id = created_courses.get(row.course_name.lower())
-                    if mapping.new_training_type:
-                        training_type = mapping.new_training_type
+                    if row_mapping.new_training_type:
+                        training_type = row_mapping.new_training_type
             # If no mapping provided, still import with course_name only (no course_id)
 
         # Reject rows whose resolved course_id is outside this org.

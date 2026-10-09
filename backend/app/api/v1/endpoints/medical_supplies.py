@@ -148,10 +148,10 @@ async def create_medical_category(
         category_data=data,
         created_by=current_user.id,
     )
-    if error:
+    if error or new_category is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=sanitize_error_message(error),
+            detail=sanitize_error_message(error or ""),
         )
 
     await log_audit_event(
@@ -370,10 +370,10 @@ async def create_medical_item(
         item_data=data,
         created_by=current_user.id,
     )
-    if error:
+    if error or new_item is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=sanitize_error_message(error),
+            detail=sanitize_error_message(error or ""),
         )
 
     await log_audit_event(

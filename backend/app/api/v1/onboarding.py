@@ -202,7 +202,7 @@ def _validated_microsoft_auth_method(value: Any) -> Optional[str]:
     """
     if value is None or value == "":
         return None
-    if value not in MICROSOFT_AUTH_METHODS:
+    if not isinstance(value, str) or value not in MICROSOFT_AUTH_METHODS:
         raise ValueError(
             "Microsoft 365 authentication method must be one of: "
             f"{', '.join(MICROSOFT_AUTH_METHODS)}"
@@ -774,7 +774,7 @@ async def get_or_create_session(
                 OnboardingSessionModel.expires_at > datetime.now(timezone.utc),
             )
         )
-        session = result.scalar_one_or_none()
+        session: OnboardingSessionModel | None = result.scalar_one_or_none()
 
         if session:
             # Update expiration on activity
@@ -837,7 +837,7 @@ async def validate_session(
             OnboardingSessionModel.session_id == session_id
         )
     )
-    session = result.scalar_one_or_none()
+    session: OnboardingSessionModel | None = result.scalar_one_or_none()
 
     if not session:
         raise CodedHTTPException(
@@ -2394,8 +2394,9 @@ def _merge_default_permissions(
             module_perms = submitted[owning_module]
             if module_perms.view and not module_perms.manage:
                 merged.append(perm)
-    seen: set[str] = set()
-    return [perm for perm in merged if not (perm in seen or seen.add(perm))]
+    # dict keys keep first-seen order, so this drops repeats without
+    # reordering the grants.
+    return list(dict.fromkeys(merged))
 
 
 def registry_checkboxes(default_perms: Iterable[str], module_id: str) -> tuple:

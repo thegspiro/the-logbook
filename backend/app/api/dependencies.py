@@ -157,7 +157,7 @@ async def get_current_user(
     # user. Cached on `request.state` rather than in a module-level dict for
     # the reason CLAUDE.md pitfall 9 gives — a process-lifetime cache of user
     # objects is an unbounded one.
-    cached_user = getattr(request.state, "authenticated_user", None)
+    cached_user: User | None = getattr(request.state, "authenticated_user", None)
     if cached_user is not None:
         return cached_user
 
@@ -438,7 +438,7 @@ async def get_user_organization(
     result = await db.execute(
         select(Organization).where(Organization.id == current_user.organization_id)
     )
-    organization = result.scalar_one_or_none()
+    organization: Organization | None = result.scalar_one_or_none()
 
     if not organization:
         raise CodedHTTPException(
@@ -516,7 +516,7 @@ async def get_request_enabled_modules(
     if current_user is None:
         return None
 
-    cached = getattr(request.state, "enabled_modules", None)
+    cached: frozenset[str] | None = getattr(request.state, "enabled_modules", None)
     if cached is not None:
         return cached
 
@@ -581,5 +581,5 @@ def require_module(module: str, label: str | None = None):
     # Named on the function rather than left in a closure cell, so tooling can
     # read the map off a built app. Mirrors ``required_permissions`` on the
     # permission checkers; cell ordering is not part of the language contract.
-    check_module_enabled.required_module = module
+    setattr(check_module_enabled, "required_module", module)
     return check_module_enabled

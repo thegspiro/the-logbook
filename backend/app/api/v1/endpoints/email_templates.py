@@ -306,12 +306,15 @@ async def _with_list_metadata(
     an admin reads as "my change did not save".
     """
     counts = await service.sent_counts(template.organization_id)
-    return EmailTemplateResponse.model_validate(template).model_copy(
+    response: EmailTemplateResponse = EmailTemplateResponse.model_validate(
+        template
+    ).model_copy(
         update={
             "is_customized": service.is_customized(template),
             "sent_count": counts.get(_type_value(template.template_type), 0),
         }
     )
+    return response
 
 
 def _type_value(template_type: Any) -> str:
@@ -322,7 +325,8 @@ def _type_value(template_type: Any) -> str:
     ``.value``. Accepting both is what stops the count silently reading zero
     for every row.
     """
-    return getattr(template_type, "value", template_type)
+    wire_value: str = getattr(template_type, "value", template_type)
+    return wire_value
 
 
 @router.get("", response_model=list[EmailTemplateResponse])
