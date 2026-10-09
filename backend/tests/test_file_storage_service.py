@@ -14,6 +14,7 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
+from app.core import file_encryption
 from app.core.error_codes import ErrorCode
 from app.services import file_storage_service as file_storage
 from app.services import upload_scanning
@@ -81,7 +82,9 @@ class TestStore:
         assert len(name) == 32 + 4
         assert stored.original_name == "Pump Test.pdf"
         assert stored.mime_type == "application/pdf"
-        assert open(stored.path, "rb").read() == PDF
+        # Encrypted at rest; the plaintext comes back intact.
+        assert PDF not in open(stored.path, "rb").read()
+        assert file_encryption.read_plaintext(stored.path) == PDF
         assert stat.S_IMODE(os.stat(stored.path).st_mode) == 0o640
         # No partial file is left behind by the write-then-rename.
         assert os.listdir(directory) == [name]

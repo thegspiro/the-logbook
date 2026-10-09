@@ -33,6 +33,7 @@ from app.api.v1.endpoints import equipment_check as equipment_check_endpoint
 from app.api.v1.endpoints import events as events_endpoint
 from app.api.v1.endpoints import membership_pipeline as pipeline_endpoint
 from app.api.v1.endpoints import training_enhancements
+from app.core import file_encryption
 from app.services import file_storage_service, membership_pipeline_service
 from app.services.documents_service import DocumentsService
 from app.utils import email_attachments
@@ -602,7 +603,8 @@ class TestEmailAttachments:
             uploads / ORG / "email-attachments" / "tpl-1"
         )
         assert Path(attachment.storage_path).name != "Welcome Packet.pdf"
-        assert Path(attachment.storage_path).read_bytes() == PDF_BYTES
+        assert file_encryption.is_encrypted(attachment.storage_path)
+        assert file_encryption.read_plaintext(attachment.storage_path) == PDF_BYTES
 
     async def test_upload_refuses_an_extension_that_disagrees(self, roots):
         uploads, _ = roots

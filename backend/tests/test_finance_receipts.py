@@ -7,7 +7,6 @@ finance rights, so another member cannot browse to it in Documents.
 """
 
 import io
-import os
 import uuid
 from datetime import datetime, timezone
 
@@ -304,7 +303,8 @@ class TestExpenseLineItemReceipts:
             current_user=finance["member"],
         )
         assert "2026-03-01_" in response.headers["content-disposition"]
-        assert os.path.isfile(response.path)
+        body = b"".join([chunk async for chunk in response.body_iterator])
+        assert body == PDF
 
     async def test_another_member_cannot_reach_the_report(
         self, db_session, uploads, finance

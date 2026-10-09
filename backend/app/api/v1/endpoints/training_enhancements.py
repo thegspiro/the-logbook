@@ -48,6 +48,7 @@ from app.services.file_storage_service import (
     FileRules,
     FileStorageService,
     StorageArea,
+    stored_file_response,
 )
 from app.services.training_enhancement_service import (
     CompetencyService,
@@ -871,8 +872,6 @@ async def download_record_attachment(
     """Stream a stored training-record attachment by its index."""
     import os
 
-    from fastapi.responses import FileResponse
-
     record = await _load_record_for_attachment(db, record_id, current_user)
     attachments = record.attachments or []
     if index < 0 or index >= len(attachments):
@@ -912,7 +911,7 @@ async def download_record_attachment(
         fallback=download_names.original_stem(attachment.get("file_name"))
         or "certificate",
     )
-    return FileResponse(
+    return stored_file_response(
         real_path,
         media_type=attachment.get("file_type") or "application/octet-stream",
         filename=filename,

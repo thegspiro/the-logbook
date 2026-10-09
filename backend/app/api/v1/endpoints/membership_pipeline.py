@@ -21,7 +21,6 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse
 from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -101,6 +100,7 @@ from app.services.file_storage_service import (
     FileRules,
     FileStorageService,
     StorageArea,
+    stored_file_response,
 )
 from app.services.membership_pipeline_service import MembershipPipelineService
 from app.utils import download_names
@@ -2095,7 +2095,7 @@ async def download_prospect_document(
     )
     extension = download_names.stored_extension(resolved_path)
     tz = await resolve_scheduling_timezone(db, current_user.organization_id)
-    return FileResponse(
+    return stored_file_response(
         path=resolved_path,
         filename=download_names.descriptive_filename(
             download_names.local_day(doc.created_at, tz),
