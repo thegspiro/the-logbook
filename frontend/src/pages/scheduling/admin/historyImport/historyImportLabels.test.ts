@@ -2,7 +2,25 @@ import { describe, it, expect } from 'vitest';
 import type { HistoryImportAnalysis } from '../../../../modules/scheduling/types/historyImport';
 import { hoursLabel, isSettled, memberLabel, unitLabel } from './historyImportLabels';
 
-const analysis = {
+const analysis: HistoryImportAnalysis = {
+  can_commit: false,
+  blocking_issue_count: 0,
+  counts: {
+    rows: 0,
+    excluded: 0,
+    skipped: 0,
+    with_errors: 0,
+    new_shifts: 0,
+    existing_shifts: 0,
+    attendances: 0,
+    external_entries: 0,
+    duplicates: 0,
+  },
+  rows: [],
+  positions: [],
+  shifts: [],
+  external: [],
+  issues: [],
   members: [
     {
       key: 'number:77',
@@ -39,7 +57,7 @@ const analysis = {
     ],
     seats: [],
   },
-} as unknown as HistoryImportAnalysis;
+};
 
 describe('history import labels', () => {
   it('shows split shifts joined to the half hour', () => {

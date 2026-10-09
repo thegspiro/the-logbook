@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { ConfirmProvider } from '../../../../contexts/ConfirmContext';
 import { nth } from '../../../../test/utils';
-import type { HistoryImportDetail } from '../../../../modules/scheduling/types/historyImport';
+import type { HistoryImportAttendance, HistoryImportDetail } from '../../../../modules/scheduling/types/historyImport';
 
 const mockGet = vi.fn();
 const mockMappings = vi.fn();
@@ -29,7 +29,7 @@ vi.mock('react-hot-toast', () => ({
 
 import ShiftHistoryImportReviewPage from './ShiftHistoryImportReviewPage';
 
-const attendance = (overrides: Record<string, unknown> = {}) => ({
+const attendance = (overrides: Partial<HistoryImportAttendance> = {}): HistoryImportAttendance => ({
   key: 'r2',
   row_ids: ['r2'],
   line_numbers: [2],
