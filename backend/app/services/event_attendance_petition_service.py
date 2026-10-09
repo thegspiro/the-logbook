@@ -350,6 +350,47 @@ class EventAttendancePetitionService:
         await self._after_decision(event, petition, reviewer, None, None)
         return petition
 
+    async def withdraw(self, event_id: str, member: User) -> str:
+        """Take back the member's own pending request; returns its id.
+
+        The row is deleted rather than marked: withdrawing is for a request
+        made by mistake, and the one-per-member index would otherwise stop the
+        member asking again correctly. The audit log keeps the record. A
+        decided request cannot be withdrawn — the decision stands.
+        """
+        organization_id = str(member.organization_id)
+        event = await self.get_event(event_id, organization_id)
+        # Locked so a withdrawal cannot cross an approval: whichever takes the
+        # row first wins, and the other sees the outcome.
+        petition = (
+            await self.db.execute(
+                select(EventAttendancePetition)
+                .where(
+                    EventAttendancePetition.event_id == str(event.id),
+                    EventAttendancePetition.user_id == str(member.id),
+                    EventAttendancePetition.organization_id == organization_id,
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        if petition is None:
+            raise PetitionNotFound("Attendance request not found")
+        if petition.status != AttendancePetitionStatus.PENDING:
+            raise ValueError(
+                "This attendance request has already been decided and can no "
+                "longer be withdrawn"
+            )
+        petition_id = str(petition.id)
+        await self.db.delete(petition)
+        await self.db.commit()
+
+        # Nothing is left to review, so the reviewers' prompts go.
+        await NotificationsService(self.db).archive_related_notifications(
+            organization_id, REVIEW_PROMPT_CATEGORY, "petition_id", petition_id
+        )
+        return petition_id
+
     async def _locked_petition(
         self, event: Event, petition_id: str
     ) -> EventAttendancePetition:

@@ -149,6 +149,40 @@ async def get_my_attendance_petition(
     )
 
 
+@router.delete(
+    "/{event_id}/attendance-petitions/mine",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def withdraw_my_attendance_petition(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Withdraw your own attendance request while it is still pending.
+
+    The request is removed, so you may ask again (within the same rules). A
+    request already approved or declined cannot be withdrawn (400).
+
+    **Authentication required**
+    """
+    service = EventAttendancePetitionService(db)
+    try:
+        petition_id = await service.withdraw(str(event_id), current_user)
+    except (PetitionNotFound, ValueError) as exc:
+        raise _http_error(exc)
+
+    await log_audit_event(
+        db=db,
+        event_type="event_attendance_petition_withdrawn",
+        event_category="events",
+        severity="info",
+        event_data={"event_id": str(event_id), "petition_id": petition_id},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+
 @router.get(
     "/{event_id}/attendance-petitions",
     response_model=List[AttendancePetitionResponse],
