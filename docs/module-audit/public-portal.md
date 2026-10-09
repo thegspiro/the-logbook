@@ -149,6 +149,15 @@ token value — links already emailed keep working. Tests:
   (`_last_used_is_stale`), and only commits when something actually changed (the
   timestamp refresh or a legacy-prefix self-heal), removing per-read write
   amplification / row contention on a hot key.
+  **Regressed, then re-fixed (2026-10-09):** migration `20260805_0004` made
+  `last_used_at` a `DateTime` column, but `_last_used_is_stale` still parsed it
+  with `fromisoformat`; the `TypeError` a datetime raises was swallowed as
+  "stale", so the throttle never throttled and every request wrote the row
+  again. It now compares datetimes (naive read as UTC) and the write stores a
+  datetime. Same root cause, fixed alongside: `POST /api-keys` 500'd after
+  committing the key (`fromisoformat` on the refreshed `created_at`), and a key
+  with no rate-limit override 500'd on every request (lazy load of `config`
+  from an `AsyncSession`). Tests: `tests/test_public_portal_datetimes.py`.
 - **✅ `detect_anomalies` query count reduced 3→2.** The two last-minute signals
   (request volume + distinct-endpoint spread) share the same IP+window and are now
   fetched in a single `SELECT count(id), count(distinct endpoint)` round-trip; the
