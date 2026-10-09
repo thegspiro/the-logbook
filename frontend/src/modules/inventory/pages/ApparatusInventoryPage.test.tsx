@@ -41,10 +41,10 @@ vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 // Default to a manager so the action flows stay exercised; individual tests
 // flip the mock to a member view. (vi.clearAllMocks clears calls, not this
 // creation-time implementation.)
-const mockCheckPermission = vi.fn(() => true);
+const mockCheckPermission = vi.fn<(permission: string) => boolean>(() => true);
 vi.mock('../../../stores/authStore', () => ({
   useAuthStore: () => ({
-    checkPermission: (...a: unknown[]) => mockCheckPermission(...a),
+    checkPermission: (permission: string) => mockCheckPermission(permission),
   }),
 }));
 
