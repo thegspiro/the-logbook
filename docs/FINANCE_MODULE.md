@@ -120,7 +120,8 @@ lock flag is read under a share lock, so neither path slips in beside a
 
 A request refused earlier for lack of funds is **not** reprocessed and no email
 goes out; the member resubmits (owner decision). Amendments cannot be edited or
-deleted — they are the record of what was approved.
+deleted — they are the record of what was approved. A mistaken one is corrected
+by a reversing entry (below).
 
 **API** (camelCase both ways):
 
@@ -144,6 +145,70 @@ when), and offers **Add amendment** to a manager unless the year is locked
 locked year the Edit dialog shows the amount read-only with "This fiscal year
 is locked." and leaves it out of the save.
 
+### Reversing a mistaken amendment _(2026-10-09)_
+
+A mistaken amendment is corrected by a **reversing entry**, never by editing or
+deleting it (owner decision, 2026-10-09). The reversal is another
+`budget_amendments` row: its `amount` is the original's, negated, and
+`reverses_amendment_id` names the original (nullable FK to
+`budget_amendments.id`, `ON DELETE SET NULL`, with a UNIQUE key — migration
+`c62a98b47406`). It carries its own reason, approver, approval date and
+entering member; the original row is untouched.
+
+**Arithmetic.** Recording one lowers `amount_budgeted` by the amount. The
+original budget stays `amount_budgeted − Σ amount` over every row, reversals
+included, so it does not move. `amendmentsTotal` is the net sum (never negative:
+each positive amendment is reversed at most once, for exactly its amount), and
+`amendmentCount` counts both rows — an amended-then-reversed line still shows
+the Original / Current tiles, and the list explains the zero.
+
+**Rules** (`FinanceService.reverse_budget_amendment`):
+
+- whole-amendment only — no partial reversal; the body carries no amount;
+- an amendment is reversed **once** — a second attempt is **409** "This
+  amendment has already been reversed.";
+- a reversal is never reversed — **400**; to restore the money, record a new
+  amendment. A negative row whose link a downgrade dropped still counts as a
+  reversal;
+- the amendment must be on that line, in the caller's department — otherwise
+  **404** ("Amendment not found" / "Budget not found");
+- refused in a **locked** year (400, the amendments' message); allowed in draft,
+  active and closed years;
+- refused with **409** "Insufficient available budget" when the lower budget
+  would fall below spent + committed;
+- the approval date may not be in the future on the department's calendar (400);
+  blank reason or approver is 422.
+
+One transaction, locks in `add_budget_amendment`'s order: the line
+(`SELECT … FOR UPDATE`, pitfall #27), then the amendment, then a **locking**
+read for an existing reversal — a plain read would answer from the snapshot
+taken before the line's lock was granted. The UNIQUE key stands behind that
+check (mapped to the same 409).
+
+**API** (camelCase both ways):
+
+- `POST /finance/budgets/{id}/amendments/{amendmentId}/reverse`
+  (`finance.manage`) — `reason` (≤ 2000), `approvedBy` (≤ 200), `approvedOn`.
+  Returns `{amendment, budget}` (201), `amendment` being the reversal. Audited
+  as `finance.budget_amendment_reversed` with `budget_id`, `amendment_id` (the
+  reversal), `reversed_amendment_id`, `amount` (negative), `approved_by` and
+  `approved_on`.
+- `GET /finance/budgets/{id}/amendments` rows gain `isReversal`,
+  `reversesAmendmentId`, and — on a reversed amendment —
+  `reversedByAmendmentId`, `reversedAt` (when the reversal was entered) and
+  `reversedByName` (who entered it), from one more in-org self-join. Existing
+  fields are unchanged.
+
+**Screen.** In the Amendments list a manager gets **Reverse** on an amendment
+that is neither a reversal nor already reversed, unless the year is locked; an
+owner sees the list but no button. `ReverseAmendmentDialog` says "This lowers
+the current budget by $X. The original amendment stays on record.", takes
+Reason, Approved by and Approval date (today by default), and confirms with
+**Record reversal** (toast "Amendment reversed"), after which the page re-reads
+the line and the list. A reversal reads "−$X · Reverses the {date} amendment of
++$Y"; a reversed amendment's amount is struck through, with "Reversed {date} by
+{name}".
+
 ## My Budgets: the owner's view, and the transaction list _(2026-10-08)_
 
 **Who reads a line.** `GET /finance/budgets/{id}`, `…/amendments` and
@@ -157,8 +222,9 @@ is checked against it. Anyone else — a member who owns nothing, the category's
 owner on a line whose own owner overrides it, a member whose account is no
 longer active, and every other department — gets **404**, the same answer #2991
 gives for another member's request, so a line id is no existence oracle.
-Ownership opens **reads only**: `PUT /finance/budgets/{id}` and
-`POST …/amendments` stay `finance.manage` (403 to an owner), and the org-wide
+Ownership opens **reads only**: `PUT /finance/budgets/{id}`,
+`POST …/amendments` and `POST …/amendments/{id}/reverse` stay `finance.manage`
+(403 to an owner), and the org-wide
 `GET /finance/budgets` list stays `finance.view`. Access only widened, for
 owners; nothing existing callers could do changed, so there is no
 `UPGRADING.md` entry.
@@ -216,7 +282,7 @@ position its owner. The Finance navigation offers **My Budgets** to anyone who
 owns a line — a Treasurer included — and to nobody who would find it empty.
 `/finance/budgets/:id` now needs only a session (the API decides) and loads the
 line by id instead of finding it in the budget list, which an owner cannot
-fetch; for an owner it is read-only (no Edit, no Add amendment) and links back
+fetch; for an owner it is read-only (no Edit, no Add amendment, no Reverse) and links back
 to My Budgets. Its **Transaction History** is the paginated list above; a row
 links to its request only for a viewer who may open it (`finance.view` for
 purchase and check requests, `finance.manage` for expense reports). The detail

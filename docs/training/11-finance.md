@@ -375,11 +375,43 @@ Budgets list marks the line _(amended)_.
 - Amendments can be added in **draft**, **active** and **closed** fiscal years,
   but not in a **locked** one — the button is hidden there.
 - An amendment cannot be edited or removed afterwards; it is the record of what
-  was approved. To take money back out, edit the amount (while the year is not
-  locked).
+  was approved. If one was entered by mistake, **reverse** it (below).
 - A purchase or check request that was refused for lack of funds is **not**
   re-run when the budget goes up, and nobody is emailed. The member submits it
   again.
+
+### Correcting a Mistaken Amendment
+
+If an amendment was entered wrongly — $2,500 typed for $250, or the wrong line —
+reverse it, then record the correct amendment if one is needed. A reversal is a
+new entry with its own reason and approval; the original stays on the list.
+Requires `finance.manage`.
+
+1. Open the budget line from **Finance > Budgets**.
+2. In the **Amendments** section, click **Reverse** on the amendment.
+3. Read the note — _This lowers the current budget by $X. The original
+   amendment stays on record._ — and fill in:
+   - **Reason** — what went wrong, for example _Entered $2,500 instead of
+     $250_.
+   - **Approved by** — who approved the correction.
+   - **Approval date** — defaults to today; it cannot be in the future.
+4. Click **Record reversal**.
+
+The current budget drops by the amendment's amount at once; the **Original
+budget** does not change. The list then shows the reversal as **−$X · Reverses
+the {date} amendment of +$Y**, and the original amendment struck through with
+**Reversed {date} by {name}**.
+
+- The whole amendment is reversed — there is no partial reversal. To lower it
+  from $2,500 to $250, reverse it and record a new $250 amendment.
+- An amendment can be reversed only once, and a reversal cannot itself be
+  reversed. If the money turns out to be needed after all, record a new
+  amendment.
+- Not available in a **locked** fiscal year (the button is hidden there); fine
+  in draft, active and closed years.
+- Refused with _Insufficient available budget_ if the lower budget would no
+  longer cover what the line has already spent and committed.
+- Line owners see reversals on their line's page but cannot make one.
 
 ### Budget Owners
 
