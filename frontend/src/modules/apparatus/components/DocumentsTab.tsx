@@ -2,18 +2,34 @@
  * Documents Tab Component
  *
  * Manages photos and documents attached to an apparatus.
- * Supports listing, adding, and deleting both photos and documents.
+ *
+ * Uploads are filed by the server as documents in the vehicle's folder under
+ * Apparatus Files (photos in Photos, a registration in Registration &
+ * Insurance, ...), malware-scanned and served back through the apparatus
+ * endpoints. Links come from `fileUrl`, which the server sets only for a
+ * stored file or a legacy HTTP(S) link, never from the raw `filePath`.
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { FileText, Camera, Trash2, ExternalLink, Image } from 'lucide-react';
+import { FileText, Camera, Trash2, ExternalLink, Image, Download, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apparatusPhotoService, apparatusDocumentService } from '../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
+import { FileDropzone } from '../../../components/ux/FileDropzone';
 import { formatDate } from '../../../utils/dateFormatting';
+import { saveFile } from '../../../utils/fileDownload';
 import { useTimezone } from '../../../hooks/useTimezone';
-import type { ApparatusPhoto, ApparatusDocument } from '../types';
+import { useAuthStore } from '../../../stores/authStore';
+import { APPARATUS_DOCUMENT_TYPES, type ApparatusPhoto, type ApparatusDocument } from '../types';
+
+const inputClass = 'form-input';
+const labelClass = 'form-label';
+
+function stem(name: string): string {
+  const dot = name.lastIndexOf('.');
+  return dot > 0 ? name.slice(0, dot) : name;
+}
 
 interface DocumentsTabProps {
   id: string;
@@ -26,7 +42,15 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'photo' | 'document'; id: string; name: string } | null>(
     null
   );
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [pendingDocument, setPendingDocument] = useState<File | null>(null);
+  const [documentTitle, setDocumentTitle] = useState('');
+  const [documentType, setDocumentType] = useState<string>('registration');
+  const [documentExpires, setDocumentExpires] = useState('');
+  const [documentUploading, setDocumentUploading] = useState(false);
   const tz = useTimezone();
+  const checkPermission = useAuthStore((state) => state.checkPermission);
+  const canUpload = checkPermission('apparatus.edit') || checkPermission('apparatus.manage');
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -47,6 +71,66 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  const handlePhotoSelected = async ([file]: File[]) => {
+    if (!file) return;
+    setPhotoUploading(true);
+    try {
+      await apparatusPhotoService.uploadPhoto(id, file, stem(file.name));
+      toast.success('Photo uploaded');
+      void loadData();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to upload photo'));
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
+  const handleDocumentSelected = ([file]: File[]) => {
+    if (!file) return;
+    setPendingDocument(file);
+    setDocumentTitle(stem(file.name));
+  };
+
+  const cancelDocument = () => {
+    setPendingDocument(null);
+    setDocumentTitle('');
+    setDocumentExpires('');
+  };
+
+  const handleDocumentUpload = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!pendingDocument) return;
+    const title = documentTitle.trim();
+    if (!title) {
+      toast.error('Give the document a title');
+      return;
+    }
+    setDocumentUploading(true);
+    try {
+      await apparatusDocumentService.uploadDocument(id, {
+        file: pendingDocument,
+        title,
+        documentType,
+        expirationDate: documentExpires || undefined,
+      });
+      toast.success('Document uploaded');
+      cancelDocument();
+      void loadData();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to upload document'));
+    } finally {
+      setDocumentUploading(false);
+    }
+  };
+
+  const handleDownload = async (doc: ApparatusDocument) => {
+    try {
+      saveFile(await apparatusDocumentService.downloadDocument(id, doc.id));
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to download document'));
+    }
+  };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -86,6 +170,16 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
           </h2>
         </div>
 
+        {canUpload && (
+          <FileDropzone
+            onFilesSelected={(files) => void handlePhotoSelected(files)}
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            maxSizeMB={20}
+            label={photoUploading ? 'Uploading…' : 'Upload a photo'}
+            className="mb-6"
+          />
+        )}
+
         {photos.length === 0 ? (
           <p className="text-theme-text-muted py-8 text-center">No photos on file for this apparatus.</p>
         ) : (
@@ -93,9 +187,9 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
             {photos.map((photo) => (
               <div key={photo.id} className="card-secondary overflow-hidden rounded-lg">
                 <div className="bg-theme-surface-secondary flex aspect-video items-center justify-center">
-                  {photo.filePath ? (
+                  {photo.fileUrl ? (
                     <img
-                      src={photo.filePath}
+                      src={photo.fileUrl}
                       alt={photo.title || photo.fileName}
                       loading="lazy"
                       decoding="async"
@@ -138,6 +232,76 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
           </h2>
         </div>
 
+        {canUpload && !pendingDocument && (
+          <FileDropzone
+            onFilesSelected={handleDocumentSelected}
+            maxSizeMB={50}
+            label="Upload a registration, manual, inspection or other document"
+            className="mb-6"
+          />
+        )}
+
+        {canUpload && pendingDocument && (
+          <form onSubmit={(e) => void handleDocumentUpload(e)} className="card-secondary mb-6 space-y-4 p-4">
+            <p className="text-theme-text-primary text-sm">
+              <Upload className="mr-1 inline h-4 w-4" aria-hidden="true" />
+              {pendingDocument.name}
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div>
+                <label htmlFor="apparatus-document-title" className={labelClass}>
+                  Title
+                </label>
+                <input
+                  id="apparatus-document-title"
+                  className={inputClass}
+                  value={documentTitle}
+                  maxLength={200}
+                  onChange={(e) => setDocumentTitle(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="apparatus-document-type" className={labelClass}>
+                  Type
+                </label>
+                <select
+                  id="apparatus-document-type"
+                  className={inputClass}
+                  value={documentType}
+                  onChange={(e) => setDocumentType(e.target.value)}
+                >
+                  {APPARATUS_DOCUMENT_TYPES.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="apparatus-document-expires" className={labelClass}>
+                  Expires (optional)
+                </label>
+                <input
+                  id="apparatus-document-expires"
+                  type="date"
+                  className={inputClass}
+                  value={documentExpires}
+                  onChange={(e) => setDocumentExpires(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-secondary" onClick={cancelDocument} disabled={documentUploading}>
+                Cancel
+              </button>
+              <button type="submit" className="btn-primary" disabled={documentUploading}>
+                {documentUploading ? 'Uploading…' : 'Upload document'}
+              </button>
+            </div>
+          </form>
+        )}
+
         {documents.length === 0 ? (
           <p className="text-theme-text-muted py-8 text-center">No documents on file for this apparatus.</p>
         ) : (
@@ -167,16 +331,29 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
                   </div>
                 </div>
                 <div className="ml-4 flex flex-shrink-0 items-center gap-2">
-                  {doc.filePath && (
-                    <a
-                      href={doc.filePath}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                  {doc.documentId ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleDownload(doc)}
                       className="text-theme-text-muted hover:text-theme-text-primary p-1 transition-colors"
-                      title="Open document"
+                      title="Download document"
+                      aria-label={`Download ${doc.title}`}
                     >
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
+                      <Download className="h-4 w-4" />
+                    </button>
+                  ) : (
+                    doc.fileUrl && (
+                      <a
+                        href={doc.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-theme-text-muted hover:text-theme-text-primary p-1 transition-colors"
+                        title="Open document"
+                        aria-label={`Open ${doc.title}`}
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    )
                   )}
                   <button
                     onClick={() => setDeleteTarget({ type: 'document', id: doc.id, name: doc.title })}

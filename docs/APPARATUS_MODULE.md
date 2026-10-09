@@ -275,21 +275,25 @@ moved on:
 
 ### Equipment, fuel, photos and documents
 
-| Method   | Path                                      | Permission                                    | Description               |
-| -------- | ----------------------------------------- | --------------------------------------------- | ------------------------- |
-| `GET`    | `/equipment`                              | `apparatus.view` / `.manage`                  | List equipment            |
-| `POST`   | `/equipment`                              | `apparatus.edit` / `.manage`                  | Add equipment             |
-| `PATCH`  | `/equipment/{equipment_id}`               | `apparatus.edit` / `.manage`                  | Update equipment          |
-| `DELETE` | `/equipment/{equipment_id}`               | `apparatus.manage`                            | Remove equipment          |
-| `GET`    | `/fuel-logs`                              | `apparatus.view` / `.manage`                  | List fuel entries         |
-| `POST`   | `/fuel-logs`                              | `apparatus.maintenance` / `.edit` / `.manage` | Create a fuel entry       |
-| `GET`    | `/{apparatus_id}/photos`                  | `apparatus.view` / `.manage`                  | List photos               |
-| `POST`   | `/{apparatus_id}/photos`                  | `apparatus.edit` / `.manage`                  | Add a photo               |
-| `DELETE` | `/{apparatus_id}/photos/{photo_id}`       | `apparatus.manage`                            | Delete a photo            |
-| `GET`    | `/{apparatus_id}/documents`               | `apparatus.view` / `.manage`                  | List documents            |
-| `POST`   | `/{apparatus_id}/documents`               | `apparatus.edit` / `.manage`                  | Add a document            |
-| `DELETE` | `/{apparatus_id}/documents/{document_id}` | `apparatus.manage`                            | Delete a document         |
-| `GET`    | `/{apparatus_id}/folders`                 | `apparatus.view` / `.manage`                  | Document folder structure |
+| Method   | Path                                           | Permission                                    | Description                                |
+| -------- | ---------------------------------------------- | --------------------------------------------- | ------------------------------------------ |
+| `GET`    | `/equipment`                                   | `apparatus.view` / `.manage`                  | List equipment                             |
+| `POST`   | `/equipment`                                   | `apparatus.edit` / `.manage`                  | Add equipment                              |
+| `PATCH`  | `/equipment/{equipment_id}`                    | `apparatus.edit` / `.manage`                  | Update equipment                           |
+| `DELETE` | `/equipment/{equipment_id}`                    | `apparatus.manage`                            | Remove equipment                           |
+| `GET`    | `/fuel-logs`                                   | `apparatus.view` / `.manage`                  | List fuel entries                          |
+| `POST`   | `/fuel-logs`                                   | `apparatus.maintenance` / `.edit` / `.manage` | Create a fuel entry                        |
+| `GET`    | `/{apparatus_id}/photos`                       | `apparatus.view` / `.manage`                  | List photos                                |
+| `POST`   | `/{apparatus_id}/photos/upload`                | `apparatus.edit` / `.manage`                  | Upload a photo (scanned, filed in Photos)  |
+| `POST`   | `/{apparatus_id}/photos`                       | `apparatus.edit` / `.manage`                  | Link an already-stored document as a photo |
+| `GET`    | `/{apparatus_id}/photos/{photo_id}/file`       | `apparatus.view` / `.manage`                  | Open a photo (inline)                      |
+| `DELETE` | `/{apparatus_id}/photos/{photo_id}`            | `apparatus.manage`                            | Delete a photo and its stored file         |
+| `GET`    | `/{apparatus_id}/documents`                    | `apparatus.view` / `.manage`                  | List documents                             |
+| `POST`   | `/{apparatus_id}/documents/upload`             | `apparatus.edit` / `.manage`                  | Upload a document (scanned, filed by type) |
+| `POST`   | `/{apparatus_id}/documents`                    | `apparatus.edit` / `.manage`                  | Link an already-stored document            |
+| `GET`    | `/{apparatus_id}/documents/{document_id}/file` | `apparatus.view` / `.manage`                  | Download a document                        |
+| `DELETE` | `/{apparatus_id}/documents/{document_id}`      | `apparatus.manage`                            | Delete a document and its stored file      |
+| `GET`    | `/{apparatus_id}/folders`                      | `apparatus.view` / `.manage`                  | Document folder structure                  |
 
 ### NFPA compliance
 

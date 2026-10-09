@@ -6,8 +6,21 @@ maintenance tracking, equipment, operators, and fleet management.
 """
 
 from datetime import date, datetime
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
+from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,9 +29,13 @@ from app.api.dependencies import (
     get_current_user,
     require_permission,
 )
+from app.api.v1.endpoints.documents import DOCUMENT_FILE_RULES
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
+from app.models.apparatus import Apparatus, ApparatusDocument, ApparatusPhoto
+from app.models.document import DocumentFolder
+from app.models.facilities import SHARED_DOCUMENT_PREFIX, shared_document_id
 from app.models.user import User
 from app.schemas.apparatus import (  # Apparatus Type; Apparatus Status; Main Apparatus; Custom Fields; Maintenance; Fuel; Operators; Equipment; Photos & Documents; NFPA Compliance; Report Configs; Service Providers; Components; Component Notes; Service Report; EVOC Levels
     ApparatusArchive,
@@ -32,6 +49,7 @@ from app.schemas.apparatus import (  # Apparatus Type; Apparatus Status; Main Ap
     ApparatusCustomFieldCreate,
     ApparatusCustomFieldResponse,
     ApparatusCustomFieldUpdate,
+    ApparatusDocumentBase,
     ApparatusDocumentCreate,
     ApparatusDocumentResponse,
     ApparatusEquipmentCreate,
@@ -56,6 +74,7 @@ from app.schemas.apparatus import (  # Apparatus Type; Apparatus Status; Main Ap
     ApparatusOperatorCreate,
     ApparatusOperatorResponse,
     ApparatusOperatorUpdate,
+    ApparatusPhotoBase,
     ApparatusPhotoCreate,
     ApparatusPhotoResponse,
     ApparatusReportConfigCreate,
@@ -87,11 +106,14 @@ from app.schemas.apparatus import (  # Apparatus Type; Apparatus Status; Main Ap
     PaginatedApparatusList,
 )
 from app.schemas.documents import FoldersListResponse
+from app.services import module_documents
 from app.services.apparatus_service import ApparatusService
 from app.services.documents_service import DocumentsService
 from app.services.driver_exception_service import DriverExceptionService
 from app.services.evoc_level_service import EvocLevelService
+from app.utils import download_names
 from app.utils.apparatus_nfpa import apparatus_nfpa_state, require_apparatus_nfpa
+from app.utils.org_timezone import resolve_scheduling_timezone
 
 router = APIRouter()
 
@@ -1529,6 +1551,108 @@ async def delete_equipment(
 # ============================================================================
 # Photo Endpoints
 # ============================================================================
+#
+# A photo or document is a real Document in the vehicle's folder under
+# Apparatus Files (docs/FILE_STORAGE_HARDENING.md decision 12): uploaded here,
+# scanned and stored once, served back through this module behind the folder's
+# rights. A row written before uploads existed holds a typed link instead;
+# ``fileUrl`` passes it on only if it is HTTP(S).
+
+# Which vehicle sub-folder (APPARATUS_SUB_FOLDERS) a document type files into.
+# Anything else lands in the vehicle folder itself.
+_DOCUMENT_TYPE_SUB_FOLDER = {
+    "title": "registration-insurance",
+    "registration": "registration-insurance",
+    "insurance": "registration-insurance",
+    "maintenance": "maintenance",
+    "inspection": "inspections",
+    "manual": "manuals",
+}
+
+
+def _form_metadata(model, **values):
+    """Validate multipart form fields with the JSON schema's own rules."""
+    try:
+        return model(**values)
+    except ValidationError as e:
+        raise RequestValidationError(e.errors())
+
+
+async def _apparatus_in_org(db: AsyncSession, apparatus_id: str, user: User):
+    apparatus = (
+        await db.execute(
+            select(Apparatus).where(
+                Apparatus.id == str(apparatus_id),
+                Apparatus.organization_id == str(user.organization_id),
+            )
+        )
+    ).scalar_one_or_none()
+    if apparatus is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Apparatus not found"
+        )
+    return apparatus
+
+
+async def _filing_folder(db: AsyncSession, apparatus, user: User, sub_folder):
+    """The vehicle folder, or its *sub_folder*, checked writable by *user*."""
+    documents = DocumentsService(db)
+    vehicle = await documents.ensure_apparatus_folder(
+        user.organization_id, str(apparatus.id), apparatus.unit_number
+    )
+    folder = vehicle
+    if sub_folder:
+        folder = (
+            await db.execute(
+                select(DocumentFolder).where(
+                    DocumentFolder.organization_id == str(user.organization_id),
+                    DocumentFolder.parent_id == vehicle.id,
+                    DocumentFolder.slug == f"apparatus-{apparatus.id}-{sub_folder}",
+                )
+            )
+        ).scalar_one_or_none() or vehicle
+    if not await documents.can_access_folder(
+        folder, user.organization_id, user, require_write=True
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to file into this apparatus folder",
+        )
+    return folder
+
+
+async def _referenced_document_id(
+    db: AsyncSession, file_path: str, apparatus, user: User, sub_folder
+) -> str:
+    """The id of the stored document *file_path* references.
+
+    New rows must point at a stored document (``document:<id>``); a typed URL
+    is refused. A document not yet in any folder is filed into the vehicle's.
+    """
+    document_id = shared_document_id(file_path)
+    documents = DocumentsService(db)
+    document = (
+        await documents.get_document_by_id(
+            document_id, user.organization_id, for_update=True
+        )
+        if document_id
+        else None
+    )
+    if document is None or not await documents.can_access_document(
+        document, user.organization_id, user
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Upload the file to this apparatus, or reference a stored "
+                "document as document:<id>"
+            ),
+        )
+    if document.folder_id is None:
+        folder = await _filing_folder(db, apparatus, user, sub_folder)
+        document.folder_id = folder.id
+        await db.flush()
+    return str(document.id)
 
 
 @router.get(
@@ -1572,24 +1696,27 @@ async def create_apparatus_photo(
     ),
 ):
     """
-    Add a photo to apparatus
+    Add a photo that is already a stored document
 
     **Authentication required**
     **Permissions required:** apparatus.edit or apparatus.manage
 
-    **Note:** This endpoint expects the file to already be uploaded to storage.
-    Use the file upload endpoint first, then call this with the file path.
+    ``file_path`` must be ``document:<id>``. To add a new file, use
+    ``POST /apparatus/{apparatus_id}/photos/upload``.
     """
     service = ApparatusService(db)
-
-    # Ensure apparatus_id matches
-    photo_data.apparatus_id = apparatus_id
+    apparatus = await _apparatus_in_org(db, apparatus_id, current_user)
+    photo_data.apparatus_id = str(apparatus.id)
+    document_id = await _referenced_document_id(
+        db, photo_data.file_path, apparatus, current_user, "photos"
+    )
 
     try:
         photo = await service.create_photo(
             photo_data=photo_data,
             organization_id=current_user.organization_id,
             uploaded_by=current_user.id,
+            document_id=document_id,
         )
     except ValueError as e:
         raise HTTPException(
@@ -1597,6 +1724,133 @@ async def create_apparatus_photo(
         )
 
     return photo
+
+
+@router.post(
+    "/{apparatus_id}/photos/upload",
+    response_model=ApparatusPhotoResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Photos"],
+)
+async def upload_apparatus_photo(
+    apparatus_id: str,
+    file: UploadFile = File(...),
+    title: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    photo_type: Optional[str] = Form(None),
+    taken_at: Optional[datetime] = Form(None),
+    is_primary: bool = Form(False),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("apparatus.edit", "apparatus.manage")
+    ),
+):
+    """
+    Upload a photo of an apparatus
+
+    **Authentication required**
+    **Permissions required:** apparatus.edit or apparatus.manage
+
+    The image is malware-scanned and filed as a document in the vehicle's
+    Photos folder.
+    """
+    details = _form_metadata(
+        ApparatusPhotoBase,
+        title=title or None,
+        description=description or None,
+        photo_type=photo_type or None,
+        taken_at=taken_at,
+        is_primary=is_primary,
+    )
+    apparatus = await _apparatus_in_org(db, apparatus_id, current_user)
+    folder = await _filing_folder(db, apparatus, current_user, "photos")
+    document = await module_documents.store_as_document(
+        db,
+        file,
+        user=current_user,
+        folder=folder,
+        name=details.title or file.filename or "Apparatus photo",
+        rules=module_documents.IMAGE_FILE_RULES,
+        upload_kind="apparatus_photo",
+        source_type="apparatus_photo",
+        source_id=str(apparatus.id),
+        description=details.description,
+    )
+    try:
+        photo = await ApparatusService(db).create_photo(
+            photo_data=ApparatusPhotoCreate(
+                **details.model_dump(),
+                apparatus_id=str(apparatus.id),
+                file_path=f"{SHARED_DOCUMENT_PREFIX}{document.id}",
+                file_name=(document.file_name or "photo")[:255],
+                file_size=document.file_size,
+                mime_type=document.file_type,
+            ),
+            organization_id=current_user.organization_id,
+            uploaded_by=current_user.id,
+            document_id=str(document.id),
+        )
+    except Exception:
+        await db.rollback()
+        await module_documents.discard_file(document)
+        raise
+
+    await log_audit_event(
+        db=db,
+        event_type="apparatus_photo_uploaded",
+        event_category="apparatus",
+        severity="info",
+        event_data={
+            "apparatus_id": str(apparatus.id),
+            "document_id": str(document.id),
+            "file_type": document.file_type,
+            "file_size": document.file_size,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return photo
+
+
+@router.get("/{apparatus_id}/photos/{photo_id}/file", tags=["Photos"])
+async def download_apparatus_photo(
+    apparatus_id: str,
+    photo_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
+):
+    """
+    Open an uploaded apparatus photo (served inline, for display)
+
+    **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
+    """
+    apparatus = await _apparatus_in_org(db, apparatus_id, current_user)
+    photo = (
+        await db.execute(
+            select(ApparatusPhoto).where(
+                ApparatusPhoto.id == str(photo_id),
+                ApparatusPhoto.apparatus_id == str(apparatus.id),
+                ApparatusPhoto.organization_id == str(current_user.organization_id),
+            )
+        )
+    ).scalar_one_or_none()
+    if photo is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found"
+        )
+    tz = await resolve_scheduling_timezone(db, current_user.organization_id)
+    return await module_documents.serve_document(
+        db,
+        photo.document_id,
+        current_user,
+        name_parts=(apparatus.unit_number, photo.title or "Photo"),
+        fallback="apparatus-photo",
+        day=download_names.local_day(photo.taken_at or photo.uploaded_at, tz),
+        inline_images=True,
+    )
 
 
 @router.delete(
@@ -1611,21 +1865,30 @@ async def delete_apparatus_photo(
     current_user: User = Depends(require_permission("apparatus.manage")),
 ):
     """
-    Delete a photo from apparatus
+    Delete a photo from apparatus, and its stored file
 
     **Authentication required**
     **Permissions required:** apparatus.manage
     """
-    service = ApparatusService(db)
-
-    deleted = await service.delete_photo(
-        photo_id=photo_id,
-        organization_id=current_user.organization_id,
-    )
-
-    if not deleted:
+    photo = (
+        await db.execute(
+            select(ApparatusPhoto).where(
+                ApparatusPhoto.id == str(photo_id),
+                ApparatusPhoto.apparatus_id == str(apparatus_id),
+                ApparatusPhoto.organization_id == str(current_user.organization_id),
+            )
+        )
+    ).scalar_one_or_none()
+    if photo is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found"
+        )
+    if photo.document_id:
+        # The photo row references the document ON DELETE CASCADE.
+        await module_documents.delete_document(db, photo.document_id, current_user)
+    else:
+        await ApparatusService(db).delete_photo(
+            photo_id=photo_id, organization_id=current_user.organization_id
         )
 
 
@@ -1675,24 +1938,31 @@ async def create_apparatus_document(
     ),
 ):
     """
-    Add a document to apparatus
+    Add a document that is already stored
 
     **Authentication required**
     **Permissions required:** apparatus.edit or apparatus.manage
 
-    **Note:** This endpoint expects the file to already be uploaded to storage.
-    Use the file upload endpoint first, then call this with the file path.
+    ``file_path`` must be ``document:<id>``. To add a new file, use
+    ``POST /apparatus/{apparatus_id}/documents/upload``.
     """
     service = ApparatusService(db)
-
-    # Ensure apparatus_id matches
-    document_data.apparatus_id = apparatus_id
+    apparatus = await _apparatus_in_org(db, apparatus_id, current_user)
+    document_data.apparatus_id = str(apparatus.id)
+    document_id = await _referenced_document_id(
+        db,
+        document_data.file_path,
+        apparatus,
+        current_user,
+        _DOCUMENT_TYPE_SUB_FOLDER.get(document_data.document_type.lower()),
+    )
 
     try:
         document = await service.create_document(
             document_data=document_data,
             organization_id=current_user.organization_id,
             uploaded_by=current_user.id,
+            document_id=document_id,
         )
     except ValueError as e:
         raise HTTPException(
@@ -1700,6 +1970,138 @@ async def create_apparatus_document(
         )
 
     return document
+
+
+@router.post(
+    "/{apparatus_id}/documents/upload",
+    response_model=ApparatusDocumentResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Documents"],
+)
+async def upload_apparatus_document(
+    apparatus_id: str,
+    file: UploadFile = File(...),
+    title: str = Form(...),
+    document_type: str = Form(...),
+    description: Optional[str] = Form(None),
+    expiration_date: Optional[date] = Form(None),
+    document_date: Optional[date] = Form(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("apparatus.edit", "apparatus.manage")
+    ),
+):
+    """
+    Upload a document for an apparatus (registration, manual, inspection...)
+
+    **Authentication required**
+    **Permissions required:** apparatus.edit or apparatus.manage
+
+    The file is malware-scanned and filed as a document in the vehicle
+    sub-folder its type belongs to.
+    """
+    details = _form_metadata(
+        ApparatusDocumentBase,
+        title=title.strip(),
+        document_type=document_type.strip().lower(),
+        description=description or None,
+        expiration_date=expiration_date,
+        document_date=document_date,
+    )
+    apparatus = await _apparatus_in_org(db, apparatus_id, current_user)
+    folder = await _filing_folder(
+        db,
+        apparatus,
+        current_user,
+        _DOCUMENT_TYPE_SUB_FOLDER.get(details.document_type),
+    )
+    document = await module_documents.store_as_document(
+        db,
+        file,
+        user=current_user,
+        folder=folder,
+        name=details.title,
+        rules=DOCUMENT_FILE_RULES,
+        upload_kind="apparatus_document",
+        source_type="apparatus_document",
+        source_id=str(apparatus.id),
+        description=details.description,
+    )
+    try:
+        record = await ApparatusService(db).create_document(
+            document_data=ApparatusDocumentCreate(
+                **details.model_dump(),
+                apparatus_id=str(apparatus.id),
+                file_path=f"{SHARED_DOCUMENT_PREFIX}{document.id}",
+                file_name=(document.file_name or "document")[:255],
+                file_size=document.file_size,
+                mime_type=document.file_type,
+            ),
+            organization_id=current_user.organization_id,
+            uploaded_by=current_user.id,
+            document_id=str(document.id),
+        )
+    except Exception:
+        await db.rollback()
+        await module_documents.discard_file(document)
+        raise
+
+    await log_audit_event(
+        db=db,
+        event_type="apparatus_document_uploaded",
+        event_category="apparatus",
+        severity="info",
+        event_data={
+            "apparatus_id": str(apparatus.id),
+            "document_id": str(document.id),
+            "document_type": details.document_type,
+            "file_type": document.file_type,
+            "file_size": document.file_size,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return record
+
+
+@router.get("/{apparatus_id}/documents/{document_id}/file", tags=["Documents"])
+async def download_apparatus_document(
+    apparatus_id: str,
+    document_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
+):
+    """
+    Download an uploaded apparatus document
+
+    **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
+    """
+    apparatus = await _apparatus_in_org(db, apparatus_id, current_user)
+    record = (
+        await db.execute(
+            select(ApparatusDocument).where(
+                ApparatusDocument.id == str(document_id),
+                ApparatusDocument.apparatus_id == str(apparatus.id),
+                ApparatusDocument.organization_id == str(current_user.organization_id),
+            )
+        )
+    ).scalar_one_or_none()
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
+        )
+    tz = await resolve_scheduling_timezone(db, current_user.organization_id)
+    return await module_documents.serve_document(
+        db,
+        record.document_id,
+        current_user,
+        name_parts=(apparatus.unit_number, record.title),
+        fallback="apparatus-document",
+        day=record.document_date or download_names.local_day(record.uploaded_at, tz),
+    )
 
 
 @router.delete(
@@ -1714,21 +2116,29 @@ async def delete_apparatus_document(
     current_user: User = Depends(require_permission("apparatus.manage")),
 ):
     """
-    Delete a document from apparatus
+    Delete a document from apparatus, and its stored file
 
     **Authentication required**
     **Permissions required:** apparatus.manage
     """
-    service = ApparatusService(db)
-
-    deleted = await service.delete_document(
-        document_id=document_id,
-        organization_id=current_user.organization_id,
-    )
-
-    if not deleted:
+    record = (
+        await db.execute(
+            select(ApparatusDocument).where(
+                ApparatusDocument.id == str(document_id),
+                ApparatusDocument.apparatus_id == str(apparatus_id),
+                ApparatusDocument.organization_id == str(current_user.organization_id),
+            )
+        )
+    ).scalar_one_or_none()
+    if record is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
+        )
+    if record.document_id:
+        await module_documents.delete_document(db, record.document_id, current_user)
+    else:
+        await ApparatusService(db).delete_document(
+            document_id=document_id, organization_id=current_user.organization_id
         )
 
 

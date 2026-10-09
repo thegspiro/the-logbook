@@ -13,9 +13,12 @@ path — so it errs toward naming every endpoint it cannot verify.
 """
 
 import ast
+import inspect
 from pathlib import Path
 
 import pytest
+
+from app.services import module_documents
 
 pytestmark = pytest.mark.unit
 
@@ -27,6 +30,8 @@ SCANNING_CALLS = {
     "scan_and_validate_logo",
     "store_upload",
     "store_bytes",
+    # app.services.module_documents: stores through store_upload.
+    "store_as_document",
 }
 
 
@@ -96,3 +101,9 @@ def test_the_sweep_finds_upload_endpoints_at_all():
             and _takes_upload(node)
         )
     assert found >= 15
+
+
+def test_store_as_document_really_routes_through_the_scanning_service():
+    """The entry above is trusted only while this holds."""
+    source = inspect.getsource(module_documents.store_as_document)
+    assert ".store_upload(" in source

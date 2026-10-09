@@ -1823,6 +1823,7 @@ class ApparatusService:
         photo_data: ApparatusPhotoCreate,
         organization_id: str,
         uploaded_by: str,
+        document_id: Optional[str] = None,
     ) -> ApparatusPhoto:
         """Create photo"""
         # AP-1 (XC-1): the row is org-stamped from the caller, but apparatus_id
@@ -1849,6 +1850,7 @@ class ApparatusService:
         photo = ApparatusPhoto(
             organization_id=organization_id,
             uploaded_by=uploaded_by,
+            document_id=document_id,
             **photo_data.model_dump(),
         )
 
@@ -1893,6 +1895,7 @@ class ApparatusService:
         document_data: ApparatusDocumentCreate,
         organization_id: str,
         uploaded_by: str,
+        document_id: Optional[str] = None,
     ) -> ApparatusDocument:
         """Create document"""
         # AP-1 (XC-1): validate the client-supplied apparatus_id is in-org
@@ -1907,6 +1910,7 @@ class ApparatusService:
         document = ApparatusDocument(
             organization_id=organization_id,
             uploaded_by=uploaded_by,
+            document_id=document_id,
             **document_data.model_dump(),
         )
 

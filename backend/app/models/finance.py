@@ -757,6 +757,13 @@ class PurchaseRequest(Base):
     paid_at = Column(DateTime(timezone=True), nullable=True)
     notes = Column(Text, nullable=True)
     receipt_url = Column(String(500), nullable=True)
+    # An uploaded receipt: a Document under Finance > Receipts. receipt_url is
+    # the older typed link, kept for rows that have one.
+    receipt_document_id = Column(
+        String(36),
+        ForeignKey("documents.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     apparatus_id = Column(
         String(36),
         ForeignKey("apparatus.id", ondelete="SET NULL"),
@@ -914,6 +921,13 @@ class ExpenseLineItem(Base):
         default=ExpenseType.GENERAL,
     )
     receipt_url = Column(String(500), nullable=True)
+    # An uploaded receipt: a Document under Finance > Receipts. receipt_url is
+    # the older typed link, kept for rows that have one.
+    receipt_document_id = Column(
+        String(36),
+        ForeignKey("documents.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     merchant = Column(String(300), nullable=True)
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

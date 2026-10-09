@@ -779,8 +779,15 @@ class ApparatusPhoto(Base):
         nullable=False,
     )
 
-    # File Information
-    file_path = Column(Text, nullable=False)  # Path in storage system
+    # The stored file, a Document in the vehicle's folder. Rows written before
+    # 2026-10 hold a free-text URL in file_path and no document_id.
+    document_id = Column(
+        String(36),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    file_path = Column(Text, nullable=False)  # "document:<id>", or a legacy URL
     file_name = Column(String(255), nullable=False)
     file_size = Column(Integer, nullable=True)  # Size in bytes
     mime_type = Column(String(100), nullable=True)
@@ -843,8 +850,15 @@ class ApparatusDocument(Base):
         nullable=False,
     )
 
-    # File Information
-    file_path = Column(Text, nullable=False)
+    # The stored file, a Document in the vehicle's folder. Rows written before
+    # 2026-10 hold a free-text URL in file_path and no document_id.
+    document_id = Column(
+        String(36),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    file_path = Column(Text, nullable=False)  # "document:<id>", or a legacy URL
     file_name = Column(String(255), nullable=False)
     file_size = Column(Integer, nullable=True)
     mime_type = Column(String(100), nullable=True)
