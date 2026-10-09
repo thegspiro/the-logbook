@@ -184,6 +184,22 @@ class TestTheNotice:
         assert self._keys() == [system_notices.FILES_NOT_ENCRYPTED]
 
 
+def test_a_missing_uploads_directory_is_nothing_to_encrypt(root, monkeypatch):
+    monkeypatch.setattr(
+        file_storage_service, "UPLOADS_ROOT", str(root / "never-created")
+    )
+    assert upload_encryption.plaintext_remains() is False
+    assert not (root / "never-created").exists()
+
+
+def test_an_unwritable_state_directory_does_not_break_the_check(root, monkeypatch):
+    def refuse(*args, **kwargs):
+        raise PermissionError("read-only")
+
+    monkeypatch.setattr(upload_encryption.os, "makedirs", refuse)
+    assert upload_encryption.plaintext_remains() is False
+
+
 def test_the_cli_dry_run_exits_cleanly(root, monkeypatch, capsys):
     import importlib.util
     import sys

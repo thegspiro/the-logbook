@@ -339,12 +339,25 @@ def mark_complete_if_done() -> bool:
                 return False
         except OSError:
             continue
-    os.makedirs(_state_dir(), mode=0o700, exist_ok=True)
-    with open(os.path.join(_state_dir(), _STATE_FILE), "w", encoding="utf-8") as h:
-        json.dump(
-            {"complete": True, "checked_at": datetime.now(timezone.utc).isoformat()},
-            h,
-        )
+    if not os.path.isdir(file_storage.UPLOADS_ROOT):
+        # Nothing has ever been stored, and there is nowhere to record it.
+        return True
+    try:
+        os.makedirs(_state_dir(), mode=0o700, exist_ok=True)
+        with open(
+            os.path.join(_state_dir(), _STATE_FILE), "w", encoding="utf-8"
+        ) as handle:
+            json.dump(
+                {
+                    "complete": True,
+                    "checked_at": datetime.now(timezone.utc).isoformat(),
+                },
+                handle,
+            )
+    except OSError as exc:
+        # The answer stands; only the shortcut for next time is lost, and an
+        # administrator's notice must not fail over it.
+        logger.warning(f"Could not record that every stored file is encrypted: {exc}")
     return True
 
 
