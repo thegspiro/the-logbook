@@ -162,6 +162,29 @@ describe('RequirementModal', () => {
       );
     });
 
+    it('sends an explicit null when the training type is widened back to any type', async () => {
+      onSave.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(
+        <RequirementModal
+          requirement={existing({ training_type: 'continuing_education' })}
+          categories={[]}
+          onClose={vi.fn()}
+          onSave={onSave}
+        />
+      );
+
+      await user.selectOptions(screen.getByLabelText('Training Type'), '');
+      await user.click(screen.getByRole('button', { name: 'Update Requirement' }));
+      await user.click(screen.getByRole('button', { name: 'Save for everyone' }));
+
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ apply_to: 'everyone', training_type: null }),
+        true,
+        'req-1'
+      );
+    });
+
     it('keeps editing without saving when the prompt is dismissed', async () => {
       const user = userEvent.setup();
       render(<RequirementModal requirement={existing()} categories={[]} onClose={vi.fn()} onSave={onSave} />);

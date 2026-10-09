@@ -182,7 +182,11 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
       name: formData.name,
       description: blankToNull(formData.description),
       requirement_type: formData.requirement_type,
-      ...(formData.training_type ? { training_type: formData.training_type as TrainingType } : {}),
+      // "Any Type" is an explicit null rather than an omitted key: an update
+      // omits a key to leave the stored value alone, so dropping it here kept
+      // a narrowed type (e.g. continuing education) after the officer widened
+      // the requirement back to every type.
+      training_type: (formData.training_type as TrainingType) || null,
       required_hours: formData.requirement_type === 'hours' ? (formData.required_hours ?? null) : null,
       // Always sent so switching a requirement off the course/certification
       // types clears stale links — a leftover course id silently narrows the
