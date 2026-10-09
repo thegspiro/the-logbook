@@ -129,7 +129,8 @@ class AdminHoursService:
                 AdminHoursCategory.organization_id == organization_id,
             )
         )
-        return result.scalar_one_or_none()
+        admin_hours_category: Optional[AdminHoursCategory] = result.scalar_one_or_none()
+        return admin_hours_category
 
     async def create_category(
         self,
@@ -308,7 +309,7 @@ class AdminHoursService:
                 AdminHoursEntry.status == AdminHoursEntryStatus.ACTIVE,
             )
         )
-        entry = result.scalar_one_or_none()
+        entry: Optional[AdminHoursEntry] = result.scalar_one_or_none()
         if not entry:
             raise ValueError("No active session found")
 
@@ -412,7 +413,8 @@ class AdminHoursService:
         if for_update:
             query = query.with_for_update(of=AdminHoursEntry)
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        admin_hours_entry: Optional[AdminHoursEntry] = result.scalar_one_or_none()
+        return admin_hours_entry
 
     # =========================================================================
     # Active Sessions (Admin)
@@ -504,7 +506,7 @@ class AdminHoursService:
                 AdminHoursEntry.status == AdminHoursEntryStatus.ACTIVE,
             )
         )
-        entry = result.scalar_one_or_none()
+        entry: Optional[AdminHoursEntry] = result.scalar_one_or_none()
         if not entry:
             raise ValueError("Active session not found")
 
@@ -824,7 +826,7 @@ class AdminHoursService:
             )
             .with_for_update()
         )
-        entry = result.scalar_one_or_none()
+        entry: Optional[AdminHoursEntry] = result.scalar_one_or_none()
         if not entry:
             raise ValueError("Pending entry not found")
 
@@ -935,7 +937,7 @@ class AdminHoursService:
         )
         if user_id is not None:
             query = query.where(AdminHoursEntry.user_id == user_id)
-        owner_id = (await self.db.execute(query)).scalar_one_or_none()
+        owner_id: Optional[str] = (await self.db.execute(query)).scalar_one_or_none()
         if not owner_id:
             return None
         await self.db.execute(
@@ -965,7 +967,7 @@ class AdminHoursService:
             )
             .with_for_update()
         )
-        entry = result.scalar_one_or_none()
+        entry: Optional[AdminHoursEntry] = result.scalar_one_or_none()
         if not entry:
             raise ValueError("Entry not found")
         if entry.status not in MEMBER_EDITABLE_STATUSES:
@@ -1069,7 +1071,7 @@ class AdminHoursService:
             )
             .with_for_update()
         )
-        entry = result.scalar_one_or_none()
+        entry: Optional[AdminHoursEntry] = result.scalar_one_or_none()
         if not entry:
             raise ValueError("Pending entry not found")
 
@@ -1745,7 +1747,7 @@ class AdminHoursService:
                 EventHourMapping.organization_id == organization_id,
             )
         )
-        mapping = result.scalar_one_or_none()
+        mapping: Optional[EventHourMapping] = result.scalar_one_or_none()
         if not mapping:
             raise ValueError("Mapping not found")
         if is_active is True and mapping.event_type in EVENT_TYPES_WITHOUT_ADMIN_HOURS:

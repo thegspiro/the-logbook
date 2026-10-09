@@ -101,7 +101,8 @@ class CertAlertService:
         org = result.scalar_one_or_none()
         if not org:
             return {"enabled": False}
-        return (org.settings or {}).get("cert_alert_config", {"enabled": False})
+        config: Dict = (org.settings or {}).get("cert_alert_config", {"enabled": False})
+        return config
 
     async def get_expiring_certifications(
         self,

@@ -3193,7 +3193,8 @@ class EmailTemplateService:
             .options(selectinload(EmailTemplate.attachments))
             .limit(1)
         )
-        return result.scalar_one_or_none()
+        email_template: Optional[EmailTemplate] = result.scalar_one_or_none()
+        return email_template
 
     async def list_templates(self, organization_id: str) -> List[EmailTemplate]:
         """List all templates for an organization.
@@ -3383,7 +3384,7 @@ class EmailTemplateService:
             )
             .options(selectinload(EmailTemplate.attachments))
         )
-        template = result.scalar_one_or_none()
+        template: Optional[EmailTemplate] = result.scalar_one_or_none()
         if not template:
             return None
 
@@ -3460,7 +3461,7 @@ class EmailTemplateService:
             )
             .options(selectinload(EmailTemplate.attachments))
         )
-        template = result.scalar_one_or_none()
+        template: Optional[EmailTemplate] = result.scalar_one_or_none()
         if not template:
             return None
 

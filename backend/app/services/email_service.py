@@ -152,7 +152,7 @@ def inline_email_css(html: str) -> str:
             class_styles[simple.group(1)] = styles
 
     # --- inline class styles ------------------------------------------
-    def _replace_class(match: re.Match) -> str:
+    def _replace_class(match: re.Match[str]) -> str:
         tag = match.group(0)
         cls_m = re.search(r'class="([\w-]+)"', tag)
         if not cls_m or cls_m.group(1) not in class_styles:
@@ -709,12 +709,13 @@ class EmailService:
         what Enhanced Filtering is looking for.
         """
         # Explicit config takes top priority
-        explicit = getattr(settings, "SMTP_EHLO_HOSTNAME", None)
+        explicit: Optional[str] = getattr(settings, "SMTP_EHLO_HOSTNAME", None)
         if explicit:
             return explicit
         from_email = self._smtp_config.get("from_email", "")
         if "@" in from_email:
-            return from_email.split("@")[1]
+            text: str = from_email.split("@")[1]
+            return text
         return "localhost"
 
     def _smtp_connect(self) -> smtplib.SMTP:
@@ -732,6 +733,7 @@ class EmailService:
         context = ssl.create_default_context()
         ehlo_hostname = self._get_ehlo_hostname()
 
+        server: smtplib.SMTP
         if encryption == "ssl":
             server = smtplib.SMTP_SSL(
                 host,
@@ -2010,7 +2012,7 @@ class EmailService:
                     stored = confined_template_attachments(
                         loaded_template.attachments, organization_id
                     )
-                    attachment_paths = list(attachment_paths or []) + stored
+                    attachment_paths = [*(attachment_paths or []), *stored]
             except Exception as e:
                 logger.warning(
                     "Failed to load welcome email template, using default: {}", e

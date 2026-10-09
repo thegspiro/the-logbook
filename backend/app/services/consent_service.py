@@ -73,7 +73,7 @@ class ConsentService:
                 UserConsent.consent_type == consent_type,
             )
         )
-        row = result.scalar_one_or_none()
+        row: UserConsent | None = result.scalar_one_or_none()
         if row is None:
             row = UserConsent(
                 organization_id=user.organization_id,
