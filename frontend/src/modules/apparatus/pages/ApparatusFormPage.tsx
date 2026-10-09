@@ -244,6 +244,9 @@ export const ApparatusFormPage: React.FC = () => {
     setFormData((prev) => ({
       ...prev,
       [name]: processedValue,
+      // A reason belongs to the status it was given for: kept across a change
+      // it would label a rig back In Service with why it was taken out.
+      ...(name === 'statusId' && processedValue !== prev.statusId ? { statusReason: '' } : {}),
     }));
 
     // Clear error when field is modified
@@ -276,6 +279,8 @@ export const ApparatusFormPage: React.FC = () => {
     }));
   };
 
+  const selectedStatus = statuses.find((status) => status.id === formData.statusId);
+
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
 
@@ -287,6 +292,8 @@ export const ApparatusFormPage: React.FC = () => {
     }
     if (!formData.statusId) {
       newErrors.statusId = 'Status is required';
+    } else if (selectedStatus?.requiresReason && !formData.statusReason?.trim()) {
+      newErrors.statusReason = `Give a reason for ${selectedStatus.name}`;
     }
 
     setErrors(newErrors);
@@ -494,6 +501,41 @@ export const ApparatusFormPage: React.FC = () => {
                   <p id="apparatus-statusId-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
                     {errors.statusId}
                   </p>
+                )}
+                {/* Statuses flagged requires_reason (Out of Service, as seeded)
+                    are refused without one by POST /apparatus/{id}/status; this
+                    form saves through the plain update, which does not check,
+                    so the requirement is enforced here. */}
+                {formData.statusId && (
+                  <div className="mt-3">
+                    <label htmlFor="apparatus-statusReason" className="text-theme-text-secondary mb-1 block text-sm">
+                      Reason{' '}
+                      {selectedStatus?.requiresReason ? (
+                        <span className="text-red-700 dark:text-red-400">*</span>
+                      ) : (
+                        <span className="text-theme-text-muted">(optional)</span>
+                      )}
+                    </label>
+                    <input
+                      id="apparatus-statusReason"
+                      name="statusReason"
+                      type="text"
+                      value={formData.statusReason ?? ''}
+                      onChange={handleChange}
+                      placeholder="e.g. Pump seal leaking, at the shop"
+                      className={`form-input ${errors.statusReason ? 'border-red-500' : 'border-theme-input-border'}`}
+                      aria-invalid={Boolean(errors.statusReason)}
+                      aria-describedby={`apparatus-statusReason-help${errors.statusReason ? ' apparatus-statusReason-error' : ''}`}
+                    />
+                    <p id="apparatus-statusReason-help" className="text-theme-text-muted mt-1 text-xs">
+                      Shown next to the status on the apparatus page.
+                    </p>
+                    {errors.statusReason && (
+                      <p id="apparatus-statusReason-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
+                        {errors.statusReason}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
               <div>
