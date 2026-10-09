@@ -59,7 +59,9 @@ describe('ElectionsPage member affordances', () => {
   it('tells a member where a vote will appear when no elections exist', async () => {
     renderWithRouter(<ElectionsPage />);
 
-    expect(await screen.findByText('No elections yet')).toBeInTheDocument();
+    // An h2 under the page's h1: the sweep runs as a member, and an h3 here
+    // tripped axe heading-order once this panel started rendering for them.
+    expect(await screen.findByRole('heading', { level: 2, name: 'No elections yet' })).toBeInTheDocument();
     expect(screen.getByText(/When your department opens a vote, it appears here/)).toBeInTheDocument();
     expect(screen.queryByText(/Create an election, add the candidates/)).not.toBeInTheDocument();
   });
