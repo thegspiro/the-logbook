@@ -129,6 +129,8 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   },
   '/finance/purchase-requests': { permissions: ['finance.request', 'finance.view', 'finance.manage'] },
   '/finance/settings': { permissions: ['finance.manage'] },
+  // Label only: the segment reads "Quickbooks"; the page is the export's settings.
+  '/finance/settings/quickbooks': { label: 'QuickBooks Export', permissions: ['finance.manage'] },
   '/grants/applications': { permissions: ['fundraising.view'] },
   '/inventory/admin/checklists': { permissions: ['inventory.check_manage'] },
   '/inventory/checklists': { permissions: ['inventory.check_view', 'scheduling.manage'] },

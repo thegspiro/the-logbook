@@ -68,6 +68,7 @@ from app.schemas.finance import (
     ExportMappingCreate,
     ExportMappingResponse,
     ExportMappingUpdate,
+    ExportReadinessResponse,
     ExportRequest,
     FinanceDashboardResponse,
     FinanceNamedOptionResponse,
@@ -2870,6 +2871,32 @@ async def update_export_mapping(
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.delete("/export/mappings/{mapping_id}", status_code=204)
+async def delete_export_mapping(
+    mapping_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    service = FinanceService(db)
+    try:
+        await service.delete_export_mapping(
+            mapping_id, str(current_user.organization_id)
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.get("/export/readiness", response_model=ExportReadinessResponse)
+async def get_export_readiness(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    service = FinanceService(db)
+    return await service.get_export_readiness(str(current_user.organization_id))
 
 
 @router.post("/export/transactions")

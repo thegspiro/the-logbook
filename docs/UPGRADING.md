@@ -532,8 +532,8 @@ Credits, Description`. Each transaction is two lines (two per expense line on
   `internal_category` matches the category name. The offset account comes only
   from that mapping's new `qbOffsetAccountName` field. Nothing is backfilled,
   so **existing installations must set offset accounts before their next
-  export** with `PUT /finance/export/mappings/{id}`. There is no screen for
-  this yet (see `docs/KNOWN_LIMITATIONS.md`).
+  export**, on **Finance › QuickBooks Export** (`/finance/settings/quickbooks`,
+  added 2026-10-09), which lists each budget category and what it is missing.
 - A migration adds the nullable `finance_export_mappings.qb_offset_account_name`
   column. Its downgrade drops the column and the values stored in it.
 

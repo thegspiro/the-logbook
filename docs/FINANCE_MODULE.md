@@ -951,6 +951,8 @@ Pages:
 **Endpoints:**
 
 - `GET/POST/PUT /finance/export/mappings` — manage QB account mappings
+- `DELETE /finance/export/mappings/{id}` _(2026-10-09)_ — remove a mapping (org-scoped; `finance.manage`). Needed to clear a duplicate, which blocks the export
+- `GET /finance/export/readiness` _(2026-10-09)_ — per budget category: status (`ready`, `no_account`, `no_offset`, `duplicate_mappings`), the account and its source (`category` or `mapping`), the offset account and the matching mapping ids; plus `unmatchedMappingIds`. Built on the export's own classifier (`finance.manage`)
 - `POST /finance/export/transactions` — generate CSV/IIF export file for date range
 - `GET /finance/export/logs` — export history
 
@@ -969,7 +971,12 @@ Pages:
 
 - `FinanceDashboardPage` (enhance from Phase 1) — budget gauges, approval queue, dues health, recent activity
 - `FinanceReportsPage` — `/finance/reports` — report selector with filters and export buttons
-- `ExportSettingsPage` — `/finance/export` — QB mapping configuration + export wizard (protected: `finance.manage`)
+- `QuickBooksExportSettingsPage` — `/finance/settings/quickbooks` _(built 2026-10-09)_ — QB mapping configuration (protected: `finance.manage`). Two tables:
+  - **Budget categories** — every category with the account it posts to (and whether the category or its mapping supplies it), the account it is paid from, and a status: Ready, No account, No paid-from account, or More than one mapping. This is `GET /finance/export/readiness`, computed by `_classify_category_accounts` — the same function the export runs — so a category shown Ready is one the export accepts; the page decides nothing itself. Each row offers Add mapping or Edit mapping.
+  - **Mappings** — every mapping, with edit and delete (confirmed first). A mapping whose `internal_category` names no budget category is flagged from the readiness report's `unmatchedMappingIds`, since the export never uses it.
+  - The mapping dialog picks the category from the department's categories rather than taking typed text (the export matches by name, so a misspelling matches nothing) and requires the paid-from account, which the export cannot do without even though the API accepts a mapping lacking one.
+  - The budget category dialog on Finance Settings carries the category's own **QuickBooks account** (`qbAccountName`), which takes precedence over its mapping's account.
+- Export wizard (run an export for a date range, export history) — not built; see `docs/KNOWN_LIMITATIONS.md`
 
 ---
 

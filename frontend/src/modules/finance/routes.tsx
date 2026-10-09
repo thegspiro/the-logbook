@@ -24,6 +24,7 @@ const BudgetRequestReviewPage = lazyWithRetry(() => import('./pages/BudgetReques
 // Settings
 const FiscalYearSettingsPage = lazyWithRetry(() => import('./pages/FiscalYearSettingsPage'));
 const ApprovalChainsSettingsPage = lazyWithRetry(() => import('./pages/ApprovalChainsSettingsPage'));
+const QuickBooksExportSettingsPage = lazyWithRetry(() => import('./pages/QuickBooksExportSettingsPage'));
 
 // Purchase Requests
 const PurchaseRequestsPage = lazyWithRetry(() => import('./pages/PurchaseRequestsPage'));
@@ -132,6 +133,14 @@ export const getFinanceRoutes = () => {
             moduleLabel="Finance"
           >
             <ApprovalChainsSettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/finance/settings/quickbooks"
+        element={
+          <ProtectedRoute requiredPermission="finance.manage" requiredModule="finance" moduleLabel="Finance">
+            <QuickBooksExportSettingsPage />
           </ProtectedRoute>
         }
       />
