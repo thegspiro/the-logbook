@@ -812,14 +812,13 @@ describe('a stale late-signup window', () => {
     // twelve-hour floor the deadline has long passed and the claim action
     // disappears, though the server still accepts it. The unresolved window
     // uses the ceiling for exactly this reason.
-    const openEnded = withoutKeys(
-      shift({
-        shift_date: toDateKey(new Date(Date.now() - 20 * 60 * 60_000)),
-        start_time: new Date(Date.now() - 20 * 60 * 60_000).toISOString(),
-        late_signup_until: live,
-      }),
-      'end_time'
-    );
+    // The API sends an explicit null for an open-ended shift.
+    const openEnded = shift({
+      shift_date: toDateKey(new Date(Date.now() - 20 * 60 * 60_000)),
+      start_time: new Date(Date.now() - 20 * 60 * 60_000).toISOString(),
+      end_time: null,
+      late_signup_until: live,
+    });
 
     expect(effectiveLateSignupUntil(openEnded, UNRESOLVED_SIGNUP_WINDOW)).toBe(Date.parse(live));
     expect(memberSignupClosedReason(openEnded, UNRESOLVED_SIGNUP_WINDOW)).toBeNull();
