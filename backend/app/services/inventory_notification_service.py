@@ -185,12 +185,16 @@ class InventoryNotificationService:
                 # A member who turned these emails off is treated like one with
                 # no address: the queued rows are consumed, so the digest does
                 # not wait for them to change their mind.
-                wants_email = bool(user and user.email) and member_receives_email(
-                    user.notification_preferences,
-                    EmailKind.INVENTORY_UPDATES,
-                    department_required_kinds(org),
+                wants_email = (
+                    user is not None
+                    and bool(user.email)
+                    and member_receives_email(
+                        user.notification_preferences,
+                        EmailKind.INVENTORY_UPDATES,
+                        department_required_kinds(org),
+                    )
                 )
-                if not wants_email:
+                if user is None or not wants_email:
                     if not user or not user.email:
                         logger.warning(
                             f"No email for user {member_id}, "
@@ -454,7 +458,9 @@ class InventoryNotificationService:
 
         # Fallback to the shipped default, rendered the same way a stored
         # template is, so the shell's colourway and footer are filled too.
-        if not subject:
+        # ``html_body`` is only ever set alongside a non-empty subject; the
+        # second test states that for the type checker.
+        if not subject or html_body is None:
             subject, html_body, text_body = EmailTemplateService.render_default(
                 EmailTemplateType.INVENTORY_CHANGE, context, organization=org
             )
@@ -475,10 +481,12 @@ class InventoryNotificationService:
 
     async def _get_user(self, user_id: str) -> Optional[User]:
         result = await self.db.execute(select(User).where(User.id == user_id))
-        return result.scalar_one_or_none()
+        user: Optional[User] = result.scalar_one_or_none()
+        return user
 
     async def _get_organization(self, org_id: str) -> Optional[Organization]:
         result = await self.db.execute(
             select(Organization).where(Organization.id == org_id)
         )
-        return result.scalar_one_or_none()
+        organization: Optional[Organization] = result.scalar_one_or_none()
+        return organization

@@ -98,7 +98,7 @@ class LegalDocumentService:
                 LegalDocumentRevision.organization_id == organization_id,
             )
         )
-        revision = result.scalar_one_or_none()
+        revision: LegalDocumentRevision | None = result.scalar_one_or_none()
         if revision is None:
             raise ValueError("Revision not found")
         return revision
@@ -125,7 +125,8 @@ class LegalDocumentService:
         result = await self.db.execute(
             select(Organization).where(Organization.id == organization_id)
         )
-        return result.scalar_one_or_none()
+        organization: Optional[Organization] = result.scalar_one_or_none()
+        return organization
 
     async def _get_organization_for_update(
         self, organization_id: str
@@ -144,7 +145,8 @@ class LegalDocumentService:
             .where(Organization.id == organization_id)
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        organization: Optional[Organization] = result.scalar_one_or_none()
+        return organization
 
     # ── Drafting ─────────────────────────────────────────────────────────
 
