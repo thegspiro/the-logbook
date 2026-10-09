@@ -67,7 +67,7 @@ export const ReceiptControl: React.FC<ReceiptControlProps> = ({
         <button
           type="button"
           onClick={() => void handleDownload()}
-          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1 text-sm"
+          className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 inline-flex items-center gap-1 text-sm"
           aria-label={`Download receipt for ${subject}`}
         >
           <Download className="h-4 w-4" aria-hidden="true" />
@@ -79,7 +79,7 @@ export const ReceiptControl: React.FC<ReceiptControlProps> = ({
             href={receiptUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1 text-sm"
+            className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 inline-flex items-center gap-1 text-sm"
             aria-label={`Open receipt link for ${subject}`}
           >
             <ExternalLink className="h-4 w-4" aria-hidden="true" />
@@ -90,7 +90,7 @@ export const ReceiptControl: React.FC<ReceiptControlProps> = ({
       {canAttach && (
         <label
           htmlFor={inputId}
-          className={`text-theme-text-secondary hover:text-theme-text-primary focus-within:ring-theme-focus-ring inline-flex cursor-pointer items-center gap-1 rounded text-sm focus-within:ring-2 ${
+          className={`text-theme-text-secondary hover:text-theme-text-primary focus-within:ring-theme-focus-ring touch:min-h-11 inline-flex cursor-pointer items-center gap-1 rounded text-sm focus-within:ring-2 ${
             uploading ? 'pointer-events-none opacity-60' : ''
           }`}
         >

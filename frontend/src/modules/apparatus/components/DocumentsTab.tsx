@@ -335,7 +335,7 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
                     <button
                       type="button"
                       onClick={() => void handleDownload(doc)}
-                      className="text-theme-text-muted hover:text-theme-text-primary p-1 transition-colors"
+                      className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 touch:min-w-11 p-1 transition-colors"
                       title="Download document"
                       aria-label={`Download ${doc.title}`}
                     >
