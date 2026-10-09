@@ -6,7 +6,7 @@ check requests, dues, and approval chains.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
@@ -23,7 +23,22 @@ from app.models.finance import (
     PurchaseRequestStatus,
 )
 from app.models.user import Position, User
+from app.services.finance_budget_request_service import FinanceBudgetRequestService
 from app.services.finance_service import BudgetLimitExceededError, FinanceService
+
+
+async def _adopt(db: AsyncSession, fy, org_id: str):
+    """Take a new draft through review and record the board's adoption."""
+    stages = FinanceBudgetRequestService(db)
+    await stages.set_planning_stage(fy.id, org_id, "leadership_review")
+    await stages.set_planning_stage(fy.id, org_id, "board_review")
+    return await FinanceService(db).activate_fiscal_year(
+        fy.id,
+        org_id,
+        adopted_on=date(2025, 12, 10),
+        adoption_reference="Board minutes 2025-12-10, motion 4",
+    )
+
 
 pytestmark = [pytest.mark.integration]
 
@@ -197,8 +212,11 @@ class TestFiscalYearService:
             end_date=datetime(2026, 12, 31, tzinfo=timezone.utc),
         )
 
-        activated = await service.activate_fiscal_year(fy.id, sample_org_data["id"])
+        activated = await _adopt(db_session, fy, sample_org_data["id"])
         assert activated.status == FiscalYearStatus.ACTIVE
+        assert activated.adopted_on == date(2025, 12, 10)
+        assert activated.adoption_reference == "Board minutes 2025-12-10, motion 4"
+        assert activated.planning_stage is None
 
     async def test_lock_fiscal_year(self, db_session: AsyncSession, sample_org_data):
         """Test locking a fiscal year"""
@@ -211,6 +229,7 @@ class TestFiscalYearService:
             end_date=datetime(2026, 12, 31, tzinfo=timezone.utc),
         )
 
+        await _adopt(db_session, fy, sample_org_data["id"])
         locked = await service.lock_fiscal_year(fy.id, sample_org_data["id"])
         assert locked.is_locked is True
         assert locked.status == FiscalYearStatus.CLOSED
@@ -227,6 +246,7 @@ class TestFiscalYearService:
             start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
             end_date=datetime(2026, 12, 31, tzinfo=timezone.utc),
         )
+        await _adopt(db_session, fy, sample_org_data["id"])
         await service.lock_fiscal_year(fy.id, sample_org_data["id"])
 
         with pytest.raises(ValueError, match="locked"):
@@ -257,8 +277,8 @@ class TestFiscalYearService:
             end_date=datetime(2026, 12, 31, tzinfo=timezone.utc),
         )
 
-        await service.activate_fiscal_year(fy1.id, org_id)
-        await service.activate_fiscal_year(fy2.id, org_id)
+        await _adopt(db_session, fy1, org_id)
+        await _adopt(db_session, fy2, org_id)
 
         refreshed_fy1 = await service.get_fiscal_year(fy1.id, org_id)
         assert refreshed_fy1.status == FiscalYearStatus.CLOSED

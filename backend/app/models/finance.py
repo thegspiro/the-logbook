@@ -59,6 +59,21 @@ class BudgetRequestStatus(str, enum.Enum):
     DECLINED = "declined"
 
 
+class BudgetPlanningStage(str, enum.Enum):
+    """Where a draft fiscal year's budget is on its way to adoption.
+
+    Owners request amounts (``requests``), the Treasurer closes the draft to
+    them and senior leadership adjusts the decided amounts
+    (``leadership_review``), then the budget goes before the board
+    (``board_review``). Adoption is activation, which needs the board's vote
+    recorded. Only a draft year has a stage.
+    """
+
+    REQUESTS = "requests"
+    LEADERSHIP_REVIEW = "leadership_review"
+    BOARD_REVIEW = "board_review"
+
+
 class PurchaseRequestStatus(str, enum.Enum):
     """Status of a purchase request"""
 
@@ -226,6 +241,25 @@ class FiscalYear(Base):
     # the department's calendar: requests stay open through the end of that
     # day in the org's timezone. NULL means no deadline.
     request_deadline = Column(Date, nullable=True)
+    # NULL on a draft year reads as REQUESTS, so a year drafted before stages
+    # existed keeps taking requests; non-draft years carry NULL.
+    planning_stage = Column(
+        SQLEnum(
+            BudgetPlanningStage,
+            values_callable=lambda x: [e.value for e in x],
+        ),
+        nullable=True,
+    )
+    # The board's adoption of the budget, recorded when the year is
+    # activated from a draft: the vote is what makes the budget spendable,
+    # so it is kept with the year rather than only in the audit log.
+    adopted_on = Column(Date, nullable=True)
+    adoption_reference = Column(String(500), nullable=True)
+    adoption_notes = Column(Text, nullable=True)
+    adoption_recorded_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    adoption_recorded_at = Column(DateTime(timezone=True), nullable=True)
     created_by = Column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
@@ -242,6 +276,7 @@ class FiscalYear(Base):
     # Relationships
     organization = relationship("Organization", foreign_keys=[organization_id])
     creator = relationship("User", foreign_keys=[created_by])
+    adoption_recorder = relationship("User", foreign_keys=[adoption_recorded_by])
     budgets = relationship(
         "Budget", back_populates="fiscal_year", cascade="all, delete-orphan"
     )
@@ -522,6 +557,15 @@ class BudgetRequest(Base):
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     decided_at = Column(DateTime(timezone=True), nullable=True)
+    # Senior leadership's change to a decided amount during leadership
+    # review, kept beside the Treasurer's decision rather than over it so the
+    # record shows who set which figure.
+    review_amount = Column(Numeric(12, 2), nullable=True)
+    review_note = Column(Text, nullable=True)
+    reviewed_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

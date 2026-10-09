@@ -1194,7 +1194,7 @@ lot's number or expiration date require `inventory.check_manage` or
 | `/finance/budgets/:id`                | Budget Detail              | Authenticated                                         |
 | `/finance/my-budgets`                 | My Budgets                 | Authenticated                                         |
 | `/finance/budget-requests`            | Next Year's Budget         | Authenticated                                         |
-| `/finance/budget-requests/review`     | Budget Requests (review)   | `finance.manage`                                      |
+| `/finance/budget-requests/review`     | Budget Requests (review)   | `finance.manage` or `finance.budget_review`           |
 | `/finance/purchase-requests`          | Purchase Requests          | `finance.request`, `finance.view` or `finance.manage` |
 | `/finance/purchase-requests/new`      | New Purchase Request       | `finance.request` or `finance.manage`                 |
 | `/finance/purchase-requests/:id`      | Purchase Request Detail    | `finance.request`, `finance.view` or `finance.manage` |
@@ -1220,7 +1220,8 @@ lot's number or expiration date require `inventory.check_manage` or
 > member who owns a draft-year line or has a request. The Treasurer reviews
 > and decides at `/finance/budget-requests/review` (`finance.manage`, the
 > decide endpoint's gate), also linked from a draft year's row in Finance
-> Settings.
+> Settings. _(2026-10-09)_ Senior leadership (`finance.budget_review`) uses the
+> same screen to change decided amounts while the year is in leadership review.
 
 > **Budget-line owners read their own lines** _(2026-10-08)_. A budget line
 > is owned by a position (or inherits its category's). `/finance/my-budgets`

@@ -49,6 +49,7 @@ from app.models.finance import (
     Budget,
     BudgetAmendment,
     BudgetCategory,
+    BudgetPlanningStage,
     CheckRequest,
     CheckRequestStatus,
     DuesPayment,
@@ -269,7 +270,13 @@ class FinanceService:
     async def create_fiscal_year(
         self, org_id: str, created_by: str, **kwargs
     ) -> FiscalYear:
-        fy = FiscalYear(organization_id=org_id, created_by=created_by, **kwargs)
+        fy = FiscalYear(
+            organization_id=org_id,
+            created_by=created_by,
+            status=FiscalYearStatus.DRAFT,
+            planning_stage=BudgetPlanningStage.REQUESTS,
+            **kwargs,
+        )
         self.db.add(fy)
         await self.db.flush()
         await self.db.refresh(fy, ["created_at", "updated_at"])
@@ -300,10 +307,47 @@ class FinanceService:
         await self.db.refresh(fy, ["updated_at"])
         return fy
 
-    async def activate_fiscal_year(self, fy_id: str, org_id: str) -> FiscalYear:
+    async def activate_fiscal_year(
+        self,
+        fy_id: str,
+        org_id: str,
+        *,
+        recorded_by: Optional[str] = None,
+        adopted_on: Optional[date] = None,
+        adoption_reference: Optional[str] = None,
+        adoption_notes: Optional[str] = None,
+    ) -> FiscalYear:
+        """Make a year the active one.
+
+        A draft year's budget becomes spendable here, so activating one is
+        its adoption: it must have been before the board (``board_review``)
+        and the board's vote is recorded with it — the meeting date, not in
+        the future, and a motion or minutes reference. Re-activating a year
+        that is not a draft records nothing new.
+        """
         fy = await self.get_fiscal_year(fy_id, org_id)
         if not fy:
             raise ValueError("Fiscal year not found")
+        if fy.status == FiscalYearStatus.DRAFT:
+            if fy.planning_stage != BudgetPlanningStage.BOARD_REVIEW:
+                raise ValueError(
+                    f"{fy.name} is adopted from board review. Move it to board "
+                    "review first."
+                )
+            reference = (adoption_reference or "").strip()
+            if adopted_on is None or not reference:
+                raise ValueError(
+                    "Record the board's adoption: the meeting date and the "
+                    "motion or minutes reference."
+                )
+            if adopted_on > await resolve_org_today(self.db, org_id):
+                raise ValueError("The adoption date cannot be in the future.")
+            fy.adopted_on = adopted_on
+            fy.adoption_reference = reference
+            fy.adoption_notes = (adoption_notes or "").strip() or None
+            fy.adoption_recorded_by = recorded_by
+            fy.adoption_recorded_at = datetime.now(timezone.utc)
+            fy.planning_stage = None
 
         # Deactivate any currently active fiscal year
         result = await self.db.execute(
@@ -326,6 +370,13 @@ class FinanceService:
         fy = await self.get_fiscal_year(fy_id, org_id)
         if not fy:
             raise ValueError("Fiscal year not found")
+        if fy.status == FiscalYearStatus.DRAFT:
+            # Locking closes a year for good; a draft is still being planned
+            # and has never been adopted, so locking it would end it unused.
+            raise ValueError(
+                f"{fy.name} is a draft that is still being planned, so it "
+                "cannot be locked."
+            )
         fy.is_locked = True
         fy.status = FiscalYearStatus.CLOSED
         await self.db.flush()

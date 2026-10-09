@@ -1,6 +1,12 @@
 /**
  * Budget requests — the Treasurer's review of next year's requests
- * (`finance.manage`).
+ * (`finance.manage`), and senior leadership's (`finance.budget_review`).
+ *
+ * What each may do follows the draft year's planning stage, which the backend
+ * reports: the Treasurer decides requests while the year is taking requests;
+ * leadership changes decided amounts while it is in leadership review
+ * (`BudgetRequestLeadershipDialog`). The API enforces both; the page only
+ * offers the action that stage allows.
  *
  * One draft fiscal year at a time: its deadline and whether owners can still
  * change requests (the backend's `requestsOpen`), a count per status, the
@@ -15,6 +21,8 @@ import { Link } from 'react-router';
 import { AlertTriangle, ClipboardList } from 'lucide-react';
 import { budgetRequestService, fiscalYearService } from '../services/api';
 import { BudgetRequestDecisionDialog } from '../components/BudgetRequestDecisionDialog';
+import { BudgetRequestLeadershipDialog } from '../components/BudgetRequestLeadershipDialog';
+import { useAuthStore } from '@/stores/authStore';
 import {
   BUDGET_REQUEST_STATUS_BADGES,
   BUDGET_REQUEST_STATUS_LABELS,
@@ -39,12 +47,17 @@ type StatusFilter = BudgetRequestStatus | 'all';
 
 const BudgetRequestReviewPage: React.FC = () => {
   const tz = useTimezone();
+  const isTreasurer = useAuthStore((s) => s.checkPermission('finance.manage'));
+  const isLeadership = useAuthStore((s) => s.checkPermission('finance.budget_review'));
   const [years, setYears] = useState<FiscalYearOption[] | null>(null);
   const [yearId, setYearId] = useState('');
-  const [status, setStatus] = useState<StatusFilter>('submitted');
+  // Leadership works on what the Treasurer decided; the Treasurer starts with
+  // what is waiting on them.
+  const [status, setStatus] = useState<StatusFilter>(isTreasurer ? 'submitted' : 'all');
   const [requests, setRequests] = useState<BudgetRequest[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deciding, setDeciding] = useState<BudgetRequest | null>(null);
+  const [reviewing, setReviewing] = useState<BudgetRequest | null>(null);
 
   const loadYears = useCallback(async () => {
     try {
@@ -98,6 +111,8 @@ const BudgetRequestReviewPage: React.FC = () => {
   );
 
   const year = years?.find((y) => y.id === yearId) ?? null;
+  const canDecide = isTreasurer && year?.planningStage === 'requests';
+  const canReview = isLeadership && year?.planningStage === 'leadership_review';
 
   if (years === null) return <SkeletonPage />;
 
@@ -108,8 +123,14 @@ const BudgetRequestReviewPage: React.FC = () => {
         <h1 className="text-theme-text-primary text-2xl font-bold">Budget requests</h1>
         <p className="text-theme-text-secondary mt-1 text-sm">
           What line owners are asking for next year. Approving or adjusting a request writes the amount into the draft
-          year&apos;s line. Set the deadline and copy last year&apos;s lines in{' '}
-          <Link to="/finance/settings">Finance Settings</Link>.
+          year&apos;s line; in leadership review, senior leadership can change the amounts the Treasurer decided.
+          {isTreasurer && (
+            <>
+              {' '}
+              Set the deadline, copy last year&apos;s lines in and move the year between stages in{' '}
+              <Link to="/finance/settings">Finance Settings</Link>.
+            </>
+          )}
         </p>
       </div>
 
@@ -231,6 +252,9 @@ const BudgetRequestReviewPage: React.FC = () => {
                   <th scope="col" className={`${HEADER_CELL} text-right`}>
                     Approved
                   </th>
+                  <th scope="col" className={`${HEADER_CELL} text-right`}>
+                    Leadership
+                  </th>
                   <th scope="col" className={HEADER_CELL}>
                     Status
                   </th>
@@ -273,13 +297,27 @@ const BudgetRequestReviewPage: React.FC = () => {
                     <td data-label="Approved" className={MONEY_CELL}>
                       {formatCurrency(r.approvedAmount ?? null)}
                     </td>
+                    <td data-label="Leadership" className={MONEY_CELL}>
+                      {r.reviewAmount != null ? (
+                        <>
+                          {formatCurrency(r.reviewAmount)}
+                          {r.reviewedByName && (
+                            <span className="text-theme-text-secondary block text-xs font-normal">
+                              {r.reviewedByName}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-theme-text-secondary">No change</span>
+                      )}
+                    </td>
                     <td data-label="Status" className={CELL}>
                       <span className={`badge ${BUDGET_REQUEST_STATUS_BADGES[r.status]}`}>
                         {BUDGET_REQUEST_STATUS_LABELS[r.status]}
                       </span>
                     </td>
                     <td data-label="Decision" className={CELL}>
-                      {r.status !== 'draft' && (
+                      {canDecide && r.status !== 'draft' && (
                         <button
                           type="button"
                           className="btn-secondary btn-sm"
@@ -287,6 +325,16 @@ const BudgetRequestReviewPage: React.FC = () => {
                           aria-label={`${r.status === 'submitted' ? 'Review' : 'Change decision on'} ${r.lineLabel}`}
                         >
                           {r.status === 'submitted' ? 'Review' : 'Change'}
+                        </button>
+                      )}
+                      {canReview && (r.status === 'approved' || r.status === 'adjusted') && (
+                        <button
+                          type="button"
+                          className="btn-secondary btn-sm"
+                          onClick={() => setReviewing(r)}
+                          aria-label={`Change the amount for ${r.lineLabel}`}
+                        >
+                          Change amount
                         </button>
                       )}
                     </td>
@@ -308,12 +356,23 @@ const BudgetRequestReviewPage: React.FC = () => {
                   <td data-label="Approved" className={`${MONEY_CELL} font-semibold`}>
                     {formatCurrency(totals.approved)}
                   </td>
-                  <td colSpan={2} />
+                  <td colSpan={3} />
                 </tr>
               </tfoot>
             </table>
           </div>
         </div>
+      )}
+
+      {reviewing && (
+        <BudgetRequestLeadershipDialog
+          request={reviewing}
+          onClose={() => setReviewing(null)}
+          onReviewed={() => {
+            setReviewing(null);
+            void load();
+          }}
+        />
       )}
 
       {deciding && (

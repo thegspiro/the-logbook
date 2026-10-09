@@ -412,6 +412,29 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### A draft fiscal year is adopted through board review, not activated directly (2026-10-09)
+
+Next year's budget now passes through stages — taking requests, leadership
+review, board review — and activating a **draft** year is its adoption:
+
+- **`POST /finance/fiscal-years/{id}/activate` on a draft now refuses (400)**
+  unless the year is in board review and the body records the board's vote:
+  `{"adoptedOn": "YYYY-MM-DD", "adoptionReference": "..."}`. The **Activate**
+  button on a draft is replaced by stage buttons and **Record adoption**.
+  Re-activating a year that is not a draft is unchanged.
+- **Lock** now refuses a draft year.
+- **Existing draft years** are set to the taking-requests stage by migration
+  `5c8be05f2f0f`; nothing about them changes until the Treasurer moves them.
+  Years activated before the upgrade have no adoption record, and none is
+  invented. The downgrade drops the new columns and the stages, adoption
+  records and leadership changes in them; amounts already written into lines
+  stay.
+- **Grant `finance.budget_review`** to the positions that sit in leadership
+  review (typically the President and the Chief) in **Role Management**
+  (`/settings/roles`).
+  It is seeded to no position, so until it is granted nobody can change amounts
+  in leadership review.
+
 ### Every upload is malware-scanned, and the scanner starts with the stack (2026-10-08)
 
 Phase 2 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).

@@ -27,6 +27,8 @@ import type {
   BudgetRequest,
   BudgetRequestCreatePayload,
   BudgetRequestDecisionPayload,
+  BudgetRequestReviewPayload,
+  BudgetPlanningStage,
   BudgetRequestProposalOptions,
   BudgetRequestStatus,
   BudgetRequestUpdatePayload,
@@ -41,6 +43,7 @@ import type {
   FinanceDashboard,
   FiscalYear,
   FiscalYearOption,
+  FiscalYearAdoptionPayload,
   FiscalYearUpdatePayload,
   FinanceNamedOption,
   MemberDues,
@@ -94,8 +97,15 @@ export const fiscalYearService = {
     return response.data;
   },
 
-  async activate(id: string): Promise<FiscalYear> {
-    const response = await api.post<FiscalYear>(`/finance/fiscal-years/${id}/activate`);
+  /** A draft is adopted: it must be in board review, and `adoption` is the board's vote. */
+  async activate(id: string, adoption?: FiscalYearAdoptionPayload): Promise<FiscalYear> {
+    const response = await api.post<FiscalYear>(`/finance/fiscal-years/${id}/activate`, adoption);
+    return response.data;
+  },
+
+  /** Move a draft year one planning stage forward or back. */
+  async setPlanningStage(id: string, stage: BudgetPlanningStage): Promise<FiscalYear> {
+    const response = await api.post<FiscalYear>(`/finance/fiscal-years/${id}/planning-stage`, { stage });
     return response.data;
   },
 
@@ -298,6 +308,12 @@ export const budgetRequestService = {
   /** finance.manage only. */
   async decide(id: string, data: BudgetRequestDecisionPayload): Promise<BudgetRequest> {
     const response = await api.post<BudgetRequest>(`/finance/budget-requests/${id}/decide`, data);
+    return response.data;
+  },
+
+  /** Senior leadership (`finance.budget_review`) changes a decided amount during leadership review. */
+  async review(id: string, data: BudgetRequestReviewPayload): Promise<BudgetRequest> {
+    const response = await api.post<BudgetRequest>(`/finance/budget-requests/${id}/review`, data);
     return response.data;
   },
 };

@@ -48,11 +48,15 @@ from decimal import Decimal
 from typing import Iterable, Optional
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.models.facilities import Facility
 from app.models.finance import (
+    Budget,
+    BudgetCategory,
+    BudgetPlanningStage,
     BudgetRequest,
     BudgetRequestStatus,
     FiscalYear,
@@ -73,6 +77,7 @@ from app.services.finance_budget_ownership import (
 from app.utils.org_timezone import org_today
 
 OWNER_PATH = "/finance/budget-requests"
+MY_BUDGETS_PATH = "/finance/my-budgets"
 REVIEW_PATH = "/finance/budget-requests/review"
 
 # Days before the deadline a reminder goes out. Constants rather than a
@@ -550,6 +555,121 @@ async def notify_requests_open(
 
 
 # ============================================
+# 5. Budget adopted -> each line owner
+# ============================================
+
+
+async def _adopted_lines(db: AsyncSession, org_id: str, fiscal_year_id: str) -> dict:
+    """Line id -> (label, adopted amount) for every line in the year."""
+    result = await db.execute(
+        select(Budget.id, Budget.amount_budgeted, BudgetCategory.name, Facility.name)
+        .select_from(Budget)
+        .join(
+            BudgetCategory,
+            (BudgetCategory.id == Budget.category_id)
+            & (BudgetCategory.organization_id == org_id),
+        )
+        .outerjoin(
+            Facility,
+            (Facility.id == Budget.station_id) & (Facility.organization_id == org_id),
+        )
+        .where(
+            Budget.organization_id == org_id,
+            Budget.fiscal_year_id == fiscal_year_id,
+        )
+    )
+    lines = {}
+    for line_id, amount, category, station in result.all():
+        label = f"{category} · {station}" if station else category
+        lines[str(line_id)] = (label, amount)
+    return lines
+
+
+async def notify_budget_adopted(
+    db: AsyncSession, org_id: str, fiscal_year_id: str
+) -> int:
+    """Tell each line owner the budget is adopted and what their lines hold.
+
+    Called once the board's adoption is recorded and the year is active.
+    Each member is sent one email listing every line their positions own,
+    with its adopted amount, so they know what they may now spend against.
+    A failure is logged and dropped; it never undoes the adoption.
+    """
+    try:
+        fy = (
+            await db.execute(
+                select(FiscalYear).where(
+                    FiscalYear.id == str(fiscal_year_id),
+                    FiscalYear.organization_id == org_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if fy is None:
+            return 0
+        org = await db.get(Organization, org_id)
+        owners = await year_owners(db, org_id, fy.id)
+        recipients = _who_receive(
+            [user for user, _lines in owners.values()],
+            EmailKind.BUDGET_REQUESTS,
+            org,
+        )
+        if not recipients:
+            return 0
+        lines = await _adopted_lines(db, org_id, fy.id)
+        link = _link(MY_BUDGETS_PATH)
+        adopted = f" on {long_date(fy.adopted_on)}" if fy.adopted_on is not None else ""
+        lead = (
+            f"The board adopted the {fy.name} budget{adopted}. Your position "
+            "owns the budget lines below, and requests for payment against "
+            "them can now be submitted."
+        )
+        subject = f"{fy.name} budget adopted: your budget lines"
+        sent_count = 0
+        for user in recipients:
+            owned = sorted(
+                (
+                    lines[line_id]
+                    for line_id in owners[str(user.id)][1]
+                    if line_id in lines
+                ),
+                key=lambda entry: entry[0],
+            )
+            if not owned:
+                continue
+            body = (
+                f"<p>{html.escape(lead)}</p>"
+                + facts(
+                    [
+                        [fact(html.escape(label), money(amount))]
+                        for label, amount in owned
+                    ]
+                )
+                + action(html.escape(link), "Open My Budgets")
+            )
+            text_lines = "\n".join(
+                f"  {label}: {money(amount)}" for label, amount in owned
+            )
+            text = f"{lead}\n\n{text_lines}\n\nOpen My Budgets: {link}\n"
+            sent = await _send(
+                db,
+                org,
+                [user],
+                subject=subject,
+                title="Budget adopted",
+                body_html=body,
+                text_body=text,
+                chip="Budget",
+                accent=ACCENT_GREEN,
+                template_type="finance_budget_adopted",
+            )
+            sent_count += len(sent)
+        return sent_count
+    except Exception as exc:
+        logger.warning("Budget adopted email failed: {}", exc)
+        return 0
+
+
+# ============================================
 # 4. Deadline reminder (scheduled)
 # ============================================
 
@@ -645,6 +765,12 @@ async def send_deadline_reminders(db: AsyncSession, org: Organization) -> int:
             FiscalYear.organization_id == org_id,
             FiscalYear.status == FiscalYearStatus.DRAFT,
             FiscalYear.is_locked.is_(False),
+            # A year closed to owners for review owes no more requests. NULL
+            # is the requests stage (a draft made before stages existed).
+            or_(
+                FiscalYear.planning_stage.is_(None),
+                FiscalYear.planning_stage == BudgetPlanningStage.REQUESTS,
+            ),
             FiscalYear.request_deadline.isnot(None),
             FiscalYear.request_deadline >= today,
         )

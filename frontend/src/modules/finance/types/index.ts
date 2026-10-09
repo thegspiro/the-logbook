@@ -215,11 +215,38 @@ export interface FiscalYear {
    * department's calendar). Only a draft year carries one.
    */
   requestDeadline?: string | null;
-  /** Draft, unlocked, and the deadline (if any) not yet passed — backend-decided. */
+  /** Draft, unlocked, taking requests, and the deadline (if any) not yet passed — backend-decided. */
   requestsOpen?: boolean;
+  /** Where a draft year's budget is on its way to adoption; null unless a draft. */
+  planningStage?: BudgetPlanningStage | null;
+  /** The board's adoption, recorded when the draft was activated (`YYYY-MM-DD`). */
+  adoptedOn?: string | null;
+  adoptionReference?: string | null;
+  adoptionNotes?: string | null;
+  adoptionRecordedBy?: string | null;
+  adoptionRecordedAt?: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * A draft year's planning stage. Owners request amounts, then the Treasurer
+ * closes the draft for senior leadership's review, then it goes before the
+ * board; adoption is activation.
+ */
+export const BudgetPlanningStage = {
+  REQUESTS: 'requests',
+  LEADERSHIP_REVIEW: 'leadership_review',
+  BOARD_REVIEW: 'board_review',
+} as const;
+export type BudgetPlanningStage = (typeof BudgetPlanningStage)[keyof typeof BudgetPlanningStage];
+
+/** `POST /finance/fiscal-years/{id}/activate` for a draft: the board's vote. */
+export interface FiscalYearAdoptionPayload {
+  adoptedOn: string;
+  adoptionReference: string;
+  adoptionNotes?: string | undefined;
 }
 
 export interface BudgetCategory {
@@ -439,6 +466,7 @@ export interface FiscalYearOption {
   status: FiscalYearStatus;
   requestDeadline?: string | null;
   requestsOpen?: boolean;
+  planningStage?: BudgetPlanningStage | null;
 }
 
 /** `PUT /finance/fiscal-years/{id}`. A `null` deadline clears it (CLAUDE.md pitfall #1). */
@@ -503,6 +531,12 @@ export interface BudgetRequest {
   decidedBy?: string | null;
   decidedByName?: string | null;
   decidedAt?: string | null;
+  /** Senior leadership's change during leadership review; the line holds this amount when set. */
+  reviewAmount?: MonetaryAmount | null;
+  reviewNote?: string | null;
+  reviewedBy?: string | null;
+  reviewedByName?: string | null;
+  reviewedAt?: string | null;
   /** The active year's figures for the same category and station ("this year"). */
   lastYearFiscalYearName?: string | null;
   lastYearBudgeted?: MonetaryAmount | null;
@@ -528,6 +562,12 @@ export interface BudgetRequestUpdatePayload {
 }
 
 /** `adjust` needs `approvedAmount` and `decisionNote`; `decline` needs `decisionNote`. */
+/** `POST /finance/budget-requests/{id}/review` — senior leadership's amount and why. */
+export interface BudgetRequestReviewPayload {
+  amount: MonetaryAmount;
+  note: string;
+}
+
 export interface BudgetRequestDecisionPayload {
   decision: BudgetRequestDecisionKind;
   approvedAmount?: MonetaryAmount | undefined;

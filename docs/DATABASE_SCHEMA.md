@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**298 tables · 4898 columns · 982 foreign keys**
+**298 tables · 4908 columns · 984 foreign keys**
 
 ---
 
@@ -255,7 +255,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`approval_step_records`](#approval_step_records) | `ApprovalStepRecord` | 13 | Tracks actual approval step progression for a specific entity |
 | [`budget_amendments`](#budget_amendments) | `BudgetAmendment` | 10 | Extra money leadership approved for a budget line, as recorded. |
 | [`budget_categories`](#budget_categories) | `BudgetCategory` | 11 | Budget category (hierarchical) |
-| [`budget_requests`](#budget_requests) | `BudgetRequest` | 18 | A line owner's proposed amount for a budget line in a draft year. |
+| [`budget_requests`](#budget_requests) | `BudgetRequest` | 22 | A line owner's proposed amount for a budget line in a draft year. |
 | [`budgets`](#budgets) | `Budget` | 13 | Budget line for a category within a fiscal year |
 | [`check_requests`](#check_requests) | `CheckRequest` | 20 | Request to cut a check for payment |
 | [`dues_payments`](#dues_payments) | `DuesPayment` | 11 | A single payment received against a member's dues (FIN-6). |
@@ -264,7 +264,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`expense_reports`](#expense_reports) | `ExpenseReport` | 17 | Expense report submitted by a member for reimbursement |
 | [`finance_export_logs`](#finance_export_logs) | `ExportLog` | 12 | Log of an export attempt, including interrupted streams. |
 | [`finance_export_mappings`](#finance_export_mappings) | `ExportMapping` | 9 | Mapping between internal budget categories and QuickBooks accounts |
-| [`fiscal_years`](#fiscal_years) | `FiscalYear` | 11 | Fiscal year definition for the organization |
+| [`fiscal_years`](#fiscal_years) | `FiscalYear` | 17 | Fiscal year definition for the organization |
 | [`member_dues`](#member_dues) | `MemberDues` | 18 | Individual member dues payment record |
 | [`purchase_requests`](#purchase_requests) | `PurchaseRequest` | 25 | Purchase request submitted by a member |
 
@@ -3792,6 +3792,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `submitted_at` | DATETIME | yes |  |  |  |
 | `decided_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `decided_at` | DATETIME | yes |  |  |  |
+| `review_amount` | NUMERIC(12, 2) | yes |  |  |  |
+| `review_note` | TEXT | yes |  |  |  |
+| `reviewed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `reviewed_at` | DATETIME | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -4043,6 +4047,12 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `status` | ENUM(`draft`, `active`, `closed`) | no |  | `'draft'` |  |
 | `is_locked` | BOOL | no |  | `False` |  |
 | `request_deadline` | DATE | yes |  |  |  |
+| `planning_stage` | ENUM(`requests`, `leadership_review`, `board_review`) | yes |  |  |  |
+| `adopted_on` | DATE | yes |  |  |  |
+| `adoption_reference` | VARCHAR(500) | yes |  |  |  |
+| `adoption_notes` | TEXT | yes |  |  |  |
+| `adoption_recorded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `adoption_recorded_at` | DATETIME | yes |  |  |  |
 | `created_by` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
@@ -10362,7 +10372,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (358 references)
+### → `users` (360 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10401,6 +10411,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `blocked_access_attempts` | `user_id` | RESTRICT | yes |
 | `budget_amendments` | `created_by` | SET NULL | yes |
 | `budget_requests` | `decided_by` | SET NULL | yes |
+| `budget_requests` | `reviewed_by` | SET NULL | yes |
 | `budget_requests` | `submitted_by` | SET NULL | yes |
 | `budgets` | `created_by` | RESTRICT | no |
 | `candidates` | `nominated_by` | SET NULL | yes |
@@ -10504,6 +10515,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `facility_utility_accounts` | `created_by` | SET NULL | yes |
 | `facility_utility_readings` | `created_by` | SET NULL | yes |
 | `finance_export_logs` | `exported_by` | RESTRICT | no |
+| `fiscal_years` | `adoption_recorded_by` | SET NULL | yes |
 | `fiscal_years` | `created_by` | RESTRICT | no |
 | `form_submissions` | `submitted_by` | SET NULL | yes |
 | `forms` | `created_by` | RESTRICT | yes |

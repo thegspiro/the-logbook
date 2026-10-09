@@ -505,14 +505,16 @@ class TestTheFormOptions:
         assert resp.status_code == 200, resp.text
         rows = resp.json()
         assert {r["id"] for r in rows} == {dept["fy_id"]}
-        # The budget-request deadline rides along so an owner can see when
-        # requests close; nothing about the year's money does.
+        # The budget-request deadline and planning stage ride along so an
+        # owner can see when requests close and why; nothing about the
+        # year's money does.
         assert set(rows[0]) == {
             "id",
             "name",
             "status",
             "requestDeadline",
             "requestsOpen",
+            "planningStage",
         }
         assert rows[0]["status"] == "active"
         assert rows[0]["requestsOpen"] is False
