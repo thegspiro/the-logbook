@@ -404,6 +404,9 @@ class TestScanningDisabledNotices:
         from app.api.v1.endpoints import system_notices as endpoint
         from app.services import system_notices
 
+        monkeypatch.setattr(
+            system_notices.upload_encryption, "plaintext_remains", lambda: False
+        )
         monkeypatch.setattr(system_notices.settings, "CLAMAV_ENABLED", False)
         notices = await endpoint.list_system_notices(current_user=None)
         assert [n.key for n in notices] == [system_notices.MALWARE_SCANNING_DISABLED]

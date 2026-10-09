@@ -1,5 +1,7 @@
 """Installation-level notices for administrators (see app.services.system_notices)."""
 
+import asyncio
+
 from fastapi import APIRouter, Depends
 
 from app.api.dependencies import require_permission
@@ -16,8 +18,9 @@ async def list_system_notices(
 ) -> list[SystemNotice]:
     """
     Conditions of this installation that weaken what the platform guarantees,
-    such as malware scanning being turned off. Empty when there are none.
+    such as malware scanning being turned off or files stored
+    before encryption at rest still unencrypted. Empty when there are none.
 
     **Requires permission: settings.manage**
     """
-    return current_notices()
+    return await asyncio.to_thread(current_notices)
