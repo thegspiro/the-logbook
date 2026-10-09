@@ -25,7 +25,7 @@ its adoption record (from ``5c8be05f2f0f``) stays, but under the previous
 revision's rules the draft would then be adopted again by activating it.
 
 Revision ID: af92f1496c43
-Revises: feecd81eef2d
+Revises: a0b34c886658
 Create Date: 2026-10-09 05:42:00.000000
 
 """
@@ -37,7 +37,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "af92f1496c43"
-down_revision: Union[str, None] = "feecd81eef2d"
+down_revision: Union[str, None] = "a0b34c886658"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -1347,7 +1347,7 @@ pending a decision:
 The transactions export is now a valid QuickBooks Online journal-entry import
 (see `docs/FINANCE_MODULE.md`, "QuickBooks Export"). Its accounts are set on
 **Finance › QuickBooks Export** _(2026-10-09)_, which also shows each budget
-category's export readiness, and in the budget category dialog. Four gaps
+category's export readiness, and in the budget category dialog. Five gaps
 remain, and each needs a decision or a follow-up change rather than a fix
 inside that one:
 
@@ -1366,6 +1366,20 @@ inside that one:
   per-organization tokens, and a background sync, and it is planned as its own
   change. The API cannot create or edit QuickBooks budgets; it can only read
   them, and QuickBooks budgets need QuickBooks Online Plus or higher.
+  Decided for that change _(2026-10-09)_: it posts each payment as a
+  QuickBooks **Purchase** (a Check, or a cash or credit card Expense) to a
+  vendor, not as a journal entry, so it appears on the vendor's record and in
+  1099 reporting, which journal entries do not reliably reach. The Accounting
+  API also has no read-only scope (`com.intuit.quickbooks.accounting` grants
+  read and write), so the connection must confine itself to the calls it
+  needs.
+- **The CSV import is journal entries, with the limits that brings.** They do
+  not appear on a vendor's record in QuickBooks and may not be counted on its
+  1099 report; a department paying contractors checks that report before
+  filing. Accounts Payable and Receivable are refused because the import needs
+  a vendor or customer on those lines and the file has no Name column. The
+  check recognizes QuickBooks' standard names only, so a renamed A/P or A/R
+  account passes and fails at import instead.
 
 ## Finance — Nobody Could Approve Anything (2026-08-12, narrowed 2026-09-06)
 

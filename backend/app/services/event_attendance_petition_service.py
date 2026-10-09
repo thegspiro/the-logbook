@@ -64,6 +64,12 @@ from app.utils.org_timezone import format_in_org_timezone
 # remember who was in the room. Owner decision, 2026-09-30.
 PETITION_WINDOW_DAYS = 30
 
+# How many times a member may withdraw a request for one event and ask again.
+# Each new request notifies the organizer, so without a cap a request could be
+# cycled to re-notify them indefinitely; at the cap the pending request is
+# final and waits for an answer. Owner decision, 2026-10-09.
+MAX_PETITION_WITHDRAWALS = 2
+
 # In-app categories. Metadata carries petition_id so the reviewers' prompts can
 # be archived once any one of them decides.
 REVIEW_PROMPT_CATEGORY = "attendance_request"
@@ -94,6 +100,14 @@ def effective_end(event: Event) -> datetime:
     """When the event ended: its recorded end if one was set, else scheduled."""
     ended: datetime = event.actual_end_time or event.end_datetime
     return _utc(ended)
+
+
+def can_withdraw(petition: EventAttendancePetition) -> bool:
+    """Whether the member may still take this request back."""
+    return (
+        petition.status == AttendancePetitionStatus.PENDING
+        and (petition.withdrawal_count or 0) < MAX_PETITION_WITHDRAWALS
+    )
 
 
 def can_review(event: Event, reviewer: User) -> bool:
@@ -139,7 +153,11 @@ class EventAttendancePetitionService:
             )
         )
         petition = result.scalar_one_or_none()
-        if petition is not None:
+        # A withdrawn request is kept only to carry its withdrawal count; to
+        # the member it is gone, and they may ask again.
+        if petition is not None and (
+            petition.status != AttendancePetitionStatus.WITHDRAWN
+        ):
             return petition, (
                 "You have already requested attendance credit for this event"
             )
@@ -197,6 +215,7 @@ class EventAttendancePetitionService:
                 EventAttendancePetition.event_id == str(event_id),
                 EventAttendancePetition.organization_id
                 == str(reviewer.organization_id),
+                EventAttendancePetition.status != AttendancePetitionStatus.WITHDRAWN,
             )
             .order_by(pending_first, EventAttendancePetition.created_at)
         )
@@ -288,17 +307,48 @@ class EventAttendancePetitionService:
         if refusal:
             raise ValueError(refusal)
 
-        petition = EventAttendancePetition(
-            id=generate_uuid(),
-            organization_id=organization_id,
-            event_id=str(event.id),
-            user_id=str(member.id),
-            status=AttendancePetitionStatus.PENDING,
-            reason=data.reason,
-            requested_check_in_at=_utc(data.requested_check_in_at),
-            requested_check_out_at=_utc(data.requested_check_out_at),
-        )
-        self.db.add(petition)
+        # Locked so two submissions over a withdrawn request cannot both
+        # reopen it; the second then finds it pending.
+        previous = (
+            await self.db.execute(
+                select(EventAttendancePetition)
+                .where(
+                    EventAttendancePetition.event_id == str(event.id),
+                    EventAttendancePetition.user_id == str(member.id),
+                    EventAttendancePetition.organization_id == organization_id,
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        if previous is not None:
+            if previous.status != AttendancePetitionStatus.WITHDRAWN:
+                raise ValueError(
+                    "You have already requested attendance credit for this event"
+                )
+            # Asking again reuses the withdrawn row so its withdrawal_count
+            # carries over; everything the member says is replaced.
+            petition = previous
+            petition.status = AttendancePetitionStatus.PENDING
+            petition.reason = data.reason
+            petition.requested_check_in_at = _utc(data.requested_check_in_at)
+            petition.requested_check_out_at = _utc(data.requested_check_out_at)
+            petition.reviewed_by = None
+            petition.reviewed_at = None
+            petition.review_note = None
+            petition.created_at = now
+        else:
+            petition = EventAttendancePetition(
+                id=generate_uuid(),
+                organization_id=organization_id,
+                event_id=str(event.id),
+                user_id=str(member.id),
+                status=AttendancePetitionStatus.PENDING,
+                reason=data.reason,
+                requested_check_in_at=_utc(data.requested_check_in_at),
+                requested_check_out_at=_utc(data.requested_check_out_at),
+            )
+            self.db.add(petition)
         try:
             await self.db.commit()
         except IntegrityError:
@@ -411,10 +461,11 @@ class EventAttendancePetitionService:
     async def withdraw(self, event_id: str, member: User) -> str:
         """Take back the member's own pending request; returns its id.
 
-        The row is deleted rather than marked: withdrawing is for a request
-        made by mistake, and the one-per-member index would otherwise stop the
-        member asking again correctly. The audit log keeps the record. A
-        decided request cannot be withdrawn — the decision stands.
+        Withdrawing is for a request made by mistake, so the member may ask
+        again — but only MAX_PETITION_WITHDRAWALS times per event, since each
+        new request notifies the organizer again. The row is marked rather than
+        deleted so the count survives. A decided request cannot be withdrawn —
+        the decision stands.
         """
         organization_id = str(member.organization_id)
         event = await self.get_event(event_id, organization_id)
@@ -432,15 +483,22 @@ class EventAttendancePetitionService:
                 .execution_options(populate_existing=True)
             )
         ).scalar_one_or_none()
-        if petition is None:
+        if petition is None or petition.status == AttendancePetitionStatus.WITHDRAWN:
             raise PetitionNotFound("Attendance request not found")
         if petition.status != AttendancePetitionStatus.PENDING:
             raise ValueError(
                 "This attendance request has already been decided and can no "
                 "longer be withdrawn"
             )
+        if not can_withdraw(petition):
+            raise ValueError(
+                f"This request has already been withdrawn "
+                f"{MAX_PETITION_WITHDRAWALS} times, so it now waits for the "
+                "organizer's answer"
+            )
         petition_id = str(petition.id)
-        await self.db.delete(petition)
+        petition.status = AttendancePetitionStatus.WITHDRAWN
+        petition.withdrawal_count = (petition.withdrawal_count or 0) + 1
         await self.db.commit()
 
         # Nothing is left to review, so the reviewers' prompts go.
@@ -479,6 +537,8 @@ class EventAttendancePetitionService:
         # The point of a petition is that someone else vouches for you.
         if str(petition.user_id) == str(reviewer.id):
             raise PermissionError("You cannot decide your own attendance request")
+        if petition.status == AttendancePetitionStatus.WITHDRAWN:
+            raise ValueError("This attendance request was withdrawn")
         if petition.status != AttendancePetitionStatus.PENDING:
             raise ValueError("This attendance request has already been decided")
 

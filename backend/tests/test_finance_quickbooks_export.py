@@ -40,7 +40,11 @@ from app.models.finance import (
     PurchaseRequestStatus,
 )
 from app.models.user import User
-from app.services.finance_service import FinanceService
+from app.services.finance_service import (
+    QB_IMPORT_MAX_ROWS,
+    FinanceService,
+    _needs_qb_name,
+)
 
 pytestmark = [pytest.mark.integration]
 
@@ -537,3 +541,103 @@ class TestExportSettingsEndpoints:
 
         assert (readiness.status_code, deleted.status_code) == (403, 403)
         assert await db_session.get(ExportMapping, books["fuel_map"].id)
+
+
+class TestQuickBooksImportLimits:
+    """Rules of QuickBooks Online's journal-entry import the file must meet."""
+
+    async def test_a_file_stays_under_the_importers_1000_rows(self, db_session, books):
+        # Four transactions (one is an expense report with two lines): eight
+        # rows and the header.
+        service = FinanceService(db_session)
+        stream = await service.generate_export(
+            books["org_id"], books["user_id"], *RANGE, max_rows=9
+        )
+        assert len([row async for row in stream]) > 0
+
+        with pytest.raises(ValueError, match="fewer than 9 rows") as caught:
+            await service.generate_export(
+                books["org_id"], books["user_id"], *RANGE, max_rows=8
+            )
+        assert str(caught.value) == (
+            "QuickBooks Online imports files of fewer than 9 rows; this period "
+            "would produce 9. Export a shorter period, then the rest."
+        )
+
+    def test_the_default_is_intuits_limit(self):
+        assert QB_IMPORT_MAX_ROWS == 999
+
+    @pytest.mark.parametrize(
+        "account",
+        [
+            "Accounts Payable (A/P)",
+            "accounts receivable (A/R)",
+            "  Accounts Payable  ",
+            "Accounts Payable (A/P):Vendors",
+        ],
+    )
+    def test_payable_and_receivable_accounts_need_a_name(self, account):
+        assert _needs_qb_name(account)
+
+    @pytest.mark.parametrize(
+        "account", ["Operating Checking", "Vehicle Expense:Fuel", "Payables Clearing"]
+    )
+    def test_other_accounts_do_not(self, account):
+        assert not _needs_qb_name(account)
+
+    async def test_a_mapping_cannot_be_paid_from_accounts_payable(
+        self, db_session, books
+    ):
+        service = FinanceService(db_session)
+        with pytest.raises(ValueError, match="can't be used"):
+            await service.create_export_mapping(
+                books["org_id"],
+                internal_category="Fuel",
+                qb_account_name="Vehicle Expense",
+                qb_offset_account_name="Accounts Payable (A/P)",
+                mapping_type=ExportMappingType.EXPENSE,
+            )
+        with pytest.raises(ValueError, match="can't be used"):
+            await service.update_export_mapping(
+                books["fuel_map"].id,
+                books["org_id"],
+                qb_offset_account_name="Accounts Receivable (A/R)",
+            )
+        await db_session.refresh(books["fuel_map"])
+        assert books["fuel_map"].qb_offset_account_name == "Operating Checking"
+
+    async def test_a_category_cannot_post_to_accounts_receivable(
+        self, db_session, books
+    ):
+        service = FinanceService(db_session)
+        with pytest.raises(ValueError, match="can't be used"):
+            await service.update_budget_category(
+                books["training"].id,
+                books["org_id"],
+                qb_account_name="Accounts Receivable (A/R)",
+            )
+        with pytest.raises(ValueError, match="can't be used"):
+            await service.create_budget_category(
+                books["org_id"],
+                name="Dues",
+                qb_account_name="Accounts Receivable (A/R)",
+            )
+
+    async def test_a_mapping_saved_before_the_rule_is_reported_and_refused(
+        self, db_session, books
+    ):
+        # Written straight to the row, as a mapping saved before the service
+        # refused these accounts would be.
+        books["fuel_map"].qb_offset_account_name = "Accounts Payable (A/P)"
+        await db_session.flush()
+
+        report = await FinanceService(db_session).get_export_readiness(books["org_id"])
+        fuel = next(r for r in report["categories"] if r["category_name"] == "Fuel")
+        assert fuel["status"] == "payable_receivable"
+
+        with pytest.raises(ValueError, match="Set QuickBooks accounts") as caught:
+            await FinanceService(db_session).generate_export(
+                books["org_id"], books["user_id"], *RANGE
+            )
+        assert "'Fuel' posts to Accounts Payable or Receivable" in str(caught.value)
+        assert await _logs(db_session, books["org_id"]) == []

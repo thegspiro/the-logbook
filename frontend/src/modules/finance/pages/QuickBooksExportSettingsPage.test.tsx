@@ -136,7 +136,32 @@ describe('QuickBooksExportSettingsPage readiness', () => {
     const gear = await rowFor('Gear');
     expect(within(gear).getByText('No account')).toBeInTheDocument();
     expect(within(gear).getByText('Inactive')).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('1 budget category is missing an account');
+    expect(screen.getByRole('status')).toHaveTextContent('1 budget category needs its accounts fixed');
+  });
+
+  it('flags a category posting to Accounts Payable or Receivable, with what to do', async () => {
+    readiness.mockResolvedValue({
+      ...report,
+      categories: report.categories.map((c) =>
+        c.categoryName === 'Fuel'
+          ? { ...c, status: 'payable_receivable', offsetAccountName: 'Accounts Payable (A/P)' }
+          : c
+      ),
+    });
+    renderPage();
+
+    const fuel = await rowFor('Fuel');
+    expect(within(fuel).getByText('Payable/receivable account')).toBeInTheDocument();
+    expect(fuel).toHaveTextContent('Use the bank or card account it is paid from');
+  });
+
+  it("lists QuickBooks' own import requirements", async () => {
+    renderPage();
+
+    const checklist = await screen.findByRole('region', { name: 'Before you import into QuickBooks Online' });
+    expect(checklist).toHaveTextContent('Account numbers are turned off');
+    expect(checklist).toHaveTextContent('MM/DD/YYYY');
+    expect(checklist).toHaveTextContent('fewer than 1,000 rows');
   });
 
   it('says every category is ready when the backend does', async () => {

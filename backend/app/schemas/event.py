@@ -1605,3 +1605,6 @@ class MyAttendancePetitionResponse(BaseModel):
     petition: Optional[AttendancePetitionResponse] = None
     can_request: bool = False
     unavailable_reason: Optional[str] = None
+    # Whether the pending request may still be taken back: false once it has
+    # been withdrawn the maximum number of times, and for any decided request.
+    can_withdraw: bool = False
