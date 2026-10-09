@@ -34,7 +34,7 @@ MIGRATION = (
     Path(__file__).resolve().parents[1]
     / "alembic"
     / "versions"
-    / "20261009_0317_b38df38d849b_gate_module_folders_on_module_rights.py"
+    / "20261009_0420_b38df38d849b_gate_module_folders_on_module_rights.py"
 )
 
 

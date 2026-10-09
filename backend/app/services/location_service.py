@@ -93,7 +93,8 @@ class LocationService:
             .where(Location.id == str(location_id))
             .where(Location.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        location: Optional[Location] = result.scalar_one_or_none()
+        return location
 
     async def list_locations(
         self,
@@ -417,7 +418,8 @@ class LocationService:
             .where(Location.is_active.is_(True))
             .where(Organization.active.is_(True))
         )
-        return result.scalar_one_or_none()
+        location: Optional[Location] = result.scalar_one_or_none()
+        return location
 
     async def _generate_unique_display_code(self, max_attempts: int = 20) -> str:
         """Generate a display code that doesn't collide with existing ones"""

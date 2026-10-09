@@ -473,7 +473,7 @@ class SalesforceSyncService:
                     User.deleted_at.is_(None),
                 )
             )
-            user = result.scalar_one_or_none()
+            user: Optional[User] = result.scalar_one_or_none()
             if user:
                 return user
 
@@ -486,7 +486,8 @@ class SalesforceSyncService:
                     User.deleted_at.is_(None),
                 )
             )
-            return result.scalar_one_or_none()
+            user = result.scalar_one_or_none()
+            return user
 
         return None
 
@@ -565,8 +566,7 @@ class SalesforceSyncService:
                     member.get("id", "?"),
                 )
                 counts["failed"] += 1
-        counts["skipped_fields"] = sorted(self.sf.skipped_fields)
-        return counts
+        return {**counts, "skipped_fields": sorted(self.sf.skipped_fields)}
 
     async def sync_all_training_to_salesforce(
         self, records: list[dict[str, Any]]
@@ -591,8 +591,7 @@ class SalesforceSyncService:
                     rec.get("id", "?"),
                 )
                 counts["failed"] += 1
-        counts["skipped_fields"] = sorted(self.sf.skipped_fields)
-        return counts
+        return {**counts, "skipped_fields": sorted(self.sf.skipped_fields)}
 
     # ============================================================
     # Dry-run preview  (read-only; nothing is written to Salesforce)

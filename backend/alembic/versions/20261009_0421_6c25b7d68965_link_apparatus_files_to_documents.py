@@ -2,7 +2,7 @@
 
 Revision ID: 6c25b7d68965
 Revises: b38df38d849b
-Create Date: 2026-10-09 03:28:23.961259
+Create Date: 2026-10-09 04:21:00.000000
 
 Apparatus photos and documents become real documents in the vehicle's folder
 (docs/FILE_STORAGE_HARDENING.md decision 12). ``document_id`` is the link; it

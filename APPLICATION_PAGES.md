@@ -288,6 +288,14 @@ Requires `members.manage` permission. Tab-based admin interface.
 | `/events/analytics` | Event Analytics Dashboard  | `analytics.view` |
 | `/events/templates` | Event Templates Management | `events.manage`  |
 
+### Attendance Requests _(2026-10-09)_
+
+| URL                           | Page                              | Permission    |
+| ----------------------------- | --------------------------------- | ------------- |
+| `/events/attendance-requests` | Attendance requests across events | Authenticated |
+
+> Authenticated rather than `events.manage` on purpose: an event's organizer or alternate decides its "I was there" requests whether or not they hold `events.manage`. The server scopes the list to the events the viewer organizes; **All events** needs `events.manage`.
+
 ### Check-In Settings _(2026-08-09)_
 
 Set per event on **Edit Event → Check-In Settings**. Both default to off.
@@ -1194,7 +1202,7 @@ lot's number or expiration date require `inventory.check_manage` or
 | `/finance/budgets/:id`                | Budget Detail              | Authenticated                                         |
 | `/finance/my-budgets`                 | My Budgets                 | Authenticated                                         |
 | `/finance/budget-requests`            | Next Year's Budget         | Authenticated                                         |
-| `/finance/budget-requests/review`     | Budget Requests (review)   | `finance.manage`                                      |
+| `/finance/budget-requests/review`     | Budget Requests (review)   | `finance.manage` or `finance.budget_review`           |
 | `/finance/purchase-requests`          | Purchase Requests          | `finance.request`, `finance.view` or `finance.manage` |
 | `/finance/purchase-requests/new`      | New Purchase Request       | `finance.request` or `finance.manage`                 |
 | `/finance/purchase-requests/:id`      | Purchase Request Detail    | `finance.request`, `finance.view` or `finance.manage` |
@@ -1221,7 +1229,8 @@ lot's number or expiration date require `inventory.check_manage` or
 > member who owns a draft-year line or has a request. The Treasurer reviews
 > and decides at `/finance/budget-requests/review` (`finance.manage`, the
 > decide endpoint's gate), also linked from a draft year's row in Finance
-> Settings.
+> Settings. _(2026-10-09)_ Senior leadership (`finance.budget_review`) uses the
+> same screen to change decided amounts while the year is in leadership review.
 
 > **Budget-line owners read their own lines** _(2026-10-08)_. A budget line
 > is owned by a position (or inherits its category's). `/finance/my-budgets`

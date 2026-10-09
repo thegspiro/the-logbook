@@ -216,7 +216,8 @@ class GoogleCalendarService(CalendarSyncInterface):
                 .insert(calendarId=calendar_id, body=google_event)
                 .execute()
             )
-            return result.get("id")
+            event_id = result.get("id")
+            return event_id if isinstance(event_id, str) else None
         except Exception:
             logger.exception("Failed to push event to Google Calendar")
             return None

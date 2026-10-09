@@ -7,7 +7,7 @@ fields, submissions, public forms, integrations, and reporting.
 
 import html as html_lib
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, tzinfo
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -458,9 +458,9 @@ class FormsService:
         field_list = list(fields)
         by_id = {str(f.id): f for f in field_list}
 
-        def field_type_of(f: Any) -> str:
+        def field_type_of(f: Any) -> Optional[str]:
             ft = getattr(f, "field_type", None)
-            return ft if isinstance(ft, str) or ft is None else ft.value
+            return ft if isinstance(ft, str) or ft is None else str(ft.value)
 
         def is_shown(f: Any, resolving: frozenset) -> bool:
             parent_id = getattr(f, "condition_field_id", None)
@@ -803,7 +803,8 @@ class FormsService:
             .where(Form.organization_id == str(organization_id))
             .options(selectinload(Form.fields), selectinload(Form.integrations))
         )
-        return result.scalar_one_or_none()
+        form: Optional[Form] = result.scalar_one_or_none()
+        return form
 
     async def get_form_by_slug(self, slug: str) -> Optional[Form]:
         """Get a published public form by its slug"""
@@ -814,7 +815,8 @@ class FormsService:
             .where(Form.status == FormStatus.PUBLISHED)
             .options(selectinload(Form.fields), selectinload(Form.integrations))
         )
-        return result.scalar_one_or_none()
+        form: Optional[Form] = result.scalar_one_or_none()
+        return form
 
     async def update_form(
         self, form_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
@@ -1448,7 +1450,8 @@ class FormsService:
                 selectinload(FormSubmission.form),
             )
         )
-        return result.scalar_one_or_none()
+        form_submission: Optional[FormSubmission] = result.scalar_one_or_none()
+        return form_submission
 
     async def reprocess_submission_integrations(
         self, submission_id: UUID, organization_id: UUID
@@ -2740,7 +2743,7 @@ class FormsService:
                 item_id=mapped_data["item_id"],
                 user_id=mapped_data["member_id"],
                 organization_id=submission.organization_id,
-                assigned_by=submission.submitted_by or mapped_data.get("member_id"),
+                assigned_by=submission.submitted_by or mapped_data["member_id"],
                 reason=mapped_data.get("reason", "Assigned via form submission"),
             )
 
@@ -2970,6 +2973,7 @@ class FormsService:
         # every negative-offset department, so the coordinator's screen shows
         # the day before the requester chose. Anchor date-only values to
         # midnight in the organization's own timezone instead.
+        request_tz: tzinfo
         try:
             request_tz = ZoneInfo(getattr(org, "timezone", None) or "UTC")
         except (ZoneInfoNotFoundError, ValueError):

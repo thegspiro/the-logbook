@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import type { FiscalYear } from '../types';
@@ -33,11 +33,15 @@ vi.mock('@/hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 
 const startFrom = vi.fn();
 const updateYear = vi.fn();
+const setPlanningStage = vi.fn();
+const activate = vi.fn();
 vi.mock('../services/api', () => ({
   fiscalYearService: {
     lock: vi.fn(),
     startFrom: (...args: unknown[]) => startFrom(...args) as unknown,
     update: (...args: unknown[]) => updateYear(...args) as unknown,
+    setPlanningStage: (...args: unknown[]) => setPlanningStage(...args) as unknown,
+    activate: (...args: unknown[]) => activate(...args) as unknown,
   },
   budgetCategoryService: { create: vi.fn(), update: vi.fn(), delete: vi.fn() },
   financeOptionService: {
@@ -87,7 +91,7 @@ const renderPage = (fiscalYears: FiscalYear[]) => {
 };
 
 const draft = (extra: Partial<FiscalYear> = {}) =>
-  year('fy-draft', 'FY2027', 'draft', { requestsOpen: true, ...extra });
+  year('fy-draft', 'FY2027', 'draft', { requestsOpen: true, planningStage: 'requests', ...extra });
 const years = (extra: Partial<FiscalYear> = {}) => [
   draft(extra),
   year('fy-active', 'FY2026', 'active'),
@@ -96,10 +100,11 @@ const years = (extra: Partial<FiscalYear> = {}) => [
 
 beforeEach(() => {
   vi.clearAllMocks();
-  startFrom.mockReset();
-  updateYear.mockReset();
+  for (const mock of [startFrom, updateYear, setPlanningStage, activate]) mock.mockReset();
   startFrom.mockResolvedValue({ created: 2, skipped: 1 });
   updateYear.mockResolvedValue(draft());
+  setPlanningStage.mockResolvedValue(draft());
+  activate.mockResolvedValue(draft());
 });
 
 describe('the request window on a fiscal year row', () => {
@@ -206,5 +211,108 @@ describe('the request deadline', () => {
 
     await waitFor(() => expect(updateYear).toHaveBeenCalledWith('fy-draft', { requestDeadline: null }));
     expect(toastSuccess).toHaveBeenCalledWith('Request deadline cleared');
+  });
+});
+
+describe('planning stages on a draft year', () => {
+  it('moves a draft into leadership review after confirming, with no plain Activate', async () => {
+    const user = userEvent.setup();
+    renderPage(years());
+
+    expect(screen.getByText('Taking requests')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Activate' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Start leadership review' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Owners can no longer make or change requests');
+    await user.click(within(dialog).getByRole('button', { name: 'Start leadership review' }));
+
+    await waitFor(() => expect(setPlanningStage).toHaveBeenCalledWith('fy-draft', 'leadership_review'));
+    expect(fetchFiscalYears).toHaveBeenCalled();
+  });
+
+  it('offers both directions in leadership review, and hides request planning', () => {
+    renderPage(years({ planningStage: 'leadership_review', requestsOpen: false }));
+
+    expect(screen.getByText('Leadership review')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back to requests' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send to the board' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Request deadline')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Record adoption' })).not.toBeInTheDocument();
+  });
+
+  it('shows the API’s refusal when a move is refused', async () => {
+    const user = userEvent.setup();
+    setPlanningStage.mockRejectedValue(new Error('FY2027 is not a draft fiscal year.'));
+    renderPage(years());
+
+    await user.click(screen.getByRole('button', { name: 'Start leadership review' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Start leadership review' }));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('FY2027 is not a draft fiscal year.'));
+  });
+});
+
+describe('recording the board’s adoption', () => {
+  const inBoardReview = () => years({ planningStage: 'board_review', requestsOpen: false });
+
+  it('adopts with the date, the reference and the notes, then fetches again', async () => {
+    const user = userEvent.setup();
+    renderPage(inBoardReview());
+
+    await user.click(screen.getByRole('button', { name: 'Record adoption' }));
+    const dialog = await screen.findByRole('dialog');
+    const date = within(dialog).getByLabelText('Date the board adopted it');
+    await user.clear(date);
+    await user.type(date, '2026-01-05');
+    await user.type(within(dialog).getByLabelText('Motion or minutes reference'), '  Motion 2026-01 ');
+    await user.type(within(dialog).getByLabelText('Notes (optional)'), 'Passed 5-0');
+    await user.click(within(dialog).getByRole('button', { name: 'Adopt and activate' }));
+
+    await waitFor(() =>
+      expect(activate).toHaveBeenCalledWith('fy-draft', {
+        adoptedOn: '2026-01-05',
+        adoptionReference: 'Motion 2026-01',
+        adoptionNotes: 'Passed 5-0',
+      })
+    );
+    expect(fetchFiscalYears).toHaveBeenCalled();
+  });
+
+  it('needs the motion or minutes reference', async () => {
+    const user = userEvent.setup();
+    renderPage(inBoardReview());
+
+    await user.click(screen.getByRole('button', { name: 'Record adoption' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Adopt and activate' }));
+
+    expect(await within(dialog).findByText(/Enter the motion or minutes reference/)).toBeInTheDocument();
+    expect(activate).not.toHaveBeenCalled();
+  });
+
+  it('never sends a date in the future', async () => {
+    const user = userEvent.setup();
+    renderPage(inBoardReview());
+
+    await user.click(screen.getByRole('button', { name: 'Record adoption' }));
+    const dialog = await screen.findByRole('dialog');
+    const date = within(dialog).getByLabelText('Date the board adopted it');
+    // The input's max stops the browser submitting it; the dialog's own check
+    // backs that up for a browser that ignores max.
+    fireEvent.change(date, { target: { value: '2999-01-01' } });
+    await user.type(within(dialog).getByLabelText('Motion or minutes reference'), 'Motion 9');
+    await user.click(within(dialog).getByRole('button', { name: 'Adopt and activate' }));
+
+    expect(date).toBeInvalid();
+    expect(activate).not.toHaveBeenCalled();
+  });
+
+  it('shows the adoption on a year that was adopted', () => {
+    renderPage([
+      year('fy-active', 'FY2026', 'active', { adoptedOn: '2025-12-10', adoptionReference: 'Motion 2025-31' }),
+    ]);
+
+    expect(screen.getByText('Adopted by the board Dec 10, 2025 · Motion 2025-31')).toBeInTheDocument();
   });
 });

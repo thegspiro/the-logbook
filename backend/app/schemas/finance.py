@@ -115,12 +115,51 @@ class FiscalYearResponse(UTCResponseBase):
     status: str
     is_locked: bool
     request_deadline: Optional[date] = None
-    # A draft year whose deadline (if any) has not passed in the org's
-    # timezone — FinanceBudgetRequestService.requests_open decides it.
+    # A draft year in the requests stage whose deadline (if any) has not
+    # passed in the org's timezone — requests_open decides it.
     requests_open: bool = False
+    # requests, leadership_review or board_review; null unless a draft.
+    planning_stage: Optional[str] = None
+    # The board's adoption, recorded when the draft was activated.
+    adopted_on: Optional[date] = None
+    adoption_reference: Optional[str] = None
+    adoption_notes: Optional[str] = None
+    adoption_recorded_by: Optional[str] = None
+    adoption_recorded_at: Optional[datetime] = None
     created_by: str
     created_at: datetime
     updated_at: datetime
+
+
+class FiscalYearStageChange(BaseModel):
+    """Move a draft year one planning stage forward or back."""
+
+    model_config = _REQUEST_CONFIG
+
+    stage: str
+
+    _check_stage = field_validator("stage")(
+        _enum_check(("requests", "leadership_review", "board_review"), "stage")
+    )
+
+
+class FiscalYearActivate(BaseModel):
+    """The board's adoption, required to activate a draft year.
+
+    Optional so re-activating a year that is not a draft needs no body; the
+    service refuses a draft without the date and reference.
+    """
+
+    model_config = _REQUEST_CONFIG
+
+    adopted_on: Optional[date] = None
+    adoption_reference: Optional[str] = Field(None, max_length=500)
+    adoption_notes: Optional[str] = Field(None, max_length=4000)
+
+    @field_validator("adoption_reference", "adoption_notes")
+    @classmethod
+    def _blank_is_none(cls, value: Optional[str]) -> Optional[str]:
+        return _strip_or_none(value)
 
 
 class StartFromLastYearResponse(BaseModel):
@@ -450,6 +489,7 @@ class FiscalYearOptionResponse(BaseModel):
     status: str
     request_deadline: Optional[date] = None
     requests_open: bool = False
+    planning_stage: Optional[str] = None
 
 
 class BudgetSummaryResponse(BaseModel):
@@ -568,6 +608,23 @@ class BudgetRequestDecision(BaseModel):
         return self
 
 
+class BudgetRequestReview(BaseModel):
+    """Senior leadership's change to a decided request's amount, with why."""
+
+    model_config = _REQUEST_CONFIG
+
+    amount: Decimal = Field(..., ge=0, max_digits=12, decimal_places=2)
+    note: str = Field(..., max_length=4000)
+
+    @field_validator("note")
+    @classmethod
+    def _note_required(cls, value: str) -> str:
+        stripped = _strip_or_none(value)
+        if not stripped:
+            raise ValueError("Say why the amount was changed.")
+        return stripped
+
+
 class BudgetRequestResponse(UTCResponseBase):
     """One budget request, as the owner's and the Treasurer's screens show it.
 
@@ -605,6 +662,13 @@ class BudgetRequestResponse(UTCResponseBase):
     decided_by: Optional[str] = None
     decided_by_name: Optional[str] = None
     decided_at: Optional[datetime] = None
+    # Senior leadership's change during leadership review, if any; the line
+    # holds this amount when it is set.
+    review_amount: Optional[Decimal] = None
+    review_note: Optional[str] = None
+    reviewed_by: Optional[str] = None
+    reviewed_by_name: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
     last_year_fiscal_year_name: Optional[str] = None
     last_year_budgeted: Optional[Decimal] = None
     last_year_spent: Optional[Decimal] = None

@@ -132,7 +132,8 @@ class GrantService:
                 GrantOpportunity.organization_id == organization_id,
             )
         )
-        return result.scalar_one_or_none()
+        grant_opportunity: Optional[GrantOpportunity] = result.scalar_one_or_none()
+        return grant_opportunity
 
     async def create_opportunity(
         self, organization_id: str, data: Dict[str, Any], user_id: str
@@ -251,7 +252,8 @@ class GrantService:
             )
             .execution_options(populate_existing=True)
         )
-        return result.scalar_one_or_none()
+        grant_application: Optional[GrantApplication] = result.scalar_one_or_none()
+        return grant_application
 
     async def _application_in_org(
         self, application_id: Any, organization_id: str
@@ -627,7 +629,7 @@ class GrantService:
                 GrantApplication.organization_id == organization_id,
             )
         )
-        item = result.scalar_one_or_none()
+        item: Optional[GrantBudgetItem] = result.scalar_one_or_none()
         if not item:
             return None
         apply_updates(item, data, skip={"application_id", "id"})
@@ -763,7 +765,7 @@ class GrantService:
                 GrantApplication.organization_id == organization_id,
             )
         )
-        expenditure = result.scalar_one_or_none()
+        expenditure: Optional[GrantExpenditure] = result.scalar_one_or_none()
         if not expenditure:
             return None
         # A reassigned budget_item_id must belong to this expenditure's
@@ -953,7 +955,7 @@ class GrantService:
                 GrantApplication.organization_id == organization_id,
             )
         )
-        task = result.scalar_one_or_none()
+        task: Optional[GrantComplianceTask] = result.scalar_one_or_none()
         if not task:
             return None
 

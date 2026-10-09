@@ -1181,7 +1181,15 @@ GET    /api/v1/events/{event_id}/attendance-petitions                         # 
 POST   /api/v1/events/{event_id}/attendance-petitions/{petition_id}/approve   # Record the confirmed times (reviewers)
 POST   /api/v1/events/{event_id}/attendance-petitions/{petition_id}/reject    # Decline with a reason (reviewers)
 DELETE /api/v1/events/{event_id}/attendance-petitions/mine                    # Withdraw the caller's pending request (204, 2026-10-09)
+GET    /api/v1/events/attendance-petitions/pending?scope=mine|all             # Pending requests across events, oldest first (2026-10-09)
 ```
+
+`GET .../attendance-petitions/pending` lists pending requests with the event
+each is about (`event_title`, `event_start_datetime`, `event_end_datetime`,
+`event_actual_start_time`, `event_actual_end_time`, `attendance_finalized`).
+`scope=mine` (the default) is the events the caller organizes or is alternate
+for; `scope=all` is every event in the department and answers 403 without
+`events.manage`. The caller's own requests are never listed.
 
 | Route         | Body                                                                                                                                        |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |

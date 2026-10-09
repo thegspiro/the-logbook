@@ -75,8 +75,7 @@ async def test_integration_connection(integration: Integration) -> str:
         )
 
         creds = _get_calendar_credentials(integration)
-        service = GoogleCalendarService(creds)
-        return await service.test_connection()
+        return await GoogleCalendarService(creds).test_connection()
 
     if itype == "outlook":
         from app.services.integration_services.outlook_calendar_service import (
@@ -84,8 +83,7 @@ async def test_integration_connection(integration: Integration) -> str:
         )
 
         creds = _get_calendar_credentials(integration)
-        service = OutlookCalendarService(creds)
-        return await service.test_connection()
+        return await OutlookCalendarService(creds).test_connection()
 
     if itype == "salesforce":
         from app.services.integration_services.salesforce_service import (
@@ -93,8 +91,7 @@ async def test_integration_connection(integration: Integration) -> str:
         )
 
         creds = _get_salesforce_credentials(integration)
-        service = SalesforceService(creds)
-        return await service.test_connection()
+        return await SalesforceService(creds).test_connection()
 
     if itype == "paypal":
         from app.services.integration_services.paypal_service import (
@@ -109,8 +106,7 @@ async def test_integration_connection(integration: Integration) -> str:
         creds = _get_documenso_credentials(integration)
         if not creds.get("api_token"):
             raise Exception("No Documenso API token configured")
-        service = DocumensoService(creds)
-        return await service.test_connection()
+        return await DocumensoService(creds).test_connection()
 
     if itype == "calcom":
         from app.services.integration_services.calcom_service import CalcomService
@@ -118,8 +114,7 @@ async def test_integration_connection(integration: Integration) -> str:
         creds = _get_calcom_credentials(integration)
         if not creds.get("api_key"):
             raise Exception("No Cal.com API key configured")
-        service = CalcomService(creds)
-        return await service.test_connection()
+        return await CalcomService(creds).test_connection()
 
     if itype == "ical":
         return "iCal feeds are read-only — no connection test needed"

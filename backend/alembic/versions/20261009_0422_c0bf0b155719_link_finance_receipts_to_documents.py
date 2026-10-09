@@ -2,7 +2,7 @@
 
 Revision ID: c0bf0b155719
 Revises: 6c25b7d68965
-Create Date: 2026-10-09 03:41:46.435727
+Create Date: 2026-10-09 04:22:00.000000
 
 Purchase requests and expense line items gain an uploaded receipt: a Document
 under Finance > Receipts (docs/FILE_STORAGE_HARDENING.md decision 13). The

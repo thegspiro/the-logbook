@@ -1,8 +1,8 @@
 """Gate module system folders on module rights.
 
 Revision ID: b38df38d849b
-Revises: c62a98b47406
-Create Date: 2026-10-09 03:17:00.000000
+Revises: 5c8be05f2f0f
+Create Date: 2026-10-09 04:20:00.000000
 
 Phase 3 of docs/FILE_STORAGE_HARDENING.md. A module's folder now opens to the
 rights of that module rather than to document leadership:
@@ -29,7 +29,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "b38df38d849b"
-down_revision = "c62a98b47406"
+down_revision = "5c8be05f2f0f"
 branch_labels = None
 depends_on = None
 

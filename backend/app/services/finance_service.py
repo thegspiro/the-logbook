@@ -12,7 +12,6 @@ import secrets
 from collections.abc import AsyncIterator
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from types import SimpleNamespace
 from typing import NoReturn, Optional
 
 from loguru import logger
@@ -49,6 +48,7 @@ from app.models.finance import (
     Budget,
     BudgetAmendment,
     BudgetCategory,
+    BudgetPlanningStage,
     CheckRequest,
     CheckRequestStatus,
     DuesPayment,
@@ -293,12 +293,19 @@ class FinanceService:
                 FiscalYear.organization_id == org_id,
             )
         )
-        return result.scalar_one_or_none()
+        fiscal_year: Optional[FiscalYear] = result.scalar_one_or_none()
+        return fiscal_year
 
     async def create_fiscal_year(
         self, org_id: str, created_by: str, **kwargs
     ) -> FiscalYear:
-        fy = FiscalYear(organization_id=org_id, created_by=created_by, **kwargs)
+        fy = FiscalYear(
+            organization_id=org_id,
+            created_by=created_by,
+            status=FiscalYearStatus.DRAFT,
+            planning_stage=BudgetPlanningStage.REQUESTS,
+            **kwargs,
+        )
         self.db.add(fy)
         await self.db.flush()
         await self.db.refresh(fy, ["created_at", "updated_at"])
@@ -329,10 +336,47 @@ class FinanceService:
         await self.db.refresh(fy, ["updated_at"])
         return fy
 
-    async def activate_fiscal_year(self, fy_id: str, org_id: str) -> FiscalYear:
+    async def activate_fiscal_year(
+        self,
+        fy_id: str,
+        org_id: str,
+        *,
+        recorded_by: Optional[str] = None,
+        adopted_on: Optional[date] = None,
+        adoption_reference: Optional[str] = None,
+        adoption_notes: Optional[str] = None,
+    ) -> FiscalYear:
+        """Make a year the active one.
+
+        A draft year's budget becomes spendable here, so activating one is
+        its adoption: it must have been before the board (``board_review``)
+        and the board's vote is recorded with it — the meeting date, not in
+        the future, and a motion or minutes reference. Re-activating a year
+        that is not a draft records nothing new.
+        """
         fy = await self.get_fiscal_year(fy_id, org_id)
         if not fy:
             raise ValueError("Fiscal year not found")
+        if fy.status == FiscalYearStatus.DRAFT:
+            if fy.planning_stage != BudgetPlanningStage.BOARD_REVIEW:
+                raise ValueError(
+                    f"{fy.name} is adopted from board review. Move it to board "
+                    "review first."
+                )
+            reference = (adoption_reference or "").strip()
+            if adopted_on is None or not reference:
+                raise ValueError(
+                    "Record the board's adoption: the meeting date and the "
+                    "motion or minutes reference."
+                )
+            if adopted_on > await resolve_org_today(self.db, org_id):
+                raise ValueError("The adoption date cannot be in the future.")
+            fy.adopted_on = adopted_on
+            fy.adoption_reference = reference
+            fy.adoption_notes = (adoption_notes or "").strip() or None
+            fy.adoption_recorded_by = recorded_by
+            fy.adoption_recorded_at = datetime.now(timezone.utc)
+            fy.planning_stage = None
 
         # Deactivate any currently active fiscal year
         result = await self.db.execute(
@@ -355,6 +399,13 @@ class FinanceService:
         fy = await self.get_fiscal_year(fy_id, org_id)
         if not fy:
             raise ValueError("Fiscal year not found")
+        if fy.status == FiscalYearStatus.DRAFT:
+            # Locking closes a year for good; a draft is still being planned
+            # and has never been adopted, so locking it would end it unused.
+            raise ValueError(
+                f"{fy.name} is a draft that is still being planned, so it "
+                "cannot be locked."
+            )
         fy.is_locked = True
         fy.status = FiscalYearStatus.CLOSED
         await self.db.flush()
@@ -369,7 +420,8 @@ class FinanceService:
                 FiscalYear.status == FiscalYearStatus.ACTIVE,
             )
         )
-        return result.scalar_one_or_none()
+        fiscal_year: Optional[FiscalYear] = result.scalar_one_or_none()
+        return fiscal_year
 
     # ========================================
     # Budget Categories
@@ -444,7 +496,8 @@ class FinanceService:
                 BudgetCategory.organization_id == org_id,
             )
         )
-        return result.scalar_one_or_none()
+        budget_category: Optional[BudgetCategory] = result.scalar_one_or_none()
+        return budget_category
 
     async def create_budget_category(self, org_id: str, **kwargs) -> BudgetCategory:
         await self._validate_budget_category_fks(org_id, kwargs)
@@ -909,12 +962,18 @@ class FinanceService:
                 Budget.organization_id == org_id,
             )
         )
-        return result.scalar_one_or_none()
+        budget: Optional[Budget] = result.scalar_one_or_none()
+        return budget
 
     async def create_budget(self, org_id: str, created_by: str, **kwargs) -> Budget:
         await self._validate_finance_fks(org_id, kwargs)
         await self._validate_owner_position(org_id, kwargs)
-        fiscal_year = await self.get_fiscal_year(kwargs.get("fiscal_year_id"), org_id)
+        fiscal_year_id = kwargs.get("fiscal_year_id")
+        fiscal_year = (
+            await self.get_fiscal_year(fiscal_year_id, org_id)
+            if fiscal_year_id
+            else None
+        )
         if fiscal_year is not None and fiscal_year.status == FiscalYearStatus.CLOSED:
             # Draft and Active years take budgets; a closed year is settled
             # history (docs/training/11-finance.md, "Creating a Budget").
@@ -940,7 +999,7 @@ class FinanceService:
             .where(Budget.id == budget_id, Budget.organization_id == org_id)
             .with_for_update()
         )
-        budget = result.scalar_one_or_none()
+        budget: Budget | None = result.scalar_one_or_none()
         if not budget:
             raise ValueError("Budget not found")
         if "amount_budgeted" in kwargs and kwargs["amount_budgeted"] is not None:
@@ -1431,7 +1490,8 @@ class FinanceService:
                 ApprovalChain.organization_id == org_id,
             )
         )
-        return result.scalar_one_or_none()
+        approval_chain: Optional[ApprovalChain] = result.scalar_one_or_none()
+        return approval_chain
 
     async def create_approval_chain(
         self, org_id: str, created_by: str, steps: Optional[list] = None, **kwargs
@@ -1456,7 +1516,10 @@ class FinanceService:
 
         await self.db.refresh(chain, ["created_at", "updated_at"])
         # Reload with steps
-        return await self.get_approval_chain(chain.id, org_id)
+        created = await self.get_approval_chain(chain.id, org_id)
+        if created is None:
+            raise RuntimeError("Approval chain not found after it was created")
+        return created
 
     async def update_approval_chain(
         self, chain_id: str, org_id: str, **kwargs
@@ -1615,7 +1678,7 @@ class FinanceService:
                 ApprovalChainStep.chain_id == chain_id,
             )
         )
-        step = result.scalar_one_or_none()
+        step: ApprovalChainStep | None = result.scalar_one_or_none()
         if not step:
             raise ValueError("Approval chain step not found")
         await self._validate_step_approver(org_id, kwargs, existing=step)
@@ -1974,7 +2037,7 @@ class FinanceService:
             )
             .with_for_update()
         )
-        record = result.scalar_one_or_none()
+        record: ApprovalStepRecord | None = result.scalar_one_or_none()
         if not record:
             raise ValueError("Approval step record not found")
         if record.status != ApprovalStepStatus.PENDING:
@@ -2043,7 +2106,7 @@ class FinanceService:
             )
             .with_for_update()
         )
-        record = result.scalar_one_or_none()
+        record: ApprovalStepRecord | None = result.scalar_one_or_none()
         if not record:
             raise ValueError("Approval step record not found")
         if record.status != ApprovalStepStatus.PENDING:
@@ -2112,7 +2175,7 @@ class FinanceService:
             .where(ApprovalStepRecord.approval_token == token)
             .with_for_update()
         )
-        record = result.scalar_one_or_none()
+        record: ApprovalStepRecord | None = result.scalar_one_or_none()
         if not record:
             raise ValueError("Invalid approval token")
         self._ensure_token_step_is_email(record)
@@ -2180,7 +2243,7 @@ class FinanceService:
             .where(ApprovalStepRecord.approval_token == token)
             .with_for_update()
         )
-        record = result.scalar_one_or_none()
+        record: ApprovalStepRecord | None = result.scalar_one_or_none()
         if not record:
             raise ValueError("Invalid approval token")
         self._ensure_token_step_is_email(record)
@@ -2346,7 +2409,9 @@ class FinanceService:
         approvals = []
         for row in result.all():
             approver_type = normalize_approver_type(row.approver_type)
-            step = SimpleNamespace(
+            # Transient and never added to the session: the matchers read only
+            # these three fields, so the row stands in for the joined step.
+            step = ApprovalChainStep(
                 step_type=row.step_type,
                 approver_type=approver_type,
                 approver_value=row.approver_value,
@@ -2888,7 +2953,8 @@ class FinanceService:
                 model.id == entity_id, model.organization_id == org_id
             )
         )
-        return result.scalar_one_or_none()
+        requester_id: Optional[str] = result.scalar_one_or_none()
+        return requester_id
 
     async def _entity_creator_email(
         self, entity_type: ApprovalEntityType, entity_id: str, org_id: str
@@ -2905,7 +2971,8 @@ class FinanceService:
         result = await self.db.execute(
             select(User.email).where(User.id == requester_id)
         )
-        return result.scalar_one_or_none()
+        email: Optional[str] = result.scalar_one_or_none()
+        return email
 
     async def _finalize_approval(
         self,
@@ -3212,7 +3279,8 @@ class FinanceService:
         if for_update:
             query = query.with_for_update().execution_options(populate_existing=True)
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        purchase_request: Optional[PurchaseRequest] = result.scalar_one_or_none()
+        return purchase_request
 
     async def create_purchase_request(
         self, org_id: str, requested_by: str, **kwargs
@@ -3351,7 +3419,7 @@ class FinanceService:
             )
             .with_for_update()
         )
-        pr = result.scalar_one_or_none()
+        pr: PurchaseRequest | None = result.scalar_one_or_none()
         if not pr:
             raise ValueError("Purchase request not found")
         # SoD (FIN-4): the person who disburses must not be the requester.
@@ -3410,7 +3478,7 @@ class FinanceService:
         if requester_id is not None:
             query = query.where(PurchaseRequest.requested_by == requester_id)
         result = await self.db.execute(query.with_for_update())
-        pr = result.scalar_one_or_none()
+        pr: PurchaseRequest | None = result.scalar_one_or_none()
         if not pr:
             _raise_not_found("Purchase request", requester_id)
         if pr.status in (PurchaseRequestStatus.PAID,):
@@ -3493,7 +3561,8 @@ class FinanceService:
         if for_update:
             query = query.with_for_update().execution_options(populate_existing=True)
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        expense_report: Optional[ExpenseReport] = result.scalar_one_or_none()
+        return expense_report
 
     async def create_expense_report(
         self,
@@ -3642,7 +3711,7 @@ class FinanceService:
             )
             .with_for_update()
         )
-        er = result.scalar_one_or_none()
+        er: ExpenseReport | None = result.scalar_one_or_none()
         if not er:
             raise ValueError("Expense report not found")
         # SoD (FIN-4): the person who disburses must not be the submitter.
@@ -3716,7 +3785,8 @@ class FinanceService:
         if for_update:
             query = query.with_for_update().execution_options(populate_existing=True)
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        check_request: Optional[CheckRequest] = result.scalar_one_or_none()
+        return check_request
 
     async def create_check_request(
         self, org_id: str, requested_by: str, **kwargs
@@ -3821,7 +3891,7 @@ class FinanceService:
             )
             .with_for_update()
         )
-        cr = result.scalar_one_or_none()
+        cr: CheckRequest | None = result.scalar_one_or_none()
         if not cr:
             raise ValueError("Check request not found")
         # SoD (FIN-4): the person who issues the check must not be the requester.
@@ -3854,7 +3924,7 @@ class FinanceService:
             )
             .with_for_update()
         )
-        cr = result.scalar_one_or_none()
+        cr: CheckRequest | None = result.scalar_one_or_none()
         if not cr:
             raise ValueError("Check request not found")
         if cr.status != CheckRequestStatus.ISSUED:
@@ -3902,7 +3972,8 @@ class FinanceService:
                 DuesSchedule.organization_id == org_id,
             )
         )
-        return result.scalar_one_or_none()
+        dues_schedule: Optional[DuesSchedule] = result.scalar_one_or_none()
+        return dues_schedule
 
     async def create_dues_schedule(
         self, org_id: str, created_by: str, **kwargs
@@ -3935,7 +4006,7 @@ class FinanceService:
         # Get eligible members
         query = select(User).where(
             User.organization_id == org_id,
-            User.is_active.is_(True),
+            User.is_active,
         )
         result = await self.db.execute(query)
         users = list(result.scalars().all())
@@ -4022,7 +4093,7 @@ class FinanceService:
             .options(selectinload(MemberDues.payments))
             .with_for_update()
         )
-        dues = result.scalar_one_or_none()
+        dues: MemberDues | None = result.scalar_one_or_none()
         if not dues:
             raise ValueError("Member dues record not found")
 
@@ -4104,7 +4175,7 @@ class FinanceService:
                 MemberDues.organization_id == org_id,
             )
         )
-        dues = result.scalar_one_or_none()
+        dues: MemberDues | None = result.scalar_one_or_none()
         if not dues:
             raise ValueError("Member dues record not found")
         # SoD (FIN-4): a member must not waive their own dues.
@@ -4145,7 +4216,7 @@ class FinanceService:
             )
             .options(selectinload(MemberDues.payments))
         )
-        dues = result.scalar_one_or_none()
+        dues: MemberDues | None = result.scalar_one_or_none()
         if not dues:
             raise ValueError("Member dues record not found")
 
@@ -4231,7 +4302,7 @@ class FinanceService:
                 ExportMapping.organization_id == org_id,
             )
         )
-        mapping = result.scalar_one_or_none()
+        mapping: ExportMapping | None = result.scalar_one_or_none()
         if not mapping:
             raise ValueError("Export mapping not found")
         apply_updates(mapping, kwargs)

@@ -24,6 +24,7 @@ from app.core.utils import safe_error_detail
 from app.models.finance import (
     ApprovalEntityType,
     ExpenseReportStatus,
+    FiscalYearStatus,
     PurchaseRequestStatus,
 )
 from app.models.user import User
@@ -50,6 +51,7 @@ from app.schemas.finance import (
     BudgetRequestDecision,
     BudgetRequestProposalOptionsResponse,
     BudgetRequestResponse,
+    BudgetRequestReview,
     BudgetRequestUpdate,
     BudgetResponse,
     BudgetSummaryResponse,
@@ -76,9 +78,11 @@ from app.schemas.finance import (
     ExportRequest,
     FinanceDashboardResponse,
     FinanceNamedOptionResponse,
+    FiscalYearActivate,
     FiscalYearCreate,
     FiscalYearOptionResponse,
     FiscalYearResponse,
+    FiscalYearStageChange,
     FiscalYearUpdate,
     ManualDenyRequest,
     MemberDuesPayment,
@@ -103,6 +107,7 @@ from app.services.finance_budget_ownership import (
     user_owns_budget,
 )
 from app.services.finance_budget_request_notifications import (
+    notify_budget_adopted,
     notify_request_decided,
     notify_request_submitted,
     notify_requests_open,
@@ -324,32 +329,97 @@ async def update_fiscal_year(
 @router.post("/fiscal-years/{fy_id}/activate", response_model=FiscalYearResponse)
 async def activate_fiscal_year(
     fy_id: str,
+    data: Optional[FiscalYearActivate] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.manage")),
 ):
+    """Make a fiscal year the active one; for a draft, record its adoption.
+
+    **Requires permission: finance.manage**
+
+    A draft year is adopted here: it must be in board review, and the body
+    carries the board's vote — ``adoptedOn`` (not in the future) and
+    ``adoptionReference`` (the motion or minutes), with optional
+    ``adoptionNotes``. Each line owner is emailed their adopted lines.
+    Re-activating a year that is not a draft needs no body.
+    """
     service = FinanceService(db)
+    org_id = str(current_user.organization_id)
+    adoption = data.model_dump() if data else {}
     try:
+        before = await service.get_fiscal_year(fy_id, org_id)
+        adopting = before is not None and before.status == FiscalYearStatus.DRAFT
         fy = await service.activate_fiscal_year(
-            fy_id, str(current_user.organization_id)
+            fy_id, org_id, recorded_by=str(current_user.id), **adoption
         )
+        event_data: dict = {"fiscal_year_id": fy_id}
+        if adopting:
+            event_data.update(
+                adopted_on=fy.adopted_on.isoformat() if fy.adopted_on else None,
+                adoption_reference=fy.adoption_reference,
+            )
         await log_audit_event(
             db=db,
-            event_type="finance.fiscal_year_activated",
+            event_type=(
+                "finance.budget_adopted"
+                if adopting
+                else "finance.fiscal_year_activated"
+            ),
             event_category="finance",
             severity="info",
-            event_data={"fiscal_year_id": fy_id},
+            event_data=event_data,
             user_id=str(current_user.id),
             username=current_user.username,
+            organization_id=org_id,
         )
-        return await FinanceBudgetRequestService(db).fiscal_year_row(
-            fy, str(current_user.organization_id)
-        )
+        if adopting:
+            await notify_budget_adopted(db, org_id, fy.id)
+        return await FinanceBudgetRequestService(db).fiscal_year_row(fy, org_id)
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.post("/fiscal-years/{fy_id}/planning-stage", response_model=FiscalYearResponse)
+async def set_fiscal_year_planning_stage(
+    fy_id: str,
+    data: FiscalYearStageChange,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """Move a draft year's budget one planning stage forward or back.
+
+    **Requires permission: finance.manage**
+
+    ``requests`` (owners propose amounts) -> ``leadership_review`` (closed to
+    owners; senior leadership adjusts decided amounts) -> ``board_review``
+    (nothing changes; the board considers it). Adoption is activation. A
+    year in another department is 404.
+    """
+    service = FinanceBudgetRequestService(db)
+    org_id = str(current_user.organization_id)
+    try:
+        fy, previous = await service.set_planning_stage(fy_id, org_id, data.stage)
+        await log_audit_event(
+            db=db,
+            event_type="finance.fiscal_year_stage_changed",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "fiscal_year_id": fy_id,
+                "from_stage": previous.value,
+                "to_stage": data.stage,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=org_id,
+        )
+        return await service.fiscal_year_row(fy, org_id)
+    except Exception as e:
+        raise _budget_request_error(e)
 
 
 @router.post("/fiscal-years/{fy_id}/lock", response_model=FiscalYearResponse)
@@ -910,6 +980,14 @@ def _is_finance_manager(user: User) -> bool:
     return user_has_permission(user, "finance.manage")
 
 
+def _sees_every_budget_request(user: User) -> bool:
+    # Senior leadership reviews the whole draft budget, so it reads every
+    # request; it changes them only through the review endpoint.
+    return _is_finance_manager(user) or user_has_permission(
+        user, "finance.budget_review"
+    )
+
+
 def _budget_request_error(e: Exception) -> HTTPException:
     if isinstance(e, FinanceEntityNotFoundError):
         return HTTPException(status_code=404, detail=str(e))
@@ -954,16 +1032,17 @@ async def list_budget_requests(
 ):
     """Budget requests, newest first, optionally for one year or status.
 
-    **Authentication required** — no permission: ``finance.manage`` sees every
-    request; anyone else sees requests for lines they own, proposals for
-    positions they hold, and requests they submitted.
+    **Authentication required** — no permission: ``finance.manage`` and
+    ``finance.budget_review`` see every request; anyone else sees requests
+    for lines they own, proposals for positions they hold, and requests they
+    submitted.
     """
     service = FinanceBudgetRequestService(db)
     try:
         return await service.list_requests(
             str(current_user.organization_id),
             str(current_user.id),
-            _is_finance_manager(current_user),
+            _sees_every_budget_request(current_user),
             fiscal_year_id,
             status,
         )
@@ -1069,7 +1148,7 @@ async def get_budget_request(
             request_id,
             str(current_user.organization_id),
             str(current_user.id),
-            _is_finance_manager(current_user),
+            _sees_every_budget_request(current_user),
         )
     except Exception as e:
         raise _budget_request_error(e)
@@ -1221,6 +1300,52 @@ async def decide_budget_request(
             ),
         )
         await notify_request_decided(db, org_id, request.id, str(current_user.id))
+        return (await service.describe([request], org_id))[0]
+    except Exception as e:
+        raise _budget_request_error(e)
+
+
+@router.post(
+    "/budget-requests/{request_id}/review", response_model=BudgetRequestResponse
+)
+async def review_budget_request(
+    request_id: str,
+    data: BudgetRequestReview,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.budget_review")),
+):
+    """Senior leadership changes a decided request's amount, with a note.
+
+    **Requires permission: finance.budget_review**
+
+    Only while the draft year is in leadership review, and only on a request
+    the Treasurer approved or adjusted. The amount is written into the line
+    and kept beside the Treasurer's decision. A reviewer may not review a
+    request for a line they own or one they submitted (403). An amount below
+    what the line has already spent or committed is 409.
+    """
+    service = FinanceBudgetRequestService(db)
+    org_id = str(current_user.organization_id)
+    try:
+        request = await service.review_request(
+            request_id,
+            org_id,
+            str(current_user.id),
+            amount=data.amount,
+            note=data.note,
+        )
+        await _audit_budget_request(
+            db,
+            current_user,
+            "finance.budget_request_reviewed",
+            request,
+            approved_amount=(
+                str(request.approved_amount)
+                if request.approved_amount is not None
+                else None
+            ),
+            review_amount=str(request.review_amount),
+        )
         return (await service.describe([request], org_id))[0]
     except Exception as e:
         raise _budget_request_error(e)
