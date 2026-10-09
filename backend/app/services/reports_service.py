@@ -2105,10 +2105,13 @@ class ReportsService:
             if (p.status.value if hasattr(p.status, "value") else p.status)
             == "transferred"
             and p.transferred_at
+            and p.created_at
         ]
         if transferred_prospects:
             total_days = sum(
-                (p.transferred_at - p.created_at).days for p in transferred_prospects
+                (p.transferred_at - p.created_at).days
+                for p in transferred_prospects
+                if p.transferred_at and p.created_at
             )
             avg_days = round(total_days / len(transferred_prospects), 1)
         else:
@@ -2214,16 +2217,12 @@ class ReportsService:
                 ProspectStepProgress.prospect_id.in_(prospect_ids)
             )
             progress_result = await self.db.execute(progress_query)
-            for prog in progress_result.scalars().all():
-                key = f"{prog.prospect_id}:{prog.step_id}"
+            for record in progress_result.scalars().all():
+                key = f"{record.prospect_id}:{record.step_id}"
                 progress_map[key] = {
-                    "status": (
-                        prog.status.value
-                        if hasattr(prog.status, "value")
-                        else prog.status
-                    ),
-                    "completed_at": prog.completed_at,
-                    "created_at": prog.created_at,
+                    "status": getattr(record.status, "value", record.status),
+                    "completed_at": record.completed_at,
+                    "created_at": record.created_at,
                 }
 
         # Build group data
@@ -2375,7 +2374,9 @@ class ReportsService:
         prospect_rows = []
         for p in prospects:
             status_val = p.status.value if hasattr(p.status, "value") else p.status
-            current_step = step_map.get(p.current_step_id)
+            current_step = (
+                step_map.get(p.current_step_id) if p.current_step_id else None
+            )
             current_step_name = current_step.name if current_step else "—"
 
             # Find which group the prospect's current step belongs to

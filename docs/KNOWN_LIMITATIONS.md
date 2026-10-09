@@ -432,24 +432,31 @@ Closing the gap would need cards that cannot be copied by reading them
 then, a department that needs attendance it can rely on for credit should keep
 those events on a staffed station, or on members' own signed-in phones.
 
-## Prospective Members — Purge Is Manual; Auto-Purge Is Not Wired (2026-09-30)
+## Prospective Members — Purge Scope and Auto-Purge (2026-09-30, wired 2026-10-09)
 
 **Purge Selected** on the Inactive Applications tab permanently deletes the
 selected applications that are still `inactive`, with their uploaded documents,
-and records the purge in the audit log. Until this date it matched `withdrawn`
+and records the purge in the audit log. Until 2026-09-30 it matched `withdrawn`
 instead, so it deleted nothing while the page reported success. Withdrawn,
-rejected and on-hold applications are never purged; the owner chose to keep the
-button to exactly what its tab lists.
+rejected and on-hold applications are never purged, manually or automatically;
+the owner chose to keep purging to exactly what the Inactive tab lists.
 
-**Open: the pipeline's Auto-Purge setting has no reader.** The settings page
-stores `auto_purge_enabled` and `purge_days_after_inactive`, and the user guide
-(`docs/training/15-prospective-members.md`) says inactive applicants are
-deleted after the grace period, but no scheduled task reads either value --
-nothing is ever purged automatically (CLAUDE.md pitfall #19). Wiring it means a
-nightly job calling `purge_inactive_prospects` per pipeline for applications
-inactive longer than the grace period, which needs the date an application went
-inactive (`deactivated_at`) and a decision on notifying coordinators first.
-Until then, departments purge from the Inactive tab.
+**Auto-Purge is in effect since 2026-10-09.** The daily `membership_auto_purge`
+task deletes, through the same code path as the manual button, the `inactive`
+applications in each pipeline with `auto_purge_enabled: true` whose
+`inactive_since` is at least `purge_days_after_inactive` days old (UTC, clamped
+to 30–1095; a missing or non-numeric value skips the pipeline). Decisions the
+owner made, recorded so they are not mistaken for gaps:
+
+- **No warning email before a purge.** Coordinators are not notified; the
+  audit log (`membership_pipeline.prospects_purged`, `trigger: auto_purge`)
+  records each purge with the pipeline, threshold and purged ids.
+- **The clock restarted at the upgrade.** Applications already inactive when
+  migration `feecd81eef2d` ran count from that moment, not from their real
+  deactivation date, so the first run could not delete a backlog at once.
+  `inactive_since` is separate from the drawer's historical `deactivated_at`,
+  which is untouched; an application with no `inactive_since` is never
+  auto-purged.
 
 ## Email Link Address — How a Change Reaches Every Worker (2026-09-25)
 
