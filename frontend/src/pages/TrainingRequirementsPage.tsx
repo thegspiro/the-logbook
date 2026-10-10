@@ -238,15 +238,9 @@ const TrainingRequirementsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div data-page-main className="py-8">
-        {/* Header */}
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
-              <FileText className="h-8 w-8 shrink-0 text-red-700 dark:text-red-500" aria-hidden="true" />
-              <span>Training Requirements</span>
-            </h1>
-            <p className="text-theme-text-muted mt-1">Manage department, state, and national training requirements</p>
-          </div>
+        {/* The hub's section nav already names this page and says what it is for; the title stays for screen-reader heading navigation only. */}
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-end">
+          <h2 className="sr-only">Training Requirements</h2>
 
           <div className="flex flex-wrap items-center gap-3">
             <button

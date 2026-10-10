@@ -290,13 +290,13 @@ const StoreAdminPage: React.FC = () => {
                 <StatTile
                   label="New (24 hours)"
                   value={dashboard.newOrderCount}
-                  tone="text-blue-600 dark:text-blue-400"
+                  tone="text-blue-800 dark:text-blue-400"
                   onClick={() => openOrders({ recentHours: 24 })}
                 />
                 <StatTile
                   label="Collected (open window)"
                   value={formatCurrency(Number(dashboard.collectedThisWindow))}
-                  tone="text-green-600 dark:text-green-400"
+                  tone="text-green-800 dark:text-green-400"
                 />
               </div>
 

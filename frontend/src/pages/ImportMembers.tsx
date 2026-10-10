@@ -972,31 +972,11 @@ const ImportMembers: React.FC = () => {
   );
 
   return (
-    // Top padding matches the hub's other tabs; without it this header sat
-    // flush against the section cards above it.
-    <div className="min-h-screen pt-6">
-      {/* Header */}
-      <header className="bg-theme-input-bg border-theme-surface-border border-b px-6 py-4 backdrop-blur-xs">
-        <div className="mx-auto max-w-4xl">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="shrink-0 rounded-lg bg-purple-600 p-2">
-                <Upload className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-theme-text-primary text-xl font-bold">Import Members from CSV</h1>
-                <p className="text-theme-text-muted text-sm">Add many members at once from a spreadsheet</p>
-              </div>
-            </div>
-            <button
-              onClick={() => void navigate('/members')}
-              className="text-theme-text-secondary hover:text-theme-text-primary touch-target-phone shrink-0 self-start text-sm transition-colors sm:self-auto"
-            >
-              ← Back to Members
-            </button>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen">
+      {/* Rendered only as the Import Members tab of Members Administration,
+          whose section nav already names it; the title stays for heading
+          navigation only, and the old back link left the hub for the roster. */}
+      <h2 className="sr-only">Import Members from CSV</h2>
 
       <div data-page-main className="mx-auto max-w-4xl py-6 sm:py-8">
         {/* Instructions */}
