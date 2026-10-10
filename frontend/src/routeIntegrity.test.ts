@@ -26,6 +26,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { MEMBERS_ADMIN_TABS } from './pages/membersAdminTabs';
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -221,12 +222,15 @@ describe('route integrity', () => {
     ).toEqual([]);
   });
 
+  // The roster page's own Add Member button is gone: it sat directly under
+  // the hub's Add Member tab and went to the same place. The tab is now the
+  // way in, so it is what has to stay.
   it('still reaches the Add Member tab from Members Administration', () => {
-    const source = fs.readFileSync(path.join(SRC, 'pages/MembersAdminPage.tsx'), 'utf8');
+    expect(MEMBERS_ADMIN_TABS.map((tab) => tab.id)).toContain('add');
 
-    expect(source).toContain('to="/members/admin?tab=add"');
-    // Matched as a link target specifically: the comment above the fix names
-    // the dead path, and a bare substring check would trip over it.
+    const source = fs.readFileSync(path.join(SRC, 'pages/MembersAdminPage.tsx'), 'utf8');
+    // Matched as a link target specifically, so a comment naming the dead
+    // path does not trip it.
     expect(source).not.toContain('to="/admin/members/add"');
   });
 

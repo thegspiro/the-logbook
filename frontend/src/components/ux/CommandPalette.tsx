@@ -30,6 +30,10 @@ import {
 import { useAuthStore } from '../../stores/authStore';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
 import { FACILITY_ENTRY_PERMISSIONS } from '../../modules/facilities/routes';
+import { TRAINING_ADMIN_AREAS } from '../training/trainingAdminAreas';
+import { EVENTS_ADMIN_TABS } from '../../pages/eventsAdminTabs';
+import { MEMBERS_ADMIN_TABS } from '../../pages/membersAdminTabs';
+import { STORE_ADMIN_TABS } from '../../modules/storefront/pages/storeAdminTabs';
 
 interface CommandItem {
   id: string;
@@ -63,6 +67,12 @@ interface CommandItem {
    * ones that would also fail on a permission.
    */
   requiresModule?: string;
+  /**
+   * Offered only once something is typed. The administration hubs add some
+   * fifty destinations, which would bury the handful of pages the empty
+   * palette is for; an officer looking for one is searching by name anyway.
+   */
+  searchOnly?: boolean;
 }
 
 const COMMANDS: CommandItem[] = [
@@ -207,7 +217,9 @@ const COMMANDS: CommandItem[] = [
   {
     id: 'add-member',
     label: 'Add Member',
-    path: '/members/add',
+    // The tab itself rather than /members/add, which only redirects here, so
+    // the hub's own entry for the tab is recognised as this one.
+    path: '/members/admin?tab=add',
     icon: Users,
     section: 'Actions',
     // users.create, not members.manage: this lands on a MembersAdminHub tab
@@ -267,6 +279,67 @@ const COMMANDS: CommandItem[] = [
   { id: 'account', label: 'My Account', path: '/account', icon: Settings, section: 'Admin' },
 ];
 
+/**
+ * Every section of the administration hubs, read from the definitions the hubs
+ * themselves render, so a section added to a hub is searchable the day it
+ * ships and a renamed one cannot be offered under its old name. Each carries
+ * its hub route's own gates: a destination the member cannot open is not
+ * offered.
+ */
+const HUB_DESTINATIONS: CommandItem[] = [
+  ...TRAINING_ADMIN_AREAS.flatMap((area) =>
+    area.destinations.map((destination): CommandItem => ({
+      id: `training-admin-${destination.id}`,
+      label: destination.label,
+      description: destination.hint,
+      path: `/training/admin?page=${area.id}&tab=${destination.id}`,
+      icon: destination.icon,
+      section: 'Training Admin',
+      keywords: [area.label.toLowerCase()],
+      permission: 'training.manage',
+      requiresModule: 'training',
+      searchOnly: true,
+    }))
+  ),
+  ...EVENTS_ADMIN_TABS.map((tab): CommandItem => ({
+    id: `events-admin-${tab.id}`,
+    label: tab.label,
+    description: tab.description,
+    path: `/events/admin?tab=${tab.id}`,
+    icon: tab.icon,
+    section: 'Events Admin',
+    permission: 'events.manage',
+    searchOnly: true,
+  })),
+  ...MEMBERS_ADMIN_TABS.map((tab): CommandItem => ({
+    id: `members-admin-${tab.id}`,
+    label: tab.label,
+    description: tab.description,
+    path: `/members/admin?tab=${tab.id}`,
+    icon: tab.icon,
+    section: 'Members Admin',
+    permission: 'members.manage',
+    // A tab with a grant of its own needs it as well as the hub's: a list of
+    // one is that grant alone, and both checks must pass.
+    ...(tab.permission ? { anyPermission: [tab.permission] } : {}),
+    searchOnly: true,
+  })),
+  ...STORE_ADMIN_TABS.map((tab): CommandItem => ({
+    id: `store-admin-${tab.id}`,
+    label: tab.label,
+    description: tab.description,
+    path: tab.id === 'overview' ? '/inventory/admin/store' : `/inventory/admin/store?tab=${tab.id}`,
+    icon: tab.icon,
+    section: 'Store Admin',
+    permission: 'storefront.manage',
+    requiresModule: 'storefront',
+    searchOnly: true,
+  })),
+];
+
+/** A destination already offered above, such as Create Event, is offered once. */
+const HUB_COMMANDS = HUB_DESTINATIONS.filter((hub) => !COMMANDS.some((command) => command.path === hub.path));
+
 export const CommandPalette: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -280,7 +353,8 @@ export const CommandPalette: React.FC = () => {
 
   // Filter commands by permissions, module supersession, and search query
   const filteredCommands = useMemo(() => {
-    const accessible = COMMANDS.filter(
+    const searching = query.trim() !== '';
+    const accessible = [...COMMANDS, ...HUB_COMMANDS].filter(
       (cmd) =>
         (!cmd.permission || checkPermission(cmd.permission)) &&
         (!cmd.anyPermission || cmd.anyPermission.some(checkPermission)) &&
@@ -289,10 +363,11 @@ export const CommandPalette: React.FC = () => {
         // Same rule as `isModuleOn`, read off the state rather than the
         // helper: the helper is rebuilt every render, so depending on it here
         // would recompute this memo every render too.
-        (!cmd.requiresModule || enabledModules === null || enabledModules.has(cmd.requiresModule))
+        (!cmd.requiresModule || enabledModules === null || enabledModules.has(cmd.requiresModule)) &&
+        (searching || !cmd.searchOnly)
     );
 
-    if (!query.trim()) return accessible;
+    if (!searching) return accessible;
 
     const q = query.toLowerCase();
     return accessible.filter(
@@ -449,7 +524,14 @@ export const CommandPalette: React.FC = () => {
                         aria-selected={isSelected}
                       >
                         <Icon className="h-4 w-4 shrink-0 opacity-60" />
-                        <span className="flex-1">{item.label}</span>
+                        <span className="min-w-0 flex-1">
+                          {item.label}
+                          {/* Several hubs have a "Settings"; the line says which
+                              one this is and what is in it. */}
+                          {item.description && (
+                            <span className="text-theme-text-muted block truncate text-xs">{item.description}</span>
+                          )}
+                        </span>
                         {isSelected && <span className="text-theme-text-muted text-xs">Enter</span>}
                       </button>
                     );

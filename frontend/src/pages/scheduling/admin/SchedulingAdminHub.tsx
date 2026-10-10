@@ -19,7 +19,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { CalendarClock } from 'lucide-react';
+import { CalendarClock, Gauge, LayoutDashboard } from 'lucide-react';
 import { AdminHubFrame, AdminMetricsSettings, type AdminHubTab } from '../../../components/admin';
 import { useAuthStore } from '../../../stores/authStore';
 import { useEnabledModules } from '../../../hooks/useEnabledModules';
@@ -71,12 +71,29 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
 
 type AdminTab = 'overview' | 'settings';
 
-/** Settings is always last — the frame's rule, on every module. */
+const OVERVIEW_TAB: AdminHubTab<AdminTab> = {
+  id: 'overview',
+  label: 'Overview',
+  description: 'Shifts, crews and the tools behind them',
+  icon: LayoutDashboard,
+};
+
+/**
+ * Settings-position last, the frame's rule on every module — but labelled for
+ * what it holds. The id stays `settings` so `?tab=settings` keeps working;
+ * this tab only chooses the headline figures, while scheduling's own settings
+ * are the Settings card on the overview, at /scheduling/admin/settings.
+ */
 const TABS: AdminHubTab<AdminTab>[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'settings', label: 'Settings' },
+  OVERVIEW_TAB,
+  {
+    id: 'settings',
+    label: 'Headline Metrics',
+    description: 'Choose the figures shown at the top of this page',
+    icon: Gauge,
+  },
 ];
-const OVERVIEW_ONLY_TABS: AdminHubTab<AdminTab>[] = [{ id: 'overview', label: 'Overview' }];
+const OVERVIEW_ONLY_TABS: AdminHubTab<AdminTab>[] = [OVERVIEW_TAB];
 
 const SchedulingAdminHub: React.FC = () => {
   const checkPermission = useAuthStore((s) => s.checkPermission);
