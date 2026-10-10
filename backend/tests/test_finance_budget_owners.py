@@ -359,10 +359,11 @@ def _by_id(rows, row_id):
 class TestCreateBudget:
     async def test_create_with_station_and_owner(self, db_session, dept):
         async with _client(db_session, dept["treasurer"]) as client:
+            # A draft year: an active one takes a new line only at zero.
             resp = await client.post(
                 "/finance/budgets",
                 json={
-                    "fiscalYearId": dept["fy"],
+                    "fiscalYearId": dept["draft_fy"],
                     "categoryId": dept["gear_cat"],
                     "amountBudgeted": "1200.00",
                     "stationId": dept["station"],
@@ -488,7 +489,6 @@ class TestUpdateBudget:
                 json={
                     "ownerPositionId": dept["training_officer"],
                     "stationId": dept["station"],
-                    "amountBudgeted": "900.00",
                 },
             )
         assert resp.status_code == 200, resp.text
@@ -496,7 +496,9 @@ class TestUpdateBudget:
         assert body["effectiveOwnerPositionName"] == "Training Officer"
         assert body["ownerInherited"] is False
         assert body["stationName"] == "Station 2"
-        assert Decimal(body["amountBudgeted"]) == Decimal("900.00")
+        # Owner and station stay editable after adoption; the amount does not.
+        assert body["amountEditable"] is False
+        assert Decimal(body["amountBudgeted"]) == Decimal("800.00")
 
     @pytest.mark.parametrize(
         ("field", "key"),
@@ -514,6 +516,10 @@ class TestUpdateBudget:
         self, db_session, dept
     ):
         line = dept["lines"]["training"]  # 500 spent + 250 encumbered
+        # Only a draft still taking requests takes a direct amount edit.
+        budget = await db_session.get(Budget, line)
+        budget.fiscal_year_id = dept["draft_fy"]
+        await db_session.flush()
         async with _client(db_session, dept["treasurer"]) as client:
             resp = await client.put(
                 f"/finance/budgets/{line}", json={"amountBudgeted": "700.00"}

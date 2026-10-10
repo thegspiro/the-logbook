@@ -1,8 +1,10 @@
 /**
  * Record a budget amendment — extra money leadership approved for a line.
  *
- * The Treasurer's screen (`finance.manage`). Saving raises the line's budget by
- * the amount and keeps the amendment as a record of who approved it and when.
+ * The Treasurer's screen (`finance.manage`). Saving enters the amendment
+ * pending, as a record of who approved it and when; the line's budget goes up
+ * only once a second officer (`finance.budget_review` or `finance.manage`,
+ * never whoever entered it) confirms it on the line's page.
  * Amendments cannot be edited or removed afterwards, so the form says so; a
  * mistaken one is corrected with `ReverseAmendmentDialog`.
  *
@@ -81,7 +83,7 @@ export const AmendmentDialog: React.FC<AmendmentDialogProps> = ({ budgetId, line
     setSaving(true);
     try {
       const result = await budgetService.addAmendment(budgetId, payload);
-      toast.success('Amendment recorded');
+      toast.success('Amendment recorded — awaiting confirmation by a second officer');
       onSaved(result);
     } catch (err: unknown) {
       // The API's own words: a locked year, a future date, a line not found.
@@ -119,8 +121,9 @@ export const AmendmentDialog: React.FC<AmendmentDialogProps> = ({ budgetId, line
     >
       <div className="space-y-4">
         <p id="amendment-form-description" className="text-theme-text-secondary text-sm">
-          Extra money approved for {lineName}. The budget goes up by this amount. An amendment is kept as a record and
-          cannot be edited or removed later; a mistaken one is corrected by reversing it.
+          Extra money approved for {lineName}. The budget goes up by this amount once a second officer confirms it. An
+          amendment is kept as a record and cannot be edited or removed later; a mistaken one is corrected by reversing
+          it.
         </p>
 
         <div>

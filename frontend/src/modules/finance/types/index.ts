@@ -15,6 +15,13 @@ export const FiscalYearStatus = {
 } as const;
 export type FiscalYearStatus = (typeof FiscalYearStatus)[keyof typeof FiscalYearStatus];
 
+export const BudgetAmendmentStatus = {
+  PENDING: 'pending',
+  CONFIRMED: 'confirmed',
+  REJECTED: 'rejected',
+} as const;
+export type BudgetAmendmentStatus = (typeof BudgetAmendmentStatus)[keyof typeof BudgetAmendmentStatus];
+
 export const PurchaseRequestStatus = {
   DRAFT: 'draft',
   SUBMITTED: 'submitted',
@@ -266,7 +273,8 @@ export interface FiscalYearLockPayload {
 
 /** A request still in flight that stops a closing year from locking. */
 export interface FiscalYearOpenItem {
-  kind: 'purchase_request' | 'expense_report' | 'check_request';
+  /** For `budget_amendment`, `entityId` is the budget line, not the amendment. */
+  kind: 'purchase_request' | 'expense_report' | 'check_request' | 'budget_amendment';
   entityId: string;
   number: string;
   description: string;
@@ -322,9 +330,18 @@ export interface Budget {
    * Derived by the backend, never stored; `amountBudgeted` is the current budget.
    */
   originalAmount?: MonetaryAmount;
-  /** The sum of the line's amendments. */
+  /** The sum of the line's confirmed amendments. */
   amendmentsTotal?: MonetaryAmount;
+  /** Confirmed amendments only. */
   amendmentCount?: number;
+  /** Amendments entered and awaiting a second officer's confirmation. */
+  pendingAmendmentCount?: number;
+  /**
+   * Whether `amountBudgeted` may be edited directly. False from board review
+   * on, and in an active, closing or locked year: from then the amount moves
+   * only through a confirmed amendment.
+   */
+  amountEditable?: boolean;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -385,6 +402,10 @@ export interface BudgetTransactionPage {
 /**
  * Extra money leadership approved for a budget line — an audit record.
  *
+ * Entered `pending`; it moves the line's budget only once a second officer
+ * (`finance.budget_review` or `finance.manage`, never whoever entered it)
+ * confirms it. A rejected one is kept, with the reason, and moves nothing.
+ *
  * A mistaken amendment is corrected by a reversing entry, never edited: a
  * row with a negative `amount` (`isReversal`) naming the amendment it
  * cancels in `reversesAmendmentId`. The reversed amendment carries the
@@ -409,6 +430,19 @@ export interface BudgetAmendment {
   reversedByAmendmentId?: string | null;
   reversedAt?: string | null;
   reversedByName?: string | null;
+  /** On a reversed amendment: whether its reversal is pending or confirmed. */
+  reversalStatus?: BudgetAmendmentStatus | null;
+  status?: BudgetAmendmentStatus;
+  /** Who confirmed or rejected it, when, and (on a rejection) why. */
+  decidedBy?: string | null;
+  decidedByName?: string | null;
+  decidedAt?: string | null;
+  decisionNote?: string | null;
+}
+
+/** `POST /finance/budgets/:id/amendments/:amendmentId/reject`. */
+export interface BudgetAmendmentRejectPayload {
+  note: string;
 }
 
 /** `POST /finance/budgets/:id/amendments`. Every field is required. */

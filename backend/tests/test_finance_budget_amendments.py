@@ -179,11 +179,16 @@ async def dept(db_session: AsyncSession):
         db_session, org_id, "Treasurer", ["finance.view", "finance.manage"]
     )
     viewer_pos = await _position(db_session, org_id, "Finance Viewer", ["finance.view"])
+    # The second officer who confirms what the Treasurer enters.
+    reviewer_pos = await _position(
+        db_session, org_id, "President", ["finance.view", "finance.budget_review"]
+    )
     foreign_pos = await _position(
         db_session, other_org, "Their Treasurer", ["finance.view", "finance.manage"]
     )
     treasurer = await _user(db_session, org_id, "treasurer", treasurer_pos)
     viewer = await _user(db_session, org_id, "viewer", viewer_pos)
+    reviewer = await _user(db_session, org_id, "reviewer", reviewer_pos)
     outsider = await _user(db_session, other_org, "outsider", foreign_pos)
 
     years = {
@@ -215,6 +220,7 @@ async def dept(db_session: AsyncSession):
         "org_id": org_id,
         "treasurer": treasurer,
         "viewer": viewer,
+        "reviewer": reviewer,
         "outsider": outsider,
         "lines": {k: v.id for k, v in lines.items()},
     }
@@ -233,6 +239,26 @@ async def _amend(client: AsyncClient, budget_id: str, **overrides):
     )
 
 
+async def _decide(db, user, budget_id, amendment_id, action, body=None):
+    async with _client(db, user) as client:
+        return await client.post(
+            f"/finance/budgets/{budget_id}/amendments/{amendment_id}/{action}",
+            json=body,
+        )
+
+
+async def _amend_and_confirm(db, dept, budget_id, **overrides):
+    """Enter an amendment as the Treasurer and confirm it as the President."""
+    async with _client(db, dept["treasurer"]) as client:
+        entered = await _amend(client, budget_id, **overrides)
+    assert entered.status_code == 201, entered.text
+    confirmed = await _decide(
+        db, dept["reviewer"], budget_id, entered.json()["amendment"]["id"], "confirm"
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    return confirmed
+
+
 async def _amount(db: AsyncSession, budget_id: str) -> Decimal:
     return (
         await db.execute(select(Budget.amount_budgeted).where(Budget.id == budget_id))
@@ -246,13 +272,25 @@ async def _amount(db: AsyncSession, budget_id: str) -> Decimal:
 
 @pytest.mark.integration
 class TestAddAmendment:
-    async def test_raises_the_budget_and_keeps_the_original(
+    async def test_entering_one_moves_nothing_until_it_is_confirmed(
         self, db_session, dept, audit
     ):
         line = dept["lines"]["active"]
         async with _client(db_session, dept["treasurer"]) as client:
             resp = await _amend(client, line)
         assert resp.status_code == 201, resp.text
+        entered = resp.json()
+        assert entered["amendment"]["status"] == "pending"
+        assert Decimal(entered["budget"]["amountBudgeted"]) == Decimal("800.00")
+        assert entered["budget"]["amendmentCount"] == 0
+        assert entered["budget"]["pendingAmendmentCount"] == 1
+        assert await _amount(db_session, line) == Decimal("800.00")
+
+    async def test_confirming_raises_the_budget_and_keeps_the_original(
+        self, db_session, dept, audit
+    ):
+        line = dept["lines"]["active"]
+        resp = await _amend_and_confirm(db_session, dept, line)
         body = resp.json()
         assert Decimal(body["budget"]["amountBudgeted"]) == Decimal("1050.00")
         assert Decimal(body["budget"]["originalAmount"]) == Decimal("800.00")
@@ -264,14 +302,18 @@ class TestAddAmendment:
         assert amendment["approvedOn"] == "2026-10-07"
         assert amendment["createdBy"] == dept["treasurer"].id
         assert amendment["enteredByName"] == "Treasurer Test"
+        assert amendment["status"] == "confirmed"
+        assert amendment["decidedBy"] == dept["reviewer"].id
+        assert amendment["decidedByName"] == "Reviewer Test"
+        assert amendment["decidedAt"] is not None
+        assert body["budget"]["pendingAmendmentCount"] == 0
         assert await _amount(db_session, line) == Decimal("1050.00")
 
     async def test_amendments_sum(self, db_session, dept, audit):
         line = dept["lines"]["active"]
+        for amount in ("100.00", "50.25", "0.75"):
+            await _amend_and_confirm(db_session, dept, line, amount=amount)
         async with _client(db_session, dept["treasurer"]) as client:
-            for amount in ("100.00", "50.25", "0.75"):
-                resp = await _amend(client, line, amount=amount)
-                assert resp.status_code == 201, resp.text
             detail = (await client.get(f"/finance/budgets/{line}")).json()
         assert Decimal(detail["amountBudgeted"]) == Decimal("951.00")
         assert Decimal(detail["originalAmount"]) == Decimal("800.00")
@@ -283,9 +325,7 @@ class TestAddAmendment:
         self, db_session, dept, audit, year
     ):
         line = dept["lines"][year]
-        async with _client(db_session, dept["treasurer"]) as client:
-            resp = await _amend(client, line)
-        assert resp.status_code == 201, resp.text
+        await _amend_and_confirm(db_session, dept, line)
         assert await _amount(db_session, line) == Decimal("1050.00")
 
     async def test_a_locked_year_takes_none(self, db_session, dept, audit):
@@ -427,10 +467,15 @@ class TestListAmendments:
     async def test_the_list_reports_each_lines_own_amendments(
         self, db_session, dept, audit
     ):
+        for line, amount in (
+            ("active", "40.00"),
+            ("active", "60.00"),
+            ("draft", "5.00"),
+        ):
+            await _amend_and_confirm(
+                db_session, dept, dept["lines"][line], amount=amount
+            )
         async with _client(db_session, dept["treasurer"]) as client:
-            await _amend(client, dept["lines"]["active"], amount="40.00")
-            await _amend(client, dept["lines"]["active"], amount="60.00")
-            await _amend(client, dept["lines"]["draft"], amount="5.00")
             rows = {r["id"]: r for r in (await client.get("/finance/budgets")).json()}
         active = rows[dept["lines"]["active"]]
         assert active["amendmentCount"] == 2
@@ -474,13 +519,203 @@ class TestLockedYearEdit:
         assert only_notes.status_code == 200
         assert only_notes.json()["notes"] == "Audited twice"
 
-    async def test_an_unlocked_closed_year_still_takes_amount_edits(
+    @pytest.mark.parametrize("year", ["active", "closed"])
+    async def test_an_active_or_closing_years_amount_changes_only_by_amendment(
+        self, db_session, dept, year
+    ):
+        line = dept["lines"][year]
+        async with _client(db_session, dept["treasurer"]) as client:
+            resp = await client.put(
+                f"/finance/budgets/{line}", json={"amountBudgeted": "900.00"}
+            )
+            detail = (await client.get(f"/finance/budgets/{line}")).json()
+        assert resp.status_code == 400
+        assert "only through an amendment" in resp.json()["detail"]
+        assert await _amount(db_session, line) == Decimal("800.00")
+        assert detail["amountEditable"] is False
+
+    async def test_a_draft_taking_requests_still_takes_amount_edits(
         self, db_session, dept
     ):
-        line = dept["lines"]["closed"]
+        line = dept["lines"]["draft"]
         async with _client(db_session, dept["treasurer"]) as client:
             resp = await client.put(
                 f"/finance/budgets/{line}", json={"amountBudgeted": "900.00"}
             )
         assert resp.status_code == 200, resp.text
+        assert resp.json()["amountEditable"] is True
         assert await _amount(db_session, line) == Decimal("900.00")
+
+    @pytest.mark.parametrize("stage", ["board_review", "adopted"])
+    async def test_a_draft_before_the_board_or_adopted_is_frozen_too(
+        self, db_session, dept, stage
+    ):
+        line = dept["lines"]["draft"]
+        year = await db_session.get(
+            FiscalYear, (await db_session.get(Budget, line)).fiscal_year_id
+        )
+        year.planning_stage = stage
+        await db_session.flush()
+        async with _client(db_session, dept["treasurer"]) as client:
+            resp = await client.put(
+                f"/finance/budgets/{line}", json={"amountBudgeted": "900.00"}
+            )
+        assert resp.status_code == 400
+        assert "only through an amendment" in resp.json()["detail"]
+
+    async def test_a_new_line_in_an_active_year_starts_at_zero(self, db_session, dept):
+        line = await db_session.get(Budget, dept["lines"]["active"])
+        other = BudgetCategory(organization_id=dept["org_id"], name="Fuel")
+        db_session.add(other)
+        await db_session.flush()
+        body = {"fiscalYearId": line.fiscal_year_id, "categoryId": other.id}
+        async with _client(db_session, dept["treasurer"]) as client:
+            funded = await client.post(
+                "/finance/budgets", json={**body, "amountBudgeted": "500.00"}
+            )
+            empty = await client.post(
+                "/finance/budgets", json={**body, "amountBudgeted": "0"}
+            )
+        assert funded.status_code == 400
+        assert "starts at zero" in funded.json()["detail"]
+        assert empty.status_code == 201, empty.text
+
+
+# ============================================
+# The second officer
+# ============================================
+
+
+@pytest.mark.integration
+class TestConfirmation:
+    async def _entered(self, db_session, dept, line="active") -> str:
+        async with _client(db_session, dept["treasurer"]) as client:
+            resp = await _amend(client, dept["lines"][line])
+        assert resp.status_code == 201, resp.text
+        return resp.json()["amendment"]["id"]
+
+    async def test_whoever_entered_it_cannot_confirm_it(self, db_session, dept, audit):
+        amendment = await self._entered(db_session, dept)
+        line = dept["lines"]["active"]
+
+        resp = await _decide(db_session, dept["treasurer"], line, amendment, "confirm")
+
+        assert resp.status_code == 400
+        assert "your own" in resp.json()["detail"]
+        assert await _amount(db_session, line) == Decimal("800.00")
+
+    async def test_another_finance_manager_may_confirm(self, db_session, dept, audit):
+        amendment = await self._entered(db_session, dept)
+        line = dept["lines"]["active"]
+        other_pos = await _position(
+            db_session, dept["org_id"], "Assistant Treasurer", ["finance.manage"]
+        )
+        other = await _user(db_session, dept["org_id"], "assistant", other_pos)
+
+        resp = await _decide(db_session, other, line, amendment, "confirm")
+
+        assert resp.status_code == 200, resp.text
+        assert await _amount(db_session, line) == Decimal("1050.00")
+        assert "finance.budget_amendment_confirmed" in [
+            call.kwargs["event_type"] for call in audit.await_args_list
+        ]
+
+    async def test_a_viewer_cannot_decide(self, db_session, dept, audit):
+        amendment = await self._entered(db_session, dept)
+        line = dept["lines"]["active"]
+
+        confirm = await _decide(db_session, dept["viewer"], line, amendment, "confirm")
+        reject = await _decide(
+            db_session, dept["viewer"], line, amendment, "reject", {"note": "No"}
+        )
+
+        assert (confirm.status_code, reject.status_code) == (403, 403)
+
+    async def test_a_rejection_needs_a_reason_and_moves_nothing(
+        self, db_session, dept, audit
+    ):
+        amendment = await self._entered(db_session, dept)
+        line = dept["lines"]["active"]
+        reviewer = dept["reviewer"]
+
+        blank = await _decide(
+            db_session, reviewer, line, amendment, "reject", {"note": " "}
+        )
+        resp = await _decide(
+            db_session, reviewer, line, amendment, "reject", {"note": "Not voted on"}
+        )
+        again = await _decide(db_session, reviewer, line, amendment, "confirm")
+
+        assert blank.status_code == 422
+        assert resp.status_code == 200, resp.text
+        rejected = resp.json()["amendment"]
+        assert rejected["status"] == "rejected"
+        assert rejected["decisionNote"] == "Not voted on"
+        assert again.status_code == 409
+        assert await _amount(db_session, line) == Decimal("800.00")
+
+    async def test_whoever_entered_it_may_withdraw_it(self, db_session, dept, audit):
+        amendment = await self._entered(db_session, dept)
+        line = dept["lines"]["active"]
+
+        resp = await _decide(
+            db_session, dept["treasurer"], line, amendment, "reject", {"note": "Typo"}
+        )
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["amendment"]["status"] == "rejected"
+
+    async def test_a_year_locked_since_it_was_entered_refuses_it(
+        self, db_session, dept, audit
+    ):
+        amendment = await self._entered(db_session, dept, "closed")
+        line = dept["lines"]["closed"]
+        year = await db_session.get(
+            FiscalYear, (await db_session.get(Budget, line)).fiscal_year_id
+        )
+        year.is_locked = True
+        await db_session.flush()
+
+        resp = await _decide(db_session, dept["reviewer"], line, amendment, "confirm")
+
+        assert resp.status_code == 400
+        assert resp.json()["detail"].startswith("This fiscal year is locked")
+
+    async def test_another_departments_amendment_is_not_found(
+        self, db_session, dept, audit
+    ):
+        amendment = await self._entered(db_session, dept)
+        line = dept["lines"]["active"]
+
+        resp = await _decide(db_session, dept["outsider"], line, amendment, "confirm")
+
+        assert resp.status_code == 404
+
+    async def test_a_pending_amendment_holds_the_year_open(
+        self, db_session, dept, audit
+    ):
+        amendment = await self._entered(db_session, dept, "closed")
+        line = dept["lines"]["closed"]
+        fy_id = (await db_session.get(Budget, line)).fiscal_year_id
+
+        async with _client(db_session, dept["treasurer"]) as client:
+            items = (
+                await client.get(f"/finance/fiscal-years/{fy_id}/open-items")
+            ).json()
+            lock = await client.post(
+                f"/finance/fiscal-years/{fy_id}/lock", json={"notes": "Reconciled"}
+            )
+        assert [i["kind"] for i in items] == ["budget_amendment"]
+        assert items[0]["entityId"] == line
+        assert items[0]["number"] == "Amendment to Gear"
+        assert lock.status_code == 400
+        assert "confirm or reject each amendment" in lock.json()["detail"]
+
+        await _decide(
+            db_session, dept["reviewer"], line, amendment, "reject", {"note": "No vote"}
+        )
+        async with _client(db_session, dept["treasurer"]) as client:
+            items = (
+                await client.get(f"/finance/fiscal-years/{fy_id}/open-items")
+            ).json()
+        assert items == []

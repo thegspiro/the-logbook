@@ -463,6 +463,29 @@ roll back: `cd backend && alembic downgrade c6c4ffcfdfb3` drops
   Export**, and an export using it is refused until it is changed to the bank
   or card account the money is paid from.
 
+### Budget amendments wait for a second officer; adopted amounts change only by amendment (2026-10-09)
+
+Migration `0a55dae43a0a` adds a status and the confirmer's details to
+`budget_amendments`. Every amendment already recorded is marked **confirmed**,
+so no budget moves on upgrade. Downgrading deletes pending and rejected
+amendments — which never moved a budget — before dropping the columns.
+
+- **A new amendment, or a reversal, no longer changes the budget when it is
+  entered.** It is saved _Pending confirmation_ and moves the line's budget
+  only when someone holding `finance.budget_review` or `finance.manage`, other
+  than whoever entered it, clicks **Confirm** on the line's page.
+- **Grant `finance.budget_review` to the second officer** (the President, for
+  example) if only one member holds `finance.manage`. Without a second
+  holder, amendments stay pending.
+- **A closing year cannot be locked while an amendment is pending.** Confirm
+  or reject each one first; the lock dialog lists them.
+- **A line's amount can no longer be edited directly once the budget goes
+  before the board** — board review, adopted, active and closing years — and a
+  new line in such a year starts at zero. Use an amendment. Owner, station and
+  notes stay editable. Scripts or integrations calling
+  `PUT /finance/budgets/{id}` with a changed `amountBudgeted` on such a line now
+  get 400.
+
 ### Expense reports need a receipt on every line (2026-10-09)
 
 Builds on the uploaded receipts below (migration `c0bf0b155719`); no

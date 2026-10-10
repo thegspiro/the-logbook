@@ -441,6 +441,31 @@ describe('locking a closing year', () => {
     expect(openItems).toHaveBeenCalledWith('fy-active');
   });
 
+  it('links a pending amendment to the budget line where it is confirmed', async () => {
+    const user = userEvent.setup();
+    openItems.mockResolvedValue([
+      {
+        kind: 'budget_amendment',
+        entityId: 'b-gear',
+        number: 'Amendment to Gear',
+        description: 'Nozzles',
+        status: 'pending',
+        amount: '400.00',
+      },
+    ]);
+    renderPage(closing());
+
+    await user.click(screen.getByRole('button', { name: 'Lock' }));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(await within(dialog).findByRole('link', { name: 'Amendment to Gear' })).toHaveAttribute(
+      'href',
+      '/finance/budgets/b-gear'
+    );
+    expect(dialog).toHaveTextContent('Budget amendment · pending · $400.00');
+    expect(within(dialog).getByRole('button', { name: 'Lock the year' })).toBeDisabled();
+  });
+
   it('needs the reconciliation notes, then locks with them', async () => {
     const user = userEvent.setup();
     renderPage(closing());
