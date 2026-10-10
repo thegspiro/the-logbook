@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import type { TrainingAdminArea, TrainingAdminAreaId } from './trainingAdminAreas';
 import { TRAINING_ADMIN_AREAS, tabId, tabPanelId } from './trainingAdminAreas';
 import AdminHubCardTabs from '../admin/AdminHubCardTabs';
+import { ScrollCueRow } from '../ux/ScrollCueRow';
 
 /**
  * Training Administration's two-level navigation, drawn as area cards above a
@@ -99,51 +100,57 @@ export const TrainingAdminNav: React.FC<TrainingAdminNavProps> = ({
         label="Training admin areas"
         // Matches `areaTabId` / `areaPanelId`, under which the page renders the area's panel.
         idPrefix="training-admin-area"
+        // The strip under the destinations already says where the user is.
+        showActiveDescription={false}
       />
 
       <div className="card overflow-hidden">
         {/* Declared an intentional scroll region so the mobile pass stops
             reading off-screen destinations as an overflow bug. No tabIndex: a
             tablist using roving tabindex stays out of the tab order (ARIA
-            APG), and arrowing through its tabs scrolls the far end into view. */}
-        <div
-          className="border-theme-surface-border hscroll flex gap-1 border-b px-2"
-          role="tablist"
-          aria-label={`${activeArea.label} pages`}
-          data-mobile-scroll-region
-        >
-          {activeArea.destinations.map((destination) => {
-            const Icon = destination.icon;
-            const isActive = destination.id === activeTab;
-            const count = attentionCounts[destination.id] ?? 0;
-            return (
-              <button
-                key={destination.id}
-                id={tabId(activeArea.id, destination.id)}
-                ref={(element) => {
-                  destinationRefs.current[destination.id] = element;
-                }}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                aria-controls={tabPanelId(activeArea.id, destination.id)}
-                tabIndex={isActive ? 0 : -1}
-                onClick={() => onTabChange(destination.id)}
-                onKeyDown={(event) =>
-                  handleRovingKeyDown(event, destinationIds, destination.id, onTabChange, destinationRefs)
-                }
-                className={`focus:ring-theme-focus-ring touch:min-h-11 -mb-px flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden focus:ring-inset ${
-                  isActive
-                    ? 'text-theme-text-primary border-red-800'
-                    : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'
-                }`}
-              >
-                <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                {destination.label}
-                {count > 0 && <CountBadge count={count} inverted={false} />}
-              </button>
-            );
-          })}
+            APG), and arrowing through its tabs scrolls the far end into view.
+            The border sits on a wrapper so the edge fade does not erase it. */}
+        <div className="border-theme-surface-border border-b">
+          <ScrollCueRow
+            className="flex gap-1 px-2"
+            role="tablist"
+            aria-label={`${activeArea.label} pages`}
+            revealKey={`${activeArea.id}-${activeTab}`}
+            data-mobile-scroll-region
+          >
+            {activeArea.destinations.map((destination) => {
+              const Icon = destination.icon;
+              const isActive = destination.id === activeTab;
+              const count = attentionCounts[destination.id] ?? 0;
+              return (
+                <button
+                  key={destination.id}
+                  id={tabId(activeArea.id, destination.id)}
+                  ref={(element) => {
+                    destinationRefs.current[destination.id] = element;
+                  }}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-controls={tabPanelId(activeArea.id, destination.id)}
+                  tabIndex={isActive ? 0 : -1}
+                  onClick={() => onTabChange(destination.id)}
+                  onKeyDown={(event) =>
+                    handleRovingKeyDown(event, destinationIds, destination.id, onTabChange, destinationRefs)
+                  }
+                  className={`focus:ring-theme-focus-ring touch:min-h-11 -mb-px flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden focus:ring-inset ${
+                    isActive
+                      ? 'text-theme-text-primary border-red-800'
+                      : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'
+                  }`}
+                >
+                  <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  {destination.label}
+                  {count > 0 && <CountBadge count={count} inverted={false} />}
+                </button>
+              );
+            })}
+          </ScrollCueRow>
         </div>
 
         {/* Says where the officer is and what the page is for. The live region

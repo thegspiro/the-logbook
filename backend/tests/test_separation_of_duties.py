@@ -127,11 +127,11 @@ class TestTheDocumentedCoverageMatchesTheCode:
         )
 
     def test_the_call_site_total_matches_the_documented_count(self):
-        # The table says "21 call sites across 9 modules" -- 8 app modules plus
+        # The table says "22 call sites across 9 modules" -- 8 app modules plus
         # the helper's own definition module, which the sweep above skips.
         total = sum(self._call_sites().values())
-        assert total == 21, (
-            f"assert_different_person now has {total} call sites, not the 21 "
+        assert total == 22, (
+            f"assert_different_person now has {total} call sites, not the 22 "
             "docs/COMPLIANCE.md claims; update the coverage table"
         )
 
@@ -140,4 +140,4 @@ class TestTheDocumentedCoverageMatchesTheCode:
         # checking nothing -- the failure mode that let the original claim rot.
         sites = self._call_sites()
         assert len(sites) >= 8
-        assert sum(sites.values()) >= 21
+        assert sum(sites.values()) >= 22

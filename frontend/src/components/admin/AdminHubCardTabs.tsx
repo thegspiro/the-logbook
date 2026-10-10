@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import type { LucideIcon } from 'lucide-react';
+import { ScrollCueRow } from '../ux/ScrollCueRow';
 
 /**
  * An administration hub's sections drawn as cards: icon, name, a line saying
@@ -44,6 +45,12 @@ interface AdminHubCardTabsProps<K extends string> {
    * naming an id that is not in the document is worse than naming none.
    */
   panelsAlwaysRendered?: boolean;
+  /**
+   * Whether to print the selected section's description under the row on a
+   * phone, where the cards are chips with no room for one. Off for a caller
+   * that already says where the user is (Training's "you are here" strip).
+   */
+  showActiveDescription?: boolean;
 }
 
 /**
@@ -68,9 +75,11 @@ export function AdminHubCardTabs<K extends string>({
   label,
   idPrefix,
   panelsAlwaysRendered = false,
+  showActiveDescription = true,
 }: AdminHubCardTabsProps<K>) {
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
   const ids = tabs.map((tab) => tab.id);
+  const activeDescription = tabs.find((tab) => tab.id === activeTab);
 
   /**
    * `focusedId` is the card the keystroke came from, not the selected one:
@@ -95,10 +104,17 @@ export function AdminHubCardTabs<K extends string>({
 
   return (
     <div className="@container">
-      <div
-        className={`grid grid-cols-2 gap-2 sm:gap-3 ${WIDE_COLUMNS[tabs.length] ?? '@3xl:grid-cols-4'}`}
+      {/* A phone gets one row of chips that scrolls sideways, with a cue at
+          whichever edge has more; from sm up the same buttons are a grid of
+          cards. One set of buttons either way, so ids and roving focus never
+          exist twice. The 4px inset keeps focus rings inside the scroller,
+          which clips anything past its edge. */}
+      <ScrollCueRow
+        className={`-m-1 flex gap-2 p-1 sm:m-0 sm:grid sm:grid-cols-2 sm:gap-3 sm:overflow-visible sm:p-0 ${WIDE_COLUMNS[tabs.length] ?? '@3xl:grid-cols-4'}`}
         role="tablist"
         aria-label={label}
+        revealKey={activeTab}
+        data-mobile-scroll-region
       >
         {tabs.map((tab) => {
           const Icon = tab.icon;
@@ -123,7 +139,7 @@ export function AdminHubCardTabs<K extends string>({
               tabIndex={isActive ? 0 : -1}
               onClick={() => onTabChange(tab.id)}
               onKeyDown={(event) => handleKeyDown(event, tab.id)}
-              className={`focus:ring-theme-focus-ring flex min-h-11 items-center gap-2 rounded-lg border p-2.5 text-left transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden sm:flex-col sm:items-start sm:p-3 ${
+              className={`focus:ring-theme-focus-ring flex min-h-11 items-center gap-2 rounded-lg border p-2.5 text-left whitespace-nowrap transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden sm:flex-col sm:items-start sm:p-3 sm:whitespace-normal ${
                 isActive
                   ? 'border-red-800 bg-red-800 text-white shadow-md'
                   : 'border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover shadow-sm'
@@ -167,7 +183,15 @@ export function AdminHubCardTabs<K extends string>({
             </button>
           );
         })}
-      </div>
+      </ScrollCueRow>
+      {/* Hidden from assistive technology: the selected tab already carries
+          this text as its accessible description. */}
+      {showActiveDescription && activeDescription && (
+        <p className="text-theme-text-muted mt-2 text-sm sm:hidden" aria-hidden="true">
+          <span className="text-theme-text-primary font-semibold">{activeDescription.label}</span> —{' '}
+          {activeDescription.description}
+        </p>
+      )}
     </div>
   );
 }

@@ -47,6 +47,7 @@ from app.models.finance import (
     ApproverType,
     Budget,
     BudgetAmendment,
+    BudgetAmendmentStatus,
     BudgetCategory,
     BudgetPlanningStage,
     CheckRequest,
@@ -118,6 +119,16 @@ class BudgetLimitExceededError(Exception):
         super().__init__("Insufficient available budget")
 
 
+class AmendmentDecidedError(Exception):
+    """The amendment was already confirmed or rejected (→ 409)."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "That amendment has already been confirmed or rejected. Refresh to "
+            "see where it stands."
+        )
+
+
 class AmendmentAlreadyReversedError(Exception):
     """The amendment already has a reversing entry (→ 409).
 
@@ -136,6 +147,35 @@ _MAX_BUDGET_AMOUNT = Decimal("9999999999.99")
 _LOCKED_YEAR_AMOUNT_MESSAGE = (
     "This fiscal year is locked. Budget amounts can no longer be changed or amended."
 )
+_AMOUNT_BY_AMENDMENT_MESSAGE = (
+    "Once a budget goes before the board, a line's amount changes only through "
+    "an amendment, which another officer confirms."
+)
+# Kept under safe_error_detail's 300 characters so the reason reaches the screen.
+_NEW_LINE_AT_ZERO_MESSAGE = (
+    "This budget has gone before the board, so a new line starts at zero. Add it, "
+    "then record an amendment for its amount, which another officer confirms."
+)
+
+
+def _amount_by_amendment(status, stage, is_locked) -> bool:
+    """Whether a line's amount now changes only through a confirmed amendment.
+
+    From board review on, the budget is what the board considered or adopted,
+    so a change is an amendment a second officer confirms -- not an edit one
+    person makes. Before that (taking requests, leadership review) the
+    Treasurer still shapes the draft directly. A locked year takes neither.
+    """
+    status = getattr(status, "value", status)
+    stage = getattr(stage, "value", stage)
+    if is_locked:
+        return True
+    if status in (FiscalYearStatus.ACTIVE.value, FiscalYearStatus.CLOSED.value):
+        return True
+    return stage in (
+        BudgetPlanningStage.BOARD_REVIEW.value,
+        BudgetPlanningStage.ADOPTED.value,
+    )
 
 
 class FinanceEntityNotFoundError(ValueError):
@@ -561,6 +601,48 @@ class FinanceService:
                         "amount": row[4],
                     }
                 )
+        # An amendment awaiting its second officer is open too: locking would
+        # freeze the line with the decision still owed. entity_id is the line,
+        # which is where it is confirmed or rejected.
+        pending = await self.db.execute(
+            select(
+                BudgetAmendment.budget_id,
+                BudgetCategory.name,
+                BudgetAmendment.reason,
+                BudgetAmendment.amount,
+            )
+            .join(
+                Budget,
+                and_(
+                    Budget.id == BudgetAmendment.budget_id,
+                    Budget.organization_id == org_id,
+                ),
+            )
+            .outerjoin(
+                BudgetCategory,
+                and_(
+                    BudgetCategory.id == Budget.category_id,
+                    BudgetCategory.organization_id == org_id,
+                ),
+            )
+            .where(
+                BudgetAmendment.organization_id == org_id,
+                Budget.fiscal_year_id == fy.id,
+                BudgetAmendment.status == BudgetAmendmentStatus.PENDING,
+            )
+            .order_by(BudgetAmendment.created_at, BudgetAmendment.id)
+        )
+        for budget_id, category, reason, amount in pending.all():
+            items.append(
+                {
+                    "kind": "budget_amendment",
+                    "entity_id": budget_id,
+                    "number": f"Amendment to {category or 'a budget line'}",
+                    "description": reason,
+                    "status": BudgetAmendmentStatus.PENDING.value,
+                    "amount": amount,
+                }
+            )
         return items
 
     async def lock_fiscal_year(
@@ -596,7 +678,8 @@ class FinanceService:
             raise ValueError(
                 f"{fy.name} still has {len(open_items)} open "
                 f"{'item' if len(open_items) == 1 else 'items'}: {shown}{more}. "
-                "Pay, issue, cancel or deny each before locking."
+                "Pay, issue, cancel or deny each request, and confirm or reject "
+                "each amendment, before locking."
             )
         fy.is_locked = True
         fy.locked_by = locked_by
@@ -608,7 +691,7 @@ class FinanceService:
         return fy
 
     async def _fiscal_year_for_update(self, fy_id: str, org_id: str) -> FiscalYear:
-        fy = (
+        fy: FiscalYear | None = (
             await self.db.execute(
                 select(FiscalYear)
                 .where(FiscalYear.id == fy_id, FiscalYear.organization_id == org_id)
@@ -836,12 +919,19 @@ class FinanceService:
         line_owner = aliased(Position)
         category_owner = aliased(Position)
         # One grouped read of every line's amendments, joined once, so the
-        # list stays a single query however many lines it holds.
+        # list stays a single query however many lines it holds. Only a
+        # confirmed amendment has moved the line; pending ones are counted
+        # apart so the page can say some are waiting.
+        confirmed = BudgetAmendment.status == BudgetAmendmentStatus.CONFIRMED
+        pending = BudgetAmendment.status == BudgetAmendmentStatus.PENDING
         amendments = (
             select(
                 BudgetAmendment.budget_id.label("budget_id"),
-                func.sum(BudgetAmendment.amount).label("total"),
-                func.count(BudgetAmendment.id).label("n"),
+                func.sum(case((confirmed, BudgetAmendment.amount), else_=0)).label(
+                    "total"
+                ),
+                func.sum(case((confirmed, 1), else_=0)).label("n"),
+                func.sum(case((pending, 1), else_=0)).label("pending"),
             )
             .where(BudgetAmendment.organization_id == org_id)
             .group_by(BudgetAmendment.budget_id)
@@ -854,12 +944,15 @@ class FinanceService:
                 BudgetCategory.name.label("category_name"),
                 FiscalYear.name.label("fiscal_year_name"),
                 FiscalYear.status.label("fiscal_year_status"),
+                FiscalYear.planning_stage.label("fiscal_year_stage"),
+                FiscalYear.is_locked.label("fiscal_year_locked"),
                 FiscalYear.start_date.label("fiscal_year_start_date"),
                 Facility.name.label("station_name"),
                 line_owner.name.label("line_owner_name"),
                 category_owner.name.label("category_owner_name"),
                 func.coalesce(amendments.c.total, 0).label("amendments_total"),
                 func.coalesce(amendments.c.n, 0).label("amendment_count"),
+                func.coalesce(amendments.c.pending, 0).label("pending_amendments"),
             )
             .outerjoin(amendments, amendments.c.budget_id == Budget.id)
             .outerjoin(
@@ -904,11 +997,12 @@ class FinanceService:
     def _budget_row(row) -> dict:
         """One budget line as the budget pages show it.
 
-        ``amount_budgeted`` is the current budget, amendments included. The
-        original budget is derived, not stored: the current amount less the
-        sum of the line's amendments. A direct edit of ``amount_budgeted``
-        therefore moves the original by the same amount, which is what the
-        edit means.
+        ``amount_budgeted`` is the current budget, confirmed amendments
+        included. The original budget is derived, not stored: the current
+        amount less the sum of the line's confirmed amendments. A direct edit
+        of ``amount_budgeted`` therefore moves the original by the same amount,
+        which is what the edit means. ``amount_editable`` says whether that
+        edit is still allowed (``_amount_by_amendment``).
         """
         budget = row[0]
         data = {
@@ -919,7 +1013,13 @@ class FinanceService:
         data.update(
             amendments_total=amendments_total,
             amendment_count=int(row.amendment_count or 0),
+            pending_amendment_count=int(row.pending_amendments or 0),
             original_amount=Decimal(budget.amount_budgeted or 0) - amendments_total,
+            amount_editable=not _amount_by_amendment(
+                row.fiscal_year_status,
+                row.fiscal_year_stage,
+                bool(row.fiscal_year_locked),
+            ),
         )
         effective_id, inherited = resolve_owner(
             budget.owner_position_id, row.category_owner_id
@@ -1223,6 +1323,14 @@ class FinanceService:
                 "This fiscal year is closed. Budget lines can only be added to "
                 "a draft or active fiscal year."
             )
+        if (
+            fiscal_year is not None
+            and _amount_by_amendment(
+                fiscal_year.status, fiscal_year.planning_stage, fiscal_year.is_locked
+            )
+            and Decimal(kwargs.get("amount_budgeted") or 0) != 0
+        ):
+            raise ValueError(_NEW_LINE_AT_ZERO_MESSAGE)
         budget = Budget(organization_id=org_id, created_by=created_by, **kwargs)
         self.db.add(budget)
         await self.db.flush()
@@ -1250,16 +1358,36 @@ class FinanceService:
             # editable: they describe the line, they do not move money. An
             # unchanged amount is not a change, so a form that sends every
             # field it owns still saves.
-            if new_amount != budget.amount_budgeted and await self._year_is_locked(
-                budget.fiscal_year_id, org_id
-            ):
-                raise ValueError(_LOCKED_YEAR_AMOUNT_MESSAGE)
+            if new_amount != budget.amount_budgeted:
+                year = await self._year_state(budget.fiscal_year_id, org_id)
+                if year is not None and year.is_locked:
+                    raise ValueError(_LOCKED_YEAR_AMOUNT_MESSAGE)
+                if year is not None and _amount_by_amendment(
+                    year.status, year.planning_stage, year.is_locked
+                ):
+                    raise ValueError(_AMOUNT_BY_AMENDMENT_MESSAGE)
             if new_amount < budget.amount_spent + budget.amount_encumbered:
                 raise BudgetLimitExceededError()
         apply_updates(budget, kwargs)
         await self.db.flush()
         await self.db.refresh(budget, ["updated_at"])
         return budget
+
+    async def _year_state(self, fiscal_year_id: str, org_id: str):
+        """A line's fiscal year's status, stage and lock, read under a share lock.
+
+        The same share lock as ``_year_is_locked``, so a direct amount edit
+        waits out a stage move or a lock that is landing.
+        """
+        result = await self.db.execute(
+            select(FiscalYear.status, FiscalYear.planning_stage, FiscalYear.is_locked)
+            .where(
+                FiscalYear.id == fiscal_year_id,
+                FiscalYear.organization_id == org_id,
+            )
+            .with_for_update(read=True)
+        )
+        return result.one_or_none()
 
     async def _year_is_locked(self, fiscal_year_id: str, org_id: str) -> bool:
         """Whether a budget line's fiscal year is locked, read under a share lock.
@@ -1294,11 +1422,13 @@ class FinanceService:
         approved_by: str,
         approved_on: date,
     ) -> BudgetAmendment:
-        """Record extra money approved for a line and raise its budget by it.
+        """Record extra money approved for a line, pending a second officer.
 
-        One transaction: lock the line (the same locking read ``update_budget``
-        and the spend checks use, CLAUDE.md pitfall #27), refuse a locked
-        year, insert the amendment, and raise ``amount_budgeted``. Raises
+        Nothing moves yet: ``confirm_budget_amendment`` raises the line when
+        another officer confirms it. Locks the line (the same locking read
+        ``update_budget`` and the spend checks use, CLAUDE.md pitfall #27) and
+        refuses a locked year or a total past the column's limit now, so a
+        doomed amendment is refused to the person entering it. Raises
         ``FinanceEntityNotFoundError`` for a line that is not the org's.
 
         A request refused earlier for lack of funds is not reprocessed: the
@@ -1340,13 +1470,17 @@ class FinanceService:
             approved_by=approved_by,
             approved_on=approved_on,
             created_by=created_by,
+            status=BudgetAmendmentStatus.PENDING,
         )
         self.db.add(amendment)
-        budget.amount_budgeted = new_amount
         await self.db.flush()
         await self.db.refresh(amendment, ["created_at"])
-        await self.db.refresh(budget, ["updated_at"])
-        logger.info("Budget {} amended by {} in org {}", budget.id, amount, org_id)
+        logger.info(
+            "Budget {} amendment of {} entered, pending, in org {}",
+            budget.id,
+            amount,
+            org_id,
+        )
         return amendment
 
     async def reverse_budget_amendment(
@@ -1360,13 +1494,16 @@ class FinanceService:
         approved_by: str,
         approved_on: date,
     ) -> BudgetAmendment:
-        """Cancel a mistaken amendment with a reversing entry.
+        """Enter a reversing entry for a mistaken amendment, pending confirmation.
 
         A mistaken amendment is never edited or deleted (owner decision,
         2026-10-09). The reversal is a new row for the whole amount, negated,
-        carrying its own reason and approval, and ``amount_budgeted`` drops by
-        the amount. The original budget is unchanged, because it is the current
-        amount less the sum of every row and both moved by the same amount.
+        carrying its own reason and approval. Like an amendment it is entered
+        pending; ``amount_budgeted`` drops by the amount only when another
+        officer confirms it. The original budget is then unchanged, because it
+        is the current amount less the sum of every confirmed row and both
+        moved by the same amount. Only a confirmed amendment can be reversed: a
+        pending one is rejected instead.
 
         One transaction, locks taken in ``add_budget_amendment``'s order: the
         line first (the locking read the spend checks use, CLAUDE.md pitfall
@@ -1421,6 +1558,11 @@ class FinanceService:
                 "A reversal cannot itself be reversed. Record a new amendment "
                 "instead."
             )
+        if target.status != BudgetAmendmentStatus.CONFIRMED:
+            raise ValueError(
+                "Only a confirmed amendment can be reversed; a pending one is "
+                "rejected instead."
+            )
         existing = await self.db.execute(
             select(BudgetAmendment.id)
             .where(
@@ -1446,6 +1588,7 @@ class FinanceService:
             approved_on=approved_on,
             created_by=created_by,
             reverses_amendment_id=target.id,
+            status=BudgetAmendmentStatus.PENDING,
         )
         try:
             async with self.db.begin_nested():
@@ -1455,18 +1598,128 @@ class FinanceService:
             # Unreachable behind the locks above; the unique key answers if
             # some other writer ever skips them.
             raise AmendmentAlreadyReversedError()
-        budget.amount_budgeted = new_amount
-        await self.db.flush()
         await self.db.refresh(reversal, ["created_at"])
-        await self.db.refresh(budget, ["updated_at"])
         logger.info(
-            "Budget {} amendment {} reversed by {} in org {}",
+            "Budget {} amendment {} reversal {} entered, pending, in org {}",
             budget.id,
             target.id,
             reversal.id,
             org_id,
         )
         return reversal
+
+    async def _pending_amendment(
+        self, budget_id: str, amendment_id: str, org_id: str
+    ) -> tuple[Budget, BudgetAmendment]:
+        """The line and its pending amendment, both row-locked, in that order.
+
+        The order ``add_budget_amendment`` and ``reverse_budget_amendment`` take
+        them in, so two decisions on one amendment queue rather than both
+        seeing it pending.
+        """
+        budget = (
+            await self.db.execute(
+                select(Budget)
+                .where(Budget.id == budget_id, Budget.organization_id == org_id)
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if not budget:
+            raise FinanceEntityNotFoundError("Budget not found")
+        amendment = (
+            await self.db.execute(
+                select(BudgetAmendment)
+                .where(
+                    BudgetAmendment.id == amendment_id,
+                    BudgetAmendment.budget_id == budget.id,
+                    BudgetAmendment.organization_id == org_id,
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if not amendment:
+            raise FinanceEntityNotFoundError("Amendment not found")
+        if amendment.status != BudgetAmendmentStatus.PENDING:
+            raise AmendmentDecidedError()
+        return budget, amendment
+
+    async def confirm_budget_amendment(
+        self, budget_id: str, amendment_id: str, org_id: str, confirmed_by: str
+    ) -> BudgetAmendment:
+        """A second officer confirms a pending amendment, which applies it.
+
+        The confirmer is not the member who entered it (the caller's
+        permission -- ``finance.budget_review`` or ``finance.manage`` -- is the
+        endpoint's). The checks that matter for money are made again here, on
+        the line as it stands now: the year is not locked, the total stays in
+        the column's range, and a reversal leaves the line covering what is
+        spent and committed and still names a confirmed amendment.
+        """
+        budget, amendment = await self._pending_amendment(
+            budget_id, amendment_id, org_id
+        )
+        assert_different_person(
+            confirmed_by,
+            amendment.created_by,
+            action="confirm",
+            record="budget amendment",
+        )
+        if await self._year_is_locked(budget.fiscal_year_id, org_id):
+            raise ValueError(_LOCKED_YEAR_AMOUNT_MESSAGE)
+        new_amount = Decimal(budget.amount_budgeted or 0) + Decimal(amendment.amount)
+        if new_amount > _MAX_BUDGET_AMOUNT:
+            raise ValueError("That amendment would take the budget past its limit.")
+        if amendment.amount < 0 and (
+            new_amount < budget.amount_spent + budget.amount_encumbered
+        ):
+            raise BudgetLimitExceededError()
+        budget.amount_budgeted = new_amount
+        amendment.status = BudgetAmendmentStatus.CONFIRMED
+        amendment.decided_by = confirmed_by
+        amendment.decided_at = datetime.now(timezone.utc)
+        await self.db.flush()
+        await self.db.refresh(budget, ["updated_at"])
+        logger.info(
+            "Budget {} amendment {} confirmed, {} applied, in org {}",
+            budget.id,
+            amendment.id,
+            amendment.amount,
+            org_id,
+        )
+        return amendment
+
+    async def reject_budget_amendment(
+        self,
+        budget_id: str,
+        amendment_id: str,
+        org_id: str,
+        rejected_by: str,
+        *,
+        note: str,
+    ) -> BudgetAmendment:
+        """Reject a pending amendment, or withdraw one's own; nothing moves.
+
+        The note is required: the row stays on record with why it was not
+        applied. A rejected reversal gives up its link to the amendment it
+        named, so that amendment can be reversed again; the link would
+        otherwise hold the unique key, and the audit log keeps which it was.
+        """
+        note = (note or "").strip()
+        if not note:
+            raise ValueError("Say why the amendment is rejected.")
+        budget, amendment = await self._pending_amendment(
+            budget_id, amendment_id, org_id
+        )
+        amendment.status = BudgetAmendmentStatus.REJECTED
+        amendment.decided_by = rejected_by
+        amendment.decided_at = datetime.now(timezone.utc)
+        amendment.decision_note = note
+        amendment.reverses_amendment_id = None
+        await self.db.flush()
+        logger.info(
+            "Budget {} amendment {} rejected in org {}", budget.id, amendment.id, org_id
+        )
+        return amendment
 
     async def list_budget_amendments(self, budget_id: str, org_id: str) -> list[dict]:
         """A line's amendments, newest first, with who entered each.
@@ -1480,6 +1733,7 @@ class FinanceService:
             raise FinanceEntityNotFoundError("Budget not found")
         reversal = aliased(BudgetAmendment)
         reverser = aliased(User)
+        decider = aliased(User)
         result = await self.db.execute(
             select(
                 BudgetAmendment,
@@ -1487,8 +1741,13 @@ class FinanceService:
                 User.last_name,
                 User.preferred_name,
                 User.username,
+                decider.first_name.label("decider_first_name"),
+                decider.last_name.label("decider_last_name"),
+                decider.preferred_name.label("decider_preferred_name"),
+                decider.username.label("decider_username"),
                 reversal.id.label("reversal_id"),
                 reversal.created_at.label("reversal_created_at"),
+                reversal.status.label("reversal_status"),
                 reverser.first_name.label("reverser_first_name"),
                 reverser.last_name.label("reverser_last_name"),
                 reverser.preferred_name.label("reverser_preferred_name"),
@@ -1499,6 +1758,13 @@ class FinanceService:
                 and_(
                     User.id == BudgetAmendment.created_by,
                     User.organization_id == org_id,
+                ),
+            )
+            .outerjoin(
+                decider,
+                and_(
+                    decider.id == BudgetAmendment.decided_by,
+                    decider.organization_id == org_id,
                 ),
             )
             .outerjoin(
@@ -1524,16 +1790,24 @@ class FinanceService:
         rows = []
         for row in result.all():
             data = self._amendment_row(*row[:5])
+            decider_name = format_display_name(
+                row.decider_first_name,
+                row.decider_last_name,
+                row.decider_preferred_name,
+            )
+            data["decided_by_name"] = decider_name or row.decider_username or None
             if row.reversal_id is not None:
                 name = format_display_name(
                     row.reverser_first_name,
                     row.reverser_last_name,
                     row.reverser_preferred_name,
                 )
+                reversal_status = row.reversal_status
                 data.update(
                     reversed_by_amendment_id=row.reversal_id,
                     reversed_at=row.reversal_created_at,
                     reversed_by_name=name or row.reverser_username or None,
+                    reversal_status=getattr(reversal_status, "value", reversal_status),
                 )
             rows.append(data)
         return rows

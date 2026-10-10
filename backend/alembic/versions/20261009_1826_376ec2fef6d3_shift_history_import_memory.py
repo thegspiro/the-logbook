@@ -16,7 +16,7 @@ which re-joins any rows a reviewer had split in a draft still under review.
 Committed imports are unaffected.
 
 Revision ID: 376ec2fef6d3
-Revises: 7e1a3c94d2b6
+Revises: 0a55dae43a0a
 Create Date: 2026-10-09 18:26:00.000000
 
 """
@@ -28,7 +28,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "376ec2fef6d3"
-down_revision: Union[str, None] = "7e1a3c94d2b6"
+down_revision: Union[str, None] = "0a55dae43a0a"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

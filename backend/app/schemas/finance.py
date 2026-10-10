@@ -150,7 +150,7 @@ class FiscalYearStageChange(BaseModel):
     stage: str
 
     _check_stage = field_validator("stage")(
-        _enum_check(("requests", "leadership_review", "board_review"), "stage")
+        _enum_check({"requests", "leadership_review", "board_review"}, "stage")
     )
 
 
@@ -332,8 +332,13 @@ class BudgetResponse(UTCResponseBase):
     # amount_budgeted is the current budget, amendments included; the
     # original is derived from it (FinanceService._budget_row), never stored.
     original_amount: Decimal
+    # Confirmed amendments only; pending ones have moved nothing yet.
     amendments_total: Decimal = Decimal("0")
     amendment_count: int = 0
+    pending_amendment_count: int = 0
+    # False once the budget is before the board, adopted, active, closing or
+    # locked: the amount then changes only through a confirmed amendment.
+    amount_editable: bool = True
     created_by: str
     created_at: datetime
     updated_at: datetime
@@ -446,14 +451,33 @@ class BudgetAmendmentReverse(BaseModel):
         return value
 
 
+class BudgetAmendmentReject(BaseModel):
+    """Reject a pending amendment (or withdraw one's own), saying why."""
+
+    model_config = _REQUEST_CONFIG
+
+    note: str = Field(..., max_length=2000)
+
+    @field_validator("note")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+
 class BudgetAmendmentResponse(UTCResponseBase):
     """One recorded amendment to a budget line.
 
     A reversing entry has a negative ``amount`` and names the amendment it
     cancels in ``reverses_amendment_id``; ``is_reversal`` says which kind a
     row is. On a reversed amendment, ``reversed_by_amendment_id``,
-    ``reversed_at`` (when the reversal was entered) and ``reversed_by_name``
-    (who entered it) are filled from that reversal.
+    ``reversed_at`` (when the reversal was entered), ``reversed_by_name`` (who
+    entered it) and ``reversal_status`` are filled from that reversal.
+    ``status`` is ``pending`` until a second officer confirms it (applied) or
+    rejects it; ``decided_by_name``, ``decided_at`` and ``decision_note``
+    record that decision.
     """
 
     model_config = _RESPONSE_CONFIG
@@ -473,10 +497,16 @@ class BudgetAmendmentResponse(UTCResponseBase):
     reversed_by_amendment_id: Optional[str] = None
     reversed_at: Optional[datetime] = None
     reversed_by_name: Optional[str] = None
+    reversal_status: Optional[str] = None
+    status: str = "confirmed"
+    decided_by: Optional[str] = None
+    decided_by_name: Optional[str] = None
+    decided_at: Optional[datetime] = None
+    decision_note: Optional[str] = None
 
 
 class BudgetAmendmentCreatedResponse(BaseModel):
-    """The new amendment (or reversal) and the line as it now stands."""
+    """The amendment (or reversal) and the line as it now stands."""
 
     model_config = _RESPONSE_CONFIG
 

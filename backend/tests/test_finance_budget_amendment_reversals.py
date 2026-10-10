@@ -5,8 +5,11 @@ Owner decision, 2026-10-09: a mistaken amendment is corrected by a
 
 * the reversal is a new amendment row for the whole amount, negated, naming
   the amendment it reverses, with its own reason, approval and approval date;
-* it lowers ``amount_budgeted`` by the amount and leaves the original budget
-  (current less every row's amount) where it was;
+* it is entered pending, like any amendment, and lowers ``amount_budgeted``
+  only once a second officer confirms it; the original budget (current less
+  every confirmed row's amount) stays where it was;
+* only a confirmed amendment is reversed, and a pending reversal holds its
+  target: a second reversal is refused until the first is rejected;
 * an amendment is reversed at most once (409), and a reversal is never
   reversed itself (400) -- money is restored by recording a new amendment;
 * refused in a locked year (400) and when the lower budget would no longer
@@ -30,12 +33,14 @@ from app.api.v1.endpoints import finance as finance_endpoints
 from app.models.finance import (
     Budget,
     BudgetAmendment,
+    BudgetAmendmentStatus,
     BudgetCategory,
     FiscalYearStatus,
 )
 from app.schemas.finance import BudgetAmendmentCreate, BudgetAmendmentReverse
 from tests.test_finance_budget_amendments import (
     _client,
+    _decide,
     _org,
     _position,
     _user,
@@ -100,12 +105,16 @@ async def dept(db_session: AsyncSession):
     )
     viewer_pos = await _position(db_session, org_id, "Finance Viewer", ["finance.view"])
     captain_pos = await _position(db_session, org_id, "Captain", [])
+    reviewer_pos = await _position(
+        db_session, org_id, "President", ["finance.view", "finance.budget_review"]
+    )
     foreign_pos = await _position(
         db_session, other_org, "Their Treasurer", ["finance.view", "finance.manage"]
     )
     treasurer = await _user(db_session, org_id, "treasurer", treasurer_pos)
     viewer = await _user(db_session, org_id, "viewer", viewer_pos)
     owner = await _user(db_session, org_id, "captain", captain_pos)
+    reviewer = await _user(db_session, org_id, "reviewer", reviewer_pos)
     outsider = await _user(db_session, other_org, "outsider", foreign_pos)
 
     years = {
@@ -147,6 +156,7 @@ async def dept(db_session: AsyncSession):
             approved_on=date(2026, 9, 30),
             created_by=treasurer.id,
             created_at=base,
+            status=BudgetAmendmentStatus.CONFIRMED,
         )
         typo = BudgetAmendment(
             organization_id=org_id,
@@ -157,6 +167,7 @@ async def dept(db_session: AsyncSession):
             approved_on=date(2026, 10, 7),
             created_by=treasurer.id,
             created_at=base + timedelta(days=1),
+            status=BudgetAmendmentStatus.CONFIRMED,
         )
         db_session.add_all([first, typo])
         amendments[key] = (first, typo)
@@ -166,6 +177,7 @@ async def dept(db_session: AsyncSession):
         "treasurer": treasurer,
         "viewer": viewer,
         "owner": owner,
+        "reviewer": reviewer,
         "outsider": outsider,
         "lines": {k: v.id for k, v in lines.items()},
         "first": {k: v[0].id for k, v in amendments.items()},
@@ -185,6 +197,18 @@ async def _reverse(client, budget_id: str, amendment_id: str, **overrides):
         f"/finance/budgets/{budget_id}/amendments/{amendment_id}/reverse",
         json={**_REVERSAL, **overrides},
     )
+
+
+async def _reverse_and_confirm(db, dept, budget_id: str, amendment_id: str):
+    """Enter a reversal as the Treasurer and confirm it as the President."""
+    async with _client(db, dept["treasurer"]) as client:
+        entered = await _reverse(client, budget_id, amendment_id)
+    assert entered.status_code == 201, entered.text
+    confirmed = await _decide(
+        db, dept["reviewer"], budget_id, entered.json()["amendment"]["id"], "confirm"
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    return entered, confirmed
 
 
 async def _amount(db: AsyncSession, budget_id: str) -> Decimal:
@@ -212,14 +236,23 @@ async def _rows(db: AsyncSession, budget_id: str) -> list:
 
 @pytest.mark.integration
 class TestReverseAmendment:
+    async def test_entering_one_lowers_nothing_until_it_is_confirmed(
+        self, db_session, dept, audit
+    ):
+        line = dept["lines"]["active"]
+        async with _client(db_session, dept["treasurer"]) as client:
+            resp = await _reverse(client, line, dept["typo"]["active"])
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["amendment"]["status"] == "pending"
+        assert resp.json()["budget"]["pendingAmendmentCount"] == 1
+        assert await _amount(db_session, line) == Decimal("3550.00")
+
     async def test_lowers_the_budget_and_keeps_the_original(
         self, db_session, dept, audit
     ):
         line = dept["lines"]["active"]
         typo = dept["typo"]["active"]
-        async with _client(db_session, dept["treasurer"]) as client:
-            resp = await _reverse(client, line, typo)
-        assert resp.status_code == 201, resp.text
+        entered, resp = await _reverse_and_confirm(db_session, dept, line, typo)
         body = resp.json()
         budget = body["budget"]
         assert Decimal(budget["amountBudgeted"]) == Decimal("1050.00")
@@ -230,6 +263,7 @@ class TestReverseAmendment:
         assert Decimal(reversal["amount"]) == Decimal("-2500.00")
         assert reversal["reversesAmendmentId"] == typo
         assert reversal["isReversal"] is True
+        assert reversal["status"] == "confirmed"
         assert reversal["reason"] == "Entered $2,500 for $250"
         assert reversal["approvedOn"] == "2026-10-08"
         assert reversal["createdBy"] == dept["treasurer"].id
@@ -245,12 +279,10 @@ class TestReverseAmendment:
         self, db_session, dept, audit
     ):
         line = dept["lines"]["active"]
+        await _reverse_and_confirm(db_session, dept, line, dept["typo"]["active"])
+        await _reverse_and_confirm(db_session, dept, line, dept["first"]["active"])
         async with _client(db_session, dept["treasurer"]) as client:
-            first = await _reverse(client, line, dept["typo"]["active"])
-            second = await _reverse(client, line, dept["first"]["active"])
             detail = (await client.get(f"/finance/budgets/{line}")).json()
-        assert first.status_code == 201, first.text
-        assert second.status_code == 201, second.text
         assert Decimal(detail["amountBudgeted"]) == Decimal("800.00")
         assert Decimal(detail["originalAmount"]) == Decimal("800.00")
         assert Decimal(detail["amendmentsTotal"]) == Decimal("0.00")
@@ -264,9 +296,52 @@ class TestReverseAmendment:
             again = await _reverse(client, line, typo)
         assert again.status_code == 409
         assert again.json()["detail"] == "This amendment has already been reversed."
-        assert await _amount(db_session, line) == Decimal("1050.00")
+        # The first reversal is still pending, so nothing has moved yet.
+        assert await _amount(db_session, line) == Decimal("3550.00")
         assert len(await _rows(db_session, line)) == 3
         assert audit.await_count == 1
+
+    async def test_a_rejected_reversal_frees_its_target_to_be_reversed_again(
+        self, db_session, dept, audit
+    ):
+        line = dept["lines"]["active"]
+        typo = dept["typo"]["active"]
+        async with _client(db_session, dept["treasurer"]) as client:
+            first = (await _reverse(client, line, typo)).json()["amendment"]["id"]
+        rejected = await _decide(
+            db_session, dept["reviewer"], line, first, "reject", {"note": "Wrong line"}
+        )
+        assert rejected.status_code == 200, rejected.text
+        listed = {r["id"]: r for r in (await self._list(db_session, dept, line))}
+        assert listed[typo]["reversedByAmendmentId"] is None
+        assert listed[first]["status"] == "rejected"
+
+        await _reverse_and_confirm(db_session, dept, line, typo)
+
+        assert await _amount(db_session, line) == Decimal("1050.00")
+
+    async def test_a_pending_amendment_cannot_be_reversed(
+        self, db_session, dept, audit
+    ):
+        line = dept["lines"]["active"]
+        pending = BudgetAmendment(
+            organization_id=dept["org_id"],
+            budget_id=line,
+            amount=Decimal("40.00"),
+            reason="r",
+            approved_by="Chief",
+            approved_on=date(2026, 10, 8),
+        )
+        db_session.add(pending)
+        await db_session.flush()
+        async with _client(db_session, dept["treasurer"]) as client:
+            resp = await _reverse(client, line, pending.id)
+        assert resp.status_code == 400
+        assert await _amount(db_session, line) == Decimal("3550.00")
+
+    async def _list(self, db_session, dept, line):
+        async with _client(db_session, dept["treasurer"]) as client:
+            return (await client.get(f"/finance/budgets/{line}/amendments")).json()
 
     async def test_a_reversal_cannot_be_reversed(self, db_session, dept, audit):
         line = dept["lines"]["active"]
@@ -276,7 +351,7 @@ class TestReverseAmendment:
             again = await _reverse(client, line, reversal_id)
         assert again.status_code == 400
         assert again.json()["detail"].startswith("A reversal cannot itself be")
-        assert await _amount(db_session, line) == Decimal("1050.00")
+        assert await _amount(db_session, line) == Decimal("3550.00")
 
     async def test_an_amendment_on_another_line_is_not_found(
         self, db_session, dept, audit
@@ -317,9 +392,7 @@ class TestReverseAmendment:
     @pytest.mark.parametrize("year", ["draft", "closed"])
     async def test_draft_and_closed_years_allow_it(self, db_session, dept, audit, year):
         line = dept["lines"][year]
-        async with _client(db_session, dept["treasurer"]) as client:
-            resp = await _reverse(client, line, dept["typo"][year])
-        assert resp.status_code == 201, resp.text
+        await _reverse_and_confirm(db_session, dept, line, dept["typo"][year])
         assert await _amount(db_session, line) == Decimal("1050.00")
 
     async def test_spent_and_committed_must_stay_covered(self, db_session, dept, audit):
@@ -344,10 +417,31 @@ class TestReverseAmendment:
         budget.amount_spent = Decimal("1000.00")
         budget.amount_encumbered = Decimal("50.00")
         await db_session.flush()
+        await _reverse_and_confirm(db_session, dept, line, dept["typo"]["active"])
+        assert await _amount(db_session, line) == Decimal("1050.00")
+
+    async def test_spending_after_entry_is_checked_again_at_confirmation(
+        self, db_session, dept, audit
+    ):
+        line = dept["lines"]["active"]
         async with _client(db_session, dept["treasurer"]) as client:
             resp = await _reverse(client, line, dept["typo"]["active"])
         assert resp.status_code == 201, resp.text
-        assert await _amount(db_session, line) == Decimal("1050.00")
+        budget = await db_session.get(Budget, line)
+        budget.amount_spent = Decimal("2000.00")
+        await db_session.flush()
+
+        confirm = await _decide(
+            db_session,
+            dept["reviewer"],
+            line,
+            resp.json()["amendment"]["id"],
+            "confirm",
+        )
+
+        assert confirm.status_code == 409
+        assert confirm.json()["detail"] == "Insufficient available budget"
+        assert await _amount(db_session, line) == Decimal("3550.00")
 
     async def test_a_future_approval_date_is_refused(self, db_session, dept, audit):
         tomorrow = (datetime.now(timezone.utc).date() + timedelta(days=1)).isoformat()
@@ -431,6 +525,8 @@ class TestListShowsTheLink:
         assert original["reversesAmendmentId"] is None
         assert original["reversedByAmendmentId"] == reversal_id
         assert original["reversedByName"] == "Treasurer Test"
+        # Entered, not yet confirmed: the screen says so beside the link.
+        assert original["reversalStatus"] == "pending"
         assert original["reversedAt"] is not None
         assert Decimal(original["amount"]) == Decimal("2500.00")
 
@@ -460,6 +556,7 @@ class TestListShowsTheLink:
             reason="r",
             approved_by="Chief",
             approved_on=date(2026, 10, 8),
+            status=BudgetAmendmentStatus.CONFIRMED,
         )
         db_session.add(orphan)
         await db_session.flush()
