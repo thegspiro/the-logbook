@@ -404,10 +404,15 @@ This returns a `ComplianceSummary` for the specified member:
 | `non_compliant_count` | Integer | Number of requirements the member does not satisfy      |
 | `expiring_soon_count` | Integer | Number of compliant screenings expiring within 60 days  |
 
-> **Corrected 2026-08-12.** There is no per-member compliance view.
-> `fetchUserCompliance` and `fetchProspectCompliance` are defined in
-> `medicalScreeningStore` and called by no component; `ComplianceDashboard`
-> lists expiring screenings and nothing else. Recorded in [Medical Screening — No Per-Member Compliance Screen](../KNOWN_LIMITATIONS.md#medical-screening--no-per-member-compliance-screen-2026-08-08).
+> **The per-member view _(2026-10-11)_.** On the **Compliance** tab, choose
+> a member or prospect under **Show compliance for**. The panel shows "_n_ of
+> _m_ requirements met", how many are not met and how many expire within 30
+> days, then each requirement with its screening type, the status and date of
+> the record it is graded on, its expiry, and **Met**, **Expires in _n_
+> days**, **Expired** or **No qualifying record**. A record the member filed
+> themself carries the **Self-recorded** mark. With no active requirements it
+> says so rather than reporting the person compliant. Each opening is recorded
+> in the audit trail, like every other compliance read.
 
 ---
 

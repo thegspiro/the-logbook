@@ -15,6 +15,9 @@ vi.mock('../store/medicalScreeningStore', () => ({
   useMedicalScreeningStore: () => ({ expiringScreenings, fetchExpiringScreenings }),
 }));
 
+// The per-member panel has its own tests and its own requests.
+vi.mock('./SubjectCompliancePanel', () => ({ SubjectCompliancePanel: () => null }));
+
 import { ComplianceDashboard } from './ComplianceDashboard';
 
 const row = (overrides: Partial<ExpiringScreening>): ExpiringScreening => ({

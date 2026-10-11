@@ -28,6 +28,7 @@ interface MedicalScreeningState {
   expiringScreenings: ExpiringScreening[];
   isLoading: boolean;
   expiringLoading: boolean;
+  complianceLoading: boolean;
   error: string | null;
 
   // Requirements
@@ -50,6 +51,7 @@ interface MedicalScreeningState {
   // Compliance
   fetchUserCompliance: (userId: string) => Promise<void>;
   fetchProspectCompliance: (prospectId: string) => Promise<void>;
+  clearCompliance: () => void;
   fetchExpiringScreenings: (days?: number) => Promise<void>;
 }
 
@@ -60,6 +62,7 @@ export const useMedicalScreeningStore = create<MedicalScreeningState>((set) => (
   expiringScreenings: [],
   isLoading: false,
   expiringLoading: false,
+  complianceLoading: false,
   error: null,
 
   // Requirements — fetch / CRUD
@@ -115,20 +118,26 @@ export const useMedicalScreeningStore = create<MedicalScreeningState>((set) => (
     'records'
   ),
 
-  // Compliance
+  // Compliance. Own loading flag for the same reason as the expiring list
+  // below: the per-member panel lives inside the compliance tab, which the page
+  // unmounts while the shared isLoading is raised.
   fetchUserCompliance: createFetchAction(
     set,
     (userId: string) => medicalScreeningService.getUserCompliance(userId),
     'compliance',
-    'Failed to load compliance'
+    'Failed to load compliance',
+    'complianceLoading'
   ),
 
   fetchProspectCompliance: createFetchAction(
     set,
     (prospectId: string) => medicalScreeningService.getProspectCompliance(prospectId),
     'compliance',
-    'Failed to load compliance'
+    'Failed to load compliance',
+    'complianceLoading'
   ),
+
+  clearCompliance: () => set({ compliance: null }),
 
   // Its own loading flag, not the shared isLoading. MedicalScreeningPage only
   // renders the compliance panel while isLoading is false, so a fetch that

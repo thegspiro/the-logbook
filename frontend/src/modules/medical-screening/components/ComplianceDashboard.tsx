@@ -1,17 +1,20 @@
 /**
  * Compliance Dashboard
  *
- * Shows org-wide compliance overview with expiring screenings.
+ * Shows one member's or prospect's compliance on demand, and the org-wide
+ * list of screenings expiring soon.
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { useMedicalScreeningStore } from '../store/medicalScreeningStore';
 import { SCREENING_TYPE_LABELS } from '../types';
 import { SelfRecordedBadge } from './SelfRecordedBadge';
+import { SubjectCompliancePanel, type ComplianceSubject } from './SubjectCompliancePanel';
 
 export const ComplianceDashboard: React.FC = () => {
   const { expiringScreenings, fetchExpiringScreenings } = useMedicalScreeningStore();
+  const [subject, setSubject] = useState<ComplianceSubject | null>(null);
 
   useEffect(() => {
     void fetchExpiringScreenings(60);
@@ -19,6 +22,8 @@ export const ComplianceDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <SubjectCompliancePanel subject={subject} onSubjectChange={setSubject} />
+
       {/* Expiring Soon */}
       <div>
         <h3 className="text-theme-text-primary mb-3 text-sm font-medium">Screenings Expiring Within 60 Days</h3>

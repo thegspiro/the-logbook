@@ -1254,10 +1254,10 @@ delete the unattached copy.
 `docs/training/13-medical-screening.md` pictures two per-member compliance
 screens that do not exist:
 
-| Guide section                      | What exists                                                                                                                                                                    | State                |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------- |
-| Member compliance detail view      | `fetchUserCompliance` / `fetchProspectCompliance` are defined in `medicalScreeningStore` and called by **no component**. `ComplianceDashboard` lists expiring screenings only. | ❌ Store action only |
-| Compliance tab filtered to overdue | `ComplianceDashboard` has no filter controls of any kind.                                                                                                                      | ❌ Not built         |
+| Guide section                      | What exists                                                                                                                                                                                                                                               | State        |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| Member compliance detail view      | **Built 2026-10-11 (owner decision: build it).** The Compliance tab's **Show compliance for** picker (members and open prospects) renders the server's `ComplianceSummary` for the chosen subject, requirement by requirement (`SubjectCompliancePanel`). | ✅ Built     |
+| Compliance tab filtered to overdue | `ComplianceDashboard` has no filter controls of any kind.                                                                                                                                                                                                 | ❌ Not built |
 
 ## Grants & Fundraising — Pledges and Fundraising Events (2026-08-08)
 
