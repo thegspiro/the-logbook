@@ -8,6 +8,8 @@ build such a department and read it back through the fleet board.
 * W46-12 — a check filed before its shift's date reaches the fleet board now.
 * W46-11 — the compliance report and failure log attribute a check to the
   unit its shift was on.
+* EC-11 — the compliance report counts expected and missed checks by the
+  fleet board's rule: one per shift per applicable checklist.
 """
 
 import uuid
@@ -240,3 +242,56 @@ class TestReportsResolveThroughTheShift:
         assert log["items"][0]["apparatus_id"] == engine.id
         assert log["items"][0]["apparatus_name"] == "E-1"
         assert other["total"] == 0
+
+
+class TestComplianceReportCadence:
+    """EC-11."""
+
+    async def test_expected_and_missed_follow_shifts_times_checklists(self, db_session):
+        org_id, user_id, engine, template, item = await _department(db_session)
+        today = date.today()
+        done = await _shift(db_session, org_id, engine, today - timedelta(days=3))
+        await _shift(db_session, org_id, engine, today - timedelta(days=2))
+        await _shift(db_session, org_id, engine, today - timedelta(days=1))
+        # Today's is due, not yet owed; it is neither expected nor missed.
+        await _shift(db_session, org_id, engine, today)
+        await _check(db_session, org_id, user_id, done, template, item, "pass")
+
+        report = await EquipmentCheckService(db_session).get_compliance_report(
+            org_id, date_from=today - timedelta(days=7), date_to=today
+        )
+
+        (row,) = report["apparatus"]
+        assert row["checks_expected"] == 3
+        assert row["checks_missed"] == 2
+        assert row["checks_completed"] == 1
+        assert report["overdue_count"] == 2
+
+    async def test_report_agrees_with_the_fleet_board(self, db_session):
+        org_id, user_id, engine, template, item = await _department(db_session)
+        today = date.today()
+        for back in (1, 2):
+            await _shift(db_session, org_id, engine, today - timedelta(days=back))
+
+        report = await EquipmentCheckService(db_session).get_compliance_report(
+            org_id, date_from=today - timedelta(days=7), date_to=today
+        )
+        log = await EquipmentReadinessService(db_session).get_check_log(
+            org_id, today=today
+        )
+
+        assert report["apparatus"][0]["checks_expected"] == log["summary"]["expected"]
+        assert report["overdue_count"] == log["summary"]["missed"]
+
+    async def test_a_unit_no_checklist_reaches_expects_nothing(self, db_session):
+        org_id, _, engine, template, _ = await _department(db_session)
+        template.apparatus_type = "ladder"
+        await db_session.flush()
+        await _shift(db_session, org_id, engine, date.today() - timedelta(days=1))
+
+        report = await EquipmentCheckService(db_session).get_compliance_report(org_id)
+
+        (row,) = report["apparatus"]
+        assert (row["checks_expected"], row["checks_missed"]) == (0, 0)
+        assert row["has_checklist"] is False
+        assert report["overdue_count"] == 0

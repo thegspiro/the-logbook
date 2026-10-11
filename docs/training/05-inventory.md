@@ -3580,6 +3580,14 @@ include **Check Reports** or the fleet board, which stay with
 **Still open** (in `docs/KNOWN_LIMITATIONS.md`): a new or re-scoped checklist
 counts as missed on days before it existed (W46-19).
 
+**Check Reports counts what was expected** _(2026-10-11)_. Each unit under
+**Apparatus Compliance** reads "_n_ of _m_ expected" and, when any were
+skipped, **Missed: _n_**; the **Missed checks** tile totals them, and the CSV
+and PDF carry both columns. An expected check is one per shift per checklist
+that applies to the unit — the same count the fleet board and check log use —
+so the three screens agree. A day the rig was out of service, or a check not yet
+due, is not expected. These used to read zero.
+
 **Per-truck reports work on basic apparatus** _(2026-10-11)_. A department
 that set its units up in onboarding rather than the Apparatus module now sees
 each unit under **Apparatus Compliance** on Check Reports, and the failure log

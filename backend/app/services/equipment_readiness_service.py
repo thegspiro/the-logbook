@@ -293,6 +293,46 @@ class EquipmentReadinessService:
             "totals": self._fleet_totals(records),
         }
 
+    async def expected_checks_between(
+        self,
+        organization_id: str,
+        start: date,
+        end: date,
+        *,
+        today: Optional[date] = None,
+    ) -> Dict[str, Dict[str, int]]:
+        """Expected, completed and missed checks per unit over a date range.
+
+        An expected check is one per shift per applicable checklist — the rule
+        the fleet board and check log already count by, so a report built on
+        this cannot disagree with them (EC-11). Keyed by the shift's unit id.
+        ``expected`` leaves out what was not owed (rig out of service, not yet
+        due), exactly as the board's completion rate does.
+        """
+        today = today or await resolve_org_today(self.db, organization_id)
+        fleet = await self._load_fleet(organization_id)
+        if not fleet or start > end:
+            return {}
+        shifts = await self._load_shifts(organization_id, fleet, start, end)
+        expected = await self._expected_pairs(organization_id, fleet, shifts)
+        if not expected:
+            return {}
+        occasions = await self._resolve_occasions(
+            organization_id, fleet, expected, start, end, today
+        )
+        by_unit: Dict[str, List[_Occasion]] = {}
+        for occ in occasions:
+            by_unit.setdefault(occ.unit_key, []).append(occ)
+        counts: Dict[str, Dict[str, int]] = {}
+        for key, unit_occasions in by_unit.items():
+            owed, done = self._rate_parts(unit_occasions)
+            counts[key] = {
+                "expected": owed,
+                "completed": done,
+                "missed": sum(1 for o in unit_occasions if o.status == STATUS_MISSED),
+            }
+        return counts
+
     # ------------------------------------------------------------------
     # Fleet + template loading
     # ------------------------------------------------------------------

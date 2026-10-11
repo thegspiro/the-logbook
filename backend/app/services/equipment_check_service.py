@@ -5115,10 +5115,20 @@ class EquipmentCheckService:
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
     ) -> Dict[str, Any]:
-        """Aggregated compliance stats by apparatus + date range."""
-        _, date_from_start, date_to_end = await self._report_window(
+        """Aggregated compliance stats by apparatus + date range.
+
+        ``checks_expected`` / ``checks_missed`` per apparatus and the report's
+        ``overdue_count`` come from the fleet board's own rule — one expected
+        check per shift per applicable checklist, dated by the shift — so the
+        report and the board agree (EC-11). The completed and pass/fail counts
+        are the checks submitted in the range.
+        """
+        org_tz, date_from_start, date_to_end = await self._report_window(
             organization_id, date_from, date_to, default_days=30
         )
+        today = today_in(org_tz)
+        range_from = date_from or today - timedelta(days=30)
+        range_to = date_to or today
 
         # All checks in the date range
         checks_q = await self.db.execute(
@@ -5162,6 +5172,7 @@ class EquipmentCheckService:
                 "last_status": None,
                 "checks_completed": 0,
                 "checks_expected": 0,
+                "checks_missed": 0,
                 "pass_count": 0,
                 "fail_count": 0,
                 "has_deficiency": False,
@@ -5183,6 +5194,16 @@ class EquipmentCheckService:
             configured = await readiness._configured_units(organization_id, basic_fleet)
             for key, unit in basic_fleet.items():
                 app_stats[key] = _row(key, unit.label, key in configured)
+
+        expected = await readiness.expected_checks_between(
+            organization_id, range_from, range_to, today=today
+        )
+        overdue_count = 0
+        for key, counts in expected.items():
+            overdue_count += counts["missed"]
+            if key in app_stats:
+                app_stats[key]["checks_expected"] = counts["expected"]
+                app_stats[key]["checks_missed"] = counts["missed"]
 
         unit_keys = await self._check_unit_keys(organization_id, checks)
         total_items_sum = 0
@@ -5245,7 +5266,7 @@ class EquipmentCheckService:
         return {
             "total_checks": total_checks,
             "pass_rate": pass_rate,
-            "overdue_count": 0,
+            "overdue_count": overdue_count,
             "avg_items_per_check": avg_items,
             "apparatus": list(app_stats.values()),
             "members": list(member_stats.values()),

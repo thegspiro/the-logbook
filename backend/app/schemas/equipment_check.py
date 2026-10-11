@@ -609,7 +609,11 @@ class ApparatusComplianceRecord(BaseModel):
     last_checked_by: Optional[str] = None
     last_status: Optional[str] = None
     checks_completed: int = 0
+    # One per shift per applicable checklist in the range, owed ones only —
+    # the fleet board's rule (EC-11).
     checks_expected: int = 0
+    # Expected checks with nothing submitted, on a past shift.
+    checks_missed: int = 0
     pass_count: int = 0
     fail_count: int = 0
     has_deficiency: bool = False

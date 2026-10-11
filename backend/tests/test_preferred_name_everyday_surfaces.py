@@ -87,10 +87,19 @@ class TestEquipmentCheckNameMap:
         # The per-apparatus "has a checklist" lookup reads templates through
         # its own queries; it is not what this test is about, and leaving it
         # live would consume the mocked results meant for the name lookup.
-        with patch(
-            "app.services.equipment_readiness_service.EquipmentReadinessService."
-            "apparatus_with_checklists",
-            new=AsyncMock(return_value={"a1"}),
+        with (
+            patch(
+                "app.services.equipment_readiness_service.EquipmentReadinessService."
+                "apparatus_with_checklists",
+                new=AsyncMock(return_value={"a1"}),
+            ),
+            # Expected checks walk shifts and templates through their own
+            # queries too; likewise not what this test is about.
+            patch(
+                "app.services.equipment_readiness_service.EquipmentReadinessService."
+                "expected_checks_between",
+                new=AsyncMock(return_value={}),
+            ),
         ):
             report = await service.get_compliance_report("org-1")
 
