@@ -4271,3 +4271,77 @@ have moved, been renamed or work differently.
 ---
 
 **Previous:** [Training & Certification](./02-training.md) | **Next:** [Events & Meetings](./04-events-meetings.md)
+
+## Pre-Shift Work and Importing Shift History _(2026-10-11)_
+
+### Timing work you do before check-in opens
+
+Vehicle check-in opens two hours before a shift. A member who does the
+equipment check the afternoon before a 04:00 start used to have no way to record
+that hour. Now they can, without stretching their shift attendance back over the
+night in between.
+
+**As a member**
+
+1. Scan the vehicle's QR code or tap its NFC tag while check-in is still closed.
+2. The check-in page asks **Doing pre-shift work?** and lists your rostered
+   shifts starting in the next 48 hours (the scanned vehicle's shift first).
+   Pick the shift this work is for and choose **Start pre-shift work**.
+3. When you finish, scan the vehicle again (or choose **End pre-shift work**).
+   Checking in to the shift also ends a session still running. A session left
+   open for more than 24 hours needs an officer to enter when it ended.
+
+**Nothing counts until an officer approves it.** The shift officer, or anyone
+with `scheduling.manage`, approves, adjusts or rejects the time from the
+close-out wizard, the shift panel, or the **Pre-shift time awaiting review**
+queue on Shift Close-Out. An officer cannot approve their own time. A shift can
+be finalized with sessions still waiting; approving one afterwards updates the
+shift's total hours.
+
+> **Hint:** Approved pre-shift time adds **hours, never a shift**. It shows in
+> the member hours report, My Hours, the scheduling summary, the administration
+> hub's monthly hours and the Shift Compliance hours column, but it does not
+> make a member "present" for an extra shift.
+
+**Turning it off.** Shift Settings → **Allow pre-shift work** (on by default).
+Off stops new sessions; running ones can still be ended and reviewed.
+
+### Importing years of past shifts
+
+A department moving off another scheduling system can bring its history in
+rather than starting from zero. It needs `scheduling.manage`.
+
+1. Go to **Administration → Scheduling → After the shift → Shift History
+   Import** (`/scheduling/admin/history-import`).
+2. Download the CSV template (one row per member per shift), fill it in, choose
+   the **time zone** the times were written in (it defaults to the department's)
+   and upload it. The upload is a **draft**; nothing is written yet.
+3. Open the draft and work through its tabs. Each issue links to the tab that
+   settles it: **Members** (map to an existing member, or create a former member
+   as an **archived** former member with no password and no email (they stay off the current roster; the Members list opens on **All Current**, and **Archived** or **All Statuses** still show them) — a bulk create handles names
+   nobody matches), **Units** (your own apparatus, another agency's unit, or add
+   a new outside unit — names must match exactly, so `A106` is not `A106E`),
+   **Positions**, **Shifts** (the shifts the import proposes, each with a
+   confidence score), joined entries and duplicates, and **Rows** (edit, revert
+   or exclude any row).
+4. Choose **Commit**. The dialog says plainly that a commit **cannot be undone**.
+
+How it reads your file: an end time at or before the start time means the shift
+crossed midnight; back-to-back entries for one member on one unit with a gap of
+30 minutes or less are **joined** into one (use **Split apart** on the Shifts
+tab, or **Rejoin** on the Rows tab, to override); crews are grouped by unit and
+day; a score of 90 or more is accepted automatically and 60–89 is held for you.
+Shifts already in the system, and hours already recorded for another agency's
+unit, are matched so importing the same file twice adds nothing.
+
+**Remembered decisions.** Departments usually import over several files from the
+same old system. Once an import is committed, its member, unit and position
+decisions are remembered, and later drafts apply them (marked **Remembered**)
+beneath whatever you decide on that draft. A discarded draft teaches nothing.
+
+Imported shifts are written already finalized: they count toward hours and shift
+compliance, but send no notifications and skip the equipment-check gate and
+completion-report drafts.
+
+> **Screenshot needed:** the Shift History Import list (upload form with the time
+> zone picker, drafts and committed imports) and a draft's **Members** tab.

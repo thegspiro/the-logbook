@@ -1185,3 +1185,17 @@ wrong, not merely stale.
 - **Entering a wrong or expired MFA code was treated as an expired session**:
   the app purged local data and hard-redirected to the login screen instead of
   showing "invalid code, try again."
+
+## Admin hubs and the checklist builder on a phone _(2026-10-11)_
+
+- **Hub sections are a sideways-scrolling row of chips** on a phone, with the
+  chosen section's description beneath. A fade and a round arrow on an edge show
+  there is more; tap the arrow to page along. See _Administration hubs_ in
+  [08 — Admin & Reports](./08-admin-reports.md).
+- **The equipment-check template builder fits a phone.** Only the back arrow,
+  the template name, **Publish** and the to-fix badge stay pinned; status,
+  **Details / Tools / Save** and the **Applies to** chips scroll away with the
+  page. A row's overflow menu opens as a titled bottom sheet (the bottom
+  navigation hides while it is open), a location's header stacks onto two lines,
+  and an empty location shows one full-width **Add items** button.
+

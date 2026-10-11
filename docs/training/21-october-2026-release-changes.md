@@ -78,3 +78,29 @@ members automatically (2026-10-08)_. Screenshots to create or replace are in
 | Apparatus first-run guidance, Maintenance dates, Equipment tab note, CNG label, readable badges                                            | [06 — Apparatus & Facilities](./06-apparatus-facilities.md)                  |
 | Member Visibility Settings in cards with a pinned Save bar; opaque menus in dark mode                                                      | [02 — Training](./02-training.md) (Visibility Configuration)                 |
 | Add Member with a membership number no longer fails                                                                                        | [01 — Membership](./01-membership.md) (no workflow change)                   |
+
+---
+
+# October 8–11, 2026 workflow updates
+
+Index for the fourth window. Audit:
+[`docs/CHANGE_AUDIT_2026-10-08_TO_10-11.md`](../CHANGE_AUDIT_2026-10-08_TO_10-11.md).
+**Before upgrading,** read the `docs/UPGRADING.md` entries for this window
+(encryption at rest and the key-custody notice; budget-amendment confirmation).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) under _Queued by the October
+8 – 11 documentation pass_; nothing has been re-captured.
+
+| Topic                                                                                                                                        | Now in                                                                                 |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Pre-shift work timed from the vehicle scan, approved by an officer; Shift History Import with remembered decisions                           | [03 — Scheduling](./03-scheduling.md) (Pre-Shift Work and Importing Shift History)     |
+| Suggestion-box intake questions, routing to another box; the Compliance box's two questions                                                  | [07 — Documents & Forms](./07-documents-forms.md) (Suggestion Boxes)                   |
+| Admin hubs as cards, chip rows on phones, four new review queues, hub sections in the search palette, fewer repeated titles                  | [08 — Admin & Reports](./08-admin-reports.md), [10 — Mobile & PWA](./10-mobile-pwa.md) |
+| Deficiency explained; reason for Out of Service; shifts can be put on Apparatus-module rigs                                                  | [06 — Apparatus & Facilities](./06-apparatus-facilities.md)                            |
+| Checklist builder restacked for phones                                                                                                       | [10 — Mobile & PWA](./10-mobile-pwa.md)                                                |
+| Budget amendments confirmed by a second officer; next-year budget requests, adoption, year-end close and lock; My Budgets; QuickBooks export | [11 — Finance](./11-finance.md) (already updated with those changes)                   |
+| "I was there" requests: withdraw (two per event), cross-event list for organizers                                                            | [04 — Events & Meetings](./04-events-meetings.md) (already updated)                    |
+| Files encrypted at rest; encryption-key confirmation in setup                                                                                | [02 — Training](./02-training.md) and the wiki Security pages (already updated)        |
+| Receipts and apparatus files filed as documents                                                                                              | [07 — Documents & Forms](./07-documents-forms.md) (already updated)                    |
+| Admin-hours entries labelled **QR Scan**, **ID Card Station**, **Manual**, **Event Attendance**                                              | [01 — Membership](./01-membership.md) (already updated)                                |
+| Training requirements and programs reject another department's skills and roles                                                              | Behind the scenes; no workflow change                                                  |

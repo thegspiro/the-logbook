@@ -555,6 +555,42 @@ Permission categories include:
 
 ---
 
+## Administration hubs: cards, phone rows and the search palette _(2026-10-11)_
+
+Every administration hub (Training, Events, Members, Inventory, Scheduling and
+the Department Store) now works the same way.
+
+- **Sections are cards.** Each section says what it holds ("Payments that need
+  matching by hand") instead of showing only a name. A card with a red count
+  uses the same numbers as the **Needs attention** list above it, so the two
+  cannot disagree. Training's thirty-one destinations are grouped into seven
+  areas (Overview, Records, Curriculum, Evaluations, Program Management,
+  Compliance Reporting, Settings & Data); old links with `?page=` or `?tab=`
+  still land on the right place.
+- **On a phone** the cards become one row of chips that scrolls sideways, with
+  the chosen section's description under it. A fade and a round arrow on an edge
+  mean there is more that way; tap the arrow to move along. The headline-metrics
+  row shows the two metrics set for **phone** on the settings tab, and drops the
+  attention count when the queue above already shows it.
+- **Four more review queues in Needs attention:** Training shows skills tests
+  waiting for an officer's validation (opens **Skills Test Records** on **Needs
+  Validation**) and shift reports waiting for review or flagged; Events shows
+  members' "I was there" requests department-wide (opens **All events**); the
+  Store shows order windows still open more than an hour after they were meant
+  to close.
+- **Inventory and Scheduling** describe their tabs as cards too, and their
+  Settings tab is now **Headline Metrics**, which is all it holds.
+- **Search finds hub sections.** Open the command palette and type: every
+  Training, Events, Members and Store section you are allowed to see is offered.
+- **Less repetition inside a hub.** Pages that only appear as a hub tab no longer
+  carry a back link to where you already are, a second large title, or (on
+  Members) a second red **Add Member** button. Screen readers still land on each
+  tab's heading.
+
+> **Screenshot needed:** each hub's card row on desktop; the chip row on a phone
+> with the edge cue visible; Training's area cards; **Needs attention** with the
+> new queues.
+
 ## Reports
 
 Navigate to **Reports** in the Administration section to generate department reports.
