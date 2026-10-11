@@ -134,6 +134,25 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### A duplicate migration revision stops a production boot (2026-10-11)
+
+When two files in `backend/alembic/versions/` declare the same `revision`,
+startup used to rename one of them to `.stale` in every environment and carry
+on, logging "Migrations completed successfully" while that file's schema
+change was silently skipped. With `ENVIRONMENT=production` the backend now
+refuses to start instead, naming the revision id and both files:
+
+```
+MIGRATION FAILURE: duplicate Alembic revision id(s) found: 'abc123' in 20261001_0100_x.py, 20261001_0100_y.py ...
+```
+
+The usual cause is a stale copy left by a cached Docker layer or a
+half-finished checkout. Rebuild the image without cache
+(`docker compose build --no-cache backend`) or delete the copy that does not
+belong to the release, so each revision id appears in exactly one file, then
+start again. Development and staging keep the old rename-and-continue
+behaviour.
+
 ### Every backend setting in `.env` now reaches the container (2026-10-06)
 
 **Review your `.env` before you upgrade.** Until this release the backend's

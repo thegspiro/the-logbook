@@ -1515,11 +1515,14 @@ python -m alembic stamp head               # 0002/0003 were already applied
 `upgrade head` is **not** the shortcut here: `20260808_0002` uses a bare
 `add_column` and fails on a database that already has the column.
 
-**Why the failure is quiet.** `main.py`'s startup fallback resolves a forked
-head by renaming one migration file to `.stale`. Startup then logs "Migrations
-completed successfully" while one migration has silently been taken out of the
-chain. That fallback buys a working dev environment at the cost of hiding the
-fork — worth knowing before trusting a green startup log.
+**Why the failure is quiet — outside production.** `main.py`'s startup
+fallback resolves a duplicate revision id by renaming one migration file to
+`.stale`, then logs "Migrations completed successfully" while that migration
+has been taken out of the chain. **Since 2026-10-11 (owner decision: fail
+loudly in production, keep the fallback in dev)** a production boot refuses
+instead and names the duplicate files (`docs/UPGRADING.md`); development and
+staging still self-heal, so a green dev startup log is still worth reading
+twice.
 
 **The general rule.** A revision id is a shared namespace across every open
 branch, and a date-stamped sequence collides the moment two people work on the
