@@ -3181,22 +3181,28 @@ migration. Two things make it worth recording rather than ignoring:
 
 ## Documents — Legal Revision History Is Unbounded (2026-08-25)
 
-`LegalDocumentService.list_revisions` (`legal_service.py`) runs `.all()` with
-no pagination or limit, and `GET /legal-documents` (`get_legal_documents`,
-`legal_documents.py`) returns every draft and every archived revision's full
-body (capped at 100,000 characters each) and change note, for both document
-types, on every load of the Governance -> Legal Documents screen. Access
-control is sound — org-scoped, `legal.propose`/`legal.publish`/
-`settings.manage`-gated — so this is the same scaling concern as the entries
-below, not a leak: a department with years of proposal history, or a
-`legal.propose` holder repeatedly creating drafts (there is no per-user or
-per-org cap on draft creation), pays a growing query and response cost on
-every load, with no ceiling.
+✅ **Resolved 2026-10-11 (owner decision: paginate drafts and history with a
+"load more" UI — bounded cost, changes the response envelope).**
 
-Not fixed for the same reason as the entries below: pagination changes the
-response envelope this screen currently expects (full `drafts`/`history`
-arrays inline per document type), a frontend-contract change rather than a
-drop-in. (Security review DOC-8, `docs/security-review/DOC-10-documents-legal.md`.)
+`GET /legal-documents` used to return every draft and every archived revision's
+full body (up to 100,000 characters each), for both document types, on every
+load of Governance → Legal Documents, with no cap on how many drafts a
+`legal.propose` holder could accumulate.
+
+It now returns, per document, the **first ten** drafts and the first ten
+history entries (newest first, `id` breaking ties) plus `draftsTotal` and
+`historyTotal`; the live revision's publisher is read on its own rather than
+picked out of the full list. **Envelope change:** `drafts` and `history` are
+no longer complete — a client must read the totals. The rest is served by the
+new `GET /legal-documents/{document_type}/revisions?kind=drafts|history&offset=&limit=`
+(limit 1–50, default 10; same permissions as the overview), and the screen
+appends it with **Load more proposals** / **Load more versions**, skipping any
+revision already shown. Tested in `tests/test_legal_documents_paging.py`,
+`legalDocumentsStore.test.ts` and `LegalDocumentsPage.test.tsx`.
+
+**What remains:** draft creation is still uncapped per user and per
+organization; only the cost of _reading_ them is now bounded. (Security review
+DOC-8, `docs/security-review/DOC-10-documents-legal.md`.)
 
 ## Equipment Checks — `get_item_deployments` Gates on `.view`, Its Sibling on `.manage` (2026-08-26)
 

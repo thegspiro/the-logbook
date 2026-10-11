@@ -3033,6 +3033,11 @@ publish; publishing to the second group only._
   `legal.publish`.
 - **There is no approval queue.** Saving a draft notifies nobody. Review before
   publishing is a process you run, not a workflow the module enforces.
+- **Long lists come ten at a time** _(2026-10-11)_. **Proposed revisions**
+  and **Published history** each show the newest ten. The heading still counts
+  every proposal, and below the list "Showing 10 of _N_" sits beside **Load
+  more proposals** (or **Load more versions**), which adds the next ten. A
+  publish, edit or discard reloads the screen back to the first ten.
 
 ![The privacy notice's published history: the live revision above two replaced ones, each with its change note, its publisher and the moment it went out](./images/08-78-legal-revision-history.png)
 

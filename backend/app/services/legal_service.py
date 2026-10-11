@@ -15,7 +15,7 @@ import copy
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.legal import (
@@ -103,13 +103,65 @@ class LegalDocumentService:
             raise ValueError("Revision not found")
         return revision
 
-    async def list_revisions(self, organization_id: str) -> list[LegalDocumentRevision]:
+    async def list_revisions_page(
+        self,
+        organization_id: str,
+        document_type: LegalDocumentType,
+        drafts: bool,
+        offset: int,
+        limit: int,
+    ) -> tuple[list[LegalDocumentRevision], int]:
+        """One page of a document's drafts, or of its published history.
+
+        Paged (owner decision DOC-8): every revision carries a body of up to
+        100,000 characters, and nothing caps how many drafts a department
+        accumulates, so returning them all made every load of the screen cost
+        more than the last. Newest first, with ``id`` breaking ties so an
+        offset never skips or repeats a row whose ``created_at`` it shares.
+        """
+        status_filter = (
+            LegalDocumentRevision.status == LegalRevisionStatus.DRAFT
+            if drafts
+            else LegalDocumentRevision.status != LegalRevisionStatus.DRAFT
+        )
+        scope = (
+            LegalDocumentRevision.organization_id == organization_id,
+            LegalDocumentRevision.document_type == document_type,
+            status_filter,
+        )
+        total = (
+            await self.db.execute(
+                select(func.count(LegalDocumentRevision.id)).where(*scope)
+            )
+        ).scalar_one()
         result = await self.db.execute(
             select(LegalDocumentRevision)
-            .where(LegalDocumentRevision.organization_id == organization_id)
-            .order_by(LegalDocumentRevision.created_at.desc())
+            .where(*scope)
+            .order_by(
+                LegalDocumentRevision.created_at.desc(),
+                LegalDocumentRevision.id.desc(),
+            )
+            .offset(offset)
+            .limit(limit)
         )
-        return list(result.scalars().all())
+        return list(result.scalars().all()), int(total)
+
+    async def get_published_revision(
+        self, organization_id: str, document_type: LegalDocumentType
+    ) -> Optional[LegalDocumentRevision]:
+        """The revision currently live for one document, if it came from here."""
+        result = await self.db.execute(
+            select(LegalDocumentRevision)
+            .where(
+                LegalDocumentRevision.organization_id == organization_id,
+                LegalDocumentRevision.document_type == document_type,
+                LegalDocumentRevision.status == LegalRevisionStatus.PUBLISHED,
+            )
+            .order_by(LegalDocumentRevision.published_at.desc())
+            .limit(1)
+        )
+        revision: Optional[LegalDocumentRevision] = result.scalar_one_or_none()
+        return revision
 
     async def get_user_names(self, user_ids: set[str]) -> dict[str, str]:
         """Map user id -> display name for revision attribution."""

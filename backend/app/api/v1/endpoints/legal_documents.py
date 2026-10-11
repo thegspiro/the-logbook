@@ -7,23 +7,22 @@ that fit their own bylaws, SOPs, and local law; publishing is a separate grant
 so proposing a revision cannot change what the public sees.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission, user_has_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
-from app.models.legal import (
-    LegalDocumentRevision,
-    LegalDocumentType,
-    LegalRevisionStatus,
-)
+from app.models.legal import LegalDocumentRevision, LegalDocumentType
 from app.models.user import User
 from app.schemas.legal import (
     LegalDocumentsOverview,
     LegalDocumentState,
     LegalRevisionCreate,
+    LegalRevisionPage,
     LegalRevisionResponse,
     LegalRevisionUpdate,
 )
@@ -37,6 +36,11 @@ from app.services.legal_service import (
 router = APIRouter()
 
 _PUBLISH_PERMISSIONS = ("legal.publish", "settings.manage")
+
+# Drafts and history are paged (owner decision DOC-8): each revision carries a
+# body of up to 100,000 characters and nothing caps how many accumulate.
+REVISION_PAGE_SIZE = 10
+MAX_REVISION_PAGE_SIZE = 50
 
 
 def _can_publish(user: User) -> bool:
@@ -84,18 +88,29 @@ async def get_legal_documents(
     if not isinstance(legal_settings, dict):
         legal_settings = {}
 
-    revisions = await service.list_revisions(organization_id)
-    names = await service.get_user_names(
-        {str(r.created_by) for r in revisions if r.created_by}
-        | {str(r.published_by) for r in revisions if r.published_by}
-    )
+    pages = {}
+    for document_type in LegalDocumentType:
+        pages[document_type] = (
+            await service.get_published_revision(organization_id, document_type),
+            await service.list_revisions_page(
+                organization_id, document_type, True, 0, REVISION_PAGE_SIZE
+            ),
+            await service.list_revisions_page(
+                organization_id, document_type, False, 0, REVISION_PAGE_SIZE
+            ),
+        )
+    shown = [
+        revision
+        for published, (drafts, _), (history, _) in pages.values()
+        for revision in [*([published] if published else []), *drafts, *history]
+    ]
+    names = await _names_for(service, shown)
 
     documents = []
     for document_type in LegalDocumentType:
-        of_type = [r for r in revisions if r.document_type == document_type]
-        published = next(
-            (r for r in of_type if r.status == LegalRevisionStatus.PUBLISHED), None
-        )
+        published, (drafts, drafts_total), (history, history_total) = pages[
+            document_type
+        ]
         # The settings value — not this table — is what the public page serves,
         # so it decides whether the platform default is live. Text configured
         # before this screen existed, or edited directly in settings, has no
@@ -119,16 +134,10 @@ async def get_legal_documents(
                 published_by_name=(
                     names.get(str(published.published_by or "")) if published else None
                 ),
-                drafts=[
-                    _to_response(r, names)
-                    for r in of_type
-                    if r.status == LegalRevisionStatus.DRAFT
-                ],
-                history=[
-                    _to_response(r, names)
-                    for r in of_type
-                    if r.status != LegalRevisionStatus.DRAFT
-                ],
+                drafts=[_to_response(r, names) for r in drafts],
+                drafts_total=drafts_total,
+                history=[_to_response(r, names) for r in history],
+                history_total=history_total,
             )
         )
 
@@ -136,6 +145,51 @@ async def get_legal_documents(
         organization_name=organization.name if organization else None,
         can_publish=_can_publish(current_user),
         documents=documents,
+    )
+
+
+async def _names_for(
+    service: LegalDocumentService, revisions: list[LegalDocumentRevision]
+) -> dict[str, str]:
+    return await service.get_user_names(
+        {str(r.created_by) for r in revisions if r.created_by}
+        | {str(r.published_by) for r in revisions if r.published_by}
+    )
+
+
+@router.get("/{document_type}/revisions", response_model=LegalRevisionPage)
+async def list_legal_revisions(
+    document_type: LegalDocumentType,
+    kind: Literal["drafts", "history"] = Query(...),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(REVISION_PAGE_SIZE, ge=1, le=MAX_REVISION_PAGE_SIZE),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("legal.propose", "legal.publish", "settings.manage")
+    ),
+):
+    """
+    A further page of one document's proposed drafts or published history.
+
+    GET /legal-documents returns the first page of each; this serves the rest,
+    newest first, for the screen's "Load more".
+
+    Requires: legal.propose, legal.publish or settings.manage permission.
+    """
+    service = LegalDocumentService(db)
+    items, total = await service.list_revisions_page(
+        str(current_user.organization_id),
+        document_type,
+        kind == "drafts",
+        offset,
+        limit,
+    )
+    names = await _names_for(service, items)
+    return LegalRevisionPage(
+        items=[_to_response(r, names) for r in items],
+        total=total,
+        offset=offset,
+        limit=limit,
     )
 
 
