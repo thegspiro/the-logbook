@@ -1276,11 +1276,20 @@ away, and everyone with meetings scheduled for next week. A meeting that is
 both waived and inside a leave is now excluded once, not twice. The dashboard
 and the ballot check share one calculation, so they cannot disagree.
 
-**Not yet built:** there is no Attendance Dashboard screen. The calculation
-above is real and the data is served by `GET /meetings/attendance/dashboard`,
-which the frontend even has a client method for — but nothing calls it, so no
-page renders the table. Per-meeting attendance is visible on each meeting's
-own record in the meantime.
+**Opening it** _(2026-10-11)_. On the **Minutes** page, an officer holding
+`meetings.manage` has an **Attendance** button beside **Record Minutes**; it
+opens **Meeting Attendance** (`/minutes/attendance`). Choose the **Period**
+(last 3, 6, 12 or 24 months) and optionally a **Meeting type**. The tiles show
+the meetings in the period, the average attendance, how many members may vote,
+and how many are blocked by attendance; the table lists each active member's
+attendance percentage, meetings attended out of those counted, absences,
+waived meetings, meetings during leave, and whether they may vote (with the
+reason when not). A member with no meeting to count reads **Not applicable**
+rather than a percentage. Every figure is the server's — the same calculation
+the ballot check uses.
+
+**Not yet on the screen:** granting a per-meeting waiver from the dashboard;
+waivers are still granted from the meeting.
 
 ### Leave of Absence & Meeting Attendance
 

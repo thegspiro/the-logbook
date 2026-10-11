@@ -1083,10 +1083,11 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Minutes
 
-| URL                   | Page           | Permission    |
-| --------------------- | -------------- | ------------- |
-| `/minutes`            | Minutes List   | Authenticated |
-| `/minutes/:minutesId` | Minutes Detail | Authenticated |
+| URL                   | Page                         | Permission        |
+| --------------------- | ---------------------------- | ----------------- |
+| `/minutes`            | Minutes List                 | Authenticated     |
+| `/minutes/attendance` | Meeting Attendance Dashboard | `meetings.manage` |
+| `/minutes/:minutesId` | Minutes Detail               | Authenticated     |
 
 ---
 

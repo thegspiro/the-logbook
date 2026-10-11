@@ -50,6 +50,12 @@ describe('MinutesPage — meeting types', () => {
     mockCreateMeeting.mockResolvedValue({ id: 'm1' });
   });
 
+  it('links a meetings manager to the attendance dashboard', async () => {
+    renderWithRouter(<MinutesPage />);
+
+    expect(await screen.findByRole('link', { name: /Attendance/ })).toHaveAttribute('href', '/minutes/attendance');
+  });
+
   it('offers and sends an executive meeting', async () => {
     const user = userEvent.setup();
     renderWithRouter(<MinutesPage />);

@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   ChevronDown,
   ChevronUp,
+  Users,
 } from 'lucide-react';
 import { useAuthStore } from '../../../stores/authStore';
 import { Link, useNavigate } from 'react-router';
@@ -86,6 +87,8 @@ const MinutesPage: React.FC = () => {
   // MM-3: minutes writes and restricted reads are gated on minutes.manage on
   // the backend, not meetings.manage — check the same permission the API does.
   const canManage = checkPermission('minutes.manage');
+  // The attendance dashboard's endpoint is gated on meetings.manage.
+  const canViewAttendance = checkPermission('meetings.manage');
 
   // Data state
   const [meetings, setMeetings] = useState<MeetingRecord[]>([]);
@@ -299,15 +302,23 @@ const MinutesPage: React.FC = () => {
               </p>
             </div>
           </div>
-          {canManage && (
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="flex shrink-0 items-center space-x-2 self-start rounded-lg bg-cyan-700 px-4 py-2 text-white transition-colors hover:bg-cyan-800 sm:self-auto"
-            >
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              <span>Record Minutes</span>
-            </button>
-          )}
+          <div className="flex shrink-0 flex-wrap items-center gap-2 self-start sm:self-auto">
+            {canViewAttendance && (
+              <Link to="/minutes/attendance" className="btn-secondary touch:min-h-11 inline-flex items-center gap-2">
+                <Users className="h-4 w-4" aria-hidden="true" />
+                <span>Attendance</span>
+              </Link>
+            )}
+            {canManage && (
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="flex items-center space-x-2 rounded-lg bg-cyan-700 px-4 py-2 text-white transition-colors hover:bg-cyan-800"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                <span>Record Minutes</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Quick Stats */}

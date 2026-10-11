@@ -1609,11 +1609,10 @@ the page not yet built.
 frontend. Each is written in the present tense ("The election detail page now
 shows…"), so nothing in the guide signals they are aspirational.
 
-- **Attendance Dashboard.** A table of members with attendance percentage,
-  meetings on leave, and voting eligibility. The calculation is real and
-  `GET /meetings/attendance/dashboard` serves the data — `meetingsServices.ts`
-  even has a `getAttendanceDashboard` client method for it — but nothing in
-  `frontend/src` calls that method. The endpoint has no consumer.
+- **Attendance Dashboard.** ✅ Built (2026-10-11), as the owner chose:
+  `/minutes/attendance` (`meetings.manage`, linked from the Minutes page)
+  renders `GET /meetings/attendance/dashboard` with period and meeting-type
+  filters, showing the server's figures without re-deriving them.
 - **Send Report Email.** A button on the election detail page to mail
   round-by-round results. The string appears nowhere in the frontend.
 - **Upcoming Business Meetings.** A section on the election detail page listing
