@@ -960,6 +960,51 @@ export interface MemberDues {
   waivedAt?: string;
   waiveReason?: string;
   notes?: string;
+  /** The member's display name. Sent by the list endpoint only. */
+  memberName?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** `POST /finance/dues-schedules`. Blank optional fields are omitted. */
+export interface DuesScheduleCreatePayload {
+  name: string;
+  amount: string;
+  frequency: DuesFrequency;
+  /** UTC instant of the due date. */
+  dueDate: string;
+  notes?: string | undefined;
+}
+
+/** `PUT /finance/dues-schedules/:id`. Omitted leaves a field alone; `null` clears it. */
+export interface DuesScheduleUpdatePayload {
+  name?: string;
+  amount?: string;
+  frequency?: DuesFrequency;
+  dueDate?: string;
+  isActive?: boolean;
+  notes?: string | null;
+}
+
+/** `PUT /finance/dues/:id` — appends one payment to the member's ledger. */
+export interface DuesPaymentPayload {
+  amountPaid: string;
+  paymentMethod?: string | undefined;
+  transactionReference?: string | undefined;
+  notes?: string | undefined;
+}
+
+/** One payment in a member's dues ledger (`GET /finance/dues/:id/payments`). */
+export interface DuesPayment {
+  id: string;
+  organizationId: string;
+  memberDuesId: string;
+  amount: MonetaryAmount;
+  paymentMethod?: string | null;
+  transactionReference?: string | null;
+  notes?: string | null;
+  receivedAt: string;
+  recordedBy?: string | null;
   createdAt: string;
   updatedAt: string;
 }

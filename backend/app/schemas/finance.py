@@ -1393,6 +1393,8 @@ class MemberDuesResponse(UTCResponseBase):
     waived_at: Optional[datetime] = None
     waive_reason: Optional[str] = None
     notes: Optional[str] = None
+    # Set by the list endpoint only; a single-record write response omits it.
+    member_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

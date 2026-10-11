@@ -1084,7 +1084,7 @@ Enums:
 - `GET/POST /finance/dues-schedules`
 - `GET/PUT /finance/dues-schedules/{id}`
 - `POST /finance/dues-schedules/{id}/generate` (bulk-create member_dues for all eligible members)
-- `GET /finance/dues` (list with member/status filters)
+- `GET /finance/dues` (list with member/status filters). Each row carries `memberName` _(2026-10-11)_ — the member's display name, joined in the query, because the Treasurer reading the Dues page holds `finance.manage` but not necessarily `users.view`. The single-record write responses (payment, waive, unwaive) do not carry it; the page re-reads the list after every write
 - `PUT /finance/dues/{id}` (record payment — appends to the ledger; idempotent on `transaction_reference`; refuses `WAIVED`/`EXEMPT`)
 - `GET /finance/dues/{id}/payments` _(2026-08-02)_ — the payment ledger, oldest first. `finance.view` or `finance.manage`; a `finance.view` holder sees only their own, because the handler narrows to the caller for anyone without `finance.manage`. The only place earlier payments can be read back, since the dues record itself carries only the derived total and the newest payment's detail
 - `POST /finance/dues/{id}/waive`

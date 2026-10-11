@@ -1269,35 +1269,32 @@ Navigate to **Finance > Dues** to manage member dues and assessments.
 
 Dues management handles the collection of recurring fees from members -- annual dues, quarterly assessments, equipment fees, or any other recurring financial obligation.
 
-> **⚠️ Current release: the Dues page is read-only.** It shows schedules, the
-> collection summary and each member's dues record, and nothing else — there
-> are no **Create Dues Schedule**, **Generate Dues**, **Record Payment**,
-> **Waive** or **Reverse Waiver** buttons on it yet. Every write action
-> described in this chapter exists as an API endpoint (`POST
-/finance/dues-schedules`, `POST /finance/dues-schedules/{id}/generate`, `PUT
-/finance/dues/{id}`, `POST /finance/dues/{id}/waive`, `POST
-/finance/dues/{id}/unwaive`, `GET /finance/dues/{id}/payments`) and behaves
-> exactly as described below, but until the management UI ships they have to be
-> driven through the API. The click-paths in this chapter describe the intended
-> UI; treat them as the specification, not as what is on screen today. Tracked
-> in [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md).
+> **Built 2026-10-11.** The Dues page now carries the administration
+> described below for a `finance.manage` holder: **New schedule**, **Edit
+> schedule**, **Generate dues**, **Record payment**, **Waive**, **Reverse
+> waiver** and each member's **Payment history**. Members are listed by name.
+> A `finance.view` holder without `finance.manage` sees the list (their own
+> dues only) and the payment history, and none of the buttons.
 
 ### Dues Schedules
 
 A dues schedule defines the terms of a recurring fee:
 
-| Field                           | Description                                                                                                                 |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| **Name**                        | Description of the dues (e.g., "Annual Membership Dues", "Q1 Assessment") (max 200 characters)                              |
-| **Amount**                      | The amount each member owes per period (must be greater than zero)                                                          |
-| **Frequency**                   | How often dues are collected (see table below)                                                                              |
-| **Due Date**                    | When the current period's payment is due                                                                                    |
-| **Grace Period Days**           | Number of days after the due date before the payment is considered overdue (default: 30)                                    |
-| **Late Fee Amount**             | Optional fee assessed when payment is overdue (after the grace period)                                                      |
-| **Fiscal Year**                 | Optionally tie the schedule to a specific fiscal year                                                                       |
-| **Applies to Membership Types** | Optionally restrict dues to specific membership tiers (stored as a JSON array, e.g., only Active members, not Life members) |
-| **Is Active**                   | Whether the schedule is currently collecting dues                                                                           |
-| **Notes**                       | Optional notes about the schedule                                                                                           |
+| Field         | Description                                                                                    |
+| ------------- | ---------------------------------------------------------------------------------------------- |
+| **Name**      | Description of the dues (e.g., "Annual Membership Dues", "Q1 Assessment") (max 200 characters) |
+| **Amount**    | The amount each member owes per period (must be greater than zero)                             |
+| **Frequency** | How often dues are collected (see table below). A label: generation does not repeat on its own |
+| **Due Date**  | When the period's payment is due                                                               |
+| **Active**    | Whether the schedule is in use. Shown on Edit only; an inactive schedule cannot generate dues  |
+| **Notes**     | Optional notes about the schedule                                                              |
+
+> **Not offered on the form.** The schedule record can also hold a grace
+> period, a late fee, a fiscal year and the membership types it applies to, but
+> nothing reads them — no late fee is ever charged, the daily overdue check
+> marks unpaid dues Overdue the day after the due date with no grace period, and
+> Generate Dues bills every active member regardless of membership type. The form leaves them out rather than offer settings that
+> do nothing.
 
 ### Frequencies
 
@@ -1313,29 +1310,21 @@ A dues schedule defines the terms of a recurring fee:
 **Required Permission:** `finance.manage`
 
 1. Navigate to **Finance > Dues**.
-2. Click **Create Dues Schedule**.
-3. Fill in the schedule details (name, amount, frequency, due date, etc.).
-4. Optionally set a **grace period** (default: 30 days) and **late fee amount**.
-5. Optionally restrict the schedule to specific **membership types** using the multi-select.
-6. Click **Save**.
+2. Click **New schedule**.
+3. Enter the name, the amount per member, the frequency and the due date, and optionally notes.
+4. Click **Create schedule**. The new schedule is selected; it has billed nobody yet.
 
-> **Corrected 2026-08-12.** Not built. See
-> [Finance — Five Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#finance--five-guide-sections-with-no-screen-2026-08-09),
-> which records what exists behind each of these: an API, a store
-> action, or types — but no page and no control that reaches them.
-> The steps above describe the intended design.
->
-> `financeStore.createDuesSchedule` exists; no component calls it.
+To change a schedule, select it and click **Edit schedule**. Changes affect dues generated afterwards only; dues already generated keep their amount and due date. Untick **Active** to retire a schedule — it stays in the list, marked inactive, and can be reactivated.
 
 ### Generating Member Dues
 
 After creating a schedule, you need to generate individual dues records for each member:
 
-1. On the **Finance > Dues** page, find the dues schedule.
-2. Click **Generate Dues**.
+1. On the **Finance > Dues** page, select the dues schedule.
+2. Click **Generate dues** and confirm.
 3. The system queries all active users in your organization, checks whether each member already has a dues record for this schedule (idempotency guard), and creates a new record for each member who does not already have one.
 4. Each generated record has a **Pending** status with the full `amountDue` from the schedule and the `dueDate` from the schedule.
-5. The system returns the count of newly generated records.
+5. A message reports how many members were billed — or that every active member already had dues for this schedule.
 
 > **Hint:** Run the **Generate Dues** action at the beginning of each dues period. For annual dues, generate at the start of the fiscal year. For quarterly dues, generate at the start of each quarter. The system is idempotent -- running it again will not create duplicates.
 
@@ -1346,7 +1335,7 @@ After creating a schedule, you need to generate individual dues records for each
 | **Pending** | Payment is expected but not yet received                                                                           |
 | **Paid**    | Full payment has been received (`amountPaid >= amountDue`)                                                         |
 | **Partial** | A partial payment has been received (`amountPaid > 0` but less than `amountDue`). The remaining balance is tracked |
-| **Overdue** | The due date plus grace period has passed without full payment                                                     |
+| **Overdue** | The due date has passed with nothing paid (a daily check moves Pending to Overdue; Partial stays Partial)          |
 | **Waived**  | The dues have been waived by an officer (e.g., financial hardship, service credit)                                 |
 | **Exempt**  | The member is exempt from this dues schedule (e.g., Life members exempt from annual dues)                          |
 
@@ -1354,10 +1343,10 @@ After creating a schedule, you need to generate individual dues records for each
 
 **Required Permission:** `finance.manage`
 
-1. On the **Finance > Dues** page, find the member's dues record.
-2. Click on the record to update it.
-3. Enter the **amount paid** (must be greater than zero), **payment method**, and optionally a **transaction reference** (check number, receipt number, etc.) and **notes**.
-4. Click **Save**.
+1. On the **Finance > Dues** page, find the member's dues record. **Record payment** is offered while the dues are Pending, Partial or Overdue.
+2. Click **Record payment**. The amount is prefilled with what is still owed.
+3. Adjust the **amount received** (must be greater than zero), and optionally choose a **method** and enter a **reference** (check number, receipt number) and **notes**.
+4. Click **Record payment**.
 
 Every payment is recorded as its own entry in the member's payment history. The
 amount paid shown on the dues record is the **sum of that history**, so if the
@@ -1383,9 +1372,10 @@ erases what the previous payment said.
 
 **Required Permission:** `finance.view`
 
-Each member's dues record keeps the full list of payments received against it --
-amount, method, reference, notes, when it was received, and which officer entered
-it. The dues record itself shows only the running total and the most recent
+Click the history icon on a member's row to open **Payment history**: the full
+list of payments received against those dues -- amount, method, reference, notes
+and when it was received. (The record also stores which officer entered each
+payment; the dialog does not show it yet.) The dues record itself shows only the running total and the most recent
 payment's detail, so the history is where you go to answer "what did they
 actually pay, and when?"
 
@@ -1399,12 +1389,12 @@ bounced.
 
 To waive a member's dues:
 
-1. Find the member's dues record.
+1. Find the member's dues record (it must still be owing).
 2. Click **Waive**.
 3. Enter a **reason** for the waiver (required).
-4. Confirm.
+4. Click **Waive dues**.
 
-The record is marked as **Waived** with the officer's ID, timestamp, and reason recorded for audit purposes.
+The record is marked as **Waived** with the officer's ID, timestamp, and reason recorded. You cannot waive your own dues; the request is refused and the message says so.
 
 Once dues are waived, **payments against them are refused.** They are no longer
 owing, so recording money against them would quietly cancel the waiver — which
@@ -1418,15 +1408,19 @@ figures with nothing recording that it had ever been waived.
 If dues were waived by mistake -- or waived and then paid anyway -- reverse the
 waiver before recording the payment:
 
-1. Find the member's dues record.
-2. Click **Reverse Waiver**.
+1. Find the member's dues record (it shows **Reverse waiver** only while Waived).
+2. Click **Reverse waiver**.
 3. Enter a **reason** for the reversal (required).
-4. Confirm.
+4. Click **Reverse waiver**.
 
 The record returns to whatever its payment history says: **Pending** if nothing
 was ever paid, **Partial** or **Paid** if something was. The original waiver
-reason is not silently discarded -- it is written into the audit log alongside
-your reason for reversing, so both halves of the decision survive.
+reason is erased from the record, and neither it nor your reason for reversing
+is copied into the audit log, which records only that the waiver was reversed
+and the status it returned to. Free-text reasons may carry personal information
+and must stay eligible for privacy scrubbing, which the immutable audit log is
+not. _(Corrected 2026-10-11: this paragraph used to say the reasons were kept
+in the audit log; they have not been since 2026-08-13.)_
 
 ### Dues Summary
 
@@ -1458,12 +1452,12 @@ The summary can be filtered by a specific dues schedule using the optional `sche
 | Two cash payments of the same amount, neither with a reference     | Both are recorded. Without a reference there is nothing to tell a duplicate from a genuine second payment, and dropping one would lose money              |
 | A later payment entered without a method or notes                  | Recorded as-is. Earlier payments keep their own detail; blank fields no longer overwrite them                                                             |
 | Payment recorded against waived or exempt dues                     | Refused with an explanatory error. Reverse the waiver first (see Reversing a Waiver)                                                                      |
-| Waiver reversed                                                    | Status returns to whatever the payment history says -- Pending, Partial or Paid. The original waive reason is written to the audit log, not discarded     |
+| Waiver reversed                                                    | Status returns to whatever the payment history says -- Pending, Partial or Paid. The original waive reason is erased and not copied to the audit log      |
 | Partial payment followed by waiver                                 | The waiver sets the status to Waived. The amount already paid is not refunded -- this is an administrative decision                                       |
-| Dues schedule with no membership type filter                       | Dues are generated for all active users in the organization                                                                                               |
+| Which members Generate Dues bills                                  | All active users in the organization. No membership-type filter is applied                                                                                |
 | Changing the dues amount on a schedule                             | Only affects newly generated records. Existing member dues records retain the original `amountDue`                                                        |
 | Member status changes to inactive                                  | Existing dues records are not automatically waived or cancelled. An officer should manually waive them if appropriate                                     |
-| Late fee application                                               | The `lateFeeApplied` field on the member dues record tracks the late fee amount. Late fee logic is managed by the officer updating the record             |
+| Late fee application                                               | Not automated, and not settable from the Dues page. The `lateFeeApplied` field exists on the record but nothing writes it                                 |
 | Dues summary with no records                                       | Returns zeroes for all metrics and 0% collection rate                                                                                                     |
 
 ---
