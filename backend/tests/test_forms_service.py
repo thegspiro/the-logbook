@@ -1,8 +1,9 @@
 """
 Unit tests for pure helpers in the forms service
 (app/services/forms_service.py). DB-free, except
-``TestConcurrentDuplicateSubmissionCheck`` (marked ``integration``), which
-needs two real, independently-committing database sessions to reproduce a
+``TestConcurrentDuplicateSubmissionCheck`` and
+``TestOneSubmissionPerPersonAcrossBothPaths`` (marked ``integration``), which
+need real, independently-committing database sessions to reproduce a
 REPEATABLE READ snapshot race and so cannot run in the no-DB unit job.
 
 Focus: FORM-6 — a required field is satisfied only by a non-empty value, not
@@ -341,6 +342,59 @@ async def test_public_form_rejects_repeat_member_submission():
     assert error == "You have already submitted this form"
     assert db.execute.await_count == 2
     db.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_in_app_submit_rejects_repeat_member_submission():
+    """FORM-10: "one submission per person" holds on the signed-in path too."""
+    db = AsyncMock()
+    prior_result = MagicMock()
+    prior_result.scalar_one_or_none.return_value = "existing-submission"
+    db.execute.side_effect = [MagicMock(), prior_result]
+    service = FormsService(db)
+    service.get_form_by_id = AsyncMock(
+        return_value=SimpleNamespace(
+            id="form-id",
+            status=FormStatus.PUBLISHED,
+            fields=[],
+            allow_multiple_submissions=False,
+        )
+    )
+
+    result, error = await service.submit_form(
+        uuid.uuid4(), uuid.uuid4(), {}, submitted_by="member-id"
+    )
+
+    assert result is None
+    assert error == "You have already submitted this form"
+    # The Form row lock, then the locking duplicate read (pitfall #27).
+    assert db.execute.await_count == 2
+    db.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_in_app_submit_skips_the_check_when_repeats_are_allowed():
+    db = AsyncMock()
+    db.add = MagicMock()
+    service = FormsService(db)
+    service.get_form_by_id = AsyncMock(
+        return_value=SimpleNamespace(
+            id="form-id",
+            status=FormStatus.PUBLISHED,
+            fields=[],
+            allow_multiple_submissions=True,
+        )
+    )
+    service._process_integrations = AsyncMock()
+
+    result, error = await service.submit_form(
+        uuid.uuid4(), uuid.uuid4(), {}, submitted_by="member-id"
+    )
+
+    assert error is None
+    assert result is not None
+    db.execute.assert_not_awaited()
+    db.add.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -745,6 +799,86 @@ class TestConcurrentDuplicateSubmissionCheck:
                 f"expected exactly one submission to succeed, got "
                 f"{len(successes)} -- the duplicate check let both through"
             )
+            assert rejections == ["You have already submitted this form"]
+        finally:
+            await session_a.rollback()
+            await session_b.rollback()
+            await session_a.close()
+            await session_b.close()
+            await _cleanup_org(org_id)
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("_initialize_database")
+class TestOneSubmissionPerPersonAcrossBothPaths:
+    """FORM-10: the owner chose one rule for both submit paths."""
+
+    async def _no_repeat_form(self, org_id: str) -> tuple[str, str]:
+        async with database_manager.session_factory() as setup:
+            form = Form(
+                organization_id=org_id,
+                name="One Per Member",
+                status=FormStatus.PUBLISHED,
+                is_public=True,
+                require_authentication=True,
+                allow_multiple_submissions=False,
+                public_slug=uuid.uuid4().hex[:12],
+            )
+            setup.add(form)
+            await setup.commit()
+            return str(form.id), form.public_slug
+
+    async def test_a_public_submission_blocks_an_in_app_one(self):
+        org_id, user_id = str(uuid.uuid4()), str(uuid.uuid4())
+        async with database_manager.session_factory() as setup:
+            await _insert_org_and_member(setup, org_id, user_id, "XP")
+            await setup.commit()
+        try:
+            form_id, slug = await self._no_repeat_form(org_id)
+            async with database_manager.session_factory() as session:
+                svc = FormsService(session)
+                first, error = await svc.submit_public_form(
+                    slug=slug, data={}, submitted_by=user_id
+                )
+                assert error is None
+                assert first is not None
+
+                second, error = await svc.submit_form(
+                    uuid.UUID(form_id), uuid.UUID(org_id), {}, submitted_by=user_id
+                )
+                assert second is None
+                assert error == "You have already submitted this form"
+        finally:
+            await _cleanup_org(org_id)
+
+    async def test_two_concurrent_in_app_submissions_never_both_succeed(self):
+        org_id, user_id = str(uuid.uuid4()), str(uuid.uuid4())
+        async with database_manager.session_factory() as setup:
+            await _insert_org_and_member(setup, org_id, user_id, "CC")
+            await setup.commit()
+        form_id, _ = await self._no_repeat_form(org_id)
+
+        session_a = database_manager.session_factory()
+        session_b = database_manager.session_factory()
+        try:
+            # Pin both snapshots first, as the public-path race test does.
+            pin_snapshot = text("SELECT id FROM organizations WHERE id = :o")
+            await session_a.execute(pin_snapshot, {"o": org_id})
+            await session_b.execute(pin_snapshot, {"o": org_id})
+
+            async def attempt(session):
+                return await FormsService(session).submit_form(
+                    uuid.UUID(form_id), uuid.UUID(org_id), {}, submitted_by=user_id
+                )
+
+            outcomes = await asyncio.gather(
+                attempt(session_a), attempt(session_b), return_exceptions=True
+            )
+            for outcome in outcomes:
+                assert not isinstance(outcome, BaseException), repr(outcome)
+            successes = [r for r, e in outcomes if r is not None]
+            rejections = [e for r, e in outcomes if r is None]
+            assert len(successes) == 1
             assert rejections == ["You have already submitted this form"]
         finally:
             await session_a.rollback()

@@ -341,16 +341,16 @@ submit this form** notice above the first question, naming the department,
 with its **Sign in** button.]_
 -->
 
-> **There is no "one submission per person" setting to switch on.** The form
-> builder has no control for it, and every form a department creates allows
-> multiple submissions — so a public form will offer _Submit Another Response_
-> after each one. A form that was set to one submission per person through the
-> API is held to it on the public link, even when two submissions arrive at the
-> same moment; the limit does not apply to submissions made from inside the
-> app. Such a form always needs a signed-in member, because that is the only way
-> to tell whether someone has already answered, so its **Allow submissions
-> without signing in** box is greyed out with the reason under it. See
-> [Known Limitations](../KNOWN_LIMITATIONS.md).
+> **One submission per person** _(2026-10-11)_. Tick **One submission per
+> person** when creating a form, or at the top of the form editor's **Builder**
+> tab, to let each member answer once. The limit holds everywhere a member can
+> submit — inside the app and through the public link — and a member who
+> answered one way is refused the other with _"You have already submitted this
+> form"_, even when two submissions arrive at the same moment. Leave it unticked
+> for anything members fill in repeatedly (a shift report, a recurring
+> acknowledgment). Such a form always needs a signed-in member, because that is
+> the only way to tell whether someone has already answered, so its **Allow
+> submissions without signing in** box is greyed out with the reason under it.
 
 **Each public form takes a limited number of submissions a day.** The ceiling
 is a server setting (`PUBLIC_FORM_DAILY_LIMIT`, 500 per form per day unless the

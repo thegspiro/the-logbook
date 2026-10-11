@@ -124,6 +124,13 @@ submissions only from a signed-in member of its organization even when
 form with `allow_multiple_submissions = false` needs a session whatever
 `require_authentication` says, because "once each" needs a stable identity.
 
+**"Once each" is one rule on both submit paths** _(2026-10-11, FORM-10)_.
+`FormsService._already_submitted` — a `FOR UPDATE` lock on the form row and a
+locking duplicate read (CLAUDE.md pitfall #27) — is called by the public path
+and by the in-app `POST /forms/{id}/submit` alike, matching any prior
+submission by `submitted_by` whichever path made it. The form editor and the
+Create Form dialog set it with a **One submission per person** checkbox.
+
 - **The Share dialog's "Allow submissions without signing in" checkbox** sends
   `require_authentication` through `PATCH /forms/{id}` (#2811). The backend had
   always accepted the field; only the control was missing, so before this every

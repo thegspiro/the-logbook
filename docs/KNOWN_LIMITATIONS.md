@@ -3645,6 +3645,15 @@ push vendor to matter at all.
 
 ## FORM-10-related — `allow_multiple_submissions` Is Enforced Only On The Public Submit Path (2026-09-06)
 
+> ✅ **Resolved (2026-10-11), as the owner chose: enforce on both paths.**
+> `FormsService.submit_form` now runs the same locked duplicate check
+> (`_already_submitted`) as the public path, and a prior submission by the same
+> member on either path counts. Accepted cost: a form set to one submission
+> per person through the API but used for repeat in-app submissions now
+> refuses the second one with _"You have already submitted this form"_; untick
+> **One submission per person** on such a form. The history below is kept as
+> the record.
+
 `Form.allow_multiple_submissions` is a single, general-purpose column with no
 hint in the schema that it applies to one submission channel only, but only
 `public/forms.py`'s `submit_public_form` (and the service method behind it)
@@ -3670,6 +3679,12 @@ that a form-specific business rule silently doesn't apply to one of its two
 submission channels.
 
 ## FORM-10-related — `allow_multiple_submissions` Has No Control In The Form Builder (2026-09-06)
+
+> ✅ **Resolved (2026-10-11), as the owner chose: add the control.** A **One
+> submission per person** checkbox in the Create Form dialog and at the top of
+> the form editor's Builder tab writes `allow_multiple_submissions`; with the
+> scope entry above resolved, it governs both submit paths. The default stays
+> "repeats allowed". The history below is kept as the record.
 
 Distinct from the scope question above, and found while documenting it rather
 than by the review pass: **nothing in the frontend writes
