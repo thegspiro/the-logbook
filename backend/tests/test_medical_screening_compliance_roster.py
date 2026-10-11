@@ -114,6 +114,21 @@ async def test_the_filter_narrows_rows_but_not_totals():
     assert roster.compliant == 2
 
 
+async def test_no_active_requirement_grades_nobody():
+    """An empty requirement set is not a passing one: no row reads compliant,
+    every total is zero, and the compliant filter matches nobody."""
+    roster = await _roster(requirements=[])
+
+    assert {row.standing for row in roster.rows} == {"not_applicable"}
+    assert (roster.not_compliant, roster.expiring_soon, roster.compliant) == (
+        0,
+        0,
+        0,
+    )
+    assert roster.total_subjects == 5
+    assert (await _roster(standing="compliant", requirements=[])).rows == []
+
+
 async def test_a_row_matches_the_per_subject_summary():
     """The roster's counts for a subject equal get_compliance_status's."""
     service = MedicalScreeningService(AsyncMock())

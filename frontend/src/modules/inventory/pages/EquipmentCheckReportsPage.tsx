@@ -247,8 +247,11 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
                   <span className="text-theme-text-muted">Checks:</span>
                   <span className="text-theme-text-secondary">
                     {/* Expected counts from the fleet board's rule (one per shift
-                        per checklist), so the two screens agree. */}
-                    {a.checksExpected > 0 ? `${a.checksCompleted} of ${a.checksExpected} expected` : a.checksCompleted}
+                        per checklist), so the two screens agree; the done count
+                        comes from that same shift-dated set so the pair reconciles. */}
+                    {a.checksExpected > 0
+                      ? `${a.checksExpectedCompleted ?? a.checksCompleted} of ${a.checksExpected} expected`
+                      : a.checksCompleted}
                   </span>
                   {(a.checksMissed ?? 0) > 0 && (
                     <>

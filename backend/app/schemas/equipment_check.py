@@ -612,6 +612,12 @@ class ApparatusComplianceRecord(BaseModel):
     # One per shift per applicable checklist in the range, owed ones only —
     # the fleet board's rule (EC-11).
     checks_expected: int = 0
+    # How many of those expected checks were done, counted over the same
+    # shift-dated set. checks_completed counts submissions by when they were
+    # filed, so a check filed the evening before a shift on the range's first
+    # day is expected here but outside checks_completed; this is the number
+    # "n of m expected" must use.
+    checks_expected_completed: int = 0
     # Expected checks with nothing submitted, on a past shift.
     checks_missed: int = 0
     pass_count: int = 0

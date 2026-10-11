@@ -8,10 +8,10 @@
  * everyone.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { medicalScreeningService } from '../services/api';
-import type { ComplianceRoster as Roster, ComplianceStanding } from '../types';
+import type { ComplianceRoster as Roster, ComplianceRowStanding, ComplianceStanding } from '../types';
 import type { ComplianceSubject } from './SubjectCompliancePanel';
 import { getErrorMessage } from '../../../utils/errorHandling';
 
@@ -22,16 +22,18 @@ const FILTERS: ReadonlyArray<readonly [ComplianceStanding | '', string]> = [
   ['compliant', 'Compliant'],
 ];
 
-const STANDING_LABELS: Record<ComplianceStanding, string> = {
+const STANDING_LABELS: Record<ComplianceRowStanding, string> = {
   not_compliant: 'Not compliant',
   expiring_soon: 'Expiring soon',
   compliant: 'Compliant',
+  not_applicable: 'Not applicable',
 };
 
-const STANDING_CLASSES: Record<ComplianceStanding, string> = {
+const STANDING_CLASSES: Record<ComplianceRowStanding, string> = {
   not_compliant: 'text-red-700 dark:text-red-300',
   expiring_soon: 'text-amber-700 dark:text-amber-300',
   compliant: 'text-green-700 dark:text-green-300',
+  not_applicable: 'text-theme-text-muted',
 };
 
 interface ComplianceRosterProps {
@@ -43,16 +45,21 @@ export const ComplianceRoster: React.FC<ComplianceRosterProps> = ({ onOpen }) =>
   const [roster, setRoster] = useState<Roster | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Switching the filter while a request is in flight must not let the older
+  // response land last and show its rows under the newer filter's name.
+  const latestRequest = useRef(0);
 
   const load = useCallback(async (filter: ComplianceStanding | '') => {
+    const request = ++latestRequest.current;
     setLoading(true);
     setLoadError(null);
     try {
-      setRoster(await medicalScreeningService.getComplianceRoster(filter || undefined));
+      const result = await medicalScreeningService.getComplianceRoster(filter || undefined);
+      if (request === latestRequest.current) setRoster(result);
     } catch (err: unknown) {
-      setLoadError(getErrorMessage(err, 'Could not load compliance.'));
+      if (request === latestRequest.current) setLoadError(getErrorMessage(err, 'Could not load compliance.'));
     } finally {
-      setLoading(false);
+      if (request === latestRequest.current) setLoading(false);
     }
   }, []);
 

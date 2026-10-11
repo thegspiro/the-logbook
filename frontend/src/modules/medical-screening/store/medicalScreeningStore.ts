@@ -9,6 +9,7 @@ import {
   createCreateAction,
   createUpdateAction,
   createDeleteAction,
+  handleStoreError,
 } from '../../../utils/storeHelpers';
 import type {
   ScreeningRequirement,
@@ -54,6 +55,27 @@ interface MedicalScreeningState {
   clearCompliance: () => void;
   fetchExpiringScreenings: (days?: number) => Promise<void>;
 }
+
+// One summary is on screen at a time. An officer who opens one subject and
+// then another has two reads in flight; whichever lands last would otherwise
+// win the shared `compliance` field (and clear the loading flag) even when it
+// is the earlier pick, leaving the selected subject's panel blank.
+let latestComplianceRequest = 0;
+
+const fetchComplianceFor =
+  (set: (partial: Partial<MedicalScreeningState>) => void, read: (id: string) => Promise<ComplianceSummary>) =>
+  async (id: string): Promise<void> => {
+    const request = ++latestComplianceRequest;
+    set({ complianceLoading: true, error: null });
+    try {
+      const compliance = await read(id);
+      if (request === latestComplianceRequest) set({ compliance, complianceLoading: false });
+    } catch (err: unknown) {
+      if (request === latestComplianceRequest) {
+        set({ complianceLoading: false, error: handleStoreError(err, 'Failed to load compliance') });
+      }
+    }
+  };
 
 export const useMedicalScreeningStore = create<MedicalScreeningState>((set) => ({
   requirements: [],
@@ -121,23 +143,17 @@ export const useMedicalScreeningStore = create<MedicalScreeningState>((set) => (
   // Compliance. Own loading flag for the same reason as the expiring list
   // below: the per-member panel lives inside the compliance tab, which the page
   // unmounts while the shared isLoading is raised.
-  fetchUserCompliance: createFetchAction(
-    set,
-    (userId: string) => medicalScreeningService.getUserCompliance(userId),
-    'compliance',
-    'Failed to load compliance',
-    'complianceLoading'
+  fetchUserCompliance: fetchComplianceFor(set, (userId) => medicalScreeningService.getUserCompliance(userId)),
+
+  fetchProspectCompliance: fetchComplianceFor(set, (prospectId) =>
+    medicalScreeningService.getProspectCompliance(prospectId)
   ),
 
-  fetchProspectCompliance: createFetchAction(
-    set,
-    (prospectId: string) => medicalScreeningService.getProspectCompliance(prospectId),
-    'compliance',
-    'Failed to load compliance',
-    'complianceLoading'
-  ),
-
-  clearCompliance: () => set({ compliance: null }),
+  // Retires any read still in flight, so it cannot repopulate a closed panel.
+  clearCompliance: () => {
+    latestComplianceRequest += 1;
+    set({ compliance: null, complianceLoading: false });
+  },
 
   // Its own loading flag, not the shared isLoading. MedicalScreeningPage only
   // renders the compliance panel while isLoading is false, so a fetch that

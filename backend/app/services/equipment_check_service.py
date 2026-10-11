@@ -5120,8 +5120,10 @@ class EquipmentCheckService:
         ``checks_expected`` / ``checks_missed`` per apparatus and the report's
         ``overdue_count`` come from the fleet board's own rule — one expected
         check per shift per applicable checklist, dated by the shift — so the
-        report and the board agree (EC-11). The completed and pass/fail counts
-        are the checks submitted in the range.
+        report and the board agree (EC-11). ``checks_expected_completed`` is
+        counted over that same shift-dated set, so "n of m expected"
+        reconciles. ``checks_completed`` and the pass/fail counts are the
+        checks submitted in the range, dated by when they were filed.
         """
         org_tz, date_from_start, date_to_end = await self._report_window(
             organization_id, date_from, date_to, default_days=30
@@ -5172,6 +5174,7 @@ class EquipmentCheckService:
                 "last_status": None,
                 "checks_completed": 0,
                 "checks_expected": 0,
+                "checks_expected_completed": 0,
                 "checks_missed": 0,
                 "pass_count": 0,
                 "fail_count": 0,
@@ -5203,6 +5206,7 @@ class EquipmentCheckService:
             overdue_count += counts["missed"]
             if key in app_stats:
                 app_stats[key]["checks_expected"] = counts["expected"]
+                app_stats[key]["checks_expected_completed"] = counts["completed"]
                 app_stats[key]["checks_missed"] = counts["missed"]
 
         unit_keys = await self._check_unit_keys(organization_id, checks)

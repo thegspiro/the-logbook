@@ -577,6 +577,11 @@ class MedicalScreeningService:
         — expired or never recorded), ``expiring_soon`` (all met, at least one
         lapsing within 30 days) or ``compliant`` (all met, none lapsing soon).
         The totals always describe the whole roster.
+
+        With no active requirement every row is ``not_applicable`` and every
+        total is zero: an empty requirement set grades nobody, so it must not
+        report the department as compliant (and ``?standing=compliant`` then
+        matches nobody).
         """
         requirements = await self.list_requirements(organization_id, is_active=True)
         subjects = await self.list_subjects(organization_id)
@@ -612,9 +617,13 @@ class MedicalScreeningService:
                         non_compliant_count=not_met,
                         expiring_soon_count=expiring,
                         standing=(
-                            "not_compliant"
-                            if not_met
-                            else "expiring_soon" if expiring else "compliant"
+                            "not_applicable"
+                            if not requirements
+                            else (
+                                "not_compliant"
+                                if not_met
+                                else "expiring_soon" if expiring else "compliant"
+                            )
                         ),
                     )
                 )

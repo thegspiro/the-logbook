@@ -70,6 +70,30 @@ describe('ComplianceRoster', () => {
     expect(await screen.findByText('Nobody matches this filter.')).toBeInTheDocument();
   });
 
+  it('keeps the rows of the filter on screen when an older request lands last', async () => {
+    const user = userEvent.setup();
+    render(<ComplianceRoster onOpen={vi.fn()} />);
+    await screen.findByText('Cal Cole');
+
+    let resolveOverdue: (value: Roster) => void = () => undefined;
+    mockGetRoster.mockImplementationOnce(
+      () =>
+        new Promise<Roster>((resolve) => {
+          resolveOverdue = resolve;
+        })
+    );
+    mockGetRoster.mockResolvedValueOnce(roster({ rows: [] }));
+    await user.selectOptions(screen.getByLabelText('Show'), 'not_compliant');
+    await user.selectOptions(screen.getByLabelText('Show'), 'compliant');
+    expect(await screen.findByText('Nobody matches this filter.')).toBeInTheDocument();
+
+    resolveOverdue(roster());
+    await waitFor(() => expect(mockGetRoster).toHaveBeenCalledTimes(3));
+    await new Promise((settle) => setTimeout(settle, 0));
+    expect(screen.queryByText('Cal Cole')).not.toBeInTheDocument();
+    expect(screen.getByText('Nobody matches this filter.')).toBeInTheDocument();
+  });
+
   it('opens a row as the subject it names', async () => {
     const onOpen = vi.fn();
     const user = userEvent.setup();
@@ -81,7 +105,7 @@ describe('ComplianceRoster', () => {
 
   it('does not present a department with no requirements as compliant', async () => {
     mockGetRoster.mockResolvedValue(
-      roster({ total_requirements: 0, not_compliant: 0, expiring_soon: 0, compliant: 3, rows: [] })
+      roster({ total_requirements: 0, not_compliant: 0, expiring_soon: 0, compliant: 0, rows: [] })
     );
     render(<ComplianceRoster onOpen={vi.fn()} />);
 

@@ -255,6 +255,11 @@ class ComplianceSummary(BaseModel):
 
 
 ComplianceStanding = Literal["not_compliant", "expiring_soon", "compliant"]
+# A row's standing adds "not_applicable": with no active requirement nobody is
+# graded, and an empty requirement set must not read as a compliant one.
+ComplianceRowStanding = Literal[
+    "not_compliant", "expiring_soon", "compliant", "not_applicable"
+]
 
 
 class ComplianceRosterRow(BaseModel):
@@ -270,7 +275,7 @@ class ComplianceRosterRow(BaseModel):
     compliant_count: int
     non_compliant_count: int
     expiring_soon_count: int
-    standing: ComplianceStanding
+    standing: ComplianceRowStanding
 
 
 class ComplianceRoster(BaseModel):
