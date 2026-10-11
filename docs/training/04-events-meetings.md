@@ -855,6 +855,18 @@ for edits made from now on:
 > all future events** may have its later occurrences collapsed onto one date,
 > which cannot be recovered from the stored rows. Fix or recreate any that look
 > wrong — see `docs/UPGRADING.md` and `docs/KNOWN_LIMITATIONS.md`.
+>
+> **Finding them** _(2026-10-11)_. Nothing is repaired automatically — fixing
+> a series moves events members have RSVP'd to, so it is an officer's call.
+> Your administrator can list the series that look affected with
+> `scripts/report_recurring_series_drift.py` (add `--org "<department>"`). It
+> changes nothing. For each series it shows occurrences **1 hour off** or
+> **1 day off** the series' own pattern, with the stored and the expected
+> time, and series **COLLAPSED** onto one start, with the pattern dates no
+> occurrence holds any more — where the collapsed ones belong. Each line gives
+> the number of RSVPs, so you know whom to tell when you move it. Only
+> upcoming occurrences are listed unless `--include-past` is added; an
+> occurrence you moved by hand by some other amount is not listed.
 
 ### Recurring Event Edge Cases
 

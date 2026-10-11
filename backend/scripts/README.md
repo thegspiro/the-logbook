@@ -292,6 +292,24 @@ docker exec -it intranet-backend python scripts/backfill_minutes_meeting_dates.p
 docker exec -it intranet-backend python scripts/backfill_minutes_meeting_dates.py --apply
 ```
 
+### `report_recurring_series_drift.py`
+
+**Report only — writes nothing** (W18-3, the owner's decision: officers fix
+affected series by hand, because a repair moves events members RSVP'd to).
+Lists recurring series that the two pre-W18 defects may have left wrong:
+occurrences **1 hour off** (stepped in UTC across a daylight-saving change) or
+**1 day off** (a custom-weekday, Nth-weekday or skip-date pattern matched on
+the UTC day) the date the series' own stored pattern gives under the fixed
+generator, and series **collapsed** onto one start by "This and all future
+events", with the pattern dates no occurrence holds. Each occurrence shows its
+RSVP count. Upcoming occurrences only unless `--include-past`; moves no defect
+explains are left out unless `--all-differences`.
+
+```bash
+docker exec -it intranet-backend python scripts/report_recurring_series_drift.py
+docker exec -it intranet-backend python scripts/report_recurring_series_drift.py --org "Falls Church" --include-past
+```
+
 ### `rotate_applicant_status_tokens.py`
 
 Revokes the applicant status tokens printed on applicant badges before W17-3
