@@ -138,3 +138,98 @@ describe('CommandPalette module gating', () => {
     expect(screen.getByText('Facilities')).toBeInTheDocument();
   });
 });
+
+describe('CommandPalette hub destinations', () => {
+  beforeEach(() => {
+    enabledModules.current = ALL;
+    permissions.current = new Set(['training.manage', 'events.manage', 'members.manage', 'storefront.manage']);
+    window.history.replaceState({}, '', '/');
+  });
+
+  const search = async (text: string) => {
+    const user = userEvent.setup();
+    renderWithRouter(<CommandPalette />);
+    open();
+    await user.type(screen.getByRole('textbox', { name: 'Search commands' }), text);
+    return user;
+  };
+
+  // Some fifty of them; listed up front they would bury the pages the empty
+  // palette is for.
+  it('keeps them out of the palette until something is typed', () => {
+    renderWithRouter(<CommandPalette />);
+    open();
+
+    expect(screen.queryByText('Training Admin')).not.toBeInTheDocument();
+    expect(screen.queryByText('Submissions to Review')).not.toBeInTheDocument();
+  });
+
+  it('finds a training destination by name and opens it in its area', async () => {
+    const user = await search('submissions');
+
+    await user.click(screen.getByRole('option', { name: /Submissions to Review/ }));
+
+    expect(window.location.pathname).toBe('/training/admin');
+    expect(window.location.search).toBe('?page=records&tab=submissions');
+  });
+
+  it('finds a destination by what it holds, not only by its name', async () => {
+    permissions.current.add('users.create');
+    await search('csv file');
+
+    expect(screen.getByRole('option', { name: /Import Members/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Import Qualifications/ })).toBeInTheDocument();
+  });
+
+  // Three hubs have a "Settings": the section heading and the line under
+  // each say which is which.
+  it('tells same-named sections apart by hub and description', async () => {
+    await search('settings');
+
+    expect(screen.getByText('Events Admin')).toBeInTheDocument();
+    expect(screen.getByText('Members Admin')).toBeInTheDocument();
+    expect(screen.getByText('Store Admin')).toBeInTheDocument();
+    expect(screen.getByText('Payment methods, pricing and notices')).toBeInTheDocument();
+  });
+
+  it('opens the store console at the chosen tab', async () => {
+    const user = await search('payments that need');
+
+    await user.click(screen.getByRole('option', { name: /Payments/ }));
+
+    expect(window.location.pathname).toBe('/inventory/admin/store');
+    expect(window.location.search).toBe('?tab=payments');
+  });
+
+  it('offers nothing in a hub the member cannot open', async () => {
+    permissions.current = new Set(['events.manage']);
+    await search('submissions');
+
+    expect(screen.getByText('No results found for "submissions"')).toBeInTheDocument();
+  });
+
+  it('withholds a members tab that needs a grant of its own', async () => {
+    permissions.current = new Set(['members.manage']);
+    await search('import');
+
+    expect(screen.getByRole('option', { name: /Import Qualifications/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Import Members/ })).not.toBeInTheDocument();
+  });
+
+  it('withholds a hub whose module is off', async () => {
+    const withoutStore = new Set(ALL);
+    withoutStore.delete('storefront');
+    enabledModules.current = withoutStore;
+    await search('catalog');
+
+    expect(screen.queryByText('Store Admin')).not.toBeInTheDocument();
+  });
+
+  // Create Event and Add Member are already actions; the hub does not add a
+  // second copy of either.
+  it('offers a destination that is already an action once', async () => {
+    permissions.current = new Set(['events.manage', 'members.manage', 'users.create']);
+    await search('create event');
+    expect(screen.getAllByRole('option', { name: /Create Event/ })).toHaveLength(1);
+  });
+});

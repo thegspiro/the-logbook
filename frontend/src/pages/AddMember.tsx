@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { UserPlus, Save, X, User, MapPin, Phone, Calendar, AlertCircle, Lock, Eye, EyeOff } from 'lucide-react';
+import { Save, X, User, MapPin, Phone, Calendar, AlertCircle, Lock, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { MemberFormData } from '../types/member';
 import { userService, organizationService, roleService, locationsService } from '../services/api';
@@ -340,28 +340,11 @@ const AddMember: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
-      <header className="bg-theme-input-bg border-theme-surface-border border-b px-6 py-4 backdrop-blur-xs">
-        <div className="mx-auto max-w-4xl">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="shrink-0 rounded-lg bg-blue-600 p-2">
-                <UserPlus className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-theme-text-primary text-xl font-bold">Add New Member</h1>
-                <p className="text-theme-text-muted text-sm">Add someone to the roster</p>
-              </div>
-            </div>
-            <button
-              onClick={() => void handleCancel()}
-              className="text-theme-text-secondary hover:text-theme-text-primary touch-target-phone shrink-0 self-start text-sm transition-colors sm:self-auto"
-            >
-              ← Back to Members
-            </button>
-          </div>
-        </div>
-      </header>
+      {/* Rendered only as the Add Member tab of Members Administration, whose
+          section nav already names it; the title stays for heading navigation
+          only. The old back link duplicated the form's own Cancel, which runs
+          the same unsaved-changes check. */}
+      <h2 className="sr-only">Add New Member</h2>
 
       <div data-page-main className="mx-auto max-w-4xl py-6 sm:py-8">
         <form

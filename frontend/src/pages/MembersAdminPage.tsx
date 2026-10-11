@@ -12,7 +12,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { useNavigate } from 'react-router';
 import { userService, roleService, locationsService } from '../services/api';
 import type { Location } from '../services/api';
 import type { UserWithRoles, Role } from '../types/role';
@@ -96,8 +96,6 @@ export const MembersAdminPage: React.FC = () => {
 
   // Station lookup
   const [availableStations, setAvailableStations] = useState<Location[]>([]);
-
-  const canCreateMembers = checkPermission('users.create');
 
   useEffect(() => {
     void fetchData();
@@ -478,38 +476,10 @@ export const MembersAdminPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl py-8">
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 className="text-theme-text-primary text-2xl font-bold">Member Management</h2>
-            <p className="text-theme-text-muted mt-1 text-sm">Edit member details, assign roles, and reset passwords</p>
-          </div>
-          {canCreateMembers && (
-            // This page is the admin hub's "manage" tab, so Add Member selects
-            // the hub's sibling tab rather than routing anywhere new. The old
-            // target, /admin/members/add, matched no route at all — only the
-            // exact path /admin/members is redirected — so the button fell
-            // through to the catch-all and bounced the user to the dashboard.
-            <Link
-              to="/members/admin?tab=add"
-              className="btn-primary inline-flex shrink-0 items-center self-start rounded-md text-sm font-medium sm:self-auto"
-            >
-              <svg
-                className="mr-2 -ml-1 h-5 w-5"
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                aria-hidden="true"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              Add Member
-            </Link>
-          )}
-        </div>
+        {/* The hub's section nav already names this page, and its header carries
+           the one red Add Member action; a second here broke the frame's
+           one-primary rule. The title stays for heading navigation only. */}
+        <h2 className="sr-only">Member Management</h2>
 
         {/* Former members still holding property (member lifecycle): the
             same panel the Inventory Member Equipment page shows. */}

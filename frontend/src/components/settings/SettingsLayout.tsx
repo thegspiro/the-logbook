@@ -159,27 +159,34 @@ export function SettingsLayout<K extends string, S extends string = string>({
             do not fit one row on a
             small phone, and a non-shrinking aside beside a shrinking title
             crushes the title first. Below sm the aside drops to its own line. */}
+        {/* Inside a hub the hub's own header and section nav already name this
+            screen, so a second icon tile, <h1> and subtitle would repeat them
+            and give the page two top-level headings. The title stays for
+            heading navigation only; the controls beside it stay as they are. */}
         <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            {onBack ? (
-              <button
-                type="button"
-                onClick={onBack}
-                aria-label={backLabel}
-                className="btn-icon text-theme-text-muted hover:text-theme-text-primary shrink-0"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </button>
-            ) : null}
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-800">
-              <SettingsIcon className="h-6 w-6 text-white" aria-hidden="true" />
+          {inHub ? <h2 className="sr-only">{title}</h2> : null}
+          {!inHub && (
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              {onBack ? (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  aria-label={backLabel}
+                  className="btn-icon text-theme-text-muted hover:text-theme-text-primary shrink-0"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </button>
+              ) : null}
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-800">
+                <SettingsIcon className="h-6 w-6 text-white" aria-hidden="true" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-theme-text-primary text-2xl leading-8 font-bold">{title}</h1>
+                <p className="text-theme-text-muted mt-0.5 text-sm">{subtitle ?? current?.description}</p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <h1 className="text-theme-text-primary text-2xl leading-8 font-bold">{title}</h1>
-              <p className="text-theme-text-muted mt-0.5 text-sm">{subtitle ?? current?.description}</p>
-            </div>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          )}
+          <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
             {headerAside}
             {saveState ? <SaveStatusPill state={saveState} onRetry={onRetrySave} /> : null}
           </div>

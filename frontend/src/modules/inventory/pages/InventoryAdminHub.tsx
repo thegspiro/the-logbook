@@ -17,7 +17,16 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { RefreshCw, UserPlus, Sparkles, ArrowRight, AlertTriangle, Package } from 'lucide-react';
+import {
+  RefreshCw,
+  UserPlus,
+  Sparkles,
+  ArrowRight,
+  AlertTriangle,
+  Package,
+  LayoutDashboard,
+  Gauge,
+} from 'lucide-react';
 import { EmptyState } from '../../../components/ux';
 import { inventoryService } from '../../../services/api';
 import { medicalSuppliesService } from '../../../services/medicalSuppliesService';
@@ -245,13 +254,31 @@ const isRecord = (body: unknown): body is Record<string, unknown> => typeof body
 const hasList = (body: unknown, key: string): body is Record<string, unknown> =>
   isRecord(body) && Array.isArray(body[key]);
 
+const OVERVIEW_TAB: AdminHubTab<AdminTab> = {
+  id: 'overview',
+  label: 'Overview',
+  description: 'Stock, issuance and the tools behind them',
+  icon: LayoutDashboard,
+};
+
+/**
+ * Labelled for what it holds. The id stays `settings` so existing links keep
+ * working, but this tab only chooses the headline figures above it — the
+ * inventory's own settings are the cards on the overview, and a tab called
+ * "Settings" sent officers looking for them in the wrong place.
+ */
 const TABS: AdminHubTab<AdminTab>[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'settings', label: 'Settings' },
+  OVERVIEW_TAB,
+  {
+    id: 'settings',
+    label: 'Headline Metrics',
+    description: 'Choose the figures shown at the top of this page',
+    icon: Gauge,
+  },
 ];
 
 /** For the administrators this page admits who cannot edit inventory metrics. */
-const OVERVIEW_ONLY_TABS: AdminHubTab<AdminTab>[] = [{ id: 'overview', label: 'Overview' }];
+const OVERVIEW_ONLY_TABS: AdminHubTab<AdminTab>[] = [OVERVIEW_TAB];
 
 export const InventoryAdminHub: React.FC = () => {
   const checkPermission = useAuthStore((s) => s.checkPermission);

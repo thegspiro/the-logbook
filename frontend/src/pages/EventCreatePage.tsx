@@ -6,8 +6,8 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router';
-import { Calendar, ArrowLeft, FileText } from 'lucide-react';
+import { useNavigate } from 'react-router';
+import { FileText } from 'lucide-react';
 import { eventService } from '../services/api';
 import type { EventCreate, EventTemplate, RecurringEventCreate } from '../types/event';
 import { EventForm } from '../components/EventForm';
@@ -148,20 +148,13 @@ export const EventCreatePage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div data-page-main className="mx-auto max-w-5xl py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <Link
-            to="/events"
-            className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex min-h-11 items-center transition-colors"
-          >
-            <ArrowLeft className="mr-2 h-5 w-5" />
-            Back to Events
-          </Link>
-          <h1 className="text-theme-text-primary flex items-center space-x-3 text-3xl font-bold">
-            <Calendar className="h-8 w-8 text-red-700" />
-            <span>Create Event</span>
-          </h1>
-          <p className="text-theme-text-muted mt-1">
+        {/* Rendered only as the Create Event tab of Events Administration, whose
+            section nav already names it and whose breadcrumb already leads back
+            to Events; the title stays for heading navigation only. The line
+            about required fields is not said anywhere else, so it stays. */}
+        <div className="mb-6">
+          <h2 className="sr-only">Create Event</h2>
+          <p className="text-theme-text-muted">
             Schedule a new event for your department. All fields marked with{' '}
             <span className="text-red-700 dark:text-red-500">*</span> are required.
           </p>

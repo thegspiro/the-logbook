@@ -10,65 +10,20 @@
 
 import React, { Suspense, useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
-import { BadgeCheck, ScanLine, Settings, Upload, UserPlus, Users } from 'lucide-react';
+import { ScanLine, Upload, UserPlus } from 'lucide-react';
 import { AdminHubFrame, AdminMetricsSettings } from '../components/admin';
-import type { AdminHubAction, AdminHubTab } from '../components/admin';
+import type { AdminHubAction } from '../components/admin';
 import { useAuthStore } from '../stores/authStore';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 import { MEMBERS_SETTINGS_SECTIONS } from './members/admin/settings/membersSettingsSections';
+import { MEMBERS_ADMIN_TABS, type MembersAdminTab } from './membersAdminTabs';
 
 const MembersAdminPage = lazyWithRetry(() => import('./MembersAdminPage'));
 const AddMember = lazyWithRetry(() => import('./AddMember'));
 const ImportMembers = lazyWithRetry(() => import('./ImportMembers'));
 const QualificationImport = lazyWithRetry(() => import('./QualificationImport'));
 
-type AdminTab = 'manage' | 'add' | 'import' | 'qualifications' | 'settings';
-
-/**
- * Settings is always last — the frame's rule, on every module. Adding and
- * importing are their own permission: members.manage lets an officer edit the
- * roster, users.create is what puts a new person on it.
- *
- * users.create, not members.create, despite the latter's name _(2026-09-06)_.
- * Both tabs submit through `userService.createMember`, which posts to
- * `POST /users`, and that endpoint requires `users.create`. `members.create`
- * reads like the right grant and is not: nothing that creates a member
- * enforces it — it gates the prospect pipeline (`POST /prospects` and
- * `/prospects/check-existing`), and its registry description said "Create new
- * members", which is what led these tabs to it. The two grants are held by the
- * same seeded positions, so this corrects the name rather than anyone's access.
- */
-const ALL_TABS: (AdminHubTab<AdminTab> & { permission?: string })[] = [
-  {
-    id: 'manage',
-    label: 'Member Management',
-    description: 'Edit members, assign roles and reset passwords',
-    icon: Users,
-  },
-  {
-    id: 'add',
-    label: 'Add Member',
-    description: 'Put one new person on the roster',
-    icon: UserPlus,
-    permission: 'users.create',
-  },
-  {
-    id: 'import',
-    label: 'Import Members',
-    description: 'Add many members at once from a CSV file',
-    icon: Upload,
-    permission: 'users.create',
-  },
-  // members.manage, which reaching this hub already requires: the endpoint
-  // writes qualifications onto existing members, it creates nobody.
-  {
-    id: 'qualifications',
-    label: 'Import Qualifications',
-    description: 'Licences and cards members already hold, from a CSV file',
-    icon: BadgeCheck,
-  },
-  { id: 'settings', label: 'Settings', description: 'Roster settings and headline metrics', icon: Settings },
-];
+type AdminTab = MembersAdminTab;
 
 const TabLoading = () => (
   <div className="flex h-64 items-center justify-center">
@@ -81,7 +36,7 @@ export const MembersAdminHub: React.FC = () => {
   const navigate = useNavigate();
   const checkPermission = useAuthStore((state) => state.checkPermission);
   const canCreate = checkPermission('users.create');
-  const tabs = ALL_TABS.filter((tab) => !tab.permission || canCreate);
+  const tabs = MEMBERS_ADMIN_TABS.filter((tab) => !tab.permission || canCreate);
   // Validated against the tabs this member can actually open, not the full
   // list. A bookmarked ?tab=add for someone without users.create would
   // otherwise select a tab that is neither in the bar nor allowed to render
