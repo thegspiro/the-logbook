@@ -28,7 +28,7 @@ import { equipmentCheckService } from '@/modules/inventory/services/equipmentChe
 import type { EquipmentCheckTemplate } from '../types/equipmentCheck';
 import { TEMPLATE_TYPE_LABELS, type TemplateType } from '../types/equipmentCheck';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { PromptDialog } from '../../../components/ux';
+import { CloneChecklistDialog } from './CloneChecklistDialog';
 
 import { useConfirm } from '../../../contexts/ConfirmContext';
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -54,11 +54,6 @@ function countItems(template: EquipmentCheckTemplate): number {
   return (template.compartments ?? []).reduce((sum, c) => sum + (c.items?.length ?? 0), 0);
 }
 
-/** The name a clone gets unless the user types their own. */
-function cloneNameFor(template: EquipmentCheckTemplate): string {
-  return `${template.name} (Copy)`;
-}
-
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export const EquipmentCheckTemplateList: React.FC = () => {
@@ -70,7 +65,6 @@ export const EquipmentCheckTemplateList: React.FC = () => {
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [hideInactive, setHideInactive] = useState(false);
   const [cloneTarget, setCloneTarget] = useState<EquipmentCheckTemplate | null>(null);
-  const [cloning, setCloning] = useState(false);
 
   const loadTemplates = useCallback(async () => {
     try {
@@ -121,31 +115,6 @@ export const EquipmentCheckTemplateList: React.FC = () => {
       toast.error(getErrorMessage(err, 'Failed to delete template'));
     } finally {
       setDeletingId(null);
-    }
-  };
-
-  /** Copy a template under a new name.
-   *
-   * Was a window.prompt, which a browser may suppress — and a suppressed
-   * prompt returns null, the same value Cancel returns, so cloning could
-   * silently do nothing.
-   */
-  const handleClone = async (newName: string) => {
-    if (!cloneTarget) return;
-    const template = cloneTarget;
-    setCloning(true);
-    try {
-      const cloned = await equipmentCheckService.cloneEquipmentCheckTemplate(
-        template.id,
-        newName || cloneNameFor(template)
-      );
-      setTemplates((prev) => [...prev, cloned]);
-      setCloneTarget(null);
-      toast.success(`Cloned as "${cloned.name}"`);
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to clone template'));
-    } finally {
-      setCloning(false);
     }
   };
 
@@ -367,20 +336,13 @@ export const EquipmentCheckTemplateList: React.FC = () => {
         </div>
       )}
 
-      <PromptDialog
-        isOpen={cloneTarget !== null}
+      <CloneChecklistDialog
+        template={cloneTarget}
         onClose={() => setCloneTarget(null)}
-        onSubmit={(newName) => void handleClone(newName)}
-        title="Clone check template"
-        message={
-          cloneTarget
-            ? `Copies every compartment and item from "${cloneTarget.name}" into a new template you can edit.`
-            : undefined
-        }
-        label="Name for the copy"
-        defaultValue={cloneTarget ? cloneNameFor(cloneTarget) : ''}
-        confirmLabel="Clone template"
-        loading={cloning}
+        onCloned={(cloned) => {
+          setTemplates((prev) => [...prev, cloned]);
+          setCloneTarget(null);
+        }}
       />
     </div>
   );
