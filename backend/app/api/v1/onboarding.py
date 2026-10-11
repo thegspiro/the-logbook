@@ -657,6 +657,34 @@ class SessionDataResponse(BaseModel):
 # ============================================
 
 SESSION_EXPIRY_HOURS = 0.5  # 30 minutes
+# Absolute lifetime from creation, however active the session is (owner
+# decision ONB2-30-8). Activity slides the 30-minute window, and three routes
+# slide it on the session id alone (no CSRF token), so without a ceiling a
+# holder of just the id could keep the pre-completion window open forever by
+# polling. 24 hours outlasts any real sitting of the wizard; a setup that
+# runs longer starts a fresh session and resumes its saved progress.
+SESSION_MAX_LIFETIME_HOURS = 24
+
+
+def _session_hard_expiry(session: OnboardingSessionModel) -> Optional[datetime]:
+    """When ``session`` dies regardless of activity, or None if unknown.
+
+    ``created_at`` is a server default and present on every stored row; it is
+    only absent on an object that was never flushed, which no caller holds.
+    """
+    created = session.created_at
+    if created is None:
+        return None
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    return created + timedelta(hours=SESSION_MAX_LIFETIME_HOURS)
+
+
+def _slid_expiry(session: OnboardingSessionModel, now: datetime) -> datetime:
+    """The sliding 30-minute expiry, never past the absolute ceiling."""
+    slid = now + timedelta(hours=SESSION_EXPIRY_HOURS)
+    hard = _session_hard_expiry(session)
+    return min(slid, hard) if hard is not None else slid
 
 
 async def _rehydrate_department_org_id(
@@ -779,11 +807,12 @@ async def get_or_create_session(
         )
         session: OnboardingSessionModel | None = result.scalar_one_or_none()
 
-        if session:
-            # Update expiration on activity
-            session.expires_at = datetime.now(timezone.utc) + timedelta(
-                hours=SESSION_EXPIRY_HOURS
-            )
+        hard = _session_hard_expiry(session) if session else None
+        if session and (hard is None or hard > datetime.now(timezone.utc)):
+            # Update expiration on activity, within the absolute ceiling. A
+            # session past its ceiling falls through to a fresh one, which
+            # rehydrates the saved progress below.
+            session.expires_at = _slid_expiry(session, datetime.now(timezone.utc))
             await db.commit()
             return session
 
@@ -855,7 +884,15 @@ async def validate_session(
         if session.expires_at.tzinfo is None
         else session.expires_at
     )
-    if session_exp < datetime.now(timezone.utc):
+    now = datetime.now(timezone.utc)
+    hard_expiry = _session_hard_expiry(session)
+    if hard_expiry is not None and hard_expiry <= now:
+        raise CodedHTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Your onboarding session reached its 24-hour limit. Please refresh the page to start a new session. Your previously saved progress will be retained.",
+            error_code=ErrorCode.ONBD_SESSION_INVALID,
+        )
+    if session_exp < now:
         raise CodedHTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Your onboarding session has expired due to inactivity (30-minute limit). Please refresh the page to start a new session. Your previously saved progress will be retained.",
@@ -878,10 +915,8 @@ async def validate_session(
                 error_code=ErrorCode.AUTH_CSRF_INVALID,
             )
 
-    # Update expiration on activity
-    session.expires_at = datetime.now(timezone.utc) + timedelta(
-        hours=SESSION_EXPIRY_HOURS
-    )
+    # Update expiration on activity, within the absolute ceiling
+    session.expires_at = _slid_expiry(session, now)
     await db.commit()
 
     return session

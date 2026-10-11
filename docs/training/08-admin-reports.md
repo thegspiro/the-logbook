@@ -72,14 +72,15 @@ morning — and it changes how you should plan the install.
 > resumable](#a-lapsed-setup-is-now-resumable-2026-09-11) below. The table
 > reflects the current behaviour.
 
-| What you do                                               | What happens                                                                                                           |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Finish the wizard in one tab without closing it           | Normal path. Nothing to think about                                                                                    |
-| Open `/onboarding` in a **second tab** to check something | That tab starts its own new session. The step you were on will refuse to save                                          |
-| **Close the browser** partway through and come back       | **Resumable.** A fresh session is issued — but once the administrator account exists, **only that account may resume** |
-| Leave it sitting for **more than 30 minutes**             | **Resumable.** The server session still expires on its own; reopening the wizard issues a new one                      |
-| See "Onboarding has already been completed"               | This is **not** an expired session. A department already exists; sign in instead of starting setup                     |
-| See "you are not the System Owner"                        | Setup got as far as creating the administrator account. Sign in as that account and resume                             |
+| What you do                                               | What happens                                                                                                                           |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Finish the wizard in one tab without closing it           | Normal path. Nothing to think about                                                                                                    |
+| Open `/onboarding` in a **second tab** to check something | That tab starts its own new session. The step you were on will refuse to save                                                          |
+| **Close the browser** partway through and come back       | **Resumable.** A fresh session is issued — but once the administrator account exists, **only that account may resume**                 |
+| Leave it sitting for **more than 30 minutes**             | **Resumable.** The server session still expires on its own; reopening the wizard issues a new one                                      |
+| Keep setup open for **more than 24 hours** _(2026-10-11)_ | **Resumable.** A session ends 24 hours after it began however active it is; refresh the page and a new one picks up your saved answers |
+| See "Onboarding has already been completed"               | This is **not** an expired session. A department already exists; sign in instead of starting setup                                     |
+| See "you are not the System Owner"                        | Setup got as far as creating the administrator account. Sign in as that account and resume                                             |
 
 **The thing to teach:** your typed answers are saved separately and are _not_
 cleared, so the form comes back filled in. Until 2026-09-11 the session behind

@@ -431,6 +431,16 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### A setup-wizard session ends 24 hours after it began (2026-10-11)
+
+Only matters to an installation whose setup wizard is still open. An
+onboarding session used to live as long as it kept being used; it now ends 24
+hours after it was issued, however active. A setup left open across the
+upgrade for longer than that gets "Your onboarding session reached its
+24-hour limit" on its next step: refresh the page and a new session picks up
+the saved answers, as after a 30-minute idle lapse. Signed-in members'
+sessions are not affected.
+
 ### Documents with no folder are filed into General Documents (2026-10-11)
 
 The upgrade moves every document that had no folder into its department's
