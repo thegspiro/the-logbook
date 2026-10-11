@@ -504,7 +504,7 @@ SCHEDULE = {
         "cron": "30 6 * * *",
     },
     "membership_auto_purge": {
-        "description": "Permanently delete inactive prospective-member applications once they have been inactive longer than their pipeline's Auto-Purge grace period (only pipelines with Auto-Purge on; applications with no recorded inactive date are never purged)",
+        "description": "Email the membership coordinators about inactive prospective-member applications due for deletion within 7 days, then permanently delete those inactive longer than their pipeline's Auto-Purge grace period (only pipelines with Auto-Purge on; applications with no recorded inactive date are never purged)",
         "frequency": "daily",
         "recommended_time": "06:45",
         "cron": "45 6 * * *",
@@ -975,8 +975,29 @@ async def run_membership_auto_purge(db: AsyncSession) -> Dict[str, Any]:
     from app.services.membership_pipeline_service import MembershipPipelineService
 
     async def _process(db_session, org):
+        # Read before anything can roll the session back: a rollback expires
+        # the org row, and it cannot lazy-load outside the async context.
+        org_id = str(org.id)
         service = MembershipPipelineService(db_session)
-        result = await service.auto_purge_inactive_prospects(str(org.id))
+        # Warn first, so an application entering the 7-day window is announced
+        # on the run that would otherwise be silent about it. A failed warning
+        # does not hold up the purge: the window is seven daily runs long, and
+        # a send that failed is retried on each of them.
+        warning_error: Exception | None = None
+        try:
+            await service.warn_upcoming_auto_purges(org_id)
+        except Exception as e:
+            warning_error = e
+            await db_session.rollback()
+        result = await service.auto_purge_inactive_prospects(org_id)
+        if warning_error is not None:
+            # Raised after the purge so the purge still runs, and raised at
+            # all so _for_each_org records it and reloads the org rows the
+            # rollback above expired before the next org's callback.
+            raise RuntimeError(
+                f"auto-purge warning failed ({warning_error}); purged "
+                f"{result['purged']} application(s)"
+            )
         if result["errors"]:
             # Surface it through _for_each_org's error path (task error log,
             # per-org entry in the result) — the purged pipelines are already

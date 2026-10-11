@@ -896,7 +896,9 @@ Navigate to **Settings > Pipeline** and configure:
 > counts from when the application last became **Inactive**. Reactivating it
 > stops the clock, and if it goes inactive again the period starts over. Only
 > inactive applications are purged — never withdrawn, rejected or on-hold ones.
-> No email is sent beforehand; each purge is recorded in the audit log.
+> Seven days before an application is deleted, the membership coordinators
+> get one email listing it with its deletion date — reactivate it before then
+> to keep it. Each purge is recorded in the audit log.
 > Applications that were already inactive when your department upgraded to the
 > version that switched Auto-Purge on count from that upgrade, not from their
 > original deactivation date, so nothing was deleted the first night. You can

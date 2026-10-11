@@ -448,9 +448,18 @@ applications in each pipeline with `auto_purge_enabled: true` whose
 to 30–1095; a missing or non-numeric value skips the pipeline). Decisions the
 owner made, recorded so they are not mistaken for gaps:
 
-- **No warning email before a purge.** Coordinators are not notified; the
-  audit log (`membership_pipeline.prospects_purged`, `trigger: auto_purge`)
-  records each purge with the pipeline, threshold and purged ids.
+- **Coordinators are emailed 7 days before a purge** _(owner decision
+  2026-10-08, built 2026-10-11)_. Each daily run first emails the department's
+  membership coordinators (the Membership Coordinator / Assistant positions,
+  else everyone who can manage prospective members, filtered by their email
+  preferences) one list of the applications that will be deleted within seven
+  days, with each one's deletion date. An application is listed once per
+  inactive spell (an `auto_purge_warning_sent` activity entry), and nothing is
+  marked warned unless the email was accepted, so a failed send is retried on
+  the next run. The purge does not wait on the warning: if no coordinator can
+  be emailed, it still runs on schedule. The audit log
+  (`membership_pipeline.prospects_purged`, `trigger: auto_purge`) records each
+  purge with the pipeline, threshold and purged ids.
 - **The clock restarted at the upgrade.** Applications already inactive when
   migration `feecd81eef2d` ran count from that moment, not from their real
   deactivation date, so the first run could not delete a backlog at once.

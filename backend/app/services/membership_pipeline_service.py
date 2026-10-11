@@ -162,6 +162,11 @@ ELECTION_PACKAGE_SYSTEM_STATUSES = frozenset(
 # clamped on read rather than trusted: the setting permanently deletes records.
 AUTO_PURGE_MIN_DAYS = 30
 AUTO_PURGE_MAX_DAYS = 1095
+# Coordinators are emailed this many days before an application is
+# auto-purged (owner decision, 2026-10-08). Below AUTO_PURGE_MIN_DAYS, so
+# every enabled pipeline has a warning window.
+AUTO_PURGE_WARNING_DAYS = 7
+AUTO_PURGE_WARNING_ACTION = "auto_purge_warning_sent"
 
 
 # The detailed duplicate-match message names the existing member and their
@@ -6508,6 +6513,178 @@ class MembershipPipelineService:
             "pipelines_purged": pipelines_purged,
             "errors": errors,
         }
+
+    async def warn_upcoming_auto_purges(
+        self, organization_id: str, now: Optional[datetime] = None
+    ) -> int:
+        """Email the coordinators about applications auto-purge will delete soon.
+
+        Owner decision: the department's prospect coordinators are told
+        ``AUTO_PURGE_WARNING_DAYS`` before an application is purged, so one
+        worth keeping can be reactivated first. An application is listed once
+        per inactive spell: the daily run picks every application whose purge
+        falls within the window and has no ``auto_purge_warning_sent`` entry
+        dated on or after its current ``inactive_since``. A missed run is made
+        up by the next one rather than skipped, and an application that is
+        reactivated and goes inactive again is warned again. The window and
+        the purge date use the same clamped grace period and the same clock
+        as ``auto_purge_inactive_prospects``, so the date in the email is the
+        date it acts on.
+
+        Recipients are the members the withdrawal notice goes to (Membership
+        Coordinator / Assistant, else whoever can manage prospective members),
+        filtered by their email preferences. Nothing is marked as warned
+        unless the email was accepted, so a failed send is retried next run.
+        Returns how many applications were included in a sent warning.
+        """
+        import html as _html
+
+        now = now or datetime.now(timezone.utc)
+        pipelines = (
+            await self.db.execute(
+                select(
+                    MembershipPipeline.id,
+                    MembershipPipeline.name,
+                    MembershipPipeline.inactivity_config,
+                ).where(MembershipPipeline.organization_id == organization_id)
+            )
+        ).all()
+
+        # (prospect id, name, pipeline name, purge date)
+        due: List[tuple] = []
+        for pipeline_id, pipeline_name, config in pipelines:
+            days = self.auto_purge_threshold_days(config)
+            if days is None:
+                continue
+            purge_cutoff = now - timedelta(days=days)
+            warn_cutoff = now - timedelta(days=days - AUTO_PURGE_WARNING_DAYS)
+            already_warned = (
+                select(ProspectActivityLog.id)
+                .where(
+                    ProspectActivityLog.prospect_id == ProspectiveMember.id,
+                    ProspectActivityLog.action == AUTO_PURGE_WARNING_ACTION,
+                    ProspectActivityLog.created_at >= ProspectiveMember.inactive_since,
+                )
+                .exists()
+            )
+            rows = (
+                await self.db.execute(
+                    select(
+                        ProspectiveMember.id,
+                        ProspectiveMember.first_name,
+                        ProspectiveMember.last_name,
+                        ProspectiveMember.inactive_since,
+                    )
+                    .where(
+                        ProspectiveMember.pipeline_id == str(pipeline_id),
+                        ProspectiveMember.organization_id == organization_id,
+                        ProspectiveMember.status == ProspectStatus.INACTIVE,
+                        ProspectiveMember.inactive_since.isnot(None),
+                        ProspectiveMember.inactive_since <= warn_cutoff,
+                        # Already due: the purge, not a warning, comes next.
+                        ProspectiveMember.inactive_since > purge_cutoff,
+                        ~already_warned,
+                    )
+                    .order_by(ProspectiveMember.inactive_since, ProspectiveMember.id)
+                )
+            ).all()
+            for prospect_id, first, last, inactive_since in rows:
+                if inactive_since.tzinfo is None:
+                    inactive_since = inactive_since.replace(tzinfo=timezone.utc)
+                due.append(
+                    (
+                        str(prospect_id),
+                        f"{first or ''} {last or ''}".strip(),
+                        pipeline_name,
+                        inactive_since + timedelta(days=days),
+                    )
+                )
+        if not due:
+            return 0
+
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == organization_id)
+            )
+        ).scalar_one_or_none()
+        if org is None:
+            return 0
+        recipients = recipients_for(
+            await self._withdrawal_notice_recipients(organization_id),
+            EmailKind.MEMBERSHIP_ADMIN,
+            department_required_kinds(org),
+        )
+        if not recipients:
+            logger.warning(
+                f"Auto-purge warning: {len(due)} application(s) in org "
+                f"{organization_id} are due for purge and no coordinator can be "
+                "emailed; the purge will still run"
+            )
+            return 0
+
+        from app.core.config import settings as app_settings
+        from app.services.email_service import EmailService, build_email_logo_html
+
+        frontend_url = getattr(app_settings, "FRONTEND_URL", "") or ""
+        queue_url = f"{frontend_url}/prospective-members?status=inactive"
+
+        def _on(purge_at: datetime) -> str:
+            return format_in_org_timezone(purge_at, org, "%B %d, %Y")
+
+        count = len(due)
+        subject = (
+            f"{count} inactive application{'s' if count != 1 else ''} will be "
+            f"deleted in {AUTO_PURGE_WARNING_DAYS} days"
+        )
+        items_html = "".join(
+            f"<li>{_html.escape(name)} ({_html.escape(pipeline)}) — deleted on "
+            f"{_html.escape(_on(purge_at))}</li>"
+            for _, name, pipeline, purge_at in due
+        )
+        items_text = "\n".join(
+            f"- {name} ({pipeline}) — deleted on {_on(purge_at)}"
+            for _, name, pipeline, purge_at in due
+        )
+        explain = (
+            "Auto-Purge is on for these pipelines, so these inactive "
+            "applications, with their uploaded documents, will be permanently "
+            "deleted on the date shown. To keep one, reactivate it before then."
+        )
+        html_body = f"""<div style="font-family:Arial,sans-serif;max-width:600px;">
+{build_email_logo_html(org)}
+<p>{_html.escape(explain)}</p>
+<ul>
+{items_html}
+</ul>
+<p><a href="{_html.escape(queue_url)}">Open the inactive applications</a></p>
+</div>"""
+        text_body = f"{explain}\n\n{items_text}\n\n{queue_url}\n"
+
+        success, _ = await EmailService(org).send_email(
+            to_emails=[u.email for u in recipients],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=self.db,
+        )
+        if not success:
+            logger.warning(
+                f"Auto-purge warning email for org {organization_id} was not "
+                "sent; it will be retried on the next run"
+            )
+            return 0
+
+        for prospect_id, _, _, purge_at in due:
+            await self._log_activity(
+                prospect_id=prospect_id,
+                action=AUTO_PURGE_WARNING_ACTION,
+                details={
+                    "purge_on": purge_at.isoformat(),
+                    "recipient_count": len(recipients),
+                },
+            )
+        await self.db.commit()
+        return count
 
     # =========================================================================
     # Document Management
