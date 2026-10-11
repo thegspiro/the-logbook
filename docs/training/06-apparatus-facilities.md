@@ -159,6 +159,25 @@ option. See `SCREENSHOT_CURRENCY.md`, _Queued by the October 7 – 8
 documentation pass_.
 -->
 
+### Why a rig shows Deficiency, and why it is Out of Service _(2026-10-11)_
+
+- **Deficiency.** A failed equipment check sets the badge. The vehicle page now
+  says when it began, that **only a passing check clears it** (logging the repair
+  does not), and links to the **Failures** report from that date.
+- **Reason for a status.** Statuses such as **Out of Service** require a reason.
+  The edit form now has a **Reason** field, required for those statuses, and the
+  page shows the reason beside the status. Before this, a rig could be put out of
+  service from the edit form with no record of why.
+- **Putting a shift on a rig.** Create Shift and the shift panel's apparatus
+  picker now list rigs added through the Apparatus module (until now they listed
+  only the simplified basic list, so a department using the full module saw no
+  picker and every shift was created without a rig, and its checklists never came
+  due). A shift template that names a rig keeps it.
+
+> **Screenshot needed:** a vehicle page showing the Deficiency explanation and
+> the Failures link; the edit form with the **Reason** field; Create Shift with
+> the apparatus picker.
+
 ## Maintenance Scheduling
 
 Track preventive and corrective maintenance for each apparatus:

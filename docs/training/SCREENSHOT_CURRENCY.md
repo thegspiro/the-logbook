@@ -36,6 +36,54 @@ names and alt text are unchanged, so `manifest.mjs` entries still match.
 | `00-09-account-settings.png` | **REPLACE** | The page title reads **My Account** (was User Settings), and the Appearance tab's description reads "Theme and phone navigation bar" |
 | `00-24-dashboard-my-department.png`, `00-25-dashboard-organization.png` | **REPLACE** | Both still show the pre-2026-08-24 tab strip (**My Department** / **Organization**); the tabs now read **Personal** / **My Department** |
 
+## Queued by the October 8 – 11 documentation pass, 2026-10-11
+
+Covers the merges from 2026-10-08 13:13 UTC to 2026-10-11. Audit:
+[CHANGE_AUDIT_2026-10-08_TO_10-11](../CHANGE_AUDIT_2026-10-08_TO_10-11.md).
+**Nothing has been captured** (the capture stack does not run in this
+environment). Finance, attendance-request, encryption and receipt screens from
+this window were queued by their own commits; only items not already queued
+appear here.
+
+**Demo data this needs:** a shift starting within 48 hours with a rostered member
+and a vehicle with a QR code; a draft shift-history import with unmatched names
+and one outside unit; a suggestion box with a routed dropdown; an unedited
+Compliance box.
+
+### New screens (no image exists)
+
+| Guide | Section | Capture brief |
+| ----- | ------- | ------------- |
+| 03-scheduling.md | Pre-Shift Work | Vehicle check-in page with check-in closed: **Doing pre-shift work?**, the 48-hour shift list, **Start pre-shift work** |
+| 03-scheduling.md | Pre-Shift Work | **Pre-shift work in progress** card, then the **Pre-shift time awaiting review** queue on Shift Close-Out (as an officer who did not do the work) |
+| 03-scheduling.md | Pre-Shift Work | Shift Settings with **Allow pre-shift work** |
+| 03-scheduling.md | Importing Shift History | `/scheduling/admin/history-import`: upload with time-zone picker, drafts and committed imports |
+| 03-scheduling.md | Importing Shift History | A draft's **Members**, **Units** and **Shifts** tabs (confidence column, **Split apart**, a **Remembered** badge) and the Commit confirmation that says it cannot be undone |
+| 07-documents-forms.md | Asking questions first | Suggestion Box dialog, **Questions** section: a dropdown question whose option routes to another box, and a follow-up with **Show only after this question** |
+| 07-documents-forms.md | Asking questions first | Member submit form with an intake question and a follow-up; reviewer panel showing intake answers |
+| 07-documents-forms.md | Asking questions first | The Compliance box submit form: **What kind of concern is this?** and, after choosing safety, **Is anyone at immediate risk?** |
+| 08-admin-reports.md | Administration hubs | Events, Members and Store hubs as described cards with a red count; Training's seven area cards |
+| 08-admin-reports.md | Administration hubs | **Needs attention** with the new queues (skills tests awaiting validation, shift reports, attendance requests, open order windows) |
+| 08-admin-reports.md | Administration hubs | Command palette with a hub section typed in |
+| 10-mobile-pwa.md | Admin hubs on a phone | The chip row at 390px wide with the right-edge fade and arrow; the metrics row with two phone slots |
+| 10-mobile-pwa.md | Checklist builder | Builder header at 390px; a row's overflow menu as a bottom sheet; an empty location with **Add items** |
+| 06-apparatus-facilities.md | Deficiency | Vehicle page with the Deficiency explanation and Failures link; edit form **Reason** field; Create Shift with the apparatus picker |
+| 03-scheduling.md | Shift Close-Out | Close-out wizard attendance step listing pre-shift work |
+
+### Existing images to replace or check
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| Any Training admin hub frame (`02-*` hub shots) | **REPLACE** | Six sections with a **More** menu became seven area cards plus an icon tab strip and a strip naming the open page |
+| Events, Members and Store hub frames | **REPLACE** | The underline tab bar is now a row of described cards; Members no longer has its own red **Add Member** under the hub's |
+| Inventory and Scheduling hub frames | **REPLACE** | Settings tab renamed **Headline Metrics**; one-tab hubs draw no section nav |
+| Tab pages inside a hub (Create Training Session, Create Pipeline, Review Submissions, Add Member, Import Members, Create Event, Shift Reports) | **CHECK** | The back link and the large repeated title are gone |
+| Equipment-check template builder (desktop and phone) | **REPLACE** | Header, location rows and the overflow menu changed under 640px |
+| Pending Review, All Entries and My Admin Hours frames | **CHECK** | The method now reads **QR Scan** or **ID Card Station** |
+| Compliance suggestion box submit form | **REPLACE** | It now asks a required question first |
+| Apparatus status in the edit form | **REPLACE** | New **Reason** field |
+| Create Shift (any frame showing the apparatus picker) | **CHECK** | Lists Apparatus-module rigs |
+
 ## Queued by the October 7 – 8 documentation pass, 2026-10-08
 
 Covers PRs #2981–#2996. Audit:

@@ -487,3 +487,7 @@ and what the shell does not reach in
 Member/officer how-to:
 [Documents, Forms & Communications → Department Messages](./training/07-documents-forms.md#department-messages).
 Wiki overview: [Communications module](../wiki/Module-Communications.md).
+
+## Suggestion box intake questions _(2026-10-11)_
+
+A suggestion box can carry `intake_questions`, asked before the title and details. Answers are stored in `suggestions.intake_answers` with their question labels so a destination's reviewers can read them. A question may depend on an earlier answer (the Forms module's branching rule), and a dropdown or single-choice option may route the submission to another box (`routed_from_box_id`, `ON DELETE SET NULL`). Routing is validated in `app/services/suggestion_intake.py`: same department, not the box itself, an anonymity-requiring box cannot route to one that refuses anonymity, and a route to a closed box is ignored. Only the destination's reviewers and watchers are told. Migration `778c3de73086` adds the three nullable columns; `4b7e1f0c9a2d` seeds a required concern-type question on unedited Compliance boxes (also applied to new departments by `seed_compliance_box`).

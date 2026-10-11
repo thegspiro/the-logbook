@@ -851,6 +851,41 @@ To remove a box you no longer need, press **Delete** on it:
 
 ![The Delete "Training ideas"? dialog: the warning giving how many submissions the box holds and that deleting removes them all, the Archive instead button, and the field for typing the box's name, with Delete permanently still disabled](./images/07-23-suggestion-box-delete-dialog.png)
 
+### Asking questions first, and sending answers to another box _(2026-10-11)_
+
+A box can ask its own **Questions** before the title and details. In the box's
+edit dialog (**Administration → Forms & Comms → Suggestion Boxes**), the
+**Questions** section adds one question at a time: its wording, an **Answer
+type**, optional help text, and whether it is required. Reorder with the arrows.
+
+- **Show only after this question.** A follow-up can appear only when an earlier
+  answer matches a rule (**is**, **is not**, **includes**, **is answered**,
+  **is not answered**). Removing a question warns you how many follow-ups hang
+  off it.
+- **Where an option sends the submission.** On a dropdown or single-choice
+  question, each option can send the submission to another box (the default is
+  **Keep in this box**). Only the destination's reviewers and watchers are told,
+  and only they can read it. Reviewers there see the answers with their question
+  wording.
+
+Rules that protect the submitter: a route must stay inside your department and
+cannot point at the box itself; a box that **requires anonymity** cannot route to
+a box that refuses it, and anonymity holds wherever an answer sends the
+submission; a route to a **closed** box is ignored and the submission stays where
+it was sent; deleting a box removes routes that point at it.
+
+**The Compliance box now asks two questions.** Every department's seeded
+Compliance box asks a required **What kind of concern is this?** (policy or
+procedure, safety, training record, regulatory or legal, other). Choosing safety
+adds **Is anyone at immediate risk?**, whose help text says the box is not
+watched around the clock. Neither answer routes anywhere. An existing Compliance
+box gets the question only if nobody has edited it; a box you changed is left
+alone.
+
+> **Screenshot needed:** the box dialog's **Questions** section with one routed
+> dropdown; the member's submit form showing a follow-up question; a reviewer's
+> view of a submission with its intake answers.
+
 ### Submitting a suggestion (every member)
 
 1. Open **Suggestions** from the sidebar. The **Submit** tab is first.

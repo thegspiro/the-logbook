@@ -412,6 +412,24 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Pre-shift work is on by default, and the Compliance box gains a question (2026-10-11)
+
+- **Pre-shift work.** Migration `46c55e6a3330` adds `shift_pre_work_sessions`;
+  nothing existing is touched. The department setting
+  `scheduling.pre_shift_work_enabled` is **on** unless an organization has set it,
+  so members scanning a vehicle before check-in opens are offered "Doing pre-shift
+  work?" the moment you upgrade. Time counts only once a shift officer or
+  `scheduling.manage` approves it, and it adds hours, never shifts. To keep the
+  old behaviour, turn off **Allow pre-shift work** in Shift Settings.
+- **Shift history import.** Migrations `c6c4ffcfdfb3` and `376ec2fef6d3` add the
+  draft, row and remembered-decision tables. Additive; the feature is reached from
+  Administration → Scheduling and needs `scheduling.manage`. A committed import is
+  final and writes finalized shifts that count toward hours and compliance.
+- **Suggestion intake questions.** Migration `778c3de73086` adds three nullable
+  columns (no backfill). `4b7e1f0c9a2d` then gives each Compliance box that is
+  still an unedited seed a required "What kind of concern is this?" question; an
+  edited box is left alone, and its downgrade removes only an untouched copy.
+
 ### Stored files are encrypted; confirm the key is kept safe (2026-10-09)
 
 Phase 4 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).
