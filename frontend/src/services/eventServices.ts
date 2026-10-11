@@ -1915,7 +1915,7 @@ export interface BatchScanItem {
   code: string;
   item_id?: string;
   quantity?: number;
-  operation: 'permanent_assignment' | 'temporary_loan';
+  operation: 'permanent_assignment' | 'temporary_assignment' | 'temporary_loan';
   expected_return_at?: string;
 }
 

@@ -2348,10 +2348,18 @@ honoured it by creating a checkout. That branch now marks the assignment
 temporary and stores the date; two tests in `test_inventory_gaps.py` pin both
 outcomes.
 
-Still missing is any control letting an officer choose Temporary directly on an
-assign or distribute-items form, which is what
-`docs/training/02-training.md` described. That placeholder is retired. Needs an
-owner decision on whether the control should exist.
+**Resolved (2026-10-11), owner decision: add a Permanent/Temporary choice plus a
+return date to assign and distribute.** Assigning from an item's detail page now
+asks, after the member is picked, whether the assignment is **Permanent** or
+**Temporary**; Temporary requires a return date. The **Distribute Items** dialog
+gains a third duration, **Temporary assignment**, beside **Ongoing assignment**
+and **Temporary loan**, and `distribute_items` stores it as
+`AssignmentType.TEMPORARY` with the date. The API enforces the pairing:
+`ItemAssignmentCreate` refuses a temporary assignment without a future
+`expected_return_date` and a permanent one carrying any date (422), and the
+batch item schema accepts `operation: "temporary_assignment"` only with a future
+`expected_return_at`. Pinned by `tests/test_inventory_temporary_assignment.py`,
+`AssignTermsModal.test.tsx` and `InventoryScanModal.test.tsx`.
 
 ## Elections — The Public Ballot Cannot Be Screenshotted, By Design (2026-08-12)
 

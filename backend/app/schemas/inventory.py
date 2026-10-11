@@ -860,11 +860,35 @@ class ItemAssignmentBase(BaseModel):
     expected_return_date: Optional[datetime] = None
 
 
+def _require_future_return(value: Optional[datetime], field: str) -> None:
+    if value is None:
+        raise ValueError(f"{field} is required for a temporary assignment")
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    if value <= datetime.now(timezone.utc):
+        raise ValueError(f"{field} must be in the future")
+
+
 class ItemAssignmentCreate(ItemAssignmentBase):
     """Schema for creating an assignment"""
 
     item_id: UUID
     user_id: UUID
+
+    @model_validator(mode="after")
+    def validate_return_date(self):
+        # A temporary assignment is defined by the date it is due back: one
+        # without a date is indistinguishable from a permanent one on every
+        # screen that lists it. A permanent assignment carrying a date would
+        # show a "Due" line for gear that is never coming back, so the date is
+        # refused there rather than silently stored.
+        if self.assignment_type == "temporary":
+            _require_future_return(self.expected_return_date, "expected_return_date")
+        elif self.expected_return_date is not None:
+            raise ValueError(
+                "expected_return_date applies only to a temporary assignment"
+            )
+        return self
 
 
 class ItemAssignmentResponse(ItemAssignmentBase):
@@ -1417,12 +1441,18 @@ class BatchScanItem(BaseModel):
         default=None, description="Item ID for direct lookup (bypasses code search)"
     )
     quantity: int = Field(default=1, ge=1, description="Quantity (for pool items)")
-    operation: Literal["permanent_assignment", "temporary_loan"] = Field(
+    operation: Literal[
+        "permanent_assignment", "temporary_assignment", "temporary_loan"
+    ] = Field(
         ...,
         description="Operation for individually tracked items; pool items follow issuance policy",
     )
     expected_return_at: Optional[datetime] = Field(
-        default=None, description="Required expected return date for temporary loans"
+        default=None,
+        description=(
+            "Required expected return date for a temporary assignment or a "
+            "temporary loan"
+        ),
     )
 
     @model_validator(mode="after")
@@ -1436,6 +1466,8 @@ class BatchScanItem(BaseModel):
                 expected = expected.replace(tzinfo=timezone.utc)
             if expected <= now:
                 raise ValueError("expected_return_at must be in the future")
+        elif self.operation == "temporary_assignment":
+            _require_future_return(self.expected_return_at, "expected_return_at")
         return self
 
 
@@ -1453,7 +1485,8 @@ class DistributeItemsResultItem(BaseModel):
     code: str
     item_name: str
     item_id: str
-    action: str  # "permanent_assignment", "temporary_loan", or "issued"
+    # "permanent_assignment", "temporary_assignment", "temporary_loan" or "issued"
+    action: str
     success: bool
     error: Optional[str] = None
     conflict: Optional["InventoryHoldingConflict"] = None

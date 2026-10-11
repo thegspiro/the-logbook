@@ -5240,7 +5240,7 @@ class InventoryService:
                     )
 
                 elif (
-                    operation == "permanent_assignment"
+                    operation in ("permanent_assignment", "temporary_assignment")
                     and item.status == ItemStatus.AVAILABLE
                 ):
                     # AVAILABLE only, deliberately. `assign_item_to_user`
@@ -5257,13 +5257,20 @@ class InventoryService:
                         user_id=user_id,
                         organization_id=organization_id,
                         assigned_by=performed_by,
-                        assignment_type=AssignmentType.PERMANENT,
+                        assignment_type=(
+                            AssignmentType.TEMPORARY
+                            if operation == "temporary_assignment"
+                            else AssignmentType.PERMANENT
+                        ),
                         reason=reason,
+                        expected_return_date=(
+                            expected_return_at
+                            if operation == "temporary_assignment"
+                            else None
+                        ),
                     )
                     results.append(
-                        self._batch_result(
-                            code, item, "permanent_assignment", not err, err
-                        )
+                        self._batch_result(code, item, operation, not err, err)
                     )
                     successful, failed = (
                         (successful + 1, failed)

@@ -789,18 +789,25 @@ starting from the item or from the person.
 2. In the **Assignment** card, click **Assign Item**. (It appears only on
    individually-tracked items that are not already assigned; an assigned one
    offers **Unassign** instead.)
-3. Search for the member and pick them. The assignment is written immediately —
-   the date is stamped for you, and there is no notes or condition field on this
-   path.
+3. Search for the member and pick them.
+4. Choose **Permanent** ("Theirs until they return it or leave, like
+   turnouts.") or **Temporary** ("Due back on a date you choose, such as gear
+   for an acting role."), which then asks for a **Return date**, and click
+   **Assign to _member_**. The assignment date is stamped for you, and there is
+   no notes or condition field on this path.
 
 **From the member** — kitting somebody out, several items at once:
 
 1. Go to **Inventory Admin > Members**.
 2. Click **Assign** on their row. The **Distribute Items** dialog opens.
 3. Under **Intended duration**, choose **Ongoing assignment** ("Theirs until
-   they return it or leave, like turnouts.") or **Temporary loan** ("Lent for a
-   set time and due back on a date you choose.", which then asks for an
-   **Expected return**). Pool stock is issued from stock whichever you choose.
+   they return it or leave, like turnouts."), **Temporary assignment**
+   ("Assigned to them until a return date you choose, such as gear for an
+   acting role.") or **Temporary loan** ("Lent for a set time and due back on a
+   date you choose."). Both temporary choices then ask for an **Expected
+   return**. A temporary assignment stays on the member's assigned gear with a
+   due date; a temporary loan is checked in when it comes back and is flagged
+   overdue if it is late. Pool stock is issued from stock whichever you choose.
 4. Scan each item, or type a name, barcode, serial or asset tag and press
    **Enter**. Items stack up in a list with a quantity each, and anything added
    twice is refused with a notice rather than counted twice.
@@ -810,8 +817,8 @@ starting from the item or from the person.
 
 > **The review button says what it is waiting for** _(2026-09-30)_. With items
 > staged and no duration chosen, **Review _n_ Items** stays disabled and the
-> line beside it reads _"Choose Ongoing assignment or Temporary loan above to
-> continue."_; for a temporary loan with no date it reads _"Set the expected
+> line beside it reads _"Choose Ongoing assignment, Temporary assignment or
+> Temporary loan above to continue."_; for a temporary choice with no date it reads _"Set the expected
 > return date to continue."_ There is still no default — choosing is deliberate,
 > so nobody hands out turnouts as a loan by accident. Before this the button
 > was disabled with no explanation.
@@ -825,7 +832,7 @@ Your assigned items appear in two places:
 
 ![Assigning items to a member by scanning or searching, with two items staged](./images/05-57-assign-scan-modal.png)
 
-**[SCREENSHOT — REPLACE `05-57-assign-scan-modal.png`.** The dialog's intro now reads "Hand gear to this member. Find each item by scanning its label or typing its name, serial number or barcode, then choose how long they keep it.", and each **Intended duration** option carries a one-line description under its name. Re-shoot **Distribute Items** with two items staged and **Ongoing assignment** chosen, so **Review 2 Items** is enabled; a second frame with no duration chosen would show the "Choose Ongoing assignment or Temporary loan above to continue." line.**]**
+**[SCREENSHOT — REPLACE `05-57-assign-scan-modal.png`.** The dialog's intro now reads "Hand gear to this member. Find each item by scanning its label or typing its name, serial number or barcode, then choose how long they keep it.", and each **Intended duration** option carries a one-line description under its name. Re-shoot **Distribute Items** with two items staged and **Ongoing assignment** chosen, so **Review 2 Items** is enabled; a second frame with no duration chosen would show the "Choose Ongoing assignment, Temporary assignment or Temporary loan above to continue." line.**]**
 
 ---
 

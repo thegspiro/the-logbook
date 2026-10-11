@@ -224,10 +224,12 @@ describe('InventoryScanModal distributing', () => {
     await addGloves(user);
 
     expect(screen.getByRole('button', { name: /Review 1 Item/ })).toBeDisabled();
-    expect(screen.getByText('Choose Ongoing assignment or Temporary loan above to continue.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Choose Ongoing assignment, Temporary assignment or Temporary loan above to continue.')
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole('radio', { name: 'Temporary loan' }));
-    expect(screen.queryByText(/Choose Ongoing assignment or Temporary loan/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Choose Ongoing assignment/)).not.toBeInTheDocument();
     expect(screen.getByText('Set the expected return date to continue.')).toBeInTheDocument();
 
     await user.click(screen.getByRole('radio', { name: 'Ongoing assignment' }));
@@ -264,6 +266,27 @@ describe('InventoryScanModal distributing', () => {
     await waitFor(() => expect(distributeItems).toHaveBeenCalledTimes(1));
     expect(distributeItems.mock.calls[0]?.[0]).toMatchObject({
       items: [{ item_id: 'gloves-1', operation: 'temporary_loan', expected_return_at: '2026-10-01T15:00:00.000Z' }],
+    });
+  });
+
+  // A temporary assignment used to be unreachable: distribute assigned every
+  // individually tracked item permanently.
+  it('sends a temporary assignment with its return date', async () => {
+    const user = userEvent.setup();
+    await addGloves(user);
+
+    await user.click(screen.getByRole('radio', { name: 'Temporary assignment' }));
+    expect(screen.getByText('Set the expected return date to continue.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Review 1 Item/ })).toBeDisabled();
+    await user.type(screen.getByLabelText('Expected return'), '2026-10-01T10:00');
+    await user.click(screen.getByRole('button', { name: /Review 1 Item/ }));
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() => expect(distributeItems).toHaveBeenCalledTimes(1));
+    expect(distributeItems.mock.calls[0]?.[0]).toMatchObject({
+      items: [
+        { item_id: 'gloves-1', operation: 'temporary_assignment', expected_return_at: '2026-10-01T15:00:00.000Z' },
+      ],
     });
   });
 });

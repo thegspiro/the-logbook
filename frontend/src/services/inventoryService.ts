@@ -362,7 +362,12 @@ export const inventoryService = {
   async assignItem(
     itemId: string,
     userId: string,
-    options?: { assignment_type?: string; assignment_reason?: string }
+    options?: {
+      assignment_type?: 'permanent' | 'temporary';
+      assignment_reason?: string | undefined;
+      // Required by the API for a temporary assignment, refused on a permanent one.
+      expected_return_date?: string | undefined;
+    }
   ): Promise<{ id: string; item_id: string; user_id: string; is_active: boolean }> {
     const response = await api.post<{ id: string; item_id: string; user_id: string; is_active: boolean }>(
       `/inventory/items/${itemId}/assign`,
@@ -371,6 +376,7 @@ export const inventoryService = {
         user_id: userId,
         assignment_type: options?.assignment_type ?? 'permanent',
         assignment_reason: options?.assignment_reason,
+        expected_return_date: options?.expected_return_date,
       }
     );
     return response.data;
