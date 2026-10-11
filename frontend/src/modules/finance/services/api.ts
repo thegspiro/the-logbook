@@ -51,6 +51,7 @@ import type {
   ExportMapping,
   ExportMappingCreatePayload,
   ExportMappingUpdatePayload,
+  ExportLog,
   ExportReadiness,
   FiscalYearOption,
   FiscalYearAdoptionPayload,
@@ -779,5 +780,11 @@ export const exportMappingService = {
   async readiness(): Promise<ExportReadiness> {
     const response = await api.get<ExportReadiness>('/finance/export/readiness');
     return response.data;
+  },
+
+  /** Export history, newest first. */
+  async logs(params?: { skip?: number; limit?: number }): Promise<ExportLog[]> {
+    const response = await api.get<ExportLog[]>('/finance/export/logs', { params });
+    return asArray(response.data);
   },
 };

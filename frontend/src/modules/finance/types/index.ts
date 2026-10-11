@@ -1095,7 +1095,12 @@ export interface ExportLog {
   recordCount: number;
   fileFormat: string;
   exportedBy: string;
+  exportedByName?: string | null;
   exportedAt: string;
+  /** `pending`, `successful`, `partial` (some rows delivered) or `failed`. */
+  status: string;
+  errorMessage?: string | null;
+  completedAt?: string | null;
 }
 
 export interface FinanceDashboard {

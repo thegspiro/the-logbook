@@ -1600,6 +1600,7 @@ class ExportLogResponse(UTCResponseBase):
     file_format: str
     exported_by: str
     exported_at: datetime
+    exported_by_name: Optional[str] = None
     status: str
     error_message: Optional[str] = None
     completed_at: Optional[datetime] = None

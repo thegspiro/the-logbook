@@ -1306,12 +1306,12 @@ placeholders picture screens the frontend does not render; their placeholders
 are left open. Four defects found alongside them were fixed — see the commit
 that added the purchase request, expense report and check request shots.
 
-| Guide section             | What exists                                                                                                           | State               |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------- |
-| Create Budget form        | _Resolved 2026-10-08:_ **Add budget line** and **Edit** open `BudgetFormDialog` (`finance.manage`). See below.        | ✅ Built            |
-| Create Dues Schedule form | _Resolved 2026-10-11:_ **New schedule** and **Edit schedule** on **Finance › Dues** (`finance.manage`).               | ✅ Built            |
-| QuickBooks export mapping | _Resolved 2026-10-09:_ **Finance › QuickBooks Export** (`/finance/settings/quickbooks`, `finance.manage`). See below. | ✅ Built            |
-| Export logs               | `GET /finance/export/logs` and an `ExportLog` interface; no page, no route, no consumer.                              | ❌ API + types only |
+| Guide section             | What exists                                                                                                           | State    |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------- |
+| Create Budget form        | _Resolved 2026-10-08:_ **Add budget line** and **Edit** open `BudgetFormDialog` (`finance.manage`). See below.        | ✅ Built |
+| Create Dues Schedule form | _Resolved 2026-10-11:_ **New schedule** and **Edit schedule** on **Finance › Dues** (`finance.manage`).               | ✅ Built |
+| QuickBooks export mapping | _Resolved 2026-10-09:_ **Finance › QuickBooks Export** (`/finance/settings/quickbooks`, `finance.manage`). See below. | ✅ Built |
+| Export logs               | _Resolved 2026-10-11:_ **Export history** on **Finance › QuickBooks Export**, with who ran each export.               | ✅ Built |
 
 **Budget detail's transaction history** — _resolved 2026-10-08._ It was a
 stub that said "No transactions yet" unconditionally. It now lists what moved
@@ -1453,8 +1453,9 @@ remain, and each needs a decision or a follow-up change rather than a fix
 inside that one:
 
 - **Running the export has no screen.** `POST /finance/export/transactions`
-  and its history (`GET /finance/export/logs`, the "Export logs" row above)
-  are still API only.
+  is still API only. Its history is not: **Export history** on the same screen
+  lists every run with its period, transaction count, outcome and who ran it
+  _(2026-10-11, the "Export logs" row above)_.
 - **Dues payments are not exported.** `DuesSchedule` and `DuesPayment` carry no
   budget category, so the export has nothing to resolve an income account or a
   deposit account from. Adding them needs a decision about where those two

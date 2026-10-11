@@ -1,7 +1,7 @@
 """
-Names on the dues list.
+Names on the dues ledger and the export history.
 
-The list is read by a Treasurer, who holds ``finance.manage`` but not
+Both lists are read by a Treasurer, who holds ``finance.manage`` but not
 necessarily ``users.view`` and so cannot look a member up by id. Each row
 therefore carries the member's display name, joined in the same query.
 
@@ -16,8 +16,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.api.dependencies import PaginationParams
-from app.models.finance import DuesStatus, MemberDues
-from app.schemas.finance import MemberDuesResponse
+from app.models.finance import DuesStatus, ExportFormat, ExportLog, MemberDues
+from app.schemas.finance import ExportLogResponse, MemberDuesResponse
 from app.services.finance_service import FinanceService
 
 pytestmark = [pytest.mark.unit]
@@ -49,6 +49,23 @@ def _dues(**overrides) -> MemberDues:
     }
     values.update(overrides)
     return MemberDues(**values)
+
+
+def _log(**overrides) -> ExportLog:
+    values = {
+        "id": str(uuid.uuid4()),
+        "organization_id": ORG_ID,
+        "export_type": "transactions",
+        "date_range_start": NOW,
+        "date_range_end": NOW,
+        "record_count": 12,
+        "file_format": ExportFormat.CSV,
+        "exported_by": str(uuid.uuid4()),
+        "exported_at": NOW,
+        "status": "successful",
+    }
+    values.update(overrides)
+    return ExportLog(**values)
 
 
 class TestMemberDuesNames:
@@ -97,3 +114,27 @@ class TestMemberDuesNames:
         assert "member_dues.organization_id =" in query
         assert "member_dues.dues_schedule_id =" in query
         assert "LEFT OUTER JOIN users" in query
+
+
+class TestExportLogNames:
+    async def test_rows_carry_who_ran_the_export(self):
+        log = _log()
+        service = _service_returning([(log, "Ann", "Lee", None, "alee")])
+
+        rows = await service.list_export_logs(
+            ORG_ID, PaginationParams(skip=0, limit=100)
+        )
+
+        assert rows[0]["exported_by_name"] == "Ann Lee"
+        dumped = ExportLogResponse.model_validate(rows[0]).model_dump(by_alias=True)
+        assert dumped["exportedByName"] == "Ann Lee"
+        assert dumped["recordCount"] == 12
+        assert dumped["status"] == "successful"
+
+    async def test_query_is_org_scoped(self):
+        service = _service_returning([])
+
+        await service.list_export_logs(ORG_ID, PaginationParams(skip=0, limit=100))
+
+        query = str(service.db.execute.await_args.args[0])
+        assert "finance_export_logs.organization_id =" in query

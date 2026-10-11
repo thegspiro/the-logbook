@@ -1535,27 +1535,24 @@ Intuit's requirements for a journal-entry import _(checked 2026-10-09)_. They ar
 > → Profile → Timezone** (America/New_York when none is set). An export taken
 > before this date may disagree with a new one for evening payments.
 
-### Export Logs
+### Export History
 
-Every export is logged with:
+**Finance › QuickBooks Export** lists every export run under **Export history**, newest first, 25 at a time (**Show older exports** loads the next 25):
 
-| Field            | Description                                |
-| ---------------- | ------------------------------------------ |
-| **Export Type**  | The type of data exported                  |
-| **Date Range**   | Start and end dates of the exported period |
-| **Record Count** | Number of transactions included            |
-| **File Format**  | The output format (CSV or IIF)             |
-| **Exported By**  | The officer who generated the export       |
-| **Exported At**  | Timestamp of the export                    |
+| Column           | Contents                                                                     |
+| ---------------- | ---------------------------------------------------------------------------- |
+| **Exported**     | When the export was run                                                      |
+| **Period**       | The start and end dates of the exported period                               |
+| **Transactions** | How many transactions (an expense report counts once per line) were included |
+| **Status**       | Whether the file was delivered whole (see below)                             |
+| **By**           | The officer who ran it                                                       |
 
-> **Corrected 2026-08-12.** Not built. See
-> [Finance — Five Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#finance--five-guide-sections-with-no-screen-2026-08-09),
-> which records what exists behind each of these: an API, a store
-> action, or types — but no page and no control that reaches them.
-> The steps above describe the intended design.
->
-> `GET /finance/export/logs` and an `ExportLog` interface exist; there is no
-> page, no route and no consumer.
+| Status           | Meaning                                                                                                   |
+| ---------------- | --------------------------------------------------------------------------------------------------------- |
+| **Complete**     | The whole file was delivered                                                                              |
+| **Interrupted**  | Some transactions reached the browser before an error or a closed tab stopped it. Do not import that file |
+| **Failed**       | Nothing was delivered                                                                                     |
+| **Not finished** | The log was opened but the download never reported an end. Run the period again                           |
 
 > **Hint:** Export frequently (monthly or quarterly) rather than waiting for year-end. This makes reconciliation with QuickBooks easier and catches mapping issues early. Each export creates a log entry so you can track what has been exported and when.
 

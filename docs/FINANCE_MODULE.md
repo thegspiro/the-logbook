@@ -1147,7 +1147,7 @@ Pages:
 - `DELETE /finance/export/mappings/{id}` _(2026-10-09)_ — remove a mapping (org-scoped; `finance.manage`). Needed to clear a duplicate, which blocks the export
 - `GET /finance/export/readiness` _(2026-10-09)_ — per budget category: status (`ready`, `no_account`, `no_offset`, `duplicate_mappings`), the account and its source (`category` or `mapping`), the offset account and the matching mapping ids; plus `unmatchedMappingIds`. Built on the export's own classifier (`finance.manage`)
 - `POST /finance/export/transactions` — generate CSV/IIF export file for date range
-- `GET /finance/export/logs` — export history
+- `GET /finance/export/logs` — export history, newest first. Each row carries `exportedByName` _(2026-10-11)_; read by **Export history** on **Finance › QuickBooks Export**
 
 Export format:
 
