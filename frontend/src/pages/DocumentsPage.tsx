@@ -32,10 +32,10 @@ import { asArray } from '../utils/asArray';
 
 type ViewMode = 'grid' | 'list';
 
-// Pseudo folder id selecting every document the caller can see, including
-// documents with no folder_id at all (org-level uploads, or the "No folder"
-// choice on the upload form) -- otherwise those documents are uploadable but
-// never visible or reachable anywhere in this page (Codex finding on #1827).
+// Pseudo folder id selecting every document the caller can see across every
+// folder they can open. (It once also surfaced documents with no folder at
+// all; uploads and moves now always file into a folder, General Documents by
+// default.)
 const ALL_DOCUMENTS = '__all__';
 const DOCUMENTS_PAGE_SIZE = 50;
 // Folders are cards in a three-column grid, so a page is sized to fill whole
@@ -1018,7 +1018,8 @@ const DocumentsPage: React.FC = () => {
                         onChange={(e) => setUploadForm({ ...uploadForm, folder: e.target.value })}
                         className="form-input focus:ring-amber-500"
                       >
-                        <option value="">No folder</option>
+                        {/* The server files an upload with no folder into General Documents. */}
+                        <option value="">General Documents (default)</option>
                         {currentFolder && <option value={currentFolder.id}>{currentFolder.name} (current)</option>}
                         {folders.map((f) => (
                           <option key={f.id} value={f.id}>

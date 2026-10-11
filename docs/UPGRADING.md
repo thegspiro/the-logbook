@@ -412,6 +412,23 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Documents with no folder are filed into General Documents (2026-10-11)
+
+The upgrade moves every document that had no folder into its department's
+**General Documents** folder (creating that folder if the department never
+had one). Who can open each one does not change — General Documents is open
+to everyone who could see the document before — but its folder now governs
+it. From now on:
+
+- An upload with no folder chosen goes to General Documents; the upload form
+  says so.
+- Moving a document "out of its folder" moves it to General Documents, and
+  needs write access there like any other move. A document can no longer be
+  taken out of a restricted folder into a place the whole department can read.
+
+The migration is reversible: a downgrade returns each moved document to no
+folder unless somebody has filed it elsewhere since.
+
 ### Stored files are encrypted; confirm the key is kept safe (2026-10-09)
 
 Phase 4 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).

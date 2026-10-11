@@ -382,7 +382,10 @@ async def upload_document(
     service = DocumentsService(db)
     name = _resolve_document_name(name, file.filename)
 
-    # Enforce folder access if uploading into a specific folder
+    # Every document is filed in a folder, so its folder's rights decide who
+    # can read it. An upload with no folder chosen goes to General Documents
+    # rather than staying unfiled, which made it readable org-wide outside
+    # every folder's rules.
     if folder_id:
         folder = await service.get_folder_by_id(
             _parse_uuid_or_400(folder_id, "folder_id"), current_user.organization_id
@@ -393,13 +396,17 @@ async def upload_document(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Folder not found"
             )
-        if not await service.can_access_folder(
-            folder, current_user.organization_id, current_user, require_write=True
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to upload to this folder",
-            )
+    else:
+        folder = await service.general_folder(
+            current_user.organization_id, current_user.id
+        )
+    if not await service.can_access_folder(
+        folder, current_user.organization_id, current_user, require_write=True
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to upload to this folder",
+        )
 
     # Size cap, content-type detection, malware scan and an org-scoped write,
     # in that order. The stored extension comes from the detected type, never
@@ -419,7 +426,7 @@ async def upload_document(
     doc_data = {
         "name": name,
         "description": description,
-        "folder_id": folder_id if folder_id else None,
+        "folder_id": str(folder.id),
         "file_name": stored.original_name,
         "file_path": file_path,
         "file_size": stored.size,
@@ -448,7 +455,7 @@ async def upload_document(
             "document_name": name,
             "file_type": detected_mime,
             "file_size": stored.size,
-            "folder_id": folder_id,
+            "folder_id": str(folder.id),
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -614,17 +621,22 @@ async def update_document(
         existing, current_user.organization_id, current_user, require_write=True
     ):
         raise HTTPException(status_code=404, detail="Document not found")
-    # exclude_unset, not exclude_none: an explicit null (clearing folder_id to
-    # move a document to org level) must reach the service as a clear, not be
-    # silently dropped (CLAUDE.md pitfall #1's update-path mirror image).
     update_data = doc.model_dump(exclude_unset=True)
+    # An explicit folder_id: null used to move a document to "unfiled", where
+    # anyone with documents.view could read it -- a way out of every gated
+    # folder (Finance, Member Separations, a personal folder). It now means
+    # General Documents, a real folder, and goes through the same destination
+    # check as any other move.
+    if "folder_id" in update_data and update_data["folder_id"] is None:
+        general = await service.general_folder(
+            current_user.organization_id, current_user.id
+        )
+        update_data["folder_id"] = general.id
     # The check above authorizes only the document's *current* folder. A move
     # into a new, non-null folder is a destination the caller may have no
     # write access to at all -- documents.manage authorizes moving documents
     # in general, not writing into a specific ACL-gated folder. Mirrors
-    # upload_document's own destination check. Moving *out* to unfiled
-    # (folder_id: null) needs no destination check -- there is no destination
-    # folder to authorize.
+    # upload_document's own destination check.
     new_folder_id = update_data.get("folder_id")
     if new_folder_id is not None and str(new_folder_id) != str(
         existing.folder_id or ""
