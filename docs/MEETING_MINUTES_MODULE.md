@@ -293,6 +293,7 @@ _(Corrected 2026-10-04: the router is mounted at `/api/v1/minutes-records`, not
 | `POST`   | `/api/v1/minutes-records/{id}/submit`               | `minutes.manage` | Submit a draft or rejected record for approval                                                                |
 | `POST`   | `/api/v1/minutes-records/{id}/approve`              | `minutes.manage` | Approve (not by the submitter)                                                                                |
 | `POST`   | `/api/v1/minutes-records/{id}/reject`               | `minutes.manage` | Reject with a reason                                                                                          |
+| `POST`   | `/api/v1/minutes-records/{id}/reopen`               | `minutes.manage` | Return approved minutes to draft for a correction, with a reason (audit-logged)                               |
 | `POST`   | `/api/v1/minutes-records/{id}/publish`              | `minutes.manage` | Publish approved minutes to Documents                                                                         |
 | `GET`    | `/api/v1/minutes-records/templates`                 | `minutes.view`   | List templates                                                                                                |
 | `POST`   | `/api/v1/minutes-records/templates`                 | `minutes.manage` | Create template                                                                                               |
@@ -308,6 +309,18 @@ _(2026-10-11, W52-7)_. `GET /api/v1/minutes-records/action-item-assignees`
 (`minutes.manage`) lists every active member as `{id, name}` for the assignee
 picker; an action item's `assignee_id` must name an active member of the
 department, and the server stores that member's name beside it _(W52-6)_.
+
+**Approved minutes are locked, including their quorum settings** _(2026-10-11,
+MM-17)_. `PATCH /{id}/quorum-config` refuses approved minutes (400), as every
+content, motion and action-item edit already did, and `GET /{id}/quorum` on
+approved minutes reports the stored `quorum_met` / `quorum_count` instead of
+recalculating and overwriting them. A correction goes through
+`POST /{id}/reopen` (`{"reason": "..."}`, 10–500 characters): the minutes
+return to draft with their approval and submission cleared, the prior approver
+and approval time are written to the `minutes_reopened` audit event, and the
+record must be submitted and approved again — by someone other than the new
+submitter. A document already published from the approved version stays in
+Documents until the minutes are re-approved and re-published.
 Meeting records themselves are a separate router at `/api/v1/meetings`.
 
 ### List Response Counts _(2026-08-17)_

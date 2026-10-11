@@ -5,7 +5,7 @@ Business logic for meeting minutes management.
 """
 
 from datetime import datetime, time, timezone
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
@@ -587,6 +587,50 @@ class MinuteService:
 
         await self.db.commit()
         return await self.get_minutes(minutes_id, organization_id)
+
+    async def reopen_minutes(
+        self, minutes_id: str, organization_id: UUID
+    ) -> Optional[Tuple[MeetingMinutes, dict]]:
+        """Return approved minutes to draft so a correction can be made.
+
+        MM-17 (owner decision): approved minutes are locked — content, motions,
+        action items and the quorum settings — and a correction goes through
+        this path rather than through an exemption on any one endpoint. The
+        record leaves APPROVED, so members stop seeing it as ratified until it
+        is submitted and approved again, by someone other than its submitter
+        (approve_minutes' separation of duties applies to the re-approval as
+        it did to the first). The prior approval is returned so the caller can
+        write it into the audit trail, which is the only place it survives.
+        """
+        minutes = await self.get_minutes(minutes_id, organization_id)
+        if not minutes:
+            return None
+
+        if minutes.status != MinutesStatus.APPROVED.value:
+            raise ValueError("Only approved minutes can be reopened")
+
+        prior = {
+            "previous_approved_by": minutes.approved_by,
+            "previous_approved_at": (
+                minutes.approved_at.isoformat() if minutes.approved_at else None
+            ),
+            "previous_submitted_by": minutes.submitted_by,
+        }
+
+        minutes.status = MinutesStatus.DRAFT
+        minutes.approved_at = None
+        minutes.approved_by = None
+        minutes.submitted_at = None
+        minutes.submitted_by = None
+        minutes.rejected_at = None
+        minutes.rejected_by = None
+        minutes.rejection_reason = None
+
+        await self.db.commit()
+        refreshed = await self.get_minutes(minutes_id, organization_id)
+        if refreshed is None:
+            return None
+        return refreshed, prior
 
     # ============================================
     # Motion CRUD

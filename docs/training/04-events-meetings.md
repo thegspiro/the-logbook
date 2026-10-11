@@ -1217,6 +1217,18 @@ you cannot approve them."_ **Reject Minutes** stays available to them as a way
 to withdraw the submission. An action item's **Due** date now reads the
 calendar day it was set for — it showed a day early for a US department.
 
+**Correcting approved minutes** _(2026-10-11)_. Approved minutes are locked:
+their content, motions, action items and quorum settings can no longer be
+changed, so the record the department ratified — including whether quorum was
+met — stays as it was approved. To correct one, open it and click **Reopen for
+Correction**, and say what needs correcting (at least 10 characters). The
+minutes go back to **Draft**; make the correction, then **Submit for
+Approval** again, and another officer approves them as before. Until they are
+re-approved, members do not see them. The earlier approval and your reason are
+kept in the audit log. If the minutes had been published to Documents, the
+published copy stays there until you re-approve and **Re-publish to
+Documents**.
+
 **The meeting record has a lighter approval** _(2026-10-11)_. A meeting (the
 card the minutes hang off, as opposed to the minutes themselves) carries its
 own **Draft → Pending Approval → Approved** status. One officer may move it

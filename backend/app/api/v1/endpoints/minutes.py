@@ -21,6 +21,7 @@ from app.api.dependencies import (
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors
+from app.models.minute import MinutesStatus
 from app.models.user import User
 from app.schemas.documents import PublishedDocumentResponse
 from app.schemas.minute import (
@@ -31,6 +32,7 @@ from app.schemas.minute import (
     MinutesCreate,
     MinutesListItem,
     MinutesReject,
+    MinutesReopen,
     MinutesResponse,
     MinutesSearchResult,
     MinutesUpdate,
@@ -460,6 +462,52 @@ async def reject_minutes(
             "minutes_id": minutes_id,
             "title": minutes.title,
             "reason": data.reason,
+        },
+        user_id=str(current_user.id),
+    )
+
+    return _build_response(minutes)
+
+
+@router.post("/{minutes_id}/reopen", response_model=MinutesResponse)
+async def reopen_minutes(
+    minutes_id: str,
+    data: MinutesReopen,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    Reopen approved minutes as a draft so a correction can be made
+
+    Approved minutes are locked against every edit, including the quorum
+    settings; this is the correction path. The minutes return to draft and
+    must be submitted and approved again. The prior approval and the reason
+    are kept in the audit trail.
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    service = MinuteService(db)
+
+    async with handle_service_errors("Failed to reopen minutes"):
+        outcome = await service.reopen_minutes(minutes_id, current_user.organization_id)
+
+    minutes, prior = ensure_found(outcome, "Meeting minutes")
+
+    logger.info(
+        f"Minutes reopened | id={minutes_id} by={current_user.id} "
+        f"reason={data.reason!r}"
+    )
+    await log_audit_event(
+        db=db,
+        event_type="minutes_reopened",
+        event_category="meetings",
+        severity="warning",
+        event_data={
+            "minutes_id": minutes_id,
+            "title": minutes.title,
+            "reason": data.reason,
+            **prior,
         },
         user_id=str(current_user.id),
     )
@@ -1082,6 +1130,18 @@ async def set_meeting_quorum_config(
     if not minutes:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found"
+        )
+    # MM-17 (owner decision): quorum settings are part of the ratified record
+    # — changing them recalculates quorum_met for votes already treated as
+    # final — so they lock with the rest of approved minutes. A genuine
+    # correction reopens the minutes first (POST /{id}/reopen).
+    if minutes.status == MinutesStatus.APPROVED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Approved minutes are locked. Reopen them to correct the "
+                "quorum settings."
+            ),
         )
 
     old_type, old_threshold = minutes.quorum_type, minutes.quorum_threshold

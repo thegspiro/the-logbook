@@ -120,3 +120,36 @@ class TestBoundsStillEnforced:
                 current_user=user,
             )
         assert exc.value.status_code == 404
+
+
+class TestApprovedMinutesAreLocked:
+    """MM-17: the quorum settings lock with the rest of approved minutes."""
+
+    @staticmethod
+    def _db_returning(minutes) -> AsyncMock:
+        from unittest.mock import MagicMock
+
+        db = AsyncMock()
+        db.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=minutes))
+        )
+        return db
+
+    async def test_approved_minutes_refuse_a_quorum_change(self):
+        minutes = SimpleNamespace(
+            status="approved", quorum_type="count", quorum_threshold=5.0
+        )
+        db = self._db_returning(minutes)
+        with pytest.raises(HTTPException) as exc:
+            await set_meeting_quorum_config(
+                minutes_id="min-1",
+                quorum_type="percentage",
+                quorum_threshold=50.0,
+                db=db,
+                current_user=SimpleNamespace(organization_id="org-1", id="u-1"),
+            )
+        assert exc.value.status_code == 400
+        assert "Reopen" in exc.value.detail
+        assert minutes.quorum_type == "count"
+        assert minutes.quorum_threshold == 5.0
+        db.commit.assert_not_awaited()

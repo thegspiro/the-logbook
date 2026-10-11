@@ -3753,6 +3753,22 @@ transition specifically.
 
 ## MM-17 — `set_meeting_quorum_config` Has No Finalization Guard on Approved Minutes (2026-09-13)
 
+> ✅ **Resolved (2026-10-11), as the owner chose: lock on APPROVED, with a
+> reopen path for corrections.** `PATCH /minutes-records/{id}/quorum-config`
+> now refuses approved minutes (400, _"Approved minutes are locked. Reopen
+> them to correct the quorum settings."_), matching every sibling mutation.
+> `GET /{id}/quorum` — which recalculated and **wrote** `quorum_met` /
+> `quorum_count` on every call, from today's active-member count and today's
+> org default — no longer writes on approved minutes and reports the stored
+> result. The correction path is the new `POST /{id}/reopen` (`minutes.manage`,
+> a 10–500 character reason): approved minutes return to draft with their
+> approval and submission cleared, the prior approver and approval time go
+> into a `minutes_reopened` audit event, and the record is submitted and
+> approved again under the usual separation of duties. The minutes page offers
+> it as **Reopen for Correction** on approved minutes. A document already
+> published from the approved version is left in Documents until the minutes
+> are re-approved and re-published. The text below is the original finding.
+
 Every other mutating route against a `MeetingMinutes` record —
 `update_minutes`, `add_motion`/`update_motion`/`delete_motion`,
 `add_action_item`/`delete_action_item` — rejects the call once the record's

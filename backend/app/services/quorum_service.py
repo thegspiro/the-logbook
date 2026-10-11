@@ -13,7 +13,7 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.minute import MeetingMinutes
+from app.models.minute import MeetingMinutes, MinutesStatus
 from app.models.user import Organization, User, UserStatus
 
 
@@ -127,6 +127,17 @@ class QuorumService:
             )
 
         quorum_met = present_count >= required
+
+        # MM-17: approved minutes are the ratified record. Recalculating here
+        # would rewrite whether quorum was met from today's active-member
+        # count and today's org default, not the meeting's, so their stored
+        # result is reported as it stands. A correction reopens them first.
+        if minutes.status == MinutesStatus.APPROVED.value:
+            if minutes.quorum_met is not None:
+                quorum_met = minutes.quorum_met
+            if minutes.quorum_count is not None:
+                present_count = minutes.quorum_count
+            return quorum_met, present_count, required, description
 
         # Update the meeting record
         minutes.quorum_met = quorum_met

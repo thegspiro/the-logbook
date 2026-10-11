@@ -10,12 +10,14 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const MINUTES_ID = 'minutes-1';
 const SECRETARY = 'user-secretary';
 const CHIEF = 'user-chief';
 
 const mockGetMinutes = vi.fn();
+const mockReopen = vi.fn();
 const authState = {
   checkPermission: () => true,
   user: { id: SECRETARY } as { id: string } | undefined,
@@ -34,7 +36,10 @@ vi.mock('../../../services/electionService', () => ({
 }));
 
 vi.mock('../services/api', () => ({
-  minutesService: { getMinutes: (...a: unknown[]) => mockGetMinutes(...a) as unknown },
+  minutesService: {
+    getMinutes: (...a: unknown[]) => mockGetMinutes(...a) as unknown,
+    reopen: (...a: unknown[]) => mockReopen(...a) as unknown,
+  },
 }));
 
 vi.mock('../../../services/api', () => ({
@@ -98,5 +103,38 @@ describe('MinutesDetailPage approval and due dates (W51)', () => {
     renderWithRouter(<MinutesDetailPage />);
 
     expect(await screen.findByRole('button', { name: 'Approve Minutes' })).toBeInTheDocument();
+  });
+});
+
+describe('MinutesDetailPage reopen for correction (MM-17)', () => {
+  const approved = { ...submitted, status: 'approved', approved_by: CHIEF };
+
+  beforeEach(() => {
+    mockGetMinutes.mockReset();
+    mockGetMinutes.mockResolvedValue(approved);
+    mockReopen.mockReset();
+    mockReopen.mockResolvedValue({ ...approved, status: 'draft', approved_by: null, submitted_by: null });
+    authState.user = { id: SECRETARY };
+  });
+
+  it('reopens approved minutes as a draft with the reason given', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<MinutesDetailPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Reopen for Correction' }));
+    await user.type(screen.getByLabelText(/What needs correcting/), 'Quorum threshold was entered wrong');
+    await user.click(screen.getByRole('button', { name: 'Reopen as draft' }));
+
+    expect(mockReopen).toHaveBeenCalledWith(MINUTES_ID, 'Quorum threshold was entered wrong');
+    expect(await screen.findByRole('button', { name: 'Submit for Approval' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reopen for Correction' })).not.toBeInTheDocument();
+  });
+
+  it('is not offered on minutes that are not approved', async () => {
+    mockGetMinutes.mockResolvedValue(submitted);
+    renderWithRouter(<MinutesDetailPage />);
+
+    expect(await screen.findByRole('button', { name: 'Reject Minutes' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reopen for Correction' })).not.toBeInTheDocument();
   });
 });
