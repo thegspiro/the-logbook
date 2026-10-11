@@ -989,7 +989,7 @@ class FormsService:
 
         def _type(integration: FormIntegration) -> str:
             it = integration.integration_type
-            return it.value if hasattr(it, "value") else it
+            return str(getattr(it, "value", it))
 
         rows = [
             i
@@ -997,9 +997,7 @@ class FormsService:
             if _type(i) == IntegrationType.EVENT_REQUEST
         ]
         marker = getattr(form, "integration_type", None)
-        if hasattr(marker, "value"):
-            marker = marker.value
-        if marker == IntegrationType.EVENT_REQUEST:
+        if getattr(marker, "value", marker) == IntegrationType.EVENT_REQUEST:
             return not rows or any(i.is_active for i in rows)
         return any(i.is_active for i in rows)
 

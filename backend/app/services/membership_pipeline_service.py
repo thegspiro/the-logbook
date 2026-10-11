@@ -5673,7 +5673,7 @@ class MembershipPipelineService:
             .options(selectinload(MembershipPipeline.steps))
         )
         result = await self.db.execute(query)
-        default = result.scalars().first()
+        default: Optional[MembershipPipeline] = result.scalars().first()
         if default is not None:
             return default
         fallback = await self.db.execute(
@@ -5690,7 +5690,8 @@ class MembershipPipelineService:
             .limit(1)
             .options(selectinload(MembershipPipeline.steps))
         )
-        return fallback.scalars().first()
+        first_active: Optional[MembershipPipeline] = fallback.scalars().first()
+        return first_active
 
     async def _get_first_step_id(self, pipeline_id: str) -> Optional[str]:
         """Get the first step ID for a pipeline"""
