@@ -388,7 +388,7 @@ Equipment kits bundle multiple inventory items into a named package for streamli
 Members can record their preferred uniform and PPE sizes, making equipment ordering and kit issuance faster and more accurate. Sizes are edited in the **Size Preferences** modal, which works in two modes:
 
 - **Self-service** — a member edits their own sizes from **My Issued Gear** (`/inventory/my/size-preferences`).
-- **Admin / quartermaster** — an admin edits any member's sizes from the **Members Inventory** page (`/inventory/members/{user_id}/size-preferences`, requires `inventory.manage`).
+- **Admin / quartermaster** — an admin edits any member's sizes from the **Members Inventory** page (`/inventory/members/{user_id}/size-preferences`, reading or editing another member's sizes requires `inventory.manage`).
 
 ### Recording Size Preferences
 

@@ -2796,6 +2796,15 @@ supply-ordering workflow needing a colleague's size) — narrowing the gate is
 a product decision about who should see it, not a mechanical match. (Security
 review INV-8/INV-9, `docs/security-review/INV-11-inventory.md`.)
 
+**Resolved (2026-10-11), owner decision: self or `inventory.manage`, matching
+the clearance route.** Both handlers now authenticate only and call
+`_require_self_or_quartermaster` before any query, so a member reads their own
+allowance usage and sizes and a quartermaster reads anyone's; a baseline member
+asking for a colleague's gets 403. The only frontend callers (issuing from
+**Pool Items**, and **Edit sizes** on the Members Inventory page) are already
+quartermaster screens. Pinned by
+`tests/test_inventory_member_reads_self_or_manage.py`.
+
 ## Inventory — Ordinary Reorder Edits Bypass the Versioned Workflow (2026-08-28)
 
 `PATCH /reorder-requests/{id}` (`update_reorder_request`) neither locks the

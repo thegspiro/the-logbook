@@ -6144,9 +6144,19 @@ async def check_member_allowance(
     user_id: UUID,
     category_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(get_current_user),
 ):
-    """Check a member's remaining issuance allowance for a category."""
+    """
+    Check a member's remaining issuance allowance for a category.
+
+    Members can check their own allowance. Quartermasters (inventory.manage)
+    can check any member's, as on the departure clearance route.
+
+    **Authentication required**
+    """
+    # INV-8: inventory.view is baseline, so it let any member read a
+    # colleague's issuance history by category.
+    _require_self_or_quartermaster(user_id, current_user)
     service = InventoryService(db)
     # Resolve the member's highest-priority position for role-specific allowances
     role_id = await service._get_primary_role_id(user_id, current_user.organization_id)
@@ -7106,14 +7116,19 @@ async def issue_kit_to_member(
 async def get_member_size_preferences(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get a member's size preferences.
 
+    Members can view their own sizes. Quartermasters (inventory.manage) can
+    view any member's, as on the departure clearance route.
+
     **Authentication required**
-    **Requires permission: inventory.view**
     """
+    # INV-9: inventory.view is baseline, so it let any member read a
+    # colleague's uniform measurements.
+    _require_self_or_quartermaster(user_id, current_user)
     service = InventoryService(db)
     prefs = await service.get_member_size_preferences(
         user_id, current_user.organization_id
