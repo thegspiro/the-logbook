@@ -20,6 +20,7 @@ import type {
   InventoryCategory,
   InventoryItemCreate,
   InventoryVendor,
+  ItemVariantGroup,
   StorageAreaResponse,
   Location,
   SizeVariantCreate,
@@ -55,6 +56,8 @@ interface FD {
   purchase_date: string;
   vendor: string;
   vendor_id: string;
+  /** Existing variant group this item belongs to, or '' for none (W40-7). */
+  variant_group_id: string;
   warranty_expiration: string;
   replacement_cost: string;
   location_id: string;
@@ -84,6 +87,7 @@ const EMPTY: FD = {
   purchase_date: '',
   vendor: '',
   vendor_id: '',
+  variant_group_id: '',
   warranty_expiration: '',
   replacement_cost: '',
   location_id: '',
@@ -168,6 +172,9 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   // A failed load leaves the picker empty and the free-text name still usable,
   // so it never blocks adding an item.
   const [vendors, setVendors] = useState<InventoryVendor[]>([]);
+  // Same failure contract as vendors: an empty list leaves the item ungrouped
+  // rather than blocking the save.
+  const [variantGroups, setVariantGroups] = useState<ItemVariantGroup[]>([]);
 
   // Variant generation state (only for new items)
   const [generateVariants, setGenerateVariants] = useState(false);
@@ -192,6 +199,15 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         setVendors(await inventoryService.getVendors({ active_only: false }));
       } catch {
         setVendors([]);
+      }
+    })();
+    void (async () => {
+      try {
+        // Inactive groups too, for the same reason as vendors: an item already
+        // in a deactivated group must show it rather than read as ungrouped.
+        setVariantGroups(await inventoryService.getVariantGroups(false));
+      } catch {
+        setVariantGroups([]);
       }
     })();
   }, [isOpen]);
@@ -224,6 +240,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         purchase_date: editItem.purchase_date ?? '',
         vendor: editItem.vendor ?? '',
         vendor_id: editItem.vendor_id ?? '',
+        variant_group_id: editItem.variant_group_id ?? '',
         warranty_expiration: editItem.warranty_expiration ?? '',
         replacement_cost: editItem.replacement_cost != null ? String(editItem.replacement_cost) : '',
         location_id: editItem.location_id ?? '',
@@ -402,6 +419,8 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         purchase_date: pick(f.purchase_date),
         vendor: isEdit ? blankToNull(f.vendor) : f.vendor.trim() || undefined,
         vendor_id: f.vendor_id || (isEdit ? null : undefined),
+        // W40-7: groups made on the Variant Groups page are filled from here.
+        variant_group_id: pick(f.variant_group_id),
         warranty_expiration: pick(f.warranty_expiration),
         replacement_cost: num(f.replacement_cost),
         location_id: pick(f.location_id),
@@ -547,6 +566,35 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                   : 'Individual: one record per physical item, such as a radio or an SCBA pack, tracked on its own, usually by serial number.'}
               </p>
             </div>
+            {/* Generating variants creates and fills a group of its own. */}
+            {!generateVariants && (
+              <div>
+                <label className={lbl} htmlFor="item-variant_group_id">
+                  Variant Group
+                </label>
+                <select
+                  id="item-variant_group_id"
+                  aria-describedby="item-variant_group_id-help"
+                  className={inp}
+                  value={f.variant_group_id}
+                  onChange={(e) => up('variant_group_id', e.target.value)}
+                >
+                  <option value="">— None —</option>
+                  {variantGroups
+                    .filter((g) => g.active || g.id === f.variant_group_id)
+                    .map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name}
+                        {g.active ? '' : ' (inactive)'}
+                      </option>
+                    ))}
+                </select>
+                <p id="item-variant_group_id-help" className="text-theme-text-muted mt-1 text-xs">
+                  Puts this item with the other sizes and styles of the same product. Groups are created on Variant
+                  Groups.
+                </p>
+              </div>
+            )}
           </div>
         </fieldset>
 

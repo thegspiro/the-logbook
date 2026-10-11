@@ -2226,20 +2226,20 @@ Navigate to **Inventory Admin > Variant Groups** (`/inventory/admin/variant-grou
 
 ### Edge Cases
 
-| Scenario               | Behavior                                                                                          |
-| ---------------------- | ------------------------------------------------------------------------------------------------- |
-| Group with no variants | Group exists but has no linked items, **and nothing in the app can add one** — see the note below |
-| Pricing changes        | Changes to group-level pricing do not retroactively update existing item costs                    |
-| Deactivated group      | Items retain their variant linkage for reporting but the group is hidden from new-item flows      |
+| Scenario               | Behavior                                                                                            |
+| ---------------------- | --------------------------------------------------------------------------------------------------- |
+| Group with no variants | Group exists but has no linked items; add one with the item form's **Variant Group** picker (below) |
+| Pricing changes        | Changes to group-level pricing do not retroactively update existing item costs                      |
+| Deactivated group      | Items retain their variant linkage for reporting but the group is hidden from new-item flows        |
 
-> **Known limitation — a group made here stays empty** _(2026-09-29, workflow
-> review W40-7)_. The item form has no variant-group field, and **Generate
-> Sizes & Styles** creates a group of its own rather than filling
-> an existing one, so a group created on this page can never receive an item.
-> Its empty state now says so instead of pointing at a step that does not exist.
-> To get a populated group, start from **Generate Sizes & Styles** on the Add
-> Item form. Open in
-> `docs/KNOWN_LIMITATIONS.md`.
+> **Filling a group made here** _(2026-10-11, workflow review W40-7)_. The Add
+> Item and Edit Item forms on **All Items** have a **Variant Group** picker
+> beside Tracking Type. Choose the group to put the item in it, or **— None —**
+> to take an item out of its group. Only active groups are offered; an item
+> already in a deactivated group shows it marked "(inactive)". The picker is
+> hidden while **Generate Sizes & Styles** is on, because generating variants
+> still creates a new group of its own. An empty group's detail view now points
+> at the picker.
 
 ---
 

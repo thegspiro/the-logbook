@@ -1371,7 +1371,8 @@ export interface InventoryItemCreate {
   /** Nullable for the same reason as `standard_size`: clearing the style on an
    *  edit has to send an explicit null, not omit the key. */
   style_attributes?: string[] | null | undefined;
-  variant_group_id?: string | undefined;
+  /** Nullable so an edit can take the item out of its group (W40-7). */
+  variant_group_id?: string | null | undefined;
 }
 
 export interface ItemVariantGroup {
