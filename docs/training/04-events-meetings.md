@@ -895,13 +895,13 @@ Navigate to **Events > Analytics** to view department-wide event metrics:
 - **Top Events**: Table of highest-attendance events
 - **Date Range Filter**: Filter all analytics by custom date range
 
-> **Read the attendance rate with care.** It divides every check-in in the
-> period by every **Going** RSVP in the period, pooled across events, and it
-> includes events that have not happened yet — so the figure falls whenever
-> members RSVP to something upcoming, and an upcoming event shows in **Top
-> Events** at 0%. Despite its label it is a pooled ratio, not an average per
-> event. Which events it should cover is an open owner decision (found
-> 2026-09-29; `docs/KNOWN_LIMITATIONS.md`).
+> **What Avg Attendance Rate measures** _(2026-10-11)_. For each event in the
+> period that has **already ended** and had at least one member **Going**, it
+> takes checked-in ÷ Going, and the card shows the average of those per-event
+> rates. Upcoming and in-progress events are left out, so the figure no longer
+> falls when members RSVP to something ahead. Before this release it pooled
+> every check-in over every Going RSVP, upcoming events included. **Top
+> Events** still lists upcoming events, at 0% until they happen.
 
 ![Event analytics page with summary cards and attendance charts](./images/04-08-event-analytics.png)
 

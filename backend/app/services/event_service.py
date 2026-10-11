@@ -5189,9 +5189,6 @@ class EventService:
         agg_q = (
             select(
                 func.count(EventRSVP.id).label("total_rsvps"),
-                func.sum(
-                    case((EventRSVP.status == RSVPStatus.GOING, 1), else_=0)
-                ).label("going_count"),
                 func.sum(case((EventRSVP.checked_in.is_(True), 1), else_=0)).label(
                     "checked_in_count"
                 ),
@@ -5201,10 +5198,35 @@ class EventService:
         )
         row = (await self.db.execute(agg_q)).one()
         total_rsvps = row.total_rsvps or 0
-        going_count = row.going_count or 0
         checked_in_count = row.checked_in_count or 0
 
-        avg_attendance_rate = checked_in_count / going_count if going_count > 0 else 0.0
+        # W21-6 (owner decision): "Avg Attendance Rate" is the mean of each
+        # past event's own rate, over events that have ended and had anyone
+        # Going. Pooling every check-in over every Going RSVP counted an
+        # upcoming event's Going members as no-shows, so the figure fell
+        # whenever members RSVP'd ahead, and was not an average at all. The
+        # per-event rate is the same checked-in / Going ratio Top Events
+        # reports below.
+        going_expr = func.sum(case((EventRSVP.status == RSVPStatus.GOING, 1), else_=0))
+        checked_in_expr = func.sum(case((EventRSVP.checked_in.is_(True), 1), else_=0))
+        per_event_q = (
+            select(
+                going_expr.label("going_count"),
+                checked_in_expr.label("checked_in_count"),
+            )
+            .join(Event, Event.id == EventRSVP.event_id)
+            .where(*rsvp_filter, Event.end_datetime <= datetime.now(dt_timezone.utc))
+            .group_by(Event.id)
+            .having(going_expr > 0)
+        )
+        per_event_rates = [
+            (r.checked_in_count or 0) / r.going_count
+            for r in (await self.db.execute(per_event_q)).all()
+            if r.going_count
+        ]
+        avg_attendance_rate = (
+            sum(per_event_rates) / len(per_event_rates) if per_event_rates else 0.0
+        )
         check_in_rate = checked_in_count / total_rsvps if total_rsvps > 0 else 0.0
 
         # 3) Average check-in time before event start (minutes)
