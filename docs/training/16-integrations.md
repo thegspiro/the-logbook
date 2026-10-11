@@ -1102,7 +1102,7 @@ Two permissions to grant alongside it — neither is granted by the upgrade:
 | `members.check_in`        | Running a check-in station                        |
 
 Full walkthrough:
-[Membership → Member ID Cards and the Check-In Station](./01-membership.md#member-id-cards-and-the-check-in-station-2026-08-23).
+[Membership → Member ID Cards and the Check-In Station](./01-membership.md#member-id-cards-and-the-check-in-station).
 
 ## Claude (MCP) — asking questions of your Logbook _(2026-09-03)_
 
