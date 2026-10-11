@@ -3340,9 +3340,15 @@ Two open items from the same review, both in `docs/KNOWN_LIMITATIONS.md`:
   of receiving the notice, the notice stays in the returns queue, on the hub's
   attention list and in the member's **Pending requests**, and can then only be
   denied. Receive through the notice when there is one.
-- **A write-off raised for one returned pool unit retires the whole item**
-  (W41-6). The review dialog says so and requires a note and an
-  acknowledgement; there is no quantity write-off yet.
+- ~~**A write-off raised for one returned pool unit retires the whole item**
+  (W41-6).~~ **Resolved 2026-10-11:** receiving a damaged pool return no
+  longer offers **Write-off review** as a safety follow-up — only
+  **Maintenance**, **Charge review** or **Automatic**, and Automatic picks
+  Maintenance for an out-of-service pool return where it used to raise a
+  write-off. The units that came back damaged are already kept out of issuable
+  stock by the receipt itself; a write-off request names the whole item, so
+  approving one retired the shelf and ended every other member's issuance.
+  Individual items still offer Write-off review.
 
 ### The "Transfer is immediate" checkbox is gone
 

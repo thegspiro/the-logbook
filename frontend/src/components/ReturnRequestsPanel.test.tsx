@@ -68,6 +68,45 @@ describe('ReturnRequestsPanel', () => {
     expect(mockReviewReturnRequest).toHaveBeenCalledWith('rr-1', expect.objectContaining({ received_quantity: 2 }));
   });
 
+  // W41-6: a write-off retires the item, which for pool stock is the whole shelf.
+  it('offers no write-off review when receiving a damaged pool return', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ReturnRequestsPanel />);
+
+    await user.click(await screen.findByRole('button', { name: 'Receive Nitrile Gloves from Jordan Avery' }));
+    const dialog = screen.getByRole('dialog', { name: 'Receive Item' });
+    await user.selectOptions(within(dialog).getByRole('combobox', { name: /Observed condition/ }), 'out_of_service');
+
+    const followUp = within(dialog).getByRole('combobox', { name: /Safety follow-up/ });
+    expect(within(followUp).getByRole('option', { name: 'Charge review' })).toBeInTheDocument();
+    expect(within(followUp).getByRole('option', { name: 'Maintenance' })).toBeInTheDocument();
+    expect(within(followUp).queryByRole('option', { name: 'Write-off review' })).not.toBeInTheDocument();
+  });
+
+  it('still offers write-off review for a damaged individual item', async () => {
+    mockGetReturnRequests.mockResolvedValue([
+      {
+        ...gloves,
+        id: 'rr-2',
+        return_type: 'assignment',
+        item_name: 'Helmet',
+        issuance_id: undefined,
+        assignment_id: 'as-1',
+        quantity_returning: 1,
+      },
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<ReturnRequestsPanel />);
+
+    await user.click(await screen.findByRole('button', { name: 'Receive Helmet from Jordan Avery' }));
+    const dialog = screen.getByRole('dialog', { name: 'Receive Item' });
+    await user.selectOptions(within(dialog).getByRole('combobox', { name: /Observed condition/ }), 'damaged');
+
+    const followUp = within(dialog).getByRole('combobox', { name: /Safety follow-up/ });
+    expect(within(followUp).getByRole('option', { name: 'Write-off review' })).toBeInTheDocument();
+    expect(within(followUp).queryByRole('option', { name: 'Charge review' })).not.toBeInTheDocument();
+  });
+
   it('names each row action after its item and member, and reads conditions as words', async () => {
     const user = userEvent.setup();
     renderWithRouter(<ReturnRequestsPanel />);

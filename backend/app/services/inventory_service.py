@@ -7608,11 +7608,23 @@ class InventoryService:
                     ItemStatus.IN_MAINTENANCE if unsafe else ItemStatus.AVAILABLE
                 )
 
+            # W41-6: a write-off request names the item, not the returned
+            # units, and approving it retires the item and releases every
+            # holder. For a pool issuance that is the whole shelf and every
+            # other member's issuance, so it is not offered there; "auto"
+            # falls back to the maintenance follow-up a damaged pool return
+            # already gets.
+            pool_issuance = req.return_type == ReturnRequestType.ISSUANCE
             chosen = follow_up
+            if chosen == "write_off" and pool_issuance:
+                raise ValueError(
+                    "Write-off review is not available for pool issuances; "
+                    "choose maintenance or charge review"
+                )
             if chosen == "auto":
                 chosen = (
                     "write_off"
-                    if condition == ItemCondition.OUT_OF_SERVICE
+                    if condition == ItemCondition.OUT_OF_SERVICE and not pool_issuance
                     else ("maintenance" if unsafe else "none")
                 )
             if unsafe and chosen == "none":

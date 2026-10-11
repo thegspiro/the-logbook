@@ -338,10 +338,15 @@ const ReturnRequestsPanel: React.FC = () => {
                         >
                           <option value="auto">Automatic (recommended)</option>
                           <option value="maintenance">Maintenance</option>
-                          {reviewModal.request.return_type === 'issuance' && (
+                          {/* A write-off names the item, not the returned units:
+                              approving one raised from a pool return retires the
+                              whole shelf and ends every holder's issuance, so the
+                              server refuses it for pool issuances (W41-6). */}
+                          {reviewModal.request.return_type === 'issuance' ? (
                             <option value="charge_review">Charge review</option>
+                          ) : (
+                            <option value="write_off">Write-off review</option>
                           )}
-                          <option value="write_off">Write-off review</option>
                         </select>
                       </div>
                     )}
