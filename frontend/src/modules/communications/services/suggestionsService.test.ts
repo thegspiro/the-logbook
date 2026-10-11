@@ -52,6 +52,13 @@ describe('suggestionsService', () => {
     expect(without.has('answers')).toBe(false);
   });
 
+  it('asks for a pick list by kind alone, never with a search term', async () => {
+    mockGet.mockResolvedValue({ data: [{ id: 'u1', name: 'Riley Member' }] });
+
+    await expect(suggestionsService.pickOptions('member')).resolves.toEqual([{ id: 'u1', name: 'Riley Member' }]);
+    expect(mockGet).toHaveBeenCalledWith('/suggestions/pick-options', { params: { kind: 'member' } });
+  });
+
   it('keeps a follow-up key out of every URL', async () => {
     const key = 'k'.repeat(43);
     await suggestionsService.lookupByKey(key);

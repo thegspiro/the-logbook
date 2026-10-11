@@ -4,6 +4,14 @@ import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 import type { EditableQuestion } from '../utils/suggestionRouting';
+
+const mockPickOptions = vi.fn();
+vi.mock('../services/suggestionsService', () => ({
+  suggestionsService: {
+    pickOptions: (...args: unknown[]) => mockPickOptions(...args) as unknown,
+  },
+}));
+
 import IntakeQuestionsEditor, { type RouteTarget } from './IntakeQuestionsEditor';
 
 const targets: RouteTarget[] = [
@@ -128,5 +136,81 @@ describe('IntakeQuestionsEditor', () => {
   it('offers no routing on a checkbox question', () => {
     renderWithRouter(<Harness initial={[{ ...safety, type: 'checkbox' }]} />);
     expect(screen.queryByLabelText('Where option 1 sends the submission')).not.toBeInTheDocument();
+  });
+});
+
+describe('IntakeQuestionsEditor — rules by answer type', () => {
+  const urgency: EditableQuestion = {
+    id: 'urgency',
+    label: 'How urgent?',
+    type: 'rating',
+    required: false,
+    options: [],
+  };
+  const who: EditableQuestion = { id: 'who', label: 'Who?', type: 'member', required: false, options: [] };
+  const followUp: EditableQuestion = { id: 'next', label: 'Follow-up', type: 'text', required: false, options: [] };
+
+  const ruleLabels = (group: HTMLElement) =>
+    within(within(group).getByLabelText('Rule'))
+      .getAllByRole('option')
+      .map((o) => o.textContent);
+
+  beforeEach(() => {
+    latest = [];
+    onChangeSpy.mockReset();
+    mockPickOptions.mockReset();
+    mockPickOptions.mockResolvedValue([]);
+  });
+
+  it('offers "at least" under a rating and a 1–5 answer to compare with', async () => {
+    renderWithRouter(<Harness initial={[urgency, followUp]} />);
+    const user = userEvent.setup();
+    const second = screen.getByRole('group', { name: 'Question 2' });
+
+    await user.selectOptions(within(second).getByLabelText('Show only after this question'), 'urgency');
+    expect(ruleLabels(second)).toEqual(expect.arrayContaining(['is at least', 'is at most']));
+    expect(ruleLabels(second)).not.toContain('includes');
+
+    await user.selectOptions(within(second).getByLabelText('Rule'), 'at_least');
+    await user.selectOptions(within(second).getByLabelText('Answer'), '4');
+    expect(latest.find((q) => q.id === 'next')).toMatchObject({
+      conditionQuestionId: 'urgency',
+      conditionOperator: 'at_least',
+      conditionValue: '4',
+    });
+  });
+
+  it('only asks whether a member pick was answered', async () => {
+    renderWithRouter(<Harness initial={[who, followUp]} />);
+    const user = userEvent.setup();
+    const second = screen.getByRole('group', { name: 'Question 2' });
+
+    await user.selectOptions(within(second).getByLabelText('Show only after this question'), 'who');
+    expect(ruleLabels(second)).toEqual(['is answered', 'is not answered']);
+    expect(latest.find((q) => q.id === 'next')?.conditionOperator).toBe('not_empty');
+    expect(within(second).queryByLabelText('Answer')).not.toBeInTheDocument();
+  });
+
+  it('never offers "at least" under a text question', async () => {
+    renderWithRouter(<Harness initial={[{ ...followUp, id: 'where', label: 'Where?' }, followUp]} />);
+    const user = userEvent.setup();
+    const second = screen.getByRole('group', { name: 'Question 2' });
+
+    await user.selectOptions(within(second).getByLabelText('Show only after this question'), 'where');
+    expect(ruleLabels(second)).not.toContain('is at least');
+  });
+
+  it('warns that a vehicle question will be skipped while none are on file', async () => {
+    const rig: EditableQuestion = {
+      id: 'rig',
+      label: 'Which vehicle?',
+      type: 'apparatus',
+      required: true,
+      options: [],
+    };
+    renderWithRouter(<Harness initial={[rig]} />);
+
+    expect(await screen.findByText(/No vehicles are on file/)).toBeInTheDocument();
+    expect(mockPickOptions).toHaveBeenCalledWith('apparatus');
   });
 });

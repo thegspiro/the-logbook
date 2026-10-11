@@ -224,6 +224,50 @@ class TestConditionError:
     def test_a_new_field_only_needs_an_existing_parent(self):
         assert FormsService._condition_error(None, "card", _intake_fields()) is None
 
+    def test_a_numeric_rule_needs_a_number_question(self):
+        fields = _intake_fields() + [_field("years", "Years served", FieldType.NUMBER)]
+        assert (
+            FormsService._condition_error("card", "years", fields, "at_least") is None
+        )
+        assert FormsService._condition_error("card", "name", fields, "at_most")
+
+
+class TestNumericRules:
+    """``at_least`` / ``at_most`` compare as numbers. ``formVisibility.test.ts``
+    asserts the same cases for the browser."""
+
+    @staticmethod
+    def _shown(operator, threshold, answer):
+        years = _field("years", "Years served", FieldType.NUMBER)
+        mentor = _field("mentor", "Mentor others?", rule=("years", operator, threshold))
+        data = {} if answer is None else {"years": answer}
+        return "mentor" in FormsService._visible_field_ids([years, mentor], data)
+
+    @pytest.mark.parametrize(
+        ("operator", "answer", "shown"),
+        [
+            ("at_least", "5", True),
+            ("at_least", "10", True),
+            ("at_least", "4.5", False),
+            ("at_most", "5", True),
+            ("at_most", "2", True),
+            ("at_most", "6", False),
+        ],
+    )
+    def test_compares_as_numbers_inclusive(self, operator, answer, shown):
+        assert self._shown(operator, "5", answer) is shown
+
+    def test_ten_is_at_least_nine_numerically_not_as_text(self):
+        assert self._shown("at_least", "9", "10") is True
+
+    @pytest.mark.parametrize("answer", [None, "", "lots"])
+    def test_a_blank_or_non_numeric_answer_meets_no_threshold(self, answer):
+        assert self._shown("at_least", "1", answer) is False
+        assert self._shown("at_most", "1", answer) is False
+
+    def test_an_unusable_threshold_fails_closed(self):
+        assert self._shown("at_least", "many", "3") is True
+
 
 def _stored(id_, label, rule=None, field_type=FieldType.TEXT):
     parent, operator, value = (tuple(rule) + (None,) * 3)[:3] if rule else (None,) * 3
@@ -274,6 +318,21 @@ class TestBuilderWrites:
         assert result is None
         assert "depends on it" in error
         assert top.condition_field_id is None
+
+    async def test_update_refuses_a_numeric_rule_under_a_text_question(self):
+        # Changing only the rule still checks it against the existing parent.
+        top = _stored("top", "Top")
+        child = _stored("child", "Child", ("top", "equals", "yes"))
+        service = FormsService(_db_returning(child))
+        service.get_form_by_id = AsyncMock(return_value=_form_with([top, child]))
+
+        result, error = await service.update_field(
+            "child", "f1", "org-1", {"condition_operator": "at_least"}
+        )
+
+        assert result is None
+        assert "number question" in error
+        assert child.condition_operator == "equals"
 
     async def test_removing_the_controlling_question_clears_the_whole_rule(self):
         top = _stored("top", "Top")
