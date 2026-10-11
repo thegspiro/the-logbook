@@ -903,18 +903,24 @@ Scheduled tasks run automatically on a schedule:
 | **Generate Compliance Reports**       | Auto-generate scheduled compliance reports _(added 2026-03-13)_                                                                                                                           |
 | **Self-Report Attachment Retention**  | Daily: deletes approved or rejected self-reported certificate files older than the department's retention period, where one is set _(added 2026-10-05; see [Training](./02-training.md))_ |
 
-**Not yet built:** there is no **Administration > Scheduled Tasks** page. The
-tasks above are real and do run — see the in-process runner below — but the
-only way to inspect them is the API: `GET /scheduled/tasks` lists every task
-with its recommended cron schedule, and `POST /scheduled/run-task?task=<id>`
-triggers one by hand. That last one runs across **every** organization, so it
-is restricted to a platform System Owner (`system.run_tasks`), not a
-department admin.
+There is no **Administration > Scheduled Tasks** page, by design: scheduled
+tasks belong to the platform owner, not to a department administrator. The
+tasks above are real and run on their own — see the in-process runner below.
+Every task works across **every** organization on the installation, so
+running one is a platform operation: `POST /scheduled/run-task?task=<id>`
+triggers one by hand and is restricted to a platform System Owner
+(`system.run_tasks`). `GET /scheduled/tasks` lists each task with its
+recommended cron schedule, and is readable through the API by an administrator
+(`admin.access` or `settings.manage`).
 
-Note that even the API reports only the schedule. Last-run and next-run times
-and a per-task enabled flag — the columns the placeholder describes — are not
-stored anywhere, so a page for this would need backend work first. The
-placeholder stays open.
+The API reports the schedule only; last-run and next-run times and a per-task
+enabled flag are not stored. A department controls what a task does for it
+through that feature's own settings (for example, the membership-tier
+auto-advance switch), not by turning the task off.
+
+> **Decided 2026-10-05.** The owner chose to keep scheduled tasks
+> platform-owner only rather than build a department-facing page; this section
+> previously described that page as not yet built.
 
 ## In-Process Scheduled Task Runner (2026-03-25)
 
