@@ -7152,7 +7152,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **OnboardingSessionModel** · `app/models/onboarding.py`
 
-> Server-side onboarding session storage SECURITY: Stores sensitive onboarding data encrypted server-side instead of in browser sessionStorage. This prevents passwords, API keys, and secrets from being exposed in the browser. Session data includes: - Department configuration - Email/authentication settings (encrypted) - File storage configuration (encrypted) - Admin user credentials (encrypted) - IT team information Sessions expire after 30 minutes of inactivity (see SESSION_EXPIRY_HOURS in api/v1/onboarding.py); each validated call slides the expiry forward.
+> Server-side onboarding session storage SECURITY: Stores sensitive onboarding data encrypted server-side instead of in browser sessionStorage. This prevents passwords, API keys, and secrets from being exposed in the browser. Session data includes: - Department configuration - Email/authentication settings (encrypted) - File storage configuration (encrypted) - Admin user credentials (encrypted) - IT team information Sessions expire after 30 minutes of inactivity (see SESSION_EXPIRY_HOURS in api/v1/onboarding.py); each validated call slides the expiry forward, but never past SESSION_MAX_LIFETIME_HOURS (24h) after ``created_at``.
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
@@ -7328,8 +7328,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
-| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `config_id` | VARCHAR(36) | no | FK |  | → `public_portal_config.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | yes | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `config_id` | VARCHAR(36) | yes | FK |  | → `public_portal_config.id` ON DELETE CASCADE |
 | `api_key_id` | VARCHAR(36) | yes | FK, IDX |  | → `public_portal_api_keys.id` ON DELETE SET NULL |
 | `ip_address` | VARCHAR(45) | no | IDX |  |  |
 | `endpoint` | VARCHAR(255) | no | IDX |  |  |
@@ -11108,7 +11108,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `property_return_reminders` | `organization_id` | CASCADE | no |
 | `prospective_members` | `organization_id` | CASCADE | no |
 | `prospects` | `organization_id` | CASCADE | no |
-| `public_portal_access_log` | `organization_id` | CASCADE | no |
+| `public_portal_access_log` | `organization_id` | CASCADE | yes |
 | `public_portal_api_keys` | `organization_id` | CASCADE | no |
 | `public_portal_config` | `organization_id` | CASCADE | no |
 | `public_portal_data_whitelist` | `organization_id` | CASCADE | no |
@@ -11680,7 +11680,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `public_portal_access_log` | `config_id` | CASCADE | no |
+| `public_portal_access_log` | `config_id` | CASCADE | yes |
 | `public_portal_api_keys` | `config_id` | CASCADE | no |
 | `public_portal_data_whitelist` | `config_id` | CASCADE | no |
 

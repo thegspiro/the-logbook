@@ -210,15 +210,20 @@ class PublicPortalAccessLog(Base):
     __tablename__ = "public_portal_access_log"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
-    organization_id: Mapped[str] = mapped_column(
+    # NULL for a request whose API key matches no stored key (PUB-8): it cannot
+    # be attributed to a department, and is logged anyway so the anomaly
+    # detector can count failed authentication. Such a row is platform-level —
+    # every per-organization reader filters on organization_id, so no
+    # department ever sees it.
+    organization_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
     )
-    config_id: Mapped[str] = mapped_column(
+    config_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("public_portal_config.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
     )
 
     # API key used (NULL if invalid/missing key)
@@ -254,8 +259,8 @@ class PublicPortalAccessLog(Base):
     flag_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationships
-    organization: Mapped["Organization"] = relationship("Organization")
-    config: Mapped["PublicPortalConfig"] = relationship(
+    organization: Mapped[Optional["Organization"]] = relationship("Organization")
+    config: Mapped[Optional["PublicPortalConfig"]] = relationship(
         "PublicPortalConfig", back_populates="access_logs"
     )
     api_key: Mapped[Optional["PublicPortalAPIKey"]] = relationship(

@@ -736,7 +736,13 @@ Navigate to **Settings > Public Portal** (`/admin/public-portal`) to control wha
   data."_ A new key is shown once (**API Key Created**); revoking cuts off
   whatever uses it immediately.
 - **Access Logs** — every request to the public API, rejected ones included,
-  newest first.
+  newest first. _(2026-10-11)_ A refused sign-in is now recorded too: a
+  request using one of **your** keys that has been revoked or has expired
+  appears here as a 401 ("Revoked API key", "Expired API key"). A request with
+  a key that belongs to no department — a guess, a typo, a key from another
+  system — is recorded where only the server operator can see it, not on any
+  department's tab; it still counts towards the suspicious-activity check, so a
+  run of failed keys from one address is flagged.
 - **Statistics** — traffic over the last 24 hours and 7 days, error rate,
   rate-limit hits and suspicious requests, with an **Attention Required**
   banner when one crosses its threshold. _(2026-09-24)_ Before this the tab
