@@ -1367,6 +1367,13 @@ class ReportsService:
         report["unfinalized_shifts"] = await self._count_unfinalized_shifts(
             organization_id, period_start, period_end
         )
+        # The whole range is read under the current mode, so any part of it
+        # before that mode took over comes from the other source and is
+        # missing here. Warn rather than change the figures (SCHED-14).
+        report["tracking_mode"] = tracking.get("mode")
+        mode_since = await call_service.mode_since(str(organization_id))
+        report["mode_since"] = str(mode_since) if mode_since else None
+        report["range_predates_mode"] = bool(mode_since and period_start < mode_since)
         return report
 
     async def _count_unfinalized_shifts(
@@ -1466,6 +1473,13 @@ class ReportsService:
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "period_start": str(period_start),
             "period_end": str(period_end),
+            "source": "shift_reports",
+            # Shift completion reports are filed per member, so a shift two
+            # members reported contributes its calls twice. The figure is a
+            # sum of member-reported calls, not an incident count, and the
+            # renderer names it that way (SCHED-15, owner decision: rename,
+            # numbers unchanged).
+            "counts_member_reports": True,
             "summary": {
                 "total_calls": total_calls,
                 "avg_calls_per_day": avg_per_day,

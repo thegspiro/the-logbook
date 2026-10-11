@@ -639,15 +639,20 @@ Two further things about this report that are easy to be caught out by:
 > source from your department's **current** setting and applies it to the whole
 > range — it does not switch part-way through. A department now on close-out
 > counts therefore sees **nothing** from its earlier per-incident months, and
-> one that switched back sees nothing from its count-only months. Nothing warns
-> you; the number is simply smaller. Run each period separately.
+> one that switched back sees nothing from its count-only months. From
+> 2026-10-11 every change of mode records the date it was made, and a report
+> whose range starts before that date opens with **Part of this range is
+> missing**, naming the date. A change made before then was never dated, so it
+> still gets no warning. Either way, run each period separately.
 
-> **"Total Calls" in per-incident mode is not an incident count either.** It
-> sums the call counts on **shift completion reports**, and those are filed per
-> trainee — so a shift with two enrolled trainees contributes its calls twice,
-> and manually filed reports are added alongside. Neither mode currently
-> produces a figure you can hand to a funder without explaining how it was
-> derived.
+> **Per-incident mode reports Member-Reported Calls, not Total Calls.** The
+> figure sums the call counts on **shift completion reports**, and those are
+> filed per member — so a shift two members reported contributes its calls
+> twice, and manually filed reports are added alongside. The cards read
+> **Member-Reported Calls**, **Avg Member-Reported/Day** and **Peak
+> Member-Reported**, with a note underneath, and the CSV export uses the same
+> column name. The numbers themselves did not change. It is not an incident
+> count; do not hand it to a funder as one.
 
 ### Claiming a call another unit logged
 

@@ -76,6 +76,14 @@ class CallTrackingService:
             return {"mode": CallTrackingMode.DETAILED, "call_types": []}
         return eligibility.get_call_tracking_settings(org)
 
+    async def mode_since(self, organization_id: str) -> Optional[date]:
+        """When the current tracking mode was adopted, if a change was recorded."""
+        eligibility = ShiftEligibilityService(self.db)
+        org = await eligibility._get_org(str(organization_id))
+        if not org:
+            return None
+        return eligibility.get_call_tracking_mode_since(org)
+
     async def _valid_type_slugs(
         self, organization_id: str, for_update: bool = False
     ) -> set:

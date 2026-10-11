@@ -1190,6 +1190,47 @@ class ShiftEligibilityService:
 
         return {"mode": mode, "call_types": clean_types}
 
+    def get_call_tracking_mode_since(self, org: Organization) -> Optional[date]:
+        """The department-calendar date the current tracking mode was adopted.
+
+        ``None`` when no change has been recorded: the stamp started on
+        2026-10-11 and was never backfilled, so a department that has not
+        switched modes since then has no date and gets no range warning
+        (owner decision, SCHED-14). Read defensively — this is hand-editable
+        JSON, and a bad value must not take the call-volume report down.
+        """
+        raw = self._get_scheduling_settings(org).get("call_tracking")
+        value = raw.get("mode_since") if isinstance(raw, dict) else None
+        if not isinstance(value, str):
+            return None
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            return None
+
+    def _stamp_call_tracking_mode_since(
+        self,
+        org: Organization,
+        stored: Any,
+        incoming: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Carry or set ``mode_since`` on a call-tracking save.
+
+        The report reads one mode for a whole range, so it needs to know when
+        that mode took over to warn about a range reaching back past it. A
+        change of mode stamps today on the department's calendar; a save that
+        keeps the mode carries the existing stamp forward, because the client
+        sends the whole object and would otherwise erase it. The client
+        cannot set the date itself.
+        """
+        saved = {k: v for k, v in incoming.items() if k != "mode_since"}
+        previous_mode = self.get_call_tracking_settings(org)["mode"]
+        if saved.get("mode") != previous_mode:
+            saved["mode_since"] = org_today(org).isoformat()
+        elif isinstance(stored, dict) and isinstance(stored.get("mode_since"), str):
+            saved["mode_since"] = stored["mode_since"]
+        return saved
+
     async def update_scheduling_settings(
         self,
         organization_id: str,
@@ -1246,7 +1287,9 @@ class ShiftEligibilityService:
         if enforce_evoc is not None:
             scheduling["enforce_evoc"] = enforce_evoc
         if call_tracking is not None:
-            scheduling["call_tracking"] = call_tracking
+            scheduling["call_tracking"] = self._stamp_call_tracking_mode_since(
+                org, scheduling.get("call_tracking"), call_tracking
+            )
 
         settings["scheduling"] = scheduling
         org.settings = settings
