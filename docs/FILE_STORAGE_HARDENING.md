@@ -286,9 +286,11 @@ This revision also joins the two Alembic heads `3f3bd6f3c7e4` and
   module, not file storage.
 - Two found by the 2026-10-11 audit for Phase 5, recorded in
   `docs/KNOWN_LIMITATIONS.md` ("File Storage — Folder Rights Phase 3 Left
-  Open"): files in the `documents` area are stored flat under
-  `<org>/documents/`, not per record; and an event's attachment references
-  are confined to the organization, not to that event.
+  Open"): files in the `documents` area were stored flat under
+  `<org>/documents/`, not per record (resolved the same day: new uploads go
+  to `<org>/documents/<document_id>/`, and `scripts/relocate_uploads.py`
+  moves the flat ones); and an event's attachment references are confined to
+  the organization, not to that event.
 
 ## Open questions for later phases
 

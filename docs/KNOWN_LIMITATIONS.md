@@ -834,13 +834,14 @@ each module folder on that module's rights. Two things it did not do:
   Since 2026-10-11 that upload lands in General Documents first (no document
   is unfiled any more), and the link files the uploader's own document from
   there into the facility folder.
-- **Files in the `documents` area are not stored per record** (found
-  2026-10-11). Library uploads and the apparatus and finance documents that
-  `module_documents` creates are written flat under `<org>/documents/`,
-  where every other area adds the record (`<org>/<area>/<record>/`). Access
-  is unaffected — reads are confined to the organization and the area, and the
-  document row decides who may download — but a document's file cannot be
-  found or purged by directory.
+- **Files in the `documents` area were not stored per record** (found and
+  resolved 2026-10-11). Library uploads and the apparatus and finance
+  documents that `module_documents` creates were written flat under
+  `<org>/documents/`, where every other area adds the record. New uploads go
+  to `<org>/documents/<document_id>/`; `scripts/relocate_uploads.py --apply`
+  moves the flat ones into their document's directory with the same verified
+  copy, rollback and finalize steps as the legacy move. Until it runs they
+  stay where they are and keep downloading.
 - **An event's attachment references are confined to the organization, not
   the event** (found 2026-10-11). Event create/update payloads accept an
   `attachments` list, checked only for being in the organization's

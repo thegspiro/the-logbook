@@ -175,7 +175,10 @@ class TestUpload:
             "Photos",
         ]
         assert document.file_type == "image/png"
-        assert document.file_path.startswith(str(uploads / org.id / "documents"))
+        # Under its own document's directory, not flat in the area.
+        assert os.path.dirname(document.file_path) == str(
+            uploads / org.id / "documents" / document.id
+        )
         assert os.path.isfile(document.file_path)
 
     async def test_a_registration_is_filed_under_registration_and_insurance(

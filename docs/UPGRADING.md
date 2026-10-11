@@ -431,6 +431,22 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Each document's file gets its own folder on disk (2026-10-11)
+
+Documents uploaded from this release on — through the Documents page, and the
+apparatus and finance screens that store documents — are written to
+`/app/uploads/<organization_id>/documents/<document_id>/`, like every other
+kind of upload, instead of flat in `…/documents/`. Nothing changes for anyone
+using the app, and files already stored keep downloading where they are.
+
+To tidy the ones already stored flat, run the relocation command; its dry run
+now lists them alongside any legacy files, and `--apply`, `--rollback` and
+`--finalize` treat them the same way:
+
+```bash
+docker exec -it intranet-backend python scripts/relocate_uploads.py
+```
+
 ### Documents with no folder are filed into General Documents (2026-10-11)
 
 The upgrade moves every document that had no folder into its department's
