@@ -3111,7 +3111,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                                   <p className="mt-1.5 text-xs font-medium text-violet-600 dark:text-violet-400">
                                     {summary.completedItems > 0
                                       ? `Continue check \u2192 ${summary.totalItems - summary.completedItems} items remaining`
-                                      : 'Start check \u2192 Go to Checklists tab'}
+                                      : // Checklists live under Inventory, not on a tab of this panel; the
+                                        // Complete Checklists button above is the way in.
+                                        'Not started \u2014 use Complete Checklists above'}
                                   </p>
                                 )}
                               </div>
