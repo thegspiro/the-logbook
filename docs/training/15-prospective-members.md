@@ -498,7 +498,10 @@ the sections that do not apply to this applicant are simply absent:
 
 The action bar pins to the bottom. Left to right: **Interview**, **Back**,
 then **Withdraw**, **Hold**, **Skip**, **Reject** and **Advance** — on the final
-stage **Skip** is not offered and the last button reads **Convert**.
+stage **Skip** is not offered and the last button reads **Convert**. The final
+stage is the one marked final in the pipeline (the stage whose completion can
+transfer the applicant to membership), wherever it sits; a pipeline with no
+stage marked final treats its last stage as final.
 
 Three drawer details changed in this window:
 

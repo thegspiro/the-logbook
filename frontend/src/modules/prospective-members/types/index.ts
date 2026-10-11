@@ -371,6 +371,12 @@ export interface PipelineStage {
   config: StageConfig;
   sort_order: number;
   is_required: boolean;
+  /**
+   * The backend's final-stage flag: completing a flagged stage is what may
+   * auto-transfer the applicant to membership. Read it rather than inferring
+   * "final" from sort_order — see `isConvertStage`.
+   */
+  is_final_step?: boolean | undefined;
   inactivity_timeout_days?: number | null | undefined; // null = use pipeline default
   notify_prospect_on_completion: boolean;
   public_visible: boolean;

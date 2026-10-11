@@ -177,6 +177,7 @@ function mapStepToStage(step: BackendStepResponse): PipelineStage {
     config: backendConfig ? { ...defaultStageConfig(stageType), ...backendConfig } : defaultStageConfig(stageType),
     sort_order: step.sort_order ?? 0,
     is_required: step.required ?? true,
+    is_final_step: step.is_final_step ?? false,
     inactivity_timeout_days: step.inactivity_timeout_days ?? null,
     notify_prospect_on_completion: step.notify_prospect_on_completion ?? false,
     public_visible: step.public_visible ?? true,

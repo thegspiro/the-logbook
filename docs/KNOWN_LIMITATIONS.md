@@ -4312,7 +4312,18 @@ The one gap that remains is `ElectionPackage.target_role_name`, which
 see the comment there for why resolving it live would put a current value beside
 two frozen snapshot ones in the same panel.
 
-## Prospects — The Screen Re-Derives "Last Stage" Instead of Reading `is_final_step` (2026-09-24)
+## Prospects — The Screen Re-Derives "Last Stage" Instead of Reading `is_final_step` (2026-09-24, resolved 2026-10-11)
+
+**✅ Resolved 2026-10-11 (owner decision: read the flag; keep Convert on the
+highest stage when none is flagged).** `PipelineStage` now carries
+`is_final_step` from the step response, and `isConvertStage`
+(`modules/prospective-members/utils`) decides the drawer's Advance/Convert:
+in a pipeline with any flagged stage, only a flagged stage shows **Convert**
+(and hides **Skip**), wherever it sits; in a pipeline with none, the
+highest-`sort_order` stage keeps **Convert**, since the manual transfer works
+without the flag. `isFirstStage` still follows the order. Covered by
+`utils/isConvertStage.test.ts` and `services/stageMapping.test.ts`. The
+original entry follows.
 
 `ProspectiveMembersPage` computes `isLastStage` as "the stage with the highest
 `sort_order`", and that is what decides whether the drawer's action row offers
