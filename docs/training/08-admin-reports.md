@@ -2341,15 +2341,15 @@ the Footers tab.
 
 **[SCREENSHOT — REPLACE `08-65-template-footer-selector.png`.** The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. Same state: **Closes with** set to Public**]**
 
-> **A template only shows a footer if its body asks for one.** The closing block
-> is delivered as the `{{footer_html}}` variable, so a body that does not contain
-> it renders without a footer no matter what **Closes with** is set to — and the
-> screen gives no sign of that. Most shipped bodies include the variable, but a
-> department that has customised a template, or whose database predates this
-> release, will have bodies that do not: re-seeding never touches a template that
-> already exists by name. If a chosen footer is not appearing, open the body and
-> check for `{{footer_html}}` before looking anywhere else. See
-> `docs/KNOWN_LIMITATIONS.md`.
+> **Closes with always takes effect** _(2026-10-11)_. The closing block is
+> placed wherever the body has the `{{footer_html}}` variable; a body without it
+> — one your department customised, or one from a database older than the
+> footer library — now gets the chosen footer added at the end (inside the
+> message card), and its plain-text version gets the text footer. Before this,
+> such a body mailed with no footer at all whatever **Closes with** said. **If
+> you customised a template to close its own way**, it now carries the footer
+> as well: remove your own closing, or put `{{footer_html}}` where you want the
+> footer to sit.
 
 **Edit and Preview are alternate views of the same panel**, not two halves of one
 screen — choosing a footer and seeing it rendered are two steps, not one.

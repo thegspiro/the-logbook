@@ -1,20 +1,15 @@
-"""A chosen footer reaches the message only through ``{{footer_html}}``.
+"""A chosen footer always reaches the message.
 
 The **Closes with** selector on every template, and the Footers tab's "N
-templates close with this footer" count, both suggest that picking a footer is
-enough. It is not: the closing block is delivered as a context variable, and a
-body that does not contain ``{{footer_html}}`` renders with no footer at all —
-silently, with nothing on screen to distinguish the two outcomes.
+templates close with this footer" count, both say that picking a footer is
+enough. Until 2026-10-11 it was not: the closing block was delivered only as
+the ``{{footer_html}}`` variable, and a body without it — a customised body, or
+one seeded before the footers release (31 of 35 in the screenshot demo
+database) — rendered with no footer at all.
 
-Most shipped bodies do carry the variable. A customised body, or one in a
-database seeded before the footers release, may not: re-seeding never touches a
-template that already exists by name. In the screenshot demo database 31 of 35
-templates omit it.
-
-These tests pin that contract in **both** directions, so the three candidate
-fixes recorded in `docs/KNOWN_LIMITATIONS.md` — append when absent, repair
-legacy bodies, or mark the template in the UI — each have something deliberate
-to change rather than a silent behavioural shift.
+The owner chose "append when missing": a body that asks for the footer gets it
+where it asks, and one that does not gets it at the end (inside the card when
+the body ends with the shell's card). These tests pin both halves.
 
 No DB session: ``render_static`` renders without one.
 """
@@ -80,11 +75,17 @@ def test_a_body_asking_for_the_footer_gets_one():
     assert "Oakville Fire Department" in html
 
 
-def test_a_body_that_never_asks_renders_without_a_footer():
-    """The gap this file exists for.
+def _footer_html():
+    return EmailTemplateService.build_context({}, _organization())["footer_html"]
 
-    Nothing is appended. If a future change makes the footer unconditional,
-    this test is the one that should fail and be deliberately rewritten.
+
+def test_a_body_that_never_asks_still_closes_with_the_footer():
+    """The owner's decision (2026-10-11): append when missing.
+
+    This test used to pin the opposite — no footer — so the change would be a
+    deliberate rewrite rather than a silent shift. The selector now always
+    takes effect, which changes the output of customised bodies that closed
+    their own way.
     """
     template = _template("<p>Hello.</p>")
 
@@ -92,9 +93,63 @@ def test_a_body_that_never_asks_renders_without_a_footer():
         template, {}, organization=_organization()
     )
 
-    assert html.strip().endswith("</p>") or "</p>" in html
-    assert "do not reply" not in html.lower()
+    footer = _footer_html()
+    assert footer.strip()
+    assert footer in html
+    assert html.index("<p>Hello.</p>") < html.index(footer)
+
+
+def test_nothing_is_appended_without_a_department_to_name():
+    """The footer is written against the department ("an automated message
+    from {{organization_name}}"); with no organization it would mail braces."""
+    template = _template("<p>Hello.</p>")
+    template.text_body = "Hello."
+
+    _subject, html, text = EmailTemplateService.render_static(template, {})
+
     assert "automated message" not in html.lower()
+    assert text == "Hello."
+
+
+def test_the_footer_is_not_added_twice():
+    template = _template("<p>Hello.</p>{{ footer_html }}")
+
+    _subject, html, _text = EmailTemplateService.render_static(
+        template, {}, organization=_organization()
+    )
+
+    assert html.count(_footer_html()) == 1
+
+
+def test_a_shell_body_missing_the_variable_gets_it_inside_the_card():
+    """A body seeded before the footer library: the shell, minus its
+    {{footer_html}} line. The footer goes where that line was, inside the
+    card and before Outlook's conditional close."""
+    body = (
+        '<div class="email-card">\n    <div class="content"><p>Hi.</p></div>\n'
+        "</div>\n<!--[if mso]></td></tr></table><![endif]-->"
+    )
+    _subject, html, _text = EmailTemplateService.render_static(
+        _template(body), {}, organization=_organization()
+    )
+
+    footer = _footer_html()
+    assert html.index("<p>Hi.</p>") < html.index(footer)
+    assert html.index(footer) < html.index("<!--[if mso]></td></tr></table>")
+
+
+def test_a_text_body_without_the_variable_gets_the_text_footer():
+    template = _template("<p>Hello.</p>")
+    template.text_body = "Hello."
+
+    _subject, _html, text = EmailTemplateService.render_static(
+        template, {}, organization=_organization()
+    )
+
+    footer_text = EmailTemplateService.build_context({}, _organization())[
+        "footer_text"
+    ].strip()
+    assert text == "Hello.\n\n" + footer_text
 
 
 def test_the_footer_variable_is_renderer_injected_not_caller_supplied():

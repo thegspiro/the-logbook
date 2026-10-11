@@ -1847,7 +1847,18 @@ re-captured and diffed before applying.
 
 ## Email Templates — A Chosen Footer Is Silently Ignored By Most Bodies (2026-08-11)
 
-Open decision, and user-visible.
+> ✅ **Resolved (2026-10-11), as the owner chose option 1: append when
+> missing.** `EmailTemplateService.render` now adds the chosen footer to a body
+> that has no `{{footer_html}}` — inside the message card when the body ends
+> with the shell's card, at the end otherwise — and the text footer to a
+> plain-text body without `{{footer_text}}`. A body that has the variable is
+> unchanged. **Accepted cost:** a template a department customised to close its
+> own way now carries the footer as well; remove the custom closing or place
+> `{{footer_html}}` where the footer should sit. Nothing is appended when no
+> organization is passed to the renderer, since the footer names the
+> department. The contract tests in
+> `backend/tests/test_email_footer_rendering.py` were deliberately rewritten.
+> The history below is kept as the record.
 
 The footer library gives every template a **Closes with** selector, and the
 Footers tab reports "N templates close with this footer". But the closing block
