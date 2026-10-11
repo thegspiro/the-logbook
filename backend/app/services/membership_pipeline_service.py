@@ -5647,7 +5647,15 @@ class MembershipPipelineService:
     async def _get_default_pipeline(
         self, organization_id: str
     ) -> Optional[MembershipPipeline]:
-        """Get the default pipeline for an organization"""
+        """The pipeline an applicant with no explicit pipeline is placed on.
+
+        The organization's default pipeline; failing that, its first active,
+        non-template pipeline by creation time. Without the fallback a
+        department whose only pipeline was never marked default collected
+        guest sign-ins on no board at all (W23-1, owner decision). The
+        stranded rows were placed by migration e1a5bfe7a2ed, which inlines
+        this same rule.
+        """
         query = (
             select(MembershipPipeline)
             .where(
@@ -5656,10 +5664,28 @@ class MembershipPipelineService:
                     MembershipPipeline.is_default.is_(True),
                 )
             )
+            .order_by(MembershipPipeline.created_at, MembershipPipeline.id)
             .options(selectinload(MembershipPipeline.steps))
         )
         result = await self.db.execute(query)
-        return result.scalars().first()
+        default = result.scalars().first()
+        if default is not None:
+            return default
+        fallback = await self.db.execute(
+            select(MembershipPipeline)
+            .where(
+                MembershipPipeline.organization_id == organization_id,
+                MembershipPipeline.is_active.is_(True),
+                or_(
+                    MembershipPipeline.is_template.is_(False),
+                    MembershipPipeline.is_template.is_(None),
+                ),
+            )
+            .order_by(MembershipPipeline.created_at, MembershipPipeline.id)
+            .limit(1)
+            .options(selectinload(MembershipPipeline.steps))
+        )
+        return fallback.scalars().first()
 
     async def _get_first_step_id(self, pipeline_id: str) -> Optional[str]:
         """Get the first step ID for a pipeline"""

@@ -72,6 +72,14 @@ Navigate to **Prospective Members > Settings** to configure the pipeline.
 5. Configure each stage's settings (auto-advance, timeout, etc.)
 6. Save
 
+**Where applicants with no chosen pipeline go.** A guest signing in at an
+event, or anything else that creates an applicant without naming a pipeline,
+lands on your **default** pipeline. If none is marked default, it lands on the
+oldest active pipeline that is not a template — so a department with one
+pipeline never has to mark it. Applicants who arrived before 2026-10-11 with no
+pipeline were placed the same way on upgrade, at the first stage; their
+activity log says so.
+
 ![Pipeline builder listing the stages with their drag handles and types](./images/15-02-pipeline-builder.png)
 
 ![The Add Pipeline Stage dialog with Election / Vote selected, its voting configuration revealed below the type grid, and Add Stage enabled with no validation error](./images/20-12-stage-picker-election-vote.png)
