@@ -371,6 +371,12 @@ export interface PipelineStage {
   config: StageConfig;
   sort_order: number;
   is_required: boolean;
+  /**
+   * The backend's final-stage flag: completing a flagged stage is what may
+   * auto-transfer the applicant to membership. Read it rather than inferring
+   * "final" from sort_order — see `isConvertStage`.
+   */
+  is_final_step?: boolean | undefined;
   inactivity_timeout_days?: number | null | undefined; // null = use pipeline default
   notify_prospect_on_completion: boolean;
   public_visible: boolean;
@@ -561,6 +567,12 @@ export interface Applicant {
   target_membership_type: TargetMembershipType;
   target_role_id?: string | undefined;
   target_role_name?: string | undefined;
+  /** How the applicant heard about the department, e.g. "Attended: Open House". */
+  referral_source?: string | undefined;
+  /** Why the applicant wants to join, in their own words. */
+  interest_reason?: string | undefined;
+  /** Display name of the member who referred them; absent when none is on file. */
+  referred_by_name?: string | undefined;
   form_submission_id?: string | undefined;
   status: ApplicantStatus;
   notes?: string | undefined;
@@ -1062,6 +1074,8 @@ export interface BackendProspectResponse {
   interest_reason: string | null;
   referral_source: string | null;
   referred_by: string | null;
+  /** Resolved server-side; only an in-org referrer is named. */
+  referred_by_name?: string | null;
   desired_membership_type: string | null;
   notes: string | null;
   current_step_id: string | null;

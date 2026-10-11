@@ -6,6 +6,43 @@ import api from './apiClient';
 import type { MeetingRecord, MeetingAttendee, MeetingActionItem, MeetingsSummary } from './documentsService';
 import { asArray } from '../utils/asArray';
 
+/**
+ * One member's row of `GET /meetings/attendance/dashboard` (snake_case, as
+ * the endpoint returns a plain dict). Every figure is the backend's — the
+ * same calculation the ballot eligibility check uses — so the screen shows
+ * these values and never recomputes them.
+ */
+export interface AttendanceDashboardMember {
+  user_id: string;
+  name: string;
+  membership_tier: string;
+  tier_name: string;
+  hire_date: string | null;
+  attendance_pct: number;
+  meetings_attended: number;
+  meetings_waived: number;
+  meetings_on_leave: number;
+  meetings_absent: number;
+  total_meetings: number;
+  eligible_meetings: number;
+  voting_eligible: boolean;
+  voting_blocked_reason: string | null;
+}
+
+export interface AttendanceDashboard {
+  generated_at: string;
+  period_months: number;
+  meeting_type_filter: string | null;
+  total_meetings_in_period: number;
+  members: AttendanceDashboardMember[];
+  summary: {
+    total_members: number;
+    avg_attendance_pct: number;
+    voting_eligible_count: number;
+    voting_blocked_by_attendance: number;
+  };
+}
+
 export const meetingsService = {
   async getMeetings(params?: {
     meeting_type?: string;
@@ -85,9 +122,9 @@ export const meetingsService = {
   async getAttendanceDashboard(params?: {
     period_months?: number;
     meeting_type?: string;
-  }): Promise<Record<string, unknown>> {
-    const response = await api.get<Record<string, unknown>>('/meetings/attendance/dashboard', { params });
-    return response.data;
+  }): Promise<AttendanceDashboard> {
+    const response = await api.get<AttendanceDashboard>('/meetings/attendance/dashboard', { params });
+    return { ...response.data, members: asArray(response.data.members) };
   },
 
   async grantAttendanceWaiver(

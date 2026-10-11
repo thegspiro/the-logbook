@@ -13,8 +13,8 @@ always used, and generation writes real timestamps — changing it would move
 existing departments' shift times.
 """
 
-from datetime import date, datetime, time, timezone
-from typing import List, Optional
+from datetime import date, datetime, time, timedelta, timezone
+from typing import List, Optional, Tuple
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -57,6 +57,66 @@ def format_in_org_timezone(
     """
     aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
     return aware.astimezone(scheduling_timezone(organization)).strftime(fmt)
+
+
+def reporting_timezone(organization: Optional[Organization]) -> ZoneInfo:
+    """The timezone a report's date range is read in: the department's, else UTC.
+
+    Deliberately not ``scheduling_timezone``: that one falls back to
+    America/New_York because changing it would move existing shift times. A
+    report has no such history to protect, and an organization with no usable
+    timezone is better served by UTC than by a guess (GF-24a, owner decision).
+    """
+    name = getattr(organization, "timezone", None) if organization else None
+    if not name:
+        return ZoneInfo("UTC")
+    try:
+        return ZoneInfo(name)
+    except Exception:
+        return ZoneInfo("UTC")
+
+
+async def resolve_reporting_timezone(
+    db: AsyncSession, organization_id: UUID | str
+) -> ZoneInfo:
+    """Load the organization and resolve its reporting timezone."""
+    result = await db.execute(
+        select(Organization).where(Organization.id == str(organization_id))
+    )
+    return reporting_timezone(result.scalar_one_or_none())
+
+
+def local_range_utc(
+    start: Optional[date], end: Optional[date], tz: ZoneInfo
+) -> Tuple[Optional[datetime], Optional[datetime]]:
+    """UTC bounds for an inclusive range of department-calendar days.
+
+    Returns ``(start_inclusive, end_exclusive)``: compare ``>= start`` and
+    ``< end``. The end is the next local midnight rather than 23:59:59.999999
+    so a record stamped in the last microsecond of the day is not lost, and so
+    a DST day of 23 or 25 hours is bounded by the calendar, not by arithmetic.
+    Either side is ``None`` when its date is.
+    """
+    return (
+        local_day_start_utc(start, tz) if start else None,
+        local_day_start_utc(end + timedelta(days=1), tz) if end else None,
+    )
+
+
+async def resolve_local_range_utc(
+    db: AsyncSession,
+    organization_id: UUID | str,
+    start: Optional[date],
+    end: Optional[date],
+) -> Tuple[Optional[datetime], Optional[datetime]]:
+    """``local_range_utc`` in the organization's reporting timezone.
+
+    An unbounded range needs no timezone, so nothing is loaded for it.
+    """
+    if start is None and end is None:
+        return None, None
+    tz = await resolve_reporting_timezone(db, organization_id)
+    return local_range_utc(start, end, tz)
 
 
 async def resolve_scheduling_timezone(

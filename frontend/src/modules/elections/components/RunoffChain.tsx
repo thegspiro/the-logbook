@@ -23,7 +23,7 @@ interface ChainNode {
   title: string;
   status: string;
   runoff_round: number;
-  total_votes?: number | undefined;
+  total_votes?: number | null | undefined;
 }
 
 const StatusIcon: React.FC<{ status: string }> = ({ status }) => {

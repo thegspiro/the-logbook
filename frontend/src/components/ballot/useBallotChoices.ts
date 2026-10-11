@@ -4,8 +4,9 @@ import { emptyChoice, type ItemChoice } from './ballotChoices';
 
 /**
  * Selection state for a ballot: one `ItemChoice` per item, every item
- * starting on Abstain. Shared by the emailed ballot and the in-app tab so a
- * selection behaves identically on both.
+ * starting with no selection (W50-25 — Abstain is chosen, never assumed).
+ * Shared by the emailed ballot and the in-app tab so a selection behaves
+ * identically on both.
  */
 export const useBallotChoices = () => {
   const [choices, setChoices] = useState<Record<string, ItemChoice>>({});

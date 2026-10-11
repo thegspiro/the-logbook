@@ -4,11 +4,32 @@
 
 import React from 'react';
 import type { CallVolumeReport } from '../../types';
+import { formatCalendarDate } from '../../../../utils/dateFormatting';
 import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
 
 interface Props {
   data: CallVolumeReport;
+}
+
+/**
+ * What the headline figure counts. Count-only tracking counts incidents (or,
+ * for an old client flag, unit responses); detailed tracking sums each
+ * member's shift report, so it is named for that rather than called "calls".
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function callVolumeLabels(data: CallVolumeReport) {
+  if (data.counts_unit_responses === true) {
+    return { total: 'Unit Responses', perDay: 'Avg Responses/Day', peak: 'Peak Responses' };
+  }
+  if (data.counts_member_reports === true) {
+    return {
+      total: 'Member-Reported Calls',
+      perDay: 'Avg Member-Reported/Day',
+      peak: 'Peak Member-Reported',
+    };
+  }
+  return { total: 'Total Calls', perDay: 'Avg Calls/Day', peak: 'Peak Calls' };
 }
 
 export const CallVolumeRenderer: React.FC<Props> = ({ data }) => {
@@ -22,9 +43,11 @@ export const CallVolumeRenderer: React.FC<Props> = ({ data }) => {
   // for it entirely; the server sends the labels, including for types it has
   // since retired.
   const typeLabel = (slug: string): string => data.call_type_labels?.[slug] ?? slug.replace(/_/g, ' ');
-  const totalLabel = unitResponses ? 'Unit Responses' : 'Total Calls';
-  const perDayLabel = unitResponses ? 'Avg Responses/Day' : 'Avg Calls/Day';
-  const peakLabel = unitResponses ? 'Peak Responses' : 'Peak Calls';
+  const labels = callVolumeLabels(data);
+  const totalLabel = labels.total;
+  const perDayLabel = labels.perDay;
+  const peakLabel = labels.peak;
+  const memberReports = !unitResponses && data.counts_member_reports === true;
   // Per-unit runs are the figure an apparatus-replacement case needs. They
   // are listed apart from the totals because they sum past them whenever two
   // units share a call.
@@ -65,12 +88,29 @@ export const CallVolumeRenderer: React.FC<Props> = ({ data }) => {
         </p>
       )}
 
+      {data.range_predates_mode === true && data.mode_since && (
+        <p className="alert-warning mb-4 text-sm" role="status">
+          <strong>Part of this range is missing.</strong> The department changed how it tracks calls on{' '}
+          {/* mode_since is a department-calendar date, not an instant, so it is
+              re-spelled rather than converted into the viewer's timezone. */}
+          {formatCalendarDate(data.mode_since)}. This report reads only the current method, so calls recorded before
+          that date under the previous method are not included.
+        </p>
+      )}
+
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard label={totalLabel} value={summary.total_calls} />
         <StatCard label={perDayLabel} value={summary.avg_calls_per_day.toFixed(1)} />
         <StatCard label="Busiest Day" value={summary.busiest_day} />
         <StatCard label={peakLabel} value={summary.busiest_day_count} />
       </div>
+
+      {memberReports && (
+        <p className="text-theme-text-muted mb-4 text-xs">
+          Adds up the calls on each member&rsquo;s shift report. A shift that two members reported is counted once for
+          each of them, so this is not a count of incidents.
+        </p>
+      )}
 
       {unitResponses && (
         <p className="text-theme-text-muted mb-4 text-xs">
@@ -144,7 +184,7 @@ export function getCallVolumeExportData(data: CallVolumeReport) {
 
   // Same naming rule as the on-screen tiles: the export is what reaches a
   // grant officer, so it must not call unit responses "calls".
-  const totalHeader = data.counts_unit_responses === true ? 'Unit Responses' : 'Total Calls';
+  const totalHeader = callVolumeLabels(data).total;
   const columns = [{ key: 'date', header: 'Date' }, { key: 'total_calls', header: totalHeader }, ...typeColumns];
 
   return { rows, columns };

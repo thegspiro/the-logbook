@@ -369,3 +369,35 @@ describe('ApplicantDetailDrawer checklist stage', () => {
     expect(screen.getByText(/1 of 2 items done/)).toBeInTheDocument();
   });
 });
+
+describe('ApplicantDetailDrawer referral details', () => {
+  it('shows where the applicant came from, who referred them and why', async () => {
+    renderDrawer({
+      referral_source: 'Attended: Spring Open House',
+      referred_by_name: 'Jordan Avery',
+      interest_reason: 'Grew up next to the station.',
+    });
+    await screen.findByText('Stage History');
+
+    const section = screen.getByRole('region', { name: 'How They Found Us' });
+    expect(within(section).getByText('Attended: Spring Open House')).toBeInTheDocument();
+    expect(within(section).getByText('Jordan Avery')).toBeInTheDocument();
+    expect(within(section).getByText('Grew up next to the station.')).toBeInTheDocument();
+  });
+
+  it('shows only the parts on file', async () => {
+    renderDrawer({ referral_source: 'Website' });
+    await screen.findByText('Stage History');
+
+    expect(screen.getByText('Website')).toBeInTheDocument();
+    expect(screen.queryByText('Referred by')).not.toBeInTheDocument();
+    expect(screen.queryByText('Why they want to join')).not.toBeInTheDocument();
+  });
+
+  it('omits the section entirely when nothing is on file', async () => {
+    renderDrawer();
+    await screen.findByText('Stage History');
+
+    expect(screen.queryByRole('heading', { name: 'How They Found Us' })).not.toBeInTheDocument();
+  });
+});

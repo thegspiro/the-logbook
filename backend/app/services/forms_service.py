@@ -1199,47 +1199,39 @@ class FormsService:
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
     ) -> Tuple[Optional[FormSubmission], Optional[str]]:
-        """Submit a form (authenticated user)"""
+        """Submit a form (authenticated user)
+
+        "One submission per person" (``allow_multiple_submissions=False``) is
+        one rule across both submit paths (FORM-10): a member who submitted
+        through ``/f/<slug>`` cannot submit again here, and the reverse. The
+        check and insert retry once on an InnoDB deadlock for the same reason
+        ``_create_public_submission`` does; integrations run only after the
+        commit, outside the retry.
+        """
         try:
-            form = await self.get_form_by_id(form_id, organization_id)
-            if not form:
-                return None, "Form not found"
-
-            if form.status != FormStatus.PUBLISHED:
-                return None, "Form is not accepting submissions"
-
-            # Validate required fields (FORM-6: presence AND a non-empty value —
-            # a key holding "" / whitespace / [] does not satisfy "required").
-            visible_ids = self._visible_field_ids(form.fields, data)
-            for field in form.fields:
-                if (
-                    field.required
-                    and str(field.id) in visible_ids
-                    and (
-                        str(field.id) not in data
-                        or self._is_empty_value(data[str(field.id)])
+            for attempt in (1, 2):
+                try:
+                    submission, form, error = await self._create_member_submission(
+                        form_id,
+                        organization_id,
+                        data,
+                        submitted_by,
+                        ip_address,
+                        user_agent,
                     )
-                ):
-                    return None, f"Required field '{field.label}' is missing"
-
-            # Sanitize and validate all submitted values
-            sanitized_data, sanitize_error = self._sanitize_submission_data(
-                data, form.fields
-            )
-            if sanitize_error:
-                return None, sanitize_error
-
-            submission = FormSubmission(
-                organization_id=organization_id,
-                form_id=form_id,
-                submitted_by=submitted_by,
-                data=sanitized_data,
-                ip_address=ip_address,
-                user_agent=user_agent,
-            )
-            self.db.add(submission)
-            await self.db.commit()
-            await self.db.refresh(submission)
+                    break
+                except OperationalError as exc:
+                    await self.db.rollback()
+                    if attempt == 2 or not _is_deadlock(exc):
+                        raise
+                    logger.warning(
+                        "Deadlock on form submission for form {}, retrying once",
+                        form_id,
+                    )
+            if error:
+                return None, error
+            assert submission is not None
+            assert form is not None
 
             # Process integrations
             await self._process_integrations(submission, form)
@@ -1248,6 +1240,93 @@ class FormsService:
         except Exception as e:
             await self.db.rollback()
             return None, safe_error_detail(e)
+
+    async def _already_submitted(self, form, submitted_by) -> bool:
+        """Whether this member already has a submission on this form.
+
+        Serializes same-form submissions first. Locking the Form row alone is
+        not enough (CLAUDE.md pitfall #27): under REPEATABLE READ the
+        duplicate check's own snapshot is fixed at the transaction's first
+        read, so a plain SELECT after the lock still answers from before the
+        other request committed. The duplicate check must itself be a locking
+        read. Shared by both submit paths, so the rule cannot drift between
+        them.
+        """
+        await self.db.execute(
+            select(Form.id)
+            .where(
+                Form.id == str(form.id),
+                Form.organization_id == str(form.organization_id),
+            )
+            .with_for_update()
+        )
+        prior = await self.db.execute(
+            select(FormSubmission.id)
+            .where(
+                FormSubmission.form_id == str(form.id),
+                FormSubmission.submitted_by == str(submitted_by),
+            )
+            .limit(1)
+            .with_for_update()
+        )
+        return prior.scalar_one_or_none() is not None
+
+    async def _create_member_submission(
+        self,
+        form_id: UUID,
+        organization_id: UUID,
+        data: Dict[str, Any],
+        submitted_by: Optional[UUID],
+        ip_address: Optional[str],
+        user_agent: Optional[str],
+    ) -> Tuple[Optional[FormSubmission], Optional[Form], Optional[str]]:
+        """Validate and insert one in-app submission; see ``submit_form``."""
+        form = await self.get_form_by_id(form_id, organization_id)
+        if not form:
+            return None, None, "Form not found"
+
+        if form.status != FormStatus.PUBLISHED:
+            return None, None, "Form is not accepting submissions"
+
+        if not form.allow_multiple_submissions:
+            if not submitted_by:
+                return None, None, "Authentication is required to submit this form"
+            if await self._already_submitted(form, submitted_by):
+                return None, None, "You have already submitted this form"
+
+        # Validate required fields (FORM-6: presence AND a non-empty value —
+        # a key holding "" / whitespace / [] does not satisfy "required").
+        visible_ids = self._visible_field_ids(form.fields, data)
+        for field in form.fields:
+            if (
+                field.required
+                and str(field.id) in visible_ids
+                and (
+                    str(field.id) not in data
+                    or self._is_empty_value(data[str(field.id)])
+                )
+            ):
+                return None, None, f"Required field '{field.label}' is missing"
+
+        # Sanitize and validate all submitted values
+        sanitized_data, sanitize_error = self._sanitize_submission_data(
+            data, form.fields
+        )
+        if sanitize_error:
+            return None, None, sanitize_error
+
+        submission = FormSubmission(
+            organization_id=organization_id,
+            form_id=form_id,
+            submitted_by=submitted_by,
+            data=sanitized_data,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+        self.db.add(submission)
+        await self.db.commit()
+        await self.db.refresh(submission)
+        return submission, form, None
 
     async def submit_public_form(
         self,
@@ -1379,26 +1458,8 @@ class FormsService:
                             None,
                             "Authentication is required to submit this form",
                         )
-                    # Serialize same-form submissions before checking. Locking
-                    # the Form row alone is not enough (CLAUDE.md pitfall
-                    # #27): under REPEATABLE READ the duplicate check's own
-                    # snapshot is fixed at this transaction's first read --
-                    # here, the get_form_by_slug() call above -- so a plain
-                    # SELECT after the lock still answers from before the
-                    # other request committed. The duplicate check itself
-                    # must be a locking read to see the latest committed row.
-                    await self.db.execute(
-                        select(Form.id).where(Form.id == str(form.id)).with_for_update()
-                    )
-                    prior = await self.db.execute(
-                        select(FormSubmission.id)
-                        .where(
-                            FormSubmission.form_id == str(form.id),
-                            FormSubmission.submitted_by == submitted_by,
-                        )
-                        .with_for_update()
-                    )
-                    if prior.scalar_one_or_none() is not None:
+                    # Locked check shared with the in-app path (FORM-10).
+                    if await self._already_submitted(form, submitted_by):
                         return None, None, "You have already submitted this form"
 
                 # Validate required fields (FORM-6: presence AND a non-empty

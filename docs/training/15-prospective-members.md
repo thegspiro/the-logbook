@@ -72,6 +72,14 @@ Navigate to **Prospective Members > Settings** to configure the pipeline.
 5. Configure each stage's settings (auto-advance, timeout, etc.)
 6. Save
 
+**Where applicants with no chosen pipeline go.** A guest signing in at an
+event, or anything else that creates an applicant without naming a pipeline,
+lands on your **default** pipeline. If none is marked default, it lands on the
+oldest active pipeline that is not a template — so a department with one
+pipeline never has to mark it. Applicants who arrived before 2026-10-11 with no
+pipeline were placed the same way on upgrade, at the first stage; their
+activity log says so.
+
 ![Pipeline builder listing the stages with their drag handles and types](./images/15-02-pipeline-builder.png)
 
 ![The Add Pipeline Stage dialog with Election / Vote selected, its voting configuration revealed below the type grid, and Add Stage enabled with no validation error](./images/20-12-stage-picker-election-vote.png)
@@ -481,6 +489,10 @@ the sections that do not apply to this applicant are simply absent:
 
 - **Contact Information**: Email and phone, editable in place
 - **Desired Membership Type**: Regular or administrative
+- **How They Found Us**: the referral source (a guest sign-in records
+  "Attended: _event name_"), the member who referred them, and why they want to
+  join — each line only when it is on file, and the section is absent when none
+  is. A referrer from another department is never named.
 - **Application Data**: What they submitted, when there is a linked application
 - **Current Stage**: The stage and when they entered it
 - **Linked Events**: Orientations, ride-alongs and open houses, with **Link Event**
@@ -494,7 +506,10 @@ the sections that do not apply to this applicant are simply absent:
 
 The action bar pins to the bottom. Left to right: **Interview**, **Back**,
 then **Withdraw**, **Hold**, **Skip**, **Reject** and **Advance** — on the final
-stage **Skip** is not offered and the last button reads **Convert**.
+stage **Skip** is not offered and the last button reads **Convert**. The final
+stage is the one marked final in the pipeline (the stage whose completion can
+transfer the applicant to membership), wherever it sits; a pipeline with no
+stage marked final treats its last stage as final.
 
 Three drawer details changed in this window:
 
@@ -881,7 +896,9 @@ Navigate to **Settings > Pipeline** and configure:
 > counts from when the application last became **Inactive**. Reactivating it
 > stops the clock, and if it goes inactive again the period starts over. Only
 > inactive applications are purged — never withdrawn, rejected or on-hold ones.
-> No email is sent beforehand; each purge is recorded in the audit log.
+> Seven days before an application is deleted, the membership coordinators
+> get one email listing it with its deletion date — reactivate it before then
+> to keep it. Each purge is recorded in the audit log.
 > Applications that were already inactive when your department upgraded to the
 > version that switched Auto-Purge on count from that upgrade, not from their
 > original deactivation date, so nothing was deleted the first night. You can

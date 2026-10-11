@@ -134,6 +134,25 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### A duplicate migration revision stops a production boot (2026-10-11)
+
+When two files in `backend/alembic/versions/` declare the same `revision`,
+startup used to rename one of them to `.stale` in every environment and carry
+on, logging "Migrations completed successfully" while that file's schema
+change was silently skipped. With `ENVIRONMENT=production` the backend now
+refuses to start instead, naming the revision id and both files:
+
+```
+MIGRATION FAILURE: duplicate Alembic revision id(s) found: 'abc123' in 20261001_0100_x.py, 20261001_0100_y.py ...
+```
+
+The usual cause is a stale copy left by a cached Docker layer or a
+half-finished checkout. Rebuild the image without cache
+(`docker compose build --no-cache backend`) or delete the copy that does not
+belong to the release, so each revision id appears in exactly one file, then
+start again. Development and staging keep the old rename-and-continue
+behaviour.
+
 ### Every backend setting in `.env` now reaches the container (2026-10-06)
 
 **Review your `.env` before you upgrade.** Until this release the backend's
@@ -168,12 +187,12 @@ first restart. The groups most likely to carry such a line:
   `PUBLIC_FORM_DAILY_LIMIT`, `GUEST_CHECK_IN_DAILY_LIMIT`.
 - **Geo-blocking** — `GEOIP_*`, `BLOCKED_COUNTRIES`, `IP_LOGGING_ENABLED`.
   `BLOCKED_COUNTRIES=` (empty) now means "block no countries".
-- **Storage and paths** — `STORAGE_TYPE`, `UPLOAD_DIR`, `MAX_FILE_SIZE`,
-  `MAX_REQUEST_BODY_SIZE`, `AWS_*`, `AZURE_STORAGE_*`, `GCS_*`,
-  `AUDIT_ARCHIVE_DIR`, `GEOIP_DATABASE_PATH`. These are read **inside the
-  container**. A host path left over from a non-Docker install would now send
-  uploads somewhere no volume is mounted, and they would be lost with the
-  container.
+- **Storage and paths** — `MAX_REQUEST_BODY_SIZE`, `AWS_*`, `AZURE_STORAGE_*`,
+  `GCS_*`, `AUDIT_ARCHIVE_DIR`, `GEOIP_DATABASE_PATH`. Paths are read **inside
+  the container**. A host path left over from a non-Docker install would now
+  send archives somewhere no volume is mounted, and they would be lost with the
+  container. (`STORAGE_TYPE`, `UPLOAD_DIR` and `MAX_FILE_SIZE` were retired on
+  2026-10-08 — nothing read them; uploads always go to `/app/uploads`.)
 - **Audit shipping and signing keys** — `AUDIT_SHIP_*`,
   `AUDIT_ALLOW_CHAIN_REHASH`, `ENCRYPTION_KEYS_LEGACY`, `AUDIT_LOG_SIGNING_KEY`,
   and on the Unraid files `VOTE_SIGNING_KEY`. Read the next paragraph if
@@ -586,7 +605,10 @@ they have been inactive for the configured number of days (30–1095; a value
 outside that range is treated as the nearest bound, and an unreadable one
 skips the pipeline). Each run writes a `membership_pipeline.prospects_purged`
 audit event marked `trigger: auto_purge`, with the pipeline, the threshold and
-the purged ids. No email is sent before a purge.
+the purged ids. Seven days before an application is purged, the department's
+prospect coordinators (the withdrawal notice's recipients) get one email per
+run listing the applications due and their deletion dates; each application is
+warned once per inactive spell, and a failed send is retried on the next run.
 
 **Nothing already inactive is deleted straight away.** Migration
 `feecd81eef2d` adds `prospective_members.inactive_since` and sets it to the

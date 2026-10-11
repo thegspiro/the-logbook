@@ -28,12 +28,26 @@ export interface BallotSettings {
   seats_per_position?: number | undefined;
 }
 
+/**
+ * No selection. An item starts here, not on Abstain: a pre-filled Abstain let
+ * an untouched Submit cast a ballot of abstentions and burn the single-use
+ * emailed link (W50-25). Abstain is something the voter picks.
+ */
 export const emptyChoice = (): ItemChoice => ({
-  choice: BallotChoice.ABSTAIN,
+  choice: '',
   write_in_name: '',
   candidate_ids: [],
   ranks: {},
 });
+
+/** True once the voter has picked an option, a ranking, or Abstain. */
+export const isAnswered = (itemChoice: ItemChoice | undefined): boolean =>
+  !!itemChoice &&
+  (itemChoice.choice !== '' || itemChoice.candidate_ids.length > 0 || Object.keys(itemChoice.ranks).length > 0);
+
+/** The items still waiting for a choice or an explicit Abstain; Submit stays disabled until none are. */
+export const unansweredItems = (choices: Record<string, ItemChoice>, items: BallotItem[]): BallotItem[] =>
+  items.filter((item) => !isAnswered(choices[item.id]));
 
 /** Ordered candidate ids for the wire payload — index 0 = rank 1. */
 export const ranksToOrderedIds = (ranks: Record<string, number>): string[] =>
@@ -96,7 +110,7 @@ export const choiceToVote = (itemId: string, itemChoice: ItemChoice): BallotItem
 
 /** Converts a selection (choice/multi-select/rankings) to a display label. */
 export const choiceLabel = (itemChoice: ItemChoice | undefined, candidates: Candidate[]): string => {
-  if (!itemChoice) return 'Abstain (No Vote)';
+  if (!isAnswered(itemChoice) || !itemChoice) return 'No selection';
   const name = (candidateId: string): string => candidates.find((c) => c.id === candidateId)?.name ?? candidateId;
 
   if (itemChoice.candidate_ids.length > 0) {
@@ -107,7 +121,6 @@ export const choiceLabel = (itemChoice: ItemChoice | undefined, candidates: Cand
     return `Ranked: ${ordered.map((cid, i) => `${i + 1}. ${name(cid)}`).join(', ')}`;
   }
   switch (itemChoice.choice) {
-    case '':
     case BallotChoice.ABSTAIN:
       return 'Abstain (No Vote)';
     case BallotChoice.APPROVE:

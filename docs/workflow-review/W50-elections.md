@@ -674,7 +674,7 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Saw:** "Results by Position — Chief" only; no "budget", "Rowan", "Approve" or "Deny" in any mail or PDF; `overall_results` pooled Approve rows with Blair for one cross-item `is_winner`, with percentages over 11 votes. EB1 "Votes Cast: 2" with one visible.
 **Expected:** every item's tally, per-item percentages and outcome on all three surfaces.
 **Where:** `frontend/src/modules/elections/components/ElectionResults.tsx:238-289`; `election_service.py:2592-2613`; the report template (~S:7227); the certified builder (S:4467-4541).
-**Fix:** S05 returns per-item results with a `label`, and the PDF and report use them (`test_w50_s05.py`). `review-backend-1.md` #4 found the tab still rendering the raw item id; `d6f828c` adds `label` to `PositionResults` and uses `label ?? position` in the heading and tie alert (`ElectionResults.w50-s25.test.tsx`).
+**Fix:** S05 returns per-item results with a `label`, and the PDF and report use them (`test_w50_s05.py`). **Pooled list (2026-10-08, owner decision: group per item):** `overall_results` now holds only candidates no contest claims; contests carry `ballot_item_id` / `vote_type`; the PDF, results screen and runoff check work per contest (`test_w50_grouped_results.py`). `review-backend-1.md` #4 found the tab still rendering the raw item id; `d6f828c` adds `label` to `PositionResults` and uses `label ?? position` in the heading and tie alert (`ElectionResults.w50-s25.test.tsx`).
 
 ### W50-8 — HIGH — "Print Blank Ballots" prints the position races only; the paper path cannot carry a motion or membership vote — ✅ FIXED (round 2, `7aa3405`), PDF half · confirmed live · ✅ DECIDED & FIXED (2026-10-05), recording half
 
@@ -821,7 +821,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `election_service.py` ~8424 (options created as `Candidate` rows on first vote); `CandidateManagement.tsx`; `BallotVotingPage.tsx:551` (`election.allow_write_ins` regardless of `vote_type`); `BallotPreviewModal.tsx`.
 **Fix:** queue row 34 — hide option rows (position ∈ item ids, `is_write_in: false`), lock write-ins once voted, gate the radio on `vote_type === 'candidate_selection'`. Tests: `CandidateManagement.w50-options.test.tsx`, `BallotVotingPage.w50-writein.test.tsx`.
 
-### W50-25 — MED — Every item on the emailed ballot is pre-set to "Abstain"; an untouched Submit → Cast burns the single-use link with no votes — FLAGGED
+### W50-25 — MED — Every item on the emailed ballot is pre-set to "Abstain"; an untouched Submit → Cast burns the single-use link with no votes — ✅ DECIDED & FIXED (2026-10-08)
+
+**Owner decision:** no default. Nothing is pre-selected on either ballot (they share `components/ballot`), and Submit stays disabled until every item has a choice or an explicit Abstain. Tests: `BallotVotingPage.w50-abstain.test.tsx`, `ballotChoices.test.ts`.
 
 **Did:** as `member`, `member2` (phone) and anonymously, A6 steps 2/3/4.
 **Saw:** the Abstain radio filled on every item on load while the instructions read "Make a selection for each item below"; the confirm dialog's "Abstain (No Vote)" per item is the only guard.
@@ -867,7 +869,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `RecordPaperBallotsModal.tsx:99-104`; `MergeWriteInsModal`; `GET /elections/{id}/candidates` (item options carry `position = <item id>`).
 **Fix:** queue row 35 — resolve `position` against `election.ballot_items[].id` in both modals. Test: `RecordPaperBallotsModal.w50.test.tsx`.
 
-### W50-31 — MED — A sanctioned void turns the election into "Vote Integrity Issue Detected" and certifies CHAIN_BROKEN; voiding the chain tail leaves PASS — FLAGGED
+### W50-31 — MED — A sanctioned void turns the election into "Vote Integrity Issue Detected" and certifies CHAIN_BROKEN; voiding the chain tail leaves PASS — ✅ DECIDED & FIXED (2026-10-08)
+
+**Owner decision:** walk voids and report them. `verify_vote_integrity` verifies voided rows with the chain and returns `voided_votes` / `voids`; the Forensics panel and certified PDF print "N vote(s) voided by <officer>: <reason>" under a PASS. Test: `test_w50_integrity_with_voids.py`.
 
 **Did:** as `secretary`, the app's own Void form on E1 then the certified PDF (A8 step 14); as `admin`, a batch void on EB2 (B4 step 10), two tail voids on EB1 (B3 step 11), one void on EB3 (B7).
 **Saw:** the red banner "Vote chain is broken — votes may have been deleted or reordered"; the PDF "CHAIN_BROKEN (12 votes checked)" under "We certify that the results above are true and correct" with no mention of the void; every forensics GET on EB2 wrote a critical `vote_integrity_check` audit row; two tail voids → PASS 1/1.
@@ -917,7 +921,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `email_template_service.py:1954,1971`; `election_service.py:5297` (rollback deletes nothing).
 **Fix:** round 2 — the template states what happened per transition (votes kept; tokens invalidated N; ballots must be resent yes/no). Test: `test_election_leadership_alert_templates.py` extended.
 
-### W50-38 — MED — A manager can accept a nomination on the nominee's behalf; a pending nominee loses the tab when nominations close but the API still accepts/declines — FLAGGED (positions guard: S17, `3de83db`, corrected in `7aa3405`)
+### W50-38 — MED — A manager can accept a nomination on the nominee's behalf; a pending nominee loses the tab when nominations close but the API still accepts/declines — ✅ DECIDED & FIXED (2026-10-08) (positions guard: S17, `3de83db`, corrected in `7aa3405`)
+
+**Owner decision:** a manager may accept for a nominee before nominations close, with a persisted "Accepted by manager" label and a notice to the nominee; the slate freezes at Close Nominations. Migration `7adc810c57f9`; test `test_w50_manager_accept_frozen_slate.py`.
 
 **Did:** as `admin`, B2 step 8 (Accept on Blair's pending row), step 7 (a position removed while a nominee is pending); as `training_officer`, B2 steps 10/11 (decline by API after Close Nominations).
 **Saw:** the Accept → `PATCH …/candidates` 200 with the nominee not told, after the nominator had been refused "Only the nominee can respond"; after Close Nominations members see no tab yet decline → 200 and the Chief race silently lost a candidate; the orphaned nominee reads "UNASSIGNED".
@@ -983,7 +989,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `frontend/src/pages/ElectionsSettingsPage.tsx:149-155, 190-237`; `components/settings/SettingsToggle.tsx:22-36`.
 **Fix:** queue row 33 — render the label and description beside each toggle. Test: `ElectionsSettingsPage.w50-labels.test.tsx` (`getByText('Non-voter reminders')`).
 
-### W50-47 — MED — A ballot item added after tokens were issued never appears on already-sent links, and nothing prompts a resend — FLAGGED
+### W50-47 — MED — A ballot item added after tokens were issued never appears on already-sent links, and nothing prompts a resend — ✅ DECIDED & FIXED (2026-10-08)
+
+**Owner decision:** invalidate tokens and prompt a resend through the W50-36 banner. A ballot change retires every outstanding link; `GET /elections/{id}` reports `ballots_must_be_resent` / `ballots_resend_reason`. Test: `test_w50_stale_token_items.py`.
 
 **Did:** as `admin`, B3 step 17: a token minted before `late-b` was added, looked up after.
 **Saw:** 200 with `chief-b, motion-b` only while the Ballot tab shows four items.
@@ -1140,7 +1148,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `POST /elections/{id}/clone` (S:4203-4322); `ElectionDetailPage.tsx` clone navigation.
 **Fix:** round 2 — the flag reset on clone; navigate to `?tab=ballot`. Test: the clone cases in `test_election_enhancements.py` extended.
 
-### W50-70 — LOW — Plain members can read the ballot-recipient list and live vote counts from `GET /elections/{id}` while `/results` is 403; the lookup body hands token holders every candidate's `user_id` — FLAGGED
+### W50-70 — LOW — Plain members can read the ballot-recipient list and live vote counts from `GET /elections/{id}` while `/results` is 403; the lookup body hands token holders every candidate's `user_id` — ✅ DECIDED & FIXED (2026-10-08)
+
+**Owner decision:** withhold while open — counts and recipients only to managers, ids stripped for others. Test: `test_w50_member_live_detail.py`.
 
 **Did:** as `treasurer`, B3 step 8; anonymous, B6 step 3 / B3 step 17.
 **Where:** `schemas/election.py` election response (P:528-572); the lookup `CandidateResponse` (E:651, P:830-854).
@@ -1151,7 +1161,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Did:** as `secretary`, A10 step 7 (absence observed); cause read from code (`election_service.py:5296-5302` against the forensics filter `:2255`).
 **Fix:** round 2 — the row written with `election_id` = parent and a mirror on the child. Test: `test_w50_s07.py` extended.
 
-### W50-72 — LOW — Auto-open mails nothing; the department's first ballot mail arrives as the pre-close "reminder" — FLAGGED
+### W50-72 — LOW — Auto-open mails nothing; the department's first ballot mail arrives as the pre-close "reminder" — ✅ DECIDED & FIXED (2026-10-08)
+
+**Owner decision:** auto-open sends ballots as the election's creator on the department's configured app URL; a failed send keeps the election open and alerts managers to resend. Test: `test_w50_auto_open_sends_ballots.py`.
 
 **Did:** as `admin`, B8 steps 8/9 (EB6 through the lifecycle task).
 **Where:** `election_service.py:4874-4899`; the `ElectionsSettingsPage.tsx` Features copy; `14-elections.md:437`.

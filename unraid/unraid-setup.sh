@@ -478,10 +478,6 @@ PGID=100
 # Email Configuration (disabled by default)
 EMAIL_ENABLED=false
 
-# Storage Configuration
-STORAGE_TYPE=local
-MAX_FILE_SIZE=52428800
-
 # Backup Configuration (consumed by the backup sidecar service)
 BACKUP_TIME=02:00
 BACKUP_RETENTION_DAYS=30

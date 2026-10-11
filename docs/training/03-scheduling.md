@@ -952,8 +952,10 @@ Member credit is different again. A member who came on at 0300 was not on the
 
 ![The same department and period in detailed mode: the identical cards read Total Calls, Avg Calls/Day and Peak Calls, and the per-unit footnote is gone](./images/03-83-call-volume-detailed.png)
 
-In both modes the report cards read **Total Calls**, **Avg Calls/Day** and
-**Peak Calls**.
+In count-only mode the report cards read **Total Calls**, **Avg Calls/Day**
+and **Peak Calls**. When you log individual calls, they read **Member-Reported
+Calls**, **Avg Member-Reported/Day** and **Peak Member-Reported** instead (see
+below for why). The CSV export uses the same names.
 
 #### The count is only as good as the ticks
 
@@ -972,14 +974,19 @@ calls.
 > **What if my date range spans a change of setting?** The report uses your
 > department's **current** setting for the whole range. It does not switch
 > part-way. A department now on close-out counts sees **nothing** from its
-> earlier months of logged calls, and the other way round. Nothing warns you;
-> the number is just smaller. Run each period separately.
+> earlier months of logged calls, and the other way round. From 2026-10-11,
+> The Logbook records the date of every change of setting. If your range
+> starts before that date, the report opens with **Part of this range is
+> missing** and names the date. A change made before 2026-10-11 was never
+> dated, so it gets no warning: the number is just smaller. Either way, run
+> each period separately.
 
-> **Is "Total Calls" an incident count when logging individual calls?** No.
-> In that mode it adds up the call counts on **shift reports**. Those are
-> filed per trainee, so a shift with two trainees counts its calls twice.
-> Reports filed by hand are added as well. Neither mode gives a number you can
-> hand to a funder without explaining how it was worked out.
+> **Is "Member-Reported Calls" an incident count?** No. When you log
+> individual calls, the report adds up the call counts on **shift reports**.
+> Those are filed per member, so a shift two members reported counts its calls
+> twice. Reports filed by hand are added as well. That is why it is not called
+> Total Calls, and why a note sits under the cards. Neither mode gives a number
+> you can hand to a funder without explaining how it was worked out.
 
 #### Claiming a call another unit logged
 

@@ -238,7 +238,10 @@ class TestTokenVoterIsCountedEverywhere:
         )
         assert err is None, err
         assert vote is not None
-        assert vote.voter_id is None, "the link path must not store the id"
+        # Since the 2026-10-08 decision a named election's link vote records
+        # its voter (resolved from the hash for a pre-column token), so the
+        # roster can name it after close (test_w50_token_voter_id.py).
+        assert vote.voter_id == data["voter_id"]
 
     async def test_token_voter_is_not_a_non_voter(
         self, db_session: AsyncSession, named_election

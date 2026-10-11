@@ -1143,14 +1143,14 @@ carry their state: **Draft**, **Awaiting approval**, **Approved** or
    items, motions (with mover, seconder, vote results), discussions,
    adjournment — and any **action items**.
 
-**Meeting Type offers Business, Special, Committee, Board and Other**
-_(2026-10-03)_. The dialog used to offer Trustee, Executive and Annual as well,
-and a meeting of any of those three was refused every time with _"Make sure it
-has a title and a date"_ although it had both — a meeting record accepts only
-the five types. Minutes themselves still know all eight; recording an
-executive (closed) session as its own meeting type needs a database change the
-owner has not yet decided (`docs/KNOWN_LIMITATIONS.md`). A refused create now
-shows the server's own reason.
+**Meeting Type offers Business, Special, Committee, Board, Trustee, Executive,
+Annual and Other** _(2026-10-11)_. A meeting record accepted only five of these
+until this release, so between 3 and 11 October the dialog offered those five
+and a closed executive session could not be recorded at all. Minutes written
+from a meeting keep its type — an **Executive** meeting's minutes are executive
+minutes, which members cannot read even once approved, and each of the three
+new types starts with its own sections. A refused create shows the server's
+own reason.
 
 ![Meeting minutes page with the meeting type selector and attendee list](./images/04-14-meeting-minutes.png)
 
@@ -1183,8 +1183,11 @@ Record formal motions with:
 > the department's clock, so for a US department the minutes header showed the
 > previous evening (a meeting with no start time) or a time 4–6 hours early (a
 > 7:00 PM meeting read 2:00 PM). New minutes are dated correctly. Existing ones
-> were not changed, because a secretary may already have corrected the date by
-> hand — check any you rely on and correct the date. Meetings created from an
+> are corrected when your administrator runs
+> `scripts/backfill_minutes_meeting_dates.py --apply` _(2026-10-11)_, which
+> changes only minutes still carrying the shifted date — a date a secretary
+> already corrected by hand is left as it is. Until it has been run, check any
+> you rely on. Meetings created from an
 > event before the 26 September 2026 update had the same kind of shift (a 7 PM
 > Eastern meeting read 11 PM, and one after 8 PM landed on the next day).
 
@@ -1224,6 +1227,20 @@ Action items have:
 
 > **Hint:** Members see their own action items prominently. Officers can view and manage all action items across the department.
 
+**Assigning an item to a member** _(2026-10-11)_. On the minutes page, **Add
+Action Item** offers an **Assignee** list of every active member (or
+**Unassigned**) instead of a box for a typed name, and the item carries that
+member's name. Only an item assigned this way appears under **Assigned to me**;
+items assigned by a typed name before this release keep their name and are not
+matched to anyone.
+
+**Closing your own item** _(2026-10-11)_. If an item is assigned to you, the
+Action Items page shows **Update status** beside it, even when you cannot open
+the minutes it came from. You can set it to Pending, In Progress, Completed or
+Cancelled and add **Completion notes**; anything else about the item — its
+wording, due date, priority or assignee — is changed by whoever keeps the
+minutes.
+
 **Reminders.** An open or in-progress action item with a due date sends its
 assignee a reminder three days before it is due, one day before, and once it is
 overdue. The check runs once a day.
@@ -1259,11 +1276,20 @@ away, and everyone with meetings scheduled for next week. A meeting that is
 both waived and inside a leave is now excluded once, not twice. The dashboard
 and the ballot check share one calculation, so they cannot disagree.
 
-**Not yet built:** there is no Attendance Dashboard screen. The calculation
-above is real and the data is served by `GET /meetings/attendance/dashboard`,
-which the frontend even has a client method for — but nothing calls it, so no
-page renders the table. Per-meeting attendance is visible on each meeting's
-own record in the meantime.
+**Opening it** _(2026-10-11)_. On the **Minutes** page, an officer holding
+`meetings.manage` has an **Attendance** button beside **Record Minutes**; it
+opens **Meeting Attendance** (`/minutes/attendance`). Choose the **Period**
+(last 3, 6, 12 or 24 months) and optionally a **Meeting type**. The tiles show
+the meetings in the period, the average attendance, how many members may vote,
+and how many are blocked by attendance; the table lists each active member's
+attendance percentage, meetings attended out of those counted, absences,
+waived meetings, meetings during leave, and whether they may vote (with the
+reason when not). A member with no meeting to count reads **Not applicable**
+rather than a percentage. Every figure is the server's — the same calculation
+the ballot check uses.
+
+**Not yet on the screen:** granting a per-meeting waiver from the dashboard;
+waivers are still granted from the meeting.
 
 ### Leave of Absence & Meeting Attendance
 

@@ -118,6 +118,21 @@ class MessageStatsResponse(BaseModel):
     total_acknowledged: int
 
 
+class DeliveryState(BaseModel):
+    """One channel's delivery to one member (MSG-12).
+
+    ``status`` is ``pending`` (being sent), ``delivered``, ``retrying`` (a
+    failed or held-back attempt, tried again at ``next_attempt_at``) or
+    ``failed`` (retries spent, or the message can no longer go out).
+    """
+
+    status: str
+    attempts: int
+    next_attempt_at: str | None = None
+    delivered_at: str | None = None
+    error: str | None = None
+
+
 class AckReportRecipient(BaseModel):
     user_id: str
     name: str
@@ -133,6 +148,10 @@ class AckReportRecipient(BaseModel):
     # on the way out and the row reads as current audience, leaving the list
     # longer than its own denominator with nothing to explain the gap.
     removed_from_audience: bool = False
+    # None when no send was attempted on that channel (no email address, or
+    # no SMS for a non-urgent message or a member who has not opted in).
+    email_delivery: DeliveryState | None = None
+    sms_delivery: DeliveryState | None = None
 
 
 class AckReportResponse(BaseModel):

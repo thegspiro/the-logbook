@@ -6,7 +6,7 @@ budget management, expenditure logging, compliance task tracking,
 and grant reporting.
 """
 
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -30,7 +30,10 @@ from app.models.grant import (
 from app.models.user import User
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
-from app.utils.org_timezone import resolve_org_today
+from app.utils.org_timezone import (
+    resolve_local_range_utc,
+    resolve_org_today,
+)
 from app.utils.sql_ordering import nulls_last_asc
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
@@ -1205,21 +1208,15 @@ class GrantService:
         query = select(GrantApplication).where(
             GrantApplication.organization_id == organization_id
         )
-        if start_date:
-            query = query.where(
-                GrantApplication.created_at
-                >= datetime.combine(
-                    start_date, datetime.min.time(), tzinfo=timezone.utc
-                )
-            )
-        if end_date:
-            # created_at is DateTime; a bare date compares as that date's
-            # midnight, silently excluding everything created later the same
-            # day. Match reports_service.py's end-of-day boundary pattern.
-            query = query.where(
-                GrantApplication.created_at
-                <= datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
-            )
+        # created_at is a timestamp: bound it at the department's midnights,
+        # through the whole end date (GF-24, GF-24a).
+        range_start, range_end = await resolve_local_range_utc(
+            self.db, organization_id, start_date, end_date
+        )
+        if range_start:
+            query = query.where(GrantApplication.created_at >= range_start)
+        if range_end:
+            query = query.where(GrantApplication.created_at < range_end)
 
         result = await self.db.execute(
             query.options(

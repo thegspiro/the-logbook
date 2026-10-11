@@ -15,6 +15,7 @@ from sqlalchemy.orm import selectinload
 from app.core.utils import generate_uuid, safe_error_detail
 from app.models.notification import (
     DepartmentMessage,
+    DepartmentMessageDelivery,
     DepartmentMessageRecipient,
     MessagePriority,
     MessageTargetType,
@@ -22,6 +23,7 @@ from app.models.notification import (
     NotificationLog,
 )
 from app.models.user import Role, User, UserStatus
+from app.services.message_delivery_service import THROTTLED_REASON
 from app.utils.member_names import format_display_name
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
@@ -46,6 +48,36 @@ def _validate_expiry(
             raise ValueError("expires_at must be later than scheduled_at")
     elif expires_at <= now:
         raise ValueError("expires_at must be in the future for a published message")
+
+
+# Reasons the delivery code itself writes, shown as they are. Anything else
+# is an exception's text from a provider or driver, which can carry hostnames
+# and internals, so the report says only that the send did not go through.
+_PLAIN_DELIVERY_REASONS = frozenset(
+    {
+        THROTTLED_REASON,
+        "email reported not sent",
+        "sms reported 0 sent",
+        "Message is no longer active; delivery abandoned",
+        "Recipient is no longer in the message audience",
+    }
+)
+
+
+def _delivery_state(delivery: DepartmentMessageDelivery) -> Dict[str, Any]:
+    """One channel's delivery outcome for the acknowledgment report (MSG-12)."""
+    next_attempt_at = _as_utc(delivery.next_attempt_at)
+    delivered_at = _as_utc(delivery.delivered_at)
+    error = delivery.error
+    if error and error not in _PLAIN_DELIVERY_REASONS:
+        error = "The provider refused the message or could not be reached"
+    return {
+        "status": delivery.status,
+        "attempts": delivery.attempt_count or 1,
+        "next_attempt_at": next_attempt_at.isoformat() if next_attempt_at else None,
+        "delivered_at": delivered_at.isoformat() if delivered_at else None,
+        "error": error,
+    }
 
 
 class MessagingService:
@@ -1045,6 +1077,18 @@ class MessagingService:
         )
         targeted_rows = recipient_result.all()
 
+        # Each member's email/SMS delivery, so a send that ran out of retries
+        # shows as failed on this list instead of only in a log (MSG-12).
+        delivery_result = await self.db.execute(
+            select(DepartmentMessageDelivery).where(
+                DepartmentMessageDelivery.message_id == message_id
+            )
+        )
+        deliveries = {
+            (str(d.recipient_id), d.channel): _delivery_state(d)
+            for d in delivery_result.scalars().all()
+        }
+
         recipients = []
         total_read = 0
         total_acknowledged = 0
@@ -1084,6 +1128,8 @@ class MessagingService:
                         if record and record.acknowledged_at
                         else None
                     ),
+                    "email_delivery": deliveries.get((str(u.id), "email")),
+                    "sms_delivery": deliveries.get((str(u.id), "sms")),
                 }
             )
 

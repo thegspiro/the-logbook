@@ -129,3 +129,44 @@ describe('preliminary marker', () => {
     expect(screen.queryByText(/Preliminary/)).not.toBeInTheDocument();
   });
 });
+
+describe('detailed tracking is named for what it counts (SCHED-15)', () => {
+  it('renames the headline figure and explains it', () => {
+    render(<CallVolumeRenderer data={report({ counts_member_reports: true })} />);
+    expect(screen.getAllByText('Member-Reported Calls').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Total Calls')).not.toBeInTheDocument();
+    expect(screen.getByText(/not a count of incidents/)).toBeInTheDocument();
+  });
+
+  it('carries the same name into the export', () => {
+    const { columns } = getCallVolumeExportData(report({ counts_member_reports: true }));
+    const headers = columns.map((c) => c.header);
+    expect(headers).toContain('Member-Reported Calls');
+    expect(headers).not.toContain('Total Calls');
+  });
+
+  it('keeps "Total Calls" and no note when the flag is absent', () => {
+    render(<CallVolumeRenderer data={report()} />);
+    expect(screen.getAllByText('Total Calls').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/not a count of incidents/)).not.toBeInTheDocument();
+  });
+});
+
+describe('a range reaching back past a tracking-mode change (SCHED-14)', () => {
+  it('warns and names the change date as written', () => {
+    render(<CallVolumeRenderer data={report({ range_predates_mode: true, mode_since: '2026-08-15' })} />);
+    const warning = screen.getByRole('status');
+    expect(warning).toHaveTextContent(/Part of this range is missing/);
+    expect(warning).toHaveTextContent('Aug 15, 2026');
+  });
+
+  it('says nothing when the range starts on or after the change', () => {
+    render(<CallVolumeRenderer data={report({ range_predates_mode: false, mode_since: '2026-08-15' })} />);
+    expect(screen.queryByText(/Part of this range is missing/)).not.toBeInTheDocument();
+  });
+
+  it('says nothing for a department with no recorded change', () => {
+    render(<CallVolumeRenderer data={report({ mode_since: null })} />);
+    expect(screen.queryByText(/Part of this range is missing/)).not.toBeInTheDocument();
+  });
+});

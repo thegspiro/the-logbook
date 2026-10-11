@@ -19,7 +19,7 @@ A seventh, lower-priority finding (unbounded prospect reads on
 ``/widget-summary`` and ``/pipelines``) is tracked in
 ``docs/security-review/MP-08-membership-pipeline.md`` / KNOWN_LIMITATIONS —
 the ``/pipelines`` half is covered here since it was fixed; ``/widget-summary``
-was flagged, not fixed, and has no guard test.
+was fixed later and is covered by ``test_pipeline_widget_summary_counts.py``.
 """
 
 import ast

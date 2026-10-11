@@ -228,7 +228,6 @@ services:
       LOG_FORMAT: ${LOG_FORMAT:-text}
 
       # Database pool and connection retries
-      DB_POOL_MIN: ${DB_POOL_MIN:-2}
       DB_POOL_MAX: ${DB_POOL_MAX:-10}
       DB_ECHO: ${DB_ECHO:-false}
       DB_CHARSET: ${DB_CHARSET:-utf8mb4}
@@ -298,7 +297,6 @@ services:
 
       # Rate limits
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
-      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-60}
       RATE_LIMIT_DEFAULT: ${RATE_LIMIT_DEFAULT:-100/minute}
       PUBLIC_FORM_DAILY_LIMIT: ${PUBLIC_FORM_DAILY_LIMIT:-500}
       GUEST_CHECK_IN_DAILY_LIMIT: ${GUEST_CHECK_IN_DAILY_LIMIT:-300}
@@ -318,9 +316,6 @@ services:
       IP_LOGGING_ENABLED: ${IP_LOGGING_ENABLED:-true}
 
       # File storage (paths are inside the container)
-      STORAGE_TYPE: ${STORAGE_TYPE:-local}
-      UPLOAD_DIR: ${UPLOAD_DIR:-./uploads}
-      MAX_FILE_SIZE: ${MAX_FILE_SIZE:-52428800}
       MAX_REQUEST_BODY_SIZE: ${MAX_REQUEST_BODY_SIZE:-62914560}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}

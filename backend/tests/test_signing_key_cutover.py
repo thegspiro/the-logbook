@@ -373,6 +373,7 @@ def _vote(voted_at: datetime) -> SimpleNamespace:
         vote_signature=None,
         signing_key_id=None,
         chain_hash=None,
+        deleted_at=None,
     )
 
 

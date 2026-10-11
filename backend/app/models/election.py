@@ -186,6 +186,14 @@ class Election(Base):
     nomination_deadline: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Stamped by close_nominations and cleared when nominations reopen. Once
+    # set, the slate is frozen: no nominee may accept or decline and no
+    # manager may accept on a nominee's behalf (W50-38, owner decision
+    # 2026-10-08). NULL on elections whose nominations closed before the
+    # column existed — they keep the old, unfrozen behaviour.
+    nominations_closed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # When and by whom the election actually closed. end_date is the
     # *scheduled* end and survives an early manual close unchanged, so it is
@@ -432,6 +440,22 @@ class Candidate(Base):
     accepted: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True
     )  # For member candidates
+    # Set when an election manager accepted the nomination on the nominee's
+    # behalf rather than the nominee themselves; the candidate list labels it
+    # "Accepted by manager" and the nominee is emailed (W50-38). Cleared if
+    # the nominee later accepts in person or the acceptance is withdrawn.
+    accepted_on_behalf_by: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey(
+            "users.id",
+            ondelete="SET NULL",
+            name="fk_candidates_accepted_on_behalf_by_users",
+        ),
+        nullable=True,
+    )
+    accepted_on_behalf_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     is_write_in: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Write-in consolidation: when spelling variants of the same person are
@@ -495,6 +519,19 @@ class VotingToken(Base):
 
     # Hashed voter identifier (for tracking without revealing identity)
     voter_hash: Mapped[str] = mapped_column(String(64), nullable=False)  # SHA256 hash
+
+    # The recipient, recorded at issue on a NAMED election only, so a link
+    # vote can carry voter_id and the who-voted roster can name it after the
+    # salt is destroyed at close (W50-3). Always NULL on an anonymous
+    # election: a user id beside this row's voter_hash would join every link
+    # vote back to its voter. NULL also on tokens issued before the column.
+    user_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey(
+            "users.id", ondelete="SET NULL", name="fk_voting_tokens_user_id_users"
+        ),
+        nullable=True,
+    )
 
     # Token metadata
     created_at: Mapped[datetime] = mapped_column(

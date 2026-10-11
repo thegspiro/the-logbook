@@ -921,6 +921,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
     checklistSection: '9. Meetings & Minutes',
     pages: [
       { path: '/minutes', label: 'Minutes', module: 'minutes' },
+      {
+        path: '/minutes/attendance',
+        label: 'Meeting attendance dashboard',
+        permission: 'meetings.manage',
+        module: 'minutes',
+      },
       { path: '/minutes/:minutesId', label: 'Minutes detail', module: 'minutes' },
     ],
   },

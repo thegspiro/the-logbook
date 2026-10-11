@@ -55,8 +55,10 @@ from app.utils.hours import (
 )
 from app.utils.org_timezone import (
     local_date,
-    local_day_start_utc,
+    local_range_utc,
+    resolve_local_range_utc,
     resolve_org_today,
+    resolve_reporting_timezone,
     resolve_scheduling_timezone,
 )
 from app.utils.sql_ordering import nulls_last_asc
@@ -488,20 +490,16 @@ class ReportsService:
         # The requested dates, and each event's date in the report, are the
         # department's: bounded at its midnights rather than UTC's, which put an
         # evening event on the last day outside the range and dated it wrongly.
-        tz = await resolve_scheduling_timezone(self.db, organization_id)
+        tz = await resolve_reporting_timezone(self.db, organization_id)
         events_query = select(Event).where(
             Event.organization_id == str(organization_id)
         )
 
-        if start_date:
-            events_query = events_query.where(
-                Event.start_datetime >= local_day_start_utc(start_date, tz)
-            )
-        if end_date:
-            events_query = events_query.where(
-                Event.start_datetime
-                < local_day_start_utc(end_date + timedelta(days=1), tz)
-            )
+        range_start, range_end = local_range_utc(start_date, end_date, tz)
+        if range_start:
+            events_query = events_query.where(Event.start_datetime >= range_start)
+        if range_end:
+            events_query = events_query.where(Event.start_datetime < range_end)
 
         events_query = events_query.order_by(Event.start_datetime.desc())
         events_result = await self.db.execute(events_query)
@@ -1367,6 +1365,13 @@ class ReportsService:
         report["unfinalized_shifts"] = await self._count_unfinalized_shifts(
             organization_id, period_start, period_end
         )
+        # The whole range is read under the current mode, so any part of it
+        # before that mode took over comes from the other source and is
+        # missing here. Warn rather than change the figures (SCHED-14).
+        report["tracking_mode"] = tracking.get("mode")
+        mode_since = await call_service.mode_since(str(organization_id))
+        report["mode_since"] = str(mode_since) if mode_since else None
+        report["range_predates_mode"] = bool(mode_since and period_start < mode_since)
         return report
 
     async def _count_unfinalized_shifts(
@@ -1466,6 +1471,13 @@ class ReportsService:
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "period_start": str(period_start),
             "period_end": str(period_end),
+            "source": "shift_reports",
+            # Shift completion reports are filed per member, so a shift two
+            # members reported contributes its calls twice. The figure is a
+            # sum of member-reported calls, not an incident count, and the
+            # renderer names it that way (SCHED-15, owner decision: rename,
+            # numbers unchanged).
+            "counts_member_reports": True,
             "summary": {
                 "total_calls": total_calls,
                 "avg_calls_per_day": avg_per_day,
@@ -1694,8 +1706,6 @@ class ReportsService:
         Cross-module department overview report.
         Aggregates key metrics from members, training, events, and action items.
         """
-        from datetime import timedelta
-
         from app.models.meeting import ActionItemStatus, MeetingActionItem
         from app.models.minute import ActionItem as MinutesActionItem
         from app.models.minute import MeetingMinutes, MinutesActionItemStatus
@@ -1704,6 +1714,13 @@ class ReportsService:
         today = await resolve_org_today(self.db, org_id)
         period_start = start_date or today - timedelta(days=365)
         period_end = end_date or today
+        # Timestamped rows are bounded at the department's midnights, not
+        # UTC's (GF-24a); date columns compare against the dates directly.
+        range_start, range_end = local_range_utc(
+            period_start,
+            period_end,
+            await resolve_reporting_timezone(self.db, org_id),
+        )
 
         # ── Members ──
         total_result = await self.db.execute(
@@ -1757,14 +1774,8 @@ class ReportsService:
         events_result = await self.db.execute(
             select(func.count(Event.id)).where(
                 Event.organization_id == org_id,
-                Event.start_datetime
-                >= datetime.combine(
-                    period_start, datetime.min.time(), tzinfo=timezone.utc
-                ),
-                Event.start_datetime
-                <= datetime.combine(
-                    period_end, datetime.max.time(), tzinfo=timezone.utc
-                ),
+                Event.start_datetime >= range_start,
+                Event.start_datetime < range_end,
                 Event.is_cancelled.is_(False),
             )
         )
@@ -1779,14 +1790,8 @@ class ReportsService:
                 # RPT-5: bound check-ins to the report period like total_events
                 # above — this metric was counting all-time while the rest of
                 # the department overview is period-scoped.
-                Event.start_datetime
-                >= datetime.combine(
-                    period_start, datetime.min.time(), tzinfo=timezone.utc
-                ),
-                Event.start_datetime
-                <= datetime.combine(
-                    period_end, datetime.max.time(), tzinfo=timezone.utc
-                ),
+                Event.start_datetime >= range_start,
+                Event.start_datetime < range_end,
             )
         )
         total_checkins = checkins_result.scalar() or 0
@@ -1873,18 +1878,13 @@ class ReportsService:
             ),
             AdminHoursEntry.duration_minutes.isnot(None),
         ]
-        if start_date:
-            base_conditions.append(
-                AdminHoursEntry.clock_in_at
-                >= datetime.combine(
-                    start_date, datetime.min.time(), tzinfo=timezone.utc
-                )
-            )
-        if end_date:
-            base_conditions.append(
-                AdminHoursEntry.clock_in_at
-                <= datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
-            )
+        range_start, range_end = await resolve_local_range_utc(
+            self.db, organization_id, start_date, end_date
+        )
+        if range_start:
+            base_conditions.append(AdminHoursEntry.clock_in_at >= range_start)
+        if range_end:
+            base_conditions.append(AdminHoursEntry.clock_in_at < range_end)
 
         # Individual entries with user and category info
         entries_query = (
@@ -2064,18 +2064,13 @@ class ReportsService:
             ProspectiveMember.pipeline_id == pipeline.id,
             ProspectiveMember.organization_id == org_id,
         ]
-        if start_date:
-            prospect_conditions.append(
-                ProspectiveMember.created_at
-                >= datetime.combine(
-                    start_date, datetime.min.time(), tzinfo=timezone.utc
-                )
-            )
-        if end_date:
-            prospect_conditions.append(
-                ProspectiveMember.created_at
-                <= datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
-            )
+        range_start, range_end = await resolve_local_range_utc(
+            self.db, org_id, start_date, end_date
+        )
+        if range_start:
+            prospect_conditions.append(ProspectiveMember.created_at >= range_start)
+        if range_end:
+            prospect_conditions.append(ProspectiveMember.created_at < range_end)
         if hidden_prospect_ids:
             prospect_conditions.append(ProspectiveMember.id.notin_(hidden_prospect_ids))
 

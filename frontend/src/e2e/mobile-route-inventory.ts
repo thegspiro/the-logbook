@@ -946,6 +946,13 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'fast route-level mobile presentation ratchet',
   },
   {
+    path: '/minutes/attendance',
+    source: 'src/modules/minutes/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'secretary report built from the shared rwd-table, card and form-input utilities; /minutes is the representative module route',
+  },
+  {
     path: '/minutes/:minutesId',
     source: 'src/modules/minutes/routes.tsx',
     coverage: 'exempt',

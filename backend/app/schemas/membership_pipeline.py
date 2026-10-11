@@ -488,6 +488,8 @@ class ProspectResponse(ProspectBase):
     transferred_at: Optional[datetime] = None
     target_role_id: Optional[UUID] = None
     target_role_name: Optional[str] = None
+    # Display name of the in-org member in referred_by; resolved, not stored.
+    referred_by_name: Optional[str] = None
     deactivated_at: Optional[datetime] = None
     deactivated_reason: Optional[str] = None
     reactivated_at: Optional[datetime] = None

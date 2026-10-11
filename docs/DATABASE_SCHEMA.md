@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**303 tables · 4992 columns · 1006 foreign keys**
+**303 tables · 4998 columns · 1008 foreign keys**
 
 ---
 
@@ -156,13 +156,13 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`candidates`](#candidates) | `Candidate` | 15 | Candidate model for election candidates |
-| [`elections`](#elections) | `Election` | 54 | Election model for managing elections within an organization |
+| [`candidates`](#candidates) | `Candidate` | 17 | Candidate model for election candidates |
+| [`elections`](#elections) | `Election` | 55 | Election model for managing elections within an organization |
 | [`manual_ballot_attestations`](#manual_ballot_attestations) | `ManualBallotAttestation` | 5 | One officer's confirmation that a paper-tally batch matches the |
 | [`manual_ballot_batches`](#manual_ballot_batches) | `ManualBallotBatch` | 14 | One paper-tally entry — the set of manual votes sharing a batch id. |
 | [`saved_ballot_templates`](#saved_ballot_templates) | `SavedBallotTemplate` | 11 | Organization-scoped, reusable snapshot of a structured ballot. |
 | [`votes`](#votes) | `Vote` | 26 | Vote model for recording votes |
-| [`voting_tokens`](#voting_tokens) | `VotingToken` | 16 | Voting token model for secure anonymous ballot access |
+| [`voting_tokens`](#voting_tokens) | `VotingToken` | 17 | Voting token model for secure anonymous ballot access |
 
 ### Email Templates
 
@@ -471,7 +471,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`department_message_deliveries`](#department_message_deliveries) | `DepartmentMessageDelivery` | 9 | Durable, per-recipient claim and result for an external delivery. |
+| [`department_message_deliveries`](#department_message_deliveries) | `DepartmentMessageDelivery` | 11 | Durable, per-recipient claim and result for an external delivery. |
 | [`department_message_reads`](#department_message_reads) | `DepartmentMessageRead` | 5 | Tracks which users have read/acknowledged a department message. |
 | [`department_message_recipients`](#department_message_recipients) | `DepartmentMessageRecipient` | 8 | Durable, queryable delivery and resolution state for one recipient. |
 | [`department_messages`](#department_messages) | `DepartmentMessage` | 19 | Department Message model |
@@ -2154,6 +2154,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `nomination_date` | DATETIME | no |  | `now()` |  |
 | `nominated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `accepted` | BOOL | no |  | `True` |  |
+| `accepted_on_behalf_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `accepted_on_behalf_at` | DATETIME | yes |  |  |  |
 | `is_write_in` | BOOL | no |  | `False` |  |
 | `merged_into_candidate_id` | VARCHAR(36) | yes |  |  |  |
 | `display_order` | INTEGER | no |  | `0` |  |
@@ -2195,6 +2197,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `reminder_hours_before_close` | INTEGER | yes |  |  |  |
 | `reminder_sent_at` | DATETIME | yes |  |  |  |
 | `nomination_deadline` | DATETIME | yes |  |  |  |
+| `nominations_closed_at` | DATETIME | yes |  |  |  |
 | `closed_at` | DATETIME | yes |  |  |  |
 | `closed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `status` | ENUM(`draft`, `nominations`, `open`, `closed`, `cancelled`) | no | IDX | `'draft'` |  |
@@ -2375,6 +2378,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `election_id` | VARCHAR(36) | no | FK, IDX |  | → `elections.id` ON DELETE CASCADE |
 | `token` | VARCHAR(128) | no | UQ |  |  |
 | `voter_hash` | VARCHAR(64) | no | IDX |  |  |
+| `user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `expires_at` | DATETIME | no |  |  |  |
 | `used` | BOOL | no |  | `0` |  |
@@ -6586,7 +6590,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `title` | VARCHAR(255) | no |  |  |  |
-| `meeting_type` | ENUM(`business`, `special`, `committee`, `board`, `other`) | no |  | `business` |  |
+| `meeting_type` | ENUM(`business`, `special`, `committee`, `board`, `trustee`, `executive`, `annual`, `other`) | no |  | `business` |  |
 | `meeting_date` | DATE | no | IDX |  |  |
 | `start_time` | TIME | yes |  |  |  |
 | `end_time` | TIME | yes |  |  |  |
@@ -6925,14 +6929,17 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `message_id` | VARCHAR(36) | no | FK, IDX |  | → `department_messages.id` ON DELETE CASCADE |
 | `recipient_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
 | `channel` | VARCHAR(16) | no |  |  |  |
-| `status` | VARCHAR(16) | no |  | `pending` |  |
+| `status` | VARCHAR(16) | no | IDX | `pending` |  |
 | `idempotency_key` | VARCHAR(255) | no | UQ |  |  |
 | `attempted_at` | DATETIME | yes |  | `now()` |  |
 | `delivered_at` | DATETIME | yes |  |  |  |
 | `error` | TEXT | yes |  |  |  |
+| `attempt_count` | INTEGER | no |  | `1` |  |
+| `next_attempt_at` | DATETIME | yes |  |  |  |
 
 **Indexes**
 
+- `idx_dept_msg_delivery_due` (`status`, `next_attempt_at`)
 - `idx_dept_msg_delivery_message` (`message_id`)
 
 **Constraints**
@@ -10548,7 +10555,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (368 references)
+### → `users` (370 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10591,6 +10598,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `budget_requests` | `reviewed_by` | SET NULL | yes |
 | `budget_requests` | `submitted_by` | SET NULL | yes |
 | `budgets` | `created_by` | RESTRICT | no |
+| `candidates` | `accepted_on_behalf_by` | SET NULL | yes |
 | `candidates` | `nominated_by` | SET NULL | yes |
 | `candidates` | `user_id` | SET NULL | yes |
 | `check_item_deployed_lots` | `deployed_by` | SET NULL | yes |
@@ -10919,6 +10927,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `proxy_voter_id` | SET NULL | yes |
 | `votes` | `recorded_by` | SET NULL | yes |
 | `votes` | `voter_id` | SET NULL | yes |
+| `voting_tokens` | `user_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
 ### → `organizations` (247 references)

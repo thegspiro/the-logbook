@@ -736,7 +736,9 @@ prospect.organization_id` before any check-in match is attempted, so an
   no pagination or per-prospect cap) — still open exactly as documented;
   `docs/KNOWN_LIMITATIONS.md`'s entry matches the current code.
 - **MP-19's `/widget-summary` half** (full-table scan for aggregate counts
-  and the manager-only `details` list) — still open; the sibling
+  and the manager-only `details` list) — **fixed 2026-10-11** (owner
+  decision): SQL `GROUP BY`/`CASE` counts and a 10-row most-recent `details`
+  list with `details_truncated`; was still open at this pass; the sibling
   `/pipelines` fix (aggregate-count query, no eager `prospects` load) is
   still intact.
 - **MP-22** (a document delete can lose the file if the commit fails after

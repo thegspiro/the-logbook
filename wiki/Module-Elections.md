@@ -212,7 +212,11 @@ transitions and reminders:
 - **Auto-open**: DRAFT elections are opened at `start_date` only when the
   creator enabled **Open Automatically at Start Time** (`auto_open`). The
   real open path runs, so an invalid draft (e.g. no candidates) is skipped
-  and retried, never force-opened.
+  and retried, never force-opened. Since 2026-10-08 (W50-72) the ballots are
+  then emailed as the election's creator, with links on `FRONTEND_URL`; a
+  send that fails or reaches nobody leaves the election open and emails every
+  `elections.manage` holder to send them (`ballots_auto_sent` /
+  `ballots_auto_send_failed` audit events).
 - **Nomination auto-close**: an election in the nomination phase with a
   `nomination_deadline` returns to draft automatically once the deadline
   passes (audited as `nominations_auto_closed`).
@@ -810,18 +814,18 @@ eight more things were fixed:
 
 ### Reporting
 
-| Finding                                                                                   | Fix                                                                                                                                                                                                                          |
-| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| W50-7 Ballot-item outcomes reported nowhere                                               | Per-item results with a `label` on the Results tab, the report mail and the certified PDF. The pooled `overall_results` list is unchanged — flagged                                                                          |
-| W50-8 Print Blank Ballots carried positions only                                          | Each approval item prints "☐ Approve ☐ Deny". Recording paper votes on items is still impossible — flagged                                                                                                                   |
-| W50-12 `send-report` mailed a mid-vote tally as "closed … official report"                | 400 "Election report is only available after the election closes"                                                                                                                                                            |
-| W50-14 Early close dated to the scheduled end, with no actor                              | `elections.closed_at` / `closed_by` (migration `ac06a2998013`), stamped on manual and lifecycle closes and printed on the PDF and report ("… by Sam Ortiz"); older rows fall back to the scheduled end and "Automatic close" |
-| W50-20 Pre-meeting package said everyone was eligible                                     | Per-item eligibility block from the roster's `item_eligibility`                                                                                                                                                              |
-| W50-32 / -48 Ties printed as two 50% rows; "Quorum Met" with no quorum                    | `is_tie` set under co-winners too, report prints "Tie — co-winners per policy" / "Tie — runoff round created"; `quorum_met: None` and "No quorum requirement" when `quorum_type == 'none'`                                   |
-| W50-33 Close report invented recipient facts                                              | One source: `email_recipients` plus `elections.email_skipped_details` (migration `c4e8a1f7d2b6`) from the last send or reminder                                                                                              |
-| W50-65 / -66 Forensics and results counters disagreed; voided batch cards showed no trail | Tokens reported as issued / used / superseded / expired / live; batches carry `voided_by` / `voided_at` / `void_reason` / `over_count_override` (migration `d9f3a6c2e8b1`, backfilled for already-voided batches)            |
-| W50-45 Audit Log page showed "system" for every row                                       | `username` resolved server-side; "system" only when `user_id` is null                                                                                                                                                        |
-| W50-71 `runoff_election_created` had no `election_id`                                     | Written on the parent with a mirror on the child                                                                                                                                                                             |
+| Finding                                                                                   | Fix                                                                                                                                                                                                                              |
+| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W50-7 Ballot-item outcomes reported nowhere                                               | Per-item results with a `label` on the Results tab, the report mail and the certified PDF. Since 2026-10-08 `overall_results` holds only candidates in no contest, never a cross-item pool, and the runoff check reads each race |
+| W50-8 Print Blank Ballots carried positions only                                          | Each approval item prints "☐ Approve ☐ Deny". Recording paper votes on items is still impossible — flagged                                                                                                                       |
+| W50-12 `send-report` mailed a mid-vote tally as "closed … official report"                | 400 "Election report is only available after the election closes"                                                                                                                                                                |
+| W50-14 Early close dated to the scheduled end, with no actor                              | `elections.closed_at` / `closed_by` (migration `ac06a2998013`), stamped on manual and lifecycle closes and printed on the PDF and report ("… by Sam Ortiz"); older rows fall back to the scheduled end and "Automatic close"     |
+| W50-20 Pre-meeting package said everyone was eligible                                     | Per-item eligibility block from the roster's `item_eligibility`                                                                                                                                                                  |
+| W50-32 / -48 Ties printed as two 50% rows; "Quorum Met" with no quorum                    | `is_tie` set under co-winners too, report prints "Tie — co-winners per policy" / "Tie — runoff round created"; `quorum_met: None` and "No quorum requirement" when `quorum_type == 'none'`                                       |
+| W50-33 Close report invented recipient facts                                              | One source: `email_recipients` plus `elections.email_skipped_details` (migration `c4e8a1f7d2b6`) from the last send or reminder                                                                                                  |
+| W50-65 / -66 Forensics and results counters disagreed; voided batch cards showed no trail | Tokens reported as issued / used / superseded / expired / live; batches carry `voided_by` / `voided_at` / `void_reason` / `over_count_override` (migration `d9f3a6c2e8b1`, backfilled for already-voided batches)                |
+| W50-45 Audit Log page showed "system" for every row                                       | `username` resolved server-side; "system" only when `user_id` is null                                                                                                                                                            |
+| W50-71 `runoff_election_created` had no `election_id`                                     | Written on the parent with a mirror on the child                                                                                                                                                                                 |
 
 ### Mail, tokens and lifecycle
 
