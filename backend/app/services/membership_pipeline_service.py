@@ -6272,16 +6272,12 @@ class MembershipPipelineService:
             return 0
 
         paths = (
-            (
-                await self.db.execute(
-                    select(
-                        ProspectDocument.prospect_id, ProspectDocument.file_path
-                    ).where(ProspectDocument.prospect_id.in_(ids))
+            await self.db.execute(
+                select(ProspectDocument.prospect_id, ProspectDocument.file_path).where(
+                    ProspectDocument.prospect_id.in_(ids)
                 )
             )
-            .tuples()
-            .all()
-        )
+        ).all()
         for prospect_id, stored_path in paths:
             if stored_path:
                 try:

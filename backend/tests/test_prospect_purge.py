@@ -140,6 +140,24 @@ class TestWhatIsPurged:
         assert await _exists(db_session, target.id)
 
 
+@pytest.fixture(autouse=True)
+def _legacy_prospect_dir(tmp_path, monkeypatch):
+    """Files these tests plant are legacy plaintext paths: they are only
+    followed inside the org's legacy prospect-documents directory, which is
+    pointed at ``tmp_path`` here. Storage-key files are covered in
+    tests/test_file_storage_service.py."""
+    monkeypatch.setattr(
+        "app.services.membership_pipeline_service.LEGACY_PROSPECT_DOCUMENT_DIR",
+        str(tmp_path),
+    )
+
+
+def _legacy_path(tmp_path, org_id, name):
+    directory = tmp_path / str(org_id)
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory / name
+
+
 class TestUploadedFiles:
     async def _with_document(self, db_session, prospect, path):
         path.write_bytes(b"scanned licence")
@@ -160,7 +178,7 @@ class TestUploadedFiles:
         prospect = await _prospect(
             svc, db_session, org_id, pipeline_id, ProspectStatus.INACTIVE
         )
-        stored = tmp_path / "licence.jpg"
+        stored = _legacy_path(tmp_path, org_id, "licence.jpg")
         await self._with_document(db_session, prospect, stored)
 
         await svc.purge_inactive_prospects(
@@ -177,7 +195,7 @@ class TestUploadedFiles:
         prospect = await _prospect(
             svc, db_session, org_id, pipeline_id, ProspectStatus.INACTIVE
         )
-        stored = tmp_path / "licence.jpg"
+        stored = _legacy_path(tmp_path, org_id, "licence.jpg")
         await self._with_document(db_session, prospect, stored)
         stored.unlink()
 
@@ -195,7 +213,7 @@ class TestUploadedFiles:
         prospect = await _prospect(
             svc, db_session, org_id, pipeline_id, ProspectStatus.INACTIVE
         )
-        stored = tmp_path / "licence.jpg"
+        stored = _legacy_path(tmp_path, org_id, "licence.jpg")
         await self._with_document(db_session, prospect, stored)
 
         with patch("os.remove", side_effect=PermissionError("read-only")):
@@ -252,7 +270,7 @@ class TestTheEndpoint:
         prospect = await _prospect(
             svc, db_session, org_id, pipeline_id, ProspectStatus.INACTIVE
         )
-        stored = tmp_path / "licence.jpg"
+        stored = _legacy_path(tmp_path, org_id, "licence.jpg")
         stored.write_bytes(b"x")
         db_session.add(
             ProspectDocument(

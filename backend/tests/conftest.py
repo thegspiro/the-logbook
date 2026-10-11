@@ -104,16 +104,24 @@ _install_patch_leak_guard()
 
 
 @pytest.fixture(autouse=True)
-def _isolated_upload_dir(tmp_path_factory, monkeypatch):
+def _isolated_upload_dir(tmp_path_factory):
     """Give every test its own UPLOAD_DIR.
 
     The file storage service writes under ``settings.UPLOAD_DIR``; left at its
     default, tests would write encrypted files into ``./uploads`` of whatever
     directory pytest runs from, and one test could read another's files.
+
+    Saved and restored by hand rather than through ``monkeypatch``: an autouse
+    fixture that requests ``monkeypatch`` sets it up ahead of the patch-leak
+    guard below, so every test's own monkeypatches would still be installed
+    when the guard checks for leaks, and be reported as leaks.
     """
     from app.core.config import settings
 
-    monkeypatch.setattr(settings, "UPLOAD_DIR", str(tmp_path_factory.mktemp("uploads")))
+    original = settings.UPLOAD_DIR
+    settings.UPLOAD_DIR = str(tmp_path_factory.mktemp("uploads"))
+    yield
+    settings.UPLOAD_DIR = original
 
 
 @pytest.fixture(autouse=True)
