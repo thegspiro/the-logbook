@@ -1098,6 +1098,7 @@ class PurchaseRequestResponse(UTCResponseBase):
     ordered_at: Optional[datetime] = None
     received_at: Optional[datetime] = None
     paid_at: Optional[datetime] = None
+    qb_exported_at: Optional[datetime] = None
     notes: Optional[str] = None
     receipt_url: Optional[str] = None
     receipt_document_id: Optional[str] = None
@@ -1227,6 +1228,7 @@ class ExpenseReportResponse(UTCResponseBase):
     denial_reason: Optional[str] = None
     paid_at: Optional[datetime] = None
     payment_method: Optional[str] = None
+    qb_exported_at: Optional[datetime] = None
     notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -1292,6 +1294,10 @@ class CheckRequestResponse(UTCResponseBase):
     denial_reason: Optional[str] = None
     check_number: Optional[str] = None
     check_date: Optional[datetime] = None
+    voided_at: Optional[datetime] = None
+    qb_exported_at: Optional[datetime] = None
+    # When the reversing entry for a void went to QuickBooks.
+    qb_void_exported_at: Optional[datetime] = None
     notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -1545,6 +1551,9 @@ class ExportRequest(BaseModel):
     date_range_start: datetime
     date_range_end: datetime
     file_format: str = "csv"
+    # Send again payments an earlier export already carried. Off, the export
+    # leaves them out so overlapping periods do not import twice.
+    include_exported: bool = False
 
     @field_validator("date_range_start", "date_range_end")
     @classmethod

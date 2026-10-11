@@ -27,6 +27,7 @@ from sqlalchemy import (
     or_,
     select,
     union_all,
+    update,
 )
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -87,6 +88,7 @@ from app.services.separation_of_duties import (
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
+from app.utils.org_locks import QUICKBOOKS_EXPORT, lock_organization_scope
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
 from app.utils.sql_search import LIKE_ESCAPE_CHAR
@@ -117,6 +119,16 @@ class BudgetLimitExceededError(Exception):
 
     def __init__(self) -> None:
         super().__init__("Insufficient available budget")
+
+
+class ExportInProgressError(Exception):
+    """Another QuickBooks export of the department is still running (→ 409)."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Another QuickBooks export is still being prepared. Wait for it to "
+            "finish, then export again."
+        )
 
 
 class AmendmentDecidedError(Exception):
@@ -265,6 +277,14 @@ QB_JOURNAL_HEADER = [
 # the header included (Intuit, "Import journal entries"); each exported
 # transaction is two rows.
 QB_IMPORT_MAX_ROWS = 999
+
+# A pending export younger than this holds off a second one. An export the
+# process died in the middle of stays pending; past this it no longer blocks.
+QB_EXPORT_IN_PROGRESS_WINDOW = timedelta(minutes=15)
+
+# Appended to a voided check's request number to make its reversing entry's
+# Journal No: distinct from the original's, and recognisably tied to it.
+QB_VOID_SUFFIX = "-V"
 
 # QuickBooks requires a customer or vendor in the Name column of any journal
 # line posting to Accounts Receivable or Accounts Payable, and the export has
@@ -4519,6 +4539,8 @@ class FinanceService:
             raise ValueError("Only issued checks can be voided")
 
         cr.status = CheckRequestStatus.VOIDED
+        # The date a check exported to QuickBooks is reversed on.
+        cr.voided_at = datetime.now(timezone.utc)
 
         # Reverse the spent amount through the same locked helper every other
         # budget mutation uses (Pitfall #27), rather than a duplicated inline
@@ -5069,31 +5091,76 @@ class FinanceService:
         file_format: str = "csv",
         batch_size: int = 500,
         max_rows: int = QB_IMPORT_MAX_ROWS,
+        include_exported: bool = False,
     ) -> AsyncIterator[str]:
-        """Prepare a bounded export and return its incremental CSV stream."""
-        filters = (
+        """Prepare a bounded export and return its incremental CSV stream.
+
+        A payment a complete export already carried is left out unless
+        ``include_exported``: QuickBooks imports a second copy without
+        complaint (the duplicate-number warning has to be off for this
+        import), so exporting overlapping periods would double the books. A
+        check voided after it was exported gets a reversing entry, dated the
+        day it was voided, in the export covering that day.
+
+        Payments are stamped as exported only once the whole file has been
+        produced; an interrupted stream stamps nothing, so its payments go out
+        again with the next export.
+        """
+        pr_filters = [
             PurchaseRequest.organization_id == org_id,
             PurchaseRequest.status == PurchaseRequestStatus.PAID,
             PurchaseRequest.paid_at >= date_start,
             PurchaseRequest.paid_at <= date_end,
-        )
-        pr_count = await self.db.scalar(
-            select(func.count()).select_from(PurchaseRequest).where(*filters)
-        )
-        cr_filters = (
+        ]
+        cr_filters = [
             CheckRequest.organization_id == org_id,
-            CheckRequest.status == CheckRequestStatus.ISSUED,
             CheckRequest.check_date >= date_start,
             CheckRequest.check_date <= date_end,
-        )
-        cr_count = await self.db.scalar(
-            select(func.count()).select_from(CheckRequest).where(*cr_filters)
-        )
-        er_filters = (
+        ]
+        er_filters = [
             ExpenseReport.organization_id == org_id,
             ExpenseReport.status == ExpenseReportStatus.PAID,
             ExpenseReport.paid_at >= date_start,
             ExpenseReport.paid_at <= date_end,
+        ]
+        # Reversals of checks voided after QuickBooks received them. A check
+        # voided before it was ever exported needs nothing: it is in neither
+        # file, so the books never saw it.
+        void_filters = [
+            CheckRequest.organization_id == org_id,
+            CheckRequest.status == CheckRequestStatus.VOIDED,
+            CheckRequest.qb_exported_at.is_not(None),
+            CheckRequest.voided_at >= date_start,
+            CheckRequest.voided_at <= date_end,
+        ]
+        if include_exported:
+            # Sending a period again reproduces what was sent for it: a check
+            # voided since still had its original entry in that file.
+            cr_filters.append(
+                or_(
+                    CheckRequest.status == CheckRequestStatus.ISSUED,
+                    and_(
+                        CheckRequest.status == CheckRequestStatus.VOIDED,
+                        CheckRequest.qb_exported_at.is_not(None),
+                    ),
+                )
+            )
+        else:
+            pr_filters.append(PurchaseRequest.qb_exported_at.is_(None))
+            cr_filters.extend(
+                [
+                    CheckRequest.status == CheckRequestStatus.ISSUED,
+                    CheckRequest.qb_exported_at.is_(None),
+                ]
+            )
+            er_filters.append(ExpenseReport.qb_exported_at.is_(None))
+            void_filters.append(CheckRequest.qb_void_exported_at.is_(None))
+
+        pr_count = await self.db.scalar(
+            select(func.count()).select_from(PurchaseRequest).where(*pr_filters)
+        )
+        cr_count = await self.db.scalar(
+            select(func.count()).select_from(CheckRequest).where(*cr_filters)
         )
         line_count = await self.db.scalar(
             select(func.count())
@@ -5101,7 +5168,15 @@ class FinanceService:
             .join(ExpenseReport)
             .where(*er_filters)
         )
-        total = int(pr_count or 0) + int(cr_count or 0) + int(line_count or 0)
+        void_count = await self.db.scalar(
+            select(func.count()).select_from(CheckRequest).where(*void_filters)
+        )
+        total = (
+            int(pr_count or 0)
+            + int(cr_count or 0)
+            + int(line_count or 0)
+            + int(void_count or 0)
+        )
         # Two rows per transaction (or expense line) plus the header. A file
         # QuickBooks will not import is no use, and splitting one would let an
         # expense report's entry straddle two files, so refuse instead.
@@ -5113,51 +5188,67 @@ class FinanceService:
                 "period, then the rest."
             )
         # Resolved before the log row so a refusal leaves no pending export.
+        # A check that carries the accounts it was exported to is posted (or
+        # reversed) against those, and needs no resolving.
         accounts = await self._resolve_export_accounts(
             org_id,
             [
                 select(PurchaseRequest.request_number, PurchaseRequest.budget_id).where(
-                    *filters
+                    *pr_filters
                 ),
                 select(CheckRequest.request_number, CheckRequest.budget_id).where(
-                    *cr_filters
+                    *cr_filters, CheckRequest.qb_export_account.is_(None)
                 ),
                 select(ExpenseReport.report_number, ExpenseLineItem.budget_id)
                 .select_from(ExpenseLineItem)
                 .join(ExpenseReport)
                 .where(*er_filters),
+                select(CheckRequest.request_number, CheckRequest.budget_id).where(
+                    *void_filters, CheckRequest.qb_export_account.is_(None)
+                ),
             ],
         )
 
-        log = ExportLog(
-            organization_id=org_id,
-            export_type="transactions",
-            date_range_start=date_start,
-            date_range_end=date_end,
-            record_count=0,
-            file_format=file_format,
-            exported_by=exported_by,
+        log = await self._begin_export(
+            org_id, exported_by, date_start, date_end, file_format
         )
-        self.db.add(log)
-        await self.db.commit()  # Persist pending before any bytes reach the client.
+
+        def check_accounts(cr: CheckRequest) -> tuple[str, str]:
+            if cr.qb_export_account and cr.qb_export_offset_account:
+                return cr.qb_export_account, cr.qb_export_offset_account
+            return accounts[cr.budget_id]
 
         def journal_lines(
             number: str,
             day: str,
             memo: str,
-            budget_id: str,
+            account: str,
+            paid_from: str,
             amount: Decimal,
             description: str,
         ) -> list[list]:
             # Money leaves the offset account and lands in the category's
             # account; QuickBooks groups consecutive lines sharing a Journal
             # No into one entry and rejects it unless the two sides balance.
-            account, offset = accounts[budget_id]
+            # A reversal passes the two accounts the other way round.
             value = _qb_amount(amount)
             return [
                 [number, day, memo, account, value, "", description],
-                [number, day, memo, offset, "", value, description],
+                [number, day, memo, paid_from, "", value, description],
             ]
+
+        def payee(cr: CheckRequest) -> str:
+            return (
+                f"{cr.payee_name} (check {cr.check_number})"
+                if cr.check_number
+                else cr.payee_name
+            )
+
+        # What this file carries, stamped only once all of it has been written.
+        sent_purchases: list[str] = []
+        sent_reports: set[str] = set()
+        sent_checks: dict[tuple[str, str], list[str]] = {}
+        sent_voids: list[str] = []
 
         async def stream() -> AsyncIterator[str]:
             output = io.StringIO()
@@ -5169,6 +5260,16 @@ class FinanceService:
                 output.truncate(0)
                 writer.writerows(rows)
                 return output.getvalue()
+
+            async def batches(statement, count: int):
+                for offset in range(0, count, batch_size):
+                    result = await self.db.execute(
+                        statement.offset(offset).limit(batch_size)
+                    )
+                    records = list(result.scalars())
+                    if not records:
+                        return
+                    yield records
 
             try:
                 yield csv_chunk([QB_JOURNAL_HEADER])
@@ -5184,56 +5285,52 @@ class FinanceService:
                     )
                     return aware.astimezone(org_tz).strftime("%m/%d/%Y")
 
-                for model, where, ordering, render in (
-                    (
-                        PurchaseRequest,
-                        filters,
-                        (PurchaseRequest.paid_at, PurchaseRequest.id),
-                        lambda pr: journal_lines(
+                async for purchases in batches(
+                    select(PurchaseRequest)
+                    .where(*pr_filters)
+                    .order_by(PurchaseRequest.paid_at, PurchaseRequest.id),
+                    int(pr_count or 0),
+                ):
+                    lines = []
+                    for pr in purchases:
+                        account, paid_from = accounts[pr.budget_id]
+                        lines += journal_lines(
                             pr.request_number,
                             local_day(pr.paid_at),
                             pr.title,
-                            pr.budget_id,
+                            account,
+                            paid_from,
                             pr.actual_amount or pr.estimated_amount,
                             pr.vendor or "",
-                        ),
-                    ),
-                    (
-                        CheckRequest,
-                        cr_filters,
-                        (CheckRequest.check_date, CheckRequest.id),
+                        )
+                        sent_purchases.append(pr.id)
+                    delivered += len(purchases)
+                    yield csv_chunk(lines)
+
+                async for checks in batches(
+                    select(CheckRequest)
+                    .where(*cr_filters)
+                    .order_by(CheckRequest.check_date, CheckRequest.id),
+                    int(cr_count or 0),
+                ):
+                    lines = []
+                    for cr in checks:
+                        account, paid_from = check_accounts(cr)
                         # The request number, not the check number, is the
                         # Journal No: it is unique across every exported type,
                         # so two entries can never merge into one.
-                        lambda cr: journal_lines(
+                        lines += journal_lines(
                             cr.request_number,
                             local_day(cr.check_date),
                             cr.memo or cr.purpose or "",
-                            cr.budget_id,
+                            account,
+                            paid_from,
                             cr.amount,
-                            (
-                                f"{cr.payee_name} (check {cr.check_number})"
-                                if cr.check_number
-                                else cr.payee_name
-                            ),
-                        ),
-                    ),
-                ):
-                    for offset in range(0, total, batch_size):
-                        result = await self.db.execute(
-                            select(model)
-                            .where(*where)
-                            .order_by(*ordering)
-                            .offset(offset)
-                            .limit(batch_size)
+                            payee(cr),
                         )
-                        records = list(result.scalars())
-                        if not records:
-                            break
-                        delivered += len(records)
-                        yield csv_chunk(
-                            [line for record in records for line in render(record)]
-                        )
+                        sent_checks.setdefault((account, paid_from), []).append(cr.id)
+                    delivered += len(checks)
+                    yield csv_chunk(lines)
 
                 # One journal entry per report: its lines are ordered by
                 # report, so they stay consecutive across batch boundaries.
@@ -5251,29 +5348,65 @@ class FinanceService:
                     records = list(result.all())
                     if not records:
                         break
+                    lines = []
+                    for item, er in records:
+                        account, paid_from = accounts[item.budget_id]
+                        lines += journal_lines(
+                            er.report_number,
+                            local_day(er.paid_at),
+                            er.title,
+                            account,
+                            paid_from,
+                            item.amount,
+                            (
+                                f"{item.merchant}: {item.description}"
+                                if item.merchant
+                                else item.description
+                            ),
+                        )
+                        sent_reports.add(er.id)
                     delivered += len(records)
-                    yield csv_chunk(
-                        [
-                            line
-                            for item, er in records
-                            for line in journal_lines(
-                                er.report_number,
-                                local_day(er.paid_at),
-                                er.title,
-                                item.budget_id,
-                                item.amount,
-                                (
-                                    f"{item.merchant}: {item.description}"
-                                    if item.merchant
-                                    else item.description
-                                ),
-                            )
-                        ]
-                    )
+                    yield csv_chunk(lines)
 
+                # Last, so a check exported and voided within one period is
+                # posted before it is reversed.
+                async for voids in batches(
+                    select(CheckRequest)
+                    .where(*void_filters)
+                    .order_by(CheckRequest.voided_at, CheckRequest.id),
+                    int(void_count or 0),
+                ):
+                    lines = []
+                    for cr in voids:
+                        account, paid_from = check_accounts(cr)
+                        # The original's accounts, swapped: the money goes
+                        # back to the account the check was drawn on.
+                        lines += journal_lines(
+                            f"{cr.request_number}{QB_VOID_SUFFIX}",
+                            local_day(cr.voided_at),
+                            f"Void: {cr.memo or cr.purpose or cr.request_number}",
+                            paid_from,
+                            account,
+                            cr.amount,
+                            f"{payee(cr)}, voided",
+                        )
+                        sent_voids.append(cr.id)
+                    delivered += len(voids)
+                    yield csv_chunk(lines)
+
+                stamped_at = datetime.now(timezone.utc)
+                await self._stamp_exported(
+                    org_id,
+                    log.id,
+                    stamped_at,
+                    purchases=sent_purchases,
+                    reports=sent_reports,
+                    checks=sent_checks,
+                    voids=sent_voids,
+                )
                 log.status = "successful"
                 log.record_count = delivered
-                log.completed_at = datetime.now(timezone.utc)
+                log.completed_at = stamped_at
                 await self.db.commit()
             except BaseException:
                 await self.db.rollback()
@@ -5285,6 +5418,102 @@ class FinanceService:
                 raise
 
         return stream()
+
+    async def _begin_export(
+        self,
+        org_id: str,
+        exported_by: str,
+        date_start: datetime,
+        date_end: datetime,
+        file_format: str,
+    ) -> ExportLog:
+        """Record the export as pending, unless another is already running.
+
+        Two exports running at once would each choose the payments the other
+        has not stamped yet, and both files would carry them. The department's
+        export lock serializes the decision, and the read of a running export
+        is a locking read so it sees one committed while this request waited
+        for the lock (CLAUDE.md pitfall #27).
+        """
+        await lock_organization_scope(self.db, org_id, QUICKBOOKS_EXPORT)
+        running = await self.db.scalar(
+            select(ExportLog.id)
+            .where(
+                ExportLog.organization_id == org_id,
+                ExportLog.export_type == "transactions",
+                ExportLog.status == "pending",
+                ExportLog.exported_at
+                >= datetime.now(timezone.utc) - QB_EXPORT_IN_PROGRESS_WINDOW,
+            )
+            .limit(1)
+            .with_for_update()
+        )
+        if running is not None:
+            await self.db.rollback()
+            raise ExportInProgressError()
+        log = ExportLog(
+            organization_id=org_id,
+            export_type="transactions",
+            date_range_start=date_start,
+            date_range_end=date_end,
+            record_count=0,
+            file_format=file_format,
+            exported_by=exported_by,
+        )
+        self.db.add(log)
+        await self.db.commit()  # Persist pending before any bytes reach the client.
+        return log
+
+    async def _stamp_exported(
+        self,
+        org_id: str,
+        log_id: str,
+        stamped_at: datetime,
+        *,
+        purchases: list[str],
+        reports: set[str],
+        checks: dict[tuple[str, str], list[str]],
+        voids: list[str],
+    ) -> None:
+        """Mark what a completed export carried, and the accounts it used."""
+        stamp = {"qb_exported_at": stamped_at, "qb_export_log_id": log_id}
+        if purchases:
+            await self.db.execute(
+                update(PurchaseRequest)
+                .where(
+                    PurchaseRequest.organization_id == org_id,
+                    PurchaseRequest.id.in_(purchases),
+                )
+                .values(**stamp)
+            )
+        if reports:
+            await self.db.execute(
+                update(ExpenseReport)
+                .where(
+                    ExpenseReport.organization_id == org_id,
+                    ExpenseReport.id.in_(reports),
+                )
+                .values(**stamp)
+            )
+        for (account, offset), ids in checks.items():
+            await self.db.execute(
+                update(CheckRequest)
+                .where(CheckRequest.organization_id == org_id, CheckRequest.id.in_(ids))
+                .values(
+                    **stamp,
+                    qb_export_account=account,
+                    qb_export_offset_account=offset,
+                )
+            )
+        if voids:
+            await self.db.execute(
+                update(CheckRequest)
+                .where(
+                    CheckRequest.organization_id == org_id,
+                    CheckRequest.id.in_(voids),
+                )
+                .values(qb_void_exported_at=stamped_at, qb_void_export_log_id=log_id)
+            )
 
     async def list_export_logs(
         self, org_id: str, pagination: PaginationParams

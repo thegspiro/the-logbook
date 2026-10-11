@@ -88,6 +88,11 @@ async def _user(db: AsyncSession, org_id: str) -> str:
 @pytest.fixture
 async def books(db_session: AsyncSession):
     """A department with two budget lines and one paid transaction of each type."""
+    return await make_books(db_session)
+
+
+async def make_books(db_session: AsyncSession) -> dict:
+    """``books``, for other modules' fixtures to build on."""
     org_id = await _org(db_session)
     user_id = await _user(db_session, org_id)
     fy = FiscalYear(
@@ -555,9 +560,14 @@ class TestQuickBooksImportLimits:
         )
         assert len([row async for row in stream]) > 0
 
+        # Sent again: the first export stamped all four.
         with pytest.raises(ValueError, match="fewer than 9 rows") as caught:
             await service.generate_export(
-                books["org_id"], books["user_id"], *RANGE, max_rows=8
+                books["org_id"],
+                books["user_id"],
+                *RANGE,
+                max_rows=8,
+                include_exported=True,
             )
         assert str(caught.value) == (
             "QuickBooks Online imports files of fewer than 9 rows; this period "

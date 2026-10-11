@@ -1424,6 +1424,15 @@ inside that one:
   API also has no read-only scope (`com.intuit.quickbooks.accounting` grants
   read and write), so the connection must confine itself to the calls it
   needs.
+- **"Sent" means the file was produced, not that QuickBooks imported it.**
+  _(2026-10-11)_ The export stamps a payment once its file is complete; it
+  cannot see whether the Treasurer then imported the file. A file downloaded
+  and never imported leaves its payments marked as sent; the Treasurer sends
+  that period again with `includeExported`. The live connection would close
+  this, since it would know what QuickBooks accepted.
+- **Only voided checks are reversed.** Paid purchase requests and expense
+  reports cannot be un-paid in the module, so there is nothing to reverse; a
+  refund or correction after export is entered in QuickBooks by hand.
 - **The CSV import is journal entries, with the limits that brings.** They do
   not appear on a vendor's record in QuickBooks and may not be counted on its
   1099 report; a department paying contractors checks that report before
