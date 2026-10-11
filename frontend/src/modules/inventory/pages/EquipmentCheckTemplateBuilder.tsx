@@ -6,7 +6,7 @@
  * types, expiration tracking, and drag-handle placeholders for reordering.
  */
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, useId } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import {
   Plus,
@@ -164,29 +164,126 @@ const checkboxClass = 'form-checkbox';
 const mobileMenuItemClass =
   'text-theme-text-primary hover:bg-theme-surface-secondary flex min-h-[44px] w-full items-center gap-3 px-3 py-2 text-left text-sm';
 const mobileDestructiveMenuItemClass = `${mobileMenuItemClass} text-red-600 dark:text-red-400`;
+const itemCountBadgeClass =
+  'inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-400';
 
-/** Native details/summary preserves keyboard disclosure behavior without making
- * the row permanently carry every secondary action. */
-const RowActionMenu: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
-  <details
-    className="relative flex-shrink-0"
-    onClick={(event) => {
-      event.stopPropagation();
-      if ((event.target as HTMLElement).closest('button')) event.currentTarget.open = false;
-    }}
-    onChange={(event) => {
-      if ((event.target as HTMLElement).matches('select')) event.currentTarget.open = false;
-    }}
-  >
-    <summary
-      className="text-theme-text-muted hover:bg-theme-surface-secondary flex min-h-[44px] min-w-[44px] cursor-pointer list-none items-center justify-center rounded-md sm:min-h-7 sm:min-w-7 [&::-webkit-details-marker]:hidden"
-      aria-label={label}
-    >
-      <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-    </summary>
-    <div className="popover-panel absolute top-full right-0 z-30 mt-1 min-w-56 overflow-hidden py-1">{children}</div>
-  </details>
-);
+const rowActionTriggerClass =
+  'text-theme-text-muted hover:bg-theme-surface-secondary flex min-h-[44px] min-w-[44px] cursor-pointer list-none items-center justify-center rounded-md sm:min-h-7 sm:min-w-7 [&::-webkit-details-marker]:hidden';
+
+/**
+ * A row's secondary actions. From 640px up this is a native details/summary
+ * popover, which keeps keyboard disclosure behaviour for free.
+ *
+ * On a phone it is a bottom sheet instead. The popover hung below the row with
+ * a dozen entries, ran past the fold, and ended up underneath the checklist
+ * action bar and the bottom navigation — so the lower half of the menu could
+ * not be tapped. A sheet portals to the body, hides the bottom navigation for
+ * as long as it is open, and scrolls inside its own height cap.
+ *
+ * The scrim does not dismiss (Pitfall #31): the location menu holds the
+ * Description and Image URL fields. Escape, the close button, or choosing an
+ * action closes it.
+ */
+const RowActionMenu: React.FC<{ label: string; title: string; children: React.ReactNode }> = ({
+  label,
+  title,
+  children,
+}) => {
+  const isLaptop = useMediaQuery('(min-width: 640px)');
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const titleId = useId();
+  const showSheet = sheetOpen && !isLaptop;
+  useOverlaySurface(showSheet);
+
+  if (isLaptop) {
+    return (
+      <details
+        className="relative flex-shrink-0"
+        onClick={(event) => {
+          event.stopPropagation();
+          if ((event.target as HTMLElement).closest('button')) event.currentTarget.open = false;
+        }}
+        onChange={(event) => {
+          if ((event.target as HTMLElement).matches('select')) event.currentTarget.open = false;
+        }}
+      >
+        <summary className={rowActionTriggerClass} aria-label={label}>
+          <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+        </summary>
+        <div className="popover-panel absolute top-full right-0 z-30 mt-1 min-w-56 overflow-hidden py-1">
+          {children}
+        </div>
+      </details>
+    );
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        className={`${rowActionTriggerClass} flex-shrink-0`}
+        aria-label={label}
+        aria-haspopup="dialog"
+        aria-expanded={showSheet}
+        onClick={(event) => {
+          // The item row opens its editor on a tap; the menu is not that tap.
+          event.stopPropagation();
+          setSheetOpen(true);
+        }}
+      >
+        <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+      </button>
+      {showSheet && (
+        <DialogPortal>
+          <div
+            className="modal-overlay z-50 flex items-end justify-center"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            // Capture, not bubble: several actions (inline rename among them)
+            // stop propagation in their own handlers, and a bubbling close
+            // would leave the sheet open on top of the thing they started.
+            // Closing hands focus back to the trigger once the sheet unmounts,
+            // so an action that moves focus somewhere else must do it on a
+            // timer, after that restore, or the restore takes it back.
+            onClickCapture={(event) => {
+              const button = (event.target as HTMLElement).closest('button');
+              if (!button || button.disabled || button.hasAttribute('data-sheet-close')) return;
+              setSheetOpen(false);
+            }}
+            // React bubbles portal events through the component tree, so a tap
+            // in the sheet would otherwise reach the row underneath it.
+            onClick={(event) => event.stopPropagation()}
+            onChange={(event) => {
+              if ((event.target as HTMLElement).matches('select')) setSheetOpen(false);
+            }}
+          >
+            <DialogPanel
+              onClose={() => setSheetOpen(false)}
+              className="max-h-[85dvh] w-full max-w-[640px] overflow-y-auto rounded-b-none pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+            >
+              <div className="modal-header-sticky flex items-center justify-between gap-3 py-1 pr-1 pl-4">
+                <h2 id={titleId} className="text-theme-text-primary min-w-0 truncate text-base font-semibold">
+                  {title}
+                </h2>
+                <button
+                  type="button"
+                  data-sheet-close
+                  onClick={() => setSheetOpen(false)}
+                  className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target flex items-center justify-center rounded-md"
+                  aria-label="Close actions"
+                >
+                  <X className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </div>
+              <div className="py-1">{children}</div>
+            </DialogPanel>
+          </div>
+        </DialogPortal>
+      )}
+    </>
+  );
+};
 
 // ============================================================================
 // Item Form State
@@ -3549,7 +3646,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const itemSummary = formatItemSummary(item);
 
     const itemActionsMenu = (
-      <RowActionMenu label={`Actions for ${item.name.trim() || 'item'}`}>
+      <RowActionMenu label={`Actions for ${item.name.trim() || 'item'}`} title={item.name.trim() || 'Untitled item'}>
         <button
           type="button"
           className={mobileMenuItemClass}
@@ -3558,7 +3655,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               window.setTimeout(() => document.getElementById(`item-name-${itemKey}`)?.focus(), 0);
               return;
             }
-            startInlineEdit(itemKey, item.name, e);
+            // After the action sheet's focus restore, not before it: the
+            // inline field commits on blur, so a restore landing after its
+            // autofocus would end the rename as it began.
+            e.stopPropagation();
+            window.setTimeout(() => startInlineEdit(itemKey, item.name, e), 0);
           }}
         >
           <Pencil className="h-4 w-4" aria-hidden="true" /> Rename
@@ -4126,7 +4227,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           id={anchorId}
           tabIndex={-1}
           style={indentPadding}
-          className={`border-theme-surface-border relative flex flex-wrap items-center gap-x-2.5 gap-y-2 border-b px-4 py-3 ${
+          className={`border-theme-surface-border relative flex flex-wrap items-center gap-x-1.5 gap-y-2 border-b px-4 py-3 sm:gap-x-2.5 ${
             isEmpty || isFlagged ? 'border-l-[3px] border-l-amber-500 bg-amber-500/[0.06]' : ''
           }`}
         >
@@ -4161,7 +4262,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           </button>
 
           <Package
-            className={`h-4 w-4 flex-shrink-0 ${depth > 0 ? 'text-violet-600 dark:text-violet-400' : 'text-blue-700 dark:text-blue-400'}`}
+            className={`hidden h-4 w-4 flex-shrink-0 sm:block ${depth > 0 ? 'text-violet-600 dark:text-violet-400' : 'text-blue-700 dark:text-blue-400'}`}
             aria-hidden="true"
           />
 
@@ -4169,7 +4270,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             id={`comp-name-${key}`}
             type="text"
             aria-label="Location name"
-            className={`text-theme-text-primary placeholder:text-theme-text-muted min-w-0 grow basis-[200px] rounded-md border bg-transparent px-1.5 py-1 font-semibold outline-none focus:border-blue-400 sm:min-w-[112px] sm:basis-[112px] ${
+            className={`text-theme-text-primary placeholder:text-theme-text-muted min-w-0 grow basis-0 rounded-md border bg-transparent px-1.5 py-1 font-semibold outline-none focus:border-blue-400 sm:min-w-[112px] sm:basis-[112px] ${
               depth > 0 ? 'text-sm' : 'text-[15px]'
             } ${comp.name.trim() ? 'hover:border-theme-surface-border border-transparent' : 'bg-theme-input-bg border-amber-500'}`}
             placeholder={`Name this ${typeLabel.toLowerCase()}…`}
@@ -4177,101 +4278,120 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             onChange={(e) => updateCompartmentField(idx, { name: e.target.value })}
           />
 
-          {parentName && (
-            <span className="text-theme-text-muted max-w-[160px] flex-shrink truncate text-[11px]">
-              inside {parentName}
-            </span>
-          )}
+          {/* On a phone these drop to a second line under the name, so the
+              name, the count and the menu keep one line to themselves. From
+              640px the wrapper is `display: contents` and its children sit in
+              the row exactly as they did before. */}
+          <div className="order-1 flex min-w-0 basis-full flex-wrap items-center gap-x-3 gap-y-1 pl-1 sm:order-none sm:contents">
+            {parentName && (
+              <span className="text-theme-text-muted max-w-[160px] flex-shrink truncate text-[11px]">
+                inside {parentName}
+              </span>
+            )}
 
-          <select
-            aria-label="Storage type"
-            className="border-theme-surface-border bg-theme-surface text-theme-text-muted flex-shrink-0 rounded-full border px-2 py-0.5 text-[11px]"
-            value={inCustomContainer ? '__custom__' : comp.containerType || 'compartment'}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (v === '__custom__') {
-                setCustomContainerKeys((prev) => new Set(prev).add(key));
-                updateCompartmentField(idx, { containerType: '' });
-              } else {
-                setCustomContainerKeys((prev) => {
-                  const next = new Set(prev);
-                  next.delete(key);
-                  return next;
-                });
-                updateCompartmentField(idx, { containerType: v });
-              }
-            }}
-          >
-            {CONTAINER_TYPE_PRESETS.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
-              </option>
-            ))}
-            <option value="__custom__">Custom…</option>
-          </select>
-
-          {inCustomContainer && (
-            <input
-              type="text"
-              className="border-theme-input-border bg-theme-input-bg text-theme-text-primary w-32 flex-shrink-0 rounded-full border px-2 py-0.5 text-[11px] outline-none focus:border-blue-400"
-              placeholder="e.g. Trauma Kit"
-              aria-label="Custom storage type label"
-              value={comp.containerType}
-              onChange={(e) => updateCompartmentField(idx, { containerType: e.target.value })}
-            />
-          )}
-
-          {/* A sealed container's contents cannot change while it sits shut, so
-              the long explanation belongs on hover rather than on the row. */}
-          <label
-            className="text-theme-text-muted flex flex-shrink-0 items-center gap-1.5 text-[11px]"
-            title="A crew that finds the seal intact and matching the last count clears every presence and quantity check inside in one tap. Expiry dates and readings still have to be checked."
-          >
-            <input
-              type="checkbox"
-              className="form-checkbox h-3.5 w-3.5"
-              checked={comp.isSealed}
-              onChange={(e) => updateCompartmentField(idx, { isSealed: e.target.checked })}
-            />
-            Sealed
-          </label>
-
-          {!isLaptop && isExpanded && (
-            <button
-              type="button"
-              aria-label={`Add item to ${comp.name || 'location'}`}
-              className="flex min-h-[44px] shrink-0 items-center gap-1 px-2 text-sm font-semibold text-blue-600 dark:text-blue-400"
-              // Through openAddSurface, not setMobileAddLocations directly: the
-              // action bar's Add item follows whichever location was last
-              // opened, and a handler that skips the funnel leaves it pointing
-              // at the previous one. That is the drift openAddSurface's own
-              // docstring says cannot happen, and this call site was it.
-              onClick={() => openAddSurface(key)}
+            <select
+              aria-label="Storage type"
+              className="border-theme-surface-border bg-theme-surface text-theme-text-muted touch:min-h-11 flex-shrink-0 rounded-full border px-2 py-0.5 text-[11px]"
+              value={inCustomContainer ? '__custom__' : comp.containerType || 'compartment'}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === '__custom__') {
+                  setCustomContainerKeys((prev) => new Set(prev).add(key));
+                  updateCompartmentField(idx, { containerType: '' });
+                } else {
+                  setCustomContainerKeys((prev) => {
+                    const next = new Set(prev);
+                    next.delete(key);
+                    return next;
+                  });
+                  updateCompartmentField(idx, { containerType: v });
+                }
+              }}
             >
-              <Plus className="h-4 w-4" aria-hidden="true" /> Add
-            </button>
-          )}
+              {CONTAINER_TYPE_PRESETS.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+              <option value="__custom__">Custom…</option>
+            </select>
 
-          <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-2">
-            {isEmpty ? (
-              <>
-                <span className="flex-shrink-0 text-xs font-semibold text-amber-700 dark:text-amber-400">
-                  Add at least one item to publish
-                </span>
-                <button
-                  type="button"
-                  onClick={() => openAddSurface(key)}
-                  className="flex min-h-7.5 flex-shrink-0 items-center gap-1.5 rounded-md bg-red-800 px-2.5 text-xs font-semibold text-white hover:bg-red-900"
-                >
-                  <Plus className="h-3.5 w-3.5" aria-hidden="true" /> Add items
-                </button>
-              </>
-            ) : (
-              <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-400">
+            {inCustomContainer && (
+              <input
+                type="text"
+                className="border-theme-input-border bg-theme-input-bg text-theme-text-primary w-32 flex-shrink-0 rounded-full border px-2 py-0.5 text-[11px] outline-none focus:border-blue-400"
+                placeholder="e.g. Trauma Kit"
+                aria-label="Custom storage type label"
+                value={comp.containerType}
+                onChange={(e) => updateCompartmentField(idx, { containerType: e.target.value })}
+              />
+            )}
+
+            {/* A sealed container's contents cannot change while it sits shut, so
+              the long explanation belongs on hover rather than on the row. */}
+            <label
+              className="text-theme-text-muted touch:min-h-11 flex flex-shrink-0 items-center gap-1.5 text-[11px]"
+              title="A crew that finds the seal intact and matching the last count clears every presence and quantity check inside in one tap. Expiry dates and readings still have to be checked."
+            >
+              <input
+                type="checkbox"
+                className="form-checkbox h-3.5 w-3.5"
+                checked={comp.isSealed}
+                onChange={(e) => updateCompartmentField(idx, { isSealed: e.target.checked })}
+              />
+              Sealed
+            </label>
+
+            {/* Expanded, the items themselves are on screen below. */}
+            {!isLaptop && !isExpanded && !isEmpty && (
+              <span className={`${itemCountBadgeClass} ml-auto`}>
                 {comp.items.length} item{comp.items.length !== 1 ? 's' : ''}
               </span>
             )}
-            {requiredCount > 0 && (
+
+            {/* An empty location has the callout's Add items below; a second
+              add button beside it did the same thing. */}
+            {!isLaptop && isExpanded && !isEmpty && (
+              <button
+                type="button"
+                aria-label={`Add item to ${comp.name || 'location'}`}
+                className="ml-auto flex min-h-[44px] shrink-0 items-center gap-1 px-2 text-sm font-semibold text-blue-600 dark:text-blue-400"
+                // Through openAddSurface, not setMobileAddLocations directly: the
+                // action bar's Add item follows whichever location was last
+                // opened, and a handler that skips the funnel leaves it pointing
+                // at the previous one. That is the drift openAddSurface's own
+                // docstring says cannot happen, and this call site was it.
+                onClick={() => openAddSurface(key)}
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" /> Add
+              </button>
+            )}
+          </div>
+
+          <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-2">
+            {/* A phone has no room for these beside the name: the empty
+                notice becomes the callout below the row, and the count moves
+                to the second line. */}
+            {isLaptop &&
+              (isEmpty ? (
+                <>
+                  <span className="flex-shrink-0 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                    Add at least one item to publish
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => openAddSurface(key)}
+                    className="flex min-h-7.5 flex-shrink-0 items-center gap-1.5 rounded-md bg-red-800 px-2.5 text-xs font-semibold text-white hover:bg-red-900"
+                  >
+                    <Plus className="h-3.5 w-3.5" aria-hidden="true" /> Add items
+                  </button>
+                </>
+              ) : (
+                <span className={itemCountBadgeClass}>
+                  {comp.items.length} item{comp.items.length !== 1 ? 's' : ''}
+                </span>
+              ))}
+            {isLaptop && requiredCount > 0 && (
               <span className="flex-shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[11px] font-medium text-red-600 dark:bg-red-900/30 dark:text-red-400">
                 {requiredCount} req
               </span>
@@ -4309,7 +4429,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </button>
             </div>
 
-            <RowActionMenu label={`Actions for ${comp.name || 'compartment'}`}>
+            <RowActionMenu
+              label={`Actions for ${comp.name || 'compartment'}`}
+              title={comp.name.trim() || `Untitled ${typeLabel.toLowerCase()}`}
+            >
               <button
                 type="button"
                 className={mobileMenuItemClass}
@@ -4436,6 +4559,22 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </button>
             </RowActionMenu>
           </div>
+
+          {!isLaptop && isEmpty && (
+            <div className="order-2 flex basis-full flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+              <p className="flex min-w-0 items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-400">
+                <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                Add at least one item to publish
+              </p>
+              <button
+                type="button"
+                onClick={() => openAddSurface(key)}
+                className="btn-primary flex shrink-0 items-center gap-1.5 px-3 text-sm font-semibold"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" /> Add items
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Items and the add composer */}
@@ -5302,10 +5441,273 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Main render
   // ---------------------------------------------------------------------------
 
+  // The top bar's pieces are laid out twice: as one row from 640px, and on a
+  // phone split between a slim pinned bar and a block that scrolls away.
+  const backButton = (
+    <button
+      type="button"
+      onClick={() => void handleLeave()}
+      className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary flex-shrink-0 rounded-md p-2 transition-colors"
+      title="Back to templates"
+      aria-label="Back to templates"
+    >
+      <ArrowLeft className="h-5 w-5" />
+    </button>
+  );
+  const templateNameInput = (
+    <input
+      type="text"
+      aria-label="Template name"
+      placeholder="e.g. Engine Daily Check"
+      className="text-theme-text-primary placeholder:text-theme-text-muted hover:border-theme-surface-border focus:bg-theme-input-bg min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-lg font-bold outline-none focus:border-blue-400 sm:max-w-[420px] sm:min-w-[200px] sm:text-xl"
+      value={form.name}
+      onChange={(e) => updateForm({ name: e.target.value })}
+    />
+  );
+  const statusPill = (
+    <span
+      aria-label="Template status"
+      className={`flex-shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
+        form.isActive
+          ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+          : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+      }`}
+    >
+      {form.isActive ? 'Published' : 'Draft'}
+    </span>
+  );
+  const autoSaveIndicator = (
+    <span className="flex flex-shrink-0 items-center gap-1.5 text-xs" aria-live="polite">
+      {autoSaveStatus === 'saving' || saving ? (
+        <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> Saving…
+        </span>
+      ) : autoSaveStatus === 'error' ? (
+        <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
+          <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" /> Save failed
+        </span>
+      ) : autoSaveStatus === 'saved' ? (
+        <span className="flex items-center gap-1.5 text-green-700 dark:text-green-400">
+          <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> Saved just now
+        </span>
+      ) : null}
+    </span>
+  );
+  const detailsButton = (
+    <button
+      type="button"
+      onClick={() => setDrawerOpen(true)}
+      aria-label="Details"
+      className="btn-secondary flex min-h-10 items-center gap-2 px-3 text-sm font-medium"
+    >
+      <SlidersHorizontal className="h-4 w-4" />
+      <span className="hidden sm:inline">Details</span>
+    </button>
+  );
+  const toolsMenu = (
+    <details className="relative">
+      <summary
+        aria-label="Tools"
+        className="btn-secondary hover:bg-theme-surface-secondary flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium"
+      >
+        <MoreHorizontal className="h-4 w-4" />
+        <span className="hidden sm:inline">Tools</span>
+      </summary>
+      <div className="popover-panel absolute right-0 z-50 mt-1 w-56 p-1.5 shadow-xl">
+        {isEditing && templateId && (
+          <button
+            type="button"
+            onClick={() => void handleClone()}
+            disabled={cloning}
+            className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm disabled:opacity-50"
+          >
+            {cloning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />} Clone checklist
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={exportTemplateJson}
+          disabled={compartments.length === 0}
+          className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm disabled:opacity-40"
+        >
+          <Download className="h-4 w-4" /> Export JSON
+        </button>
+        <button
+          type="button"
+          onClick={() => importFileRef.current?.click()}
+          className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
+        >
+          <Upload className="h-4 w-4" /> Import JSON
+        </button>
+        <button
+          type="button"
+          onClick={() => csvImportRef.current?.click()}
+          className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
+        >
+          <Upload className="h-4 w-4" /> Import spreadsheet
+        </button>
+        <a
+          href={equipmentCheckService.getCsvSampleUrl()}
+          download
+          className="hover:bg-theme-surface-secondary flex min-h-10 items-center gap-2 rounded-md px-3 text-sm"
+        >
+          <Download className="h-4 w-4" /> Download CSV sample
+        </a>
+        {templateId && coverage && coverage.linkable > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowInventoryMatch(true)}
+            className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
+          >
+            <Link2 className="h-4 w-4" /> Link to inventory ({coverage.linked}/{coverage.linkable})
+          </button>
+        )}
+        {templateId && (
+          <button
+            type="button"
+            onClick={() => {
+              setShowChangelog(true);
+              void loadChangelog();
+            }}
+            className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
+          >
+            <Clock className="h-4 w-4" /> Change history
+          </button>
+        )}
+        {!isWideCanvas && (
+          <button
+            type="button"
+            onClick={() => setShowPreview(true)}
+            disabled={compartments.length === 0}
+            className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm disabled:opacity-40"
+          >
+            <Eye className="h-4 w-4" /> Preview
+          </button>
+        )}
+      </div>
+    </details>
+  );
+  const saveDraftButton = (
+    <>
+      {/* Item edits autosave; the template's own fields do not, so the
+                explicit draft save stays. */}
+      <button
+        type="button"
+        onClick={() => void handleSave(false)}
+        disabled={saving}
+        aria-label={saving ? 'Saving draft' : 'Save draft'}
+        className="btn-secondary flex min-h-10 items-center gap-2 px-3 text-sm font-medium"
+      >
+        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+        <span className="hidden sm:inline">{saving ? 'Saving...' : 'Save draft'}</span>
+      </button>
+    </>
+  );
+  const publishButton = (
+    <button
+      type="button"
+      onClick={() => void handleSave(true)}
+      disabled={saving || !publishReady}
+      className="touch:min-h-11 touch:min-w-11 flex min-h-10 items-center gap-2 rounded-lg bg-red-800 px-3.5 text-sm font-semibold text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <CheckCircle2 className="hidden h-4 w-4 sm:block" aria-hidden="true" /> Publish
+    </button>
+  );
+  const blockersBadge = (
+    <>
+      {blockers.length > 0 && (
+        <button
+          type="button"
+          onClick={() => {
+            // Three surfaces, by what the width can hold: the rail, the
+            // sheet the bottom bar opens, or — on a phone, which has
+            // neither — the offending row itself.
+            if (isWideCanvas) {
+              setRail('blockers');
+              document.getElementById('publish-blockers')?.scrollIntoView({ block: 'nearest' });
+              return;
+            }
+            if (isLaptop) {
+              setShowBlockerSheet(true);
+              return;
+            }
+            const first = blockers[0];
+            if (first) goToBlocker(first.anchorId, first.expandKey, first.focusId, first.editorTarget, first.addKey);
+          }}
+          className="rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-bold text-amber-700 hover:bg-amber-500/25 dark:text-amber-400"
+        >
+          {blockers.length} to fix
+        </button>
+      )}
+    </>
+  );
+  const appliesToRow = (
+    <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-2 px-4 pb-2.5 sm:px-6">
+      <span className="text-theme-text-muted mr-0.5 text-[10px] font-bold tracking-[0.08em] uppercase">Applies to</span>
+      {(
+        [
+          {
+            key: 'timing',
+            Icon: Clock,
+            label: form.checkTiming === 'end_of_shift' ? 'End of shift' : 'Start of shift',
+            set: true,
+            capitalize: false,
+          },
+          {
+            key: 'scope',
+            Icon: Truck,
+            label: `${TEMPLATE_TYPE_LABELS[form.templateType]}${
+              form.apparatusType
+                ? ` · ${
+                    form.apparatusId
+                      ? (apparatusOptions.find((a) => a.id === form.apparatusId)?.name ?? 'one unit')
+                      : `all ${form.apparatusType}s`
+                  }`
+                : ''
+            }`,
+            set: true,
+            capitalize: false,
+          },
+          {
+            key: 'positions',
+            Icon: Users,
+            label: form.assignedPositions.length > 0 ? form.assignedPositions.join(', ') : 'Whole crew',
+            set: form.assignedPositions.length > 0,
+            capitalize: true,
+          },
+          {
+            key: 'description',
+            Icon: Type,
+            label: form.description.trim() || '+ Description',
+            set: Boolean(form.description.trim()),
+            capitalize: false,
+          },
+        ] as const
+      ).map(({ key, Icon, label, set, capitalize }) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => setDrawerOpen(true)}
+          className={`flex min-h-[30px] max-w-[280px] items-center gap-1.5 rounded-full border px-2.5 text-xs transition-colors ${
+            set
+              ? 'border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover font-medium'
+              : 'border-theme-surface-border text-theme-text-muted hover:bg-theme-surface-hover border-dashed'
+          }`}
+        >
+          {set && <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+          <span className={`truncate ${capitalize ? 'capitalize' : ''}`}>{label}</span>
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div style={actionBarHeight > 0 ? { paddingBottom: actionBarHeight } : undefined}>
       {/* Sticky top bar. Bleeds past the page gutters so it reads as a bar
-          rather than a card, and sits below the fixed mobile header. */}
+          rather than a card, and sits below the fixed mobile header. On a
+          phone only the name and Publish stay pinned: the full bar wrapped to
+          five lines there and covered almost half the screen, hiding the
+          location being edited underneath it. */}
       <div
         ref={topBarRef}
         /* `mobile-header-inset` parks it below the fixed mobile header, which
@@ -5316,261 +5718,53 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           marginTop: 'calc(var(--page-gutter-block) * -1)',
         }}
       >
-        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-3 gap-y-2.5 px-4 py-2.5 sm:px-6">
-          <button
-            type="button"
-            onClick={() => void handleLeave()}
-            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary flex-shrink-0 rounded-md p-2 transition-colors"
-            title="Back to templates"
-            aria-label="Back to templates"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-
-          <input
-            type="text"
-            aria-label="Template name"
-            placeholder="e.g. Engine Daily Check"
-            className="text-theme-text-primary placeholder:text-theme-text-muted hover:border-theme-surface-border focus:bg-theme-input-bg w-full rounded-md border border-transparent bg-transparent px-2 py-1.5 text-xl font-bold outline-none focus:border-blue-400 sm:w-auto sm:max-w-[420px] sm:min-w-[200px] sm:flex-1"
-            value={form.name}
-            onChange={(e) => updateForm({ name: e.target.value })}
-          />
-
-          <span
-            aria-label="Template status"
-            className={`flex-shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
-              form.isActive
-                ? 'bg-green-500/10 text-green-700 dark:text-green-400'
-                : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
-            }`}
-          >
-            {form.isActive ? 'Published' : 'Draft'}
-          </span>
-
-          <span className="flex flex-shrink-0 items-center gap-1.5 text-xs" aria-live="polite">
-            {autoSaveStatus === 'saving' || saving ? (
-              <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> Saving…
-              </span>
-            ) : autoSaveStatus === 'error' ? (
-              <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
-                <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" /> Save failed
-              </span>
-            ) : autoSaveStatus === 'saved' ? (
-              <span className="flex items-center gap-1.5 text-green-700 dark:text-green-400">
-                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> Saved just now
-              </span>
-            ) : null}
-          </span>
-
-          <div className="flex-1" />
-
-          <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setDrawerOpen(true)}
-              aria-label="Details"
-              className="btn-secondary flex min-h-10 items-center gap-2 px-3 text-sm font-medium"
-            >
-              <SlidersHorizontal className="h-4 w-4" />
-              <span className="hidden sm:inline">Details</span>
-            </button>
-
-            <details className="relative">
-              <summary
-                aria-label="Tools"
-                className="btn-secondary hover:bg-theme-surface-secondary flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-                <span className="hidden sm:inline">Tools</span>
-              </summary>
-              <div className="popover-panel absolute right-0 z-50 mt-1 w-56 p-1.5 shadow-xl">
-                {isEditing && templateId && (
-                  <button
-                    type="button"
-                    onClick={() => void handleClone()}
-                    disabled={cloning}
-                    className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm disabled:opacity-50"
-                  >
-                    {cloning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />} Clone
-                    checklist
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={exportTemplateJson}
-                  disabled={compartments.length === 0}
-                  className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm disabled:opacity-40"
-                >
-                  <Download className="h-4 w-4" /> Export JSON
-                </button>
-                <button
-                  type="button"
-                  onClick={() => importFileRef.current?.click()}
-                  className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
-                >
-                  <Upload className="h-4 w-4" /> Import JSON
-                </button>
-                <button
-                  type="button"
-                  onClick={() => csvImportRef.current?.click()}
-                  className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
-                >
-                  <Upload className="h-4 w-4" /> Import spreadsheet
-                </button>
-                <a
-                  href={equipmentCheckService.getCsvSampleUrl()}
-                  download
-                  className="hover:bg-theme-surface-secondary flex min-h-10 items-center gap-2 rounded-md px-3 text-sm"
-                >
-                  <Download className="h-4 w-4" /> Download CSV sample
-                </a>
-                {templateId && coverage && coverage.linkable > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowInventoryMatch(true)}
-                    className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
-                  >
-                    <Link2 className="h-4 w-4" /> Link to inventory ({coverage.linked}/{coverage.linkable})
-                  </button>
-                )}
-                {templateId && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowChangelog(true);
-                      void loadChangelog();
-                    }}
-                    className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
-                  >
-                    <Clock className="h-4 w-4" /> Change history
-                  </button>
-                )}
-                {!isWideCanvas && (
-                  <button
-                    type="button"
-                    onClick={() => setShowPreview(true)}
-                    disabled={compartments.length === 0}
-                    className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm disabled:opacity-40"
-                  >
-                    <Eye className="h-4 w-4" /> Preview
-                  </button>
-                )}
+        {isLaptop ? (
+          <>
+            <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-3 gap-y-2.5 px-4 py-2.5 sm:px-6">
+              {backButton}
+              {templateNameInput}
+              {statusPill}
+              {autoSaveIndicator}
+              <div className="flex-1" />
+              <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
+                {detailsButton}
+                {toolsMenu}
+                {saveDraftButton}
+                {publishButton}
+                {blockersBadge}
               </div>
-            </details>
-
-            <input ref={importFileRef} type="file" accept=".json" className="hidden" onChange={handleImportTemplate} />
-            <input ref={csvImportRef} type="file" accept=".csv" className="hidden" onChange={handleCsvImport} />
-
-            {/* Item edits autosave; the template's own fields do not, so the
-                explicit draft save stays. */}
-            <button
-              type="button"
-              onClick={() => void handleSave(false)}
-              disabled={saving}
-              aria-label={saving ? 'Saving draft' : 'Save draft'}
-              className="btn-secondary flex min-h-10 items-center gap-2 px-3 text-sm font-medium"
-            >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              <span className="hidden sm:inline">{saving ? 'Saving...' : 'Save draft'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => void handleSave(true)}
-              disabled={saving || !publishReady}
-              className="touch:min-h-11 touch:min-w-11 flex min-h-10 items-center gap-2 rounded-lg bg-red-800 px-3.5 text-sm font-semibold text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <CheckCircle2 className="h-4 w-4" /> Publish
-            </button>
-            {blockers.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  // Three surfaces, by what the width can hold: the rail, the
-                  // sheet the bottom bar opens, or — on a phone, which has
-                  // neither — the offending row itself.
-                  if (isWideCanvas) {
-                    setRail('blockers');
-                    document.getElementById('publish-blockers')?.scrollIntoView({ block: 'nearest' });
-                    return;
-                  }
-                  if (isLaptop) {
-                    setShowBlockerSheet(true);
-                    return;
-                  }
-                  const first = blockers[0];
-                  if (first)
-                    goToBlocker(first.anchorId, first.expandKey, first.focusId, first.editorTarget, first.addKey);
-                }}
-                className="rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-bold text-amber-700 hover:bg-amber-500/25 dark:text-amber-400"
-              >
-                {blockers.length} to fix
-              </button>
-            )}
+            </div>
+            {appliesToRow}
+          </>
+        ) : (
+          <div className="flex items-center gap-2 px-4 py-2">
+            {backButton}
+            {templateNameInput}
+            {publishButton}
+            {blockersBadge}
           </div>
-        </div>
-
-        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-2 px-4 pb-2.5 sm:px-6">
-          <span className="text-theme-text-muted mr-0.5 text-[10px] font-bold tracking-[0.08em] uppercase">
-            Applies to
-          </span>
-          {(
-            [
-              {
-                key: 'timing',
-                Icon: Clock,
-                label: form.checkTiming === 'end_of_shift' ? 'End of shift' : 'Start of shift',
-                set: true,
-                capitalize: false,
-              },
-              {
-                key: 'scope',
-                Icon: Truck,
-                label: `${TEMPLATE_TYPE_LABELS[form.templateType]}${
-                  form.apparatusType
-                    ? ` · ${
-                        form.apparatusId
-                          ? (apparatusOptions.find((a) => a.id === form.apparatusId)?.name ?? 'one unit')
-                          : `all ${form.apparatusType}s`
-                      }`
-                    : ''
-                }`,
-                set: true,
-                capitalize: false,
-              },
-              {
-                key: 'positions',
-                Icon: Users,
-                label: form.assignedPositions.length > 0 ? form.assignedPositions.join(', ') : 'Whole crew',
-                set: form.assignedPositions.length > 0,
-                capitalize: true,
-              },
-              {
-                key: 'description',
-                Icon: Type,
-                label: form.description.trim() || '+ Description',
-                set: Boolean(form.description.trim()),
-                capitalize: false,
-              },
-            ] as const
-          ).map(({ key, Icon, label, set, capitalize }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setDrawerOpen(true)}
-              className={`flex min-h-[30px] max-w-[280px] items-center gap-1.5 rounded-full border px-2.5 text-xs transition-colors ${
-                set
-                  ? 'border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover font-medium'
-                  : 'border-theme-surface-border text-theme-text-muted hover:bg-theme-surface-hover border-dashed'
-              }`}
-            >
-              {set && <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
-              <span className={`truncate ${capitalize ? 'capitalize' : ''}`}>{label}</span>
-            </button>
-          ))}
-        </div>
+        )}
       </div>
+
+      {!isLaptop && (
+        <div
+          className="surface-opaque border-theme-surface-border flex flex-col gap-2.5 border-b pt-2.5"
+          style={{ marginInline: 'calc(var(--page-gutter-inline) * -1)' }}
+        >
+          <div className="flex flex-wrap items-center gap-2 px-4">
+            {statusPill}
+            {autoSaveIndicator}
+            <div className="flex-1" />
+            {detailsButton}
+            {toolsMenu}
+            {saveDraftButton}
+          </div>
+          {appliesToRow}
+        </div>
+      )}
+
+      <input ref={importFileRef} type="file" accept=".json" className="hidden" onChange={handleImportTemplate} />
+      <input ref={csvImportRef} type="file" accept=".csv" className="hidden" onChange={handleCsvImport} />
 
       {offCrewShifts && (
         <div className="mx-auto max-w-[1440px] px-4 pt-4 sm:px-6">
