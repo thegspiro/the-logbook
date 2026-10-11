@@ -802,6 +802,25 @@ each module folder on that module's rights. Two things it did not do:
   `documents.manage` is refused at the first step. Apparatus and finance
   upload through their own module endpoints since this change; facilities
   would need the same (`app/services/module_documents.py` is the shared path).
+  Since 2026-10-11 that upload lands in General Documents first (no document
+  is unfiled any more), and the link files the uploader's own document from
+  there into the facility folder.
+- **Files in the `documents` area are not stored per record** (found
+  2026-10-11). Library uploads and the apparatus and finance documents that
+  `module_documents` creates are written flat under `<org>/documents/`,
+  where every other area adds the record (`<org>/<area>/<record>/`). Access
+  is unaffected — reads are confined to the organization and the area, and the
+  document row decides who may download — but a document's file cannot be
+  found or purged by directory.
+- **An event's attachment references are confined to the organization, not
+  the event** (found 2026-10-11). Event create/update payloads accept an
+  `attachments` list, checked only for being in the organization's
+  event-attachments area — deliberately, because duplicating an event and
+  generating recurring occurrences share one file. So event A can reference a
+  file uploaded to event B, and it is served under A's visibility. Only
+  someone who can write events can set that list, and they can already open
+  every event's attachments, so it grants nothing new today.
+  `GET /events/{id}/attachments` also returns the stored `file_path`.
 
 ## File Storage — What Encryption at Rest Does Not Cover (2026-10-09)
 
@@ -1599,14 +1618,22 @@ are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
    adds "A shift completion report is required before this shift can be
    finalized." `finalize_shift` (`scheduling_service.py`) never checks for a
    report, so a shift closes out without one despite the reminder's claim.
+   **Labelled (2026-10-11):** the setting's description now says it changes
+   the reminder, and it shows "Not in effect yet — a shift can still be closed
+   out without a report." Enforcing it at close-out is still open.
 2. **"Reviewer role"** (Shift Reports settings). Saved as
    `report_review_role` in the training module config and read by nothing.
    Approving reports is gated on `training.manage` alone
    (`shift_completion.py`), so changing the role changes nothing.
+   **Labelled (2026-10-11):** both places it is chosen (Shift Reports settings
+   and the My Training settings page) show "Not in effect yet — anyone who can
+   manage training can review reports, whatever is chosen here." Wiring it is
+   still open.
 3. **Department Defaults** (default duration, minimum staffing, overtime
    threshold). Stored and shown on the settings summary, but nothing applies
    them: new shifts and templates do not pick them up, and no overtime warning
-   reads the threshold.
+   reads the threshold. **Labelled (2026-10-11):** the card shows "Not in
+   effect yet". Applying the defaults is still open.
 4. **Start-of-shift reminder emails default on in the backend, off on the
    screen.** `scheduled_tasks.py` (~line 2358) reads
    `reminder_cfg.get("send_email", True)` ("sent by default"); the
@@ -1614,6 +1641,10 @@ are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
    `shift_reminders` when a department is created. Until someone saves that
    panel, crews receive reminder emails while the box shows unticked. The
    function's own docstring says the default is False.
+   **Resolved (2026-10-11):** the panel now defaults the box to ticked, so it
+   shows what is sent, and the docstring matches the code. The backend default
+   is unchanged on purpose: switching it off would silently stop reminder
+   emails for every department that never saved the panel.
 5. **Eligibility screen promises an override the server refuses.** The
    membership-type exclusion card says "Admins can still assign them
    manually", but officer assignment runs the eligibility check
@@ -1631,6 +1662,8 @@ are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
    `ShiftDetailPanel.tsx` (~line 3114) reads "Start check → Go to Checklists
    tab". Equipment checks moved to Inventory; the working route is the panel's
    **Complete Checklists** button.
+   **Resolved (2026-10-11):** the hint now reads "Not started — use Complete
+   Checklists above".
 
 ## Admin — No Scheduled Tasks Page (2026-08-09)
 
