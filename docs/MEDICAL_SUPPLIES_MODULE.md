@@ -274,6 +274,33 @@ and gives the past-due count. The low-stock and NFPA emails put the category and
 the serial number or asset tag on a grey line under the item name so the table
 fits a phone.
 
+**Raised by the checks themselves** _(2026-10-11)_. Two signals no longer wait
+for someone to act on a report:
+
+- **A short count raises a restock report.** When a shift, standalone or
+  completed check counts a position below its required (or expected) quantity,
+  the position is flagged for restock with the note "Counted 2 of 4 on an
+  equipment check", attributed to whoever submitted. This is the same flag
+  "report used" sets, so it appears on the supply overview and in the weekly
+  email. A report already standing is left as it is; a full recount still
+  clears it.
+- **A lot swap that leaves the shelf at its reorder point files a reorder
+  request.** Shelf stock is read exactly as the low-stock alert reads it
+  (`InventoryService.ready_on_hand`: in-date lots for lot-stocked items), and
+  the threshold is the same "at or below". The request asks for enough to
+  bring ready stock back to **twice the reorder point**, is `high` urgency when
+  the shelf is empty and `normal` otherwise, and is skipped while the item has
+  any request pending, approved, ordered or partially received. It lands in the
+  quartermaster's reorder queue, and an email goes to the same audiences as the
+  low-stock alert, so an EMS Supply Officer hears about medical items only.
+
+`AutoReorderService` runs **after the swap commits, in a session of its own**.
+Inside the swap it would take the item lock after the lot lock — the reverse of
+`add_lot` — and risk InnoDB aborting a crew's swap as a deadlock victim; and a
+rollback in the request's session would expire the endpoint's loaded objects. A
+failure there is logged and never fails the swap; the daily low-stock alert
+still covers the item.
+
 Recipients are grouped by the domains they may actually see:
 
 ```python

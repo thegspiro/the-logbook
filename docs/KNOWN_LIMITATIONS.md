@@ -402,6 +402,20 @@ guides can point at one place and an owner can decide it.
   information that `members.view` reads; what is gated is the assembled,
   scannable badge.
 
+## Medical Supplies — Automatic Reorders Land in a Queue the EMS Officer Cannot Open (2026-10-11)
+
+**Accepted.** A lot swap that leaves shelf stock at its reorder point files a
+reorder request (see `docs/MEDICAL_SUPPLIES_MODULE.md`, Alerts). Every
+`/inventory/reorder-requests` route requires `inventory.manage`, so an EMS
+Supply Officer holding only the medical pair is emailed that the request exists
+but cannot see, approve or cancel it.
+
+The owner chose this over widening the queue: purchasing stays with the
+quartermaster, and the email tells the medical officer what was filed. Opening
+the queue to `inventory.manage_medical` for medical items would need
+domain-pinned reorder routes on `/medical-supplies` and a page to show them —
+reopen this if the department moves medical purchasing to the EMS officer.
+
 ## Room Kiosk Badge Check-In — A Copied Card Works With Nobody Watching (2026-10-03)
 
 **Accepted by the owner on 2026-10-02.** A room with **Badge check-in** on

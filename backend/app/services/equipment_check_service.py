@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 from uuid import NAMESPACE_URL, uuid5
 from zoneinfo import ZoneInfo
 
+from loguru import logger
 from sqlalchemy import and_
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import func, or_, select, update
@@ -20,6 +21,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.database import async_session_factory
 from app.core.utils import generate_uuid
 from app.models.apparatus import (
     Apparatus,
@@ -43,6 +45,7 @@ from app.models.training import (
     ShiftTemplateEquipmentCheck,
 )
 from app.models.user import Organization, User
+from app.services.auto_reorder_service import AutoReorderService
 from app.services.inventory_service import InventoryService
 from app.utils.apparatus_ref import resolve_apparatus_labels, resolve_apparatus_ref
 from app.utils.check_types import COUNT, EXPIRY, LEVEL, normalize_check_type
@@ -1521,6 +1524,7 @@ class EquipmentCheckService:
         items_data: List[Dict[str, Any]],
         template_items_map: Dict[str, CheckTemplateItem],
         organization_id: str,
+        checked_by: Optional[str] = None,
     ) -> List[ShiftEquipmentCheckItem]:
         """Create check item snapshots from authoritative inventory data."""
         created: List[ShiftEquipmentCheckItem] = []
@@ -1533,7 +1537,9 @@ class EquipmentCheckService:
             # back to full.
             found_qty = item_data.get("quantity_found")
             if tmpl_item is not None and found_qty is not None:
-                self._reconcile_count_observation(tmpl_item, found_qty, organization_id)
+                self._reconcile_count_observation(
+                    tmpl_item, found_qty, organization_id, checked_by
+                )
 
             check_item = ShiftEquipmentCheckItem(
                 id=generate_uuid(),
@@ -1568,8 +1574,16 @@ class EquipmentCheckService:
         template_item: CheckTemplateItem,
         counted: int,
         organization_id: str,
+        checked_by: Optional[str] = None,
     ) -> None:
-        """Write the already-validated count to every inventory representation."""
+        """Write the already-validated count to every inventory representation.
+
+        A count that leaves the position short raises a restock report, the
+        same one "report used" raises, so the supply officer's worklist hears
+        about it at the check rather than waiting for someone to tap a button.
+        A report already standing is left alone: it names who first raised it
+        and why, and a later recount of the same gap adds nothing to that.
+        """
         if normalize_check_type(template_item.check_type) != COUNT:
             return
         # Where lots are aboard the total has to be reconciled against them;
@@ -1581,6 +1595,14 @@ class EquipmentCheckService:
         else:
             template_item.quantity_on_truck = counted
         self._sync_restock_after_restocking(template_item)
+        if self._is_short(template_item) and not template_item.restock_needed:
+            template_item.restock_needed = True
+            template_item.restock_reported_at = datetime.now(timezone.utc)
+            template_item.restock_reported_by = checked_by
+            template_item.restock_note = (
+                f"Counted {self._on_truck(template_item)} of "
+                f"{self._target_quantity(template_item)} on an equipment check"
+            )
 
     async def _create_check_seals(
         self,
@@ -2112,7 +2134,7 @@ class EquipmentCheckService:
             )
 
         await self._create_check_items(
-            check.id, items_data, template_items_map, organization_id
+            check.id, items_data, template_items_map, organization_id, checked_by
         )
         if seals_data and template_id:
             await self._create_check_seals(
@@ -2255,7 +2277,7 @@ class EquipmentCheckService:
         await self.db.flush()
 
         await self._create_check_items(
-            check.id, items_data, template_items_map, organization_id
+            check.id, items_data, template_items_map, organization_id, checked_by
         )
         if seals_data:
             await self._create_check_seals(
@@ -2391,7 +2413,11 @@ class EquipmentCheckService:
         ]
         if missing_rows:
             created = await self._create_check_items(
-                check.id, missing_rows, template_items_map, organization_id
+                check.id,
+                missing_rows,
+                template_items_map,
+                organization_id,
+                checked_by,
             )
             check.items.extend(created)
 
@@ -4126,8 +4152,7 @@ class EquipmentCheckService:
             )
 
         await self.db.commit()
-
-        return {
+        result = {
             "template_item_id": item.id,
             "lot_number": item.lot_number,
             "expiration_date": item.expiration_date,
@@ -4144,6 +4169,43 @@ class EquipmentCheckService:
             "replaced_lot_number": replaced_lot_number,
             "disposition": disposition,
         }
+        # After the commit, never before: see AutoReorderService for the lock
+        # ordering this protects.
+        await self._raise_low_stock_reorder(
+            organization_id,
+            str(lot.inventory_item_id),
+            str(user.id) if user is not None else None,
+        )
+        return result
+
+    async def _raise_low_stock_reorder(
+        self, organization_id: str, inventory_item_id: str, requested_by: Optional[str]
+    ) -> None:
+        """File a reorder if the swap left shelf stock at its reorder point.
+
+        Runs in a session of its own. ``rollback()`` expires every object a
+        session holds regardless of ``expire_on_commit``, so rolling back the
+        request's session here — on a failure, or to release the item lock
+        when nothing is filed — would expire the endpoint's ``current_user``
+        and fail its next attribute read under asyncio.
+
+        The swap has already committed, and the units are on the truck
+        whether or not purchasing hears about it. A failure here is logged
+        rather than raised so it cannot report a completed swap as failed;
+        the daily low-stock alert still covers the item.
+        """
+        try:
+            async with async_session_factory() as session:
+                await AutoReorderService(session).raise_if_low(
+                    organization_id, inventory_item_id, requested_by
+                )
+        except Exception as exc:
+            logger.error(
+                "Auto reorder for item {} in org {} failed: {}",
+                inventory_item_id,
+                organization_id,
+                exc,
+            )
 
     # ------------------------------------------------------------------
     # Catalog Linking (template setup)
