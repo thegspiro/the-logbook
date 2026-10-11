@@ -17,6 +17,7 @@ import DateTimeQuarterHour from '../../../components/ux/DateTimeQuarterHour';
 import toast from 'react-hot-toast';
 import { addHoursExact, syncEndToStartExact, resolveEndUtc, type DerivedEndTime } from '../utils/entryTimes';
 import QuickDurationButtons from './QuickDurationButtons';
+import { entryMethodLabel } from '../utils/entryMethod';
 
 const PendingReviewTab: React.FC = () => {
   const tz = useTimezone();
@@ -348,7 +349,7 @@ const PendingReviewTab: React.FC = () => {
                           <span className="mx-2">|</span>
                           <span>{formatDuration(entry.durationMinutes)}</span>
                           <span className="mx-2">|</span>
-                          <span className="capitalize">{entry.entryMethod.replace('_', ' ')}</span>
+                          <span>{entryMethodLabel(entry.entryMethod)}</span>
                         </div>
                         {entry.description && <p className="text-theme-text-muted mt-1 text-sm">{entry.description}</p>}
                       </div>

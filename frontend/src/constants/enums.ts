@@ -1059,3 +1059,26 @@ export const IdCardSides = {
   BOTH: 'both',
 } as const;
 export type IdCardSides = (typeof IdCardSides)[keyof typeof IdCardSides];
+
+// ============================================
+// Admin Hours
+// ============================================
+
+/** How an admin-hours entry was recorded. Mirrors `AdminHoursEntryMethod` on the backend. */
+export const AdminHoursEntryMethod = {
+  QR_SCAN: 'qr_scan',
+  // An officer-run ID card station, kept apart from a member scanning the
+  // category's QR code: a record that cannot tell the two apart claims
+  // something untrue about who was standing there.
+  NFC_STATION: 'nfc_station',
+  MANUAL: 'manual',
+  EVENT_ATTENDANCE: 'event_attendance',
+} as const;
+export type AdminHoursEntryMethod = (typeof AdminHoursEntryMethod)[keyof typeof AdminHoursEntryMethod];
+
+export const ADMIN_HOURS_ENTRY_METHOD_LABELS: Record<string, string> = {
+  qr_scan: 'QR Scan',
+  nfc_station: 'ID Card Station',
+  manual: 'Manual',
+  event_attendance: 'Event Attendance',
+};
