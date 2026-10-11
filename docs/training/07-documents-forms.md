@@ -588,14 +588,20 @@ member's email preference or by consent (a member can never opt out of being
 informed of a department notice); important/urgent messages carry an
 `[IMPORTANT]`/`[URGENT]` subject prefix.
 
-**Email is attempted, not guaranteed.** Three conditions can stop it, none of
-which is reported back to the author:
+**Email is attempted, and retried when it does not go out** _(2026-10-11)_:
 
 - **No address on file.** Members without an email address are skipped.
-- **Hourly cap.** A department sends at most 30 message emails per hour; once
-  that cap is reached, later messages in the same hour are posted in-app but
-  their email goes out to nobody.
-- **Delivery failures.** Provider errors are logged, not surfaced in the UI.
+- **Hourly cap.** A department sends at most 30 message emails per hour. A
+  message held back by the cap is queued for each member and sent on a retry
+  once the hour has room.
+- **Delivery failures.** A send the provider refuses, or cannot be reached
+  for, is retried five times — 5, 10, 20, 40 and 80 minutes apart. After that
+  it is marked failed.
+
+The **acknowledgment report** shows each member's email (and text) when it has
+not simply gone out: _"Email not sent yet, trying again …"_ while a retry is
+pending, and _"Email failed — …"_ in red once the retries are spent. A failed
+email is the one to follow up by hand.
 
 Treat the in-app inbox and the acknowledgment report — not the email — as the
 record that a member was notified. For anything time-critical, use **Require

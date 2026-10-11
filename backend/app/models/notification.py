@@ -16,6 +16,7 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -501,6 +502,9 @@ class DepartmentMessageDelivery(Base):
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     channel: Mapped[str] = mapped_column(String(16), nullable=False)
+    # pending -> delivered | retrying -> ... -> delivered | failed (MSG-12).
+    # "retrying" is a failed or throttled attempt with retries left; it is
+    # picked up again once next_attempt_at has passed.
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, server_default="pending"
     )
@@ -514,6 +518,13 @@ class DepartmentMessageDelivery(Base):
         DateTime(timezone=True), nullable=True
     )
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Attempts made so far, the first included; a throttled attempt counts.
+    attempt_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    next_attempt_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     __table_args__ = (
         UniqueConstraint(
@@ -523,6 +534,7 @@ class DepartmentMessageDelivery(Base):
             name="uq_dept_msg_delivery_recipient_channel",
         ),
         Index("idx_dept_msg_delivery_message", "message_id"),
+        Index("idx_dept_msg_delivery_due", "status", "next_attempt_at"),
     )
 
 

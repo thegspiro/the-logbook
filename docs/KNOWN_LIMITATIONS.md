@@ -3531,6 +3531,24 @@ validation block.
 
 ## MSG-12 — A Failed or Throttled Department-Message Delivery Is Never Retried (2026-08-31, stranded-pending sub-case fixed 2026-09-06)
 
+> ✅ **Resolved (2026-10-11), as the owner chose: record throttled sends as
+> retriable rows, and retry on a schedule.** Migration `b834afdaffdf` adds
+> `attempt_count` and `next_attempt_at` to `department_message_deliveries`.
+> A failed send, or one held back by the hourly escalation cap (which now
+> writes a row per member instead of only a log line), is recorded as
+> `retrying` and sent again by the new `retry_message_deliveries` task (every
+> 5 minutes) 5, 10, 20, 40 and 80 minutes after each attempt — five retries.
+> A sixth failure is final: the row says `failed`, and the message's
+> acknowledgment report (the per-member delivery list on the Messages admin
+> screen) shows "Email failed" / "Text failed" beside the member, or "not
+> sent yet, trying again …" while a retry is pending. A due retry whose
+> message has since been deactivated, deleted or expired, or whose member left
+> the audience, is written down as failed with that reason. Rows that failed
+> before the upgrade are not retried. A duplicate remains possible in the
+> direction the stranded-claim fix already chose (a provider that accepted a
+> message but reported failure is sent to again). The history below is kept
+> as the record.
+
 `MessageDeliveryService._claim_delivery` commits a
 `DepartmentMessageDelivery` row with `status="pending"` before calling out to
 the email/SMS provider — this is what makes a raced or retried `deliver()`

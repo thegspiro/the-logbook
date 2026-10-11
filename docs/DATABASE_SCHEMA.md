@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**303 tables · 4985 columns · 1004 foreign keys**
+**303 tables · 4987 columns · 1004 foreign keys**
 
 ---
 
@@ -471,7 +471,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`department_message_deliveries`](#department_message_deliveries) | `DepartmentMessageDelivery` | 9 | Durable, per-recipient claim and result for an external delivery. |
+| [`department_message_deliveries`](#department_message_deliveries) | `DepartmentMessageDelivery` | 11 | Durable, per-recipient claim and result for an external delivery. |
 | [`department_message_reads`](#department_message_reads) | `DepartmentMessageRead` | 5 | Tracks which users have read/acknowledged a department message. |
 | [`department_message_recipients`](#department_message_recipients) | `DepartmentMessageRecipient` | 8 | Durable, queryable delivery and resolution state for one recipient. |
 | [`department_messages`](#department_messages) | `DepartmentMessage` | 19 | Department Message model |
@@ -6918,14 +6918,17 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `message_id` | VARCHAR(36) | no | FK, IDX |  | → `department_messages.id` ON DELETE CASCADE |
 | `recipient_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
 | `channel` | VARCHAR(16) | no |  |  |  |
-| `status` | VARCHAR(16) | no |  | `pending` |  |
+| `status` | VARCHAR(16) | no | IDX | `pending` |  |
 | `idempotency_key` | VARCHAR(255) | no | UQ |  |  |
 | `attempted_at` | DATETIME | yes |  | `now()` |  |
 | `delivered_at` | DATETIME | yes |  |  |  |
 | `error` | TEXT | yes |  |  |  |
+| `attempt_count` | INTEGER | no |  | `1` |  |
+| `next_attempt_at` | DATETIME | yes |  |  |  |
 
 **Indexes**
 
+- `idx_dept_msg_delivery_due` (`status`, `next_attempt_at`)
 - `idx_dept_msg_delivery_message` (`message_id`)
 
 **Constraints**

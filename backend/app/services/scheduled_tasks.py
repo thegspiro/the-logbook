@@ -413,6 +413,12 @@ SCHEDULE = {
         "recommended_time": "*/30",
         "cron": "*/30 * * * *",
     },
+    "retry_message_deliveries": {
+        "description": "Retry department message emails and texts that failed or were held back by the hourly limit (up to 5 retries, 5 to 80 minutes apart)",
+        "frequency": "every 5 minutes",
+        "recommended_time": "*/5",
+        "cron": "*/5 * * * *",
+    },
     "series_end_reminders": {
         "description": "Send email reminders 6 months before recurring event series end dates",
         "frequency": "daily",
@@ -4362,6 +4368,165 @@ async def run_recover_stranded_message_deliveries(db: AsyncSession) -> Dict[str,
     }
 
 
+async def run_retry_message_deliveries(db: AsyncSession) -> Dict[str, Any]:
+    """Retry department message deliveries whose backoff has run out (MSG-12).
+
+    A send that failed, or that the department's hourly escalation cap held
+    back, is recorded as ``retrying`` with a ``next_attempt_at`` (5, 10, 20,
+    40 then 80 minutes on, the owner's schedule). This re-delivers the due
+    ones through ``MessageDeliveryService.deliver``, which claims each due row
+    as its next attempt; a sixth failure is recorded as ``failed`` and stays
+    that way.
+
+    A due row that can no longer be sent — its message deactivated, deleted
+    or expired, its department switched off, or its member no longer in the
+    audience — is written down as failed with the reason rather than left
+    ``retrying``: ``deliver`` silently skips such members, so the row would
+    otherwise be selected on every pass and fill the bounded window.
+    """
+    from datetime import timezone as dt_timezone
+
+    from app.models.notification import DepartmentMessage, DepartmentMessageDelivery
+    from app.services.message_delivery_service import MessageDeliveryService
+    from app.services.messaging_service import MessagingService
+
+    now = datetime.now(dt_timezone.utc)
+    due = (
+        DepartmentMessageDelivery.status == "retrying",
+        DepartmentMessageDelivery.next_attempt_at <= now,
+    )
+
+    undeliverable = (
+        (
+            await db.execute(
+                select(DepartmentMessageDelivery.id)
+                .join(
+                    DepartmentMessage,
+                    DepartmentMessage.id == DepartmentMessageDelivery.message_id,
+                )
+                .join(
+                    Organization,
+                    Organization.id == DepartmentMessage.organization_id,
+                )
+                .where(
+                    *due,
+                    or_(
+                        DepartmentMessage.is_active.is_(False),
+                        DepartmentMessage.deleted_at.isnot(None),
+                        DepartmentMessage.expires_at <= now,
+                        Organization.active.is_(False),
+                    ),
+                )
+                .limit(_STRANDED_CLAIM_SCAN_LIMIT)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    retired = len(undeliverable)
+    if undeliverable:
+        await db.execute(
+            update(DepartmentMessageDelivery)
+            .where(DepartmentMessageDelivery.id.in_(list(undeliverable)))
+            .values(
+                status="failed",
+                next_attempt_at=None,
+                error="Message is no longer active; delivery abandoned",
+            )
+        )
+        await db.commit()
+
+    result = await db.execute(
+        select(
+            DepartmentMessageDelivery.message_id,
+            DepartmentMessageDelivery.recipient_id,
+        )
+        .join(
+            DepartmentMessage,
+            DepartmentMessage.id == DepartmentMessageDelivery.message_id,
+        )
+        .join(Organization, Organization.id == DepartmentMessage.organization_id)
+        .where(
+            *due,
+            DepartmentMessage.is_active.is_(True),
+            DepartmentMessage.deleted_at.is_(None),
+            or_(
+                DepartmentMessage.expires_at.is_(None),
+                DepartmentMessage.expires_at > now,
+            ),
+            Organization.active.isnot(False),
+        )
+        .order_by(DepartmentMessageDelivery.next_attempt_at.asc())
+        .limit(_STRANDED_CLAIM_SCAN_LIMIT)
+    )
+    pending: Dict[str, Set[str]] = {}
+    for message_id, recipient_id in result.all():
+        pending.setdefault(str(message_id), set()).add(str(recipient_id))
+
+    delivery = MessageDeliveryService(db)
+    retried = 0
+    failed = 0
+    for message_id, user_ids in pending.items():
+        try:
+            message = (
+                await db.execute(
+                    select(DepartmentMessage).where(
+                        DepartmentMessage.id == message_id,
+                        DepartmentMessage.is_active.is_(True),
+                        DepartmentMessage.deleted_at.is_(None),
+                    )
+                )
+            ).scalar_one_or_none()
+            if message is None:
+                continue
+
+            targeted = await MessagingService(db)._targeted_users(
+                message, str(message.organization_id)
+            )
+            still_targeted = {
+                str(u.id) for u in targeted if str(u.id) != str(message.posted_by)
+            }
+            dropped = sorted(user_ids - still_targeted)
+            if dropped:
+                await db.execute(
+                    update(DepartmentMessageDelivery)
+                    .where(
+                        DepartmentMessageDelivery.message_id == message_id,
+                        DepartmentMessageDelivery.recipient_id.in_(dropped),
+                        DepartmentMessageDelivery.status == "retrying",
+                    )
+                    .values(
+                        status="failed",
+                        next_attempt_at=None,
+                        error="Recipient is no longer in the message audience",
+                    )
+                )
+                await db.commit()
+                retired += len(dropped)
+
+            deliverable = user_ids & still_targeted
+            if not deliverable:
+                continue
+            await delivery.deliver(message, only_user_ids=deliverable)
+            retried += 1
+        except Exception as e:  # pragma: no cover - defensive
+            logger.warning(
+                "Failed to retry deliveries for message {}: {}", message_id, e
+            )
+            failed += 1
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+
+    return {
+        "task": "retry_message_deliveries",
+        "messages": retried,
+        "retired": retired,
+        "failed": failed,
+    }
+
+
 async def run_storefront_window_lifecycle(db: AsyncSession) -> Dict[str, Any]:
     """
     Open and close department-store order windows that have reached their
@@ -6854,6 +7019,7 @@ TASK_RUNNERS = {
     "message_history_cleanup": run_message_history_cleanup,
     "publish_scheduled_messages": run_publish_scheduled_messages,
     "recover_stranded_message_deliveries": run_recover_stranded_message_deliveries,
+    "retry_message_deliveries": run_retry_message_deliveries,
     "series_end_reminders": run_series_end_reminders,
     "rolling_recurrence_extend": run_rolling_recurrence_extend,
     "shift_auto_checkout": run_shift_auto_checkout,
@@ -6886,6 +7052,9 @@ TASK_RUNNERS = {
 # how end_of_shift_summary, shift_auto_checkout, trainee_report_escalation and
 # others were defined and documented but never actually fired.
 TASK_INTERVALS_SECONDS: Dict[str, int] = {
+    # Every 5 minutes: the first retry of a failed message delivery is due 5
+    # minutes after it (MSG-12).
+    "retry_message_deliveries": 300,
     # Every 15 minutes
     "inventory_notifications": 900,
     "election_lifecycle": 900,
