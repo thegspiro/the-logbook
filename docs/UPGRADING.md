@@ -412,6 +412,31 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### A department runs one practical-skills system (2026-10-11)
+
+Training had two ways to record practical skills: **Skills Testing** (station
+sheets, scored by an examiner and validated by an officer) and **shift-report
+sign-offs** (skills a shift officer ticks as demonstrated, which raise the
+member's competency). A department now runs one of them, chosen under
+**Training Administration → Settings & Data → Practical Skills**, and the
+other's screens are hidden from the hub, both navigation bars, My Training,
+the shift report form and the command palette.
+
+What the upgrade picks for each department:
+
+- **Sign-offs and no skills tests ever run** → shift-report sign-offs. Nothing
+  it uses disappears.
+- **Everyone else** → Skills Testing. This includes a department that used
+  both: its shift report form loses the skills list, and approving a shift
+  report no longer records sign-offs or raises competency.
+
+Nothing is deleted. Past sign-offs, competency levels and skills-test results
+stay on file, and switching the setting back shows them again. If a department
+used both, check its choice after the upgrade.
+
+The migration adds `training_module_configs.practical_skills_method`.
+Downgrading drops the column and with it only the choice.
+
 ### Stored files are encrypted; confirm the key is kept safe (2026-10-09)
 
 Phase 4 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).

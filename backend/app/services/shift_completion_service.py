@@ -50,6 +50,9 @@ from app.services.call_tracking_service import CallTrackingService
 from app.services.shift_eligibility_service import (
     ShiftEligibilityService,
 )
+from app.services.training_module_config_service import (
+    get_practical_skills_method,
+)
 from app.services.training_program_service import TrainingProgramService
 from app.utils.call_type_matching import matching_call_types
 from app.utils.member_names import format_display_name
@@ -1078,8 +1081,17 @@ class ShiftCompletionService:
         """Create SkillCheckoff records for demonstrated skills.
 
         Returns list of matched SkillEvaluation IDs.
+
+        Records nothing for a department that runs Skills Testing: it chose
+        that system over these sign-offs, so a skills list on a shift report
+        (an older report approved now, or one filed through the API) must not
+        quietly raise competency or credit a program step behind it. Both
+        approval paths come through here, which is why the check is here.
         """
         if not skills_observed:
+            return []
+        method = await get_practical_skills_method(self.db, organization_id)
+        if method != "shift_signoffs":
             return []
 
         demonstrated = [

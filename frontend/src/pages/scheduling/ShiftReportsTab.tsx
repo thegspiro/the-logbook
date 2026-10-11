@@ -37,6 +37,7 @@ import toast from 'react-hot-toast';
 import StarRating from '../../modules/scheduling/components/StarRating';
 import { shiftCompletionService, trainingModuleConfigService } from '../../services/api';
 import { organizationService, userService } from '../../services/api';
+import { offersShiftSignoffs } from '../../stores/practicalSkillsStore';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
@@ -271,6 +272,11 @@ export const ShiftReportsTab: React.FC = () => {
 
   // Rating display helpers using config
   const ratingLabel = config?.rating_label || 'Performance Rating';
+  // The skills list is what shift-report sign-offs are made of, so it is
+  // offered only to a department that runs them, and only while the form
+  // section is switched on. Read from the config this tab already loads.
+  const showSkillsObserved =
+    (config?.form_show_skills_observed ?? true) && offersShiftSignoffs(config?.practical_skills_method ?? null);
   const ratingScaleType = config?.rating_scale_type || 'stars';
   const ratingScaleLabels = config?.rating_scale_labels || DEFAULT_COMPETENCY_LABELS;
   const orgCallTypes = useOrgCallTypes();
@@ -1495,28 +1501,30 @@ export const ShiftReportsTab: React.FC = () => {
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Skills Observed</label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {skillOptions.map((skill) => {
-                      const isSelected = (draftForm.skills_observed || []).some((s) => s.skill_name === skill);
-                      return (
-                        <button
-                          key={skill}
-                          type="button"
-                          onClick={() => toggleSkill(setDraftForm, skill)}
-                          className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
-                            isSelected
-                              ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
-                              : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-green-500/30'
-                          }`}
-                        >
-                          {skill}
-                        </button>
-                      );
-                    })}
+                {showSkillsObserved && (
+                  <div>
+                    <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Skills Observed</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {skillOptions.map((skill) => {
+                        const isSelected = (draftForm.skills_observed || []).some((s) => s.skill_name === skill);
+                        return (
+                          <button
+                            key={skill}
+                            type="button"
+                            onClick={() => toggleSkill(setDraftForm, skill)}
+                            className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                              isSelected
+                                ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
+                                : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-green-500/30'
+                            }`}
+                          >
+                            {skill}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div>
                   <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Officer Narrative</label>
@@ -2170,7 +2178,7 @@ export const ShiftReportsTab: React.FC = () => {
                               )}
 
                               {/* Skills Observed */}
-                              {(config?.form_show_skills_observed ?? true) && (
+                              {showSkillsObserved && (
                                 <div>
                                   <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
                                     Skills Observed

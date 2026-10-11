@@ -57,6 +57,7 @@ import {
   Users,
 } from 'lucide-react';
 import type { AdminAttentionItem } from '../../types/adminHub';
+import { PracticalSkillsMethod } from '../../constants/enums';
 
 export type TrainingAdminAreaId =
   'dashboard' | 'records' | 'curriculum' | 'evaluations' | 'enhancements' | 'compliance' | 'settings';
@@ -176,12 +177,39 @@ export const TRAINING_ADMIN_AREAS: TrainingAdminArea[] = [
         hint: 'What members may record themselves',
         icon: PencilRuler,
       },
+      {
+        id: 'practical-skills',
+        label: 'Practical Skills',
+        hint: 'Skills Testing, or sign-offs on shift reports',
+        icon: Award,
+      },
       { id: 'integrations', label: 'Integrations', hint: 'Connections to outside training systems', icon: Plug },
       { id: 'import', label: 'Import History', hint: 'Bulk imports of past training records', icon: History },
       { id: 'metrics', label: 'Headline Metrics', hint: 'The figures shown at the top of this page', icon: Activity },
     ],
   },
 ];
+
+/**
+ * The destinations each practical-skills system owns. A department runs one,
+ * and the other's destinations are left out of the hub; its records are kept.
+ */
+const SYSTEM_DESTINATIONS: Record<PracticalSkillsMethod, readonly string[]> = {
+  [PracticalSkillsMethod.SKILLS_TESTING]: ['templates', 'tests'],
+  [PracticalSkillsMethod.SHIFT_SIGNOFFS]: ['skill-evaluations'],
+};
+
+/** Whether `method` hides this destination. An unknown method hides nothing. */
+export const isHiddenByPracticalSkills = (destinationId: string, method: PracticalSkillsMethod | null): boolean =>
+  method !== null &&
+  Object.entries(SYSTEM_DESTINATIONS).some(([owner, ids]) => owner !== method && ids.includes(destinationId));
+
+/** The hub as this department sees it. */
+export const trainingAdminAreasFor = (method: PracticalSkillsMethod | null): TrainingAdminArea[] =>
+  TRAINING_ADMIN_AREAS.map((area) => ({
+    ...area,
+    destinations: area.destinations.filter((destination) => !isHiddenByPracticalSkills(destination.id, method)),
+  }));
 
 /** Element ids shared by the nav's tabs and the panels the page renders for them. */
 export const areaTabId = (area: string) => `training-admin-area-tab-${area}`;
@@ -202,14 +230,17 @@ export interface TrainingAdminLocation {
   tab: string;
 }
 
-export const getTrainingAdminArea = (id: TrainingAdminAreaId): TrainingAdminArea => {
-  const area = TRAINING_ADMIN_AREAS.find((candidate) => candidate.id === id);
+export const getTrainingAdminArea = (
+  id: TrainingAdminAreaId,
+  areas: TrainingAdminArea[] = TRAINING_ADMIN_AREAS
+): TrainingAdminArea => {
+  const area = areas.find((candidate) => candidate.id === id);
   if (!area) throw new Error(`Unknown training admin area: ${id}`);
   return area;
 };
 
-const areaOfTab = (tab: string): TrainingAdminArea | undefined =>
-  TRAINING_ADMIN_AREAS.find((area) => area.destinations.some((destination) => destination.id === tab));
+const areaOfTab = (tab: string, areas: TrainingAdminArea[]): TrainingAdminArea | undefined =>
+  areas.find((area) => area.destinations.some((destination) => destination.id === tab));
 
 const defaultTabOf = (area: TrainingAdminArea): string => area.destinations[0]?.id ?? DEFAULT_LOCATION.tab;
 
@@ -220,17 +251,22 @@ const defaultTabOf = (area: TrainingAdminArea): string => area.destinations[0]?.
  * is unique, and the page may be a retired section id (`setup`) or absent
  * (the older flat `?tab=` links).
  */
-export const resolveTrainingAdminLocation = (page: string | null, tab: string | null): TrainingAdminLocation => {
-  const byPage = TRAINING_ADMIN_AREAS.find((area) => area.id === page);
+export const resolveTrainingAdminLocation = (
+  page: string | null,
+  tab: string | null,
+  areas: TrainingAdminArea[] = TRAINING_ADMIN_AREAS
+): TrainingAdminLocation => {
+  const byPage = areas.find((area) => area.id === page);
   if (byPage && tab && byPage.destinations.some((destination) => destination.id === tab)) {
     return { area: byPage.id, tab };
   }
 
-  const byTab = tab ? areaOfTab(tab) : undefined;
+  const byTab = tab ? areaOfTab(tab, areas) : undefined;
   if (byTab && tab) return { area: byTab.id, tab };
 
   const area =
-    byPage ?? (page && RETIRED_AREA_DEFAULTS[page] ? getTrainingAdminArea(RETIRED_AREA_DEFAULTS[page]) : undefined);
+    byPage ??
+    (page && RETIRED_AREA_DEFAULTS[page] ? getTrainingAdminArea(RETIRED_AREA_DEFAULTS[page], areas) : undefined);
   if (area) return { area: area.id, tab: defaultTabOf(area) };
 
   return { ...DEFAULT_LOCATION };

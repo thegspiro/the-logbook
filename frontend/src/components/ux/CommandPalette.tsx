@@ -30,7 +30,8 @@ import {
 import { useAuthStore } from '../../stores/authStore';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
 import { FACILITY_ENTRY_PERMISSIONS } from '../../modules/facilities/routes';
-import { TRAINING_ADMIN_AREAS } from '../training/trainingAdminAreas';
+import { TRAINING_ADMIN_AREAS, isHiddenByPracticalSkills } from '../training/trainingAdminAreas';
+import { usePracticalSkillsMethod } from '../../stores/practicalSkillsStore';
 import { EVENTS_ADMIN_TABS } from '../../pages/eventsAdminTabs';
 import { MEMBERS_ADMIN_TABS } from '../../pages/membersAdminTabs';
 import { STORE_ADMIN_TABS } from '../../modules/storefront/pages/storeAdminTabs';
@@ -73,6 +74,11 @@ interface CommandItem {
    * palette is for; an officer looking for one is searching by name anyway.
    */
   searchOnly?: boolean;
+  /**
+   * A Training Admin destination id, for the destinations one of the two
+   * practical-skills systems owns: hidden when the department runs the other.
+   */
+  trainingDestination?: string;
 }
 
 const COMMANDS: CommandItem[] = [
@@ -299,6 +305,7 @@ const HUB_DESTINATIONS: CommandItem[] = [
       permission: 'training.manage',
       requiresModule: 'training',
       searchOnly: true,
+      trainingDestination: destination.id,
     }))
   ),
   ...EVENTS_ADMIN_TABS.map((tab): CommandItem => ({
@@ -350,6 +357,7 @@ export const CommandPalette: React.FC = () => {
   const navigate = useNavigate();
   const { checkPermission } = useAuthStore();
   const { enabledModules } = useEnabledModules();
+  const practicalSkillsMethod = usePracticalSkillsMethod();
 
   // Filter commands by permissions, module supersession, and search query
   const filteredCommands = useMemo(() => {
@@ -364,7 +372,8 @@ export const CommandPalette: React.FC = () => {
         // helper: the helper is rebuilt every render, so depending on it here
         // would recompute this memo every render too.
         (!cmd.requiresModule || enabledModules === null || enabledModules.has(cmd.requiresModule)) &&
-        (searching || !cmd.searchOnly)
+        (searching || !cmd.searchOnly) &&
+        !(cmd.trainingDestination && isHiddenByPracticalSkills(cmd.trainingDestination, practicalSkillsMethod))
     );
 
     if (!searching) return accessible;
@@ -377,7 +386,7 @@ export const CommandPalette: React.FC = () => {
         cmd.keywords?.some((kw) => kw.includes(q)) ||
         cmd.section.toLowerCase().includes(q)
     );
-  }, [query, checkPermission, enabledModules]);
+  }, [query, checkPermission, enabledModules, practicalSkillsMethod]);
 
   // Group by section
   const sections = useMemo(() => {
