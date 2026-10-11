@@ -82,6 +82,7 @@ import { DialogPortal } from '@/components/DialogPortal';
 import { DialogPanel } from '@/components/ux/DialogPanel';
 import { Modal } from '@/components/Modal';
 import { NfcTagsCard } from '@/modules/inventory/components/NfcTagsCard';
+import { CloneChecklistDialog } from '@/modules/inventory/components/CloneChecklistDialog';
 import { useInventoryNfcEnabled } from '@/modules/inventory/hooks/useInventoryNfcEnabled';
 import InventoryItemPicker from '@/modules/inventory/components/InventoryItemPicker';
 import CatalogQuickAdd from '@/modules/inventory/components/CatalogQuickAdd';
@@ -657,7 +658,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // delete just removed. This flag is a superset of every one of those gaps
   // by construction, since it covers the whole function.
   const [saveOperationActive, setSaveOperationActive] = useState(false);
-  const [cloning, setCloning] = useState(false);
+  const [cloneOpen, setCloneOpen] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   /**
    * Whether this checklist has been live on crews' shifts during this visit —
@@ -2586,19 +2587,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Clone template
   // ---------------------------------------------------------------------------
 
-  const handleClone = async () => {
-    if (!templateId) return;
-    setCloning(true);
-    try {
-      const cloned = await equipmentCheckService.cloneEquipmentCheckTemplate(templateId, '');
-      setIsDirty(false);
-      toast.success('Template cloned');
-      void navigate(`/inventory/admin/checklists/templates/${cloned.id}`, { replace: true });
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to clone template'));
-    } finally {
-      setCloning(false);
-    }
+  const handleCloned = (cloned: EquipmentCheckTemplate) => {
+    setCloneOpen(false);
+    setIsDirty(false);
+    void navigate(`/inventory/admin/checklists/templates/${cloned.id}`, { replace: true });
   };
 
   // ---------------------------------------------------------------------------
@@ -5191,12 +5183,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 {isEditing && templateId && (
                   <button
                     type="button"
-                    onClick={() => void handleClone()}
-                    disabled={cloning}
+                    onClick={() => setCloneOpen(true)}
                     className="btn-secondary flex min-h-9 items-center gap-1.5 px-3 text-[13px] disabled:opacity-50"
                   >
-                    {cloning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />}{' '}
-                    Clone
+                    <Copy className="h-3.5 w-3.5" /> Clone
                   </button>
                 )}
               </div>
@@ -5517,11 +5507,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         {isEditing && templateId && (
           <button
             type="button"
-            onClick={() => void handleClone()}
-            disabled={cloning}
+            onClick={() => setCloneOpen(true)}
             className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm disabled:opacity-50"
           >
-            {cloning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />} Clone checklist
+            <Copy className="h-4 w-4" /> Clone checklist
           </button>
         )}
         <button
@@ -6671,6 +6660,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           </div>
         </div>
       )}
+
+      <CloneChecklistDialog
+        template={cloneOpen && templateId ? { id: templateId, name: form.name } : null}
+        onClose={() => setCloneOpen(false)}
+        onCloned={handleCloned}
+      />
 
       {nfcCompartment && (
         <Modal isOpen onClose={() => setNfcCompartment(null)} title={`NFC tags: ${nfcCompartment.name}`} size="lg">
