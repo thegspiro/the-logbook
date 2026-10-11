@@ -1170,6 +1170,16 @@ _[Public Application Status page for an active applicant → the "Withdraw your 
 > and since the token can now withdraw the application, that was a credential
 > on a sticker. Badges print a short id now. Destroy any applicant badges
 > printed before that date.
+>
+> **Revoking badges you cannot recover** _(2026-10-11)_. If badges printed
+> before that date may be in the wrong hands, ask your administrator to rotate
+> your department's status tokens
+> (`scripts/rotate_applicant_status_tokens.py --org "<your department>"
+--apply`). Every applicant in the department gets a new token, so every
+> printed badge **and every status link already emailed** stops working. No
+> new link is sent automatically: an applicant gets one with the next pipeline
+> email that carries the status tracker, or re-send it from their record.
+> Rotation is per department and only on request.
 
 ![Public application status page showing an applicant's progress through the pipeline](./images/15-13-application-status.png)
 

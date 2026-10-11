@@ -292,6 +292,24 @@ docker exec -it intranet-backend python scripts/backfill_minutes_meeting_dates.p
 docker exec -it intranet-backend python scripts/backfill_minutes_meeting_dates.py --apply
 ```
 
+### `rotate_applicant_status_tokens.py`
+
+Revokes the applicant status tokens printed on applicant badges before W17-3
+(2026-09-28), for **one department, on request** — the owner's decision. Every
+applicant in the department who holds a token gets a fresh one, so **every
+status link already emailed to them stops working** too; nothing is re-sent.
+Dry run by default; `--apply` writes. `--org` is required and must match one
+organization by id or exact name. One `applicant_status_tokens_rotated` audit
+event records the count and applicant ids, never a token.
+
+```bash
+# Dry run — counts the applicants, writes nothing:
+docker exec -it intranet-backend python scripts/rotate_applicant_status_tokens.py --org "Falls Church Volunteer Fire Department"
+
+# Rotate:
+docker exec -it intranet-backend python scripts/rotate_applicant_status_tokens.py --org "Falls Church Volunteer Fire Department" --apply
+```
+
 ### `clear_hidden_form_answers.py`
 
 Removes stale answers to conditional form questions from stored submissions.
