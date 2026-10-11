@@ -2692,8 +2692,8 @@ count. A manager's `details` selects only id, name and status for the
 new `details_truncated` flag says more exist behind `queue_url`, the "View all"
 link. Response change is additive (`details_truncated`); the list is now a
 glance, not a roster. Note that no dashboard screen renders this widget yet
-(DASH-1 below — the registry still points at the wrong path), so the "View
-all" link exists in the API contract for whichever widget consumes it.
+(DASH-1 below — the registry entry now names the right path but is marked
+unwired), so the "View all" link exists in the API contract for whichever widget consumes it.
 `tests/test_pipeline_widget_summary_counts.py` pins the counts, the cap and
 the self-application exclusion. The original finding follows.
 
@@ -3041,7 +3041,22 @@ draft. Until then the guides carry the caution explicitly (see
 [`ONBOARDING.md`](../ONBOARDING.md) → Data Persistence and
 [`training/00-getting-started.md`](./training/00-getting-started.md)).
 
-## DASH-1 — The Main Widget Registry Is Mostly Unread (2026-08-23)
+## DASH-1 — The Main Widget Registry Is Mostly Unread (2026-08-23, resolved 2026-10-11)
+
+**✅ Resolved 2026-10-11 (owner decision 2026-10-05: mark the unwired entries
+in the file).** Every entry in `widgetRegistry.ts` now carries `wired` (true
+only when a screen reads it through `dashboardWidget()`) and
+`aggregateEndpoint` (`mounted` or `not-built`). Seven entries read
+`wired: false`; five of those read `aggregateEndpoint: 'not-built'`
+(onboarding, membership status, admin hours, meetings, messages). The two
+paths that pointed at the wrong prefix were corrected while marking them —
+`/prospective-members/widget-summary` and `/organization/setup-checklist` —
+since both routes exist and nothing fetched the old strings.
+`widgetRegistry.test.ts` scans the source for `dashboardWidget('…')` calls and
+fails if the set of `wired: true` entries differs from the set actually read,
+or if a wired entry's endpoint is `not-built`. No endpoints were built and no
+entries were deleted. The original finding follows; its table describes the
+paths as they were.
 
 `frontend/src/components/dashboard/widgetRegistry.ts` declares eight widgets,
 each with a `permission`, an `aggregatePath` and a `queuePath`. **Only one —
@@ -3072,8 +3087,8 @@ Seven of the eight `aggregatePath` values do not resolve to a mounted route:
 > decorator alone never gives the URL. The same mistake produced three wrong
 > endpoint URLs in the August 23–24 API reference, caught in review on #1772.
 
-**Status:** Open (LOW — found 2026-08-23, verified against the code the same
-day).
+**Status:** Resolved 2026-10-11 by marking (LOW — found 2026-08-23, verified
+against the code the same day).
 
 Nothing is broken today, because nothing fetches those paths. This is
 [pitfall #19](../CLAUDE.md) in its milder form — a declaration without a
@@ -5236,8 +5251,8 @@ proves a path resolves; proving a _parameter is read_ needs route-to-component
 resolution and is not attempted.
 
 **Related, and the same shape one layer up:** the `DASH-1` entry above records
-seven of eight `widgetRegistry.ts` `aggregatePath` values that resolve to no
-mounted route. Server-supplied and registry-declared navigation targets have
+seven of eight `widgetRegistry.ts` `aggregatePath` values that resolved to no
+mounted route (now marked in the file, 2026-10-11). Server-supplied and registry-declared navigation targets have
 both drifted from the routes they name, for the same reason — nothing in the
 type system connects either to a `path=` string.
 
