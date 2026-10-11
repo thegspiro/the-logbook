@@ -54,8 +54,9 @@ list that a search, a filter, **Past** or **My Events** has narrowed to nothing.
 
 ![Events listing page with upcoming events and type badges](./images/04-01-events-list.png)
 
-> **Screenshot needed:**
-> _[Events page as a regular member on a department with no upcoming events → the "No upcoming events yet" empty state with its explanation and the "Take the short walkthrough in the Learning Center" link.]_
+<!-- Screenshot needed:
+_[Events page as a regular member on a department with no upcoming events → the "No upcoming events yet" empty state with its explanation and the "Take the short walkthrough in the Learning Center" link.]_
+-->
 
 ---
 
@@ -188,11 +189,13 @@ the member asking — it goes to the position chosen for that event type in
 resort to every holder of `events.manage`. The member hears the decision in
 the app and by email (**Event reminders**).
 
-> **Screenshot needed:**
-> _[Event detail as a member, for an event whose check-in window closed today and with no check-in recorded → the "Were you at this event but never checked in?" card with its "I was there" button.]_
+<!-- Screenshot needed:
+_[Event detail as a member, for an event whose check-in window closed today and with no check-in recorded → the "Were you at this event but never checked in?" card with its "I was there" button.]_
+-->
 
-> **Screenshot needed:**
-> _[Event detail as the event's organizer → the Attendance Requests card listing one pending request (name, "Asked …", the reason, "Says they were there from … until …") with Approve and Decline.]_
+<!-- Screenshot needed:
+_[Event detail as the event's organizer → the Attendance Requests card listing one pending request (name, "Asked …", the reason, "Says they were there from … until …") with Approve and Decline.]_
+-->
 
 ---
 
@@ -236,8 +239,9 @@ appears only for an event that will actually record one, and no longer says
 "Created" before the record exists. Training credit from finalizing is
 described in [Training Credit from Events](#training-credit-from-events-2026-09-29).
 
-> **Screenshot needed:**
-> _[Member at /events/:id/check-in on a Training-type demo event inside its check-in window, after tapping Check In to This Event: the "You're Checked In" heading, the event name, and the green Training Record panel reading "Your attendance will be added to your training record when the event's attendance is finalized." Creates a check-in (mutates seed data). Do not capture the member's email or the URL bar.]_
+<!-- Screenshot needed:
+_[Member at /events/:id/check-in on a Training-type demo event inside its check-in window, after tapping Check In to This Event: the "You're Checked In" heading, the event name, and the green Training Record panel reading "Your attendance will be added to your training record when the event's attendance is finalized." Creates a check-in (mutates seed data). Do not capture the member's email or the URL bar.]_
+-->
 
 ### NFC Tags — a second way in _(2026-08-18)_
 
@@ -356,11 +360,13 @@ checked in. The screen shows only the member's first name and last initial.
 > 2026-10-02; it is recorded in `docs/KNOWN_LIMITATIONS.md`. Turn badge
 > check-in on only for rooms where that is acceptable.
 
-> **Screenshot needed:**
-> _[Check-In QR Codes (`/locations/qr-codes`) as an administrator with the NFC ID Cards integration on → a room card showing its QR code, **Write NFC tag** and the **Badge check-in** switch.]_
+<!-- Screenshot needed:
+_[Check-In QR Codes (`/locations/qr-codes`) as an administrator with the NFC ID Cards integration on → a room card showing its QR code, **Write NFC tag** and the **Badge check-in** switch.]_
+-->
 
-> **Screenshot needed:**
-> _[A phone after tapping a room tag while two events are in their check-in window in that room → "Which event are you here for?" with both events listed.]_
+<!-- Screenshot needed:
+_[A phone after tapping a room tag while two events are in their check-in window in that room → "Which event are you here for?" with both events listed.]_
+-->
 
 ### Monitoring Check-Ins
 
@@ -632,8 +638,9 @@ When the server refuses (for example, because the event's attendance is already
 closed), the toast now shows its reason instead of a generic _"Failed to
 postpone request"_ or only the double-booked-room hint.
 
-> **Screenshot needed:**
-> _[Event organizer at /events/:id/edit on a finalized demo event: the "Attendance for this event is finalized" notice at the top, with the type, category, schedule and check-in controls greyed out and the title editable.]_
+<!-- Screenshot needed:
+_[Event organizer at /events/:id/edit on a finalized demo event: the "Attendance for this event is finalized" notice at the top, with the type, category, schedule and check-in controls greyed out and the title editable.]_
+-->
 
 **On a Training event, finalizing writes each member's training record**
 _(2026-09-29)_. Every checked-in member gets a **Completed** record for the
@@ -653,8 +660,9 @@ finalizing sends the attendance to training officers instead: members see the
 class as **In Progress** until an officer approves it on the approval page
 (linked from their email and from the event's Requirements & Programs card).
 
-> **Screenshot needed:**
-> _[Event organizer (events.manage) at /events/:eventId on an ended Training event with attendance still open: the "Finalize attendance?" confirmation, listing how each member's time is decided, that members with no credited time get no record, and that earlier admin-hours entries are removed, with Finalize and close / Keep it open. Press Keep it open; never confirm.]_
+<!-- Screenshot needed:
+_[Event organizer (events.manage) at /events/:eventId on an ended Training event with attendance still open: the "Finalize attendance?" confirmation, listing how each member's time is decided, that members with no credited time get no record, and that earlier admin-hours entries are removed, with Finalize and close / Keep it open. Press Keep it open; never confirm.]_
+-->
 
 **Training events do not credit Admin Hours.** Their attendance goes to the
 training records, and crediting admin hours as well counted the same hours
@@ -716,11 +724,13 @@ over.
   (each type defaults to **Default (Secretary)**), then to the Secretary, then
   to every event manager.
 
-> **Screenshot needed:**
-> _[Event detail as an administrator → the details card's "Organized by" row with the alternate's name and the "Transfer event" link; then the Transfer Event dialog on a recurring event with "This and all future events in the series" selected.]_
+<!-- Screenshot needed:
+_[Event detail as an administrator → the details card's "Organized by" row with the alternate's name and the "Transfer event" link; then the Transfer Event dialog on a recurring event with "This and all future events in the series" selected.]_
+-->
 
-> **Screenshot needed:**
-> _[Manage Events → Event settings → Attendance → the "Attendance requests" block with one select per event type, each on "Default (Secretary)".]_
+<!-- Screenshot needed:
+_[Manage Events → Event settings → Attendance → the "Attendance requests" block with one select per event type, each on "Default (Secretary)".]_
+-->
 
 ### Training Credit from Events _(2026-09-29)_
 
@@ -741,8 +751,9 @@ its attendance is finalized — however the event was created.
 4. To correct a finalized event, somebody who can reopen attendance (a chief)
    reopens it; change the details or times; finalize again.
 
-> **Screenshot needed:**
-> _[Admin with events.manage and training.manage at /events/admin?tab=create: Create Event with Event Type set to Training, scrolled to the "Training details (optional)" group, a course picked (so Training Type and Category fill), and the Create Training Session link line visible. Do not submit.]_
+<!-- Screenshot needed:
+_[Admin with events.manage and training.manage at /events/admin?tab=create: Create Event with Event Type set to Training, scrolled to the "Training details (optional)" group, a course picked (so Training Type and Category fill), and the Create Training Session link line visible. Do not submit.]_
+-->
 
 **The reverse also works, in bulk.** If the training is a multi-class course — a recruit school, a five-night refresher — generate a **course cohort** instead and the platform creates the events _and_ their linked training sessions for you, one per class, with the roster already RSVP'd to each. See [Multi-Class Courses & Cohorts](02-training.md#multi-class-courses--cohorts) in the training guide.
 
@@ -804,8 +815,9 @@ Once a recurring series is created, each occurrence appears as an individual eve
 
 > **Hint:** Deleting a single occurrence from a series does not affect other occurrences. The system warns you when an edit will affect multiple events.
 
-> **Screenshot needed:**
-> _[Event organizer (events.manage) at /events/:id/edit on an occurrence of a weekly recurring demo event: the indigo "This event is part of a recurring series." panel above the form with "This and all future events" selected. Do not save.]_
+<!-- Screenshot needed:
+_[Event organizer (events.manage) at /events/:id/edit on an occurrence of a weekly recurring demo event: the indigo "This event is part of a recurring series." panel above the form with "This and all future events" selected. Do not save.]_
+-->
 
 ### Series keep their dates and times _(2026-09-28)_
 

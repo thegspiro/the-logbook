@@ -177,8 +177,9 @@ open the full navigation drawer.
 
 ![Phone header with the menu button at the left edge and the department name beside it](./images/10-13-mobile-header-menu.png)
 
-> **Screenshot needed:**
-> _[Administrator (long menu) at /dashboard in a 390×844 phone viewport: bottom-bar More tapped so the navigation drawer is open and not yet scrolled, with the bottom fade and the More pill with its arrow visible above the drawer footer.]_
+<!-- Screenshot needed:
+_[Administrator (long menu) at /dashboard in a 390×844 phone viewport: bottom-bar More tapped so the navigation drawer is open and not yet scrolled, with the bottom fade and the More pill with its arrow visible above the drawer footer.]_
+-->
 
 ### Everything Is Thumb-Sized Now _(2026-08-08)_
 
@@ -498,8 +499,9 @@ behind a confirmation:
   Whoever saved them is not told.
 - **Keep on hold** in either dialog leaves things as they are.
 
-> **Screenshot needed:**
-> _[Member signed in on a device with two or three held offline items (seed untagged entries in IndexedDB): the yellow "N offline items are on hold" notice at the top of the app with its Send as me and Discard buttons; a second frame with the "Send these as yours?" confirmation open. Do not confirm.]_
+<!-- Screenshot needed:
+_[Member signed in on a device with two or three held offline items (seed untagged entries in IndexedDB): the yellow "N offline items are on hold" notice at the top of the app with its Send as me and Discard buttons; a second frame with the "Send these as yours?" confirmation open. Do not confirm.]_
+-->
 
 ---
 
@@ -1073,8 +1075,9 @@ moment you make it, and **Use the default tabs** puts the role defaults back.
   ever offered to administrators. An officer who manages the department's
   settings reaches them from **More**.
 
-> **Screenshot needed:**
-> _[My Account → Appearance on a 390px phone, scrolled to **Phone navigation bar**: the **Left of Add** and **Right of Add** selects (one set to Training), the **Use the default tabs** link, and the bottom bar beneath showing the chosen tab.]_
+<!-- Screenshot needed:
+_[My Account → Appearance on a 390px phone, scrolled to **Phone navigation bar**: the **Left of Add** and **Right of Add** selects (one set to Training), the **Use the default tabs** link, and the bottom bar beneath showing the chosen tab.]_
+-->
 
 **[SCREENSHOT — CHECK `10-12-mobile-bottom-nav.png`.** If the frame shows an administrator's bar with a **Settings** tab, that tab now opens My Account; the frame itself is unchanged unless it predates the 2026-09-01 Add button.**]**
 
@@ -1087,8 +1090,9 @@ tapping it scrolls the list down. On desktop the sidebar keeps its permanent
 scrollbar and shows no chevron _(2026-09-30)_ — there it only covered the last
 rows.
 
-> **Screenshot needed:**
-> _[The navigation drawer open on a 390px phone as an officer, with items below the fold: the fade at the bottom edge and the floating **More** chevron.]_
+<!-- Screenshot needed:
+_[The navigation drawer open on a 390px phone as an officer, with items below the fold: the fade at the bottom edge and the floating **More** chevron.]_
+-->
 
 ## Tablets and phones: layout fixes _(2026-10-03 → 10-04)_
 

@@ -68,8 +68,9 @@ The directory lists the members on the roster with their name, **rank**, members
 
 ![Member directory listing members with their status and contact columns](./images/01-01-member-directory.png)
 
-> **Screenshot needed:**
-> _[As an administrator (members.manage) at /members on a desktop width: the Members table with the status filter set to Archived, showing at least one archived member's row with the green Reactivate icon beside Edit and Delete in Actions. Needs an archived member in the demo seed. Do not open the Reactivate dialog.]_
+<!-- Screenshot needed:
+_[As an administrator (members.manage) at /members on a desktop width: the Members table with the status filter set to Archived, showing at least one archived member's row with the green Reactivate icon beside Edit and Delete in Actions. Needs an archived member in the demo seed. Do not open the Reactivate dialog.]_
+-->
 
 **[SCREENSHOT — REPLACE `01-01-member-directory.png`.** The table gained a
 **Rank** column between the name and **Member #** (2026-09-30). Re-shoot as an
@@ -288,8 +289,9 @@ There is **one** Membership Number field:
 
 ---
 
-> **Screenshot needed:**
-> _[As an administrator (users.create + members.manage) on an install with email not configured, at /members/admin?tab=add: the Account Password block with Set initial password ticked and disabled and the "Required: email isn't set up for this department…" hint visible. Leave the password fields empty; do not capture any typed password.]_
+<!-- Screenshot needed:
+_[As an administrator (users.create + members.manage) on an install with email not configured, at /members/admin?tab=add: the Account Password block with Set initial password ticked and disabled and the "Required: email isn't set up for this department…" hint visible. Leave the password fields empty; do not capture any typed password.]_
+-->
 
 ## Importing Members from CSV
 
@@ -507,8 +509,9 @@ saving.
 
 ---
 
-> **Screenshot needed:**
-> _[As an administrator (members.manage) at /members/admin, Member Management tab: a demo member's Reset Password dialog with a weak password typed (for example Abcdefgh1234!) so the Password rules list shows "No runs like 123 or abc" unmet. Never submit, and never capture a real password.]_
+<!-- Screenshot needed:
+_[As an administrator (members.manage) at /members/admin, Member Management tab: a demo member's Reset Password dialog with a weak password typed (for example Abcdefgh1234!) so the Password rules list shows "No runs like 123 or abc" unmet. Never submit, and never capture a real password.]_
+-->
 
 ## Member Audit History
 
@@ -647,8 +650,9 @@ are never rewritten.
 
 ---
 
-> **Screenshot needed:**
-> _[As an administrator (members.manage) at /members/:userId for a Dropped or Archived demo member: the Anonymize Member dialog showing the warning sentence, the red Removed panel, the Kept panel with the "Former Member" note, the empty "Type <name> to confirm" field and the disabled Anonymize button. Clip to the dialog. Never type the name or confirm — the action is irreversible and would remove the demo member. Needs a dropped or archived member in the seed.]_
+<!-- Screenshot needed:
+_[As an administrator (members.manage) at /members/:userId for a Dropped or Archived demo member: the Anonymize Member dialog showing the warning sentence, the red Removed panel, the Kept panel with the "Former Member" note, the empty "Type <name> to confirm" field and the disabled Anonymize button. Clip to the dialog. Never type the name or confirm — the action is irreversible and would remove the demo member. Needs a dropped or archived member in the seed.]_
+-->
 
 ## Prospective Members Pipeline
 
@@ -881,8 +885,9 @@ reveal the tracker once someone has passed their interview.
 > on/off setting, but is not emailed the link, and the stage waits for you to
 > complete it.
 
-> **Screenshot needed:**
-> _[As a Membership Coordinator (prospective_members.manage) at /prospective-members/settings: a pipeline selected and Add Stage open with the Enable Status Page tile chosen, showing the "Enables the public status page" panel with its override sentence, "Enable public status page at this stage" ticked, and "Message in the link email (optional)" filled with a sample welcome line.]_
+<!-- Screenshot needed:
+_[As a Membership Coordinator (prospective_members.manage) at /prospective-members/settings: a pipeline selected and Add Stage open with the Enable Status Page tile chosen, showing the "Enables the public status page" panel with its override sentence, "Enable public status page at this stage" ticked, and "Message in the link email (optional)" filled with a sample welcome line.]_
+-->
 
 ### Pipeline Configuration
 
@@ -1154,8 +1159,9 @@ which records the rejoin (workflow review W15-3).
 
 ![The Change Member Status dialog with a drop status selected and its property-return note](./images/01-29-status-change-modal.png)
 
-> **Screenshot needed:**
-> _[As an administrator (members.manage) at /members/:userId for a Dropped (Voluntary) demo member: the Change Member Status dialog with Active selected, showing the Earlier service radios (department default marked), Return date and Last day of previous service. Never press Update Status. Needs a dropped member in the seed.]_
+<!-- Screenshot needed:
+_[As an administrator (members.manage) at /members/:userId for a Dropped (Voluntary) demo member: the Change Member Status dialog with Active selected, showing the Earlier service radios (department default marked), Return date and Last day of previous service. Never press Update Status. Needs a dropped member in the seed.]_
+-->
 
 > **The last administrator cannot be removed** _(2026-08-01)_. If the member
 > you are changing is the only remaining active person who can manage members,
@@ -1467,8 +1473,9 @@ date may be in the future.
 > still counted from their hire date, including the time away. Correct it by
 > editing their Service History.
 
-> **Screenshot needed:**
-> _[As an administrator (members.manage) at /members/:userId for a demo member who rejoined under Restart at zero: the Service History card in its read view, showing the Credited service and Prior service (not counted) tiles and two stints — an earlier one tagged "Dropped (voluntary)" and "Not counted", and a current one ending "present". Needs a seeded rejoin with stints. Clip to the card.]_
+<!-- Screenshot needed:
+_[As an administrator (members.manage) at /members/:userId for a demo member who rejoined under Restart at zero: the Service History card in its read view, showing the Credited service and Prior service (not counted) tiles and two stints — an earlier one tagged "Dropped (voluntary)" and "Not counted", and a current one ending "present". Needs a seeded rejoin with stints. Clip to the card.]_
+-->
 
 ---
 
@@ -1705,8 +1712,9 @@ A pattern is checked when it is saved, and one whose numbers would not fit the
 the yearly restart off in the same save. Departments that never open the screen
 keep producing `FD-0001`-style numbers; nothing is migrated.
 
-> **Screenshot needed:**
-> _[Members Admin → Settings → Membership IDs with numbering and auto-generation on → the **Year and number** preset applied: Number pattern `{YYYY}-{SEQ}`, Minimum digits 3, **Restart the count each year** on, **The year follows** set to **Our fiscal year** starting in July and named by **The year it ends in**, and the line "The next member will be numbered 2027-001." with "Next: 2027-001" in the panel header.]_
+<!-- Screenshot needed:
+_[Members Admin → Settings → Membership IDs with numbering and auto-generation on → the **Year and number** preset applied: Number pattern `{YYYY}-{SEQ}`, Minimum digits 3, **Restart the count each year** on, **The year follows** set to **Our fiscal year** starting in July and named by **The year it ends in**, and the line "The next member will be numbered 2027-001." with "Next: 2027-001" in the panel header.]_
+-->
 
 #### Numbers are never reissued _(2026-09-29)_
 
@@ -2268,11 +2276,13 @@ is still printed on the card as text; it just no longer scans.
   member has a reprinted card, turn it off: from then on only badge codes scan.
   Inventory checkout still refuses a member whose account is not active.
 
-> **Screenshot needed:**
-> _[Administrator (members.manage) at /members/print-id-cards with two demo members selected: the Orientation, Sides and Code options, the Save as department layout button, and the "Accept old badges" switch at the bottom. Check the route in the page before capturing.]_
+<!-- Screenshot needed:
+_[Administrator (members.manage) at /members/print-id-cards with two demo members selected: the Orientation, Sides and Code options, the Save as department layout button, and the "Accept old badges" switch at the bottom. Check the route in the page before capturing.]_
+-->
 
-> **Screenshot needed:**
-> _[Administrator at /members/<demo member id>/id-card: the badge with its QR code, showing the membership number as text, and the "Reissue badge" button; a second frame with the "Reissue this badge?" confirmation open. Demo member only; do not confirm.]_
+<!-- Screenshot needed:
+_[Administrator at /members/<demo member id>/id-card: the badge with its QR code, showing the membership number as text, and the "Reissue badge" button; a second frame with the "Reissue this badge?" confirmation open. Demo member only; do not confirm.]_
+-->
 
 ---
 

@@ -91,12 +91,18 @@ All guides in their entirety, with special attention to:
 
 ## Screenshot Placeholders
 
-Throughout these guides you will find screenshot placeholder lines formatted as:
+Where a screenshot is still to be taken, the guide holds a hidden note
+describing it. The note is an HTML comment, so it does not appear when you
+read the guide; open the file's source to see it:
 
-> **Screenshot placeholder:** or **Screenshot needed:**
-> _[Description of what the screenshot should show]_
+```markdown
+<!-- Screenshot needed:
+[Description of what the screenshot should show]
+-->
+```
 
-These indicate where a screenshot should be inserted. The description explains what should be captured. Lines marked **Screenshot needed:** are newly added sections that particularly require visual documentation.
+Some older branches still use a visible blockquote (`> **Screenshot needed:**`);
+both are counted and filled the same way.
 
 Screenshots are captured from a running demo department rather than taken by hand, so they can be refreshed in bulk after a UI change. See [`scripts/screenshots/README.md`](../../scripts/screenshots/README.md) for how to stand up the demo environment, declare a shot, and capture it. [SCREENSHOT_STATUS.md](./SCREENSHOT_STATUS.md) tracks which placeholders are filled; [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) tracks whether what was captured still matches the application, which is a different question and the one that goes stale silently.
 
@@ -104,7 +110,7 @@ If you are adding one by hand instead:
 
 1. Take the screenshot as described.
 2. Save it to the `docs/training/images/` directory.
-3. Replace the placeholder with: `![Alt text](./images/filename.png)`
+3. Replace the whole comment, from `<!--` to `-->`, with: `![Alt text](./images/filename.png)`
 
 ---
 

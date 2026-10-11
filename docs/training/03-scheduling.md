@@ -281,11 +281,13 @@ department's figures, not inside them: "+N hrs with other departments" on your
 Hours view, an **Outside Hours** column on the Member Hours report. The Shift
 Compliance report **does** add them into each member's shift and hour totals.
 
-> **Screenshot needed:**
-> _[My Shifts → Hours as a member → the "Shifts with other departments" card with two entries (one showing a start–end time range, one reading **Not counted** with its reason) and the **Log outside shift** button.]_
+<!-- Screenshot needed:
+_[My Shifts → Hours as a member → the "Shifts with other departments" card with two entries (one showing a start–end time range, one reading **Not counted** with its reason) and the **Log outside shift** button.]_
+-->
 
-> **Screenshot needed:**
-> _[My Shifts → Hours → Log outside shift → the "Log a shift with another department" dialog with Start and End filled, the **+12 hours** / **+24 hours** buttons, "Counts as 12 hours", and Department and Apparatus chosen.]_
+<!-- Screenshot needed:
+_[My Shifts → Hours → Log outside shift → the "Log a shift with another department" dialog with Start and End filled, the **+12 hours** / **+24 hours** buttons, "Counts as 12 hours", and Department and Apparatus chosen.]_
+-->
 
 ### For scheduling officers: the list and the review
 
@@ -303,19 +305,23 @@ Compliance report **does** add them into each member's shift and hour totals.
   a **Show** filter (All / Counted / Not counted) and **Reject** (with a reason) /
   **Restore**.
 
-> **Screenshot needed:**
-> _[Scheduling Admin → Settings → Outside Apparatus → one department with two units, one turned off, and the "Add a department" field.]_
+<!-- Screenshot needed:
+_[Scheduling Admin → Settings → Outside Apparatus → one department with two units, one turned off, and the "Add a department" field.]_
+-->
 
-> **Screenshot needed:**
-> _[Scheduling Reports → Member Hours → scrolled to the "Outside apparatus staffed" table and the "Shifts with other departments" list with a Reject button on a row.]_
+<!-- Screenshot needed:
+_[Scheduling Reports → Member Hours → scrolled to the "Outside apparatus staffed" table and the "Shifts with other departments" list with a Reject button on a row.]_
+-->
 
 ---
 
-> **Screenshot needed:**
-> _[Member at /scheduling?tab=my-shifts&view=hours, with at least one outside department and unit seeded. The 'Log a shift with another department' dialog opened from 'Log outside shift' and filled in: a Start, an End set with '+12 hours', the 'Counts as 12 hours' line, a Department and Apparatus chosen, and Position 'Driver'. Use placeholder department names, never a real neighbouring department.]_
+<!-- Screenshot needed:
+_[Member at /scheduling?tab=my-shifts&view=hours, with at least one outside department and unit seeded. The 'Log a shift with another department' dialog opened from 'Log outside shift' and filled in: a Start, an End set with '+12 hours', the 'Counts as 12 hours' line, a Department and Apparatus chosen, and Position 'Driver'. Use placeholder department names, never a real neighbouring department.]_
+-->
 
-> **Screenshot needed:**
-> _[Member at /scheduling?tab=my-shifts&view=hours. The 'Shifts with other departments' section under the Hours table, with two counted entries showing date, time range, hours and apparatus, and one 'Not counted' entry with its Reason line; a card above should read '+N hrs with other departments'.]_
+<!-- Screenshot needed:
+_[Member at /scheduling?tab=my-shifts&view=hours. The 'Shifts with other departments' section under the Hours table, with two counted entries showing date, time range, hours and apparatus, and one 'Not counted' entry with its Reason line; a card above should read '+N hrs with other departments'.]_
+-->
 
 ## Shift Assignments
 
@@ -458,8 +464,9 @@ scheduled end it checks out without asking. **Check Out** under your assignment 
 the shift panel does not ask. A check-out in the first minute now reads "0 hours" rather than a
 bare "hours".
 
-> **Screenshot needed:**
-> _[Shift Check-In at phone width, one hour into a shift → tap Check Out → the "Check out early?" dialog with **Stay checked in** and **Check out now**.]_
+<!-- Screenshot needed:
+_[Shift Check-In at phone width, one hour into a shift → tap Check Out → the "Check out early?" dialog with **Stay checked in** and **Check out now**.]_
+-->
 
 ### Post-Shift Validation
 
@@ -843,8 +850,9 @@ What you are told afterwards _(2026-09-29)_:
 
 ![The shift patterns page — each pattern with its type badge, rotation settings and Generate Shifts action](./images/03-13-shift-patterns.png)
 
-> **Screenshot needed:**
-> _[Scheduling administrator at /scheduling/admin/planning/patterns. A pattern's Generate panel after generating a date range that is already fully on the schedule, with the 'No new shifts. Dates already on the schedule are skipped…' toast visible. Generate the same range once first so the second run creates nothing.]_
+<!-- Screenshot needed:
+_[Scheduling administrator at /scheduling/admin/planning/patterns. A pattern's Generate panel after generating a date range that is already fully on the schedule, with the 'No new shifts. Dates already on the schedule are skipped…' toast visible. Generate the same range once first so the second run creates nothing.]_
+-->
 
 ### Understanding Platoon Rotations
 
@@ -1022,8 +1030,9 @@ logged on other departments' apparatus; below the table sit **Outside
 apparatus staffed** and **Shifts with other departments** — see
 [Shifts with other departments](#shifts-with-other-departments-2026-09-27--09-29).
 
-> **Screenshot needed:**
-> _[Scheduling administrator (scheduling.manage) at /scheduling/admin/reports, Member Hours generated for a range containing outside shifts. Show the Outside Hours column, the 'Outside apparatus staffed' table with its Total row, and the 'Shifts with other departments' list with a Reject button and one 'Not counted' row. Use placeholder department names such as 'Township Fire Company', never a real neighbouring department.]_
+<!-- Screenshot needed:
+_[Scheduling administrator (scheduling.manage) at /scheduling/admin/reports, Member Hours generated for a range containing outside shifts. Show the Outside Hours column, the 'Outside apparatus staffed' table with its Total row, and the 'Shifts with other departments' list with a Reject button and one 'Not counted' row. Use placeholder department names such as 'Township Fire Company', never a real neighbouring department.]_
+-->
 
 ### Compliance Report
 
@@ -1309,8 +1318,9 @@ leaving you on a page that has gone.
   themselves up, exclude the membership type under **Eligibility → Excluded
   from Self-Signup**.
 
-> **Screenshot needed:**
-> _[Scheduling Admin → Settings → Notifications → the "Not in effect yet" notice above the six switches.]_
+<!-- Screenshot needed:
+_[Scheduling Admin → Settings → Notifications → the "Not in effect yet" notice above the six switches.]_
+-->
 
 ### Two things that changed with it
 
@@ -1565,8 +1575,9 @@ Three other empty states stopped claiming success over nothing:
   still get **Create the first shift**. Neither message shows beside a load
   error.
 
-> **Screenshot needed:**
-> _[Scheduling Admin hub on a fresh department with no templates → the "Set up scheduling for your department" card reading "0 of 2 required steps done", its three numbered steps with their links, and the × in the corner.]_
+<!-- Screenshot needed:
+_[Scheduling Admin hub on a fresh department with no templates → the "Set up scheduling for your department" card reading "0 of 2 required steps done", its three numbered steps with their links, and the × in the corner.]_
+-->
 
 ![Shift Planning on its Staffing gaps tab: a date range, the count of short shifts and open seats, and each short shift with its empty seats and an assign control, beside the Templates and Patterns tabs](./images/20-17-staffing-gaps.png)
 
@@ -3425,8 +3436,9 @@ rather than a plain list.
 
 ![The bottom of the Requests tab's first page of time-off requests, with the Load more time-off requests control beneath the twentieth row](./images/03-79-requests-load-more.png)
 
-> **Screenshot needed:**
-> _[Member at /scheduling?tab=requests on the default Pending filter, after their only swap request was approved. It shows 'No swap requests', 'Your swap requests will appear here…' and the line 'Showing pending requests only. Choose All Statuses to see the rest.']_
+<!-- Screenshot needed:
+_[Member at /scheduling?tab=requests on the default Pending filter, after their only swap request was approved. It shows 'No swap requests', 'Your swap requests will appear here…' and the line 'Showing pending requests only. Choose All Statuses to see the rest.']_
+-->
 
 ## August 19–23, 2026 update — equipment checks survive a dead spot
 
@@ -3565,11 +3577,13 @@ Requests tab it reads "→ Offered to _name_".
   the override is noted on the request and in the audit log. Exchange cards on
   the Requests tab name the other member.
 
-> **Screenshot needed:**
-> _[Member at /scheduling?tab=my-shifts, Request swap dialog with Exchange With a Member chosen and the Exchange With dropdown listing two seats. Demo members only.]_
+<!-- Screenshot needed:
+_[Member at /scheduling?tab=my-shifts, Request swap dialog with Exchange With a Member chosen and the Exchange With dropdown listing two seats. Demo members only.]_
+-->
 
-> **Screenshot needed:**
-> _[Scheduling officer at /scheduling?tab=requests: the "Approve without qualification?" confirmation over a pending exchange, with Approve anyway and Keep it pending. Needs a seeded exchange whose member lost a qualification after submission. Do not confirm.]_
+<!-- Screenshot needed:
+_[Scheduling officer at /scheduling?tab=requests: the "Approve without qualification?" confirmation over a pending exchange, with Approve anyway and Keep it pending. Needs a seeded exchange whose member lost a qualification after submission. Do not confirm.]_
+-->
 - **A request goes away when its seat does.** If you leave a shift — withdraw,
   decline, take approved time off, go on leave, or an officer removes or
   reassigns you — any pending swap or offer for that seat is cancelled, and you
@@ -3998,8 +4012,9 @@ officer reviews each report before it is shared with you." where the department
 requires review, and lists what a report holds: the shift itself, your
 officer's feedback, and a place to acknowledge it.
 
-> **Screenshot needed:**
-> _[Scheduling → Shift Reports as a member with no reports → the "Shift reports about you" heading and the "No shift reports yet" empty state with its three cards.]_
+<!-- Screenshot needed:
+_[Scheduling → Shift Reports as a member with no reports → the "Shift reports about you" heading and the "No shift reports yet" empty state with its three cards.]_
+-->
 
 ### What an officer sees
 
@@ -4036,11 +4051,13 @@ In **About me**, cards drop your own name from the title.
 **On a phone** the status badges sit on their own row under the title; they
 used to share it and crush the member's name to "Al…".
 
-> **Screenshot needed:**
-> _[Scheduling → Shift Reports as a training officer → Written by me → "Your reporting summary" with its tiles (including a Drafts to finish → button), the "Reports written per month" chart, and the "Reports you've written (N)" list beginning below.]_
+<!-- Screenshot needed:
+_[Scheduling → Shift Reports as a training officer → Written by me → "Your reporting summary" with its tiles (including a Drafts to finish → button), the "Reports written per month" chart, and the "Reports you've written (N)" list beginning below.]_
+-->
 
-> **Screenshot needed:**
-> _[Scheduling → Shift Reports at 390 px width as an officer → a report card with its status badges on their own row beneath the member's full name.]_
+<!-- Screenshot needed:
+_[Scheduling → Shift Reports at 390 px width as an officer → a report card with its status badges on their own row beneath the member's full name.]_
+-->
 
 ### Links into a view now land on it
 
