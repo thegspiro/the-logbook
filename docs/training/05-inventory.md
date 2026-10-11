@@ -947,6 +947,12 @@ own. You choose the person and what you are doing first, then scan; there is no
 
 If a code matches multiple items (e.g., the same serial number in different categories), all matches are displayed.
 
+**Scanning a shelf label by mistake** _(2026-10-11)_: a storage area's `SA-…`
+label is not an item, so it is not added to the list. The scanner names the
+storage area instead and offers **Open storage area**, which jumps to it on
+**Storage Areas**. Only an exact, whole label matches, so a partial code never
+pulls shelves into the item results.
+
 > **No screenshot — the harness has no camera _(2026-08-12)_.** These shots need a live viewfinder with a code actually being recognised; the capture automation runs headless with no camera device, and a synthetic video stream produces a test pattern rather than a scannable code. The feature works — only the automated screenshot is impossible. See [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#screenshot-harness--camera-viewfinders-cannot-be-photographed-2026-08-12).
 
 > **Hint:** Barcode scanning works best with a device that has a camera. On desktop, you can use a USB barcode scanner, which types the code into the search field — as does typing a name, serial or asset tag by hand, which is the same path. If scanning fails, check that the barcode is clean and well-lit; a specific error message will indicate whether the item was not found or a network error occurred.
@@ -1330,7 +1336,10 @@ barcode; an area that has no barcode yet is given one when it prints.
 and jumps to that area, opening its parents and its item list. The address then
 ends in `?area=…`, so the view can be bookmarked or linked to. Shelf codes are
 read here and by **Put away** and **Check contents** on the same page. The assign
-and return scanner does not read them.
+and return scanner recognises them too _(2026-10-11)_: scanning a shelf label
+there adds nothing to the list and says "SA-0007 is the label for the storage
+area Glove shelf, not an item", with **Open storage area** (for anyone who
+manages inventory) jumping to it here.
 
 <!-- Screenshot needed:
 _[Quartermaster at /inventory/storage-areas/print-labels?ids=<3–4 storage area ids>: the Print Storage Area Labels page with Settings closed, previews showing each area's name, its location/parent trail and its SA- barcode. Seeded areas only; if a printer is registered, show only an RFC 5737 documentation address.]_

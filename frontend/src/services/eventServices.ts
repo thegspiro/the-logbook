@@ -1919,9 +1919,20 @@ export interface ScanLookupResult {
   matched_value: string;
 }
 
+/** A storage area whose label barcode is exactly the scanned code (INV-8). */
+export interface StorageAreaScanHit {
+  id: string;
+  name: string;
+  barcode: string;
+  storage_type: string;
+  location_id?: string | null;
+}
+
 export interface ScanLookupResponse {
   results: ScanLookupResult[];
+  /** Item results only; a shelf label comes back in `storage_areas`. */
   total: number;
+  storage_areas?: StorageAreaScanHit[];
 }
 
 export interface BatchScanItem {

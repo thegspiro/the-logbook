@@ -5223,6 +5223,30 @@ class InventoryService:
 
         return results[:limit]
 
+    async def find_storage_areas_by_code(
+        self, code: str, organization_id: UUID
+    ) -> List[StorageArea]:
+        """Active storage areas whose label barcode is exactly ``code`` (INV-8).
+
+        Exact, case-insensitive match rather than the substring search items
+        get: a shelf label is scanned whole, and a partial match would put
+        every ``SA-…`` shelf into the results of an unrelated item scan.
+        """
+        code = code.strip()
+        if not code:
+            return []
+        result = await self.db.execute(
+            select(StorageArea)
+            .where(
+                StorageArea.organization_id == str(organization_id),
+                StorageArea.is_active.is_(True),
+                func.upper(StorageArea.barcode) == code.upper(),
+            )
+            .order_by(StorageArea.name)
+            .limit(5)
+        )
+        return list(result.scalars().all())
+
     # ============================================
     # Item distribution (scan-to-assign or loan)
     # ============================================

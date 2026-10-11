@@ -1427,11 +1427,26 @@ class ScanLookupResponse(BaseModel):
     matched_value: str
 
 
+class StorageAreaScanHit(BaseModel):
+    """A storage area whose label barcode is exactly the scanned code (INV-8)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    barcode: str
+    storage_type: StorageTypeLiteral
+    location_id: Optional[UUID] = None
+
+
 class ScanLookupListResponse(BaseModel):
     """Response from searching items by partial barcode, serial, or asset tag"""
 
     results: List[ScanLookupResponse]
     total: int
+    # Additive: a shelf label resolves to its storage area rather than to
+    # nothing. ``total`` still counts item results only.
+    storage_areas: List[StorageAreaScanHit] = Field(default_factory=list)
 
 
 class BatchScanItem(BaseModel):

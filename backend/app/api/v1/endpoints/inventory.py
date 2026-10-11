@@ -182,6 +182,7 @@ from app.schemas.inventory import (
     SizeVariantCreateResponse,
     StorageAreaCreate,
     StorageAreaResponse,
+    StorageAreaScanHit,
     StorageAreaUpdate,
     UnassignItemRequest,
     UnlinkedVendorName,
@@ -3361,6 +3362,9 @@ async def lookup_item_by_code(
     """
     Search inventory items by barcode, serial number, asset tag, or name.
 
+    ``storage_areas`` lists active storage areas whose label barcode is exactly
+    the code, so a scanned shelf label resolves to its shelf.
+
     Supports partial matching — type part of a barcode, serial number,
     asset tag, or item name to see all matching items. Searches barcode
     first, then serial number, then asset tag, then name.
@@ -3383,8 +3387,15 @@ async def lookup_item_by_code(
         )
         for item, matched_field, matched_value in matches
     ]
+    areas = await service.find_storage_areas_by_code(
+        code=code, organization_id=current_user.organization_id
+    )
 
-    return ScanLookupListResponse(results=results, total=len(results))
+    return ScanLookupListResponse(
+        results=results,
+        total=len(results),
+        storage_areas=[StorageAreaScanHit.model_validate(area) for area in areas],
+    )
 
 
 @router.post("/distribute-items", response_model=DistributeItemsResponse)
