@@ -992,8 +992,10 @@ All audit events are appended to the tamper-proof SHA-256 hash chain in the `aud
 
 Find these under **Administration → Organization Settings → Audit Log** and
 search for `shift_report`. The search box holds its own draft — it does not
-filter until you press **Apply** — while the severity and category dropdowns
-take effect the moment you change them.
+filter until you press **Enter** or **Apply** — while the severity and category
+dropdowns take effect the moment you change them. While the box holds a term
+that has not been applied, **Apply** is enabled and a "Not applied yet" note
+sits under the box; once the table matches the box, Apply greys out again.
 
 ![The audit log searched for shift_report, listing review and update events](./images/08-54-audit-shift-reports.png)
 

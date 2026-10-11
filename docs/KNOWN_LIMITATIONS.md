@@ -1641,9 +1641,10 @@ field on `ElectionDetailPage` offers **Link a meeting** / **(change)** on a
 draft election, opening a picker of upcoming events and minutes records. There
 is still no list of upcoming meetings with a **Link to Election** button on
 each, and the guide no longer describes one. The **Attendance Dashboard**
-remains unbuilt.
+was built 2026-10-11 (`/minutes/attendance`, owner decision
+meetings-attendance-dashboard).
 
-## Audit Log — The Search Box Needs Apply, The Dropdowns Do Not (2026-08-10)
+## Audit Log — The Search Box Needs Apply, The Dropdowns Do Not (2026-08-10, resolved 2026-10-11)
 
 Two filters on the same bar behave differently. The severity and category
 selects write straight to the query state and refetch on change; the search
@@ -1651,12 +1652,13 @@ input holds a separate draft that only reaches the query when **Apply** is
 pressed. Typing a term and reading the table gives the unfiltered list under a
 filled-in search box, with no cue that the term has not been applied.
 
-Not changed — an unconditionally live search on a table this size is a fetch
-per keystroke, and the Apply button is a deliberate answer to that. Recorded
-because it reads as a bug from the outside, and because it caught this repo's
-own screenshot: the first capture of the shift-report filter showed
-"shift_report" in the box above 1,865 unfiltered rows. Worth revisiting as a
-debounce, or as disabling Apply until the draft differs.
+The Apply step stays — an unconditionally live search on a table this size is
+a fetch per keystroke. **Resolved 2026-10-11 (owner decision: disable Apply
+until the draft differs / show an unapplied cue):** Apply is disabled while the
+box (trimmed) matches the search already applied, and a typed-but-unapplied
+term shows "Not applied yet — press Enter or Apply to search" under the box,
+linked to the input by `aria-describedby`. A filled box above unfiltered rows
+now says so. `AuditLogPage.searchApply.test.tsx` covers it.
 
 ## Prospects — `referral_source` Is Stored But Never Shown (2026-08-10)
 

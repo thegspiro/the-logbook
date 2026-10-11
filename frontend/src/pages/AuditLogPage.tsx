@@ -119,6 +119,12 @@ const AuditLogPage: React.FC = () => {
     setSearch(searchInput.trim());
   };
 
+  // The dropdowns apply on change, but the search box waits for Apply so a
+  // half-typed term does not fire a query per keystroke. Apply is enabled only
+  // while the box holds something other than the search already shown, and
+  // the cue says so, so an unapplied term is never mistaken for the results.
+  const searchUnapplied = searchInput.trim() !== search;
+
   const resetFilters = () => {
     setSearchInput('');
     setSearch('');
@@ -184,19 +190,27 @@ const AuditLogPage: React.FC = () => {
         onSubmit={handleSearchSubmit}
         className="card mb-4 grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-4"
       >
-        <div className="relative">
-          <Search
-            className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
-            aria-hidden="true"
-          />
-          <input
-            type="search"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search username or event type"
-            className={`${inputClass} pl-9`}
-            aria-label="Search audit log"
-          />
+        <div>
+          <div className="relative">
+            <Search
+              className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
+              aria-hidden="true"
+            />
+            <input
+              type="search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search username or event type"
+              className={`${inputClass} pl-9`}
+              aria-label="Search audit log"
+              aria-describedby={searchUnapplied ? 'audit-search-unapplied' : undefined}
+            />
+          </div>
+          {searchUnapplied && (
+            <p id="audit-search-unapplied" role="status" className="text-theme-text-secondary mt-1 text-xs">
+              Not applied yet — press Enter or Apply to search.
+            </p>
+          )}
         </div>
         <select
           value={severity}
@@ -229,7 +243,7 @@ const AuditLogPage: React.FC = () => {
           ))}
         </select>
         <div className="flex items-center gap-2">
-          <button type="submit" className="btn-primary flex-1 text-sm">
+          <button type="submit" disabled={!searchUnapplied} className="btn-primary flex-1 text-sm">
             Apply
           </button>
           <button type="button" onClick={resetFilters} className="btn-secondary btn-md text-sm">
