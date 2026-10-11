@@ -3596,8 +3596,15 @@ include **Check Reports** or the fleet board, which stay with
   against the matching failures — one failed flashlight read as "4 total
   failures".
 
-**Still open** (in `docs/KNOWN_LIMITATIONS.md`): a new or re-scoped checklist
-counts as missed on days before it existed (W46-19).
+**A new checklist is owed from when it was created** _(2026-10-11)_. The
+fleet board, the check log and Check Reports used to count a brand-new
+checklist against every shift in their window, so one written at 9:54 PM made
+the day before a missed check and put the rig in **Needs attention** minutes
+later. Now a shift that was already over when the checklist was created owes
+nothing; a shift still under way at that moment does, because the crew can
+still do it. A shift with no recorded end time owes it from the checklist's
+creation day on your department's calendar. Changing an existing checklist's
+apparatus or type does not restart the clock — it counts from creation.
 
 **Check Reports counts what was expected** _(2026-10-11)_. Each unit under
 **Apparatus Compliance** reads "_n_ of _m_ expected" and, when any were
