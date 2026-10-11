@@ -46,8 +46,14 @@ from app.schemas.training import (
     TrainingRequirementCreate,
     TrainingRequirementUpdate,
 )
+from app.schemas.training_program import (
+    TrainingProgramCreate,
+    TrainingProgramUpdate,
+    TrainingRequirementEnhancedCreate,
+)
 from app.schemas.training_session import TrainingSessionCreate
 from app.services.training_enhancement_service import CompetencyService
+from app.services.training_program_service import TrainingProgramService
 from app.services.training_session_service import TrainingSessionService
 
 pytestmark = pytest.mark.integration
@@ -517,3 +523,161 @@ class TestManualEntryApparatus:
         await _assert_apparatus_ids_in_org(db_session, [own], org_a)
         await _assert_apparatus_ids_in_org(db_session, None, org_a)
         await _assert_apparatus_ids_in_org(db_session, [], org_a)
+
+
+async def _skill(db, org_id: str) -> str:
+    skill = SkillEvaluation(organization_id=org_id, name="SCBA Donning")
+    db.add(skill)
+    await db.flush()
+    return str(skill.id)
+
+
+async def _position(db, org_id: str) -> str:
+    position = Position(
+        organization_id=org_id,
+        name="Probationary",
+        slug=f"probie-{uuid.uuid4().hex[:6]}",
+    )
+    db.add(position)
+    await db.flush()
+    return str(position.id)
+
+
+def _skills_payload(**kw) -> TrainingRequirementCreate:
+    return TrainingRequirementCreate(
+        name="Skill Sign-offs",
+        requirement_type="skills_evaluation",
+        frequency="annual",
+        **kw,
+    )
+
+
+class TestRequirementRequiredSkills:
+    """required_skills holds SkillEvaluation ids, on both the training and the
+    program requirement paths."""
+
+    async def test_endpoint_refuses_foreign_skill_on_create(self, db_session, two_orgs):
+        org_a, user, org_b = two_orgs
+        foreign = await _skill(db_session, org_b)
+
+        with pytest.raises(HTTPException) as exc:
+            await create_requirement(
+                _skills_payload(required_skills=[foreign]), db_session, user
+            )
+
+        assert exc.value.status_code == 400
+        assert await _count(db_session, TrainingRequirement, org_a) == 0
+
+    async def test_endpoint_accepts_own_skill_and_refuses_foreign_on_update(
+        self, db_session, two_orgs
+    ):
+        org_a, user, org_b = two_orgs
+        own = await _skill(db_session, org_a)
+        requirement = await create_requirement(
+            _skills_payload(required_skills=[own]), db_session, user
+        )
+        assert requirement.required_skills == [own]
+
+        foreign = await _skill(db_session, org_b)
+        with pytest.raises(HTTPException) as exc:
+            await update_requirement(
+                uuid.UUID(str(requirement.id)),
+                TrainingRequirementUpdate(required_skills=[foreign]),
+                db_session,
+                user,
+            )
+        assert exc.value.status_code == 400
+
+    async def test_program_service_refuses_foreign_skill(self, db_session, two_orgs):
+        org_a, user, org_b = two_orgs
+        svc = TrainingProgramService(db_session)
+        foreign = await _skill(db_session, org_b)
+        own = await _skill(db_session, org_a)
+
+        refused, error = await svc.create_training_requirement(
+            TrainingRequirementEnhancedCreate(
+                name="Sign-offs",
+                requirement_type="skills_evaluation",
+                frequency="annual",
+                required_skills=[foreign],
+            ),
+            org_a,
+            user.id,
+        )
+        assert refused is None
+        assert error == "Invalid required skill"
+
+        created, error = await svc.create_training_requirement(
+            TrainingRequirementEnhancedCreate(
+                name="Sign-offs",
+                requirement_type="skills_evaluation",
+                frequency="annual",
+                required_skills=[own],
+            ),
+            org_a,
+            user.id,
+        )
+        assert error is None
+        assert created.required_skills == [own]
+
+        updated, error = await svc.update_training_requirement(
+            created.id, org_a, {"required_skills": [foreign]}
+        )
+        assert updated is None
+        assert error == "Invalid required skill"
+
+
+class TestProgramTargetRoles:
+    """target_roles holds Position ids (the schema accepts UUIDs only)."""
+
+    async def test_create_refuses_foreign_and_accepts_own(self, db_session, two_orgs):
+        org_a, user, org_b = two_orgs
+        svc = TrainingProgramService(db_session)
+        foreign = await _position(db_session, org_b)
+        own = await _position(db_session, org_a)
+
+        refused, error = await svc.create_training_program(
+            TrainingProgramCreate(name="Recruit", target_roles=[foreign]),
+            org_a,
+            user.id,
+        )
+        assert refused is None
+        assert error == "Invalid target position"
+
+        program, error = await svc.create_training_program(
+            TrainingProgramCreate(name="Recruit", target_roles=[own]),
+            org_a,
+            user.id,
+        )
+        assert error is None
+        assert program.target_roles == [own]
+
+        updated, error = await svc.update_training_program(
+            program.id, org_a, TrainingProgramUpdate(target_roles=[foreign])
+        )
+        assert updated is None
+        assert error == "Invalid target position"
+
+    async def test_import_keeps_only_this_departments_positions(
+        self, db_session, two_orgs
+    ):
+        org_a, user, org_b = two_orgs
+        foreign = await _position(db_session, org_b)
+        own = await _position(db_session, org_a)
+
+        result = await TrainingProgramService(db_session).import_program_from_json(
+            {
+                "program": {
+                    "name": "Shared Recruit School",
+                    "structure_type": "flexible",
+                    "target_roles": [foreign, own],
+                },
+                "phases": [],
+                "milestones": [],
+            },
+            org_a,
+            user.id,
+        )
+
+        assert result.program is not None
+        assert result.program.target_roles == [own]

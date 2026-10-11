@@ -42,6 +42,7 @@ from app.models.event import Event, EventRSVP
 from app.models.training import (
     DueDateType,
     RequirementType,
+    SkillEvaluation,
     SubmissionStatus,
     TrainingCategory,
     TrainingCourse,
@@ -1609,6 +1610,15 @@ async def create_requirement(
             current_user.organization_id,
             label="training category",
         )
+        # required_skills holds skill-evaluation ids a SKILLS_EVALUATION
+        # requirement is graded against; a foreign one can never be met.
+        await assert_all_in_org(
+            db,
+            SkillEvaluation,
+            requirement.required_skills,
+            current_user.organization_id,
+            label="required skill",
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
@@ -1740,7 +1750,11 @@ async def update_requirement(
             status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found"
         )
 
-    if "required_courses" in updates or "category_ids" in updates:
+    if (
+        "required_courses" in updates
+        or "category_ids" in updates
+        or "required_skills" in updates
+    ):
         try:
             await assert_all_in_org(
                 db,
@@ -1755,6 +1769,13 @@ async def update_requirement(
                 updates.get("category_ids"),
                 current_user.organization_id,
                 label="training category",
+            )
+            await assert_all_in_org(
+                db,
+                SkillEvaluation,
+                updates.get("required_skills"),
+                current_user.organization_id,
+                label="required skill",
             )
         except ValueError as e:
             raise HTTPException(
