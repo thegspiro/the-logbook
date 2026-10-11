@@ -251,6 +251,50 @@ switches on each one that is still exactly as seeded (no creator, the seeded
 description, never saved from the admin screen, with a reviewer). A box an
 administrator has already saved is left as they set it.
 
+### Intake questions _(2026-10-11)_
+
+A box can ask its own questions before the title and details
+(`suggestion_boxes.intake_questions`, edited in the box modal's **Questions**
+section). The answers are stored on the submission as `intake_answers`,
+together with the question labels as they read at the time. Reviewers and the
+submitter both see them.
+
+| Answer type                   | Stored value                             | Can route | Rules a follow-up can use                       |
+| ----------------------------- | ---------------------------------------- | --------- | ----------------------------------------------- |
+| Dropdown, single choice       | option key                               | yes       | is / is not / includes / answered               |
+| Checkboxes                    | option keys, comma-joined                | no        | is / is not / includes / answered               |
+| Short text, long text, date   | as typed                                 | no        | is / is not / includes / answered               |
+| Number, rating (1–5)          | plain decimal / `1`–`5`                  | no        | is / is not / **at least / at most** / answered |
+| Time                          | `HH:MM`, 24-hour, the member's own clock | no        | answered / not answered                         |
+| Pick a member, pick a vehicle | the record's id, plus its name           | no        | answered / not answered                         |
+
+- **Branching** reuses the forms module's rule: `FormsService._visible_field_ids`
+  on the server and `getVisibleFieldIds` in the browser. "At least" and "at
+  most" were added to that shared rule, so forms number fields gained them
+  too. Both sides read a number only as a plain decimal, so they cannot
+  disagree. An answer to a question that has since been hidden is dropped.
+- **Routing:** a dropdown or single-choice option can send the submission to
+  another box in the department. It **moves** the submission
+  (`routed_from_box_id` records where it started), and only the destination's
+  reviewers and watchers are told. A route to a closed box is ignored. A box
+  that requires anonymity keeps it wherever an answer sends the submission.
+- **Picks:** `GET /suggestions/pick-options?kind=member|apparatus` returns the
+  whole list, as id and name only, and the browser filters it. It is never a
+  search request, because the typed name would land in the access log beside
+  the reporter's address.
+  - **Members:** active members of the caller's department. Members already
+    see these names through the forms member lookup.
+  - **Vehicles:** the same list the shift-template picker offers
+    (`app/services/apparatus_options.py`).
+  - **Checking and keeping the answer:** on submit, the id is looked up in
+    the box's own department, and its name is kept with the answer.
+  - **No vehicles on file:** a vehicle question is skipped, so it never
+    blocks the form.
+- **Default question:** the Compliance box starts with a required "What kind
+  of concern is this?". Picking Safety adds "Is anyone at immediate risk?".
+  Migration `4b7e1f0c9a2d` gives it to existing Compliance boxes that are still
+  unedited seeds.
+
 ### Anonymity is structural
 
 | What        | Anonymous submission                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |

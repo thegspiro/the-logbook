@@ -45,6 +45,15 @@ export interface IntakeQuestion {
   conditionValue?: string | null | undefined;
 }
 
+/** Which list a pick question chooses from. Mirrors `PickKind`. */
+export type PickKind = 'member' | 'apparatus';
+
+/** A member or vehicle a pick question offers: an id and a name, nothing more. */
+export interface PickOption {
+  id: string;
+  name: string;
+}
+
 /** One answered question, labels as they read when it was answered. */
 export interface IntakeAnswer {
   questionId: string;

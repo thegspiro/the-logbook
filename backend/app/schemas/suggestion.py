@@ -59,17 +59,40 @@ MAX_INTAKE_LABEL_LENGTH = 200
 MAX_INTAKE_HELP_LENGTH = 500
 
 IntakeQuestionType = Literal[
-    "select", "radio", "checkbox", "text", "textarea", "date", "number"
+    "select",
+    "radio",
+    "checkbox",
+    "text",
+    "textarea",
+    "date",
+    "number",
+    "rating",
+    "time",
+    "member",
+    "apparatus",
 ]
 # The operators the forms module's branching rule understands; the rule itself
 # is shared (FormsService._visible_field_ids), so these must stay a subset.
 IntakeConditionOperator = Literal[
-    "equals", "not_equals", "contains", "not_empty", "is_empty"
+    "equals",
+    "not_equals",
+    "contains",
+    "not_empty",
+    "is_empty",
+    "at_least",
+    "at_most",
 ]
 CHOICE_QUESTION_TYPES = frozenset({"select", "radio", "checkbox"})
 # A checkbox answer can name several options, so it cannot name one box.
 ROUTING_QUESTION_TYPES = frozenset({"select", "radio"})
-_OPERATORS_WITH_VALUE = frozenset({"equals", "not_equals", "contains"})
+# Answered by choosing a record the department keeps; the answer is its id.
+PICK_QUESTION_TYPES = frozenset({"member", "apparatus"})
+# Questions whose answers compare as numbers, for "at least" / "at most".
+NUMERIC_QUESTION_TYPES = frozenset({"number", "rating"})
+RATING_VALUES = ("1", "2", "3", "4", "5")
+_OPERATORS_WITH_VALUE = frozenset(
+    {"equals", "not_equals", "contains", "at_least", "at_most"}
+)
 
 
 def _optional_text(value: Optional[str]) -> Optional[str]:
@@ -285,6 +308,19 @@ class SuggestionBoxPublic(UTCResponseBase):
     # A route only appears when its destination is open; the server routes
     # the same way, so the member's preview matches where it lands.
     intake_questions: List[IntakeQuestion] = Field(default_factory=list)
+
+
+PickKind = Literal["member", "apparatus"]
+
+
+class PickOption(BaseModel):
+    """One member or vehicle a pick question offers: an id and a name, and
+    nothing else — no contact details, rank or status."""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    name: str
 
 
 class SubmissionReceipt(UTCResponseBase):
