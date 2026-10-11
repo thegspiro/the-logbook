@@ -209,7 +209,7 @@ The **Certifies** field on the course form names the qualification a completion
 grants the member, dated from the training record's completion and expiry — it
 decides which shift positions they may fill. Qualifications are recorded only
 this way; see
-[Rank and Qualification Are Different Things](./01-membership.md#rank-and-qualification-are-different-things-2026-08-26).
+[Rank and Qualification Are Different Things](./01-membership.md#rank-and-qualification-are-different-things).
 
 ![Course Library showing course cards grouped by category](./images/02-04-course-library.png)
 

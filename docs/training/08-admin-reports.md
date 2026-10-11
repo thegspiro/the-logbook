@@ -3367,7 +3367,7 @@ only seeded (`is_system`) ones move.
 
 **Also:** `User.rank` is **cleared on every administrative member**, and does
 not come back on downgrade. See
-[Membership Management](./01-membership.md#member-class-and-member-status-changed-2026-08-26).
+[Membership Management](./01-membership.md#member-class-and-member-status).
 
 ## Administration changes _(August 31 – September 6, 2026)_
 

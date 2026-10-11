@@ -107,46 +107,62 @@ export interface FacilityPage {
   limit: number;
 }
 
+/**
+ * Serves both create and update (the service's update methods take a
+ * `Partial` of this), so a field whose column is nullable accepts an explicit
+ * `null` — that is how an edit form clears it, since the backend dumps update
+ * payloads with `exclude_unset` and an omitted key means "leave this alone".
+ *
+ * `maintenance_type_id`, `is_completed` and `is_historic` stay non-nullable on
+ * purpose: their columns are NOT NULL, so a null would be rejected by
+ * `apply_updates` with a 400 rather than clearing anything. A blank one is
+ * omitted instead.
+ */
 export interface MaintenanceRecordCreate {
   facility_id: string;
-  maintenance_type_id?: string;
-  system_id?: string;
-  description?: string;
-  scheduled_date?: string;
-  due_date?: string;
-  completed_date?: string;
-  performed_by?: string;
+  maintenance_type_id?: string | undefined;
+  system_id?: string | null | undefined;
+  description?: string | null | undefined;
+  scheduled_date?: string | null | undefined;
+  due_date?: string | null | undefined;
+  completed_date?: string | null | undefined;
+  performed_by?: string | null | undefined;
   is_completed?: boolean;
-  work_performed?: string;
-  findings?: string;
-  cost?: number;
-  vendor?: string;
-  invoice_number?: string;
-  work_order_number?: string;
-  next_due_date?: string;
-  notes?: string;
+  work_performed?: string | null | undefined;
+  findings?: string | null | undefined;
+  cost?: number | null | undefined;
+  vendor?: string | null | undefined;
+  invoice_number?: string | null | undefined;
+  work_order_number?: string | null | undefined;
+  next_due_date?: string | null | undefined;
+  notes?: string | null | undefined;
   is_historic?: boolean;
-  occurred_date?: string;
-  historic_source?: string;
+  occurred_date?: string | null | undefined;
+  historic_source?: string | null | undefined;
 }
 
+/**
+ * Also serves both create and update — see `MaintenanceRecordCreate`.
+ * `inspection_type`, `title` and `inspection_date` are NOT NULL columns and so
+ * stay required; `corrective_action_completed` is a NOT NULL boolean.
+ */
 export interface InspectionCreate {
   facility_id: string;
   inspection_type: string;
   title: string;
-  description?: string;
+  description?: string | null | undefined;
   inspection_date: string;
-  next_inspection_date?: string;
+  next_inspection_date?: string | null | undefined;
   passed?: boolean | null;
-  inspector_name?: string;
-  inspector_organization?: string;
-  inspector_license_number?: string;
-  inspector_agency?: string;
-  findings?: string;
-  corrective_actions?: string;
-  corrective_action_deadline?: string;
+  inspector_name?: string | null | undefined;
+  inspector_organization?: string | null | undefined;
+  inspector_license_number?: string | null | undefined;
+  inspector_agency?: string | null | undefined;
+  findings?: string | null | undefined;
+  corrective_actions?: string | null | undefined;
+  corrective_action_deadline?: string | null | undefined;
   corrective_action_completed?: boolean;
-  notes?: string;
+  notes?: string | null | undefined;
 }
 
 export interface RoomCreate {
