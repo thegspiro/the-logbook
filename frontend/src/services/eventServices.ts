@@ -14,6 +14,7 @@ import type {
   EventListItem,
   EventStats,
   EventUpdate,
+  ExternalAttendee,
   RSVP,
   RSVPCreate,
 } from '../types/event';
@@ -602,8 +603,8 @@ export const eventService = {
   },
 
   // External Attendees
-  async getExternalAttendees(eventId: string): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get<Array<Record<string, unknown>>>(`/events/${eventId}/external-attendees`);
+  async getExternalAttendees(eventId: string): Promise<ExternalAttendee[]> {
+    const response = await api.get<ExternalAttendee[]>(`/events/${eventId}/external-attendees`);
     return response.data;
   },
   async addExternalAttendee(eventId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
