@@ -132,6 +132,27 @@ _SENSITIVE_READ_PERMISSIONS = (
 )
 
 
+async def _is_own_general_upload(
+    documents: DocumentsService, document, current_user: User, organization_id
+) -> bool:
+    """Whether *document* is the caller's own upload sitting in General.
+
+    The facility Files tab uploads through the Documents module with no folder
+    and then files the reference here, which moves the document behind the
+    facility's rights. An upload with no folder now lands in General
+    Documents rather than staying unfiled, so that upload has to be
+    recognised here too or every facility file would stay readable org-wide.
+    Limited to the caller's own upload: moving it is a write the caller could
+    already make through PATCH /documents, and a shared library document
+    someone else filed is never pulled behind facility rights by being
+    referenced.
+    """
+    if document.folder_id is None or str(document.uploaded_by) != str(current_user.id):
+        return False
+    general = await documents.general_root(organization_id)
+    return general is not None and str(document.folder_id) == str(general.id)
+
+
 async def _validate_shared_document_reference(
     db: AsyncSession,
     file_path: str,
@@ -243,7 +264,9 @@ async def _validate_shared_document_reference(
         # Deliberately indistinguishable from a missing same-org document.
         raise HTTPException(status_code=404, detail="Document not found")
 
-    if document.folder_id is None:
+    if document.folder_id is None or await _is_own_general_upload(
+        documents, document, current_user, organization_id
+    ):
         document.folder_id = folder.id
         # FAC-31: flush, never commit -- a commit here would release the
         # document's FOR UPDATE lock before the caller has actually filed
