@@ -4732,6 +4732,16 @@ class FinanceService:
         if not dues:
             raise ValueError("Member dues record not found")
 
+        # SoD (FIN-4 / OPS-8): settling dues is a money movement, so the person
+        # recording it must not be the member who owes it -- the same rule
+        # waive_dues applies to this record and StorefrontService.record_payment
+        # applies to an order. The owner chose this same-person guard over a
+        # separate disbursement permission. recorded_by is Optional so an
+        # unattributed reconciliation path passes through untouched.
+        assert_different_person(
+            recorded_by, dues.user_id, action="record a payment on", record="dues"
+        )
+
         # FIN-6: a record that is not owing must not be silently converted into
         # one that was paid. Recording a payment here used to recompute status
         # to PAID/PARTIAL while leaving waived_by / waived_at / waive_reason
