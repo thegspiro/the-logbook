@@ -5,7 +5,7 @@ Business logic for fundraising campaigns, donors, donations, pledges,
 and fundraising events. Provides dashboard aggregation and reporting.
 """
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Dict, List, Optional
 
@@ -27,6 +27,7 @@ from app.models.grant import (
 from app.utils.model_updates import apply_updates
 from app.utils.org_timezone import (
     local_date,
+    resolve_local_range_utc,
     resolve_org_today,
     resolve_scheduling_timezone,
 )
@@ -244,21 +245,16 @@ class FundraisingService:
             query = query.where(Donation.campaign_id == campaign_id)
         if donor_id:
             query = query.where(Donation.donor_id == donor_id)
-        if start_date:
-            query = query.where(
-                Donation.donation_date
-                >= datetime.combine(
-                    start_date, datetime.min.time(), tzinfo=timezone.utc
-                )
-            )
-        if end_date:
-            # donation_date is DateTime; a bare date compares as that date's
-            # midnight, silently excluding donations recorded later the same
-            # day. Match reports_service.py's end-of-day boundary pattern.
-            query = query.where(
-                Donation.donation_date
-                <= datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
-            )
+        # donation_date is a timestamp, displayed in the department's
+        # timezone: bound it at the department's midnights, through the whole
+        # end date (GF-24, GF-24a).
+        range_start, range_end = await resolve_local_range_utc(
+            self.db, organization_id, start_date, end_date
+        )
+        if range_start:
+            query = query.where(Donation.donation_date >= range_start)
+        if range_end:
+            query = query.where(Donation.donation_date < range_end)
         # Tie-broken by id: date-only donations recorded on the same day
         # collide on donation_date — see list_campaigns for why an unbroken
         # ORDER BY breaks pagination.
@@ -759,21 +755,16 @@ class FundraisingService:
             Donation.organization_id == organization_id,
             Donation.payment_status == PaymentStatus.COMPLETED.value,
         )
-        if start_date:
-            query = query.where(
-                Donation.donation_date
-                >= datetime.combine(
-                    start_date, datetime.min.time(), tzinfo=timezone.utc
-                )
-            )
-        if end_date:
-            # donation_date is DateTime; a bare date compares as that date's
-            # midnight, silently excluding donations recorded later the same
-            # day. Match reports_service.py's end-of-day boundary pattern.
-            query = query.where(
-                Donation.donation_date
-                <= datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
-            )
+        # donation_date is a timestamp, displayed in the department's
+        # timezone: bound it at the department's midnights, through the whole
+        # end date (GF-24, GF-24a).
+        range_start, range_end = await resolve_local_range_utc(
+            self.db, organization_id, start_date, end_date
+        )
+        if range_start:
+            query = query.where(Donation.donation_date >= range_start)
+        if range_end:
+            query = query.where(Donation.donation_date < range_end)
         result = await self.db.execute(query)
         donations = list(result.scalars().all())
 

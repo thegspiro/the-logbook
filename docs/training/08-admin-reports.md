@@ -608,8 +608,10 @@ reporting period set at the top of the page; the others are a snapshot of now.
 **"Today" in a report is the department's date** _(2026-09-26)_ — the
 certification report's expiring/expired flags, apparatus inspection due dates
 and the call-volume year-to-date default no longer run a day ahead in the
-evening. A custom range's end date is still read as a UTC day boundary
-(see [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md), GF-24a).
+evening. Since 2026-10-11 a custom range is read the same way: "June 1 to
+June 15" means midnight June 1 to the end of June 15 on the department's own
+clock, in every report and in the grant and fundraising reports. A department
+with no timezone set reads its ranges in UTC.
 
 ### Pipeline Overview Report (2026-03-15)
 
