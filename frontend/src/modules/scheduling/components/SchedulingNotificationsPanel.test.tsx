@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockGetSettings = vi.fn();
@@ -76,5 +76,34 @@ describe('SchedulingNotificationsPanel', () => {
     await user.click(await screen.findByRole('checkbox', { name: 'Enable decline/drop notifications' }));
 
     await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Service unavailable'));
+  });
+});
+
+describe('SchedulingNotificationsPanel — start-of-shift reminder email default', () => {
+  beforeEach(() => {
+    mockGetSettings.mockReset();
+    mockUpdateSettings.mockReset();
+    mockUpdateSettings.mockResolvedValue({});
+  });
+
+  const reminderEmailBox = async () => {
+    const section = await screen.findByRole('region', { name: 'Start-of-Shift Reminders' });
+    return within(section).getByRole('checkbox', { name: 'Also send email notification' });
+  };
+
+  // The reminder sender emails unless send_email is explicitly false, so a
+  // department that never saved this panel must see the box ticked.
+  it('shows reminder emails as on when the department never saved the panel', async () => {
+    mockGetSettings.mockResolvedValue({});
+    render(<SchedulingNotificationsPanel />);
+
+    expect(await reminderEmailBox()).toBeChecked();
+  });
+
+  it('shows reminder emails as off once the department turned them off', async () => {
+    mockGetSettings.mockResolvedValue({ shift_reminders: { enabled: true, send_email: false } });
+    render(<SchedulingNotificationsPanel />);
+
+    await waitFor(async () => expect(await reminderEmailBox()).not.toBeChecked());
   });
 });

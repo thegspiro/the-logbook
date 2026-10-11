@@ -26,6 +26,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
     PaginationParams,
+    _collect_user_permissions,
+    _has_permission,
     get_current_user,
     require_permission,
 )
@@ -1650,6 +1652,16 @@ async def _referenced_document_id(
             ),
         )
     if document.folder_id is None:
+        # Re-filing moves the document behind apparatus rights, which is a
+        # write to it: reading it is not enough, or anyone with apparatus.edit
+        # could pull a document they may only view into a vehicle's folder.
+        # An unfiled document has no folder to grant that write, so it takes
+        # the library's own right (can_access_document admits any reader).
+        if not _has_permission("documents.manage", _collect_user_permissions(user)):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to file this document",
+            )
         folder = await _filing_folder(db, apparatus, user, sub_folder)
         document.folder_id = folder.id
         await db.flush()

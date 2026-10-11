@@ -516,8 +516,13 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                         Require officer shift completion report
                       </span>
                       <p className="text-theme-text-muted text-xs">
-                        Officers must file a shift completion report before the shift can be finalized. The report
-                        covers staffing, call response, and training observations.
+                        Tells officers, in the post-shift reminder, that a shift completion report is required. The
+                        report covers staffing, call response, and training observations.
+                      </p>
+                      {/* Pitfall #19: the reminder text is this setting's only reader — close-out never checks for a
+                          report — so the screen must not promise a block that does not happen. */}
+                      <p className="text-theme-alert-warning-text mt-1 text-xs font-medium">
+                        Not in effect yet — a shift can still be closed out without a report.
                       </p>
                     </div>
                   </label>
@@ -868,6 +873,10 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                     <option value="captain">Captain</option>
                     <option value="chief">Chief</option>
                   </select>
+                  {/* Pitfall #19: nothing reads report_review_role; approving a report is gated on training.manage. */}
+                  <p className="text-theme-alert-warning-text mt-1 text-xs font-medium">
+                    Not in effect yet — anyone who can manage training can review reports, whatever is chosen here.
+                  </p>
                 </div>
               )}
             </div>

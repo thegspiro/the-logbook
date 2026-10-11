@@ -3311,7 +3311,7 @@ computer never sees your values.
 | **Enforce EVOC for drivers**                              | On unless you turn it off. See [Position Eligibility](#position-eligibility)                                                                                                                                   |
 | **Restrict check-in to assigned members**                 | Only members on a shift's roster can check in to it (open shifts are exempt)                                                                                                                                   |
 | **Allow pre-shift work**                                  | Lets a member time prep work, such as an early equipment check, before check-in opens. An officer approves the time before it counts                                                                           |
-| **Department Defaults**                                   | **Default Shift Duration (hours)**, **Default Min Staffing** and **Overtime Threshold (hours/week)**. These are shown as your department's defaults on Shift Planning                                           |
+| **Department Defaults**                                   | **Default Shift Duration (hours)**, **Default Min Staffing** and **Overtime Threshold (hours/week)**. These are shown as your department's defaults on Shift Planning. The card is marked **Not in effect yet**: new shifts and templates don't use them, and no overtime warning reads the threshold |
 | **Position Names**                                        | Turn built-in seats on or off, and add your own under **Add Custom Position**. See [Your department's own seats](#your-departments-own-seats)                                                                  |
 
 ### What the settings do not do
@@ -3359,8 +3359,9 @@ to complete.
 ![Scheduling notification settings showing the start-of-shift reminder options](./images/03-39-notifications-reminders.png)
 
 > **What if nobody has ever saved the reminder settings?** Reminders are then
-> emailed as well, even though **Also send email notification** shows
-> unticked. Tick and untick the box once to save the choice you want.
+> emailed as well, and **Also send email notification** shows ticked. Untick
+> it to stop the emails. The change saves at once, and the in-app reminder
+> still goes out.
 
 ### Scheduling Administration
 
