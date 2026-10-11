@@ -1599,14 +1599,22 @@ are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
    adds "A shift completion report is required before this shift can be
    finalized." `finalize_shift` (`scheduling_service.py`) never checks for a
    report, so a shift closes out without one despite the reminder's claim.
+   **Labelled (2026-10-11):** the setting's description now says it changes
+   the reminder, and it shows "Not in effect yet — a shift can still be closed
+   out without a report." Enforcing it at close-out is still open.
 2. **"Reviewer role"** (Shift Reports settings). Saved as
    `report_review_role` in the training module config and read by nothing.
    Approving reports is gated on `training.manage` alone
    (`shift_completion.py`), so changing the role changes nothing.
+   **Labelled (2026-10-11):** both places it is chosen (Shift Reports settings
+   and the My Training settings page) show "Not in effect yet — anyone who can
+   manage training can review reports, whatever is chosen here." Wiring it is
+   still open.
 3. **Department Defaults** (default duration, minimum staffing, overtime
    threshold). Stored and shown on the settings summary, but nothing applies
    them: new shifts and templates do not pick them up, and no overtime warning
-   reads the threshold.
+   reads the threshold. **Labelled (2026-10-11):** the card shows "Not in
+   effect yet". Applying the defaults is still open.
 4. **Start-of-shift reminder emails default on in the backend, off on the
    screen.** `scheduled_tasks.py` (~line 2358) reads
    `reminder_cfg.get("send_email", True)` ("sent by default"); the

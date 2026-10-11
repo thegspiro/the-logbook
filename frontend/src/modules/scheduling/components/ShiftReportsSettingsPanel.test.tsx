@@ -179,3 +179,48 @@ describe('ShiftReportsSettingsPanel — call types', () => {
     expect(sent.shift_review_default_skills).toEqual(['Bravo', 'Charlie']);
   });
 });
+
+/**
+ * CLAUDE.md pitfall #19: a setting with no reader must say so. These two are
+ * saved but nothing acts on them — close-out never checks for a report, and
+ * approving a report is gated on managing training, not on the chosen role —
+ * so the screen labels them rather than promising an effect.
+ */
+describe('ShiftReportsSettingsPanel — settings that are not in effect yet', () => {
+  it('says a shift can still be closed out without the required report', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftReportsSettingsPanel />);
+    const tabs = await screen.findAllByRole('button', { name: /Filing & Validation/ });
+    await user.click(tabs[0] as HTMLElement);
+
+    expect(await screen.findByText(/Require officer shift completion report/)).toBeInTheDocument();
+    expect(
+      screen.getByText('Not in effect yet — a shift can still be closed out without a report.')
+    ).toBeInTheDocument();
+  });
+
+  it('says the reviewer role does not limit who can review', async () => {
+    mockGetConfig.mockReset();
+    mockGetConfig.mockResolvedValue({
+      shift_reports_enabled: true,
+      report_review_required: true,
+      report_review_role: 'captain',
+      shift_review_default_skills: [],
+      shift_review_default_tasks: [],
+      apparatus_type_skills: {},
+      apparatus_type_tasks: {},
+      rating_scale_labels: {},
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftReportsSettingsPanel />);
+    const tabs = await screen.findAllByRole('button', { name: /Review Workflow/ });
+    await user.click(tabs[0] as HTMLElement);
+
+    expect(await screen.findByText('Reviewer role')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Not in effect yet — anyone who can manage training can review reports, whatever is chosen here.'
+      )
+    ).toBeInTheDocument();
+  });
+});
