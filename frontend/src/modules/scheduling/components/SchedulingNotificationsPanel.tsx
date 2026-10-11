@@ -363,7 +363,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                       />
                       <button
                         onClick={declineCc.add}
-                        className="rounded-lg bg-violet-600 px-3 py-1 text-xs text-white hover:bg-violet-700"
+                        className="touch:min-h-11 rounded-lg bg-violet-600 px-3 py-1 text-xs text-white hover:bg-violet-700"
                       >
                         Add
                       </button>
@@ -459,7 +459,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                       />
                       <button
                         onClick={assignCc.add}
-                        className="rounded-lg bg-red-800 px-3 py-1 text-xs text-white hover:bg-red-900"
+                        className="touch:min-h-11 rounded-lg bg-red-800 px-3 py-1 text-xs text-white hover:bg-red-900"
                       >
                         Add
                       </button>
@@ -593,7 +593,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                       />
                       <button
                         onClick={reminderCc.add}
-                        className="rounded-lg bg-green-700 px-3 py-1 text-xs text-white hover:bg-green-800"
+                        className="touch:min-h-11 rounded-lg bg-green-700 px-3 py-1 text-xs text-white hover:bg-green-800"
                       >
                         Add
                       </button>
@@ -734,7 +734,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                       />
                       <button
                         onClick={equipCc.add}
-                        className="rounded-lg bg-red-800 px-3 py-1 text-xs text-white hover:bg-red-900"
+                        className="touch:min-h-11 rounded-lg bg-red-800 px-3 py-1 text-xs text-white hover:bg-red-900"
                       >
                         Add
                       </button>
