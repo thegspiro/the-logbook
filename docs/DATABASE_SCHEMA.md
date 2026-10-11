@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**303 tables · 4998 columns · 1008 foreign keys**
+**303 tables · 5001 columns · 1010 foreign keys**
 
 ---
 
@@ -676,7 +676,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`training_records`](#training_records) | `TrainingRecord` | 42 | Training Record model |
 | [`training_requirements`](#training_requirements) | `TrainingRequirement` | 47 | Training Requirement model |
 | [`training_sessions`](#training_sessions) | `TrainingSession` | 30 | Training Session model |
-| [`training_submissions`](#training_submissions) | `TrainingSubmission` | 25 | Training Submission model |
+| [`training_submissions`](#training_submissions) | `TrainingSubmission` | 28 | Training Submission model |
 | [`training_waivers`](#training_waivers) | `TrainingWaiver` | 13 | Training Waiver / Leave of Absence |
 | [`xapi_statements`](#xapi_statements) | `XAPIStatement` | 27 | xAPI (Experience API / Tin Can) Statement model |
 
@@ -10153,6 +10153,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `reviewed_at` | DATETIME | yes |  |  |  |
 | `reviewer_notes` | TEXT | yes |  |  |  |
 | `training_record_id` | VARCHAR(36) | yes | FK |  | → `training_records.id` ON DELETE SET NULL |
+| `recorded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `crew_batch_id` | VARCHAR(36) | yes | IDX |  |  |
+| `shift_id` | VARCHAR(36) | yes | FK |  | → `shifts.id` ON DELETE SET NULL |
 | `submitted_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -10161,6 +10164,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_submission_date` (`completion_date`)
 - `idx_submission_org_status` (`organization_id`, `status`)
 - `idx_submission_user` (`submitted_by`, `status`)
+- `ix_training_submissions_crew_batch_id` (`crew_batch_id`)
 - `ix_training_submissions_status` (`status`)
 
 ### `training_waivers`
@@ -10555,7 +10559,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (370 references)
+### → `users` (371 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10916,6 +10920,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_sessions` | `created_by` | SET NULL | yes |
 | `training_sessions` | `finalized_by` | SET NULL | yes |
 | `training_sessions` | `instructor_id` | SET NULL | yes |
+| `training_submissions` | `recorded_by` | SET NULL | yes |
 | `training_submissions` | `reviewed_by` | SET NULL | yes |
 | `training_submissions` | `submitted_by` | CASCADE | no |
 | `training_waivers` | `granted_by` | SET NULL | yes |
@@ -11292,6 +11297,22 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `storage_areas` | `location_id` | SET NULL | yes |
 | `training_records` | `location_id` | SET NULL | yes |
 
+### → `shifts` (11 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `event_requests` | `staffing_shift_id` | SET NULL | yes |
+| `org_call_responses` | `shift_id` | SET NULL | yes |
+| `shift_assignments` | `shift_id` | CASCADE | no |
+| `shift_attendance` | `shift_id` | CASCADE | no |
+| `shift_calls` | `shift_id` | CASCADE | no |
+| `shift_completion_reports` | `shift_id` | SET NULL | yes |
+| `shift_equipment_checks` | `shift_id` | SET NULL | yes |
+| `shift_pre_work_sessions` | `shift_id` | CASCADE | no |
+| `shift_swap_requests` | `offering_shift_id` | CASCADE | no |
+| `shift_swap_requests` | `requesting_shift_id` | SET NULL | yes |
+| `training_submissions` | `shift_id` | SET NULL | yes |
+
 ### → `positions` (10 references)
 
 | From table | Column | On delete | Nullable |
@@ -11306,21 +11327,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `suggestion_box_watchers` | `position_id` | CASCADE | yes |
 | `suggestion_forwards` | `position_id` | CASCADE | yes |
 | `user_positions` | `position_id` | CASCADE | no |
-
-### → `shifts` (10 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `event_requests` | `staffing_shift_id` | SET NULL | yes |
-| `org_call_responses` | `shift_id` | SET NULL | yes |
-| `shift_assignments` | `shift_id` | CASCADE | no |
-| `shift_attendance` | `shift_id` | CASCADE | no |
-| `shift_calls` | `shift_id` | CASCADE | no |
-| `shift_completion_reports` | `shift_id` | SET NULL | yes |
-| `shift_equipment_checks` | `shift_id` | SET NULL | yes |
-| `shift_pre_work_sessions` | `shift_id` | CASCADE | no |
-| `shift_swap_requests` | `offering_shift_id` | CASCADE | no |
-| `shift_swap_requests` | `requesting_shift_id` | SET NULL | yes |
 
 ### → `training_courses` (10 references)
 

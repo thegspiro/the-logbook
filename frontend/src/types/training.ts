@@ -1764,8 +1764,58 @@ export interface TrainingSubmission {
   reviewed_at?: string;
   reviewer_notes?: string;
   training_record_id?: string;
+  /** Set only on an entry a shift officer recorded for the crew. */
+  recorded_by?: string | null;
+  recorder_name?: string | null;
+  crew_batch_id?: string | null;
+  shift_id?: string | null;
   submitted_at: string;
   updated_at: string;
+}
+
+/** A drill a shift officer records for every member present. */
+export interface CrewTrainingCreate {
+  course_name: string;
+  training_type: TrainingType;
+  description?: string | undefined;
+  completion_date: string;
+  /** "HH:MM" */
+  start_time?: string | undefined;
+  hours_completed: number;
+  instructor?: string | undefined;
+  location?: string | undefined;
+  category_id?: string | undefined;
+  shift_id?: string | undefined;
+  member_ids: string[];
+}
+
+export interface CrewTrainingResult {
+  crew_batch_id: string;
+  submissions: TrainingSubmission[];
+}
+
+export interface CrewMemberOption {
+  id: string;
+  name: string;
+}
+
+export interface CrewRecordingContext {
+  can_record: boolean;
+  members: CrewMemberOption[];
+}
+
+export interface CrewShiftOption {
+  id: string;
+  start_time: string;
+  end_time?: string | null;
+  platoon?: string | null;
+  shift_officer_name?: string | null;
+  member_ids: string[];
+}
+
+export interface CrewBatchApproveResult {
+  approved: number;
+  skipped: { submission_id: string; member_name?: string | null; reason: string }[];
 }
 
 export interface TrainingSubmissionCreate {
