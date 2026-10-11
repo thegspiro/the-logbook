@@ -998,6 +998,15 @@ RSVP directly from the events list without opening the event detail page — cli
 
 For recurring events, you can RSVP to **all events in the series** at once instead of responding to each individually.
 
+**Sessions ahead of your training phase** _(2026-10-11)_. If you answer
+**Going** for a whole series and some of its sessions are training-program
+sessions in a phase ahead of yours, you now get the same warning a single RSVP
+gives — once, for the series. **Sessions ahead of your phase** lists every such
+session by name and date. **RSVP to series** answers Going for all of them;
+**Not now** writes nothing, so you can RSVP to the sessions you are ready for
+one at a time instead. Before this release a series RSVP skipped the warning
+entirely.
+
 ### Waitlist System
 
 When an event reaches its capacity limit:

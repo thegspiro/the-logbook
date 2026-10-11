@@ -2207,6 +2207,20 @@ no per-event analytics panel is built.
 
 ## Events — Series RSVP Never Shows the Training Phase-Gate Warning (2026-09-04, security review EV-23)
 
+> ✅ **Resolved (2026-10-11), as the owner chose: list every ahead-of-phase
+> occurrence in the 409.** `POST /events/{id}/rsvp-series` now takes
+> `override` (query, default false). For a **going** response it evaluates
+> the phase gate on every future occurrence before writing anything, and if
+> any is ahead of the member's phase answers 409 with
+> `{"warning_type": "phase_gate", "message": "N sessions are in this series
+ahead of your current training phase.", "occurrences": [{event_id, title,
+start_datetime (UTC ISO), message}, ...]}`. The RSVP form lists those
+> sessions by name and date in the department's timezone, and **RSVP to
+> series** retries with `override=true`; **Not now** leaves nothing written.
+> The per-occurrence write still passes `override=True`, now because the gate
+> has already been evaluated for the whole series. The text below is the
+> original finding.
+
 An individual RSVP to a training session ahead of the member's current
 pipeline phase gets a soft, overridable 409 warning that the member must
 confirm before it proceeds. `rsvp_to_series` (rewritten 2026-09 to delegate

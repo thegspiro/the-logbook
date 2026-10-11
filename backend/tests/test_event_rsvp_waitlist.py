@@ -576,6 +576,8 @@ class TestRsvpToSeries:
         db.rollback = AsyncMock()
         svc = EventService(db)
         svc.create_or_update_rsvp = AsyncMock(side_effect=results)
+        # No occurrence is ahead of phase unless a test says otherwise.
+        svc._evaluate_session_phase_warning = AsyncMock(return_value=None)
         return svc
 
     def _events(self, count):
@@ -597,15 +599,78 @@ class TestRsvpToSeries:
         assert count == 3
         assert svc.create_or_update_rsvp.await_count == 3
 
-    async def test_the_phase_gate_is_overridden_for_the_series(self):
-        """The member confirmed the warning once; there is no way to re-prompt
-        them per occurrence."""
+    async def test_the_per_occurrence_gate_is_not_re_run(self):
+        """The series-level check already ran (or was confirmed); re-checking
+        per occurrence would abort the batch half-way through."""
         events = self._events(1)
         svc = self._svc(events, [(SimpleNamespace(), None)])
 
         await svc.rsvp_to_series("parent-1", "u1", "org-1", RSVPCreate(status="going"))
 
         assert svc.create_or_update_rsvp.await_args.kwargs["override"] is True
+
+    async def test_every_ahead_of_phase_occurrence_is_listed_and_nothing_written(
+        self,
+    ):
+        """EV-23 (owner decision): list every ahead-of-phase occurrence."""
+        from app.services.event_service import SeriesPhaseGateWarning
+
+        events = self._events(3)
+        events[0].title = "Phase 1 drill"
+        events[1].title = "Phase 3 live burn"
+        events[2].title = "Phase 4 RIT"
+        for ev, day in zip(events, (1, 8, 15)):
+            ev.start_datetime = datetime(2026, 11, day, 23, 0)
+        svc = self._svc(events, [(SimpleNamespace(), None)] * 3)
+        svc._evaluate_session_phase_warning = AsyncMock(
+            side_effect=[None, "Phase 3 is ahead", "Phase 4 is ahead"]
+        )
+
+        try:
+            await svc.rsvp_to_series(
+                "parent-1", "u1", "org-1", RSVPCreate(status="going")
+            )
+        except SeriesPhaseGateWarning as warning:
+            occurrences = warning.occurrences
+        else:
+            raise AssertionError("expected a phase-gate warning")
+
+        assert [o["event_id"] for o in occurrences] == ["e1", "e2"]
+        assert [o["title"] for o in occurrences] == [
+            "Phase 3 live burn",
+            "Phase 4 RIT",
+        ]
+        assert [o["message"] for o in occurrences] == [
+            "Phase 3 is ahead",
+            "Phase 4 is ahead",
+        ]
+        # Stored UTC, labelled as UTC so the client renders it in local time.
+        assert occurrences[0]["start_datetime"] == "2026-11-08T23:00:00+00:00"
+        svc.create_or_update_rsvp.assert_not_awaited()
+
+    async def test_override_proceeds_without_checking(self):
+        events = self._events(2)
+        svc = self._svc(events, [(SimpleNamespace(), None)] * 2)
+        svc._evaluate_session_phase_warning = AsyncMock(return_value="ahead")
+
+        count = await svc.rsvp_to_series(
+            "parent-1", "u1", "org-1", RSVPCreate(status="going"), override=True
+        )
+
+        assert count == 2
+        svc._evaluate_session_phase_warning.assert_not_awaited()
+
+    async def test_declining_a_series_is_never_gated(self):
+        events = self._events(1)
+        svc = self._svc(events, [(SimpleNamespace(), None)])
+        svc._evaluate_session_phase_warning = AsyncMock(return_value="ahead")
+
+        count = await svc.rsvp_to_series(
+            "parent-1", "u1", "org-1", RSVPCreate(status="not_going")
+        )
+
+        assert count == 1
+        svc._evaluate_session_phase_warning.assert_not_awaited()
 
     async def test_a_refused_occurrence_is_skipped_not_fatal(self):
         """Full, finalized, guests-not-allowed — the member is answering for the

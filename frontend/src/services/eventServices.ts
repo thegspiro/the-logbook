@@ -528,10 +528,21 @@ export const eventService = {
   /**
    * RSVP to all future events in a recurring series
    */
-  async rsvpToSeries(parentEventId: string, rsvpData: RSVPCreate): Promise<{ message: string; rsvp_count: number }> {
+  /**
+   * RSVP to every future occurrence of a series. A "going" response to a
+   * series with training sessions ahead of the member's phase is a 409 listing
+   * them (see getSeriesPhaseGateWarning); repeat with `override` once the
+   * member has confirmed.
+   */
+  async rsvpToSeries(
+    parentEventId: string,
+    rsvpData: RSVPCreate,
+    override = false
+  ): Promise<{ message: string; rsvp_count: number }> {
     const response = await api.post<{ message: string; rsvp_count: number }>(
       `/events/${parentEventId}/rsvp-series`,
-      rsvpData
+      rsvpData,
+      override ? { params: { override: true } } : undefined
     );
     return response.data;
   },

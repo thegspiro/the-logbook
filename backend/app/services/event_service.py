@@ -124,6 +124,24 @@ def resolve_attendee_visibility(
 # turns this into a 409 the client can override (proceed anyway).
 PHASE_GATE_PREFIX = "PHASE_GATE::"
 
+
+class SeriesPhaseGateWarning(Exception):
+    """A series RSVP includes sessions ahead of the member's training phase.
+
+    EV-23 (owner decision): the series path warns like the single-event path
+    does, listing *every* ahead-of-phase occurrence so the member sees which
+    sessions they are confirming. ``occurrences`` is a list of
+    ``{"event_id", "title", "start_datetime", "message"}`` with the start as a
+    UTC ISO-8601 string. Nothing has been written when this is raised; the
+    endpoint turns it into a 409 the client confirms and retries with
+    ``override``.
+    """
+
+    def __init__(self, occurrences: List[Dict[str, Any]]):
+        super().__init__(f"{len(occurrences)} series session(s) ahead of phase")
+        self.occurrences = occurrences
+
+
 # Sentinel error prefix for the attendance lock. Finalizing an event closes its
 # attendance: the durations it wrote feed admin hours, training records and
 # compliance totals, so every write that could change those numbers is refused
@@ -2276,9 +2294,16 @@ class EventService:
         user_id: UUID,
         organization_id: UUID,
         rsvp_data: RSVPCreate,
+        override: bool = False,
     ) -> int:
         """
         RSVP to all future, non-cancelled events in a recurring series.
+
+        A "going" response is first checked against the training-pipeline
+        phase gate for every occurrence; if any is ahead of the member's
+        phase, :class:`SeriesPhaseGateWarning` lists them all and nothing is
+        written. ``override=True`` (the member confirmed that list) skips the
+        check, as the single-event path's ``override`` does.
 
         Each occurrence goes through :meth:`create_or_update_rsvp` rather than
         being written here directly. This used to hand-roll the insert, which
@@ -2310,9 +2335,33 @@ class EventService:
                     Event.recurrence_parent_id == str(parent_event_id),
                 )
             )
+            .order_by(Event.start_datetime.asc(), Event.id.asc())
         )
         series_events = result.scalars().all()
         event_ids = [event.id for event in series_events]
+
+        # EV-23: the same soft gate an individual RSVP applies, but evaluated
+        # across the whole series before anything is written, so the member
+        # confirms once against the full list rather than per occurrence.
+        if not override and rsvp_data.status == "going":
+            ahead: List[Dict[str, Any]] = []
+            for event in series_events:
+                warning = await self._evaluate_session_phase_warning(event, user_id)
+                if not warning:
+                    continue
+                start = event.start_datetime
+                if start is not None and start.tzinfo is None:
+                    start = start.replace(tzinfo=dt_timezone.utc)
+                ahead.append(
+                    {
+                        "event_id": str(event.id),
+                        "title": event.title,
+                        "start_datetime": start.isoformat() if start else None,
+                        "message": warning,
+                    }
+                )
+            if ahead:
+                raise SeriesPhaseGateWarning(ahead)
 
         rsvp_count = 0
         for event_id in event_ids:
@@ -2321,9 +2370,10 @@ class EventService:
             # skipped rather than failing the batch. The member is answering
             # for the rest of the series, not asking to force one date.
             #
-            # override=True: the member confirmed the training phase-gate
-            # warning once for the series, and there is no way to prompt them
-            # again per occurrence.
+            # override=True: the phase gate was already evaluated for every
+            # occurrence above, and either nothing was ahead or the member
+            # confirmed the list (override). Re-checking per occurrence would
+            # only abort the batch half-way through.
             rsvp, error = await self.create_or_update_rsvp(
                 # Passed through as stored. create_or_update_rsvp stringifies
                 # whatever it is given, so coercing to UUID here would only add
