@@ -435,6 +435,24 @@ export interface Donation {
   updatedAt: string;
 }
 
+/** `POST /grants/donations`. Blank optional fields are omitted. */
+export interface DonationCreatePayload {
+  amount: string;
+  /** UTC instant. */
+  donationDate: string;
+  paymentMethod: PaymentMethod;
+  paymentStatus: 'pending' | 'completed' | 'failed' | 'refunded' | 'cancelled';
+  campaignId?: string | undefined;
+  donorId?: string | undefined;
+  donorName?: string | undefined;
+  donorEmail?: string | undefined;
+  isAnonymous: boolean;
+  dedicationType?: 'in_honor' | 'in_memory' | undefined;
+  dedicationName?: string | undefined;
+  taxDeductible: boolean;
+  notes?: string | undefined;
+}
+
 // =============================================================================
 // Pledges
 // =============================================================================

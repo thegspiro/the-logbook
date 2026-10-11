@@ -41,6 +41,7 @@ Navigate to **Grants & Fundraising** in the sidebar. The module must be enabled 
 | `/grants/campaigns`             | Fundraising Campaigns             | `fundraising.view`   |
 | `/grants/donors`                | Donor Directory/CRM               | `fundraising.view`   |
 | `/grants/donations`             | All Donations                     | `fundraising.view`   |
+| `/grants/donations/new`         | Record Donation                   | `fundraising.manage` |
 | `/grants/reports`               | Financial Reports                 | `fundraising.view`   |
 
 ### Permissions
@@ -361,18 +362,22 @@ Each donor profile shows:
 
 ### Creating a Donation Record
 
-1. Navigate to **Grants > Donations** and click **Record Donation**
+1. Navigate to **Grants > Donations** and click **Record Donation** (shown only to `fundraising.manage` holders)
 2. Fill in:
-   - **Donor** — select from directory or enter details for one-time gift
-   - **Campaign** — which campaign (optional)
-   - **Amount** — donation amount
+   - **Amount** and **Date received** (both required; the date defaults to today)
    - **Payment Method** — Cash, Check, Credit Card, Bank Transfer, PayPal, Venmo, Other
-   - **Donation Date** — when received
-   - **Is Recurring** — toggle for recurring gifts (with frequency: weekly, monthly, quarterly, annually)
-   - **Is Anonymous** — whether to display donor name
-   - **Dedication** — In Honor Of or In Memory Of (with dedication name)
-   - **Tax Deductible** — flag for tax receipt purposes
-3. Save
+   - **Payment status** — defaults to Completed. Only a completed gift counts toward the campaign's raised total and the donor's giving history
+   - **Campaign** — optional
+   - **Donor** — choose from the donor directory, or leave it as "Not in the donor directory" and enter a name and email for a one-time gift
+   - **Anonymous** — keep the donor's name out of public views
+   - **Dedication** — In honor of or In memory of, with the name
+   - **Tax deductible** — on by default
+   - **Notes**
+3. Click **Record donation**. You return to the Donations list
+
+A link to `/grants/donations/new?donorId=…&campaignId=…` opens the form with that donor and campaign already chosen.
+
+Not on the form: the recurring-gift flag and frequency, the check number and transaction ID. The create API does not accept the last two; nothing acts on the recurring flag.
 
 ### Payment Statuses
 
@@ -391,21 +396,14 @@ Track whether receipts and thank-you letters have been sent:
 - `receipt_sent` / `receipt_sent_at` — tax receipt
 - `thank_you_sent` / `thank_you_sent_at` — thank-you letter
 
-> **Corrected 2026-08-12.** The form was never built. No component calls
-> `createDonation`, and the "Record Donation" button that pointed at
-> `/grants/donations/new` has been removed because that route does not exist —
-> the router's catch-all was silently bouncing anyone who clicked it to the
-> home dashboard. Donations reach the system through the API and through no
-> screen. Recorded in [Grants & Fundraising — Pledges and Fundraising Events](../KNOWN_LIMITATIONS.md#grants--fundraising--pledges-and-fundraising-events-2026-08-08).
-
 ### Edge Cases
 
-| Scenario                           | Behavior                                             |
-| ---------------------------------- | ---------------------------------------------------- |
-| Recurring donation                 | Records each occurrence separately; tracks frequency |
-| Anonymous donation with dedication | Dedication shown; donor name hidden                  |
-| Donation to inactive campaign      | Allowed but logged; counted toward campaign total    |
-| Check donation                     | `check_number` field available for reference         |
+| Scenario                           | Behavior                                               |
+| ---------------------------------- | ------------------------------------------------------ |
+| Recurring donation                 | Records each occurrence separately; tracks frequency   |
+| Anonymous donation with dedication | Dedication shown; donor name hidden                    |
+| Donation to inactive campaign      | Allowed but logged; counted toward campaign total      |
+| Check donation                     | `check_number` is stored but API-only; put it in Notes |
 
 ---
 

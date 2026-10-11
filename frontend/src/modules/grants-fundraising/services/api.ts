@@ -16,6 +16,7 @@ import type {
   FundraisingCampaign,
   Donor,
   Donation,
+  DonationCreatePayload,
   Pledge,
   FundraisingEvent,
   GrantsDashboard,
@@ -339,7 +340,7 @@ export const fundraisingService = {
     return asArray(response.data);
   },
 
-  async createDonation(data: Partial<Donation>): Promise<Donation> {
+  async createDonation(data: DonationCreatePayload): Promise<Donation> {
     const response = await api.post<Donation>('/grants/donations', data);
     return response.data;
   },

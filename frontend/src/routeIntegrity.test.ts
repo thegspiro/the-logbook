@@ -36,7 +36,7 @@ const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
  * route exists to drive it. Listed rather than silently tolerated so the two
  * broken buttons stay visible; remove an entry when its screen ships.
  */
-const KNOWN_MISSING_ROUTES = ['/grants/donations/new'];
+const KNOWN_MISSING_ROUTES: string[] = [];
 
 const collectSourceFiles = (dir: string): string[] => {
   const found: string[] = [];

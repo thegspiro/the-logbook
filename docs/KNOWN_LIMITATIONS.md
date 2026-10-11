@@ -1206,10 +1206,10 @@ file, line and target. Known gaps are listed in its `KNOWN_MISSING_ROUTES`
 allowance, and a companion test fails if either route ever appears, so the
 allowance cannot outlive the gap.
 
-| Item                                                                  | Status                                   | Detail                                                                                                                                                                                                                                                                                                     |
-| --------------------------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Grants: "Record Donation" points at a screen that was never built** | Open (MED — feature gap, not a bug)      | The donors page links to a create-donation route with no matching page. The API client and store already expose the create call, so the gap is the screen alone. `docs/training/12-grants-fundraising.md` documents the flow and carries a screenshot placeholder for it; both stay until the page exists. |
-| **Grants: "Add Opportunity" points at a screen that was never built** | ✅ Resolved (owner decision, 2026-10-11) | _Resolved 2026-10-11 (owner: "build the screen")._ `/grants/opportunities/new` (`fundraising.manage`) is the **Add Grant Opportunity** form over `POST /grants`; the button is shown only to a holder of that permission. Required documents, tags and a recurring schedule stay API-only.                 |
+| Item                                                                  | Status                                   | Detail                                                                                                                                                                                                                                                                                                                                           |
+| --------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Grants: "Record Donation" points at a screen that was never built** | ✅ Resolved (owner decision, 2026-10-11) | _Resolved 2026-10-11 (owner: "build the form — API/store already exist, screen only")._ **Record Donation** on the Donations page (`fundraising.manage`) opens `/grants/donations/new` over `POST /grants/donations`. Check number, transaction ID and the recurring flag are not on the form (the create schema does not accept the first two). |
+| **Grants: "Add Opportunity" points at a screen that was never built** | ✅ Resolved (owner decision, 2026-10-11) | _Resolved 2026-10-11 (owner: "build the screen")._ `/grants/opportunities/new` (`fundraising.manage`) is the **Add Grant Opportunity** form over `POST /grants`; the button is shown only to a holder of that permission. Required documents, tags and a recurring schedule stay API-only.                                                       |
 
 ## Member Lifecycle — The Page That Was Documented but Never Built (2026-08-08)
 
@@ -1281,7 +1281,7 @@ Same shape, found while capturing `docs/training/12-grants-fundraising.md`.
   when the page ships.
 - **Fundraising events.** `listFundraisingEvents` / `createFundraisingEvent` /
   `updateFundraisingEvent`: zero consumers, no route, no page.
-- **Recording a donation.** `DonationsPage`'s primary action, "Record
+- **Recording a donation** _(resolved 2026-10-11 — see the "Record Donation" row above)_. `DonationsPage`'s primary action, "Record
   Donation", linked to `/grants/donations/new` — also routeless, also
   redirected to `/`. No component calls `createDonation` either, so the form
   behind it was never built. The button has been removed; donations reach the
