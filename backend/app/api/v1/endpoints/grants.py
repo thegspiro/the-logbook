@@ -10,7 +10,7 @@ from datetime import date
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -152,28 +152,56 @@ async def create_opportunity(
 
 @router.get("/applications", response_model=list[GrantApplicationListResponse])
 async def list_applications(
+    response: Response,
     status_filter: Optional[str] = Query(
         None, alias="status", description="Filter by application status"
     ),
     priority: Optional[str] = Query(None, description="Filter by priority"),
     assigned_to: Optional[UUID] = Query(None, description="Filter by assigned user"),
+    status_group: Optional[str] = Query(
+        None,
+        description=(
+            "Filter by a named set of statuses the dashboard counts: "
+            "active, pending or funded"
+        ),
+    ),
+    search: Optional[str] = Query(
+        None, max_length=200, description="Match program name or agency"
+    ),
+    sort: Optional[str] = Query(
+        None, description="Field to sort by (camelCase); newest first when omitted"
+    ),
+    order: str = Query("asc", pattern="^(asc|desc)$"),
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("fundraising.view")),
 ):
     """
-    List grant applications
+    List grant applications, a page at a time.
+
+    ``X-Total-Count`` carries the number of applications matching the filters,
+    so the applications page can page through all of them rather than
+    truncating at one fetch (GF-33).
 
     **Authentication required**
     **Requires permission: fundraising.view**
     """
     try:
         service = GrantService(db)
+        filters = {
+            "organization_id": str(current_user.organization_id),
+            "status": status_filter,
+            "status_group": status_group,
+            "priority": priority,
+            "assigned_to": str(assigned_to) if assigned_to else None,
+            "search": search,
+        }
+        total = await service.count_applications(**filters)
+        response.headers["X-Total-Count"] = str(total)
         return await service.list_applications(
-            organization_id=str(current_user.organization_id),
-            status=status_filter,
-            priority=priority,
-            assigned_to=str(assigned_to) if assigned_to else None,
+            **filters,
+            sort=sort,
+            order=order,
             skip=pagination.skip,
             limit=pagination.limit,
         )

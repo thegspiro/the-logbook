@@ -64,6 +64,56 @@ class ApplicationStatus(str, Enum):
     CLOSED = "closed"
 
 
+# Named sets of statuses that a dashboard figure counts and that the
+# applications list can filter by (GF-27a). One definition for both: the
+# "Active Grants" card counts active *and* reporting, so the list it links to
+# must show exactly that set, not the one status the link used to carry.
+APPLICATION_STATUS_GROUPS: dict[str, tuple[ApplicationStatus, ...]] = {
+    # Awarded and being spent or reported on.
+    "active": (ApplicationStatus.ACTIVE, ApplicationStatus.REPORTING),
+    # Not yet decided by the funder.
+    "pending": (
+        ApplicationStatus.RESEARCHING,
+        ApplicationStatus.PREPARING,
+        ApplicationStatus.INTERNAL_REVIEW,
+        ApplicationStatus.SUBMITTED,
+        ApplicationStatus.UNDER_REVIEW,
+    ),
+    # Every status whose amount_awarded counts toward total grant funding.
+    "funded": (
+        ApplicationStatus.AWARDED,
+        ApplicationStatus.ACTIVE,
+        ApplicationStatus.REPORTING,
+        ApplicationStatus.CLOSED,
+    ),
+}
+
+
+# Named sets of statuses that a dashboard figure counts and that the
+# applications list can filter by (GF-27a). One definition for both: the
+# "Active Grants" card counts `active`, so the list it links to must show
+# exactly that set, not the one status the link used to carry.
+APPLICATION_STATUS_GROUPS: dict[str, tuple[ApplicationStatus, ...]] = {
+    # Awarded and being spent or reported on.
+    "active": (ApplicationStatus.ACTIVE, ApplicationStatus.REPORTING),
+    # Not yet decided by the funder.
+    "pending": (
+        ApplicationStatus.RESEARCHING,
+        ApplicationStatus.PREPARING,
+        ApplicationStatus.INTERNAL_REVIEW,
+        ApplicationStatus.SUBMITTED,
+        ApplicationStatus.UNDER_REVIEW,
+    ),
+    # Every status whose amount_awarded counts toward total grant funding.
+    "funded": (
+        ApplicationStatus.AWARDED,
+        ApplicationStatus.ACTIVE,
+        ApplicationStatus.REPORTING,
+        ApplicationStatus.CLOSED,
+    ),
+}
+
+
 class ReportingFrequency(str, Enum):
     """Frequency of grant reporting requirements"""
 

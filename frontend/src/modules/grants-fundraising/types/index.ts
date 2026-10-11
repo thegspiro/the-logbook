@@ -22,6 +22,43 @@ export const ApplicationStatus = {
 } as const;
 export type ApplicationStatus = (typeof ApplicationStatus)[keyof typeof ApplicationStatus];
 
+/**
+ * Named sets of statuses the grants dashboard counts (GF-27a). Which statuses
+ * belong to each is defined once, on the backend (`APPLICATION_STATUS_GROUPS`);
+ * the list endpoint's `status_group` filter applies it, so a dashboard card
+ * opens exactly the set it counted.
+ */
+export const ApplicationStatusGroup = {
+  ACTIVE: 'active',
+  PENDING: 'pending',
+  FUNDED: 'funded',
+} as const;
+export type ApplicationStatusGroup = (typeof ApplicationStatusGroup)[keyof typeof ApplicationStatusGroup];
+
+export const APPLICATION_STATUS_GROUP_LABELS: Record<ApplicationStatusGroup, string> = {
+  active: 'Active grants (active + reporting)',
+  pending: 'Pending (not yet decided)',
+  funded: 'Funded (awarded through closed)',
+};
+
+/** Query for one page of the applications list (GF-33). */
+export interface GrantApplicationQuery {
+  status?: string | undefined;
+  statusGroup?: ApplicationStatusGroup | undefined;
+  priority?: string | undefined;
+  search?: string | undefined;
+  sort?: string | undefined;
+  order?: 'asc' | 'desc' | undefined;
+  skip?: number | undefined;
+  limit?: number | undefined;
+}
+
+export interface GrantApplicationPage {
+  items: GrantApplication[];
+  /** Every application matching the filters, across all pages. */
+  total: number;
+}
+
 export const GrantCategory = {
   EQUIPMENT: 'equipment',
   STAFFING: 'staffing',

@@ -10,12 +10,13 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.audit import log_audit_event
 from app.models.grant import (
+    APPLICATION_STATUS_GROUPS,
     ApplicationStatus,
     ComplianceTaskStatus,
     FundraisingCampaign,
@@ -26,6 +27,7 @@ from app.models.grant import (
     GrantNote,
     GrantNoteType,
     GrantOpportunity,
+    GrantPriority,
 )
 from app.models.user import User
 from app.utils.model_updates import apply_updates
@@ -34,7 +36,7 @@ from app.utils.org_timezone import (
     resolve_local_range_utc,
     resolve_org_today,
 )
-from app.utils.sql_ordering import nulls_last_asc
+from app.utils.sql_ordering import nulls_last_asc, nulls_last_desc
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
@@ -56,6 +58,21 @@ def _status_value(value: Any) -> str:
     reads the same way a real member does.
     """
     return str(getattr(value, "value", value))
+
+
+# Columns the applications table may be sorted by server-side (GF-33), keyed
+# by the camelCase field the frontend sorts on. Priority is handled apart, by
+# urgency rather than by its stored string.
+APPLICATION_SORT_COLUMNS: Dict[str, Any] = {
+    "grantProgramName": GrantApplication.grant_program_name,
+    "grantAgency": GrantApplication.grant_agency,
+    "applicationStatus": GrantApplication.application_status,
+    "amountRequested": GrantApplication.amount_requested,
+    "amountAwarded": GrantApplication.amount_awarded,
+    "applicationDeadline": GrantApplication.application_deadline,
+    "assignedTo": GrantApplication.assigned_to,
+    "createdAt": GrantApplication.created_at,
+}
 
 
 class GrantService:
@@ -187,6 +204,70 @@ class GrantService:
     # Grant Applications
     # ------------------------------------------------------------------
 
+    def _application_filters(
+        self,
+        organization_id: str,
+        status: Optional[str] = None,
+        status_group: Optional[str] = None,
+        priority: Optional[str] = None,
+        assigned_to: Optional[str] = None,
+        search: Optional[str] = None,
+    ) -> list[Any]:
+        filters: list[Any] = [GrantApplication.organization_id == organization_id]
+        if status:
+            filters.append(GrantApplication.application_status == status)
+        if status_group:
+            statuses = APPLICATION_STATUS_GROUPS.get(status_group)
+            if statuses is None:
+                raise ValueError(
+                    f"Unknown status group '{status_group}'. Expected one of: "
+                    + ", ".join(sorted(APPLICATION_STATUS_GROUPS))
+                )
+            filters.append(
+                GrantApplication.application_status.in_([s.value for s in statuses])
+            )
+        if priority:
+            filters.append(GrantApplication.priority == priority)
+        if assigned_to:
+            filters.append(GrantApplication.assigned_to == assigned_to)
+        if search and search.strip():
+            pattern = like_pattern(search.strip())
+            filters.append(
+                or_(
+                    GrantApplication.grant_program_name.ilike(
+                        pattern, escape=LIKE_ESCAPE_CHAR
+                    ),
+                    GrantApplication.grant_agency.ilike(
+                        pattern, escape=LIKE_ESCAPE_CHAR
+                    ),
+                )
+            )
+        return filters
+
+    @staticmethod
+    def _application_order(sort: Optional[str], order: str) -> list[Any]:
+        if sort is None:
+            return [GrantApplication.created_at.desc()]
+        descending = order == "desc"
+        if sort == "priority":
+            # Most urgent first on an ascending sort, the way the table has
+            # always read -- the stored string's alphabetical order would not.
+            rank = case(
+                (GrantApplication.priority == GrantPriority.CRITICAL, 0),
+                (GrantApplication.priority == GrantPriority.HIGH, 1),
+                (GrantApplication.priority == GrantPriority.MEDIUM, 2),
+                else_=3,
+            )
+            return [rank.desc() if descending else rank.asc()]
+        column = APPLICATION_SORT_COLUMNS.get(sort)
+        if column is None:
+            raise ValueError(
+                f"Unknown sort '{sort}'. Expected one of: "
+                + ", ".join(sorted([*APPLICATION_SORT_COLUMNS, "priority"]))
+            )
+        # Missing deadlines and amounts sort last in both directions.
+        return list(nulls_last_desc(column) if descending else nulls_last_asc(column))
+
     async def list_applications(
         self,
         organization_id: str,
@@ -195,6 +276,10 @@ class GrantService:
         assigned_to: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
+        status_group: Optional[str] = None,
+        search: Optional[str] = None,
+        sort: Optional[str] = None,
+        order: str = "asc",
     ) -> List[GrantApplication]:
         # No eager loads here: GrantApplicationListResponse (the response
         # model for this route) serializes none of the child collections —
@@ -204,25 +289,41 @@ class GrantService:
         # response never uses. get_application() (a single-record fetch)
         # is the one that needs them, for GrantApplicationResponse.
         query = select(GrantApplication).where(
-            GrantApplication.organization_id == organization_id
+            *self._application_filters(
+                organization_id, status, status_group, priority, assigned_to, search
+            )
         )
-        if status:
-            query = query.where(GrantApplication.application_status == status)
-        if priority:
-            query = query.where(GrantApplication.priority == priority)
-        if assigned_to:
-            query = query.where(GrantApplication.assigned_to == assigned_to)
         # Tie-broken by id: created_at can collide (bulk-created applications,
         # low timestamp resolution), and an unbroken ORDER BY over a
         # paginated query has no guaranteed tie order in MySQL — different
         # pages of the same query can then return duplicate or missing rows.
         query = query.order_by(
-            GrantApplication.created_at.desc(), GrantApplication.id.asc()
+            *self._application_order(sort, order), GrantApplication.id.asc()
         )
         # GF-35: same offset/limit fix as list_opportunities.
         query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().unique().all())
+
+    async def count_applications(
+        self,
+        organization_id: str,
+        status: Optional[str] = None,
+        priority: Optional[str] = None,
+        assigned_to: Optional[str] = None,
+        status_group: Optional[str] = None,
+        search: Optional[str] = None,
+    ) -> int:
+        """How many applications ``list_applications`` pages through with the
+        same filters (GF-33: the page cannot page without it)."""
+        result = await self.db.execute(
+            select(func.count(GrantApplication.id)).where(
+                *self._application_filters(
+                    organization_id, status, status_group, priority, assigned_to, search
+                )
+            )
+        )
+        return int(result.scalar() or 0)
 
     async def get_application(
         self, application_id: str, organization_id: str
@@ -1084,7 +1185,9 @@ class GrantService:
         today = await resolve_org_today(self.db, organization_id)
 
         # Active grants (status = active or reporting)
-        active_statuses = [ApplicationStatus.ACTIVE, ApplicationStatus.REPORTING]
+        # The groups are shared with the applications list's status_group
+        # filter, so a card's link shows the set the card counted (GF-27a).
+        active_statuses = APPLICATION_STATUS_GROUPS["active"]
         active_grants_result = await self.db.execute(
             select(func.count(GrantApplication.id)).where(
                 GrantApplication.organization_id == organization_id,
@@ -1096,13 +1199,7 @@ class GrantService:
         active_grants = active_grants_result.scalar() or 0
 
         # Pending applications
-        pending_statuses = [
-            ApplicationStatus.RESEARCHING,
-            ApplicationStatus.PREPARING,
-            ApplicationStatus.INTERNAL_REVIEW,
-            ApplicationStatus.SUBMITTED,
-            ApplicationStatus.UNDER_REVIEW,
-        ]
+        pending_statuses = APPLICATION_STATUS_GROUPS["pending"]
         pending_result = await self.db.execute(
             select(func.count(GrantApplication.id)).where(
                 GrantApplication.organization_id == organization_id,
@@ -1118,15 +1215,7 @@ class GrantService:
             select(func.coalesce(func.sum(GrantApplication.amount_awarded), 0)).where(
                 GrantApplication.organization_id == organization_id,
                 GrantApplication.application_status.in_(
-                    [
-                        s.value
-                        for s in [
-                            ApplicationStatus.AWARDED,
-                            ApplicationStatus.ACTIVE,
-                            ApplicationStatus.REPORTING,
-                            ApplicationStatus.CLOSED,
-                        ]
-                    ]
+                    [s.value for s in APPLICATION_STATUS_GROUPS["funded"]]
                 ),
             )
         )

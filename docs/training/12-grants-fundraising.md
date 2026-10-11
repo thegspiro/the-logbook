@@ -161,8 +161,12 @@ Applications progress through 10 stages:
 
 Applications can be viewed in two ways:
 
-- **Pipeline (Kanban)** — Visual columns with drag-and-drop between stages
-- **Table** — Sortable, filterable list with status badges
+- **Pipeline (Kanban)** — One column per stage. Each column's header shows how many applications are in that stage, and the column loads 25 cards at a time; **Show more** at the bottom loads the next batch. (Change a stage from the application's own page.)
+- **Table** — Sortable, filterable list with status badges, a page at a time. The pager under the table moves between pages and sets how many rows a page shows (25 by default); sorting by a column sorts every application, not only the page you are looking at.
+
+Nothing is left out of either view: every application matching the filters can be reached, however many the department has. (The page used to load the newest 1,000 and silently stop.)
+
+**Filtering.** Search matches the program name or the agency. The **Status** filter offers single statuses and three groups — **Active grants** (Active and Reporting), **Pending** (Researching through Under Review) and **Funded** (Awarded, Active, Reporting and Closed). The dashboard's **Active Grants**, **Pending Applications** and **Total Grant Funding** cards open the list on the matching group, so the list shows the same applications the card counted.
 
 ![Grant applications in pipeline view with a column per status](./images/12-05-applications-pipeline.png)
 

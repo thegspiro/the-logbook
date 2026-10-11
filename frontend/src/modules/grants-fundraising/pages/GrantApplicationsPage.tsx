@@ -1,11 +1,16 @@
 /**
  * Grant Applications Page
  *
- * Displays all grant applications with a pipeline (kanban) view and a table view.
- * Supports search, status filtering, and priority filtering.
+ * Displays grant applications with a pipeline (kanban) view and a table view.
+ * Supports search, status (or status-group) filtering, and priority filtering.
+ *
+ * Both views page through the server (GF-33): the table a page at a time with
+ * a pager, each pipeline column a batch at a time with "Show more". Filtering,
+ * search and sort happen on the server, so nothing past a single fetch is
+ * silently left out.
  */
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import {
   Plus,
@@ -20,12 +25,21 @@ import {
   ChevronsUpDown,
   X,
 } from 'lucide-react';
-import type { GrantApplication, ApplicationStatus } from '../types';
-import { ApplicationStatus as ApplicationStatusEnum, APPLICATION_STATUS_COLORS, PRIORITY_COLORS } from '../types';
-import { useGrantsStore } from '../store/grantsStore';
+import type { GrantApplication, ApplicationStatus, ApplicationStatusGroup, GrantApplicationQuery } from '../types';
+import {
+  ApplicationStatus as ApplicationStatusEnum,
+  ApplicationStatusGroup as ApplicationStatusGroupEnum,
+  APPLICATION_STATUS_COLORS,
+  APPLICATION_STATUS_GROUP_LABELS,
+  PRIORITY_COLORS,
+} from '../types';
+import { grantsService } from '../services/api';
 import { formatDate } from '../../../utils/dateFormatting';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
+import { getErrorMessage } from '@/utils/errorHandling';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { Pagination } from '@/components/ux/Pagination';
+import { DEFAULT_PAGE_SIZE } from '@/constants/config';
 
 // =============================================================================
 // Constants
@@ -59,6 +73,17 @@ const PIPELINE_COLUMNS: ApplicationStatus[] = [
   ApplicationStatusEnum.CLOSED,
 ];
 
+const STATUS_GROUPS = Object.values(ApplicationStatusGroupEnum) as ApplicationStatusGroup[];
+
+/** A status-filter value naming a group rather than one status. */
+const GROUP_PREFIX = 'group:';
+
+/** Cards fetched per pipeline column, and per "Show more". */
+const PIPELINE_PAGE_SIZE = 25;
+
+/** How long the search box waits for typing to stop before querying. */
+const SEARCH_DEBOUNCE_MS = 300;
+
 const PRIORITY_LABELS: Record<string, string> = {
   low: 'Low',
   medium: 'Medium',
@@ -77,12 +102,31 @@ type SortField =
   | 'assignedTo';
 type SortDir = 'asc' | 'desc';
 
-const PRIORITY_SORT_ORDER: Record<string, number> = {
-  critical: 0,
-  high: 1,
-  medium: 2,
-  low: 3,
-};
+/** The filters both views share, as the server takes them. */
+type ListFilters = Pick<GrantApplicationQuery, 'status' | 'statusGroup' | 'priority' | 'search'>;
+
+function filtersFromSelection(statusFilter: string, priority: string, search: string): ListFilters {
+  const isGroup = statusFilter.startsWith(GROUP_PREFIX);
+  return {
+    status: isGroup ? undefined : statusFilter || undefined,
+    statusGroup: isGroup ? (statusFilter.slice(GROUP_PREFIX.length) as ApplicationStatusGroup) : undefined,
+    priority: priority || undefined,
+    search: search.trim() || undefined,
+  };
+}
+
+/**
+ * The initial status filter from the URL. Dashboard cards link with
+ * `?group=<name>` for a figure that counts several statuses (GF-27a) and
+ * `?status=<value>` for one. A stale or mistyped value falls back to
+ * unfiltered rather than silently matching nothing.
+ */
+function initialStatusFilter(params: URLSearchParams): string {
+  const group = params.get('group');
+  if (group && (STATUS_GROUPS as string[]).includes(group)) return `${GROUP_PREFIX}${group}`;
+  const status = params.get('status');
+  return status && (PIPELINE_COLUMNS as string[]).includes(status) ? status : '';
+}
 
 // =============================================================================
 // Pipeline Card Component
@@ -140,12 +184,71 @@ const PipelineCard: React.FC<PipelineCardProps> = ({ application, timezone }) =>
 
 interface PipelineColumnProps {
   status: ApplicationStatus;
-  applications: GrantApplication[];
+  filters: ListFilters;
   timezone: string;
+  onTotal: (status: ApplicationStatus, total: number) => void;
 }
 
-const PipelineColumn: React.FC<PipelineColumnProps> = ({ status, applications, timezone }) => {
+/**
+ * One kanban column. It fetches its own status a batch at a time, so a busy
+ * column is paged rather than cut off, and the count in its header is the
+ * server's total for the column, not the number of cards loaded.
+ *
+ * Under a status group the column still asks for its own status *within* the
+ * group; the server decides membership, so a column outside the group simply
+ * comes back empty rather than this page re-deriving which statuses a group
+ * holds.
+ */
+const PipelineColumn: React.FC<PipelineColumnProps> = ({ status, filters, timezone, onTotal }) => {
   const colorClasses = APPLICATION_STATUS_COLORS[status] ?? 'bg-theme-surface-secondary text-theme-text-secondary';
+  const [items, setItems] = useState<GrantApplication[]>([]);
+  const [total, setTotal] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const requestId = useRef(0);
+
+  // A status filter for another column means this one has nothing to show,
+  // without asking the server.
+  const excluded = Boolean(filters.status && filters.status !== status);
+
+  const load = useCallback(
+    async (skip: number) => {
+      const id = ++requestId.current;
+      setIsLoading(true);
+      setError(null);
+      try {
+        const page = await grantsService.listApplicationsPage({
+          ...filters,
+          status,
+          skip,
+          limit: PIPELINE_PAGE_SIZE,
+        });
+        if (id !== requestId.current) return;
+        setItems((prev) => (skip === 0 ? page.items : [...prev, ...page.items]));
+        setTotal(page.total);
+        onTotal(status, page.total);
+      } catch (err: unknown) {
+        if (id !== requestId.current) return;
+        setError(getErrorMessage(err, 'Could not load this column.'));
+      } finally {
+        if (id === requestId.current) setIsLoading(false);
+      }
+    },
+    [filters, status, onTotal]
+  );
+
+  useEffect(() => {
+    if (excluded) {
+      requestId.current += 1;
+      setItems([]);
+      setTotal(0);
+      setIsLoading(false);
+      setError(null);
+      onTotal(status, 0);
+      return;
+    }
+    void load(0);
+  }, [excluded, load, onTotal, status]);
 
   return (
     <div className="border-theme-surface-border bg-theme-surface-secondary flex h-full w-72 flex-shrink-0 flex-col rounded-lg border">
@@ -154,15 +257,33 @@ const PipelineColumn: React.FC<PipelineColumnProps> = ({ status, applications, t
         <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${colorClasses}`}>
           {APPLICATION_STATUS_LABELS[status] ?? status}
         </span>
-        <span className="text-theme-text-secondary text-xs font-medium">{applications.length}</span>
+        <span className="text-theme-text-secondary text-xs font-medium" data-testid={`column-total-${status}`}>
+          {total}
+        </span>
       </div>
 
       {/* Cards */}
       <div className="flex-1 space-y-2 overflow-y-auto p-2">
-        {applications.length === 0 ? (
+        {error ? (
+          <p className="py-4 text-center text-xs text-red-700 dark:text-red-400">{error}</p>
+        ) : items.length === 0 && !isLoading ? (
           <p className="text-theme-text-secondary py-4 text-center text-xs">No applications</p>
         ) : (
-          applications.map((app) => <PipelineCard key={app.id} application={app} timezone={timezone} />)
+          items.map((app) => <PipelineCard key={app.id} application={app} timezone={timezone} />)
+        )}
+        {isLoading && (
+          <div className="flex justify-center py-2">
+            <Loader2 className="h-4 w-4 animate-spin text-red-500" aria-label="Loading" />
+          </div>
+        )}
+        {!isLoading && !error && items.length < total && (
+          <button
+            type="button"
+            onClick={() => void load(items.length)}
+            className="border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 w-full rounded-md border px-3 py-1.5 text-xs font-medium"
+          >
+            Show more ({total - items.length} more)
+          </button>
         )}
       </div>
     </div>
@@ -209,67 +330,57 @@ const SortableHeader: React.FC<SortableHeaderProps> = ({ label, field, currentSo
 };
 
 // =============================================================================
-// Main Page Component
+// Table View Component
 // =============================================================================
 
-export const GrantApplicationsPage: React.FC = () => {
+interface ApplicationsTableProps {
+  filters: ListFilters;
+  timezone: string;
+  emptyState: React.ReactNode;
+}
+
+const ApplicationsTable: React.FC<ApplicationsTableProps> = ({ filters, timezone, emptyState }) => {
   const navigate = useNavigate();
-  const tz = useTimezone();
-  const [searchParams] = useSearchParams();
-
-  const { applications, isLoading, error, fetchApplications } = useGrantsStore();
-
-  const [viewMode, setViewMode] = useState<ViewMode>('pipeline');
-  const [searchText, setSearchText] = useState('');
-  // Dashboard KPI/pipeline cards link here with `?status=<value>` — honor it
-  // as the initial filter so those links actually filter, instead of
-  // silently landing on the unfiltered list. A bookmarked/shared URL can
-  // carry a stale or mistyped value (a status the current release removed,
-  // a typo) — falling back to unfiltered beats silently applying a filter
-  // that matches nothing, which looks like an unexplained empty list.
-  const [statusFilter, setStatusFilter] = useState<string>(() => {
-    const fromUrl = searchParams.get('status');
-    return fromUrl && (PIPELINE_COLUMNS as string[]).includes(fromUrl) ? fromUrl : '';
-  });
-  const [priorityFilter, setPriorityFilter] = useState<string>('');
   const [sortField, setSortField] = useState<SortField>('applicationDeadline');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [items, setItems] = useState<GrantApplication[]>([]);
+  const [total, setTotal] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const requestId = useRef(0);
 
-  // Status is filtered server-side (and refetched on change) rather than
-  // client-side: the list endpoint caps a single fetch at 100 records, so a
-  // deep-linked status filter applied only to that first page could miss
-  // matching applications past it (GF-31). This page has no pagination UI
-  // in either view (pipeline or table) — it's built to show the org's full
-  // application set at once — so the fetch also requests the endpoint's own
-  // declared maximum (`PaginationParams`'s `le=1000`, ten times the default)
-  // rather than leaving it at 100, for both the filtered and unfiltered
-  // case. A department with more than 1000 applications sharing one status
-  // would still be truncated; a true fix needs either paging through the
-  // full result set or a page-size control this page doesn't have, both out
-  // of scope for this fix (GF-33, flagged).
+  // A new filter or sort starts again from the first page.
   useEffect(() => {
-    void fetchApplications(statusFilter ? { status: statusFilter, limit: 1000 } : { limit: 1000 });
-  }, [fetchApplications, statusFilter]);
+    setPage(1);
+  }, [filters, sortField, sortDir, pageSize]);
 
-  // ---------------------------------------------------------------------------
-  // Filtering
-  // ---------------------------------------------------------------------------
-
-  const filteredApplications = useMemo(() => {
-    return applications.filter((app) => {
-      const matchesSearch =
-        !searchText ||
-        app.grantProgramName.toLowerCase().includes(searchText.toLowerCase()) ||
-        app.grantAgency.toLowerCase().includes(searchText.toLowerCase()) ||
-        (app.assignedTo ?? '').toLowerCase().includes(searchText.toLowerCase());
-      const matchesPriority = !priorityFilter || app.priority === priorityFilter;
-      return matchesSearch && matchesPriority;
-    });
-  }, [applications, searchText, priorityFilter]);
-
-  // ---------------------------------------------------------------------------
-  // Sorting (table view)
-  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const id = ++requestId.current;
+    setIsLoading(true);
+    setError(null);
+    grantsService
+      .listApplicationsPage({
+        ...filters,
+        sort: sortField,
+        order: sortDir,
+        skip: (page - 1) * pageSize,
+        limit: pageSize,
+      })
+      .then((result) => {
+        if (id !== requestId.current) return;
+        setItems(result.items);
+        setTotal(result.total);
+      })
+      .catch((err: unknown) => {
+        if (id !== requestId.current) return;
+        setError(getErrorMessage(err, 'Could not load grant applications.'));
+      })
+      .finally(() => {
+        if (id === requestId.current) setIsLoading(false);
+      });
+  }, [filters, sortField, sortDir, page, pageSize]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -280,73 +391,209 @@ export const GrantApplicationsPage: React.FC = () => {
     }
   };
 
-  const sortedApplications = useMemo(() => {
-    const copy = [...filteredApplications];
-    copy.sort((a, b) => {
-      let cmp = 0;
-      switch (sortField) {
-        case 'grantProgramName':
-          cmp = a.grantProgramName.localeCompare(b.grantProgramName);
-          break;
-        case 'grantAgency':
-          cmp = a.grantAgency.localeCompare(b.grantAgency);
-          break;
-        case 'applicationStatus':
-          cmp = a.applicationStatus.localeCompare(b.applicationStatus);
-          break;
-        case 'amountRequested':
-          cmp = (a.amountRequested ?? 0) - (b.amountRequested ?? 0);
-          break;
-        case 'amountAwarded':
-          cmp = (a.amountAwarded ?? 0) - (b.amountAwarded ?? 0);
-          break;
-        case 'applicationDeadline': {
-          const da = a.applicationDeadline ? new Date(a.applicationDeadline).getTime() : Infinity;
-          const db = b.applicationDeadline ? new Date(b.applicationDeadline).getTime() : Infinity;
-          cmp = da - db;
-          break;
-        }
-        case 'priority':
-          cmp = (PRIORITY_SORT_ORDER[a.priority] ?? 99) - (PRIORITY_SORT_ORDER[b.priority] ?? 99);
-          break;
-        case 'assignedTo':
-          cmp = (a.assignedTo ?? '').localeCompare(b.assignedTo ?? '');
-          break;
-      }
-      return sortDir === 'asc' ? cmp : -cmp;
-    });
-    return copy;
-  }, [filteredApplications, sortField, sortDir]);
+  if (error) {
+    return (
+      <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+        {error}
+      </div>
+    );
+  }
 
-  // ---------------------------------------------------------------------------
-  // Pipeline grouping
-  // ---------------------------------------------------------------------------
+  if (isLoading && items.length === 0) {
+    return (
+      <div className="mt-16 flex flex-col items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-red-500" />
+        <p className="text-theme-text-secondary mt-3 text-sm">Loading applications...</p>
+      </div>
+    );
+  }
 
-  const applicationsByStatus = useMemo(() => {
-    const grouped: Record<string, GrantApplication[]> = {};
-    for (const status of PIPELINE_COLUMNS) {
-      grouped[status] = [];
-    }
-    for (const app of filteredApplications) {
-      const bucket = grouped[app.applicationStatus];
-      if (bucket) {
-        bucket.push(app);
-      }
-    }
-    return grouped;
-  }, [filteredApplications]);
+  if (!isLoading && total === 0) return <>{emptyState}</>;
 
-  // ---------------------------------------------------------------------------
-  // Filters active indicator
-  // ---------------------------------------------------------------------------
+  return (
+    <div className="card mt-6 overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full" aria-busy={isLoading}>
+          <thead>
+            <tr className="border-theme-surface-border bg-theme-surface border-b">
+              <SortableHeader
+                label="Program Name"
+                field="grantProgramName"
+                currentSort={sortField}
+                currentDir={sortDir}
+                onSort={handleSort}
+              />
+              <SortableHeader
+                label="Agency"
+                field="grantAgency"
+                currentSort={sortField}
+                currentDir={sortDir}
+                onSort={handleSort}
+              />
+              <SortableHeader
+                label="Status"
+                field="applicationStatus"
+                currentSort={sortField}
+                currentDir={sortDir}
+                onSort={handleSort}
+              />
+              <SortableHeader
+                label="Amount Requested"
+                field="amountRequested"
+                currentSort={sortField}
+                currentDir={sortDir}
+                onSort={handleSort}
+              />
+              <SortableHeader
+                label="Amount Awarded"
+                field="amountAwarded"
+                currentSort={sortField}
+                currentDir={sortDir}
+                onSort={handleSort}
+              />
+              <SortableHeader
+                label="Deadline"
+                field="applicationDeadline"
+                currentSort={sortField}
+                currentDir={sortDir}
+                onSort={handleSort}
+              />
+              <SortableHeader
+                label="Priority"
+                field="priority"
+                currentSort={sortField}
+                currentDir={sortDir}
+                onSort={handleSort}
+              />
+              <SortableHeader
+                label="Assigned To"
+                field="assignedTo"
+                currentSort={sortField}
+                currentDir={sortDir}
+                onSort={handleSort}
+              />
+              <th
+                scope="col"
+                className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+              >
+                <span className="sr-only">Actions</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-theme-surface-border divide-y">
+            {items.map((app) => (
+              <tr
+                key={app.id}
+                onClick={() => void navigate(`/grants/applications/${app.id}`)}
+                className="hover:bg-theme-surface-hover cursor-pointer transition-colors"
+              >
+                <td className="text-theme-text-primary px-4 py-3 text-sm font-medium">{app.grantProgramName}</td>
+                <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">{app.grantAgency}</td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <span
+                    className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${APPLICATION_STATUS_COLORS[app.applicationStatus] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
+                  >
+                    {APPLICATION_STATUS_LABELS[app.applicationStatus] ?? app.applicationStatus}
+                  </span>
+                </td>
+                <td className="text-theme-text-primary px-4 py-3 text-sm font-semibold whitespace-nowrap">
+                  {formatCurrencyWhole(app.amountRequested)}
+                </td>
+                <td className="text-theme-text-primary px-4 py-3 text-sm whitespace-nowrap">
+                  {formatCurrencyWhole(app.amountAwarded)}
+                </td>
+                <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                  {app.applicationDeadline ? formatDate(app.applicationDeadline, timezone) : '--'}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <span
+                    className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[app.priority] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
+                  >
+                    {PRIORITY_LABELS[app.priority] ?? app.priority}
+                  </span>
+                </td>
+                <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                  {app.assignedTo ?? '--'}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <ExternalLink className="text-theme-text-secondary h-4 w-4" />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <Pagination
+        currentPage={page}
+        totalItems={total}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
+    </div>
+  );
+};
 
-  const hasFilters = searchText || statusFilter || priorityFilter;
+// =============================================================================
+// Main Page Component
+// =============================================================================
+
+export const GrantApplicationsPage: React.FC = () => {
+  const tz = useTimezone();
+  const [searchParams] = useSearchParams();
+
+  const [viewMode, setViewMode] = useState<ViewMode>('pipeline');
+  const [searchText, setSearchText] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>(() => initialStatusFilter(searchParams));
+  const [priorityFilter, setPriorityFilter] = useState<string>('');
+  const [columnTotals, setColumnTotals] = useState<Partial<Record<ApplicationStatus, number>>>({});
+
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedSearch(searchText), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(handle);
+  }, [searchText]);
+
+  // Rebuilt only when a filter value changes, so the views' fetch effects run
+  // once per change rather than on every render.
+  const filters = useMemo(
+    () => filtersFromSelection(statusFilter, priorityFilter, debouncedSearch),
+    [statusFilter, priorityFilter, debouncedSearch]
+  );
+
+  const handleColumnTotal = useCallback((status: ApplicationStatus, total: number) => {
+    setColumnTotals((prev) => (prev[status] === total ? prev : { ...prev, [status]: total }));
+  }, []);
+
+  const hasFilters = Boolean(searchText || statusFilter || priorityFilter);
 
   const clearFilters = () => {
     setSearchText('');
     setStatusFilter('');
     setPriorityFilter('');
   };
+
+  const pipelineReported = PIPELINE_COLUMNS.every((s) => columnTotals[s] !== undefined);
+  const pipelineEmpty = pipelineReported && PIPELINE_COLUMNS.every((s) => (columnTotals[s] ?? 0) === 0);
+
+  const emptyState = (
+    <div className="mt-16 flex flex-col items-center justify-center">
+      <FileText className="text-theme-text-secondary h-16 w-16 opacity-40" />
+      <h3 className="text-theme-text-primary mt-4 text-lg font-semibold">No grant applications found</h3>
+      <p className="text-theme-text-secondary mt-1 text-sm">
+        {hasFilters ? 'Try a different search or clear the filters.' : 'Add an application to start tracking a grant.'}
+      </p>
+      {!hasFilters && (
+        <Link
+          to="/grants/applications/new"
+          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900"
+        >
+          <Plus className="h-4 w-4" />
+          New Application
+        </Link>
+      )}
+    </div>
+  );
 
   // ---------------------------------------------------------------------------
   // Render
@@ -410,24 +657,43 @@ export const GrantApplicationsPage: React.FC = () => {
               autoCorrect="off"
               spellCheck={false}
               type="text"
-              aria-label="Search by program, agency, or assignee"
-              placeholder="Search by program, agency, or assignee..."
+              aria-label="Search by program or agency"
+              placeholder="Search by program or agency..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               className="form-input pr-4 pl-10"
             />
           </div>
 
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="form-input">
+          <select
+            aria-label="Status"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="form-input"
+          >
             <option value="">All Statuses</option>
-            {PIPELINE_COLUMNS.map((s) => (
-              <option key={s} value={s}>
-                {APPLICATION_STATUS_LABELS[s] ?? s}
-              </option>
-            ))}
+            <optgroup label="Groups">
+              {STATUS_GROUPS.map((g) => (
+                <option key={g} value={`${GROUP_PREFIX}${g}`}>
+                  {APPLICATION_STATUS_GROUP_LABELS[g]}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Statuses">
+              {PIPELINE_COLUMNS.map((s) => (
+                <option key={s} value={s}>
+                  {APPLICATION_STATUS_LABELS[s] ?? s}
+                </option>
+              ))}
+            </optgroup>
           </select>
 
-          <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="form-input">
+          <select
+            aria-label="Priority"
+            value={priorityFilter}
+            onChange={(e) => setPriorityFilter(e.target.value)}
+            className="form-input"
+          >
             <option value="">All Priorities</option>
             {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
@@ -448,174 +714,31 @@ export const GrantApplicationsPage: React.FC = () => {
           )}
         </div>
 
-        {/* Error */}
-        {error && (
-          <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-400">
-            {error}
-          </div>
-        )}
-
-        {/* Loading */}
-        {isLoading ? (
-          <div className="mt-16 flex flex-col items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-red-500" />
-            <p className="text-theme-text-secondary mt-3 text-sm">Loading applications...</p>
-          </div>
-        ) : filteredApplications.length === 0 ? (
-          /* Empty state */
-          <div className="mt-16 flex flex-col items-center justify-center">
-            <FileText className="text-theme-text-secondary h-16 w-16 opacity-40" />
-            <h3 className="text-theme-text-primary mt-4 text-lg font-semibold">No grant applications found</h3>
-            <p className="text-theme-text-secondary mt-1 text-sm">
-              {hasFilters
-                ? 'Try a different search or clear the filters.'
-                : 'Add an application to start tracking a grant.'}
-            </p>
-            {!hasFilters && (
-              <Link
-                to="/grants/applications/new"
-                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900"
-              >
-                <Plus className="h-4 w-4" />
-                New Application
-              </Link>
-            )}
-          </div>
-        ) : viewMode === 'pipeline' ? (
+        {viewMode === 'pipeline' ? (
           /* ================================================================ */
           /* Pipeline (Kanban) View                                           */
           /* ================================================================ */
-          <div className="-mx-4 mt-6 overflow-x-auto px-4 pb-4">
-            <div className="inline-flex gap-3" style={{ minHeight: '60vh' }}>
-              {PIPELINE_COLUMNS.map((status) => (
-                <PipelineColumn
-                  key={status}
-                  status={status}
-                  applications={applicationsByStatus[status] ?? []}
-                  timezone={tz}
-                />
-              ))}
+          <>
+            {pipelineEmpty && emptyState}
+            <div className="-mx-4 mt-6 overflow-x-auto px-4 pb-4">
+              <div className="inline-flex gap-3" style={{ minHeight: '60vh' }}>
+                {PIPELINE_COLUMNS.map((status) => (
+                  <PipelineColumn
+                    key={status}
+                    status={status}
+                    filters={filters}
+                    timezone={tz}
+                    onTotal={handleColumnTotal}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
+          </>
         ) : (
           /* ================================================================ */
           /* Table View                                                       */
           /* ================================================================ */
-          <div className="card mt-6 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-theme-surface-border bg-theme-surface border-b">
-                    <SortableHeader
-                      label="Program Name"
-                      field="grantProgramName"
-                      currentSort={sortField}
-                      currentDir={sortDir}
-                      onSort={handleSort}
-                    />
-                    <SortableHeader
-                      label="Agency"
-                      field="grantAgency"
-                      currentSort={sortField}
-                      currentDir={sortDir}
-                      onSort={handleSort}
-                    />
-                    <SortableHeader
-                      label="Status"
-                      field="applicationStatus"
-                      currentSort={sortField}
-                      currentDir={sortDir}
-                      onSort={handleSort}
-                    />
-                    <SortableHeader
-                      label="Amount Requested"
-                      field="amountRequested"
-                      currentSort={sortField}
-                      currentDir={sortDir}
-                      onSort={handleSort}
-                    />
-                    <SortableHeader
-                      label="Amount Awarded"
-                      field="amountAwarded"
-                      currentSort={sortField}
-                      currentDir={sortDir}
-                      onSort={handleSort}
-                    />
-                    <SortableHeader
-                      label="Deadline"
-                      field="applicationDeadline"
-                      currentSort={sortField}
-                      currentDir={sortDir}
-                      onSort={handleSort}
-                    />
-                    <SortableHeader
-                      label="Priority"
-                      field="priority"
-                      currentSort={sortField}
-                      currentDir={sortDir}
-                      onSort={handleSort}
-                    />
-                    <SortableHeader
-                      label="Assigned To"
-                      field="assignedTo"
-                      currentSort={sortField}
-                      currentDir={sortDir}
-                      onSort={handleSort}
-                    />
-                    <th
-                      scope="col"
-                      className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      <span className="sr-only">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-theme-surface-border divide-y">
-                  {sortedApplications.map((app) => (
-                    <tr
-                      key={app.id}
-                      onClick={() => void navigate(`/grants/applications/${app.id}`)}
-                      className="hover:bg-theme-surface-hover cursor-pointer transition-colors"
-                    >
-                      <td className="text-theme-text-primary px-4 py-3 text-sm font-medium">{app.grantProgramName}</td>
-                      <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
-                        {app.grantAgency}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span
-                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${APPLICATION_STATUS_COLORS[app.applicationStatus] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
-                        >
-                          {APPLICATION_STATUS_LABELS[app.applicationStatus] ?? app.applicationStatus}
-                        </span>
-                      </td>
-                      <td className="text-theme-text-primary px-4 py-3 text-sm font-semibold whitespace-nowrap">
-                        {formatCurrencyWhole(app.amountRequested)}
-                      </td>
-                      <td className="text-theme-text-primary px-4 py-3 text-sm whitespace-nowrap">
-                        {formatCurrencyWhole(app.amountAwarded)}
-                      </td>
-                      <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
-                        {app.applicationDeadline ? formatDate(app.applicationDeadline, tz) : '--'}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span
-                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[app.priority] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
-                        >
-                          {PRIORITY_LABELS[app.priority] ?? app.priority}
-                        </span>
-                      </td>
-                      <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
-                        {app.assignedTo ?? '--'}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <ExternalLink className="text-theme-text-secondary h-4 w-4" />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <ApplicationsTable filters={filters} timezone={tz} emptyState={emptyState} />
         )}
       </div>
     </div>
