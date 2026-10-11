@@ -329,6 +329,7 @@ async def test_public_form_rejects_repeat_member_submission():
     service.get_form_by_slug = AsyncMock(
         return_value=SimpleNamespace(
             id="form-id",
+            organization_id="org-1",
             require_authentication=False,
             allow_multiple_submissions=False,
         )
@@ -355,6 +356,7 @@ async def test_in_app_submit_rejects_repeat_member_submission():
     service.get_form_by_id = AsyncMock(
         return_value=SimpleNamespace(
             id="form-id",
+            organization_id="org-1",
             status=FormStatus.PUBLISHED,
             fields=[],
             allow_multiple_submissions=False,
@@ -380,6 +382,7 @@ async def test_in_app_submit_skips_the_check_when_repeats_are_allowed():
     service.get_form_by_id = AsyncMock(
         return_value=SimpleNamespace(
             id="form-id",
+            organization_id="org-1",
             status=FormStatus.PUBLISHED,
             fields=[],
             allow_multiple_submissions=True,
@@ -405,6 +408,7 @@ async def test_invalid_public_form_does_not_consume_daily_cap(monkeypatch):
     service.get_form_by_slug = AsyncMock(
         return_value=SimpleNamespace(
             id="form-id",
+            organization_id="org-1",
             fields=[field],
             require_authentication=False,
             allow_multiple_submissions=True,

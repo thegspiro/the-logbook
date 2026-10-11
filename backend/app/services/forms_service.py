@@ -1197,7 +1197,7 @@ class FormsService:
             await self.db.rollback()
             return None, safe_error_detail(e)
 
-    async def _already_submitted(self, form_id, submitted_by) -> bool:
+    async def _already_submitted(self, form, submitted_by) -> bool:
         """Whether this member already has a submission on this form.
 
         Serializes same-form submissions first. Locking the Form row alone is
@@ -1209,12 +1209,17 @@ class FormsService:
         them.
         """
         await self.db.execute(
-            select(Form.id).where(Form.id == str(form_id)).with_for_update()
+            select(Form.id)
+            .where(
+                Form.id == str(form.id),
+                Form.organization_id == str(form.organization_id),
+            )
+            .with_for_update()
         )
         prior = await self.db.execute(
             select(FormSubmission.id)
             .where(
-                FormSubmission.form_id == str(form_id),
+                FormSubmission.form_id == str(form.id),
                 FormSubmission.submitted_by == str(submitted_by),
             )
             .limit(1)
@@ -1242,7 +1247,7 @@ class FormsService:
         if not form.allow_multiple_submissions:
             if not submitted_by:
                 return None, None, "Authentication is required to submit this form"
-            if await self._already_submitted(form.id, submitted_by):
+            if await self._already_submitted(form, submitted_by):
                 return None, None, "You have already submitted this form"
 
         # Validate required fields (FORM-6: presence AND a non-empty value —
@@ -1410,7 +1415,7 @@ class FormsService:
                             "Authentication is required to submit this form",
                         )
                     # Locked check shared with the in-app path (FORM-10).
-                    if await self._already_submitted(form.id, submitted_by):
+                    if await self._already_submitted(form, submitted_by):
                         return None, None, "You have already submitted this form"
 
                 # Validate required fields (FORM-6: presence AND a non-empty
