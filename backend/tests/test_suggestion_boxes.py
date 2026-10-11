@@ -19,6 +19,7 @@ from PIL import Image
 from sqlalchemy import func, select, text
 
 from app.api.v1.endpoints import suggestions as suggestion_endpoints
+from app.core.config import settings
 from app.models.audit import AuditLog
 from app.models.notification import NotificationLog, NotificationRule
 from app.models.suggestion import (
@@ -31,9 +32,11 @@ from app.models.suggestion import (
 from app.models.user import User
 from app.schemas.suggestion import SuggestionBoxWrite
 from app.services import suggestion_service
+from app.services.file_storage_service import get_file_storage
 from app.services.suggestion_service import (
     SuggestionService,
     anonymous_timestamp,
+    attachment_storage_scope,
     forward_notice,
     hash_follow_up_key,
     reviewer_notice,
@@ -226,7 +229,10 @@ class TestAnonymousSubmissionsStoreNoAuthor:
         ).scalar_one()
         assert attachment.file_name == "screenshot-1.webp"
         stamp = anonymous_timestamp(datetime.now(timezone.utc)).timestamp()
-        assert os.stat(attachment.file_path).st_mtime == pytest.approx(stamp, abs=1)
+        on_disk = os.path.join(settings.UPLOAD_DIR, attachment.file_path)
+        assert os.stat(on_disk).st_mtime == pytest.approx(stamp, abs=1)
+        # Its per-suggestion directory must not keep the real arrival time.
+        assert os.stat(os.path.dirname(on_disk)).st_mtime == pytest.approx(stamp, abs=1)
 
     async def test_member_id_appears_nowhere_on_the_submission(
         self, db_session, dept, upload_dir
@@ -544,7 +550,7 @@ class TestBoxConfiguration:
                 )
             )
         ).scalar_one()
-        assert Path(stored).exists()
+        assert (Path(settings.UPLOAD_DIR) / stored).exists()
 
         assert await service.delete_box(box, "  Ideas ") == 1
 
@@ -561,7 +567,7 @@ class TestBoxConfiguration:
                 .where(model.organization_id == dept["org"])
             )
             assert remaining == 0, model.__name__
-        assert not Path(stored).exists()
+        assert not (Path(settings.UPLOAD_DIR) / stored).exists()
 
     async def test_the_admin_list_reports_submission_counts(self, db_session, dept):
         box = await _box(db_session, dept)
@@ -806,7 +812,12 @@ class TestOverHttp:
                 )
             )
         ).scalar_one()
-        stored = Path(attachment.file_path).read_bytes()
+        # Encrypted on disk; the decrypted screenshot is what a reviewer gets.
+        on_disk = (Path(settings.UPLOAD_DIR) / attachment.file_path).read_bytes()
+        assert b"Sam Member" not in on_disk
+        stored = get_file_storage().read_bytes(
+            attachment.file_path, **attachment_storage_scope(attachment)
+        )
         assert b"Sam Member" not in stored
         assert b"Captain" not in stored
         with Image.open(io.BytesIO(stored)) as image:
