@@ -24,12 +24,13 @@ sees it.
 2. [Permissions and roles](#permissions-and-roles)
 3. [Pages](#pages)
 4. [The domain boundary](#the-domain-boundary)
-5. [Lots and on-hand](#lots-and-on-hand)
-6. [Alerts](#alerts)
-7. [API reference](#api-reference)
-8. [Data model](#data-model)
-9. [Migrations](#migrations)
-10. [Edge cases](#edge-cases)
+5. [Linking checklist items](#linking-checklist-items)
+6. [Lots and on-hand](#lots-and-on-hand)
+7. [Alerts](#alerts)
+8. [API reference](#api-reference)
+9. [Data model](#data-model)
+10. [Migrations](#migrations)
+11. [Edge cases](#edge-cases)
 
 ---
 
@@ -163,6 +164,42 @@ so the quartermaster's catalog does not fill with saline.
 
 ---
 
+## Linking checklist items
+
+_(2026-10-11)_ An equipment check position tracks expiry, lots and restock only
+through its `inventory_item_id`. The template builder used to search the gear
+list alone — which excludes medical stock — and its "create in inventory" filed
+the new row with no category, which made it gear. A rig's gauze either stayed a
+free-text line or became a second catalog row the supply officer never saw.
+
+The builder's quick-add bar and its **Linked Inventory Item** picker now:
+
+- **Search both halves of the catalog**, medical first, with medical results
+  badged. Each half is searched only when the viewer can read it
+  (`inventory.view` for gear; `inventory.view_medical` or `inventory.view` for
+  medical) and, for medical, only when the module is enabled — so a
+  medical-only EMS Supply Officer is not refused on every keystroke.
+- **Offer "Create in Medical Supplies"** to holders of `inventory.manage_medical`
+  or `inventory.manage`. The officer picks a medical category (preselected when
+  there is only one), and `POST /items/create-if-absent` files and links the
+  row in one request.
+- **Withhold every create when a half of the search failed.** A partial answer
+  cannot prove the name is free.
+
+`create-if-absent` dedups pool rows by normalized name across the **whole**
+catalog, as the gear route does. A match in the medical domain is handed back
+with `created: false`. A match filed as gear is refused with **409** rather
+than linked — the officer asked for medical stock — and the response does not
+describe the gear row. The quartermaster moves it into a medical category if
+that is where it belongs.
+
+After a bulk paste into a saved compartment, the builder offers **Match to
+catalog**, opening the existing match tool, whose fuzzy matching already spans
+medical stock. The template-level "_n_ of _m_ items linked" line remains the
+standing warning; linking is never required to save.
+
+---
+
 ## Lots and on-hand
 
 Medical supplies use the same dated-lot machinery as other consumables
@@ -293,10 +330,12 @@ permission **or** the broad equivalent.
 | `GET`    | `/items`                    | view       |
 | `GET`    | `/items/{item_id}`          | view       |
 | `POST`   | `/items`                    | manage     |
+| `POST`   | `/items/create-if-absent`   | manage     |
 | `PATCH`  | `/items/{item_id}`          | manage     |
+| `POST`   | `/items/{item_id}/retire`   | manage     |
 | `GET`    | `/items/{item_id}/lots`     | view       |
 | `POST`   | `/items/{item_id}/lots`     | manage     |
-| `POST`   | `/receive`                  | manage     |
+| `POST`   | `/lots/bulk`                | manage     |
 | `PATCH`  | `/lots/{lot_id}`            | manage     |
 | `DELETE` | `/lots/{lot_id}`            | manage     |
 | `GET`    | `/lots/expiring`            | view       |
