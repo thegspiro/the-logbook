@@ -71,7 +71,7 @@ export const SkillSheetLibraryModal: React.FC<SkillSheetLibraryModalProps> = ({ 
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Add from the sheet library" size="lg">
-      <div className="modal-body space-y-3">
+      <div className="space-y-3">
         <p className="text-theme-text-muted text-sm">
           Ready-made skill sheets you can copy into your department. Each arrives as a draft for you to review and
           adjust — publish it when it matches how you actually test.

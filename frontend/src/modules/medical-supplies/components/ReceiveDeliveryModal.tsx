@@ -106,7 +106,7 @@ export const ReceiveDeliveryModal: React.FC<ReceiveDeliveryModalProps> = ({ onCl
   return (
     <Modal isOpen onClose={onClose} title="Receive delivery" size="xl">
       <form onSubmit={(e) => void handleSubmit(e)}>
-        <div className="modal-body space-y-3">
+        <div className="space-y-3">
           <>
             <p className="text-theme-text-muted text-sm">
               Add one line per item. Crews can swap stock recorded here onto a rig during an equipment check.

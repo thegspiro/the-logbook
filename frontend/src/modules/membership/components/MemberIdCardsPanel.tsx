@@ -293,7 +293,7 @@ export const MemberIdCardsPanel: React.FC<MemberIdCardsPanelProps> = ({ userId, 
           </>
         }
       >
-        <div className="modal-body space-y-4">
+        <div className="space-y-4">
           <NfcCardCapture
             value={credential}
             onChange={handleCapture}

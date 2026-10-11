@@ -122,3 +122,48 @@ describe('dialog scroll integrity', () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * The shared <Modal> already scrolls its children in `modal-content` and caps
+ * its panel with `modal-body`. A child that applies `modal-body` again is a
+ * second scroller with its own height cap, so a long form shows two scroll
+ * bars side by side, and actions placed inside it scroll away with the fields.
+ */
+const MODAL_ELEMENT = /<Modal\b/g;
+const MODAL_BODY_CLASS = /className=\{?[`"'][^`"']*\bmodal-body\b[^`"']*[`"']/g;
+
+const findNestedModalBodies = (): string[] => {
+  const offenders: string[] = [];
+
+  for (const file of files) {
+    const source = fs.readFileSync(file, 'utf8');
+    MODAL_ELEMENT.lastIndex = 0;
+    let open: RegExpExecArray | null;
+
+    while ((open = MODAL_ELEMENT.exec(source)) !== null) {
+      const close = source.indexOf('</Modal>', open.index);
+      if (close === -1) continue;
+      const children = source.slice(open.index, close);
+
+      MODAL_BODY_CLASS.lastIndex = 0;
+      let nested: RegExpExecArray | null;
+      while ((nested = MODAL_BODY_CLASS.exec(children)) !== null) {
+        const line = source.slice(0, open.index + nested.index).split('\n').length;
+        offenders.push(`${path.relative(SRC, file)}:${line}`);
+      }
+      MODAL_ELEMENT.lastIndex = close;
+    }
+  }
+
+  return offenders;
+};
+
+describe('shared Modal scrolls once', () => {
+  it('has no modal-body nested inside a <Modal>', () => {
+    expect(
+      findNestedModalBodies(),
+      '<Modal> already scrolls its content; drop `modal-body` from the child. Put the actions in ' +
+        "Modal's `footer` (with `onSubmit` for a form) so they stay pinned."
+    ).toEqual([]);
+  });
+});

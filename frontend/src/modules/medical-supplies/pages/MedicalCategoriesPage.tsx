@@ -187,7 +187,7 @@ const MedicalCategoriesPage: React.FC = () => {
         title={editing ? 'Edit medical supply category' : 'New medical supply category'}
       >
         <form onSubmit={(e) => void handleSubmit(e)}>
-          <div className="modal-body space-y-4">
+          <div className="space-y-4">
             <div>
               <label htmlFor="mc-name" className="form-label">
                 Name <span aria-hidden="true">*</span>

@@ -69,7 +69,7 @@ const SuggestionBoxDeleteDialog: React.FC<SuggestionBoxDeleteDialogProps> = ({
 
   return (
     <Modal isOpen onClose={onClose} title={`Delete "${box.name}"?`} size="md">
-      <div className="modal-body space-y-4">
+      <div className="space-y-4">
         <div className="alert-danger text-sm">
           <p className="text-theme-text-primary">
             This box holds <strong>{count}</strong> {count === 1 ? 'submission' : 'submissions'}. Deleting it

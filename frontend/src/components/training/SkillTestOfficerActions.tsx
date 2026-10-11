@@ -303,7 +303,7 @@ export const SkillTestOfficerActions: React.FC<SkillTestOfficerActionsProps> = (
           </div>
         }
       >
-        <div className="modal-body space-y-3">
+        <div className="space-y-3">
           <p className="text-theme-text-secondary text-sm">
             This reopens <span className="text-theme-text-primary font-medium">{test.template_name}</span> for{' '}
             <span className="text-theme-text-primary font-medium">{test.examiner_name || 'the examiner'}</span> with
@@ -353,7 +353,7 @@ export const SkillTestOfficerActions: React.FC<SkillTestOfficerActionsProps> = (
           </div>
         }
       >
-        <div className="modal-body space-y-3">
+        <div className="space-y-3">
           <p className="text-theme-text-secondary text-sm">
             Voiding withdraws this result for{' '}
             <span className="text-theme-text-primary font-medium">{test.candidate_name}</span> ({test.template_name})

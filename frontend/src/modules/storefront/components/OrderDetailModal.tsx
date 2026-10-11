@@ -217,7 +217,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
         </div>
       }
     >
-      <div className="modal-body space-y-5">
+      <div className="space-y-5">
         {loading || !order ? (
           <p className="text-theme-text-muted text-sm">Loading…</p>
         ) : (
