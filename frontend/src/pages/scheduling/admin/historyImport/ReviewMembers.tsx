@@ -16,6 +16,7 @@ import type {
   MemberMapping,
 } from '../../../../modules/scheduling/types/historyImport';
 import { isSettled, memberSourceLabel, RESOLUTION_LABELS } from './historyImportLabels';
+import RememberedBadge from './RememberedBadge';
 
 interface ReviewMembersProps {
   analysis: HistoryImportAnalysis;
@@ -111,6 +112,7 @@ const ReviewMembers: React.FC<ReviewMembersProps> = ({ analysis, busy, onMapping
                     <span className={`badge border ${HISTORY_IMPORT_RESOLUTION_COLORS[member.status] ?? ''}`}>
                       {RESOLUTION_LABELS[member.status] ?? member.status}
                     </span>
+                    {member.remembered && <RememberedBadge />}
                   </div>
                   <p className="text-theme-text-secondary mt-1 text-sm">
                     {member.row_count} {member.row_count === 1 ? 'row' : 'rows'}

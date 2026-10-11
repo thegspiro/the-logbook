@@ -18,6 +18,7 @@ import type {
 } from '../../../../modules/scheduling/types/historyImport';
 import { UnitTargetKind } from '../../../../modules/scheduling/types/historyImport';
 import { isSettled, RESOLUTION_LABELS, unitLabel } from './historyImportLabels';
+import RememberedBadge from './RememberedBadge';
 
 interface ReviewUnitsProps {
   analysis: HistoryImportAnalysis;
@@ -82,6 +83,7 @@ const UnitRow: React.FC<{
             <span className={`badge border ${HISTORY_IMPORT_RESOLUTION_COLORS[unit.status] ?? ''}`}>
               {RESOLUTION_LABELS[unit.status] ?? unit.status}
             </span>
+            {unit.remembered && <RememberedBadge />}
           </div>
           <p className="text-theme-text-secondary mt-1 text-sm">
             {unit.row_count} {unit.row_count === 1 ? 'row' : 'rows'}
