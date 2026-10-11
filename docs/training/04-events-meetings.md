@@ -916,7 +916,10 @@ Navigate to **Events > Templates** to manage reusable event configurations:
 1. Click **Create Template** to save a new template
 2. Fill in the template form with default event settings (title, type, location, time, description, reminders)
 3. Toggle templates **active/inactive** — inactive templates won't appear in the template picker
-4. Edit or delete existing templates
+4. Edit or deactivate existing templates. Templates are never deleted — events
+   created from one keep their link to it — so the archive icon reads
+   **Deactivate**, and a deactivated template can be switched back on at any
+   time _(2026-10-11)_.
 
 When creating a new event, the **Template Picker** lets you quick-select from active templates to pre-fill the event form. Its hint reads _"Pick a template to pre-fill common settings, or start blank."_
 
@@ -929,11 +932,12 @@ When creating a new event, the **Template Picker** lets you quick-select from ac
 - **A template's default start is the next hour on the department's clock**,
   not the browser's — in a browser set to a half-hour timezone it landed on the
   half hour.
-- **Delete does not delete.** The dialog reads _"Delete "…"? You can't undo
-  this."_ with **Delete Template**, but the template is kept and listed as
-  **Inactive**, exactly as **Deactivate** would leave it. Whether templates
-  should be removable is an open owner decision (`docs/KNOWN_LIMITATIONS.md`);
-  until then, treat Delete as Deactivate.
+- **Delete is now Deactivate** _(2026-10-11)_. The action used to read
+  **Delete Template** with _"You can't undo this."_, but the template was only
+  deactivated. It is now labelled for what it does: **Deactivate Template**,
+  _"It will no longer be offered when creating an event. Events already
+  created from it are not affected, and you can reactivate it at any time with
+  its switch."_ It is shown only on active templates.
 
 ![Event Templates page listing templates with type and active state](./images/04-09-event-templates.png)
 
@@ -1837,7 +1841,7 @@ Events support three check-in window modes that control when QR and manual check
 | Event form sending empty strings causes 422                | Fixed 2026-03-12 — `??` replaced with `\|\|` for all optional form fields, to coerce empty strings to `undefined`.                                                                                                                                                                                                                        |
 | Calendar view not showing events                           | Ensure events exist for the displayed month. Use the navigation arrows to check other months. Events are filtered by the currently selected event type filter.                                                                                                                                                                            |
 | Analytics page shows no data                               | Verify `analytics.view` permission is assigned to your role. Analytics require at least one event to have been created. Use the date range filter to widen the search window.                                                                                                                                                             |
-| Template picker shows no templates                         | No active templates exist. Create a template from **Events > Templates** or save an existing event as a template. Deactivated templates are hidden — and so are "deleted" ones, which are only deactivated. |
+| Template picker shows no templates                         | No active templates exist. Create a template from **Events > Templates** or save an existing event as a template. Deactivated templates are hidden; switch one back on from **Events > Templates**. |
 | Waitlist not promoting attendees                           | Promotion occurs automatically when a "Going" member changes to "Not Going". Check that the event has a capacity limit set.                                                                                                                                                                                                               |
 | CSV import skipping rows                                   | Rows missing required fields (title, date) are skipped. Check the error details in the import preview for specific validation failures.                                                                                                                                                                                                   |
 | Draft event visible to regular members                     | Verify the event was saved as a draft, not published. Only users with `events.manage` permission can see drafts.                                                                                                                                                                                                                          |
