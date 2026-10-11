@@ -175,7 +175,7 @@ const ShiftHistoryImportReviewPage: React.FC = () => {
           <p>
             This writes {analysis.counts.new_shifts} new shifts, adds members to {analysis.counts.existing_shifts}{' '}
             existing ones, and records {writing} attendance and outside-agency entries
-            {created > 0 ? `, creating ${created} inactive member records` : ''}.
+            {created > 0 ? `, creating ${created} archived former-member records` : ''}.
           </p>
           <p>
             <strong>This cannot be undone as a batch.</strong> After committing, imported shifts are corrected one at a
@@ -270,7 +270,7 @@ const ShiftHistoryImportReviewPage: React.FC = () => {
           <Stat label="Existing shifts added to" value={s.shifts_updated ?? 0} />
           <Stat label="Attendance records" value={s.attendance_created ?? 0} />
           <Stat label="Outside-agency entries" value={s.external_hours_created ?? 0} />
-          <Stat label="Inactive members created" value={s.members_created ?? 0} />
+          <Stat label="Former members created" value={s.members_created ?? 0} />
           <Stat label="Outside units added" value={s.external_units_created ?? 0} />
           <Stat label="Already recorded (skipped)" value={s.duplicates_skipped ?? 0} />
           <Stat label="Rows skipped or excluded" value={(s.rows_skipped ?? 0) + (s.rows_excluded ?? 0)} />

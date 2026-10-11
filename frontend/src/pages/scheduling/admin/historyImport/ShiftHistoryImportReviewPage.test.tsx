@@ -185,7 +185,7 @@ describe('ShiftHistoryImportReviewPage', () => {
     const user = userEvent.setup();
     renderPage();
     await user.click(await screen.findByRole('tab', { name: /Members/ }));
-    await user.selectOptions(screen.getByLabelText('Who is Dana Former?'), 'Create as an inactive member');
+    await user.selectOptions(screen.getByLabelText('Who is Dana Former?'), 'Create as an archived former member');
 
     expect(mockMappings).toHaveBeenCalledWith('imp-1', {
       members: { 'name:dana former': { action: 'create' } },
