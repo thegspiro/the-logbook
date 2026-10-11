@@ -1217,6 +1217,15 @@ you cannot approve them."_ **Reject Minutes** stays available to them as a way
 to withdraw the submission. An action item's **Due** date now reads the
 calendar day it was set for — it showed a day early for a US department.
 
+**The meeting record has a lighter approval** _(2026-10-11)_. A meeting (the
+card the minutes hang off, as opposed to the minutes themselves) carries its
+own **Draft → Pending Approval → Approved** status. One officer may move it
+through all three, but only in that order: a meeting is approved only from
+**Pending Approval**, an approved meeting is not approved again, and editing a
+meeting cannot set it to **Approved** — the server answers _"A meeting cannot
+be marked approved by editing it; submit it for approval and use Approve
+instead"_, so every approved meeting records who approved it and when.
+
 ---
 
 ## Action Items

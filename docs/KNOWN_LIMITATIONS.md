@@ -3694,6 +3694,19 @@ has been removed and no longer exists anywhere under `backend/`.
 
 ## MM-9 — `approve_meeting` Has No Approval State Machine or Separation of Duties (2026-08-31)
 
+> ✅ **Resolved (2026-10-11), as the owner chose: keep `Meeting` approval
+> single-actor, but require `PENDING_APPROVAL` first and block approval by
+> edit.** `MeetingsService.approve_meeting` now refuses a meeting that is not
+> `pending_approval` (400: _"Only a meeting pending approval can be approved;
+> submit it for approval first"_, or _"This meeting is already approved"_, so
+> an approved record's `approved_by`/`approved_at` are never re-stamped), and
+> `update_meeting` refuses a `PATCH /meetings/{id}` that moves `status` into
+> `approved` (400), so every approval carries an approver and a timestamp. A
+> draft is submitted by `PATCH` with `status: "pending_approval"`. No
+> `submitted_by` field or second-person rule was added — the same officer may
+> submit and approve — which is the deliberate difference from
+> `MeetingMinutes` (MM-5). The text below is the original finding.
+
 `minute_service.approve_minutes` (the `MeetingMinutes` governance workflow)
 requires the record be `SUBMITTED` and refuses to let the submitter also
 approve it (`assert_different_person`). `meetings_service.approve_meeting`
