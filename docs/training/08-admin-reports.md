@@ -181,6 +181,14 @@ seeded position removes it.
 
 ![Step 4's permission rows for Chief, with 13 unenabled modules hidden and a Show all modules control](./images/20-10-onboarding-permission-rows.png)
 
+**What step 4 will not save** _(2026-10-11)_. A built-in position keeps the
+rank order the system gives it, and a custom position you add is always ranked
+below the IT Manager (the System Owner's position). A custom position cannot
+use the name of a built-in one — "Fire Chief" when Chief exists, or "Member" —
+because it would take over that position; tick the built-in position instead,
+or name yours differently. The save is refused with a message naming the
+position, and nothing from that save is stored.
+
 **Testing an SMTP server in step 8** _(2026-10-11)_. When **SMTP (any
 provider)** is tested and nothing answering as a mail server could be reached
 — a wrong address, a closed port, a host that does not exist, or something on

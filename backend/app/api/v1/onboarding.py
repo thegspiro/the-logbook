@@ -39,6 +39,7 @@ from app.core.constants import ROLE_IT_MANAGER, ROLE_MEMBER
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.permissions import (
+    DEFAULT_ROLES,
     module_checkbox_grants,
     module_checkbox_is_held,
     module_for_permission,
@@ -56,6 +57,7 @@ from app.services import key_custody_service
 from app.services.auth_service import AuthService
 from app.services.onboarding import (
     ONBOARDING_ACCEPTED_MODULE_IDS,
+    ONBOARDING_POSITION_EDITOR_MODULE_IDS,
     OnboardingService,
 )
 from app.services.upload_scanning import scan_and_validate_logo
@@ -574,14 +576,12 @@ class RoleSetupItem(BaseModel):
     priority: int = Field(default=50, ge=0, le=100)
     permissions: dict[str, RolePermission] = Field(
         default_factory=dict,
-        # The registry names 34 modules today; a client-supplied key is an
-        # arbitrary string (there is no allowlist — see ONB-7), so nothing
-        # else bounds how many `expand_module_checkboxes` turns into
-        # `{module}.view`/`{module}.manage`/`{module}.*` entries per role. The
-        # outer `RolesSetupRequest.roles`/`PositionsSetupRequest.positions`
-        # caps (ONB2-30-2) bound the number of roles in one request, not the
-        # size of any one role's own permission set — same rationale as
-        # `stations`/`apparatus`/`it_team`, headroom above the current count.
+        # Keys are checked against ONBOARDING_POSITION_EDITOR_MODULE_IDS by
+        # save_session_roles (ONB-7); this cap only bounds the request size
+        # before that check runs. The outer `RolesSetupRequest.roles` /
+        # `PositionsSetupRequest.positions` caps (ONB2-30-2) bound the number
+        # of roles in one request, not the size of any one role's own
+        # permission set — headroom above the registry's current count.
         max_length=50,
         description="Module permissions with view/manage flags",
     )
@@ -2570,6 +2570,78 @@ def _untouched_modules(
     }
 
 
+def _custom_priority_ceiling() -> int:
+    """The highest priority a position the client defines may claim.
+
+    One below the System Owner's own position, so nothing invented during
+    setup can rank above the account setting the installation up.
+    """
+    return int(DEFAULT_ROLES[ROLE_IT_MANAGER]["priority"]) - 1
+
+
+def _check_submitted_positions(
+    roles: list[RoleSetupItem], existing_system_slugs: set[str]
+) -> None:
+    """Refuse what the Positions editor cannot produce (owner decision ONB-7).
+
+    Two things, both checked before anything is written:
+
+    * a ``permissions`` key the editor never renders — the expansion would
+      otherwise turn it into a ``{key}.view`` / ``{key}.*`` grant, so a setup
+      session could mint ``users.*`` or ``audit.*``;
+    * a custom position reusing a built-in position's identifier. The update
+      branch keys on the slug, so this used to rewrite the built-in row with
+      the custom position's checkboxes and priority; and a custom ``member``
+      would take over the baseline every new account is given.
+    """
+    unknown = sorted(
+        {
+            module_id
+            for role in roles
+            for module_id in role.permissions
+            if module_id not in ONBOARDING_POSITION_EDITOR_MODULE_IDS
+        }
+    )
+    if unknown:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown modules in position permissions: {', '.join(unknown)}",
+        )
+    reserved = sorted(
+        role.name
+        for role in roles
+        if role.is_custom
+        and (role.id in DEFAULT_ROLES or role.id in existing_system_slugs)
+    )
+    if reserved:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "These custom positions use the name of a built-in position: "
+                f"{', '.join(reserved)}. Tick the built-in position instead, "
+                "or give the custom one a different name."
+            ),
+        )
+
+
+def _stored_priority(role_data: RoleSetupItem, existing: Optional[Any]) -> int:
+    """The priority to store; the client's figure is never trusted outright.
+
+    A built-in position keeps the registry's priority (or, for a seeded row
+    the registry no longer lists, the row's own) — the same rule
+    ``RoleService.update_role`` applies after setup, where a system position's
+    priority cannot be changed. Anything the client defines is clamped below
+    the System Owner's position.
+    """
+    if not role_data.is_custom:
+        registry = DEFAULT_ROLES.get(role_data.id)
+        if registry is not None:
+            return int(registry["priority"])
+        if existing is not None and existing.priority is not None:
+            return int(existing.priority)
+    return min(role_data.priority, _custom_priority_ceiling())
+
+
 @router.post("/session/roles", response_model=RolesSetupResponse)
 async def save_session_roles(
     request: Request, data: RolesSetupRequest, db: AsyncSession = Depends(get_db)
@@ -2634,8 +2706,18 @@ async def save_session_roles(
     # Backend stores: ["module.view", "module.manage", ...]
     from sqlalchemy import delete
 
-    from app.core.permissions import DEFAULT_ROLES
     from app.models.user import Role, user_positions
+
+    # Get existing system roles. Read before the delete below (which only
+    # touches non-system rows) so the submission is checked before any write.
+    result = await db.execute(
+        select(Role).where(
+            Role.organization_id == organization_id,
+            Role.is_system.is_(True),
+        )
+    )
+    existing_system_roles = {role.slug: role for role in result.scalars().all()}
+    _check_submitted_positions(data.roles, set(existing_system_roles))
 
     # Delete existing non-system roles for this organization (custom roles from previous attempts)
     await db.execute(
@@ -2644,15 +2726,6 @@ async def save_session_roles(
             Role.is_system.is_(False),
         )
     )
-
-    # Get existing system roles
-    result = await db.execute(
-        select(Role).where(
-            Role.organization_id == organization_id,
-            Role.is_system.is_(True),
-        )
-    )
-    existing_system_roles = {role.slug: role for role in result.scalars().all()}
 
     created_roles = []
     updated_roles = []
@@ -2682,7 +2755,7 @@ async def save_session_roles(
                 )
 
             existing_role.permissions = permission_list
-            existing_role.priority = role_data.priority
+            existing_role.priority = _stored_priority(role_data, existing_role)
             if role_data.description:
                 existing_role.description = role_data.description
             updated_roles.append(role_data.name)
@@ -2726,8 +2799,13 @@ async def save_session_roles(
                 slug=role_data.id,
                 description=role_data.description or f"Custom role: {role_data.name}",
                 permissions=permission_list,
-                is_system=not role_data.is_custom,  # System roles can't be deleted
-                priority=role_data.priority,
+                # System (undeletable) only for a position the registry defines.
+                # The client's is_custom flag alone used to decide this, so any
+                # invented slug could be minted as a system row (ONB-7); an
+                # unknown non-custom slug — a template a stale draft remembers —
+                # is stored as an ordinary position instead.
+                is_system=bool(registry_defaults),
+                priority=_stored_priority(role_data, None),
             )
             db.add(new_role)
             created_roles.append(role_data.name)
