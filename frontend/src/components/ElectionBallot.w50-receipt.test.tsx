@@ -140,6 +140,21 @@ describe('ElectionBallot (ballot convergence, W50-10, W50-53)', () => {
     expect(within(receipts).getByText('hash-chief')).toBeInTheDocument();
   });
 
+  it('holds Cast Ballot until each open item has a choice or an explicit Abstain (W50-25)', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ElectionBallot electionId="el1" election={election} />);
+
+    await user.click(await screen.findByRole('radio', { name: 'Approve' }));
+    const cast = screen.getByRole('button', { name: 'Cast Ballot' });
+    expect(cast).toBeDisabled();
+    expect(screen.getByText(/1 item still needs a selection or Abstain: Chief/)).toBeInTheDocument();
+
+    await user.click(
+      within(screen.getByRole('group', { name: 'Voting options for Chief' })).getByRole('radio', { name: /Abstain/ })
+    );
+    expect(cast).toBeEnabled();
+  });
+
   it('shows an item already voted as done and leaves the rest open', async () => {
     mockGetMemberBallot.mockResolvedValue(
       ballot({
@@ -203,6 +218,10 @@ describe('ElectionBallot (ballot convergence, W50-10, W50-53)', () => {
     expect(await screen.findByText('Voting as proxy for: Bob Baker')).toBeInTheDocument();
 
     await user.click(screen.getByRole('radio', { name: 'Deny' }));
+    // Nothing is pre-selected (W50-25): the Chief race is abstained on explicitly.
+    await user.click(
+      within(screen.getByRole('group', { name: 'Voting options for Chief' })).getByRole('radio', { name: /Abstain/ })
+    );
     await user.click(screen.getByRole('button', { name: "Cast Bob Baker's Ballot" }));
     await confirmCast(user);
 

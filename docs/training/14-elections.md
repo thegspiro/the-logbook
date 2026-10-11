@@ -611,9 +611,12 @@ every ballot item and every position race, answered the same way (Approve /
 Deny, one candidate, "Select up to N", or a ranking).
 
 1. Navigate to **Elections** and open the active election, then **Cast Vote**
-2. Make a selection on the items you are voting on now. An item you leave on
-   **Abstain** stays open — unlike the emailed link, the in-app ballot is not
-   single-use — and an item you have already voted on is shown as done
+2. Make a selection — or choose **Abstain** — on every open item. Nothing is
+   pre-selected _(2026-10-08, W50-25)_, and **Cast Ballot** stays disabled
+   until each item has one, with a line naming the items still waiting. An
+   item you abstain on stays open — unlike the emailed link, the in-app
+   ballot is not single-use — and an item you have already voted on is shown
+   as done
 3. Click **Cast Ballot**, check the summary in the confirmation and confirm.
    Everything you selected is recorded together: if any selection is refused
    (say, you are not eligible for that item), nothing is recorded and the
@@ -1245,8 +1248,10 @@ is still open.
 `docs/KNOWN_LIMITATIONS.md` under "Elections — Owner Decisions From the W50
 Drive"):
 
-- The emailed ballot pre-selects **Abstain** on every item; an untouched
-  Submit casts no votes and uses up the link.
+- ~~The emailed ballot pre-selects **Abstain** on every item~~ — fixed
+  2026-10-08 (W50-25): nothing is pre-selected on either ballot, and
+  **Submit Ballot** stays disabled until every item has a choice or an
+  explicit Abstain.
 - Scheduled opening (**Open Automatically at Start Time**) sends no ballots.
 - Several screen fixes found in the same review — the delete and close dialog
   wording, a close stamp on the election cards, a test-ballot banner on the

@@ -821,7 +821,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `election_service.py` ~8424 (options created as `Candidate` rows on first vote); `CandidateManagement.tsx`; `BallotVotingPage.tsx:551` (`election.allow_write_ins` regardless of `vote_type`); `BallotPreviewModal.tsx`.
 **Fix:** queue row 34 — hide option rows (position ∈ item ids, `is_write_in: false`), lock write-ins once voted, gate the radio on `vote_type === 'candidate_selection'`. Tests: `CandidateManagement.w50-options.test.tsx`, `BallotVotingPage.w50-writein.test.tsx`.
 
-### W50-25 — MED — Every item on the emailed ballot is pre-set to "Abstain"; an untouched Submit → Cast burns the single-use link with no votes — FLAGGED
+### W50-25 — MED — Every item on the emailed ballot is pre-set to "Abstain"; an untouched Submit → Cast burns the single-use link with no votes — ✅ DECIDED & FIXED (2026-10-08)
+
+**Owner decision:** no default. Nothing is pre-selected on either ballot (they share `components/ballot`), and Submit stays disabled until every item has a choice or an explicit Abstain. Tests: `BallotVotingPage.w50-abstain.test.tsx`, `ballotChoices.test.ts`.
 
 **Did:** as `member`, `member2` (phone) and anonymously, A6 steps 2/3/4.
 **Saw:** the Abstain radio filled on every item on load while the instructions read "Make a selection for each item below"; the confirm dialog's "Abstain (No Vote)" per item is the only guard.
@@ -867,7 +869,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `RecordPaperBallotsModal.tsx:99-104`; `MergeWriteInsModal`; `GET /elections/{id}/candidates` (item options carry `position = <item id>`).
 **Fix:** queue row 35 — resolve `position` against `election.ballot_items[].id` in both modals. Test: `RecordPaperBallotsModal.w50.test.tsx`.
 
-### W50-31 — MED — A sanctioned void turns the election into "Vote Integrity Issue Detected" and certifies CHAIN_BROKEN; voiding the chain tail leaves PASS — FLAGGED
+### W50-31 — MED — A sanctioned void turns the election into "Vote Integrity Issue Detected" and certifies CHAIN_BROKEN; voiding the chain tail leaves PASS — ✅ DECIDED & FIXED (2026-10-08)
+
+**Owner decision:** walk voids and report them. `verify_vote_integrity` verifies voided rows with the chain and returns `voided_votes` / `voids`; the Forensics panel and certified PDF print "N vote(s) voided by <officer>: <reason>" under a PASS. Test: `test_w50_integrity_with_voids.py`.
 
 **Did:** as `secretary`, the app's own Void form on E1 then the certified PDF (A8 step 14); as `admin`, a batch void on EB2 (B4 step 10), two tail voids on EB1 (B3 step 11), one void on EB3 (B7).
 **Saw:** the red banner "Vote chain is broken — votes may have been deleted or reordered"; the PDF "CHAIN_BROKEN (12 votes checked)" under "We certify that the results above are true and correct" with no mention of the void; every forensics GET on EB2 wrote a critical `vote_integrity_check` audit row; two tail voids → PASS 1/1.
