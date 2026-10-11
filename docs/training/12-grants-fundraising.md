@@ -33,6 +33,7 @@ Navigate to **Grants & Fundraising** in the sidebar. The module must be enabled 
 | ------------------------------- | --------------------------------- | -------------------- |
 | `/grants`                       | Dashboard                         | `fundraising.view`   |
 | `/grants/opportunities`         | Grant Opportunities Library       | `fundraising.view`   |
+| `/grants/opportunities/new`     | Add Opportunity                   | `fundraising.manage` |
 | `/grants/applications`          | Application List (Pipeline/Table) | `fundraising.view`   |
 | `/grants/applications/new`      | Create Application                | `fundraising.manage` |
 | `/grants/applications/:id`      | Application Detail (5 tabs)       | `fundraising.view`   |
@@ -97,12 +98,14 @@ The opportunities library is a catalog of available grant programs. Pre-loaded w
 
 **Required Permission:** `fundraising.manage`
 
-1. Click **Add Opportunity**
-2. Fill in: name, agency, description, eligibility criteria, application URL
-3. Set deadline type: Fixed, Recurring, or Rolling
-4. Enter typical award range (min/max) and match requirements
-5. Add required documents list and federal program code
-6. Save
+1. Click **Add Opportunity** (shown only to `fundraising.manage` holders)
+2. Enter the **Program name** — the only required field — and, as you know them, the agency or funder, category, federal program code, description, eligible uses and who is eligible
+3. Enter the typical award range (smallest and largest). Tick **The department must contribute a local match** to give the match percentage and a note about it
+4. Choose the **Deadline**: Fixed date (the date is then required), Recurring (enter the next deadline if known) or Rolling (no date)
+5. Add the application and program-information links (http or https only) and any notes
+6. Click **Add opportunity**. You return to the library, where the new program is listed
+
+The required-documents list, tags and a recurring schedule can be stored through the API but are not on this form.
 
 ![Grant opportunities library showing available grant programs](./images/12-03-opportunities.png)
 

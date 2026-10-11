@@ -24,6 +24,7 @@ const GrantApplicationFormPage = lazyWithRetry(() => import('./pages/GrantApplic
 
 // Grant Opportunities
 const GrantOpportunitiesPage = lazyWithRetry(() => import('./pages/GrantOpportunitiesPage'));
+const GrantOpportunityFormPage = lazyWithRetry(() => import('./pages/GrantOpportunityFormPage'));
 
 // Fundraising
 const CampaignsPage = lazyWithRetry(() => import('./pages/CampaignsPage'));
@@ -60,6 +61,18 @@ export const getGrantsFundraisingRoutes = () => {
             requiredPermission="fundraising.view"
           >
             <GrantOpportunitiesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/grants/opportunities/new"
+        element={
+          <ProtectedRoute
+            requiredModule="grants"
+            moduleLabel="Grants & Fundraising"
+            requiredPermission="fundraising.manage"
+          >
+            <GrantOpportunityFormPage />
           </ProtectedRoute>
         }
       />

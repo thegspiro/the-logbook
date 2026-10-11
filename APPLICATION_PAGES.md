@@ -1288,6 +1288,7 @@ lot's number or expiration date require `inventory.check_manage` or
 | ------------------------------- | ------------------- | -------------------- |
 | `/grants`                       | Grants Dashboard    | `fundraising.view`   |
 | `/grants/opportunities`         | Grant Opportunities | `fundraising.view`   |
+| `/grants/opportunities/new`     | New Opportunity     | `fundraising.manage` |
 | `/grants/applications`          | Grant Applications  | `fundraising.view`   |
 | `/grants/applications/new`      | New Application     | `fundraising.manage` |
 | `/grants/applications/:id`      | Grant Detail        | `fundraising.view`   |

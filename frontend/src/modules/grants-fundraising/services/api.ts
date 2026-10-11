@@ -7,6 +7,7 @@
 import { createApiClient } from '../../../utils/createApiClient';
 import type {
   GrantOpportunity,
+  GrantOpportunityCreatePayload,
   GrantApplication,
   GrantBudgetItem,
   GrantExpenditure,
@@ -56,7 +57,7 @@ export const grantsService = {
     return response.data;
   },
 
-  async createOpportunity(data: Partial<GrantOpportunity>): Promise<GrantOpportunity> {
+  async createOpportunity(data: GrantOpportunityCreatePayload): Promise<GrantOpportunity> {
     const response = await api.post<GrantOpportunity>('/grants', data);
     return response.data;
   },

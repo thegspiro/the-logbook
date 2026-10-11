@@ -35,6 +35,13 @@ export const GrantCategory = {
 } as const;
 export type GrantCategory = (typeof GrantCategory)[keyof typeof GrantCategory];
 
+export const DeadlineType = {
+  FIXED: 'fixed',
+  RECURRING: 'recurring',
+  ROLLING: 'rolling',
+} as const;
+export type DeadlineType = (typeof DeadlineType)[keyof typeof DeadlineType];
+
 export const GrantPriority = {
   LOW: 'low',
   MEDIUM: 'medium',
@@ -185,6 +192,28 @@ export interface GrantOpportunity {
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** `POST /grants`. Blank optional fields are omitted; amounts are decimal strings. */
+export interface GrantOpportunityCreatePayload {
+  name: string;
+  agency?: string | undefined;
+  category?: GrantCategory | undefined;
+  description?: string | undefined;
+  eligibleUses?: string | undefined;
+  eligibilityCriteria?: string | undefined;
+  typicalAwardMin?: string | undefined;
+  typicalAwardMax?: string | undefined;
+  matchRequired: boolean;
+  matchPercentage?: string | undefined;
+  matchDescription?: string | undefined;
+  deadlineType?: DeadlineType | undefined;
+  /** `YYYY-MM-DD`. */
+  deadlineDate?: string | undefined;
+  applicationUrl?: string | undefined;
+  programUrl?: string | undefined;
+  federalProgramCode?: string | undefined;
+  notes?: string | undefined;
 }
 
 // =============================================================================

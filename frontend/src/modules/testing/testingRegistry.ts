@@ -1106,6 +1106,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
     pages: [
       { path: '/grants', label: 'Grants dashboard', permission: 'fundraising.view', module: 'grants' },
       { path: '/grants/opportunities', label: 'Grant opportunities', permission: 'fundraising.view', module: 'grants' },
+      {
+        path: '/grants/opportunities/new',
+        label: 'New grant opportunity',
+        permission: 'fundraising.manage',
+        module: 'grants',
+      },
       { path: '/grants/applications', label: 'Grant applications', permission: 'fundraising.view', module: 'grants' },
       {
         path: '/grants/applications/new',
