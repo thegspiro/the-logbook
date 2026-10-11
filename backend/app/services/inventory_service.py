@@ -3088,6 +3088,79 @@ class InventoryService:
             await self.db.rollback()
             return None, str(e)
 
+    async def _lock_open_return_notices(
+        self, organization_id: UUID | str, item_id: UUID | str
+    ) -> List[ReturnRequest]:
+        """Lock the item's open ("requested") return notices, before the item.
+
+        W39-5: gear that comes back through a direct return must take the
+        member's open notice off the queue. ``review_return_request`` locks the
+        notice and then the item, so the direct paths take them in the same
+        order — locking the notice after the item would let a direct return
+        and a review of the same notice deadlock each other.
+        """
+        result = await self.db.execute(
+            select(ReturnRequest)
+            .where(
+                ReturnRequest.organization_id == str(organization_id),
+                ReturnRequest.item_id == str(item_id),
+                ReturnRequest.status == ReturnRequestStatus.REQUESTED,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return list(result.scalars().all())
+
+    @staticmethod
+    def _mark_return_notices_received(
+        notices: List[ReturnRequest],
+        *,
+        requester_id: str,
+        return_type: ReturnRequestType,
+        holding_id: Optional[str],
+        quantity: int,
+        holding_closed: bool,
+        received_by: UUID | str,
+        via: str,
+    ) -> None:
+        """Mark the member's open notice for this holding received.
+
+        Owner decision on W39-5: "received for inspection", not completed. The
+        direct return recorded its own condition on the holding; the notice
+        records only that the gear came back, by which path, and how many —
+        ``observed_condition`` stays empty because nobody inspected it through
+        the notice. A partial pool return that brings back fewer units than the
+        notice announced leaves the notice open.
+        """
+        holding_column = {
+            ReturnRequestType.ASSIGNMENT: "assignment_id",
+            ReturnRequestType.CHECKOUT: "checkout_id",
+            ReturnRequestType.ISSUANCE: "issuance_id",
+        }[return_type]
+        now = datetime.now(timezone.utc)
+        for notice in notices:
+            if notice.status != ReturnRequestStatus.REQUESTED:
+                continue
+            if str(notice.requester_id) != str(requester_id):
+                continue
+            noted_type = getattr(notice.return_type, "value", notice.return_type)
+            if noted_type != return_type.value:
+                continue
+            noted_holding = getattr(notice, holding_column)
+            if noted_holding and holding_id and str(noted_holding) != str(holding_id):
+                continue
+            announced = notice.quantity_returning or 1
+            if not holding_closed and quantity < announced:
+                continue
+            notice.status = ReturnRequestStatus.RECEIVED
+            notice.reviewed_by = str(received_by)
+            notice.reviewed_at = now
+            notice.received_quantity = min(quantity, announced)
+            notice.review_notes = (
+                f"Received through {via}, not through this notice; "
+                "not inspected here."
+            )
+
     async def unassign_item(
         self,
         item_id: UUID,
@@ -3104,6 +3177,7 @@ class InventoryService:
         in batch operations.
         """
         try:
+            notices = await self._lock_open_return_notices(organization_id, item_id)
             # Lock the item row to prevent concurrent assign/unassign races
             item = await self._get_item_locked(item_id, organization_id)
             if not item:
@@ -3136,6 +3210,17 @@ class InventoryService:
                 assignment.returned_by = returned_by
                 assignment.return_condition = return_condition
                 assignment.return_notes = return_notes
+
+            self._mark_return_notices_received(
+                notices,
+                requester_id=previous_user_id,
+                return_type=ReturnRequestType.ASSIGNMENT,
+                holding_id=str(assignment.id) if assignment else None,
+                quantity=1,
+                holding_closed=True,
+                received_by=returned_by,
+                via="a direct return",
+            )
 
             # Update item
             item.assigned_to_user_id = None
@@ -3597,6 +3682,10 @@ class InventoryService:
             if not peek_item_id:
                 return False, "Issuance record not found"
 
+            notices = await self._lock_open_return_notices(
+                organization_id, peek_item_id
+            )
+
             # Lock the item row before modifying pool counts to prevent
             # concurrent returns from losing updates via read-modify-write
             item = await self._get_item_locked(
@@ -3658,6 +3747,17 @@ class InventoryService:
             )
             # Down either way: the member is not holding them any more.
             item.quantity_issued = max(0, (item.quantity_issued or 0) - qty)
+
+            self._mark_return_notices_received(
+                notices,
+                requester_id=issuance_user_id,
+                return_type=ReturnRequestType.ISSUANCE,
+                holding_id=str(issuance.id),
+                quantity=qty,
+                holding_closed=qty >= issuance.quantity_issued,
+                received_by=returned_by,
+                via="a direct pool return",
+            )
 
             # Handle partial return: reduce issuance quantity_issued and leave open
             if qty < issuance.quantity_issued:
@@ -3852,6 +3952,10 @@ class InventoryService:
             if not peek_item_id:
                 return False, "Checkout record not found"
 
+            notices = await self._lock_open_return_notices(
+                organization_id, peek_item_id
+            )
+
             # Lock the item row before mutating status/condition to prevent
             # concurrent checkout/checkin from creating inconsistent state
             item = await self._get_item_locked(UUID(str(peek_item_id)), organization_id)
@@ -3903,6 +4007,17 @@ class InventoryService:
             checkout.damage_notes = damage_notes
             checkout.is_returned = True
             checkout.is_overdue = False
+
+            self._mark_return_notices_received(
+                notices,
+                requester_id=checkout_user_id,
+                return_type=ReturnRequestType.CHECKOUT,
+                holding_id=str(checkout.id),
+                quantity=1,
+                holding_closed=True,
+                received_by=checked_in_by,
+                via="a check-in",
+            )
 
             item.condition = return_condition
 

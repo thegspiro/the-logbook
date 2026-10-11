@@ -107,6 +107,26 @@ describe('ReturnRequestsPanel', () => {
     expect(within(followUp).queryByRole('option', { name: 'Charge review' })).not.toBeInTheDocument();
   });
 
+  // W39-5: a notice whose gear came back another way is marked received and
+  // leaves the Requested queue; the filter is how a quartermaster finds it.
+  it('lists notices received another way, with no Receive or Deny action', async () => {
+    mockGetReturnRequests.mockResolvedValue([
+      {
+        ...gloves,
+        status: 'received',
+        review_notes: 'Received through a direct pool return, not through this notice; not inspected here.',
+      },
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<ReturnRequestsPanel />);
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: /Status/ }), 'received');
+
+    await waitFor(() => expect(mockGetReturnRequests).toHaveBeenLastCalledWith({ status: 'received' }));
+    expect(await screen.findByText(/not through this notice/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Receive Nitrile Gloves/ })).not.toBeInTheDocument();
+  });
+
   it('names each row action after its item and member, and reads conditions as words', async () => {
     const user = userEvent.setup();
     renderWithRouter(<ReturnRequestsPanel />);

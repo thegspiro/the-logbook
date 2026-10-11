@@ -3369,11 +3369,18 @@ recorded as "charged $0.00" against the member.
 
 Two open items from the same review, both in `docs/KNOWN_LIMITATIONS.md`:
 
-- **Receiving gear back another way leaves the member's return notice open**
-  (W39-5). If you take the gear through **Return** on the members page instead
-  of receiving the notice, the notice stays in the returns queue, on the hub's
-  attention list and in the member's **Pending requests**, and can then only be
-  denied. Receive through the notice when there is one.
+- ~~**Receiving gear back another way leaves the member's return notice open**
+  (W39-5).~~ **Resolved 2026-10-11:** taking the gear back through **Return**
+  on the members page, a pool return, or a loan check-in now marks the
+  member's open notice for that holding **received**. It leaves the returns
+  queue, the hub's attention list and the member's **Pending requests**; find
+  it under **Status: Received another way** in the returns panel, with the note
+  "Received through a direct return, not through this notice; not inspected
+  here." The condition you recorded on the return itself is the record of what
+  came back — the notice does not claim an inspection. A pool return of fewer
+  units than the notice announced leaves the notice open. Receiving through the
+  notice is still the better path when there is one, because it records the
+  inspection and any safety follow-up against the member's report.
 - ~~**A write-off raised for one returned pool unit retires the whole item**
   (W41-6).~~ **Resolved 2026-10-11:** receiving a damaged pool return no
   longer offers **Write-off review** as a safety follow-up — only

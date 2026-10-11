@@ -138,6 +138,9 @@ const ReturnRequestsPanel: React.FC = () => {
         >
           <option value="requested">Requested</option>
           <option value="">All</option>
+          {/* Gear that came back through a direct return, check-in or pool
+              return while this notice was open (W39-5). */}
+          <option value="received">Received another way</option>
           <option value="completed">Completed</option>
           <option value="denied">Denied</option>
         </select>
