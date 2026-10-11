@@ -75,6 +75,7 @@ Recommended crontab (add to host or container cron):
 
 # Daily at 6:30 AM — compliance auto-report generation (monthly on configured day, yearly on Jan 1)
 30 6 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=compliance_auto_reports
+40 13 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=compliance_member_notices
 
 # Daily at 3:00 AM — message history cleanup (delete records older than 90 days)
 0 3 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=message_history_cleanup
@@ -394,6 +395,12 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "06:30",
         "cron": "30 6 * * *",
+    },
+    "compliance_member_notices": {
+        "description": "Email members training-requirement reminders on the department's configured days before each deadline, and a notice when they fall out of compliance (Compliance configuration > Notifications)",
+        "frequency": "daily",
+        "recommended_time": "13:40",
+        "cron": "40 13 * * *",
     },
     "message_history_cleanup": {
         "description": "Delete message history records older than 90 days to prevent unbounded table growth",
@@ -5497,6 +5504,20 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
     }
 
 
+async def run_compliance_member_notices(db: AsyncSession) -> Dict[str, Any]:
+    """Training-compliance reminders and notices to members (CMP2-1).
+
+    Email only (CLAUDE.md pitfall #18). Which requirements are unmet, when
+    each is due, and the sent-log that keeps a second run the same day from
+    sending again are in ``compliance_member_notices``.
+    """
+    from app.services.compliance_member_notices import send_member_compliance_notices
+
+    return await _for_each_org(
+        db, "compliance_member_notices", send_member_compliance_notices
+    )
+
+
 async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
     """
     Send email reminders 6 months before a recurring event series ends.
@@ -7037,6 +7058,7 @@ TASK_RUNNERS = {
     "nfpa_retirement_alerts": run_nfpa_retirement_alerts,
     "supply_expiration_alerts": run_supply_expiration_alerts,
     "compliance_auto_reports": run_compliance_auto_reports,
+    "compliance_member_notices": run_compliance_member_notices,
     "message_history_cleanup": run_message_history_cleanup,
     "publish_scheduled_messages": run_publish_scheduled_messages,
     "recover_stranded_message_deliveries": run_recover_stranded_message_deliveries,
@@ -7103,6 +7125,9 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "storefront_payment_reminders": 86400,
     "paypal_capture_backfill": 86400,
     "compliance_auto_reports": 86400,
+    # Daily; idempotent per (requirement, deadline, offset) and per unmet set
+    # through a sent-log (compliance_member_notices).
+    "compliance_member_notices": 86400,
     "message_history_cleanup": 86400,
     "series_end_reminders": 86400,
     "rolling_recurrence_extend": 86400,

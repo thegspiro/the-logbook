@@ -223,7 +223,11 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         label="Training and certification reminders",
         required=False,
         audience=_M,
-        includes=("Certifications expiring or expired",),
+        includes=(
+            "Certifications expiring or expired",
+            "Training requirement due soon",
+            "Training requirements not met",
+        ),
         rationale=(
             "Officers are still copied on escalations when the department "
             "has escalation turned on."
