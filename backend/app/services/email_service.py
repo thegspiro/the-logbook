@@ -18,11 +18,23 @@ from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 from loguru import logger
 
 from app.core.config import settings
+from app.core.file_encryption import FileDecryptionError
 from app.models.email_template import EmailTemplateType
 from app.models.user import Organization
 from app.schemas.organization import decrypt_settings_secrets
@@ -38,6 +50,11 @@ from app.services.email_theme import (
     facts,
     find_element_end,
 )
+from app.services.file_storage_service import (
+    FileStorageError,
+    StorageArea,
+    get_file_storage,
+)
 from app.utils.email_providers import (
     is_valid_cloudflare_account_id,
     resolve_smtp_settings,
@@ -49,6 +66,110 @@ from app.utils.org_timezone import ZONED_DATE_TIME_FORMAT, format_in_org_timezon
 # Header injection control characters that must never appear in
 # RFC 5322 unstructured fields (Subject, From display-name, etc.).
 _HEADER_INJECTION_RE = re.compile(r"[\r\n\x00]")
+
+
+class EmailAttachmentFile(NamedTuple):
+    """An attachment held in memory rather than read from a path.
+
+    Stored files are encrypted at rest, so a template attachment is decrypted
+    by the storage service and handed over as bytes — a plaintext copy is
+    never written back to disk to be attached.
+    """
+
+    filename: str
+    content: bytes
+    content_type: Optional[str] = None
+
+
+class _AttachmentSource(NamedTuple):
+    filename: str
+    size: int
+    content_type: Optional[str]
+    read: Callable[[], bytes]
+
+
+def _read_path(path: str) -> bytes:
+    with open(path, "rb") as handle:
+        return handle.read()
+
+
+def _attachment_sources(
+    attachment_paths: Optional[List[str]],
+    attachment_files: Optional[Sequence[EmailAttachmentFile]],
+) -> Iterator[_AttachmentSource]:
+    """Every attachment to send, path-based first, with size known up front.
+
+    Reading is deferred to ``read`` so a send that skips an attachment for
+    the size budget never loads it.
+    """
+    for filepath in attachment_paths or []:
+        resolved = os.path.realpath(filepath)
+        if not os.path.isfile(resolved):
+            logger.warning("Attachment not found, skipping")
+            continue
+        yield _AttachmentSource(
+            filename=os.path.basename(resolved),
+            size=os.path.getsize(resolved),
+            content_type=mimetypes.guess_type(resolved)[0],
+            read=lambda path=resolved: _read_path(path),
+        )
+    for item in attachment_files or []:
+        yield _AttachmentSource(
+            filename=item.filename,
+            size=len(item.content),
+            content_type=item.content_type or mimetypes.guess_type(item.filename)[0],
+            read=lambda content=item.content: content,
+        )
+
+
+# Where template attachments were written before the shared storage service:
+# relative to the backend's working directory, i.e. outside the uploads volume.
+LEGACY_EMAIL_ATTACHMENT_DIR = os.path.join("storage", "email_attachments")
+
+
+def email_attachment_storage_scope(
+    organization_id: Any, template_id: Any
+) -> Dict[str, Any]:
+    """Where one template's attachments may live: that template's files in its
+    organization, or the org's legacy attachment directory."""
+    return {
+        "organization_id": organization_id,
+        "area": StorageArea.EMAIL_TEMPLATES,
+        "legacy_dirs": [
+            os.path.join(LEGACY_EMAIL_ATTACHMENT_DIR, str(organization_id))
+        ],
+        "entity_id": template_id,
+    }
+
+
+def load_template_attachment_files(template: Any) -> List[EmailAttachmentFile]:
+    """Decrypt a template's stored attachments for sending.
+
+    A file that is missing, out of scope or unreadable is skipped with a
+    warning — the same rule the path-based attachments follow — so one bad
+    attachment does not stop a welcome email going out.
+    """
+    storage = get_file_storage()
+    scope = email_attachment_storage_scope(template.organization_id, template.id)
+    files: List[EmailAttachmentFile] = []
+    for attachment in template.attachments or []:
+        try:
+            content = storage.read_bytes(attachment.storage_path, **scope)
+        except (FileStorageError, FileDecryptionError, OSError, ValueError) as exc:
+            logger.warning(
+                "Template attachment {} skipped: {}",
+                attachment.id,
+                type(exc).__name__,
+            )
+            continue
+        files.append(
+            EmailAttachmentFile(
+                filename=attachment.filename or "attachment",
+                content=content,
+                content_type=attachment.content_type,
+            )
+        )
+    return files
 
 
 def _sanitize_header(value: str) -> str:
@@ -868,8 +989,9 @@ class EmailService:
         cls,
         attachment_paths: Optional[List[str]],
         budget_bytes: Optional[int] = None,
+        attachment_files: Optional[Sequence[EmailAttachmentFile]] = None,
     ) -> List[Dict[str, str]]:
-        """Read attachment files into Cloudflare Email API attachment dicts.
+        """Read attachments into Cloudflare Email API attachment dicts.
 
         Returns ``[{filename, type, content (base64), disposition}]``.
         Missing files are skipped with a warning (matching the SMTP path);
@@ -884,25 +1006,19 @@ class EmailService:
         )
         attachments: List[Dict[str, str]] = []
         used = 0
-        for filepath in attachment_paths or []:
-            resolved = os.path.realpath(filepath)
-            if not os.path.isfile(resolved):
-                logger.warning("Attachment not found, skipping")
-                continue
-            with open(resolved, "rb") as f:
-                content_b64 = base64.b64encode(f.read()).decode("ascii")
+        for source in _attachment_sources(attachment_paths, attachment_files):
+            content_b64 = base64.b64encode(source.read()).decode("ascii")
             if used + len(content_b64) > budget:
                 logger.warning(
                     "Attachment exceeds Cloudflare 5 MiB message cap, " "skipping: {}",
-                    os.path.basename(resolved),
+                    source.filename,
                 )
                 continue
             used += len(content_b64)
-            mime_type, _ = mimetypes.guess_type(resolved)
             attachments.append(
                 {
-                    "filename": _sanitize_header(os.path.basename(resolved)),
-                    "type": mime_type or "application/octet-stream",
+                    "filename": _sanitize_header(source.filename),
+                    "type": source.content_type or "application/octet-stream",
                     "content": content_b64,
                     "disposition": "attachment",
                 }
@@ -1331,6 +1447,7 @@ class EmailService:
         reply_to: Optional[str] = None,
         list_unsubscribe: Optional[str] = None,
         results_out: Optional[List[bool]] = None,
+        attachment_files: Optional[Sequence[EmailAttachmentFile]] = None,
     ) -> tuple[int, int]:
         """
         Send an email to one or more recipients
@@ -1341,6 +1458,8 @@ class EmailService:
             html_body: HTML email body
             text_body: Optional plain text version of email
             attachment_paths: Optional list of file paths to attach
+            attachment_files: Optional in-memory attachments (already
+                decrypted stored files), attached after ``attachment_paths``
             cc_emails: Optional list of CC recipient email addresses
             bcc_emails: Optional list of BCC recipient email addresses (not shown in headers)
             db: Optional async database session (for logging to message_history)
@@ -1366,7 +1485,9 @@ class EmailService:
         # --- Cloudflare Email Service path (REST API, no SMTP) ---
         if self._use_cloudflare:
             try:
-                cf_attachments = self._build_cloudflare_attachments(attachment_paths)
+                cf_attachments = self._build_cloudflare_attachments(
+                    attachment_paths, attachment_files=attachment_files
+                )
                 results = await self._cloudflare_send(
                     to_emails=to_emails,
                     subject=subject,
@@ -1389,24 +1510,18 @@ class EmailService:
             # Pre-read attachment payloads once (avoids re-reading per recipient)
             attachment_parts: List[MIMEBase] = []
             attachment_bytes_used = 0
-            for filepath in attachment_paths or []:
-                resolved = os.path.realpath(filepath)
-                if not os.path.isfile(resolved):
-                    logger.warning("Attachment not found, skipping")
-                    continue
-                file_size = os.path.getsize(resolved)
-                if attachment_bytes_used + file_size > self._SMTP_ATTACHMENT_BUDGET:
+            for source in _attachment_sources(attachment_paths, attachment_files):
+                if attachment_bytes_used + source.size > self._SMTP_ATTACHMENT_BUDGET:
                     logger.warning(
                         "Attachment exceeds per-message size budget, skipping: {}",
-                        os.path.basename(resolved),
+                        source.filename,
                     )
                     continue
-                attachment_bytes_used += file_size
-                with open(resolved, "rb") as f:
-                    part = MIMEBase("application", "octet-stream")
-                    part.set_payload(f.read())
+                attachment_bytes_used += source.size
+                part = MIMEBase("application", "octet-stream")
+                part.set_payload(source.read())
                 encoders.encode_base64(part)
-                filename = _sanitize_header(os.path.basename(resolved))
+                filename = _sanitize_header(source.filename)
                 part.add_header("Content-Disposition", "attachment", filename=filename)
                 attachment_parts.append(part)
 
@@ -1980,6 +2095,7 @@ class EmailService:
 
         # Welcome template supports attachments stored on the template itself
         loaded_template = None
+        template_files: List[EmailAttachmentFile] = []
         if db and organization_id:
             try:
                 svc = EmailTemplateService(db)
@@ -1991,8 +2107,9 @@ class EmailService:
                     and loaded_template.allow_attachments
                     and loaded_template.attachments
                 ):
-                    stored_paths = [a.storage_path for a in loaded_template.attachments]
-                    attachment_paths = (attachment_paths or []) + stored_paths
+                    template_files = await asyncio.to_thread(
+                        load_template_attachment_files, loaded_template
+                    )
             except Exception as e:
                 logger.warning(
                     "Failed to load welcome email template, using default: {}", e
@@ -2013,6 +2130,7 @@ class EmailService:
             html_body=html_body,
             text_body=text_body,
             attachment_paths=attachment_paths,
+            attachment_files=template_files,
             db=db,
             template_type="welcome",
         )

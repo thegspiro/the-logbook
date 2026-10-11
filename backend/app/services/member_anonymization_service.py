@@ -41,7 +41,7 @@ Preconditions: the member must already be departed (soft-deleted or in a
 departed/archived status). Anonymization is irreversible by design.
 """
 
-import os
+import asyncio
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -68,6 +68,7 @@ from app.models.user import (
     User,
     UserStatus,
 )
+from app.services.membership_pipeline_service import remove_prospect_document_file
 
 _DEPARTED_STATUSES = {
     UserStatus.DROPPED_VOLUNTARY,
@@ -365,7 +366,12 @@ class MemberAnonymizationService:
             for doc in docs_result.scalars().all():
                 if doc.file_path:
                     try:
-                        os.remove(doc.file_path)
+                        await asyncio.to_thread(
+                            remove_prospect_document_file,
+                            doc.file_path,
+                            prospect.organization_id,
+                            prospect.id,
+                        )
                     except OSError:
                         pass  # already gone or unreachable — the row still goes
             await self.db.execute(

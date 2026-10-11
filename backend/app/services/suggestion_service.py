@@ -69,10 +69,13 @@ from app.schemas.suggestion import (
     MAX_TITLE_LENGTH,
     SuggestionBoxWrite,
 )
+from app.services.file_storage_service import StorageArea, get_file_storage
 from app.utils.image_processing import optimize_image
 from app.utils.mime_validation import detect_mime_type
 from app.utils.org_scoping import assert_all_in_org
 
+# Where screenshots were written before the shared storage service; rows from
+# then hold absolute paths under {this}/{org}/ and stay readable until moved.
 SUGGESTION_ATTACHMENT_DIR = "/app/uploads/suggestions"
 MAX_SCREENSHOTS = 5
 MAX_SCREENSHOT_BYTES = 10 * 1024 * 1024
@@ -144,11 +147,23 @@ def _display_name(user: Optional[User]) -> Optional[str]:
     return user.display_name or user.username or None
 
 
-def _remove_quietly(path: str) -> None:
-    try:
-        os.remove(path)
-    except OSError:
-        pass
+def attachment_storage_scope(attachment: SuggestionAttachment) -> Dict[str, Any]:
+    """Where a screenshot may live: its own suggestion's files in its org, or
+    the org's legacy screenshot directory."""
+    return {
+        "organization_id": attachment.organization_id,
+        "area": StorageArea.SUGGESTIONS,
+        "legacy_dirs": [
+            os.path.join(SUGGESTION_ATTACHMENT_DIR, str(attachment.organization_id))
+        ],
+        "entity_id": attachment.suggestion_id,
+    }
+
+
+def _remove_stored(references: List[Tuple[str, Dict[str, Any]]]) -> None:
+    storage = get_file_storage()
+    for reference, scope in references:
+        storage.delete_quietly(reference, **scope)
 
 
 class SuggestionService:
@@ -239,13 +254,16 @@ class SuggestionService:
             .scalars()
             .all()
         )
-        paths = [p for p in (self.confined_path(a) for a in attachments) if p]
+        references = [
+            (a.file_path, attachment_storage_scope(a))
+            for a in attachments
+            if a.file_path
+        ]
         # The database cascades from the box through its submissions and
         # everything under them.
         await self.db.delete(box)
         await self.db.commit()
-        for path in paths:
-            _remove_quietly(path)
+        await asyncio.to_thread(_remove_stored, references)
         return count
 
     async def create_box(
@@ -630,7 +648,10 @@ class SuggestionService:
         try:
             for index, content in enumerate(screenshots):
                 path = await self._write_screenshot(
-                    box.organization_id, content, stamp if is_anonymous else None
+                    box.organization_id,
+                    suggestion.id,
+                    content,
+                    stamp if is_anonymous else None,
                 )
                 written.append(path)
                 self.db.add(
@@ -648,29 +669,41 @@ class SuggestionService:
             await self.db.commit()
         except Exception:
             await self.db.rollback()
-            for path in written:
-                await asyncio.to_thread(_remove_quietly, path)
+            await asyncio.to_thread(
+                _remove_stored,
+                [
+                    (
+                        path,
+                        {
+                            "organization_id": box.organization_id,
+                            "area": StorageArea.SUGGESTIONS,
+                            "entity_id": suggestion.id,
+                        },
+                    )
+                    for path in written
+                ],
+            )
             raise
         return suggestion, key
 
     async def _write_screenshot(
-        self, organization_id: str, content: bytes, mtime: Optional[datetime]
+        self,
+        organization_id: str,
+        suggestion_id: str,
+        content: bytes,
+        mtime: Optional[datetime],
     ) -> str:
-        org_dir = os.path.join(SUGGESTION_ATTACHMENT_DIR, str(organization_id))
-        path = os.path.join(org_dir, f"{uuid.uuid4().hex}.webp")
-
-        def _write() -> None:
-            os.makedirs(org_dir, exist_ok=True)
-            with open(path, "wb") as handle:
-                handle.write(content)
-            if mtime is not None:
-                # The filesystem would otherwise keep the exact upload time the
-                # row itself declines to record.
-                seconds = mtime.timestamp()
-                os.utime(path, (seconds, seconds))
-
-        await asyncio.to_thread(_write)
-        return path
+        # mtime: an anonymous submission's file must not keep the exact upload
+        # time the row itself declines to record.
+        stored = await asyncio.to_thread(
+            get_file_storage().save,
+            content,
+            organization_id=organization_id,
+            area=StorageArea.SUGGESTIONS,
+            entity_id=suggestion_id,
+            mtime=mtime,
+        )
+        return stored.key
 
     # ------------------------------------------------------------------
     # The submitter's side
@@ -1559,16 +1592,6 @@ class SuggestionService:
             if attachment.id == str(attachment_id):
                 return attachment
         return None
-
-    @staticmethod
-    def confined_path(attachment: SuggestionAttachment) -> Optional[str]:
-        real_path = os.path.realpath(attachment.file_path)
-        org_root = os.path.realpath(
-            os.path.join(SUGGESTION_ATTACHMENT_DIR, str(attachment.organization_id))
-        )
-        if not real_path.startswith(org_root + os.sep):
-            return None
-        return real_path
 
     @staticmethod
     def _attachment_view(attachment: SuggestionAttachment) -> Dict[str, Any]:

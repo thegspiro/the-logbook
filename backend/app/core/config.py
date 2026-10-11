@@ -1212,7 +1212,12 @@ class Settings(BaseSettings):
     # ============================================
     # File Storage
     # ============================================
-    STORAGE_TYPE: str = "local"  # local, s3, azure, gcs
+    # Only "local" is implemented (app/services/file_storage_service.py); any
+    # other value logs a warning and files are still written to UPLOAD_DIR.
+    STORAGE_TYPE: str = "local"
+    # Root of every stored upload. Relative values resolve against the
+    # backend's working directory — /app in the container, so the default is
+    # the /app/uploads volume every compose file mounts.
     UPLOAD_DIR: str = "./uploads"
     MAX_FILE_SIZE: int = 52428800  # 50 MB
 

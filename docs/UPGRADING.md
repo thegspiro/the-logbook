@@ -412,6 +412,41 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Uploaded files are encrypted, and `UPLOAD_DIR` is now read (2026-10-11)
+
+Every file uploaded from this release on — documents, event attachments,
+training certificates, applicant documents, suggestion screenshots, email
+template attachments — is encrypted before it is written and filed under
+`{UPLOAD_DIR}/{organization}/{module}/{record}/`. See
+[FILE_STORAGE.md](./FILE_STORAGE.md). What to check:
+
+- **`UPLOAD_DIR` now takes effect.** It was read by nothing before, so a value
+  in `.env` may have sat there unnoticed. The default `./uploads` resolves to
+  `/app/uploads` inside the container — the volume every shipped compose file
+  mounts — so an installation that never set it changes nothing. If yours sets
+  something else, either mount a volume at that path or remove the line;
+  otherwise new uploads land in the container's own filesystem and are lost
+  when it is recreated. Files already uploaded stay where they are.
+- **`STORAGE_TYPE` other than `local`** logs a warning and files are still
+  stored locally — exactly what has always happened.
+- **The uploads backup now needs the key.** `uploads.tar.gz` holds ciphertext
+  for new files; keep `ENCRYPTION_KEY`, `ENCRYPTION_SALT` and any
+  `ENCRYPTION_KEYS_LEGACY` values with your backups
+  ([BACKUP.md](./BACKUP.md)).
+- **Do not drop a rotated key from `ENCRYPTION_KEYS_LEGACY`.** The rotation
+  script re-encrypts database rows but not files, and files uploaded under the
+  old key become unreadable without it ([KEY_ROTATION.md](./KEY_ROTATION.md)).
+- **Email template attachments uploaded before this release** were stored
+  inside the container (`/app/storage/email_attachments`), not in the uploads
+  volume. They still send for as long as that container exists; if the
+  container has been recreated since they were uploaded they are already gone,
+  and need uploading again.
+- **Downloads no longer answer HTTP range requests.** A file is decrypted as it
+  streams, so a client asking for part of a file receives all of it. No screen
+  in the application asks for a range.
+
+Existing files are untouched and keep downloading exactly as before.
+
 ### The QuickBooks export is a journal-entry import, and needs accounts first (2026-10-08)
 
 `POST /finance/export/transactions` now produces a file QuickBooks Online's

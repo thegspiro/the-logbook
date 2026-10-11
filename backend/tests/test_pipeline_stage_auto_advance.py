@@ -156,7 +156,7 @@ async def _upload_document(
         organization_id=org_id,
         document_type=document_type,
         file_name=f"{token}.pdf",
-        file_path=f"/app/uploads/{token}.pdf",
+        file_path=f"{org_id}/prospects/{prospect.id}/{_uid().replace('-', '')}.enc",
         step_id=step_id,
     )
 

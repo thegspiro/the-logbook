@@ -13,6 +13,8 @@ import pytest
 from app.api.v1.endpoints.message_history import send_test_email
 from app.models.email_template import EmailTemplateType
 from app.schemas.email_template import SendTestEmailRequest
+from app.services.email_service import EmailAttachmentFile
+from app.services.file_storage_service import StorageArea, get_file_storage
 
 pytestmark = pytest.mark.unit
 
@@ -26,6 +28,7 @@ def _result(value):
 def _template(allow_attachments, attachments, template_type=EmailTemplateType.WELCOME):
     return SimpleNamespace(
         id="tpl-1",
+        organization_id="org-1",
         template_type=template_type,
         allow_attachments=allow_attachments,
         attachments=attachments,
@@ -83,34 +86,72 @@ async def _send(template):
     return email_service.send_email.await_args.kwargs, render.call_args.args[1]
 
 
+def _stored_attachment(filename, content, content_type="application/pdf"):
+    stored = get_file_storage().save(
+        content,
+        organization_id="org-1",
+        area=StorageArea.EMAIL_TEMPLATES,
+        entity_id="tpl-1",
+    )
+    return SimpleNamespace(
+        id=filename,
+        filename=filename,
+        content_type=content_type,
+        storage_path=stored.key,
+    )
+
+
 async def test_the_templates_attachments_ride_along():
     kwargs, _ = await _send(
         _template(
             True,
             [
-                SimpleNamespace(storage_path="/data/attachments/handbook.pdf"),
-                SimpleNamespace(storage_path="/data/attachments/sop.pdf"),
+                _stored_attachment("handbook.pdf", b"%PDF handbook"),
+                _stored_attachment("sop.pdf", b"%PDF sop"),
             ],
         )
     )
-    assert kwargs["attachment_paths"] == [
-        "/data/attachments/handbook.pdf",
-        "/data/attachments/sop.pdf",
+    # Decrypted in memory and sent under the names they were uploaded with.
+    assert kwargs["attachment_files"] == [
+        EmailAttachmentFile("handbook.pdf", b"%PDF handbook", "application/pdf"),
+        EmailAttachmentFile("sop.pdf", b"%PDF sop", "application/pdf"),
     ]
     assert kwargs["subject"] == "[TEST] Welcome"
 
 
 async def test_files_on_a_template_with_attachments_switched_off_are_not_sent():
     """The real send ignores them in that case, so the test does too."""
-    kwargs, _ = await _send(
-        _template(False, [SimpleNamespace(storage_path="/data/attachments/a.pdf")])
-    )
-    assert kwargs["attachment_paths"] is None
+    kwargs, _ = await _send(_template(False, [_stored_attachment("a.pdf", b"%PDF a")]))
+    assert kwargs["attachment_files"] is None
 
 
 async def test_a_template_without_attachments_sends_none():
     kwargs, _ = await _send(_template(True, []))
-    assert kwargs["attachment_paths"] is None
+    assert kwargs["attachment_files"] is None
+
+
+async def test_an_attachment_of_another_template_is_not_sent():
+    """A storage_path naming another template's file is skipped, not sent."""
+    foreign = get_file_storage().save(
+        b"%PDF other",
+        organization_id="org-1",
+        area=StorageArea.EMAIL_TEMPLATES,
+        entity_id="tpl-2",
+    )
+    kwargs, _ = await _send(
+        _template(
+            True,
+            [
+                SimpleNamespace(
+                    id="att-x",
+                    filename="x.pdf",
+                    content_type="application/pdf",
+                    storage_path=foreign.key,
+                )
+            ],
+        )
+    )
+    assert kwargs["attachment_files"] is None
 
 
 async def test_the_welcome_test_is_addressed_to_the_admin_sending_it():

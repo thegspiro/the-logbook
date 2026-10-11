@@ -8,6 +8,7 @@ transfer to full membership.
 
 import asyncio
 import copy
+import os
 import re
 import secrets
 import unicodedata
@@ -57,6 +58,12 @@ from app.services.email_policy import (
     EmailKind,
     department_required_kinds,
     recipients_for,
+)
+from app.services.file_storage_service import (
+    StorageAccessDenied,
+    StorageArea,
+    get_file_storage,
+    is_storage_key,
 )
 from app.utils.membership import (
     ADMINISTRATIVE_RANK_MESSAGE,
@@ -472,6 +479,42 @@ def _with_target_role_setter(
     if target_role_id and set_by:
         result[TARGET_ROLE_SET_BY_KEY] = str(set_by)
     return result
+
+
+# Where prospect documents were written before the shared storage service
+# (app/services/file_storage_service.py). Rows from then hold absolute paths
+# under {this}/{organization_id}/... and stay readable until moved.
+LEGACY_PROSPECT_DOCUMENT_DIR = "/app/uploads/prospect-documents"
+
+
+def legacy_prospect_document_dirs(organization_id: Any) -> List[str]:
+    """The directories an org's legacy prospect-document paths may resolve into."""
+    return [os.path.join(LEGACY_PROSPECT_DOCUMENT_DIR, str(organization_id))]
+
+
+def remove_prospect_document_file(
+    file_path: str, organization_id: Any, prospect_id: Any
+) -> None:
+    """Delete a prospect document's stored file, confined to its prospect.
+
+    A file that is already gone is not an error. A reference that points
+    outside this prospect's storage is never unlinked — the row may be
+    corrupted, and following it could delete another applicant's (or another
+    organization's) file — so it is logged and skipped. Any other ``OSError``
+    propagates: the caller keeps the row so a retry can finish the job.
+    """
+    try:
+        get_file_storage().delete(
+            file_path,
+            organization_id=organization_id,
+            area=StorageArea.PROSPECTS,
+            legacy_dirs=legacy_prospect_document_dirs(organization_id),
+            entity_id=prospect_id,
+        )
+    except StorageAccessDenied:
+        logger.warning(
+            f"Skipped deleting an out-of-area file for prospect {prospect_id}"
+        )
 
 
 class MembershipPipelineService:
@@ -6231,23 +6274,27 @@ class MembershipPipelineService:
         paths = (
             (
                 await self.db.execute(
-                    select(ProspectDocument.file_path).where(
-                        ProspectDocument.prospect_id.in_(ids)
-                    )
+                    select(
+                        ProspectDocument.prospect_id, ProspectDocument.file_path
+                    ).where(ProspectDocument.prospect_id.in_(ids))
                 )
             )
-            .scalars()
+            .tuples()
             .all()
         )
-        import os
-
-        for stored_path in paths:
-            if stored_path and os.path.exists(stored_path):
+        for prospect_id, stored_path in paths:
+            if stored_path:
                 try:
-                    await asyncio.to_thread(os.remove, stored_path)
+                    await asyncio.to_thread(
+                        remove_prospect_document_file,
+                        stored_path,
+                        organization_id,
+                        prospect_id,
+                    )
                 except OSError as exc:
                     logger.error(
-                        f"Failed to remove prospect document file {stored_path}: {exc}"
+                        f"Failed to remove a document file for prospect "
+                        f"{prospect_id}: {type(exc).__name__}"
                     )
                     raise ValueError(
                         "Could not delete an applicant's document file, so "
@@ -6294,8 +6341,6 @@ class MembershipPipelineService:
         uploaded_by: Optional[str] = None,
     ) -> Optional[ProspectDocument]:
         """Add a document to a prospect"""
-        import os
-
         prospect = await self.get_prospect(prospect_id, organization_id)
         if not prospect:
             return None
@@ -6310,21 +6355,25 @@ class MembershipPipelineService:
             if not any(str(s.id) == str(step_id) for s in steps):
                 raise ValueError("Step does not belong to this prospect's pipeline")
 
-        # Validate file_path: must resolve to a location under the uploads
-        # volume (mounted at /app/uploads in docker-compose) to prevent path
-        # traversal via symlinks or unicode tricks.
-        from pathlib import Path
-
-        base_dir = Path("/app/uploads").resolve()
-        resolved = Path(file_path).resolve()
-        if (
-            not str(resolved).startswith(str(base_dir) + os.sep)
-            and resolved != base_dir
-        ):
-            raise ValueError(
-                "Invalid file_path: must be under /app/uploads and may not "
-                "contain path traversal"
+        # file_path must be this prospect's own stored file: a storage key
+        # filed under {org}/prospects/{prospect_id}/, or a legacy path inside
+        # the org's old prospect-documents directory. Resolution goes through
+        # the storage service so symlinks and traversal are judged on the
+        # real path, and a file of another prospect, module or organization
+        # is refused rather than recorded.
+        try:
+            resolved = get_file_storage().resolve(
+                file_path,
+                organization_id=organization_id,
+                area=StorageArea.PROSPECTS,
+                legacy_dirs=legacy_prospect_document_dirs(organization_id),
+                entity_id=prospect_id,
             )
+        except StorageAccessDenied:
+            raise ValueError(
+                "Invalid file_path: must be a file stored for this prospect"
+            )
+        stored_reference = file_path if is_storage_key(file_path) else resolved
 
         # Sanitise file_name to prevent path injection through the file name
         safe_file_name = os.path.basename(file_name)
@@ -6335,7 +6384,7 @@ class MembershipPipelineService:
             step_id=step_id,
             document_type=document_type,
             file_name=safe_file_name,
-            file_path=str(resolved),
+            file_path=stored_reference,
             file_size=file_size,
             mime_type=mime_type,
             uploaded_by=uploaded_by,
@@ -6397,18 +6446,21 @@ class MembershipPipelineService:
         # a failed removal for a retry instead of being deleted alongside it.
         stored_path = doc.file_path
         if stored_path:
-            import os
-
-            if os.path.exists(stored_path):
-                try:
-                    await asyncio.to_thread(os.remove, stored_path)
-                except OSError as exc:
-                    logger.error(
-                        f"Failed to remove prospect document file {stored_path}: {exc}"
-                    )
-                    raise ValueError(
-                        "Could not delete the document file; please try again"
-                    ) from exc
+            try:
+                await asyncio.to_thread(
+                    remove_prospect_document_file,
+                    stored_path,
+                    organization_id,
+                    prospect_id,
+                )
+            except OSError as exc:
+                logger.error(
+                    f"Failed to remove document file {document_id} for prospect "
+                    f"{prospect_id}: {type(exc).__name__}"
+                )
+                raise ValueError(
+                    "Could not delete the document file; please try again"
+                ) from exc
 
         await self._log_activity(
             prospect_id=prospect_id,

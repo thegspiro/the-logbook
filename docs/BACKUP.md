@@ -8,11 +8,11 @@ from a total loss. Business-continuity alignment context (ISO 22301) lives in
 
 `scripts/backup.sh` produces a single timestamped archive containing:
 
-| Component        | Contents                                                                  | Notes                                                                   |
-| ---------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `database.sql`   | Full `mysqldump` of the application database                              | `--single-transaction --quick`, safe against a running server           |
-| `uploads.tar.gz` | The `uploads/` directory (documents, photos, attachments)                 | Only if local uploads are used — S3/MinIO-stored files are not included |
-| `config/`        | `.env.example`, docker-compose files, and a **sanitized** `.env` template | Values are stripped — see the warning below                             |
+| Component        | Contents                                                                  | Notes                                                         |
+| ---------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `database.sql`   | Full `mysqldump` of the application database                              | `--single-transaction --quick`, safe against a running server |
+| `uploads.tar.gz` | The `uploads/` directory (documents, photos, attachments)                 | Files uploaded since 2026-10-11 are **encrypted** — see below |
+| `config/`        | `.env.example`, docker-compose files, and a **sanitized** `.env` template | Values are stripped — see the warning below                   |
 
 Destinations: local disk (default `./backups`), S3, Azure Blob, or Google
 Cloud Storage via `--destination`. Old local backups are pruned after
@@ -30,6 +30,20 @@ Schedule it (02:00 daily shown; align frequency with your RPO, below):
 ```cron
 0 2 * * * /path/to/the-logbook/scripts/backup.sh
 ```
+
+### Uploaded files need the encryption key to restore
+
+Since 2026-10-11 every uploaded file is encrypted before it is written
+(AES-256-GCM under a sub-key of `ENCRYPTION_KEY` / `ENCRYPTION_SALT`; see
+[FILE_STORAGE.md](./FILE_STORAGE.md)). `uploads.tar.gz` therefore holds
+ciphertext: restoring it onto an installation with a different
+`ENCRYPTION_KEY` or `ENCRYPTION_SALT` restores files nobody can open. Keep the
+offline copy of those two secrets — and of any retired keys still listed in
+`ENCRYPTION_KEYS_LEGACY` — with the backups they belong to. That is already
+true for the database's encrypted fields; it is now true of the files too.
+
+Files uploaded before that date stay plaintext in their original directories
+until they are migrated into the new layout.
 
 ## Automated: the backup sidecar (production compose)
 

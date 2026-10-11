@@ -107,9 +107,8 @@ async def _document(
     """Insert a ``ProspectDocument`` row directly, bypassing
     ``add_prospect_document``'s ``/app/uploads`` path-traversal guard.
 
-    That guard hardcodes ``/app/uploads`` (the docker-compose mount point)
-    with no monkeypatch seam, and only ``.resolve()``s the path -- it never
-    requires the directory to exist. The delete-path tests below only need a
+    That guard only accepts a storage key or a path inside the org's legacy
+    prospect-documents directory. The delete-path tests below only need a
     real, writable file on disk (for ``os.path.exists``/``os.remove``) at
     whatever path the DB row happens to record; they aren't exercising the
     upload guard, so going straight to the DB with a ``tmp_path`` location
@@ -529,17 +528,33 @@ class TestElectionPackageAssignmentLocking:
 
 
 class TestDocumentDeletionDoesNotOrphanTheFile:
+    """Prospect files stored before the shared storage service: absolute paths
+    under the org's legacy prospect-documents directory, which these tests
+    point at ``tmp_path``. Storage-key files are covered in
+    tests/test_file_storage_service.py."""
+
+    @staticmethod
+    def _legacy_file(monkeypatch, tmp_path, org_id, name, content):
+        monkeypatch.setattr(
+            "app.services.membership_pipeline_service.LEGACY_PROSPECT_DOCUMENT_DIR",
+            str(tmp_path),
+        )
+        stored = tmp_path / str(org_id) / name
+        stored.parent.mkdir(parents=True, exist_ok=True)
+        stored.write_bytes(content)
+        return stored
 
     async def test_delete_removes_the_file_and_the_row(
-        self, db_session: AsyncSession, org_and_admin, tmp_path
+        self, db_session: AsyncSession, org_and_admin, tmp_path, monkeypatch
     ):
         org_id, admin_id = org_and_admin
         svc = MembershipPipelineService(db_session)
         pipeline, _ = await _pipeline_with_steps(svc, org_id)
         prospect = await _prospect(svc, org_id, pipeline.id)
 
-        stored = tmp_path / "doc.pdf"
-        stored.write_bytes(b"pdf bytes")
+        stored = self._legacy_file(
+            monkeypatch, tmp_path, org_id, "doc.pdf", b"pdf bytes"
+        )
 
         doc = await _document(db_session, prospect.id, stored, uploaded_by=admin_id)
 
@@ -560,8 +575,9 @@ class TestDocumentDeletionDoesNotOrphanTheFile:
         pipeline, _ = await _pipeline_with_steps(svc, org_id)
         prospect = await _prospect(svc, org_id, pipeline.id)
 
-        stored = tmp_path / "doc.pdf"
-        stored.write_bytes(b"pdf bytes")
+        stored = self._legacy_file(
+            monkeypatch, tmp_path, org_id, "doc.pdf", b"pdf bytes"
+        )
 
         doc = await _document(db_session, prospect.id, stored, uploaded_by=admin_id)
 
@@ -586,7 +602,7 @@ class TestDocumentDeletionDoesNotOrphanTheFile:
         assert stored.exists()
 
     async def test_delete_of_an_already_missing_file_still_succeeds(
-        self, db_session: AsyncSession, org_and_admin, tmp_path
+        self, db_session: AsyncSession, org_and_admin, tmp_path, monkeypatch
     ):
         """A file already removed by some earlier partial failure is not an
         error -- there is nothing left to remove, and the metadata row
@@ -596,8 +612,7 @@ class TestDocumentDeletionDoesNotOrphanTheFile:
         pipeline, _ = await _pipeline_with_steps(svc, org_id)
         prospect = await _prospect(svc, org_id, pipeline.id)
 
-        stored = tmp_path / "gone.pdf"
-        stored.write_bytes(b"x")
+        stored = self._legacy_file(monkeypatch, tmp_path, org_id, "gone.pdf", b"x")
 
         doc = await _document(
             db_session, prospect.id, stored, file_name="gone.pdf", uploaded_by=admin_id

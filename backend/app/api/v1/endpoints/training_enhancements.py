@@ -6,10 +6,12 @@ instructor qualifications, training effectiveness, multi-agency training,
 report exports, document uploads, and xAPI ingestion.
 """
 
+import os
 from datetime import date, datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -19,6 +21,7 @@ from app.api.dependencies import (
 )
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
+from app.core.file_encryption import FileDecryptionError
 from app.core.utils import safe_error_detail
 from app.schemas.training_enhancements import (
     CompetencyHeatmapResponse,
@@ -43,6 +46,15 @@ from app.schemas.training_enhancements import (
     XAPIBatchResponse,
     XAPIStatementCreate,
     XAPIStatementResponse,
+)
+from app.services.file_storage_service import (
+    FileStorageError,
+    OpenedFile,
+    StorageAccessDenied,
+    StorageArea,
+    StoredFileNotFound,
+    get_file_storage,
+    stored_file_response,
 )
 from app.services.training_enhancement_service import (
     CompetencyService,
@@ -719,8 +731,53 @@ async def get_compliance_forecast(
 
 
 # Certificates/documents attached to a training record. MIME type is verified
-# from the file's magic bytes (not the client-supplied Content-Type).
+# from the file's magic bytes (not the client-supplied Content-Type). Files are
+# stored through the shared storage service under {org}/training/{record_id}/.
+#
+# Where training attachments were written before that service. Rows from then
+# hold absolute paths under {this}/{org}/ (record uploads) or
+# {this}/self_reported_submissions/{org}/ (certificates copied onto the record
+# when a self-report was approved), and stay readable until moved.
 TRAINING_ATTACHMENT_DIR = "/app/uploads/training_attachments"
+LEGACY_SUBMISSION_ATTACHMENT_DIR = os.path.join(
+    TRAINING_ATTACHMENT_DIR, "self_reported_submissions"
+)
+
+
+def open_record_attachment(file_path, record) -> OpenedFile:
+    """Open a training record's attachment, confined to what it may reference.
+
+    A record holds its own uploads ({org}/training/{record_id}/) and, once a
+    self-report is approved, copies of the member's certificates
+    ({org}/training-submissions/{member_id}/). Anything else is refused.
+    """
+    storage = get_file_storage()
+    try:
+        return storage.open(
+            file_path,
+            organization_id=record.organization_id,
+            area=StorageArea.TRAINING,
+            legacy_dirs=legacy_record_attachment_dirs(record.organization_id),
+            entity_id=record.id,
+        )
+    except StorageAccessDenied:
+        return storage.open(
+            file_path,
+            organization_id=record.organization_id,
+            area=StorageArea.TRAINING_SUBMISSIONS,
+            entity_id=record.user_id,
+        )
+
+
+def legacy_record_attachment_dirs(organization_id) -> list[str]:
+    """Directories an org's legacy training-record attachment paths may use."""
+    org = str(organization_id)
+    return [
+        os.path.join(TRAINING_ATTACHMENT_DIR, org),
+        os.path.join(LEGACY_SUBMISSION_ATTACHMENT_DIR, org),
+    ]
+
+
 ALLOWED_ATTACHMENT_MIME = {
     "application/pdf": ".pdf",
     "image/jpeg": ".jpg",
@@ -772,8 +829,6 @@ async def upload_record_attachment(
 ):
     """Upload and store a document/certificate for a training record."""
     import asyncio
-    import os
-    import uuid as uuid_lib
 
     import magic
     from sqlalchemy.orm.attributes import flag_modified
@@ -800,21 +855,18 @@ async def upload_record_attachment(
             error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
         )
 
-    org_dir = os.path.join(TRAINING_ATTACHMENT_DIR, str(current_user.organization_id))
-    await asyncio.to_thread(os.makedirs, org_dir, exist_ok=True)
-    # Use a server-generated name + magic-derived extension to prevent
-    # double-extension attacks (e.g. cert.pdf.exe).
-    stored_name = f"{uuid_lib.uuid4().hex}{ext}"
-    file_path = os.path.join(org_dir, stored_name)
-
-    def _write_file(path: str, data: bytes) -> None:
-        with open(path, "wb") as f:
-            f.write(data)
-
-    await asyncio.to_thread(_write_file, file_path, content)
+    storage = get_file_storage()
+    stored = await asyncio.to_thread(
+        storage.save,
+        content,
+        organization_id=current_user.organization_id,
+        area=StorageArea.TRAINING,
+        entity_id=record.id,
+    )
+    file_path = stored.key
 
     attachment = {
-        "file_name": file.filename or stored_name,
+        "file_name": file.filename or f"certificate{ext}",
         "file_path": file_path,
         "file_type": detected_mime,
         "file_size": len(content),
@@ -830,22 +882,19 @@ async def upload_record_attachment(
         await db.commit()
         await db.refresh(record)
     except Exception as e:
-        await asyncio.to_thread(_safe_remove, file_path)
+        await asyncio.to_thread(
+            storage.delete_quietly,
+            file_path,
+            organization_id=current_user.organization_id,
+            area=StorageArea.TRAINING,
+            entity_id=record.id,
+        )
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
     return {
         "record_id": record_id,
         "attachments": _sanitize_attachments(record.attachments or []),
     }
-
-
-def _safe_remove(path: str) -> None:
-    import os
-
-    try:
-        os.remove(path)
-    except OSError:
-        pass
 
 
 def _sanitize_attachments(attachments: list) -> list:
@@ -884,9 +933,7 @@ async def download_record_attachment(
     current_user=Depends(get_current_user),
 ):
     """Stream a stored training-record attachment by its index."""
-    import os
-
-    from fastapi.responses import FileResponse
+    import asyncio
 
     record = await _load_record_for_attachment(db, record_id, current_user)
     attachments = record.attachments or []
@@ -897,21 +944,26 @@ async def download_record_attachment(
     if not isinstance(attachment, dict) or not attachment.get("file_path"):
         raise HTTPException(status_code=404, detail="Attachment file unavailable")
 
-    file_path = attachment["file_path"]
-    # Confine the stored path to the attachment directory. file_path is
-    # server-generated today, but it round-trips through a JSON column —
-    # if any future code path lets that column be written from user input,
-    # this check is what stands between it and arbitrary file read.
-    real_path = os.path.realpath(file_path)
-    attachment_root = os.path.realpath(TRAINING_ATTACHMENT_DIR)
-    if not real_path.startswith(attachment_root + os.sep):
+    # Confined to this record's own files, or to the record owner's
+    # self-reported certificates (approving a self-report copies the
+    # submission's attachment onto the record). file_path round-trips through
+    # a JSON column, and this is what stands between it and an arbitrary file
+    # read.
+    try:
+        opened = await asyncio.to_thread(
+            open_record_attachment, attachment["file_path"], record
+        )
+    except (StorageAccessDenied, StoredFileNotFound, ValueError):
         raise HTTPException(status_code=404, detail="Attachment file not found")
+    except (FileStorageError, FileDecryptionError, OSError) as exc:
+        logger.error(
+            f"Stored attachment {index} of training record {record_id} could not "
+            f"be read: {type(exc).__name__}"
+        )
+        raise HTTPException(status_code=500, detail="Attachment could not be read")
 
-    if not os.path.isfile(real_path):
-        raise HTTPException(status_code=404, detail="Attachment file not found")
-
-    return FileResponse(
-        real_path,
+    return stored_file_response(
+        opened,
+        filename=attachment.get("file_name") or "attachment",
         media_type=attachment.get("file_type") or "application/octet-stream",
-        filename=attachment.get("file_name") or os.path.basename(real_path),
     )

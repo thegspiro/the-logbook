@@ -268,7 +268,7 @@ class TestProspectDocumentStepValidation:
                     organization_id="org1",
                     document_type="waiver",
                     file_name="w.pdf",
-                    file_path="/app/uploads/w.pdf",
+                    file_path=f"org1/prospects/p1/{'a' * 32}.enc",
                     step_id="foreign-step",
                 )
 

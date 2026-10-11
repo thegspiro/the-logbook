@@ -73,8 +73,13 @@ current recommendation, which auditors do check.
    docker exec -it intranet-backend python scripts/rotate_encryption_key.py --commit
    ```
 6. When the script reports zero rotated and zero unreadable values on a
-   `--commit` run, remove the drained key from `ENCRYPTION_KEYS_LEGACY` and
-   restart.
+   `--commit` run, the **database** is drained. **Keep the old key in
+   `ENCRYPTION_KEYS_LEGACY` anyway** while any stored file was uploaded under
+   it: uploaded files are encrypted with a sub-key of the same
+   `ENCRYPTION_KEY` (see [FILE_STORAGE.md](./FILE_STORAGE.md)), and
+   `rotate_encryption_key.py` does not re-encrypt files. Removing the key
+   makes every file uploaded before the rotation unreadable — documents,
+   certificates, attachments — with no way back short of restoring the key.
 7. Update the offline copies of your secrets (see BACKUP.md) — an old backup
    restored later will need whichever key encrypted it, so keep retired keys
    with the backups from their era, clearly labeled.
@@ -90,6 +95,12 @@ current recommendation, which auditors do check.
   yet.
 
 ## Scope notes
+
+- **Stored files are not drained by the rotation script.** A file records a
+  fingerprint of the key that encrypted it and is read with whichever ring key
+  matches, so files uploaded before a rotation stay readable for exactly as
+  long as their key stays in `ENCRYPTION_KEYS_LEGACY` — and no longer. Until a
+  file re-encryption tool exists, a retired key is never removed from the ring.
 
 - This rotates the **data-encryption key** only. `SECRET_KEY` (JWT signing)
   rotation invalidates active sessions/tokens by design — do it separately

@@ -35,6 +35,7 @@ from app.models.document import (
 )
 from app.models.facilities import FacilityDocument, FacilityPhoto
 from app.models.user import Organization, User
+from app.services.file_storage_service import StorageArea, get_file_storage
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
@@ -198,10 +199,37 @@ async def reachable_folder_ids(
     return {str(row) for row in result.scalars().all()}
 
 
+# Where document uploads were written before the shared storage service
+# (app/services/file_storage_service.py). Rows written then still hold absolute
+# paths under it, and stay readable until their files are moved.
+LEGACY_UPLOAD_DIR = "/app/uploads/documents"
+
+
+def legacy_document_dir(organization_id: Any) -> str:
+    """The one directory an org's legacy document paths may resolve into."""
+    return os.path.join(LEGACY_UPLOAD_DIR, str(organization_id))
+
+
+def _remove_document_file(
+    file_path: str, organization_id: Any, document_id: Any
+) -> None:
+    """Delete a document's stored file, confined to the org's documents area.
+
+    Confinement matters on delete as much as on read: ``file_path`` came from
+    the database, and an unconfined unlink of a corrupted value could remove
+    any file the process can reach.
+    """
+    get_file_storage().delete_quietly(
+        file_path,
+        organization_id=organization_id,
+        area=StorageArea.DOCUMENTS,
+        legacy_dirs=[legacy_document_dir(organization_id)],
+        entity_id=document_id,
+    )
+
+
 class DocumentsService:
     """Service for document management used by the documents endpoint"""
-
-    UPLOAD_DIR = "/app/uploads/documents"
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -775,11 +803,11 @@ class DocumentsService:
 
         file_rows = await self._lock_subtree_documents(subtree_ids, organization_id)
         document_ids: Set[str] = set()
-        file_paths: List[str] = []
+        file_paths: List[Tuple[str, str]] = []
         for document_id, file_path in file_rows:
             document_ids.add(document_id)
             if file_path:
-                file_paths.append(file_path)
+                file_paths.append((document_id, file_path))
 
         # A facility record can reference one of these documents without a
         # foreign key (see _delete_facility_document_references) -- clean
@@ -832,14 +860,10 @@ class DocumentsService:
 
         # Best-effort file cleanup — a missing file is not an error, and the DB
         # rows are already gone.
-        for file_path in file_paths:
-            try:
-                await asyncio.to_thread(os.remove, file_path)
-            except OSError:
-                logger.warning(
-                    "Could not remove backing file for a document in deleted "
-                    f"folder {folder_id}: {file_path}"
-                )
+        for document_id, file_path in file_paths:
+            await asyncio.to_thread(
+                _remove_document_file, file_path, organization_id, document_id
+            )
         return True
 
     async def _lock_subtree_folders(self, subtree_ids: Set[str]) -> None:
@@ -1270,13 +1294,9 @@ class DocumentsService:
         # sensitive) upload orphaned on disk. Best-effort — a missing file is
         # not an error, and the DB row is already gone.
         if file_path:
-            try:
-                await asyncio.to_thread(os.remove, file_path)
-            except OSError:
-                logger.warning(
-                    f"Could not remove backing file for deleted document "
-                    f"{document_id}: {file_path}"
-                )
+            await asyncio.to_thread(
+                _remove_document_file, file_path, organization_id, document_id
+            )
         return True
 
     # ============================================

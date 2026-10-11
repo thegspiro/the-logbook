@@ -1633,13 +1633,13 @@ Login passwords must be at least **8 characters** (schema validation). New passw
 
 **Message**: `"Access denied"` (HTTP 403)
 
-**Cause**: The stored file path for the attachment resolved outside the allowed upload directory. This is a security safeguard against path traversal attacks.
+**Cause**: The attachment's stored file reference points outside this organization's event attachments. This is a security safeguard: a reference to another organization's file, another module's file, or a path outside the uploads volume is never followed (see [FILE_STORAGE.md](./FILE_STORAGE.md)).
 
 **Solutions**:
 
-- This error indicates data integrity issue — the `file_path` in the event's attachments JSON does not point to a file within `/app/uploads/event-attachments/`
+- This error indicates a data integrity issue — the `file_path` in the event's attachments JSON is neither a storage key under `<organization_id>/events/` nor a legacy path within `/app/uploads/event-attachments/<organization_id>/`
 - Re-upload the attachment through the normal upload flow
-- If this occurs on previously uploaded files, check that the `ATTACHMENT_UPLOAD_DIR` path has not changed between deployments
+- If this occurs on previously uploaded files, check that the uploads volume is still mounted at `/app/uploads`
 
 #### External Training Provider: Credentials Not Working After Update
 

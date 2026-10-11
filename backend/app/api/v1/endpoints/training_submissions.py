@@ -8,7 +8,6 @@ and self-report configuration management.
 import asyncio
 import hashlib
 import os
-import uuid as uuid_lib
 from datetime import datetime, timezone
 
 from fastapi import (
@@ -22,6 +21,7 @@ from fastapi import (
     status,
 )
 from fastapi.exceptions import RequestValidationError
+from loguru import logger
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,10 +33,11 @@ from app.api.dependencies import (
     get_current_user,
     require_permission,
 )
-from app.api.v1.endpoints.training_enhancements import TRAINING_ATTACHMENT_DIR
+from app.api.v1.endpoints.training_enhancements import LEGACY_SUBMISSION_ATTACHMENT_DIR
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
+from app.core.file_encryption import FileDecryptionError
 from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
 from app.models.training import SubmissionStatus, TrainingSubmission
 from app.models.user import User
@@ -48,6 +49,14 @@ from app.schemas.training_submission import (
     TrainingSubmissionResponse,
     TrainingSubmissionUpdate,
     sanitize_attachments,
+)
+from app.services.file_storage_service import (
+    FileStorageError,
+    StorageAccessDenied,
+    StorageArea,
+    StoredFileNotFound,
+    get_file_storage,
+    stored_file_response,
 )
 from app.services.malware_scan_service import (
     MalwareScanUnavailable,
@@ -184,7 +193,13 @@ async def create_submission_with_attachment(
             # submission — and for an auto-approved one its training record —
             # durably references this path. An orphaned file is recoverable;
             # a record whose evidence was deleted out from under it is not.
-            await asyncio.to_thread(_remove_quietly, stored["file_path"])
+            await asyncio.to_thread(
+                get_file_storage().delete_quietly,
+                stored["file_path"],
+                organization_id=current_user.organization_id,
+                area=StorageArea.TRAINING_SUBMISSIONS,
+                entity_id=current_user.id,
+            )
             raise
         return submission
 
@@ -323,16 +338,18 @@ async def delete_submission(
         submission = await service.get_submission(
             submission_id, current_user.organization_id
         )
-        stored_paths = (
-            _confined_attachment_paths(submission.attachments) if submission else []
+        cleanup = (
+            (_storage_scope(submission), list(submission.attachments or []))
+            if submission
+            else None
         )
 
         await service.delete_submission(
             submission_id, current_user.id, current_user.organization_id
         )
 
-        for path in stored_paths:
-            await asyncio.to_thread(_remove_quietly, path)
+        if cleanup is not None:
+            await asyncio.to_thread(_remove_in_scope, *cleanup)
 
 
 # ==================== Officer Review ====================
@@ -488,15 +505,14 @@ async def submit_draft(
 # PDF or, far more often, a phone photo of a paper card. MIME type is verified
 # from the file's magic bytes, never the client-supplied Content-Type.
 #
-# Nested *inside* the training-record attachment root on purpose: approval
-# copies these attachment dicts verbatim onto the TrainingRecord, and the
-# record download route confines paths to TRAINING_ATTACHMENT_DIR. A sibling
-# directory would leave every approved member's certificate 404ing from their
-# own training history. tests/test_training_submission_drafts_attachments.py
-# asserts the nesting so a later tidy-up cannot quietly break it.
-SUBMISSION_ATTACHMENT_DIR = os.path.join(
-    TRAINING_ATTACHMENT_DIR, "self_reported_submissions"
-)
+# Stored through the shared storage service under
+# {org}/training-submissions/{member_id}/. Approval copies these attachment
+# dicts verbatim onto the TrainingRecord, and the record download route accepts
+# the record owner's certificates for exactly that reason.
+#
+# Where certificates were written before that service; rows from then hold
+# absolute paths under {this}/{org}/ and stay readable until moved.
+SUBMISSION_ATTACHMENT_DIR = LEGACY_SUBMISSION_ATTACHMENT_DIR
 ALLOWED_SUBMISSION_ATTACHMENT_MIME = {
     "application/pdf": ".pdf",
     "image/jpeg": ".jpg",
@@ -540,32 +556,45 @@ async def _load_submission_for_attachment(
     return submission
 
 
-def _remove_quietly(path: str) -> None:
-    try:
-        os.remove(path)
-    except OSError:
-        pass
+def legacy_submission_attachment_dirs(organization_id) -> list[str]:
+    return [os.path.join(SUBMISSION_ATTACHMENT_DIR, str(organization_id))]
 
 
-def _confined_path(attachment) -> str | None:
-    """Real path of a stored attachment, or None if it escapes the root.
+def _storage_scope(submission: TrainingSubmission) -> dict:
+    """Where a submission's attachments may live: the submitter's
+    certificates in its organization, or that org's legacy directory.
 
-    file_path is server-generated, but the column is client-writable through
-    the create/update schemas — this is what keeps that from becoming an
-    arbitrary file read (or, on delete, an arbitrary unlink).
+    ``file_path`` is server-generated, but the column is client-writable
+    through the create/update schemas — confining every read and delete to
+    this scope is what keeps that from becoming an arbitrary file read (or,
+    on delete, an arbitrary unlink).
     """
-    if not isinstance(attachment, dict) or not attachment.get("file_path"):
-        return None
-    real_path = os.path.realpath(attachment["file_path"])
-    attachment_root = os.path.realpath(SUBMISSION_ATTACHMENT_DIR)
-    if not real_path.startswith(attachment_root + os.sep):
-        return None
-    return real_path
+    return {
+        "organization_id": submission.organization_id,
+        "area": StorageArea.TRAINING_SUBMISSIONS,
+        "legacy_dirs": legacy_submission_attachment_dirs(submission.organization_id),
+        "entity_id": submission.submitted_by,
+    }
 
 
-def _confined_attachment_paths(attachments) -> list[str]:
-    paths = [_confined_path(a) for a in attachments or []]
-    return [path for path in paths if path]
+def _stored_reference(attachment) -> str | None:
+    if not isinstance(attachment, dict):
+        return None
+    file_path = attachment.get("file_path")
+    return file_path if isinstance(file_path, str) and file_path else None
+
+
+def _remove_stored_attachments(submission: TrainingSubmission, attachments) -> None:
+    """Best-effort delete of a submission's own stored files."""
+    _remove_in_scope(_storage_scope(submission), attachments)
+
+
+def _remove_in_scope(scope: dict, attachments) -> None:
+    storage = get_file_storage()
+    for attachment in attachments or []:
+        reference = _stored_reference(attachment)
+        if reference:
+            storage.delete_quietly(reference, **scope)
 
 
 async def _reject_if_malicious(
@@ -670,20 +699,17 @@ async def _store_attachment_file(
 
     await _reject_if_malicious(db, content, detected_mime, current_user)
 
-    org_dir = os.path.join(SUBMISSION_ATTACHMENT_DIR, str(current_user.organization_id))
-    await asyncio.to_thread(os.makedirs, org_dir, exist_ok=True)
-    stored_name = f"{uuid_lib.uuid4().hex}{ext}"
-    file_path = os.path.join(org_dir, stored_name)
-
-    def _write_file(path: str, data: bytes) -> None:
-        with open(path, "wb") as handle:
-            handle.write(data)
-
-    await asyncio.to_thread(_write_file, file_path, content)
+    stored = await asyncio.to_thread(
+        get_file_storage().save,
+        content,
+        organization_id=current_user.organization_id,
+        area=StorageArea.TRAINING_SUBMISSIONS,
+        entity_id=current_user.id,
+    )
 
     return {
-        "file_name": file.filename or stored_name,
-        "file_path": file_path,
+        "file_name": file.filename or f"certificate{ext}",
+        "file_path": stored.key,
         "file_type": detected_mime,
         "file_size": len(content),
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
@@ -724,7 +750,7 @@ async def upload_submission_attachment(
         await db.commit()
         await db.refresh(submission)
     except Exception as e:
-        await asyncio.to_thread(_remove_quietly, attachment["file_path"])
+        await asyncio.to_thread(_remove_stored_attachments, submission, [attachment])
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
     return {
@@ -755,25 +781,33 @@ async def download_submission_attachment(
     current_user: User = Depends(get_current_user),
 ):
     """Stream one stored attachment by its index."""
-    from fastapi.responses import FileResponse
-
     submission = await _load_submission_for_attachment(db, submission_id, current_user)
     attachments = submission.attachments or []
     if index < 0 or index >= len(attachments):
         raise HTTPException(status_code=404, detail="Attachment not found")
 
     attachment = attachments[index]
-    real_path = _confined_path(attachment)
-    if not real_path:
+    reference = _stored_reference(attachment)
+    if not reference:
         raise HTTPException(status_code=404, detail="Attachment file not found")
 
-    if not await asyncio.to_thread(os.path.isfile, real_path):
+    try:
+        opened = await asyncio.to_thread(
+            get_file_storage().open, reference, **_storage_scope(submission)
+        )
+    except (StorageAccessDenied, StoredFileNotFound, ValueError):
         raise HTTPException(status_code=404, detail="Attachment file not found")
+    except (FileStorageError, FileDecryptionError, OSError) as exc:
+        logger.error(
+            f"Stored attachment {index} of submission {submission_id} could not "
+            f"be read: {type(exc).__name__}"
+        )
+        raise HTTPException(status_code=500, detail="Attachment could not be read")
 
-    return FileResponse(
-        real_path,
+    return stored_file_response(
+        opened,
+        filename=attachment.get("file_name") or "certificate",
         media_type=attachment.get("file_type") or "application/octet-stream",
-        filename=attachment.get("file_name") or os.path.basename(real_path),
     )
 
 
@@ -821,6 +855,4 @@ async def delete_submission_attachment(
     flag_modified(submission, "attachments")
     await db.commit()
 
-    removed_path = _confined_path(removed)
-    if removed_path:
-        await asyncio.to_thread(_remove_quietly, removed_path)
+    await asyncio.to_thread(_remove_stored_attachments, submission, [removed])

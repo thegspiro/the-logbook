@@ -552,9 +552,9 @@ Azure Blob Storage and Google Cloud Storage are **not** options and never were;
 `azure` and `gcs` return a 400.
 
 > **Stored, but nothing reads it** _(2026-09-10)_: whichever platform is chosen,
-> uploads do not use it. `documents.py` writes to a fixed
-> `UPLOAD_DIR = "/app/uploads/documents"` and event attachments to their own
-> fixed directory; no code outside the settings schema and the onboarding
+> uploads do not use it. Every upload is written by the shared storage service
+> under `UPLOAD_DIR` on local disk ([FILE_STORAGE.md](./FILE_STORAGE.md)); no
+> code outside the settings schema and the onboarding
 > writer reads `s3_bucket_name`, `google_drive_client_id` or any other
 > `FileStorageSettings` field. So a correctly keyed S3 or Drive configuration
 > saves green and every file still lands on local disk — which matters most to

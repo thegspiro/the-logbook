@@ -24,7 +24,6 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse
 from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import String, cast, func, or_, select
@@ -39,6 +38,7 @@ from app.api.dependencies import (
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
+from app.core.file_encryption import FileDecryptionError
 from app.core.utils import generate_uuid, safe_error_detail
 from app.models.event import (
     AttendeeVisibility,
@@ -108,6 +108,14 @@ from app.services.event_service import (
     attendance_lock_reason,
     resolve_attendee_visibility,
 )
+from app.services.file_storage_service import (
+    FileStorageError,
+    StorageAccessDenied,
+    StorageArea,
+    StoredFileNotFound,
+    get_file_storage,
+    stored_file_response,
+)
 from app.services.guest_check_in_service import GuestCheckInService
 from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
@@ -116,7 +124,7 @@ from app.services.membership_pipeline_service import MembershipPipelineService
 from app.services.notifications_service import NotificationsService
 from app.utils.contact_visibility import load_contact_policy
 from app.utils.event_attachments import ATTACHMENT_UPLOAD_DIR as attachment_upload_dir
-from app.utils.event_attachments import is_path_in_org
+from app.utils.event_attachments import is_path_in_org, legacy_attachment_dirs
 from app.utils.mime_validation import detect_mime_type
 
 router = APIRouter()
@@ -2980,27 +2988,23 @@ async def upload_event_attachment(
             error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
         )
 
-    # Save file
-    org_dir = os.path.join(
-        ATTACHMENT_UPLOAD_DIR, str(current_user.organization_id), str(event_id)
+    # Encrypted and filed under {org}/events/{event_id}/ by the storage
+    # service; the row records only the key.
+    stored = await asyncio.to_thread(
+        get_file_storage().save,
+        content,
+        organization_id=current_user.organization_id,
+        area=StorageArea.EVENTS,
+        entity_id=event_id,
     )
-    await asyncio.to_thread(os.makedirs, org_dir, exist_ok=True)
-
-    unique_name = f"{uuid_lib.uuid4().hex}{ext}"
-    file_path = os.path.join(org_dir, unique_name)
-
-    def _write_file(path: str, data: bytes) -> None:
-        with open(path, "wb") as f:
-            f.write(data)
-
-    await asyncio.to_thread(_write_file, file_path, content)
+    file_path = stored.key
 
     # Update event attachments list (deep copy to ensure SQLAlchemy detects the change)
     attachments = copy.deepcopy(event.attachments or [])
     attachments.append(
         {
             "id": uuid_lib.uuid4().hex,
-            "file_name": file.filename or unique_name,
+            "file_name": file.filename or f"attachment{ext}",
             "file_path": file_path,
             "file_size": len(content),
             "file_type": file.content_type,
@@ -3075,28 +3079,38 @@ async def download_event_attachment(
 
     file_path = attachment["file_path"]
 
-    # SEC (EV-17): confine the resolved path to *this org's own* attachment
-    # subtree, not the shared ATTACHMENT_UPLOAD_DIR root. Every org's uploads
-    # live under that root, so a root-level check still serves a tampered or
-    # injected file_path that points at another organization's subdirectory —
-    # and the generic event create/update payloads can carry attachment
-    # dictionaries. Same fix, and same reasoning, as DOC-24 in documents.py.
-    resolved_path = os.path.realpath(file_path)
-    if not is_path_in_org(file_path, current_user.organization_id):
+    # SEC (EV-17): confined to *this org's own* event attachments. The
+    # generic event create/update payloads can carry attachment dictionaries,
+    # so a tampered or injected file_path naming another organization's file,
+    # another module's file, or anything outside the uploads volume is refused
+    # before the disk is read.
+    try:
+        opened = await asyncio.to_thread(
+            get_file_storage().open,
+            file_path,
+            organization_id=current_user.organization_id,
+            area=StorageArea.EVENTS,
+            legacy_dirs=legacy_attachment_dirs(current_user.organization_id),
+        )
+    except StorageAccessDenied:
         logger.warning(
-            f"Blocked out-of-org event attachment read for event {event_id}: "
-            f"{file_path} resolved to {resolved_path}, outside the upload "
-            f"subtree of org {current_user.organization_id}"
+            f"Blocked out-of-org event attachment read for event {event_id}, "
+            f"attachment {attachment_id}"
         )
         raise HTTPException(status_code=403, detail="Access denied")
-
-    if not os.path.exists(resolved_path):
+    except StoredFileNotFound:
         raise HTTPException(status_code=404, detail="Attachment file not found on disk")
+    except (FileStorageError, FileDecryptionError, OSError, ValueError) as exc:
+        logger.error(
+            f"Stored file for event {event_id} attachment {attachment_id} could "
+            f"not be read: {type(exc).__name__}"
+        )
+        raise HTTPException(status_code=500, detail="Attachment could not be read")
 
-    return FileResponse(
-        path=resolved_path,
-        filename=attachment.get("file_name", "download"),
-        media_type=attachment.get("file_type", "application/octet-stream"),
+    return stored_file_response(
+        opened,
+        filename=attachment.get("file_name") or "download",
+        media_type=attachment.get("file_type") or "application/octet-stream",
     )
 
 
@@ -3156,14 +3170,14 @@ async def delete_event_attachment(
         # path was tampered with — a root-level check would let an injected
         # path delete another tenant's file. The metadata row is removed
         # regardless.
-        resolved_path = os.path.realpath(file_path)
-        try:
-            if is_path_in_org(
-                file_path, current_user.organization_id
-            ) and os.path.exists(resolved_path):
-                os.remove(resolved_path)
-        except OSError as e:
-            logger.warning(f"Failed to remove attachment file {file_path}: {e}")
+        if is_path_in_org(file_path, current_user.organization_id):
+            await asyncio.to_thread(
+                get_file_storage().delete_quietly,
+                file_path,
+                organization_id=current_user.organization_id,
+                area=StorageArea.EVENTS,
+                legacy_dirs=legacy_attachment_dirs(current_user.organization_id),
+            )
 
     # Remove from attachments list
     event.attachments = [a for a in attachments if a.get("id") != attachment_id]

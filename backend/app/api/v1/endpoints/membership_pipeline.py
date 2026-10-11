@@ -6,8 +6,6 @@ step progression, and transfer to full membership.
 """
 
 import asyncio
-import os
-import uuid as uuid_lib
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -23,7 +21,6 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse
 from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -47,6 +44,7 @@ from app.api.v1.endpoints.users import (
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
+from app.core.file_encryption import FileDecryptionError
 from app.core.security_middleware import get_client_ip
 from app.core.utils import handle_service_errors, safe_error_detail
 from app.models.event import Event
@@ -99,7 +97,19 @@ from app.schemas.membership_pipeline import (
     TransferProspectResponse,
 )
 from app.services.email_service import welcome_email_can_send
-from app.services.membership_pipeline_service import MembershipPipelineService
+from app.services.file_storage_service import (
+    FileStorageError,
+    StorageAccessDenied,
+    StorageArea,
+    StoredFileNotFound,
+    get_file_storage,
+    stored_file_response,
+)
+from app.services.membership_pipeline_service import (
+    MembershipPipelineService,
+    legacy_prospect_document_dirs,
+    remove_prospect_document_file,
+)
 
 # Applied router-wide, not per route: every endpoint that takes a
 # {prospect_id} path parameter — including ones added later — must refuse to
@@ -1917,10 +1927,6 @@ async def get_prospect_activity(
 # Prospect Document Endpoints
 # ============================================
 
-# Files are stored under {org_id}/{prospect_id}/ within the uploads volume
-# (mounted at /app/uploads in docker-compose), mirroring the event-attachments
-# layout so storage is grouped per individual and walkable per organization.
-PROSPECT_DOCUMENT_DIR = "/app/uploads/prospect-documents"
 MAX_PROSPECT_DOCUMENT_SIZE = 50 * 1024 * 1024  # 50 MB — matches the frontend limit
 
 # Allowed document types mapped to their canonical extension. The MIME type is
@@ -1934,14 +1940,6 @@ PROSPECT_DOCUMENT_MIME_EXTENSIONS = {
     "application/msword": ".doc",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
 }
-
-
-def _remove_prospect_document_file(path: str) -> None:
-    """Best-effort cleanup of a stored file after a failed upload."""
-    try:
-        os.remove(path)
-    except OSError:
-        logger.warning(f"Failed to clean up prospect document file: {path}")
 
 
 @router.get(
@@ -2021,22 +2019,30 @@ async def add_prospect_document(
             error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
         )
 
-    # Scope storage by org then prospect (mirrors event-attachments) so each
-    # individual's files are grouped and the whole org is walkable for
-    # accounting, export, or purge. Random UUID filename with a MIME-derived
-    # extension (never the user-supplied name) avoids collisions and
-    # double-extension attacks (e.g. resume.pdf.exe).
-    prospect_dir = os.path.join(
-        PROSPECT_DOCUMENT_DIR, str(current_user.organization_id), str(prospect_id)
+    # Filed under {org}/prospects/{prospect_id}/ so each applicant's files are
+    # grouped and can be purged together; the stored name is random and the
+    # contents are encrypted, so neither the user-supplied name nor its
+    # extension ever reaches the disk.
+    stored = await asyncio.to_thread(
+        get_file_storage().save,
+        content,
+        organization_id=current_user.organization_id,
+        area=StorageArea.PROSPECTS,
+        entity_id=prospect_id,
     )
-    await asyncio.to_thread(os.makedirs, prospect_dir, exist_ok=True)
-    stored_path = os.path.join(prospect_dir, f"{uuid_lib.uuid4().hex}{ext}")
+    stored_path = stored.key
 
-    def _write_file(path: str, data: bytes) -> None:
-        with open(path, "wb") as fh:
-            fh.write(data)
-
-    await asyncio.to_thread(_write_file, stored_path, content)
+    def _discard_stored_file() -> None:
+        # Best effort: runs while another error is already on its way out,
+        # which a failed cleanup must not replace.
+        try:
+            remove_prospect_document_file(
+                stored_path, current_user.organization_id, prospect_id
+            )
+        except OSError:
+            logger.warning(
+                f"Failed to clean up a stored document for prospect {prospect_id}"
+            )
 
     service = MembershipPipelineService(db)
     try:
@@ -2044,7 +2050,7 @@ async def add_prospect_document(
             prospect_id=str(prospect_id),
             organization_id=current_user.organization_id,
             document_type=document_type,
-            file_name=file.filename or os.path.basename(stored_path),
+            file_name=file.filename or f"{document_type}{ext}",
             file_path=stored_path,
             file_size=len(content),
             mime_type=detected_mime,
@@ -2052,13 +2058,13 @@ async def add_prospect_document(
             uploaded_by=current_user.id,
         )
     except ValueError as e:
-        await asyncio.to_thread(_remove_prospect_document_file, stored_path)
+        await asyncio.to_thread(_discard_stored_file)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception:
-        await asyncio.to_thread(_remove_prospect_document_file, stored_path)
+        await asyncio.to_thread(_discard_stored_file)
         raise
     if not doc:
-        await asyncio.to_thread(_remove_prospect_document_file, stored_path)
+        await asyncio.to_thread(_discard_stored_file)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
         )
@@ -2091,30 +2097,43 @@ async def download_prospect_document(
             status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
         )
 
-    # Defence-in-depth: ensure the stored path resolves inside the uploads
-    # directory before serving it, in case the DB value is ever tampered with.
-    resolved_path = os.path.realpath(doc.file_path)
-    allowed_base = os.path.realpath(PROSPECT_DOCUMENT_DIR)
-    if (
-        not resolved_path.startswith(allowed_base + os.sep)
-        and resolved_path != allowed_base
-    ):
+    # Confined to this prospect's own stored files (or, for files stored
+    # before the shared storage service, the org's old prospect-documents
+    # directory): a tampered file_path naming another applicant's or another
+    # organization's file is refused before the disk is read.
+    try:
+        opened = await asyncio.to_thread(
+            get_file_storage().open,
+            doc.file_path,
+            organization_id=current_user.organization_id,
+            area=StorageArea.PROSPECTS,
+            legacy_dirs=legacy_prospect_document_dirs(current_user.organization_id),
+            entity_id=prospect_id,
+        )
+    except StorageAccessDenied:
         logger.warning(
-            f"Path traversal attempt blocked for prospect document {document_id}: "
-            f"{doc.file_path} resolved to {resolved_path}"
+            f"Out-of-area file reference blocked for prospect document {document_id}"
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
         )
-
-    if not os.path.exists(resolved_path):
+    except StoredFileNotFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document file not found on disk",
         )
+    except (FileStorageError, FileDecryptionError, OSError) as exc:
+        logger.error(
+            f"Stored file for prospect document {document_id} could not be read: "
+            f"{type(exc).__name__}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Document file could not be read",
+        )
 
-    return FileResponse(
-        path=resolved_path,
+    return stored_file_response(
+        opened,
         filename=doc.file_name or "download",
         media_type=doc.mime_type or "application/octet-stream",
     )

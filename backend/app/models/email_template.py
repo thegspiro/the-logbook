@@ -236,7 +236,7 @@ class EmailAttachment(Base):
     filename = Column(String(255), nullable=False)
     content_type = Column(String(100), nullable=False)
     file_size = Column(String(20))  # Human-readable size
-    storage_path = Column(String(500), nullable=False)  # Path in MinIO/S3
+    storage_path = Column(String(500), nullable=False)  # File storage key
 
     # Timestamps
     created_at = Column(

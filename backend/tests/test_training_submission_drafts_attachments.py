@@ -58,6 +58,16 @@ def _config(**overrides):
     return SimpleNamespace(**base)
 
 
+def _member_certificates(organization_id, member_id):
+    """The encrypted files stored for one member's self-reported training."""
+    from app.core.config import settings
+
+    directory = os.path.join(
+        settings.UPLOAD_DIR, organization_id, "training-submissions", member_id
+    )
+    return os.listdir(directory) if os.path.isdir(directory) else []
+
+
 def _submission(**overrides):
     base = dict(
         id=str(uuid4()),
@@ -333,7 +343,7 @@ class TestAttachments:
                 current_user=SimpleNamespace(id="user-1", organization_id="org-1"),
             )
         assert exc.value.status_code == 400
-        assert not os.listdir(tmp_path)
+        assert _member_certificates("org-1", "user-1") == []
 
     async def test_upload_stores_a_pdf_and_returns_sanitized_metadata(
         self, monkeypatch, tmp_path
@@ -376,10 +386,14 @@ class TestAttachments:
                 "uploaded_at": submission.attachments[0]["uploaded_at"],
             }
         ]
-        # Stored under a server-generated name with a magic-derived extension.
-        stored = os.listdir(os.path.join(str(tmp_path), "org-1"))
+        # Stored encrypted under a random name, filed per member; the row
+        # records the storage key, never a filesystem path.
+        stored = _member_certificates("org-1", "user-1")
         assert len(stored) == 1
-        assert stored[0].endswith(".pdf")
+        assert stored[0].endswith(".enc")
+        assert submission.attachments[0]["file_path"] == (
+            f"org-1/training-submissions/user-1/{stored[0]}"
+        )
 
     async def test_upload_is_refused_once_a_decision_has_been_made(
         self, monkeypatch, tmp_path
@@ -466,41 +480,43 @@ class TestDraftHandoffRevalidates:
         svc._create_record_from_submission.assert_awaited_once()
 
 
-class TestAttachmentRoot:
-    def test_submission_evidence_lives_under_the_record_download_root(self):
-        """Approval copies these paths onto the TrainingRecord verbatim.
-
-        The record download route confines paths to TRAINING_ATTACHMENT_DIR, so
-        a sibling directory would 404 every approved certificate from the
-        member's own training history.
-        """
-        from app.api.v1.endpoints.training_enhancements import TRAINING_ATTACHMENT_DIR
-
-        assert training_submissions.SUBMISSION_ATTACHMENT_DIR.startswith(
-            TRAINING_ATTACHMENT_DIR + os.sep
+class TestAttachmentScope:
+    def test_legacy_submission_evidence_lives_under_the_record_legacy_root(self):
+        """Approval copied legacy paths onto the TrainingRecord verbatim, so
+        the record download route must keep reading the submission's legacy
+        directory."""
+        from app.api.v1.endpoints.training_enhancements import (
+            legacy_record_attachment_dirs,
         )
 
-    def test_a_path_outside_the_root_is_never_returned(self):
-        assert training_submissions._confined_path({"file_path": "/etc/passwd"}) is None
-        assert training_submissions._confined_path("legacy-string") is None
-        assert (
-            training_submissions._confined_attachment_paths(
-                [{"file_path": "/etc/passwd"}, None]
-            )
-            == []
+        org = str(uuid4())
+        assert training_submissions.legacy_submission_attachment_dirs(org)[
+            0
+        ] in legacy_record_attachment_dirs(org)
+
+    def test_a_reference_outside_the_submitters_files_is_refused(self):
+        from app.services.file_storage_service import (
+            StorageAccessDenied,
+            get_file_storage,
         )
+
+        submission = _submission()
+        scope = training_submissions._storage_scope(submission)
+        org = submission.organization_id
+        other_member = str(uuid4())
+        refused = [
+            "/etc/passwd",
+            f"{org}/training-submissions/{other_member}/{'a' * 32}.enc",
+            f"{org}/training/{submission.submitted_by}/{'a' * 32}.enc",
+            f"{uuid4()}/training-submissions/{submission.submitted_by}/{'a' * 32}.enc",
+        ]
+        for reference in refused:
+            with pytest.raises(StorageAccessDenied):
+                get_file_storage().resolve(reference, **scope)
 
 
 class TestDeletingASubmission:
-    async def test_stored_evidence_is_removed_with_the_row(self, monkeypatch, tmp_path):
-        """A withdrawn certificate must not outlive its submission on disk."""
-        monkeypatch.setattr(
-            training_submissions, "SUBMISSION_ATTACHMENT_DIR", str(tmp_path)
-        )
-        stored = tmp_path / "cert.pdf"
-        stored.write_bytes(b"%PDF")
-        submission = _submission(attachments=[{"file_path": str(stored)}])
-
+    async def _delete(self, monkeypatch, submission):
         service = SimpleNamespace(
             get_submission=AsyncMock(return_value=submission),
             delete_submission=AsyncMock(return_value=True),
@@ -508,7 +524,6 @@ class TestDeletingASubmission:
         monkeypatch.setattr(
             training_submissions, "TrainingSubmissionService", lambda db: service
         )
-
         await training_submissions.delete_submission(
             submission.id,
             db=None,
@@ -516,6 +531,38 @@ class TestDeletingASubmission:
                 id=submission.submitted_by, organization_id=submission.organization_id
             ),
         )
+
+    async def test_stored_evidence_is_removed_with_the_row(self, monkeypatch):
+        """A withdrawn certificate must not outlive its submission on disk."""
+        from app.services.file_storage_service import StorageArea, get_file_storage
+
+        submission = _submission()
+        stored = get_file_storage().save(
+            b"%PDF",
+            organization_id=submission.organization_id,
+            area=StorageArea.TRAINING_SUBMISSIONS,
+            entity_id=submission.submitted_by,
+        )
+        submission.attachments = [{"file_path": stored.key}]
+
+        await self._delete(monkeypatch, submission)
+
+        assert (
+            _member_certificates(submission.organization_id, submission.submitted_by)
+            == []
+        )
+
+    async def test_legacy_evidence_is_removed_with_the_row(self, monkeypatch, tmp_path):
+        submission = _submission()
+        monkeypatch.setattr(
+            training_submissions, "SUBMISSION_ATTACHMENT_DIR", str(tmp_path)
+        )
+        stored = tmp_path / submission.organization_id / "cert.pdf"
+        stored.parent.mkdir()
+        stored.write_bytes(b"%PDF")
+        submission.attachments = [{"file_path": str(stored)}]
+
+        await self._delete(monkeypatch, submission)
 
         assert not stored.exists()
 
@@ -602,7 +649,7 @@ class TestCreateWithAttachment:
 
         assert exc.value.status_code == 400
         create.assert_not_awaited()
-        assert not os.listdir(tmp_path)
+        assert _member_certificates("org-1", "user-1") == []
 
     async def test_a_failed_create_does_not_strand_the_file(
         self, monkeypatch, tmp_path
@@ -634,7 +681,7 @@ class TestCreateWithAttachment:
             )
 
         # The row never landed, so the bytes on disk belong to nothing.
-        assert os.listdir(os.path.join(str(tmp_path), "org-1")) == []
+        assert _member_certificates("org-1", "user-1") == []
 
 
 class TestStartTime:
@@ -771,7 +818,7 @@ class TestMultipartFailureHandling:
                 current_user=SimpleNamespace(id="user-1", organization_id="org-1"),
             )
 
-        assert os.listdir(os.path.join(str(tmp_path), "org-1")) == []
+        assert _member_certificates("org-1", "user-1") == []
 
     async def test_a_post_commit_failure_leaves_the_file_alone(
         self, monkeypatch, tmp_path
@@ -816,7 +863,7 @@ class TestMultipartFailureHandling:
                 current_user=SimpleNamespace(id="user-1", organization_id="org-1"),
             )
 
-        assert os.listdir(os.path.join(str(tmp_path), "org-1"))
+        assert _member_certificates("org-1", "user-1")
 
     async def test_a_bad_payload_raises_the_frameworks_validation_error(
         self, monkeypatch, tmp_path

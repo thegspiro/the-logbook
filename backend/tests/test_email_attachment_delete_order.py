@@ -1,7 +1,7 @@
 """Deleting an email attachment must not lose the file silently.
 
 The `email_attachments` row is the only record that the file on disk exists —
-nothing sweeps `storage/email_attachments`, and there is no orphan-cleanup task
+nothing sweeps the template attachment storage, and there is no orphan-cleanup task
 anywhere in the repository. That makes the order of the two operations, and what
 happens to a failed unlink, a correctness question rather than a style one.
 
@@ -25,17 +25,27 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.api.v1.endpoints.email_templates import delete_attachment
+from app.core.config import settings
+from app.services.file_storage_service import StorageArea, get_file_storage
 
 
 def _attachment(tmp_path):
-    path = tmp_path / "attachment.pdf"
-    path.write_bytes(b"%PDF-1.4 member document")
+    stored = get_file_storage().save(
+        b"%PDF-1.4 member document",
+        organization_id="org-1",
+        area=StorageArea.EMAIL_TEMPLATES,
+        entity_id="tpl-1",
+    )
     return SimpleNamespace(
         id="att-1",
         template_id="tpl-1",
         filename="member-document.pdf",
-        storage_path=str(path),
+        storage_path=stored.key,
     )
+
+
+def _on_disk(attachment) -> str:
+    return os.path.join(settings.UPLOAD_DIR, attachment.storage_path)
 
 
 def _db_returning(attachment):
@@ -71,7 +81,7 @@ class TestDeleteAttachmentOrdering:
 
         db.delete.assert_not_awaited()
         db.commit.assert_not_awaited()
-        assert os.path.isfile(attachment.storage_path), (
+        assert os.path.isfile(_on_disk(attachment)), (
             "the file should still be on disk after a failed unlink — if it is "
             "gone the test is not exercising what it claims to"
         )
@@ -98,7 +108,7 @@ class TestDeleteAttachmentOrdering:
             "the file must be removed before the row is deleted; the row is the "
             "only record the file exists"
         )
-        assert not os.path.exists(attachment.storage_path)
+        assert not os.path.exists(_on_disk(attachment))
         db.commit.assert_awaited()
 
     async def test_an_already_missing_file_is_not_an_error(self, tmp_path, monkeypatch):
@@ -106,7 +116,7 @@ class TestDeleteAttachmentOrdering:
         attempt unlinked the file and then failed to commit, so the row is still
         here and the file is not. That must complete, not 500 forever."""
         attachment = _attachment(tmp_path)
-        os.remove(attachment.storage_path)
+        os.remove(_on_disk(attachment))
         db = _db_returning(attachment)
 
         await delete_attachment("tpl-1", "att-1", db=db, current_user=_user())

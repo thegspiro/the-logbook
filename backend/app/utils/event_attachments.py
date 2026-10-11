@@ -23,25 +23,39 @@ this exploitable:
   mirrors the identical fix already made for documents (DOC-24) in
   ``api/v1/endpoints/documents.py``.
 
-The org subdirectory has been part of the save path since the upload endpoint
-was written, so no stored attachment predates the layout this confines to.
-Copying an attachment between events of the *same* organization stays legal —
-recurring-occurrence generation and event duplication both do it deliberately.
+Uploads now go through the shared storage service, so ``file_path`` holds a
+storage key (``{org}/events/{event_id}/...``). Rows written before that hold an
+absolute path under ``ATTACHMENT_UPLOAD_DIR/<organization_id>``; both forms are
+confined to the caller's organization. The key is deliberately *not* confined
+to one event: copying an attachment between events of the same organization
+stays legal — recurring-occurrence generation and event duplication both do it
+deliberately.
 """
 
 import os
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, List, Optional
 
+from app.services.file_storage_service import (
+    StorageAccessDenied,
+    StorageArea,
+    get_file_storage,
+)
+
+# Where event attachments were written before the shared storage service.
 ATTACHMENT_UPLOAD_DIR = "/app/uploads/event-attachments"
 
 
 def org_attachment_root(organization_id: Any) -> str:
-    """Resolved filesystem root that holds *organization_id*'s attachments."""
+    """Resolved legacy directory that holds *organization_id*'s old attachments."""
     return os.path.realpath(os.path.join(ATTACHMENT_UPLOAD_DIR, str(organization_id)))
 
 
+def legacy_attachment_dirs(organization_id: Any) -> List[str]:
+    return [org_attachment_root(organization_id)]
+
+
 def is_path_in_org(file_path: Any, organization_id: Any) -> bool:
-    """Return True iff *file_path* resolves inside the org's own upload subtree.
+    """Return True iff *file_path* is one of the org's own event attachments.
 
     Fails **closed**: an empty path, a missing organization, a value that is
     not a string, or anything that resolves outside the subtree (``..``
@@ -58,9 +72,16 @@ def is_path_in_org(file_path: Any, organization_id: Any) -> bool:
     """
     if not isinstance(file_path, str) or not file_path or not organization_id:
         return False
-    root = org_attachment_root(organization_id)
-    resolved = os.path.realpath(file_path)
-    return resolved == root or resolved.startswith(root + os.sep)
+    try:
+        get_file_storage().resolve(
+            file_path,
+            organization_id=organization_id,
+            area=StorageArea.EVENTS,
+            legacy_dirs=legacy_attachment_dirs(organization_id),
+        )
+    except (StorageAccessDenied, ValueError):
+        return False
+    return True
 
 
 def validate_attachments_for_org(

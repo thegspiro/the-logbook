@@ -22,7 +22,6 @@ submission, which is the timing the service otherwise refuses to keep.
 """
 
 import asyncio
-import os
 from typing import List, Optional
 
 from fastapi import (
@@ -35,13 +34,15 @@ from fastapi import (
     Query,
     UploadFile,
 )
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import PaginationParams, get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
+from app.core.file_encryption import FileDecryptionError
 from app.core.utils import ensure_found, handle_service_errors
 from app.models.notification import NotificationTrigger
 from app.models.suggestion import Suggestion
@@ -66,11 +67,19 @@ from app.schemas.suggestion import (
     SuggestionBoxPublic,
     SuggestionBoxWrite,
 )
+from app.services.file_storage_service import (
+    FileStorageError,
+    StorageAccessDenied,
+    StoredFileNotFound,
+    get_file_storage,
+    stored_file_response,
+)
 from app.services.notification_rules import NotificationRuleResolver
 from app.services.suggestion_service import (
     MAX_SCREENSHOT_BYTES,
     MAX_SCREENSHOTS,
     SuggestionService,
+    attachment_storage_scope,
     forward_notice,
     process_screenshot,
     reviewer_notice,
@@ -120,15 +129,28 @@ async def _read_screenshots(files: List[UploadFile]) -> List[bytes]:
     return processed
 
 
-async def _serve_attachment(suggestion: Suggestion, attachment_id: str) -> FileResponse:
+async def _serve_attachment(
+    suggestion: Suggestion, attachment_id: str
+) -> StreamingResponse:
     attachment = SuggestionService.find_attachment(suggestion, attachment_id)
     if attachment is None:
         raise HTTPException(status_code=404, detail="Attachment not found")
-    real_path = SuggestionService.confined_path(attachment)
-    if not real_path or not await asyncio.to_thread(os.path.isfile, real_path):
+    try:
+        opened = await asyncio.to_thread(
+            get_file_storage().open,
+            attachment.file_path,
+            **attachment_storage_scope(attachment),
+        )
+    except (StorageAccessDenied, StoredFileNotFound, ValueError):
         raise HTTPException(status_code=404, detail="Attachment file not found")
-    return FileResponse(
-        real_path, media_type=attachment.content_type, filename=attachment.file_name
+    except (FileStorageError, FileDecryptionError, OSError) as exc:
+        logger.error(
+            f"Stored screenshot {attachment_id} could not be read: "
+            f"{type(exc).__name__}"
+        )
+        raise HTTPException(status_code=500, detail="Attachment could not be read")
+    return stored_file_response(
+        opened, filename=attachment.file_name, media_type=attachment.content_type
     )
 
 

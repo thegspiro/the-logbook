@@ -54,6 +54,7 @@ from app.services.email_policy import (
     ORG_SETTINGS_KEY,
     department_required_kinds,
 )
+from app.services.email_service import email_attachment_storage_scope
 from app.services.email_template_service import (
     GLOBAL_VARIABLES,
     TEST_RECIPIENT_FIELDS,
@@ -61,6 +62,11 @@ from app.services.email_template_service import (
     live_sample_context,
 )
 from app.services.email_test_records import real_record_context
+from app.services.file_storage_service import (
+    StorageAccessDenied,
+    StorageArea,
+    get_file_storage,
+)
 from app.services.notification_channels import SMS_ALERT_DETAILS, SMS_CONDITIONS
 from app.services.officer_service import OfficerService
 from app.utils.member_names import format_display_name, format_legal_name
@@ -719,7 +725,7 @@ async def upload_attachment(
     """
     Upload a file attachment for an email template.
 
-    Files are stored locally (or in MinIO when configured).
+    Files are encrypted and stored in the uploads volume.
     Max file size: 10MB.
     """
     from sqlalchemy import select
@@ -821,21 +827,19 @@ async def upload_attachment(
             detail=f"File content type '{detected_mime}' is not allowed.",
         )
 
-    # Store file with UUID name (prevents path traversal)
-    attachment_dir = os.path.join(
-        "storage", "email_attachments", current_user.organization_id
-    )
-    await asyncio.to_thread(os.makedirs, attachment_dir, exist_ok=True)
-
+    # Encrypted and filed under {org}/email-templates/{template_id}/ in the
+    # uploads volume. (These were once written to a directory relative to the
+    # working directory, outside the volume, and so did not survive a
+    # container being recreated.)
     file_id = str(uuid.uuid4())
-    storage_filename = f"{file_id}{ext}"
-    storage_path = os.path.join(attachment_dir, storage_filename)
-
-    def _write_file(path: str, data: bytes) -> None:
-        with open(path, "wb") as f:
-            f.write(data)
-
-    await asyncio.to_thread(_write_file, storage_path, contents)
+    stored = await asyncio.to_thread(
+        get_file_storage().save,
+        contents,
+        organization_id=current_user.organization_id,
+        area=StorageArea.EMAIL_TEMPLATES,
+        entity_id=template.id,
+    )
+    storage_path = stored.key
 
     # Human-readable file size
     size = len(contents)
@@ -921,12 +925,23 @@ async def delete_attachment(
     # other order leaves is permanent and silent.)
     def _remove_file(path: str) -> None:
         # `to_thread`, matching the upload path above: blocking syscalls stay
-        # off the event loop. FileNotFoundError is not an error here — it is
-        # what a retry after a half-completed delete looks like.
+        # off the event loop. An already-missing file is not an error — it is
+        # what a retry after a half-completed delete looks like. A reference
+        # outside this template's storage is never followed: the row is
+        # dropped and the file it names is left alone.
         try:
-            os.remove(path)
-        except FileNotFoundError:
-            pass
+            get_file_storage().delete(
+                path,
+                **email_attachment_storage_scope(
+                    current_user.organization_id, template_id
+                ),
+            )
+        except (StorageAccessDenied, ValueError):
+            logger.warning(
+                "Email attachment {} referenced a file outside its template; "
+                "row removed, file left in place",
+                attachment_id,
+            )
 
     await asyncio.to_thread(_remove_file, storage_path)
 
