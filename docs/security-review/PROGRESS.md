@@ -16,6 +16,41 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3084](https://github.com/thegspiro/the-logbook/pull/3084)**: branch
+`claude/security-review-core-infrastructure`, Feature 33 (Core
+infrastructure), pass 6 (watchdog pickup — no `claude/security-review-*` PR
+or branch existed anywhere in the repo when this iteration started, shortly
+after PR #3077 (Feature 32, Locations & kiosk, pass 6) merged docs-only). 0
+fixed, 0 new findings; CI3-33-3 (HIGH, open since pass 3) re-verified **now
+fixed** by code already on `main` — `REGISTRATION_REQUIRES_APPROVAL` was
+retired entirely via a new `RETIRED_SETTINGS` mechanism, closing the gap
+between its documented claim and the unconditional `UserStatus.ACTIVE` on
+self-registration. CI3-33-4 (LOW) re-confirmed still open, unchanged. New
+code since pass 5 — a bounded per-IP allowlist exception on the country
+block (INT2-28), a templated-export-route matcher, export-exfiltration
+monitoring switched from a `Content-Length` header read to counting
+streamed bytes plus a new per-export audit row, and new Authentik/MCP-OAuth
+settings — all reviewed fresh against all seven checklist dimensions, no
+findings. Completion gate green (flake8/black/isort re-pinned to CI's exact
+versions; migrations — 566 revisions, single head; 694 scoped backend
+tests; 159 cross-cutting guard tests; 14,092 full backend unit tests;
+frontend typecheck/lint). See the Log entry below and
+`docs/security-review/CI6-33-core-infra.md` for detail.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3077's merge, Feature 32, Locations & kiosk, pass 6 — the state this pass's PR conflicted with), preserved for history</summary>
+
+**None.** PR #3077 (Feature 32, Locations & kiosk, pass 6) merged clean
+2026-10-11 13:44 UTC (confirmed via `pull_request_read`: `merged: true`,
+2 files changed — `PROGRESS.md` and the findings file only). Docs-only
+merge, so there is nothing further to record here beyond what the Log
+entry below already captures. Rotation row 32 → ✅.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 32, Locations & kiosk, pass 6, PR #3077, before it merged), preserved for history</summary>
+
 **PR [#3077](https://github.com/thegspiro/the-logbook/pull/3077)**: branch
 `claude/security-review-locations-kiosk`, Feature 32 (Locations & kiosk),
 pass 6 (watchdog pickup — no `claude/security-review-*` PR or branch
@@ -32,6 +67,8 @@ Completion gate green (flake8/black/isort; migrations — 563 revisions,
 single head; 645 scoped backend tests; repo-tenancy guard suite, 86 tests;
 frontend typecheck/lint). See the Log entry below and
 `docs/security-review/LOC6-32-locations-kiosk.md` for detail.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3005's merge, Feature 31, Scheduled tasks, pass 6 — the state this pass's PR conflicted with), preserved for history</summary>
@@ -18450,7 +18487,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
@@ -18459,6 +18496,74 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-11 — Feature 33 (Core infrastructure, pass 6) — 0 fixed, 0 new findings; CI3-33-3 (HIGH) re-verified now fixed by other work (watchdog pickup)
+
+Watchdog pickup: PR #3077 (Feature 32, Locations & kiosk, pass 6) merged
+2026-10-11 13:44 UTC, docs-only (2 files: `PROGRESS.md` and its own findings
+file). By the time this iteration started shortly after, no
+`claude/security-review-*` PR or branch existed anywhere in the repo
+(confirmed via `search_pull_requests`, `is:open head:claude/security-review-`),
+and the dedicated `/loop 30m /security-review` session had not picked up the
+next feature. Feature 33 (Core infrastructure) was the next `⬜` row, already
+five passes deep. This iteration picked up pass 6 from outside that loop.
+
+Direct `git diff` of pass 5's merge (`29675a3a`, PR #2906, 2026-10-04) against
+current `main` for the three in-scope files — 606 intervening commits, of
+which `database.py`'s diff is empty and `security_middleware.py`/`config.py`
+carry real, substantive changes, all read in full:
+
+- **`security_middleware.py`:** a new rate-limit scope for the password-reset
+  token endpoints (10/5min, separate from the request budget); a bounded
+  `_ExceptionCache` + `_has_ip_exception` adding an approved per-IP allowlist
+  exception to `IPBlockingMiddleware`'s country block (owner decision
+  INT2-28) — keyed on the exact address only, fails closed, does not
+  reintroduce the PR #1544 cross-tenant bypass; a `_route_template_pattern`
+  helper closing the templated-export-route gap (`training/programs/
+{id}/export`) CI4-33/CI5-33 both left as a known, accepted limitation; and a
+  rewrite of export-exfiltration monitoring from a `Content-Length`-header
+  read (which `StreamingResponse` never sets, so streamed exports were
+  invisible to the check) to counting actual streamed bytes, plus a new
+  per-export audit row (`AUDIT_EVENT_DATA_EXPORT`) read back by
+  `GET /security/download-activity` — confirmed permission-gated
+  (`audit.view`) and org-scoped on that read side, and carrying no PII (no
+  query string, no response content).
+- **`config.py`:** a `RETIRED_SETTINGS` mechanism that pops a dead setting
+  from the raw env dict (with a logged warning) instead of silently keeping
+  it — and its first two uses **retire `REGISTRATION_REQUIRES_APPROVAL`
+  entirely**, which is how **CI3-33-3 (HIGH, open since pass 3) is now
+  fixed**: the setting, its misleading doc comment, and the inaccurate
+  `POST /auth/register` docstring are all gone, and `REGISTRATION_ENABLED` is
+  now the only, honestly-documented control. (This fix landed in a commit
+  this pass could not attribute cleanly — see the findings file's "Scope"
+  section for a git-history artifact encountered and resolved along the way —
+  but the code state on `main` is unambiguous and independently re-verified.)
+  Also new: `HIPAA_PASSWORD_EXPIRY_GRACE_DAYS` (has real readers), ClamAV
+  scanning config (fails closed, part of the file-storage-hardening
+  feature), a new Authentik OIDC provider (asymmetric-signing-only,
+  same-origin-checked discovery) and a new MCP OAuth 2.1 authorization
+  server (every route 404s until `mcp_oauth_origin()` validates, which
+  requires `https://` and no path/query/fragment/credentials) — both
+  spot-checked as new consumers of this feature's settings and found to fail
+  closed as advertised. CI3-33-4 (LOW, four settings with no reader)
+  re-confirmed still open and unchanged; `KNOWN_LIMITATIONS.md`'s row for it
+  was already current (last verified 2026-10-08) and needed no edit.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+`app/ tests/ alembic/` (linters re-pinned to CI's exact versions —
+flake8==7.3.0, black==26.5.1, isort==9.0.1 — since the sandbox's default
+flake8 was 7.4.1); `validate_migrations.py --strict` passed (566 revisions,
+single head `dcb8a46ac50c`, unchanged by this feature); feature-scoped tests
+694 passed; cross-cutting guard tests 159 passed; full backend unit suite
+**14,092 passed, 1 skipped** (pre-existing `pywebpush` optional dependency),
+0 failed; frontend `npm run typecheck` 0 errors, `npm run lint` 0 errors/0
+warnings.
+
+Findings doc: [`CI6-33-core-infra.md`](./CI6-33-core-infra.md). No
+`KNOWN_LIMITATIONS.md` change this pass — CI3-33-3's fix removes the
+misleading setting rather than leaving a row to update, and no new item was
+flagged. Rotation row 33 → ✅ (pending PR merge). Next: Feature 34 (Frontend
+shared).
 
 ### 2026-10-11 — Feature 32 (Locations & kiosk, pass 6) — 0 fixed, 0 new findings; EV-26's room-booking lock re-confirmed cross-referenced, not re-derived (watchdog pickup)
 
