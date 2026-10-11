@@ -31,6 +31,7 @@ import {
 import { EmptyState } from '../components/ux';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuthStore } from '../stores/authStore';
+import { useConfirm } from '../contexts/ConfirmContext';
 import {
   formsService,
   type FormDef,
@@ -61,6 +62,7 @@ const ONE_PER_PERSON_HINT =
 
 const FormsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
+  const { confirm } = useConfirm();
   const canManage = checkPermission('forms.manage');
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -185,6 +187,26 @@ const FormsPage: React.FC = () => {
 
   const handlePublish = async (formId: string) => {
     try {
+      // The server says what publishing will not do — today, a public request
+      // form whose submissions file nothing while public intake is off in
+      // Events settings. Read there because that setting needs events.manage.
+      const warnings = await formsService.getPublishWarnings(formId);
+      if (warnings.length > 0) {
+        const proceed = await confirm({
+          title: 'Publish this form?',
+          message: (
+            <div className="space-y-2 text-left">
+              {warnings.map((warning) => (
+                <p key={warning.code}>{warning.message}</p>
+              ))}
+            </div>
+          ),
+          confirmLabel: 'Publish anyway',
+          cancelLabel: 'Not yet',
+          variant: 'warning',
+        });
+        if (!proceed) return;
+      }
       await formsService.publishForm(formId);
       await loadData();
     } catch (err: unknown) {

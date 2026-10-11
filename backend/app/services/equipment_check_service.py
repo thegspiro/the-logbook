@@ -5077,16 +5077,60 @@ class EquipmentCheckService:
         )
         return org_tz, start, end
 
+    async def _check_unit_keys(
+        self, organization_id: str, checks: Sequence[ShiftEquipmentCheck]
+    ) -> Dict[str, Optional[str]]:
+        """The apparatus each check was on, read through its shift (W46-11).
+
+        ``shift_equipment_checks.apparatus_id`` holds only a full Apparatus id
+        and is NULL for a department on basic apparatus, so a report keyed on
+        it shows nothing by truck for that department. A shift-based check is
+        attributed through ``shifts.apparatus_id`` — the polymorphic id the
+        fleet board keys on — and the check's own column is the fallback for a
+        standalone check. Read-time only: no stored row changes.
+        """
+        shift_ids = {str(c.shift_id) for c in checks if c.shift_id}
+        shift_units: Dict[str, Optional[str]] = {}
+        if shift_ids:
+            result = await self.db.execute(
+                select(Shift.id, Shift.apparatus_id).where(
+                    Shift.organization_id == organization_id,
+                    Shift.id.in_(list(shift_ids)),
+                )
+            )
+            shift_units = {
+                str(sid): (str(aid) if aid else None) for sid, aid in result.all()
+            }
+        keys: Dict[str, Optional[str]] = {}
+        for c in checks:
+            key = shift_units.get(str(c.shift_id)) if c.shift_id else None
+            if key is None and c.apparatus_id:
+                key = str(c.apparatus_id)
+            keys[str(c.id)] = key
+        return keys
+
     async def get_compliance_report(
         self,
         organization_id: str,
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
     ) -> Dict[str, Any]:
-        """Aggregated compliance stats by apparatus + date range."""
-        _, date_from_start, date_to_end = await self._report_window(
+        """Aggregated compliance stats by apparatus + date range.
+
+        ``checks_expected`` / ``checks_missed`` per apparatus and the report's
+        ``overdue_count`` come from the fleet board's own rule — one expected
+        check per shift per applicable checklist, dated by the shift — so the
+        report and the board agree (EC-11). ``checks_expected_completed`` is
+        counted over that same shift-dated set, so "n of m expected"
+        reconciles. ``checks_completed`` and the pass/fail counts are the
+        checks submitted in the range, dated by when they were filed.
+        """
+        org_tz, date_from_start, date_to_end = await self._report_window(
             organization_id, date_from, date_to, default_days=30
         )
+        today = today_in(org_tz)
+        range_from = date_from or today - timedelta(days=30)
+        range_to = date_to or today
 
         # All checks in the date range
         checks_q = await self.db.execute(
@@ -5116,33 +5160,60 @@ class EquipmentCheckService:
             EquipmentReadinessService,
         )
 
-        with_checklists = await EquipmentReadinessService(
-            self.db
-        ).apparatus_with_checklists(organization_id, all_apparatus)
+        readiness = EquipmentReadinessService(self.db)
+        with_checklists = await readiness.apparatus_with_checklists(
+            organization_id, all_apparatus
+        )
 
-        # Per-apparatus stats
-        app_stats: Dict[str, Dict[str, Any]] = {}
-        for a in all_apparatus:
-            aid = str(a.id)
-            app_stats[aid] = {
+        def _row(aid: str, name: str, has_checklist: bool) -> Dict[str, Any]:
+            return {
                 "apparatus_id": aid,
-                "apparatus_name": a.unit_number,
+                "apparatus_name": name,
                 "last_check_date": None,
                 "last_checked_by": None,
                 "last_status": None,
                 "checks_completed": 0,
                 "checks_expected": 0,
+                "checks_expected_completed": 0,
+                "checks_missed": 0,
                 "pass_count": 0,
                 "fail_count": 0,
-                "has_deficiency": bool(a.has_deficiency),
-                "deficiency_since": a.deficiency_since,
-                "has_checklist": aid in with_checklists,
+                "has_deficiency": False,
+                "deficiency_since": None,
+                "has_checklist": has_checklist,
             }
 
+        # Per-apparatus stats
+        app_stats: Dict[str, Dict[str, Any]] = {}
+        for a in all_apparatus:
+            aid = str(a.id)
+            app_stats[aid] = _row(aid, a.unit_number, aid in with_checklists)
+            app_stats[aid]["has_deficiency"] = bool(a.has_deficiency)
+            app_stats[aid]["deficiency_since"] = a.deficiency_since
+        if not all_apparatus:
+            # A department on onboarding's basic apparatus list (W46-11): the
+            # same fallback the fleet board and the shift form use.
+            basic_fleet = await readiness._load_fleet(organization_id)
+            configured = await readiness._configured_units(organization_id, basic_fleet)
+            for key, unit in basic_fleet.items():
+                app_stats[key] = _row(key, unit.label, key in configured)
+
+        expected = await readiness.expected_checks_between(
+            organization_id, range_from, range_to, today=today
+        )
+        overdue_count = 0
+        for key, counts in expected.items():
+            overdue_count += counts["missed"]
+            if key in app_stats:
+                app_stats[key]["checks_expected"] = counts["expected"]
+                app_stats[key]["checks_expected_completed"] = counts["completed"]
+                app_stats[key]["checks_missed"] = counts["missed"]
+
+        unit_keys = await self._check_unit_keys(organization_id, checks)
         total_items_sum = 0
         user_ids: set[str] = set()
         for c in checks:
-            check_aid = str(c.apparatus_id) if c.apparatus_id else None
+            check_aid = unit_keys.get(str(c.id))
             if check_aid and check_aid in app_stats:
                 stats = app_stats[check_aid]
                 stats["checks_completed"] += 1
@@ -5199,7 +5270,7 @@ class EquipmentCheckService:
         return {
             "total_checks": total_checks,
             "pass_rate": pass_rate,
-            "overdue_count": 0,
+            "overdue_count": overdue_count,
             "avg_items_per_check": avg_items,
             "apparatus": list(app_stats.values()),
             "members": list(member_stats.values()),
@@ -5239,7 +5310,18 @@ class EquipmentCheckService:
             )
         )
         if apparatus_id:
-            base_q = base_q.where(ShiftEquipmentCheck.apparatus_id == apparatus_id)
+            # Through the shift, as the compliance report reads it (W46-11):
+            # a basic-apparatus check carries no apparatus of its own.
+            base_q = base_q.outerjoin(
+                Shift,
+                and_(
+                    Shift.id == ShiftEquipmentCheck.shift_id,
+                    Shift.organization_id == organization_id,
+                ),
+            ).where(
+                func.coalesce(Shift.apparatus_id, ShiftEquipmentCheck.apparatus_id)
+                == apparatus_id
+            )
         if item_name:
             # Escape LIKE wildcards so a literal % or _ in the filter doesn't
             # act as a wildcard (declare the escape char so it's honored).
@@ -5276,41 +5358,33 @@ class EquipmentCheckService:
             checks_map[str(check.id)] = check
 
         user_ids_set: set[str] = set()
-        apparatus_ids_set: set[str] = set()
         for c in checks_map.values():
             if c.checked_by:
                 user_ids_set.add(str(c.checked_by))
-            if c.apparatus_id:
-                apparatus_ids_set.add(str(c.apparatus_id))
 
         user_map = await self._get_user_name_map(list(user_ids_set), legal=legal_names)
-        app_name_map: Dict[str, str] = {}
-        if apparatus_ids_set:
-            aq = await self.db.execute(
-                select(Apparatus.id, Apparatus.unit_number).where(
-                    Apparatus.id.in_(list(apparatus_ids_set))
-                )
-            )
-            for row in aq.all():
-                app_name_map[str(row[0])] = row[1]
+        unit_keys = await self._check_unit_keys(
+            organization_id, list(checks_map.values())
+        )
+        # Either inventory: a basic-apparatus unit is named from its own table.
+        app_name_map = await resolve_apparatus_labels(
+            self.db,
+            {key for key in unit_keys.values() if key},
+            organization_id,
+        )
 
         records = []
         for fi in failed_items:
             check = checks_map.get(str(fi.check_id))
+            unit_key = unit_keys.get(str(check.id)) if check else None
             records.append(
                 {
                     "id": str(fi.id),
                     "check_id": str(fi.check_id),
                     "checked_at": (check.checked_at if check else None),
-                    "apparatus_id": (
-                        str(check.apparatus_id)
-                        if check and check.apparatus_id
-                        else None
-                    ),
+                    "apparatus_id": unit_key,
                     "apparatus_name": (
-                        app_name_map.get(str(check.apparatus_id), "")
-                        if check and check.apparatus_id
-                        else None
+                        app_name_map.get(unit_key, "") if unit_key else None
                     ),
                     "compartment_name": fi.compartment_name,
                     "item_name": fi.item_name,

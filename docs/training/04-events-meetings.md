@@ -479,6 +479,14 @@ application form is what your follow-up email links to.
 | An entry on the event's **external attendee** list | Always                                                                     |
 | A card in the **prospective members** pipeline     | Only if the event has the second toggle on **and** the guest left an email |
 
+**Seeing who came _(2026-10-11)_.** An event manager (`events.manage`) sees a
+**Guests (_n_)** card on the event page: each guest's name, organization,
+email and phone, when they signed in, and "Signed in at the kiosk" for a QR
+sign-in. On an event that takes guest sign-ins it shows even when empty ("No
+guests have signed in yet."). Guests are **not** counted in the event's
+attendance, which stays a record of members — the card says so. Members
+without `events.manage` do not see the card.
+
 A prospect opened this way is linked back to the event it came from: the detail
 drawer's **Linked Events** panel names the open house, its date and its type, so
 at the next pipeline review you can see which one each lead walked in from.
@@ -1404,7 +1412,9 @@ The Events module includes a **Public Outreach Request Pipeline** that lets comm
 2. Under **Pipeline**, switch on **Accept Public Requests**. It gates **both**
    ways a request arrives: the public request API and a Forms-module event
    request form (the kind **Generate Event Request Form** produces). While it
-   is off, a published form stops creating requests.
+   is off, a published form stops creating requests. Publishing such a form
+   from the Forms screen while it is off asks **Publish this form?** and says
+   so; choose **Not yet**, turn this on, and publish again.
 3. Under **Outreach Types**, add the program types your department offers:
    - Click **Add Type**, enter a key (e.g., `fire_safety_demo`) and label (e.g., "Fire Safety Demonstration")
    - These appear as options on the public request form

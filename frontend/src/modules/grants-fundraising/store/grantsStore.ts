@@ -16,6 +16,7 @@ import type {
   FundraisingCampaign,
   Donor,
   Donation,
+  DonationCreatePayload,
   Pledge,
   GrantsDashboard,
 } from '../types';
@@ -60,7 +61,7 @@ interface GrantsState {
   fetchDashboard: () => Promise<void>;
   createApplication: (data: Partial<GrantApplication>) => Promise<GrantApplication>;
   updateApplication: (id: string, data: Partial<GrantApplication>) => Promise<GrantApplication>;
-  createDonation: (data: Partial<Donation>) => Promise<Donation>;
+  createDonation: (data: DonationCreatePayload) => Promise<Donation>;
   addBudgetItem: (applicationId: string, data: Partial<GrantBudgetItem>) => Promise<GrantBudgetItem>;
   addExpenditure: (applicationId: string, data: Partial<GrantExpenditure>) => Promise<GrantExpenditure>;
   addComplianceTask: (applicationId: string, data: Partial<GrantComplianceTask>) => Promise<GrantComplianceTask>;

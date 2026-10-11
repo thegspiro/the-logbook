@@ -718,6 +718,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'inventory',
       },
       {
+        path: '/inventory/admin/clearances/:clearanceId',
+        label: 'Admin — departure clearance',
+        permission: 'inventory.manage',
+        module: 'inventory',
+      },
+      {
         path: '/inventory/admin/write-offs',
         label: 'Admin — write-offs',
         permission: 'inventory.manage',
@@ -1100,6 +1106,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
     pages: [
       { path: '/grants', label: 'Grants dashboard', permission: 'fundraising.view', module: 'grants' },
       { path: '/grants/opportunities', label: 'Grant opportunities', permission: 'fundraising.view', module: 'grants' },
+      {
+        path: '/grants/opportunities/new',
+        label: 'New grant opportunity',
+        permission: 'fundraising.manage',
+        module: 'grants',
+      },
       { path: '/grants/applications', label: 'Grant applications', permission: 'fundraising.view', module: 'grants' },
       {
         path: '/grants/applications/new',
@@ -1117,6 +1129,9 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/grants/campaigns', label: 'Campaigns', permission: 'fundraising.view', module: 'grants' },
       { path: '/grants/donors', label: 'Donors', permission: 'fundraising.view', module: 'grants' },
       { path: '/grants/donations', label: 'Donations', permission: 'fundraising.view', module: 'grants' },
+      { path: '/grants/donations/new', label: 'Record donation', permission: 'fundraising.manage', module: 'grants' },
+      { path: '/grants/pledges', label: 'Pledges', permission: 'fundraising.view', module: 'grants' },
+      { path: '/grants/events', label: 'Fundraising events', permission: 'fundraising.view', module: 'grants' },
       { path: '/grants/reports', label: 'Fundraising reports', permission: 'fundraising.view', module: 'grants' },
     ],
   },

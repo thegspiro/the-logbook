@@ -944,6 +944,63 @@ class FormsService:
         """Publish a form (make it available for submissions)"""
         return await self.update_form(form_id, organization_id, {"status": "published"})
 
+    PUBLIC_INTAKE_OFF_WARNING = (
+        "This form files event requests from the public, but public event "
+        "requests are turned off in Events settings (Request pipeline > Accept "
+        "public requests). It will accept submissions and file no requests "
+        "until that is turned on."
+    )
+
+    async def get_publish_warnings(
+        self, form_id: UUID, organization_id: UUID
+    ) -> Optional[List[Dict[str, str]]]:
+        """What publishing this form will not do, for the publish confirmation.
+
+        ``None`` when the form is not in the organization. The one warning today
+        is public intake: a public form that files event requests stores each
+        submission but files no request while
+        ``events.request_pipeline.accept_public_requests`` is off — the same
+        condition ``_process_event_request`` refuses on, read from the same
+        settings, so the warning and the refusal cannot drift apart.
+        """
+        form = await self.get_form_by_id(form_id, organization_id)
+        if form is None:
+            return None
+        if not form.is_public or not self._files_event_requests(form):
+            return []
+        from app.services.event_request_service import get_pipeline_settings
+
+        org = await self.db.scalar(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        if get_pipeline_settings(org).get("accept_public_requests", False):
+            return []
+        return [
+            {"code": "public_intake_off", "message": self.PUBLIC_INTAKE_OFF_WARNING}
+        ]
+
+    @staticmethod
+    def _files_event_requests(form: Form) -> bool:
+        """Whether a submission to *form* runs the event-request integration.
+
+        Mirrors ``_run_integrations``: the form-level marker runs unless every
+        same-type row was deactivated, and an active legacy row runs on its own.
+        """
+
+        def _type(integration: FormIntegration) -> str:
+            it = integration.integration_type
+            return str(getattr(it, "value", it))
+
+        rows = [
+            i
+            for i in (form.integrations or [])
+            if _type(i) == IntegrationType.EVENT_REQUEST
+        ]
+        marker = getattr(form, "integration_type", None)
+        if getattr(marker, "value", marker) == IntegrationType.EVENT_REQUEST:
+            return not rows or any(i.is_active for i in rows)
+        return any(i.is_active for i in rows)
+
     async def archive_form(
         self, form_id: UUID, organization_id: UUID
     ) -> Tuple[Optional[Form], Optional[str]]:

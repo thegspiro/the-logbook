@@ -4654,8 +4654,24 @@ class FinanceService:
         schedule_id: Optional[str] = None,
         user_id: Optional[str] = None,
         status: Optional[str] = None,
-    ) -> list[MemberDues]:
-        query = select(MemberDues).where(MemberDues.organization_id == org_id)
+    ) -> list[dict]:
+        """Member dues rows, each with the member's display name.
+
+        The name rides along because the dues screen is read by a Treasurer
+        who holds ``finance.manage`` but not necessarily ``users.view``, so it
+        cannot look members up itself and would otherwise show a bare id.
+        """
+        query = (
+            select(
+                MemberDues,
+                User.first_name,
+                User.last_name,
+                User.preferred_name,
+                User.username,
+            )
+            .outerjoin(User, User.id == MemberDues.user_id)
+            .where(MemberDues.organization_id == org_id)
+        )
         if schedule_id:
             query = query.where(MemberDues.dues_schedule_id == schedule_id)
         if user_id:
@@ -4668,7 +4684,16 @@ class FinanceService:
             .limit(pagination.limit)
         )
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        rows = []
+        for dues, first_name, last_name, preferred_name, username in result.all():
+            data = {
+                column.key: getattr(dues, column.key)
+                for column in MemberDues.__table__.columns
+            }
+            name = format_display_name(first_name, last_name, preferred_name)
+            data["member_name"] = name or username or None
+            rows.append(data)
+        return rows
 
     async def record_dues_payment(
         self,
@@ -5517,15 +5542,32 @@ class FinanceService:
 
     async def list_export_logs(
         self, org_id: str, pagination: PaginationParams
-    ) -> list[ExportLog]:
+    ) -> list[dict]:
+        """Export history, newest first, each with who ran it by name."""
         result = await self.db.execute(
-            select(ExportLog)
+            select(
+                ExportLog,
+                User.first_name,
+                User.last_name,
+                User.preferred_name,
+                User.username,
+            )
+            .outerjoin(User, User.id == ExportLog.exported_by)
             .where(ExportLog.organization_id == org_id)
             .order_by(ExportLog.exported_at.desc(), ExportLog.id)
             .offset(pagination.skip)
             .limit(pagination.limit)
         )
-        return list(result.scalars().all())
+        rows = []
+        for log, first_name, last_name, preferred_name, username in result.all():
+            data = {
+                column.key: getattr(log, column.key)
+                for column in ExportLog.__table__.columns
+            }
+            name = format_display_name(first_name, last_name, preferred_name)
+            data["exported_by_name"] = name or username or None
+            rows.append(data)
+        return rows
 
     # ========================================
     # Dashboard

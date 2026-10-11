@@ -388,7 +388,7 @@ Equipment kits bundle multiple inventory items into a named package for streamli
 Members can record their preferred uniform and PPE sizes, making equipment ordering and kit issuance faster and more accurate. Sizes are edited in the **Size Preferences** modal, which works in two modes:
 
 - **Self-service** — a member edits their own sizes from **My Issued Gear** (`/inventory/my/size-preferences`).
-- **Admin / quartermaster** — an admin edits any member's sizes from the **Members Inventory** page (`/inventory/members/{user_id}/size-preferences`, requires `inventory.manage`).
+- **Admin / quartermaster** — an admin edits any member's sizes from the **Members Inventory** page (`/inventory/members/{user_id}/size-preferences`, reading or editing another member's sizes requires `inventory.manage`).
 
 ### Recording Size Preferences
 
@@ -789,18 +789,25 @@ starting from the item or from the person.
 2. In the **Assignment** card, click **Assign Item**. (It appears only on
    individually-tracked items that are not already assigned; an assigned one
    offers **Unassign** instead.)
-3. Search for the member and pick them. The assignment is written immediately —
-   the date is stamped for you, and there is no notes or condition field on this
-   path.
+3. Search for the member and pick them.
+4. Choose **Permanent** ("Theirs until they return it or leave, like
+   turnouts.") or **Temporary** ("Due back on a date you choose, such as gear
+   for an acting role."), which then asks for a **Return date**, and click
+   **Assign to _member_**. The assignment date is stamped for you, and there is
+   no notes or condition field on this path.
 
 **From the member** — kitting somebody out, several items at once:
 
 1. Go to **Inventory Admin > Members**.
 2. Click **Assign** on their row. The **Distribute Items** dialog opens.
 3. Under **Intended duration**, choose **Ongoing assignment** ("Theirs until
-   they return it or leave, like turnouts.") or **Temporary loan** ("Lent for a
-   set time and due back on a date you choose.", which then asks for an
-   **Expected return**). Pool stock is issued from stock whichever you choose.
+   they return it or leave, like turnouts."), **Temporary assignment**
+   ("Assigned to them until a return date you choose, such as gear for an
+   acting role.") or **Temporary loan** ("Lent for a set time and due back on a
+   date you choose."). Both temporary choices then ask for an **Expected
+   return**. A temporary assignment stays on the member's assigned gear with a
+   due date; a temporary loan is checked in when it comes back and is flagged
+   overdue if it is late. Pool stock is issued from stock whichever you choose.
 4. Scan each item, or type a name, barcode, serial or asset tag and press
    **Enter**. Items stack up in a list with a quantity each, and anything added
    twice is refused with a notice rather than counted twice.
@@ -810,8 +817,8 @@ starting from the item or from the person.
 
 > **The review button says what it is waiting for** _(2026-09-30)_. With items
 > staged and no duration chosen, **Review _n_ Items** stays disabled and the
-> line beside it reads _"Choose Ongoing assignment or Temporary loan above to
-> continue."_; for a temporary loan with no date it reads _"Set the expected
+> line beside it reads _"Choose Ongoing assignment, Temporary assignment or
+> Temporary loan above to continue."_; for a temporary choice with no date it reads _"Set the expected
 > return date to continue."_ There is still no default — choosing is deliberate,
 > so nobody hands out turnouts as a loan by accident. Before this the button
 > was disabled with no explanation.
@@ -825,7 +832,7 @@ Your assigned items appear in two places:
 
 ![Assigning items to a member by scanning or searching, with two items staged](./images/05-57-assign-scan-modal.png)
 
-**[SCREENSHOT — REPLACE `05-57-assign-scan-modal.png`.** The dialog's intro now reads "Hand gear to this member. Find each item by scanning its label or typing its name, serial number or barcode, then choose how long they keep it.", and each **Intended duration** option carries a one-line description under its name. Re-shoot **Distribute Items** with two items staged and **Ongoing assignment** chosen, so **Review 2 Items** is enabled; a second frame with no duration chosen would show the "Choose Ongoing assignment or Temporary loan above to continue." line.**]**
+**[SCREENSHOT — REPLACE `05-57-assign-scan-modal.png`.** The dialog's intro now reads "Hand gear to this member. Find each item by scanning its label or typing its name, serial number or barcode, then choose how long they keep it.", and each **Intended duration** option carries a one-line description under its name. Re-shoot **Distribute Items** with two items staged and **Ongoing assignment** chosen, so **Review 2 Items** is enabled; a second frame with no duration chosen would show the "Choose Ongoing assignment, Temporary assignment or Temporary loan above to continue." line.**]**
 
 ---
 
@@ -1832,16 +1839,13 @@ corrections that change what you see:
 
 When a member departs the department (dropped, retired, etc.), a **Departure Clearance** is created to track the return of all assigned equipment.
 
-> **No screen for this yet _(2026-08-12)_.** Departure clearance is implemented
-> on the server — clearances can be initiated, listed, resolved item by item and
-> completed — but nothing in the application calls it. There is no Inventory
-> Admin button, no clearance page, and no way to work one through the interface;
-> it is reachable only via the API. The steps below describe the workflow, not a
-> screen you can currently open. The **property return report** generated when a
-> member is dropped is a different, working feature — see
+> **The clearance screen _(2026-10-11)_.** A clearance is worked at
+> **Inventory Admin > Needs attention > Unresolved departure clearance >
+> Review**, which opens `/inventory/admin/clearances/<id>`. Initiating one by
+> hand still has no button: dropping a member who holds property creates it.
+> The **property return report** generated when a member is dropped is a
+> different feature — see
 > [Membership > Property Return Process](./01-membership.md#member-status-management).
-> See
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#inventory--departure-clearance-is-backend-only-2026-08-12).
 
 <!-- Screenshot needed:
 _[Quartermaster at /inventory/admin: crop to the Needs attention card showing an "Unresolved departure clearance · <demo member> · 1 outstanding · Due <date> · Review" row. Requires a demo member dropped while holding an item.]_
@@ -1851,15 +1855,27 @@ _[Quartermaster at /inventory/admin: crop to the Needs attention card showing an
 
 **Required Permission:** `inventory.manage`
 
-1. Navigate to **Inventory Admin**.
-2. Click **Create Departure Clearance** for the departing member.
-3. The system generates a list of all items assigned to or checked out by the member.
-4. For each line item, choose a **disposition**:
-   - **Returned** — item received back in acceptable condition
-   - **Returned Damaged** — item received back but in damaged condition
-   - **Written Off** — item cannot be recovered (lost, destroyed)
-   - **Waived** — department chose not to require return
-5. When all items are accounted for, click **Complete Clearance**.
+1. Drop the member (or retire them) while they hold department property. The
+   clearance is created with one line per assignment, temporary loan and pool
+   issuance they hold.
+2. On **Inventory Admin**, the **Needs attention** list shows "Unresolved
+   departure clearance · _member_ · _n_ outstanding". Click **Review**.
+3. The clearance screen shows the totals (items, resolved, outstanding, value
+   outstanding) and every line with how it was held and its disposition.
+4. Click **Resolve** on a line and choose what happened to it:
+   - **Returned** — handed back in usable condition; choose the **Condition**
+   - **Returned damaged** — handed back damaged; the condition starts at Damaged
+   - **Written off** — lost or not coming back
+   - **Waived** — the department does not require it back
+
+   Add **Notes** if useful and click **Resolve**. A return is recorded on the
+   item itself (unassigned, checked in or returned to the pool) — do not also
+   return it on **Members**.
+
+5. When every line is resolved, add any **Closing notes** and click **Complete
+   clearance**. If leadership has decided the rest will not come back, click
+   **Close incomplete** instead; the confirmation says how many items and how
+   much value stay unresolved, and **Keep it open** backs out.
 
 ### Clearance Lifecycle
 
@@ -1884,10 +1900,10 @@ It used to be missing until something had already been returned, because the
 hub asked only for clearances in progress, and the row printed the member's
 internal id.
 
-Returning the items on **Members** gives the gear back but **does not resolve
-the clearance**, and no screen can resolve or complete one — so the clearance
-stays open and the member is never auto-archived. That is an open decision
-(workflow review W15-2) in `docs/KNOWN_LIMITATIONS.md`.
+Since 2026-10-11 **Review** on that row opens the clearance itself rather than
+the member's row. Returning the items on **Members** gives the gear back but
+**does not resolve the clearance** — resolve each line on the clearance
+instead, which performs the return for you, then complete it.
 
 ### Property return reminders now go out _(2026-09-24)_
 
@@ -2222,10 +2238,9 @@ FF Garcia currently has the following items assigned:
 
 When FF Garcia's status is changed to **Retired** by the membership officer, the system automatically generates a property return report. Lt. Park also manually creates the departure clearance:
 
-1. Navigates to **Inventory Admin**
-2. Clicks **Create Departure Clearance**
-3. Selects **Tom Garcia** from the member dropdown
-4. The system populates the clearance with all 7 items/issuances currently held by FF Garcia
+1. The status change creates the clearance, because FF Garcia still holds gear
+2. On **Inventory Admin**, Lt. Park clicks **Review** on "Unresolved departure clearance · Tom Garcia · 7 outstanding"
+3. The clearance lists all 7 items/issuances currently held by FF Garcia
 
 The clearance status is set to **Initiated**.
 
@@ -3582,10 +3597,30 @@ include **Check Reports** or the fleet board, which stay with
   failures".
 
 **Still open** (in `docs/KNOWN_LIMITATIONS.md`): a new or re-scoped checklist
-counts as missed on days before it existed (W46-19); a check on a basic
-apparatus is stored with no apparatus, so per-truck reports are empty for it
-(W46-11); and a check filed ahead of its shift's date does not show on the board
-(W46-12).
+counts as missed on days before it existed (W46-19).
+
+**Check Reports counts what was expected** _(2026-10-11)_. Each unit under
+**Apparatus Compliance** reads "_n_ of _m_ expected" and, when any were
+skipped, **Missed: _n_**; the **Missed checks** tile totals them, and the CSV
+and PDF carry both columns. An expected check is one per shift per checklist
+that applies to the unit — the same count the fleet board and check log use —
+so the three screens agree. A day the rig was out of service, or a check not yet
+due, is not expected. These used to read zero.
+
+**Per-truck reports work on basic apparatus** _(2026-10-11)_. A department
+that set its units up in onboarding rather than the Apparatus module now sees
+each unit under **Apparatus Compliance** on Check Reports, and the failure log
+(and its CSV and PDF) names the unit, because the report reads the unit from
+the check's shift. Checks filed before this change are reported the same way;
+nothing had to be re-entered.
+
+**A check filed ahead of its shift shows at once** _(2026-10-11)_. A crew that
+checks the rig the evening before a morning shift now sees that check on the
+fleet board and in the check log straight away — a failed item puts the rig in
+**Needs attention** that evening, not when the date turns. The board shows it as
+a column after today. Only a shift with a check already filed is pulled forward,
+up to a week ahead; an upcoming shift nobody has checked yet is not shown as
+due.
 
 ## Requesting gear: the form browses now _(2026-09-05)_
 

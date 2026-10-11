@@ -275,6 +275,17 @@ class FormDetailResponse(FormResponse):
     model_config = _response_config
 
 
+class FormPublishWarning(BaseModel):
+    """Something publishing a form will not do, shown before it is published."""
+
+    code: str
+    message: str
+
+
+class FormPublishWarnings(BaseModel):
+    warnings: List[FormPublishWarning]
+
+
 class FormsListResponse(BaseModel):
     """Schema for paginated forms list"""
 

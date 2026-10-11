@@ -12,6 +12,8 @@ import type {
   ScreeningRecord,
   ScreeningRecordCreate,
   ScreeningRecordUpdate,
+  ComplianceRoster,
+  ComplianceStanding,
   ComplianceSummary,
   ExpiringScreening,
   ScreeningSubjects,
@@ -92,6 +94,13 @@ export const medicalScreeningService = {
   },
 
   // --- Compliance ---
+
+  async getComplianceRoster(standing?: ComplianceStanding): Promise<ComplianceRoster> {
+    const { data } = await api.get<ComplianceRoster>(`${BASE}/compliance`, {
+      params: standing ? { standing } : undefined,
+    });
+    return { ...data, rows: expectArray(data.rows, 'compliance roster') };
+  },
 
   async getUserCompliance(userId: string): Promise<ComplianceSummary> {
     const { data } = await api.get<ComplianceSummary>(`${BASE}/compliance/${userId}`);

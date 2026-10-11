@@ -37,12 +37,15 @@ def test_own_size_preferences_require_only_authentication(method):
     assert _permission_checkers("/my/size-preferences", method) == []
 
 
-@pytest.mark.parametrize(
-    ("method", "expected"),
-    [("GET", "inventory.view"), ("PUT", "inventory.manage")],
-)
-def test_another_members_size_preferences_stay_gated(method, expected):
+def test_another_members_size_preferences_write_stays_gated():
     """Relaxing the self endpoints must not relax the officer-facing ones."""
-    checkers = _permission_checkers("/members/{user_id}/size-preferences", method)
+    checkers = _permission_checkers("/members/{user_id}/size-preferences", "PUT")
     assert len(checkers) == 1
-    assert set(checkers[0].required_permissions) == {expected}
+    assert set(checkers[0].required_permissions) == {"inventory.manage"}
+
+
+def test_another_members_size_preferences_read_is_self_or_quartermaster():
+    """INV-9: the read is gated in the handler (self or inventory.manage),
+    not by a baseline ``inventory.view`` dependency — see
+    ``test_inventory_member_reads_self_or_manage.py`` for the behaviour."""
+    assert _permission_checkers("/members/{user_id}/size-preferences", "GET") == []

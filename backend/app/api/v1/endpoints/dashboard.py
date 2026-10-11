@@ -30,6 +30,7 @@ from app.models.facilities import (
     FacilityMaintenance,
 )
 from app.models.inventory import (
+    MEDICAL_ITEM_TYPES,
     CheckOutRecord,
     EquipmentRequest,
     InventoryItem,
@@ -163,7 +164,13 @@ async def get_asset_widgets(
     if "inventory" in enabled and user_has_permission(current_user, "inventory.manage"):
         inventory = InventoryService(db)
         summary = await inventory.get_inventory_summary(org_id)
-        low_stock = await inventory.get_low_stock_items(org_id)
+        # Medical categories are left out to match the `/inventory?stock=low`
+        # list this tile opens, which carves the medical domain out of every
+        # inventory listing; Medical Supplies reports its own low stock from
+        # item reorder points (W47-6).
+        low_stock = await inventory.get_low_stock_items(
+            org_id, exclude_item_types=MEDICAL_ITEM_TYPES
+        )
         today = await department_today()
         expiring = await db.scalar(
             select(func.count(InventoryLot.id))

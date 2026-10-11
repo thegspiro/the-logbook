@@ -3256,15 +3256,13 @@ Lt. Santos navigates to **Inventory > Check Out** to reserve training equipment:
 | Thermal Imaging Cameras | 2          | Temporary (same-day return) | June 13, 16:00  |
 | Attack Hose (1.75")     | 12 lengths | Pool item issuance          | June 13, 16:00  |
 
-> **No "Temporary" control on the checkout form _(2026-08-12)_.** The
-> assignment types in the table above are real — an assignment is `permanent` or
-> `temporary`, and the member's equipment list groups them accordingly — but
-> nothing in the interface lets you pick one. Assigning from an item's detail
-> page and the bulk distribute-items both create **permanent** assignments with no
-> choice offered. The one way to produce a loan today is to fulfil an equipment
-> request with an expected-return date. Pool issuance (the hose lengths above)
-> is a separate flow and does honour a return date. See
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#inventory--nothing-in-the-ui-can-choose-a-temporary-assignment-2026-08-12).
+> **Choosing Temporary _(2026-10-11)_.** Serialized gear such as the SCBA
+> units goes out from **Inventory Admin > Members > Assign**: under **Intended
+> duration** choose **Temporary loan** (or **Temporary assignment**, for gear
+> held through a posting) and set the **Expected return**. Assigning a single
+> item from its detail page asks **Permanent** or **Temporary** after you pick
+> the member; Temporary asks for a return date. Pool issuance (the hose lengths
+> above) is issued from stock whichever you choose.
 
 **Edge case — equipment in maintenance:** When Lt. Santos attempts to check out 6 SCBA units, the system reports that SCBA Unit #14 is currently flagged as "In Maintenance" (last inspection failed — regulator issue). Only 5 of the 6 requested units from that batch are available. Lt. Santos substitutes SCBA Unit #22 from a different station's inventory, and the checkout proceeds with 6 available units.
 

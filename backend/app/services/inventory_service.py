@@ -4343,18 +4343,52 @@ class InventoryService:
         rather than a simple row count, and include the names of low-stock items.
         ``exclude_item_types`` leaves out categories of those domains;
         ``skip`` / ``limit`` page the categories (by name) — the default is
-        every category, as the dashboard reads it."""
-        org_id = str(organization_id)
+        every category, as the dashboard reads it.
 
-        # Sum the quantity field per category (handles pool items correctly)
-        query = (
+        An item's on-hand is read the way :meth:`get_low_stock_items_for_alerts`
+        reads it: from its in-date stock lots when it has any lot at all, and
+        from ``InventoryItem.quantity`` otherwise. Lot bookkeeping never
+        touches ``quantity``, so summing that column alone read a category of
+        lot-stocked supplies as empty whatever its lots held (W47-6)."""
+        org_id = str(organization_id)
+        today = await resolve_org_today(self.db, org_id)
+
+        # Ready units per lot-stocked item. An item with only expired lots is
+        # still present here with zero, so it reads as empty rather than
+        # falling back to a quantity column nobody maintains.
+        lot_totals = (
             select(
-                InventoryCategory,
-                func.coalesce(func.sum(InventoryItem.quantity), 0).label(
-                    "current_stock"
-                ),
+                InventoryLot.inventory_item_id.label("item_id"),
+                func.sum(
+                    case(
+                        (
+                            or_(
+                                InventoryLot.expiration_date.is_(None),
+                                InventoryLot.expiration_date >= today,
+                            ),
+                            InventoryLot.quantity,
+                        ),
+                        else_=0,
+                    )
+                ).label("ready"),
             )
+            .where(InventoryLot.organization_id == org_id)
+            .group_by(InventoryLot.inventory_item_id)
+            .subquery()
+        )
+        on_hand = case(
+            (
+                lot_totals.c.item_id.isnot(None),
+                func.coalesce(lot_totals.c.ready, 0),
+            ),
+            else_=func.coalesce(InventoryItem.quantity, 0),
+        )
+        current_stock = func.coalesce(func.sum(on_hand), 0)
+
+        query = (
+            select(InventoryCategory, current_stock.label("current_stock"))
             .join(InventoryItem, InventoryCategory.id == InventoryItem.category_id)
+            .outerjoin(lot_totals, lot_totals.c.item_id == InventoryItem.id)
             .where(InventoryCategory.organization_id == org_id)
             .where(InventoryCategory.active.is_(True))
             .where(InventoryItem.active.is_(True))
@@ -4366,10 +4400,7 @@ class InventoryService:
             )
         query = (
             query.group_by(InventoryCategory.id)
-            .having(
-                func.coalesce(func.sum(InventoryItem.quantity), 0)
-                <= InventoryCategory.low_stock_threshold
-            )
+            .having(current_stock <= InventoryCategory.low_stock_threshold)
             .order_by(InventoryCategory.name, InventoryCategory.id)
         )
         if skip:
@@ -4388,7 +4419,7 @@ class InventoryService:
                 func.row_number()
                 .over(
                     partition_by=InventoryItem.category_id,
-                    order_by=(InventoryItem.quantity.asc(), InventoryItem.id.asc()),
+                    order_by=(on_hand.asc(), InventoryItem.id.asc()),
                 )
                 .label("rank")
             )
@@ -4396,9 +4427,10 @@ class InventoryService:
                 select(
                     InventoryItem.category_id,
                     InventoryItem.name,
-                    InventoryItem.quantity,
+                    on_hand.label("quantity"),
                     rank,
                 )
+                .outerjoin(lot_totals, lot_totals.c.item_id == InventoryItem.id)
                 .where(
                     InventoryItem.category_id.in_(
                         [category.id for category, _ in categories]
@@ -4414,7 +4446,7 @@ class InventoryService:
             )
             for row in items_result.all():
                 item_details.setdefault(row.category_id, []).append(
-                    {"name": row.name, "quantity": row.quantity}
+                    {"name": row.name, "quantity": int(row.quantity)}
                 )
 
         return [
@@ -4422,11 +4454,11 @@ class InventoryService:
                 "category_id": category.id,
                 "category_name": category.name,
                 "item_type": category.item_type,
-                "current_stock": int(current_stock),
+                "current_stock": int(stock),
                 "threshold": category.low_stock_threshold,
                 "items": item_details.get(category.id, []),
             }
-            for category, current_stock in categories
+            for category, stock in categories
         ]
 
     async def get_inventory_summary(
@@ -5240,7 +5272,7 @@ class InventoryService:
                     )
 
                 elif (
-                    operation == "permanent_assignment"
+                    operation in ("permanent_assignment", "temporary_assignment")
                     and item.status == ItemStatus.AVAILABLE
                 ):
                     # AVAILABLE only, deliberately. `assign_item_to_user`
@@ -5257,13 +5289,20 @@ class InventoryService:
                         user_id=user_id,
                         organization_id=organization_id,
                         assigned_by=performed_by,
-                        assignment_type=AssignmentType.PERMANENT,
+                        assignment_type=(
+                            AssignmentType.TEMPORARY
+                            if operation == "temporary_assignment"
+                            else AssignmentType.PERMANENT
+                        ),
                         reason=reason,
+                        expected_return_date=(
+                            expected_return_at
+                            if operation == "temporary_assignment"
+                            else None
+                        ),
                     )
                     results.append(
-                        self._batch_result(
-                            code, item, "permanent_assignment", not err, err
-                        )
+                        self._batch_result(code, item, operation, not err, err)
                     )
                     successful, failed = (
                         (successful + 1, failed)

@@ -2900,13 +2900,9 @@ class TestUpdateFolderRefusesReparentingSystemFolder:
         await db_session.refresh(system_root)
         assert system_root.parent_id is None
 
-    async def test_renaming_a_system_folder_without_touching_parent_id_still_works(
-        self, db_session
-    ):
-        # Positive control: the new check keys off `"parent_id" in
-        # update_data`, not `is_system` alone -- a rename or other field
-        # update on a system folder that doesn't touch parent_id must not be
-        # blocked.
+    async def test_renaming_a_system_folder_is_refused(self, db_session):
+        # W53-4 (owner decision, 2026-10-08): a system folder cannot be
+        # renamed, moved or deleted. This test used to pin the opposite.
         org, system_root, _ordinary = (
             await self._org_with_system_folder_and_ordinary_folder(
                 db_session, "fcvfd-reparent-system-2"
@@ -2914,13 +2910,40 @@ class TestUpdateFolderRefusesReparentingSystemFolder:
         )
         caller = self._caller(org.id)
 
+        with pytest.raises(HTTPException) as exc:
+            await update_folder(
+                system_root.id,
+                DocumentFolderUpdate(name="Member Files (Renamed)"),
+                db=db_session,
+                current_user=caller,
+            )
+        assert exc.value.status_code == 400
+        await db_session.refresh(system_root)
+        assert system_root.name == "Member Files"
+
+    async def test_a_system_folders_other_fields_still_save(self, db_session):
+        # Positive control: only the name and the location are fixed. Its
+        # description and who may open it are the department's to set, and a
+        # form that re-sends the unchanged name is not a rename.
+        org, system_root, _ordinary = (
+            await self._org_with_system_folder_and_ordinary_folder(
+                db_session, "fcvfd-reparent-system-2b"
+            )
+        )
+        caller = self._caller(org.id)
+
         result = await update_folder(
             system_root.id,
-            DocumentFolderUpdate(name="Member Files (Renamed)"),
+            DocumentFolderUpdate(
+                name="Member Files",
+                description="Per-member records",
+                visibility="leadership",
+            ),
             db=db_session,
             current_user=caller,
         )
-        assert result.name == "Member Files (Renamed)"
+        assert result.description == "Per-member records"
+        assert result.visibility.value == "leadership"
 
     async def test_a_non_system_folder_can_still_be_reparented_normally(
         self, db_session

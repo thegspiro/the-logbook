@@ -27,18 +27,10 @@ import { formatDate } from '../../../utils/dateFormatting';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { isSafeExternalUrl } from '../../../utils/safeUrl';
+import { useAuthStore } from '../../../stores/authStore';
+import { GRANT_CATEGORY_LABELS } from '../utils/labels';
 
-const CATEGORY_LABELS: Record<string, string> = {
-  equipment: 'Equipment',
-  staffing: 'Staffing',
-  training: 'Training',
-  prevention: 'Prevention',
-  facilities: 'Facilities',
-  vehicles: 'Vehicles',
-  wellness: 'Wellness',
-  community: 'Community',
-  other: 'Other',
-};
+const CATEGORY_LABELS: Record<string, string> = GRANT_CATEGORY_LABELS;
 
 const CATEGORY_COLORS: Record<string, string> = {
   equipment: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
@@ -138,6 +130,7 @@ function getDeadlineUrgency(
 export const GrantOpportunitiesPage: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
+  const canManage = useAuthStore((s) => s.checkPermission('fundraising.manage'));
   const [opportunities, setOpportunities] = useState<GrantOpportunity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -203,13 +196,13 @@ export const GrantOpportunitiesPage: React.FC = () => {
           <h1 className="text-theme-text-primary text-2xl font-bold">Grant Opportunities</h1>
           <p className="text-theme-text-secondary mt-1 text-sm">Browse grant programs and start an application</p>
         </div>
-        <button
-          onClick={() => void navigate('/grants/opportunities/new')}
-          className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
-        >
-          <Plus className="h-4 w-4" />
-          Add Opportunity
-        </button>
+        {/* The create route and POST /grants both need fundraising.manage. */}
+        {canManage && (
+          <button type="button" onClick={() => void navigate('/grants/opportunities/new')} className="btn-primary">
+            <Plus className="h-4 w-4" />
+            Add Opportunity
+          </button>
+        )}
       </div>
 
       {/* Search and Filters */}

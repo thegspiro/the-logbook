@@ -77,6 +77,8 @@ vi.mock('../services/electionService', () => ({
 vi.mock('../modules/prospective-members/services/api', () => ({
   applicantService: { getApplicants: vi.fn() },
 }));
+// Tested on its own (EventGuestsCard.test.tsx); its request is not under test here.
+vi.mock('../components/event-detail/EventGuestsCard', () => ({ default: () => null }));
 
 // Mock react-hot-toast
 vi.mock('react-hot-toast', () => ({

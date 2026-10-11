@@ -191,6 +191,32 @@ export interface ComplianceSummary {
   items: ComplianceItem[];
 }
 
+/** `standing` on a roster row: any requirement unmet, all met but one lapsing within 30 days, or all met. */
+export type ComplianceStanding = 'not_compliant' | 'expiring_soon' | 'compliant';
+
+/** A row's standing; `not_applicable` when no requirement is active, so nobody is graded. */
+export type ComplianceRowStanding = ComplianceStanding | 'not_applicable';
+
+export interface ComplianceRosterRow {
+  subject_id: string;
+  subject_name: string;
+  subject_type: 'user' | 'prospect';
+  compliant_count: number;
+  non_compliant_count: number;
+  expiring_soon_count: number;
+  standing: ComplianceRowStanding;
+}
+
+/** `GET /medical-screening/compliance`: totals describe everyone; only `rows` is filtered. */
+export interface ComplianceRoster {
+  total_requirements: number;
+  total_subjects: number;
+  not_compliant: number;
+  expiring_soon: number;
+  compliant: number;
+  rows: ComplianceRosterRow[];
+}
+
 export interface ExpiringScreening {
   record_id: string;
   screening_type: ScreeningType;

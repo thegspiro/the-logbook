@@ -1084,7 +1084,7 @@ Enums:
 - `GET/POST /finance/dues-schedules`
 - `GET/PUT /finance/dues-schedules/{id}`
 - `POST /finance/dues-schedules/{id}/generate` (bulk-create member_dues for all eligible members)
-- `GET /finance/dues` (list with member/status filters)
+- `GET /finance/dues` (list with member/status filters). Each row carries `memberName` _(2026-10-11)_ — the member's display name, joined in the query, because the Treasurer reading the Dues page holds `finance.manage` but not necessarily `users.view`. The single-record write responses (payment, waive, unwaive) do not carry it; the page re-reads the list after every write
 - `PUT /finance/dues/{id}` (record payment — appends to the ledger; idempotent on `transaction_reference`; refuses `WAIVED`/`EXEMPT`)
 - `GET /finance/dues/{id}/payments` _(2026-08-02)_ — the payment ledger, oldest first. `finance.view` or `finance.manage`; a `finance.view` holder sees only their own, because the handler narrows to the caller for anyone without `finance.manage`. The only place earlier payments can be read back, since the dues record itself carries only the derived total and the newest payment's detail
 - `POST /finance/dues/{id}/waive`
@@ -1147,7 +1147,7 @@ Pages:
 - `DELETE /finance/export/mappings/{id}` _(2026-10-09)_ — remove a mapping (org-scoped; `finance.manage`). Needed to clear a duplicate, which blocks the export
 - `GET /finance/export/readiness` _(2026-10-09)_ — per budget category: status (`ready`, `no_account`, `no_offset`, `duplicate_mappings`), the account and its source (`category` or `mapping`), the offset account and the matching mapping ids; plus `unmatchedMappingIds`. Built on the export's own classifier (`finance.manage`)
 - `POST /finance/export/transactions` — generate CSV/IIF export file for date range
-- `GET /finance/export/logs` — export history
+- `GET /finance/export/logs` — export history, newest first. Each row carries `exportedByName` _(2026-10-11)_; read by **Export history** on **Finance › QuickBooks Export**
 
 Export format:
 

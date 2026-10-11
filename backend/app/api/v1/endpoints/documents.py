@@ -20,7 +20,7 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
 from app.models.document import Document, DocumentStatus
-from app.models.user import User
+from app.models.user import Position, User
 from app.schemas.documents import (
     DocumentFolderCreate,
     DocumentFolderResponse,
@@ -29,6 +29,7 @@ from app.schemas.documents import (
     DocumentsListResponse,
     DocumentsSummary,
     DocumentUpdate,
+    FolderRoleOption,
     FoldersListResponse,
 )
 from app.services import file_storage_service as file_storage
@@ -190,6 +191,29 @@ async def create_folder(
         username=current_user.username,
     )
     return result
+
+
+@router.get("/folders/role-options", response_model=list[FolderRoleOption])
+async def list_folder_role_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("documents.manage")),
+):
+    """
+    The department's positions, for restricting a folder to specific roles.
+
+    Names and slugs only. Served here rather than read from ``GET /roles``
+    because that needs ``positions.view``, which a documents manager such as
+    the seeded historian does not hold.
+
+    **Authentication required**
+    **Requires permission: documents.manage**
+    """
+    rows = await db.execute(
+        select(Position.slug, Position.name)
+        .where(Position.organization_id == str(current_user.organization_id))
+        .order_by(Position.name, Position.slug)
+    )
+    return [FolderRoleOption(slug=slug, name=name) for slug, name in rows.all()]
 
 
 @router.patch("/folders/{folder_id}", response_model=DocumentFolderResponse)

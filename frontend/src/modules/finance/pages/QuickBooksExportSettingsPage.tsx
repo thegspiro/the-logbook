@@ -9,6 +9,10 @@
  * computed by the same classifier the export runs, so a category shown ready
  * is one the export accepts. This page does not decide readiness, which
  * account wins, or which mappings match a category (CLAUDE.md pitfall #29).
+ *
+ * Below the mappings, the export history (`GET /finance/export/logs`) lists
+ * every export run, so a Treasurer can see what was exported and whether it
+ * finished beside the settings that shaped it.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -22,6 +26,7 @@ import { EmptyState } from '@/components/ux/EmptyState';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { exportMappingService } from '../services/api';
 import { ExportMappingDialog } from '../components/ExportMappingDialog';
+import { ExportHistorySection } from '../components/ExportHistorySection';
 import { ExportReadinessStatus } from '../types';
 import type { ExportMapping, ExportReadiness, ExportReadinessCategory } from '../types';
 
@@ -366,6 +371,8 @@ const QuickBooksExportSettingsPage: React.FC = () => {
           </div>
         )}
       </section>
+
+      <ExportHistorySection />
 
       {/* What QuickBooks itself needs before an import (Intuit, "Import journal entries") */}
       <section aria-labelledby="import-checklist-heading" className="card space-y-2 p-6">

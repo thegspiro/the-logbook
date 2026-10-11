@@ -16,6 +16,8 @@ from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.schemas.medical_screening import (
+    ComplianceRoster,
+    ComplianceStanding,
     ComplianceSummary,
     ExpiringScreening,
     MyComplianceSummary,
@@ -440,6 +442,51 @@ async def delete_record(
 
 
 # --- Compliance ---
+
+
+@router.get(
+    "/compliance",
+    response_model=ComplianceRoster,
+)
+async def get_compliance_roster(
+    standing: Optional[ComplianceStanding] = Query(
+        None,
+        description=(
+            "Only rows with this standing: not_compliant (a requirement unmet — "
+            "expired or never recorded), expiring_soon, or compliant"
+        ),
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("medical_screening.view")),
+):
+    """The department's screening standing, one row per member and prospect.
+
+    Graded by the same rule as ``GET /compliance/{user_id}``; counts only.
+
+    **Authentication required**
+    **Requires permission: medical_screening.view**
+    """
+    service = MedicalScreeningService(db)
+    roster = await service.get_compliance_roster(
+        organization_id=current_user.organization_id,
+        standing=standing,
+    )
+    await _audit_phi_read(
+        db,
+        current_user,
+        "medical_screening.compliance_roster_viewed",
+        {
+            "filters": {"standing": standing},
+            "row_count": len(roster.rows),
+            "subject_user_ids": sorted(
+                r.subject_id for r in roster.rows if r.subject_type == "user"
+            ),
+            "subject_prospect_ids": sorted(
+                r.subject_id for r in roster.rows if r.subject_type == "prospect"
+            ),
+        },
+    )
+    return roster
 
 
 # Registered before "/compliance/{user_id}" so "me" is matched as this route

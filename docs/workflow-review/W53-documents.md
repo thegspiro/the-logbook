@@ -94,7 +94,7 @@ Documents (everyone).
 - Members never see the badge, because they never see those folders.
 - `DocumentFolder` gains the `visibility` field the API already sends.
 
-### W53-4 — MED — Folders cannot be restricted, renamed, moved or deleted from the screen — FLAGGED
+### W53-4 — MED — Folders cannot be restricted, renamed, moved or deleted from the screen — ✅ FIXED (2026-10-11)
 
 **Saw:** Create Folder takes a name and a description only. Every folder made
 on the screen is visible to all members, and nothing on the screen renames,
@@ -105,6 +105,10 @@ own leadership-only folder, or tidy a misnamed one, without the API.
 **Why flagged:** it is a feature build, with product choices: which visibility
 options to offer, what deleting a non-empty folder does, and whether system
 folders can move. In `KNOWN_LIMITATIONS.md`.
+**Fixed (2026-10-11), owner decision:** Organization / Leadership / Specific
+roles; system folders cannot be renamed, moved or deleted; delete cascades
+behind a confirmation stating what will be removed. **Manage folder** on each
+card.
 
 ### W53-5 — NIT — The route file said to disable Documents by editing `App.tsx` — ✅ FIXED
 

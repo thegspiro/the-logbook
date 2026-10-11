@@ -7,6 +7,12 @@ import type { Symbology } from './labelService';
 import type { InventoryAuditFrequency } from '../constants/enums';
 import type { LabelSetup, LabelSetupSave } from '../modules/inventory/utils/labelSetups';
 import type {
+  ClearanceLineItem,
+  CompleteClearancePayload,
+  DepartureClearance,
+  ResolveClearanceItemPayload,
+} from '../modules/inventory/types/clearance';
+import type {
   ItemPin,
   UserCheckoutItem,
   UserInventoryResponse,
@@ -362,7 +368,12 @@ export const inventoryService = {
   async assignItem(
     itemId: string,
     userId: string,
-    options?: { assignment_type?: string; assignment_reason?: string }
+    options?: {
+      assignment_type?: 'permanent' | 'temporary';
+      assignment_reason?: string | undefined;
+      // Required by the API for a temporary assignment, refused on a permanent one.
+      expected_return_date?: string | undefined;
+    }
   ): Promise<{ id: string; item_id: string; user_id: string; is_active: boolean }> {
     const response = await api.post<{ id: string; item_id: string; user_id: string; is_active: boolean }>(
       `/inventory/items/${itemId}/assign`,
@@ -371,6 +382,7 @@ export const inventoryService = {
         user_id: userId,
         assignment_type: options?.assignment_type ?? 'permanent',
         assignment_reason: options?.assignment_reason,
+        expected_return_date: options?.expected_return_date,
       }
     );
     return response.data;
@@ -489,6 +501,28 @@ export const inventoryService = {
       }>;
       total: number;
     };
+  },
+
+  async getDepartureClearance(clearanceId: string): Promise<DepartureClearance> {
+    const response = await api.get<DepartureClearance>(`/inventory/clearances/${clearanceId}`);
+    return response.data;
+  },
+
+  async resolveClearanceItem(
+    clearanceId: string,
+    lineItemId: string,
+    data: ResolveClearanceItemPayload
+  ): Promise<ClearanceLineItem> {
+    const response = await api.post<ClearanceLineItem>(
+      `/inventory/clearances/${clearanceId}/items/${lineItemId}/resolve`,
+      data
+    );
+    return response.data;
+  },
+
+  async completeClearance(clearanceId: string, data: CompleteClearancePayload): Promise<DepartureClearance> {
+    const response = await api.post<DepartureClearance>(`/inventory/clearances/${clearanceId}/complete`, data);
+    return response.data;
   },
 
   async getLowStockItems(): Promise<LowStockAlert[]> {

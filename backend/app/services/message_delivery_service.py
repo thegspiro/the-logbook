@@ -89,7 +89,8 @@ def retry_delay(attempt_count: int) -> Optional[timedelta]:
     once the retries are spent."""
     if attempt_count > MAX_DELIVERY_RETRIES:
         return None
-    return _RETRY_BASE_DELAY * (2 ** (attempt_count - 1))
+    delay: timedelta = _RETRY_BASE_DELAY * (2 ** (attempt_count - 1))
+    return delay
 
 
 def _as_utc(value: Optional[datetime]) -> Optional[datetime]:

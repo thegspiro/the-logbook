@@ -70,6 +70,13 @@ class DocumentFolderResponse(UTCResponseBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class FolderRoleOption(BaseModel):
+    """A position a folder can be restricted to (``allowed_roles`` holds slugs)."""
+
+    slug: str
+    name: str
+
+
 # ============================================
 # Document Schemas
 # ============================================

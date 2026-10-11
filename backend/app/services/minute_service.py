@@ -111,7 +111,8 @@ class MinuteService:
         user = result.scalar_one_or_none()
         if user is None:
             raise ValueError("Invalid assignee: choose an active member")
-        return user.display_name or user.username
+        name: str = user.display_name or user.username
+        return name
 
     # ============================================
     # Meeting Minutes CRUD
@@ -134,7 +135,7 @@ class MinuteService:
             allow_none=True,
             label="event",
         )
-        assignee_names = {}
+        assignee_names: dict[str, str] = {}
         for item_data in data.action_items or []:
             if item_data.assignee_id:
                 assignee_names[item_data.assignee_id] = (
@@ -249,8 +250,12 @@ class MinuteService:
                     minutes_id=minutes.id,
                     description=item_data.description,
                     assignee_id=item_data.assignee_id,
-                    assignee_name=assignee_names.get(
-                        item_data.assignee_id, item_data.assignee_name
+                    assignee_name=(
+                        assignee_names.get(
+                            item_data.assignee_id, item_data.assignee_name
+                        )
+                        if item_data.assignee_id
+                        else item_data.assignee_name
                     ),
                     due_date=item_data.due_date,
                     priority=ActionItemPriority(item_data.priority),

@@ -132,6 +132,8 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   // Label only: the segment reads "Quickbooks"; the page is the export's settings.
   '/finance/settings/quickbooks': { label: 'QuickBooks Export', permissions: ['finance.manage'] },
   '/grants/applications': { permissions: ['fundraising.view'] },
+  '/grants/donations': { permissions: ['fundraising.view'] },
+  '/grants/opportunities': { permissions: ['fundraising.view'] },
   '/inventory/admin/checklists': { permissions: ['inventory.check_manage'] },
   '/inventory/checklists': { permissions: ['inventory.check_view', 'scheduling.manage'] },
   // Registered for their labels, and so the hub-card agreement test covers

@@ -1487,7 +1487,9 @@ async def export_csv(
         writer.writerow(
             [
                 "Apparatus",
+                "Checks Expected",
                 "Checks Completed",
+                "Checks Missed",
                 "Pass",
                 "Fail",
                 "Last Check Date",
@@ -1499,7 +1501,9 @@ async def export_csv(
             writer.writerow(
                 [
                     a.get("apparatus_name", ""),
+                    a.get("checks_expected", 0),
                     a.get("checks_completed", 0),
+                    a.get("checks_missed", 0),
                     a.get("pass_count", 0),
                     a.get("fail_count", 0),
                     local_ts(a.get("last_check_date", "")),

@@ -6039,7 +6039,7 @@ class ElectionService:
                     logger.warning(
                         f"Auto-open skipped | election={election.id} reason={err}"
                     )
-                else:
+                elif opened is not None:
                     actions += 1
                     await self._audit(
                         "election_auto_opened",
@@ -7372,7 +7372,8 @@ class ElectionService:
                 )
             except ValueError:
                 continue
-            return at is not None and abs((at - retired_at).total_seconds()) <= 2
+            matched: bool = abs((at - retired_at).total_seconds()) <= 2
+            return matched
         return False
 
     async def ballot_resend_state(
@@ -10798,6 +10799,8 @@ class ElectionService:
             )
             if error:
                 return None, error
+            if auth is None:
+                return None, "Proxy authorization not found"
             anonymity_error = self._proxy_anonymity_error(election, auth)
             if anonymity_error:
                 return None, anonymity_error

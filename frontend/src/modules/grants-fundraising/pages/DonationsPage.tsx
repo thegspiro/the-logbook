@@ -1,20 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { DollarSign, Search, Filter, Receipt, Heart } from 'lucide-react';
+import { Link } from 'react-router';
+import { DollarSign, Search, Filter, Receipt, Heart, Plus } from 'lucide-react';
 import { fundraisingService } from '../services/api';
 import type { Donation } from '../types';
 import { formatDate } from '../../../utils/dateFormatting';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
-
-const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  cash: 'Cash',
-  check: 'Check',
-  credit_card: 'Credit Card',
-  bank_transfer: 'Bank Transfer',
-  paypal: 'PayPal',
-  venmo: 'Venmo',
-  other: 'Other',
-};
+import { useAuthStore } from '../../../stores/authStore';
+import { PAYMENT_METHOD_LABELS } from '../utils/labels';
 
 const PAYMENT_STATUS_COLORS: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
@@ -26,6 +19,7 @@ const PAYMENT_STATUS_COLORS: Record<string, string> = {
 
 const DonationsPage: React.FC = () => {
   const tz = useTimezone();
+  const canManage = useAuthStore((st) => st.checkPermission('fundraising.manage'));
   const [donations, setDonations] = useState<Donation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -59,17 +53,18 @@ const DonationsPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-theme-text-primary text-2xl font-bold">Donations</h1>
           <p className="text-theme-text-secondary mt-1 text-sm">View donation records and totals</p>
         </div>
-        {/* "Record Donation" pointed at /grants/donations/new, which has no
-            route: the router's catch-all sends unknown paths to "/", so the
-            primary action on this page silently returned the user to the home
-            dashboard. No component calls `createDonation` — the form was never
-            built. A button that appears to work and does not is worse than an
-            absent one, so it is gone until the form exists. */}
+        {/* The create route and POST /grants/donations both need fundraising.manage. */}
+        {canManage && (
+          <Link to="/grants/donations/new" className="btn-primary">
+            <Plus className="h-4 w-4" />
+            Record Donation
+          </Link>
+        )}
       </div>
 
       {/* Summary Card */}
