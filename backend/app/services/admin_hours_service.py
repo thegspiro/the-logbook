@@ -5,9 +5,8 @@ Business logic for admin hours tracking, including QR-based clock-in/clock-out,
 manual entry, and approval workflows.
 """
 
-import io
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 from loguru import logger
 from sqlalchemy import and_, func, select
@@ -31,7 +30,7 @@ from app.utils.admin_hours_settings import (
     load_admin_hours_review_settings,
     resync_growth_needs_review,
 )
-from app.utils.csv_export import SafeCsvWriter
+from app.utils.csv_export import SafeCsvChunks, collect_csv
 from app.utils.hours import hours_from_minutes
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
@@ -40,6 +39,7 @@ from app.utils.org_timezone import (
     resolve_scheduling_timezone,
     today_in,
 )
+from app.utils.streamed_query import iter_row_batches
 
 # A single manual admin-hours entry cannot span more than a day — bounds the
 # absurd-duration self-credit vector on client-supplied times.
@@ -1349,7 +1349,34 @@ class AdminHoursService:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
     ) -> str:
-        """Export entries as a CSV string."""
+        """Export entries as one CSV string (see ``stream_entries_csv``)."""
+        return await collect_csv(
+            await self.stream_entries_csv(
+                organization_id,
+                status_filter=status_filter,
+                category_id=category_id,
+                user_id=user_id,
+                start_date=start_date,
+                end_date=end_date,
+            )
+        )
+
+    async def stream_entries_csv(
+        self,
+        organization_id: str,
+        status_filter: Optional[str] = None,
+        category_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+    ) -> AsyncIterator[str]:
+        """Export entries as CSV, a batch of rows at a time (AH-16).
+
+        Uncapped -- the owner chose streaming over a row limit, so a complete
+        history is still one file -- but memory is bounded by the batch. The
+        timezone is resolved here, before the cursor opens, because the
+        connection cannot run a second query while it is being read.
+        """
         EntryUser = aliased(User)
         Approver = aliased(User)
 
@@ -1382,23 +1409,23 @@ class AdminHoursService:
         if end_date:
             query = query.where(AdminHoursEntry.clock_in_at <= end_date)
 
-        query = query.order_by(AdminHoursEntry.clock_in_at.desc())
-
-        result = await self.db.execute(query)
-        rows = result.all()
+        query = query.order_by(
+            AdminHoursEntry.clock_in_at.desc(), AdminHoursEntry.id.desc()
+        )
 
         # Clock times are stored UTC; the export is read as the department's
         # wall clock, and an evening shift must not land on the next day.
         org_tz = await resolve_scheduling_timezone(self.db, organization_id)
+        return self._entry_csv_chunks(query, org_tz)
 
+    async def _entry_csv_chunks(self, query, org_tz) -> AsyncIterator[str]:
         def local(value: datetime, fmt: str) -> str:
             aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
             return aware.astimezone(org_tz).strftime(fmt)
 
-        output = io.StringIO()
-        # SafeCsvWriter neutralizes spreadsheet formula injection in free-text
-        # cells (member names, notes).
-        writer = SafeCsvWriter(output)
+        # SafeCsvChunks writes through SafeCsvWriter, which neutralizes
+        # spreadsheet formula injection in free-text cells (names, notes).
+        writer = SafeCsvChunks()
         writer.writerow(
             [
                 "Member",
@@ -1413,54 +1440,59 @@ class AdminHoursService:
                 "Description",
             ]
         )
+        yield writer.drain()
 
-        for row in rows:
-            entry = row[0]
-            cat_name = row[1]
-            user_first = row[2]
-            user_last = row[3]
-            approver_first = row[4]
-            approver_last = row[5]
+        async for batch in iter_row_batches(self.db, query):
+            for row in batch:
+                entry = row[0]
+                cat_name = row[1]
+                user_first = row[2]
+                user_last = row[3]
+                approver_first = row[4]
+                approver_last = row[5]
 
-            # The export states the same figure the member read on the screen
-            # it came from, so a hand-off does not have to explain why one says
-            # 2.9 and the other 3.
-            duration_hours = (
-                hours_from_minutes(entry.duration_minutes)
-                if entry.duration_minutes
-                else ""
-            )
-            clock_in = (
-                local(entry.clock_in_at, "%Y-%m-%d %H:%M") if entry.clock_in_at else ""
-            )
-            clock_out = (
-                local(entry.clock_out_at, "%Y-%m-%d %H:%M")
-                if entry.clock_out_at
-                else ""
-            )
-            date_str = local(entry.clock_in_at, "%Y-%m-%d") if entry.clock_in_at else ""
-            approver_name = (
-                f"{approver_first} {approver_last}"
-                if approver_first and approver_last
-                else ""
-            )
+                # The export states the same figure the member read on the
+                # screen it came from, so a hand-off does not have to explain
+                # why one says 2.9 and the other 3.
+                duration_hours = (
+                    hours_from_minutes(entry.duration_minutes)
+                    if entry.duration_minutes
+                    else ""
+                )
+                clock_in = (
+                    local(entry.clock_in_at, "%Y-%m-%d %H:%M")
+                    if entry.clock_in_at
+                    else ""
+                )
+                clock_out = (
+                    local(entry.clock_out_at, "%Y-%m-%d %H:%M")
+                    if entry.clock_out_at
+                    else ""
+                )
+                date_str = (
+                    local(entry.clock_in_at, "%Y-%m-%d") if entry.clock_in_at else ""
+                )
+                approver_name = (
+                    f"{approver_first} {approver_last}"
+                    if approver_first and approver_last
+                    else ""
+                )
 
-            writer.writerow(
-                [
-                    f"{user_first} {user_last}",
-                    cat_name,
-                    date_str,
-                    clock_in,
-                    clock_out,
-                    duration_hours,
-                    entry.entry_method.value if entry.entry_method else "manual",
-                    entry.status.value if entry.status else "",
-                    approver_name,
-                    entry.description or "",
-                ]
-            )
-
-        return output.getvalue()
+                writer.writerow(
+                    [
+                        f"{user_first} {user_last}",
+                        cat_name,
+                        date_str,
+                        clock_in,
+                        clock_out,
+                        duration_hours,
+                        entry.entry_method.value if entry.entry_method else "manual",
+                        entry.status.value if entry.status else "",
+                        approver_name,
+                        entry.description or "",
+                    ]
+                )
+            yield writer.drain()
 
     # =========================================================================
     # Stale Session Enforcement

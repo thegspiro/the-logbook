@@ -9,7 +9,7 @@ report exports, document uploads, and xAPI ingestion.
 from datetime import date, datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -654,7 +654,7 @@ async def export_report(
 
         # CSV format (default)
         if data.report_type == "compliance":
-            csv_content = await service.generate_compliance_csv(
+            chunks = await service.stream_compliance_csv(
                 current_user.organization_id,
                 start_date=data.start_date,
                 end_date=data.end_date,
@@ -662,26 +662,26 @@ async def export_report(
         elif data.report_type == "individual":
             if not data.user_id:
                 raise ValueError("user_id is required for individual reports")
-            csv_content = await service.generate_individual_csv(
+            chunks = await service.stream_individual_csv(
                 str(data.user_id),
                 current_user.organization_id,
                 start_date=data.start_date,
                 end_date=data.end_date,
             )
         elif data.report_type == "member_records":
-            csv_content = await service.generate_bulk_csv(
+            chunks = await service.stream_bulk_csv(
                 current_user.organization_id,
                 start_date=data.start_date,
                 end_date=data.end_date,
             )
         elif data.report_type == "hours_summary":
-            csv_content = await service.generate_hours_summary_csv(
+            chunks = await service.stream_hours_summary_csv(
                 current_user.organization_id,
                 start_date=data.start_date,
                 end_date=data.end_date,
             )
         elif data.report_type == "certification":
-            csv_content = await service.generate_certification_csv(
+            chunks = await service.stream_certification_csv(
                 current_user.organization_id,
                 end_date=data.end_date,
             )
@@ -690,8 +690,10 @@ async def export_report(
                 f"Report type '{data.report_type}' is not supported for export."
             )
 
-        return Response(
-            content=csv_content,
+        # Streamed a member (or a batch of records) at a time (AH-16); the
+        # request's session stays open until the body has been sent.
+        return StreamingResponse(
+            chunks,
             media_type="text/csv",
             headers={
                 "Content-Disposition": f"attachment; filename=training_report_{data.report_type}.csv"

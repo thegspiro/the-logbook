@@ -2142,6 +2142,8 @@ Navigate to **Training Admin > Reports** for department-wide exports:
 
 > **Hint:** A bulk PDF for a period with no matching records still produces a valid (placeholder) PDF rather than failing — useful as proof that a quiet period was reviewed.
 
+> **Hint:** The CSV downloads have no row limit. A lifetime export of a large department is written and sent a member (or a batch of records) at a time, so the download starts straight away and grows while it runs; leave the tab open until your browser shows it finished. The PDFs are still built whole before they download.
+
 ---
 
 ## External Training Integrations

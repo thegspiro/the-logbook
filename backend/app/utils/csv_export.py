@@ -9,7 +9,8 @@ to an export must be neutralized.
 """
 
 import csv
-from typing import Any, Iterable, Mapping, Sequence
+import io
+from typing import Any, AsyncIterable, Iterable, Mapping, Sequence
 
 # Characters that make spreadsheet applications interpret a cell as a formula
 _FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
@@ -66,3 +67,40 @@ class SafeDictCsvWriter:
     def writerows(self, rows: Iterable[Mapping[str, Any]]) -> None:
         for row in rows:
             self.writerow(row)
+
+
+class SafeCsvChunks:
+    """A ``SafeCsvWriter`` whose output is taken away in pieces.
+
+    For a streamed export: write a batch of rows, ``drain()`` the text they
+    produced and yield it, and the buffer starts empty again. Memory is bounded
+    by the batch rather than by the whole file, which is the point -- a
+    department's complete history no longer has to fit in one string before
+    the first byte is sent.
+    """
+
+    def __init__(self, **kwargs: Any):
+        self._buffer = io.StringIO()
+        self._writer = SafeCsvWriter(self._buffer, **kwargs)
+
+    def writerow(self, row: Iterable[Any]) -> None:
+        self._writer.writerow(row)
+
+    def writerows(self, rows: Iterable[Iterable[Any]]) -> None:
+        self._writer.writerows(rows)
+
+    def drain(self) -> str:
+        text = self._buffer.getvalue()
+        self._buffer.seek(0)
+        self._buffer.truncate(0)
+        return text
+
+
+async def collect_csv(chunks: AsyncIterable[str]) -> str:
+    """Join a streamed export back into one string.
+
+    For callers that genuinely need the whole document at once -- an email
+    attachment, a test -- not for an HTTP download, which should hand the
+    iterator to ``StreamingResponse`` instead.
+    """
+    return "".join([chunk async for chunk in chunks])
