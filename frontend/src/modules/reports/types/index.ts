@@ -501,17 +501,14 @@ export interface SavedReportConfig {
   report_type: string;
   filters: Record<string, unknown>;
   is_scheduled: boolean;
-  schedule_frequency?: SavedReportFrequency;
-  schedule_day?: number;
-  email_recipients?: string[];
-  last_run_at?: string;
-  next_run_at?: string;
-  // No scheduler reads is_scheduled/schedule_frequency/next_run_at yet, so
-  // this is always false — see backend/app/models/analytics.py. A future
-  // saved-reports UI must show this rather than badging is_scheduled as
-  // "Active" (no such UI exists yet; ReportsPage.tsx doesn't currently
-  // render saved reports at all, despite reportsStore/api.ts having full
-  // CRUD support for them).
+  schedule_frequency?: SavedReportFrequency | null;
+  schedule_day?: number | null;
+  email_recipients?: string[] | null;
+  last_run_at?: string | null;
+  /** The department's calendar date of the next scheduled send. */
+  next_run_at?: string | null;
+  // True when the schedule is live: the saved_report_delivery task reads it
+  // (RPT2-29-2, backend/app/services/saved_report_schedule.py).
   enforced: boolean;
   created_by: string;
   created_at: string;
@@ -531,13 +528,27 @@ export interface SavedReportCreate {
 
 export interface SavedReportUpdate {
   name?: string;
-  description?: string;
+  description?: string | null;
   filters?: Record<string, unknown>;
   is_scheduled?: boolean;
-  schedule_frequency?: SavedReportFrequency;
-  schedule_day?: number;
+  schedule_frequency?: SavedReportFrequency | null;
+  schedule_day?: number | null;
   email_recipients?: string[];
 }
+
+/**
+ * Relative reporting periods a saved report can carry in `filters.period`,
+ * resolved on the department's date each time it runs (backend
+ * `saved_report_schedule.REPORT_PERIODS`).
+ */
+export const SavedReportPeriod = {
+  LAST_30_DAYS: 'last_30_days',
+  PREVIOUS_MONTH: 'previous_month',
+  PREVIOUS_QUARTER: 'previous_quarter',
+  YEAR_TO_DATE: 'year_to_date',
+  PREVIOUS_YEAR: 'previous_year',
+} as const;
+export type SavedReportPeriod = (typeof SavedReportPeriod)[keyof typeof SavedReportPeriod];
 
 // ============================================================================
 // Report Data: Pipeline Overview

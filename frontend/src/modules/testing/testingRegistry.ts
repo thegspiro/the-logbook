@@ -1154,6 +1154,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
     checklistSection: '15. Dashboard & Reports',
     pages: [
       { path: '/reports', label: 'Reports', permission: 'reports.view', module: 'reports' },
+      { path: '/reports/saved', label: 'Saved reports', permission: 'reports.view', module: 'reports' },
       { path: '/admin/analytics', label: 'Analytics dashboard', permission: 'analytics.view' },
       { path: '/admin/platform-analytics', label: 'Platform analytics', permission: 'settings.manage' },
     ],

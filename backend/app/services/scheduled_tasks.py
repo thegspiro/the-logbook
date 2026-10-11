@@ -76,6 +76,7 @@ Recommended crontab (add to host or container cron):
 # Daily at 6:30 AM — compliance auto-report generation (monthly on configured day, yearly on Jan 1)
 30 6 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=compliance_auto_reports
 40 13 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=compliance_member_notices
+50 12 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=saved_report_delivery
 
 # Daily at 3:00 AM — message history cleanup (delete records older than 90 days)
 0 3 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=message_history_cleanup
@@ -401,6 +402,12 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "13:40",
         "cron": "40 13 * * *",
+    },
+    "saved_report_delivery": {
+        "description": "Email each scheduled saved report that is due today: a summary and a link, sent only to recipients the PII gate allows",
+        "frequency": "daily",
+        "recommended_time": "12:50",
+        "cron": "50 12 * * *",
     },
     "message_history_cleanup": {
         "description": "Delete message history records older than 90 days to prevent unbounded table growth",
@@ -5518,6 +5525,17 @@ async def run_compliance_member_notices(db: AsyncSession) -> Dict[str, Any]:
     )
 
 
+async def run_saved_report_delivery(db: AsyncSession) -> Dict[str, Any]:
+    """Send the scheduled saved reports due today (RPT2-29-2).
+
+    Email only. The schedule rules, the PII gate and what the email contains
+    are in ``saved_report_schedule``; each report commits on its own.
+    """
+    from app.services.saved_report_schedule import send_due_saved_reports
+
+    return await _for_each_org(db, "saved_report_delivery", send_due_saved_reports)
+
+
 async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
     """
     Send email reminders 6 months before a recurring event series ends.
@@ -7059,6 +7077,7 @@ TASK_RUNNERS = {
     "supply_expiration_alerts": run_supply_expiration_alerts,
     "compliance_auto_reports": run_compliance_auto_reports,
     "compliance_member_notices": run_compliance_member_notices,
+    "saved_report_delivery": run_saved_report_delivery,
     "message_history_cleanup": run_message_history_cleanup,
     "publish_scheduled_messages": run_publish_scheduled_messages,
     "recover_stranded_message_deliveries": run_recover_stranded_message_deliveries,
@@ -7128,6 +7147,9 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Daily; idempotent per (requirement, deadline, offset) and per unmet set
     # through a sent-log (compliance_member_notices).
     "compliance_member_notices": 86400,
+    # Daily; next_run_date advances on each send, so a second run the same
+    # day sends nothing (saved_report_schedule).
+    "saved_report_delivery": 86400,
     "message_history_cleanup": 86400,
     "series_end_reminders": 86400,
     "rolling_recurrence_extend": 86400,

@@ -3571,6 +3571,29 @@ review rounds 2-4.)
 
 ## RPT2-29-2 — Saved Report Scheduling Is Stored and API-Writable, but Nothing Reads It (2026-08-27)
 
+> **✅ Resolved 2026-10-11 (owner decision: build the `TASK_RUNNERS` sender
+> and a saved-reports screen with the PII gate — the full feature).** The daily
+> `saved_report_delivery` task (`app/services/saved_report_schedule.py`) sends
+> each active scheduled report on its `next_run_date` (the department's date)
+> and advances it, so a second run the same day sends nothing; a schedule saved
+> before the sender existed gets its first email at its next occurrence, not on
+> upgrade day. `POST`/`PATCH /reports/saved` now validate a schedule
+> (frequency, day, 1–25 recipients, a known `filters.period`), compute
+> `next_run_at`, and report `enforced: true` for a live schedule; saving or
+> editing a PII-bearing report type needs the same permission as running it.
+> **The PII gate:** for the eight `PII_REPORT_PERMISSIONS` types every
+> recipient must be an active member holding that permission (refused with the
+> addresses named on save, dropped and logged at send), and the schedule's
+> owner must still hold it on the run day or the send stops. **The email
+> carries only the report's top-level counts** and a link to the new
+> `/reports/saved` screen — never member rows — so non-PII reports may go to an
+> outside address (audited via `audit_external_recipients`). Saved reports also
+> take a relative `filters.period`, resolved on the run day by both the
+> scheduled send and **Run**. **Accepted, by design:** the email is a summary,
+> not an attachment; a member-data report reaches its recipients only through
+> the app. Tests: `tests/test_saved_report_delivery.py`,
+> `SavedReportsPage.test.tsx`. The text below is the original finding.
+
 `POST /reports/saved` and `PATCH /reports/saved/{id}` fully accept and
 persist `is_scheduled`, `schedule_frequency` (daily/weekly/monthly/quarterly),
 `schedule_day`, and `email_recipients`. `GET /reports/saved` reports

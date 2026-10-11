@@ -691,6 +691,50 @@ June 15" means midnight June 1 to the end of June 15 on the department's own
 clock, in every report and in the grant and fundraising reports. A department
 with no timezone set reads its ranges in UTC.
 
+### Saved and Scheduled Reports _(2026-10-11)_
+
+**Required Permission:** `reports.view` to see and run saved reports;
+`reports.manage` to save, schedule, edit or delete them.
+
+Open **Reports > Saved reports** (`/reports/saved`). Each saved report shows
+its report, its reporting period, its schedule, the date of the next email and
+when it last ran.
+
+- **Run** opens the report on the Reports page with the saved settings, the way
+  **Generate Report** does. A saved report of a type your permissions do not
+  cover is listed but has no **Run** button.
+- **New saved report** / **Edit**: a name, the report (only the reports you can
+  run are offered), and a **Reporting period** — _Last 30 days_, _Previous
+  month_, _Previous quarter_, _Year to date_ or _Previous year_ — worked out on
+  the day the report runs, so a monthly email always covers the month just
+  ended. Tick **Email this report on a schedule** and choose **Daily**,
+  **Weekly** (and the day), **Monthly** or **Quarterly** (and the day of the
+  month; 29–31 fall on a shorter month's last day; quarterly sends in January,
+  April, July and October), and up to 25 addresses.
+- **Delete** asks first, and stops the schedule.
+
+**What the email contains.** A summary — the report's totals and figures and a
+**Open saved reports** link — never a list of members. The full report opens in
+the app, where the reader's own access applies.
+
+**Reports that list member data can only be emailed to members allowed to see
+that data.** The roster, the applicant pipeline, the training reports and the
+admin-hours report each need the permission that guards the same records
+(`members.view`, `prospective_members.view`, `training.manage`,
+`admin_hours.manage`). For those reports every recipient must be an active
+member of the department holding it — an outside address, or a member without
+it, is refused when you save, with the addresses named. Other reports (fleet,
+inventory, events, call volume, the department overview) may go to an outside
+address; that send is recorded in the audit log.
+
+**If the person who scheduled a member-data report later loses its
+permission, the emails stop** until someone who holds it saves the schedule
+again. A recipient who loses the permission is left off the next email.
+
+**Upgrading:** a report scheduled through the API before 2026-10-11 (no screen
+offered it) gets its first email at its next scheduled date, not on the day of
+the upgrade.
+
 ### Pipeline Overview Report (2026-03-15)
 
 The **Pipeline Overview** report shows prospect counts per pipeline stage with configurable stage grouping. This report helps leadership see how many applicants are at each point in the membership process.

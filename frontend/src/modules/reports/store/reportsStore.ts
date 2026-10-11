@@ -83,6 +83,8 @@ interface ReportsState {
   generatingReportType: string | null;
   activeReportData: ReportData | null;
   activeReportType: string | null;
+  /** Set when the active report is a saved report's run: its name. */
+  activeReportLabel: string | null;
 
   // Date range
   datePreset: DatePreset;
@@ -117,6 +119,7 @@ interface ReportsState {
   createSavedReport: (data: SavedReportCreate) => Promise<SavedReportConfig>;
   updateSavedReport: (id: string, data: SavedReportUpdate) => Promise<SavedReportConfig>;
   deleteSavedReport: (id: string) => Promise<void>;
+  runSavedReport: (report: SavedReportConfig) => Promise<ReportData>;
 
   // Comparison actions
   generateComparisonReport: (request: ReportRequest) => Promise<void>;
@@ -135,6 +138,7 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
   generatingReportType: null,
   activeReportData: null,
   activeReportType: null,
+  activeReportLabel: null,
   datePreset: 'this-year',
   startDate: initialDates.start,
   endDate: initialDates.end,
@@ -165,6 +169,7 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
       set({
         activeReportData: data,
         activeReportType: request.report_type,
+        activeReportLabel: null,
         generatingReportType: null,
       });
       return data;
@@ -176,7 +181,7 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
   },
 
   clearActiveReport: () => {
-    set({ activeReportData: null, activeReportType: null, error: null });
+    set({ activeReportData: null, activeReportType: null, activeReportLabel: null, error: null });
   },
 
   setDatePreset: (preset: DatePreset, tz?: string) => {
@@ -244,6 +249,24 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
     } catch (err: unknown) {
       set({ error: getErrorMessage(err, 'Failed to delete saved report') });
       throw err;
+    }
+  },
+
+  runSavedReport: async (report: SavedReportConfig) => {
+    set({ generatingReportType: report.report_type, error: null });
+    try {
+      const data = await savedReportsService.runNow(report.id);
+      set({
+        activeReportData: data,
+        activeReportType: report.report_type,
+        activeReportLabel: report.name,
+        generatingReportType: null,
+      });
+      return data;
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, 'Failed to run saved report');
+      set({ generatingReportType: null, error: message });
+      throw new Error(message, { cause: err });
     }
   },
 

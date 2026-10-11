@@ -199,7 +199,7 @@ async def _sent_logs(
     return by_member
 
 
-def _reminded(logs: Iterable[NotificationLog]) -> set[tuple[str, str, int]]:
+def _reminded(logs: Iterable[NotificationLog]) -> set[tuple[str, str, Any]]:
     told = set()
     for log in logs:
         meta = log.notification_metadata
