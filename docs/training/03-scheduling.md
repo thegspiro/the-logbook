@@ -3359,8 +3359,9 @@ to complete.
 ![Scheduling notification settings showing the start-of-shift reminder options](./images/03-39-notifications-reminders.png)
 
 > **What if nobody has ever saved the reminder settings?** Reminders are then
-> emailed as well, even though **Also send email notification** shows
-> unticked. Tick and untick the box once to save the choice you want.
+> emailed as well, and **Also send email notification** shows ticked. Untick
+> it to stop the emails. The change saves at once, and the in-app reminder
+> still goes out.
 
 ### Scheduling Administration
 
