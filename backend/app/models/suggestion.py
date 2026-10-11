@@ -21,6 +21,7 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     DateTime,
     ForeignKey,
@@ -97,6 +98,11 @@ class SuggestionBox(Base):
     public_board_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
+    # Questions asked on submission, which may branch on earlier answers and
+    # may move the submission to another box. One canonical shape, settled by
+    # ``SuggestionService._normalize_intake_questions`` on every write; NULL
+    # means the box asks nothing beyond title and details.
+    intake_questions: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -236,6 +242,17 @@ class Suggestion(Base):
     )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     details: Mapped[str] = mapped_column(Text, nullable=False)
+    # A snapshot of the box's questions as answered, labels included, so a
+    # later edit to the questions cannot rewrite what the submitter was asked
+    # and a destination box's reviewers can read questions it never asked.
+    intake_answers: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # The box the member submitted to when an answer moved the submission to
+    # ``box_id``. That box's reviewers have no access to it.
+    routed_from_box_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("suggestion_boxes.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     disposition: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
@@ -270,7 +287,10 @@ class Suggestion(Base):
         DateTime(timezone=True), nullable=False
     )
 
-    box: Mapped["SuggestionBox"] = relationship("SuggestionBox")
+    box: Mapped["SuggestionBox"] = relationship("SuggestionBox", foreign_keys=[box_id])
+    routed_from_box: Mapped[Optional["SuggestionBox"]] = relationship(
+        "SuggestionBox", foreign_keys=[routed_from_box_id]
+    )
     attachments: Mapped[list["SuggestionAttachment"]] = relationship(
         "SuggestionAttachment",
         back_populates="suggestion",

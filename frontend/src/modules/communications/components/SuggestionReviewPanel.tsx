@@ -27,6 +27,7 @@ import type {
   SuggestionBoxPublic,
 } from '../types/suggestions';
 import { formatSuggestionTime } from '../utils/suggestionTime';
+import IntakeAnswersList from './IntakeAnswersList';
 import SuggestionAttachments from './SuggestionAttachments';
 import SuggestionForwardModal from './SuggestionForwardModal';
 import SuggestionPublishModal from './SuggestionPublishModal';
@@ -155,7 +156,13 @@ const ReviewDetail: React.FC<ReviewDetailProps> = ({ detail, onChange }) => {
           {detail.boxName} · {detail.isAnonymous ? 'Anonymous' : (detail.submitterName ?? 'Former member')} ·{' '}
           {formatSuggestionTime(detail.createdAt, detail.timestampPrecision, tz)}
         </p>
+        {detail.routedFromBoxName && (
+          <p className="text-theme-text-secondary text-xs">
+            Sent here from {detail.routedFromBoxName} by the submitter&apos;s answers.
+          </p>
+        )}
       </header>
+      <IntakeAnswersList answers={detail.intakeAnswers} />
       <p className="text-theme-text-primary text-sm whitespace-pre-wrap">{detail.details}</p>
       <SuggestionAttachments attachments={detail.attachments} load={loadAttachment} />
 

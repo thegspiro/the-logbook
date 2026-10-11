@@ -30,6 +30,28 @@ describe('suggestionsService', () => {
     expect(body.getAll('screenshots')).toHaveLength(1);
   });
 
+  it('sends intake answers as one JSON field, and none when there are none', async () => {
+    await suggestionsService.submit('box-1', {
+      title: 'T',
+      details: 'D',
+      anonymous: false,
+      screenshots: [],
+      answers: { safety: 'yes' },
+    });
+    await suggestionsService.submit('box-1', {
+      title: 'T',
+      details: 'D',
+      anonymous: false,
+      screenshots: [],
+      answers: {},
+    });
+
+    const [, withAnswers] = mockPost.mock.calls[0] as [string, FormData];
+    const [, without] = mockPost.mock.calls[1] as [string, FormData];
+    expect(withAnswers.get('answers')).toBe('{"safety":"yes"}');
+    expect(without.has('answers')).toBe(false);
+  });
+
   it('keeps a follow-up key out of every URL', async () => {
     const key = 'k'.repeat(43);
     await suggestionsService.lookupByKey(key);

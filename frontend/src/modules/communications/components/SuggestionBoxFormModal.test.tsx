@@ -65,6 +65,7 @@ describe('SuggestionBoxFormModal', () => {
       watcherPositionIds: ['p-chief'],
       watcherMemberIds: ['u-drew'],
       publicBoardEnabled: false,
+      intakeQuestions: [],
     });
   });
 

@@ -14,18 +14,28 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull } from '../../../utils/formValues';
 import { suggestionsService } from '../services/suggestionsService';
 import type { ReviewerOptions, SuggestionBoxAdmin } from '../types/suggestions';
+import { type EditableQuestion, withEditorIds } from '../utils/suggestionRouting';
+import IntakeQuestionsEditor from './IntakeQuestionsEditor';
 import ReviewerChecklist from './ReviewerChecklist';
 
 interface SuggestionBoxFormModalProps {
   box: SuggestionBoxAdmin | null;
   options: ReviewerOptions;
+  /** Every box in the department, for the questions' routing choices. */
+  boxes?: SuggestionBoxAdmin[] | undefined;
   onClose: () => void;
   onSaved: (box: SuggestionBoxAdmin) => void;
 }
 
 const ANONYMITY_MODES = Object.values(SuggestionAnonymityMode);
 
-const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({ box, options, onClose, onSaved }) => {
+const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
+  box,
+  options,
+  boxes = [],
+  onClose,
+  onSaved,
+}) => {
   const [name, setName] = useState(box?.name ?? '');
   const [description, setDescription] = useState(box?.description ?? '');
   const [anonymityMode, setAnonymityMode] = useState<SuggestionAnonymityMode>(
@@ -40,7 +50,9 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({ box, op
   const [watcherPositionIds, setWatcherPositionIds] = useState<string[]>(box?.watcherPositions.map((p) => p.id) ?? []);
   const [watcherMemberIds, setWatcherMemberIds] = useState<string[]>(box?.watcherMembers.map((m) => m.id) ?? []);
   const [watcherFilter, setWatcherFilter] = useState('');
+  const [questions, setQuestions] = useState<EditableQuestion[]>(() => withEditorIds(box?.intakeQuestions));
   const [isSaving, setIsSaving] = useState(false);
+  const routeTargets = useMemo(() => boxes.filter((b) => b.id !== box?.id), [boxes, box]);
 
   const hasReviewers = positionIds.length + memberIds.length > 0;
   // A reviewer removed from the org since the box was saved still needs to be
@@ -74,6 +86,12 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({ box, op
       watcherPositionIds,
       watcherMemberIds,
       publicBoardEnabled,
+      intakeQuestions: questions.map((q) => ({
+        ...q,
+        label: q.label.trim(),
+        helpText: blankToNull(q.helpText ?? ''),
+        options: q.options.map((o) => ({ ...o, label: o.label.trim() })),
+      })),
     };
     try {
       const saved = box
@@ -251,6 +269,13 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({ box, op
               />
             </div>
           </section>
+
+          <IntakeQuestionsEditor
+            questions={questions}
+            onChange={setQuestions}
+            routeTargets={routeTargets}
+            anonymityMode={anonymityMode}
+          />
         </div>
 
         <div className="border-theme-surface-border flex justify-end gap-2 border-t px-5 py-4">
