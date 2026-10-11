@@ -4465,16 +4465,15 @@ Found driving W51 (`docs/workflow-review/W51-minutes.md`).
     under `meetings.view` whatever its type; only the minutes carry the
     executive restriction.
 - **W51-8 — Minutes created from meetings before 2026-10-03 carry a shifted
-  date.**
-  - `create_from_meeting` read the meeting's local date and time as UTC. A
-    meeting with no start time is therefore dated the evening before, and
-    one at 7:00 PM is shown at 2:00 PM. New minutes are correct.
-  - The linked `meeting_id` would let a backfill recompute the date, but it
-    cannot tell a shifted value from one a secretary has since corrected by
-    hand.
-  - Options: a backfill that changes only rows still equal to the old
-    UTC-combined value (which spares hand corrections), with a dry run; or
-    leaving the old rows and noting it.
+  date.** ✅ Resolved (2026-10-11), as the owner chose: a guarded backfill
+  with a dry run, `backend/scripts/backfill_minutes_meeting_dates.py`. It
+  re-dates a row only while its date still equals the old UTC-combined value
+  of its linked, same-organization meeting, so a hand correction (or a meeting
+  rescheduled since) is spared; dry run by default, `--apply` writes and
+  audit-logs each change with its old and new value.
+  - Remaining: it is an operator-run script, not a migration, so an
+    installation's old minutes stay shifted until someone runs it with
+    `--apply`.
 
 ## Action Items — Who Is Assigned, and Who Closes (2026-10-04)
 

@@ -1183,8 +1183,11 @@ Record formal motions with:
 > the department's clock, so for a US department the minutes header showed the
 > previous evening (a meeting with no start time) or a time 4–6 hours early (a
 > 7:00 PM meeting read 2:00 PM). New minutes are dated correctly. Existing ones
-> were not changed, because a secretary may already have corrected the date by
-> hand — check any you rely on and correct the date. Meetings created from an
+> are corrected when your administrator runs
+> `scripts/backfill_minutes_meeting_dates.py --apply` _(2026-10-11)_, which
+> changes only minutes still carrying the shifted date — a date a secretary
+> already corrected by hand is left as it is. Until it has been run, check any
+> you rely on. Meetings created from an
 > event before the 26 September 2026 update had the same kind of shift (a 7 PM
 > Eastern meeting read 11 PM, and one after 8 PM landed on the next day).
 

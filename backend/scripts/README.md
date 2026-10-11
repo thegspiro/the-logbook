@@ -267,6 +267,31 @@ a partial fix is still a fix, and the leftover is reported.
 - Database must be running
 - SQLAlchemy models must be importable
 
+### `backfill_minutes_meeting_dates.py`
+
+Re-dates minutes created from a meeting before 3 October 2026 (W51-8), when the
+meeting's local date and start time were stored as if they were UTC — a meeting
+with no start time showed the evening before, a 7:00 PM meeting 2:00 PM. Dry run
+by default; `--apply` writes.
+
+**A row changes only while its date still equals the old UTC-read value** of
+its linked meeting (same organization). A date corrected by hand, or minutes
+whose meeting has since been rescheduled, are left alone; a department on UTC
+has nothing to correct. Each change is audit-logged
+(`minutes_meeting_date_backfilled`) with its old and new value, and a second
+run finds nothing.
+
+```bash
+# Dry run — writes nothing:
+docker exec -it intranet-backend python scripts/backfill_minutes_meeting_dates.py
+
+# One organization:
+docker exec -it intranet-backend python scripts/backfill_minutes_meeting_dates.py --org "Falls Church"
+
+# Apply:
+docker exec -it intranet-backend python scripts/backfill_minutes_meeting_dates.py --apply
+```
+
 ### `clear_hidden_form_answers.py`
 
 Removes stale answers to conditional form questions from stored submissions.
