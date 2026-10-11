@@ -77,6 +77,7 @@ from app.services.skills_testing_service import (
     lock_attempt_capacity,
     notify_candidate_result_available,
     notify_candidate_result_voided,
+    pending_validation_criteria,
     redact_test_for_view,
     resolve_disclosure_policy,
     resolve_elapsed_seconds,
@@ -1079,11 +1080,7 @@ def _apply_test_filters(
     # The review queue is not expressible as a status — it is a status *and*
     # the absence of a validation.
     if pending_validation:
-        query = query.where(
-            SkillTest.is_practice.is_(False),
-            SkillTest.status == SkillTestStatus.COMPLETED.value,
-            SkillTest.validated_at.is_(None),
-        )
+        query = query.where(*pending_validation_criteria(organization_id))
 
     if status_filter:
         query = query.where(SkillTest.status == status_filter)
@@ -4005,12 +4002,7 @@ async def get_testing_summary(
     pending_validation_count = 0
     if _can_manage_tests(current_user):
         pending_validation_result = await db.execute(
-            select(func.count(SkillTest.id)).where(
-                SkillTest.organization_id == org_id,
-                SkillTest.status == "completed",
-                SkillTest.validated_at.is_(None),
-                SkillTest.is_practice.is_(False),
-            )
+            select(func.count(SkillTest.id)).where(*pending_validation_criteria(org_id))
         )
         pending_validation_count = pending_validation_result.scalar() or 0
 
