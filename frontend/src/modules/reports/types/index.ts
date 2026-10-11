@@ -114,7 +114,7 @@ export interface MemberRosterReport {
 }
 
 // ============================================================================
-// Report Data: Training Summary
+// Report Data: Training & Program Progress Summary (training_summary)
 // ============================================================================
 
 export interface TrainingSummaryEntry {
@@ -389,7 +389,7 @@ export interface InventoryStatusReport {
 }
 
 // ============================================================================
-// Report Data: Compliance Status
+// Report Data: Program Requirement Progress (compliance_status) -- RPT5-29-1
 // ============================================================================
 
 export interface ComplianceMemberEntry {

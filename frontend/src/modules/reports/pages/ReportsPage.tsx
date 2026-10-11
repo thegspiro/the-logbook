@@ -136,8 +136,9 @@ const REPORT_CARDS: ReportCardDefinition[] = [
   },
   {
     id: 'training-summary',
-    title: 'Training Summary',
-    description: 'Training hours and completion rates by member, course, and requirement',
+    title: 'Training & Program Progress Summary',
+    description:
+      'Training hours and course completion by member and course, and training-program progress by requirement — not requirement compliance',
     icon: 'TrendingUp',
     category: 'training',
     available: true,
@@ -197,8 +198,9 @@ const REPORT_CARDS: ReportCardDefinition[] = [
   },
   {
     id: 'compliance-status',
-    title: 'Compliance Status',
-    description: "Each member's compliance with training requirements, with overdue items and upcoming deadlines",
+    title: 'Program Requirement Progress',
+    description:
+      "Each member's progress on training requirements through their training programs, with outstanding items and upcoming deadlines — not requirement compliance",
     icon: 'Shield',
     category: 'compliance',
     available: true,

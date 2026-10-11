@@ -623,21 +623,21 @@ Each card says what the report contains _(descriptions rewritten 2026-09-29 to
 match what each report actually returns)_. Cards marked **Date Range** cover the
 reporting period set at the top of the page; the others are a snapshot of now.
 
-| Report                       | Category   | Date Range | What it contains                                                                               |
-| ---------------------------- | ---------- | ---------- | ---------------------------------------------------------------------------------------------- |
-| **Member Roster**            | Member     |            | Every member, active and inactive, with email, rank, station, and roles                        |
-| **Training Summary**         | Training   | ✓          | Training hours and completion rates by member, course, and requirement                         |
-| **Event Attendance**         | Events     | ✓          | RSVPs and attendance for each event in the reporting period                                    |
-| **Training Progress**        | Training   |            | Each member's progress through their training programs and requirements                        |
-| **Annual Training Report**   | Training   | ✓          | Training hours, shift experience, calls, and performance ratings for each active member        |
-| **Admin Hours Report**       | Admin      | ✓          | Administrative hours logged by members, broken down by category                                |
-| **Department Overview**      | Compliance | ✓          | Department totals for members, training, events, and open action items                         |
-| **Certification Expiration** | Compliance |            | Every member's certifications and expiration dates, flagging expired and expiring ones         |
-| **Compliance Status**        | Compliance |            | Each member's compliance with training requirements, with overdue items and upcoming deadlines |
-| **Fleet / Apparatus Status** | Operations |            | Vehicle status, inspection due dates, mileage, and open work orders                            |
-| **Inventory Status**         | Operations |            | Stock levels, assigned equipment, and low-stock alerts                                         |
-| **Incident / Call Volume**   | Operations | ✓          | Call volume trends, incident type breakdown, and peak activity                                 |
-| **Pipeline Overview**        | Member     | ✓          | Applicants in the prospective member pipeline, by stage, year, and referral source             |
+| Report                                  | Category   | Date Range | What it contains                                                                                                                                            |
+| --------------------------------------- | ---------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Member Roster**                       | Member     |            | Every member, active and inactive, with email, rank, station, and roles                                                                                     |
+| **Training & Program Progress Summary** | Training   | ✓          | Training hours and course completion by member and course, and training-program progress by requirement — not requirement compliance                        |
+| **Event Attendance**                    | Events     | ✓          | RSVPs and attendance for each event in the reporting period                                                                                                 |
+| **Training Progress**                   | Training   |            | Each member's progress through their training programs and requirements                                                                                     |
+| **Annual Training Report**              | Training   | ✓          | Training hours, shift experience, calls, and performance ratings for each active member                                                                     |
+| **Admin Hours Report**                  | Admin      | ✓          | Administrative hours logged by members, broken down by category                                                                                             |
+| **Department Overview**                 | Compliance | ✓          | Department totals for members, training, events, and open action items                                                                                      |
+| **Certification Expiration**            | Compliance |            | Every member's certifications and expiration dates, flagging expired and expiring ones                                                                      |
+| **Program Requirement Progress**        | Compliance |            | Each member's progress on training requirements through their training programs, with outstanding items and upcoming deadlines — not requirement compliance |
+| **Fleet / Apparatus Status**            | Operations |            | Vehicle status, inspection due dates, mileage, and open work orders                                                                                         |
+| **Inventory Status**                    | Operations |            | Stock levels, assigned equipment, and low-stock alerts                                                                                                      |
+| **Incident / Call Volume**              | Operations | ✓          | Call volume trends, incident type breakdown, and peak activity                                                                                              |
+| **Pipeline Overview**                   | Member     | ✓          | Applicants in the prospective member pipeline, by stage, year, and referral source                                                                          |
 
 > **Corrected 2026-09-29.** Three of the old descriptions were wrong, not just
 > loose: the roster includes inactive members (it said "all active members"),
@@ -646,6 +646,28 @@ reporting period set at the top of the page; the others are a snapshot of now.
 > empty state now reads _"No training program enrollments found."_ Two column
 > headings were renamed: **Days Left** (was Days Until) on the certification
 > and apparatus reports, and **Open Work Orders** (was Open WOs).
+
+> **Renamed 2026-10-11 — two reports measure program progress, not
+> compliance.** **Program Requirement Progress** (was _Compliance Status_) and
+> the requirement tab of the **Training & Program Progress Summary** (was
+> _Training Summary_) count a requirement as met when the member's
+> **training-program enrollment** marked it complete. That is a different
+> question from the requirement compliance the **Training dashboard** and the
+> **compliance matrix** answer — which look at the member's training records in
+> each requirement's window — so the two can disagree, and for a department
+> that does not run its annual requirements through training programs they
+> will. The owner chose to label the reports for what they measure rather than
+> change their figures. On the Program Requirement Progress report the buckets
+> now read **All Requirements Met**, **Some Met** and **None Met**, the
+> percentage column **Program Progress**, and the overdue column
+> **Outstanding**. For requirement compliance, use the Training dashboard.
+>
+> The summary's **Program Progress by Requirement** tab now leaves out a member
+> a requirement does not apply to — including one who joined before the
+> requirement's cutoff date, or who is still inside its catch-up period — the
+> way Program Requirement Progress already did. Those members used to count as
+> not having met it, so a requirement's percentage can rise where grandfathering
+> is in use. Its CSV export also drops a "Compliance %" column that was always 0.
 
 ### Generating a Report
 

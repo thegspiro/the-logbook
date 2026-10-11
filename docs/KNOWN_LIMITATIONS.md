@@ -3617,6 +3617,28 @@ error until a sender exists, rather than the current silent-accept.
 
 ## RPT5-29-1 — `compliance_status`/`training_summary` Re-Derive Training Compliance Instead of Consuming the Shared Evaluator (2026-09-06)
 
+> **✅ Resolved 2026-10-11 (owner decision: relabel as program-enrollment
+> progress, and fix `requirement_breakdown` grandfathering — no silent number
+> change).** Option (2) below. The `compliance_status` report is now titled
+> **Program Requirement Progress** and `training_summary` **Training & Program
+> Progress Summary** (report ids, routes and response shapes unchanged); both
+> descriptions say they are not requirement compliance, and the renderers no
+> longer use the word — the buckets read All Requirements Met / Some Met /
+> None Met, the column Program Progress. `_generate_training_summary`'s
+> `requirement_breakdown` now grades each requirement with
+> `requirement_applies_to_user` and `catch_up_deadline`, exactly as
+> `_generate_compliance_status` does, so a member a requirement exempts or is
+> still giving time to catch up is left out of that requirement's count rather
+> than counted unmet (its population — enrolled members, or active members when
+> nobody is enrolled — is unchanged). That fix does move those percentages
+> where grandfathering or role/position scoping applies; it is the change the
+> owner asked for. The always-zero `compliance_percentage` on summary member
+> rows is no longer exported (the API field is unchanged). **Remaining, by
+> decision:** the two reports still measure program progress and can disagree
+> with the dashboard; that is now stated on them. Tests:
+> `tests/test_training_summary_program_progress.py`,
+> `programProgressLabels.test.tsx`. The text below is the original finding.
+
 `reports_service._generate_compliance_status` (the `compliance_status`
 report) and `_generate_training_summary`'s `requirement_breakdown` section
 both compute per-member/per-requirement completion from `ProgramEnrollment` +
