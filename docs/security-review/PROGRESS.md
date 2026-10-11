@@ -16,18 +16,17 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (opening)**: branch `claude/security-review-frontend-shared`,
-Feature 34 (Frontend shared), pass 8. 2 fixes (FE8-34-1, FE8-34-2 — two new
-cache-exclusion gaps found by a fresh repo-wide sweep), 0 new OPEN/FLAGGED
-findings. Both of pass 7's standing HIGH findings (FE3-34-2, FE3-34-5) were
-re-verified and found **already fixed on `main`** — by other, non-security-
-review work that landed between pass 7 and this pass. See the Log entry
-below and `docs/security-review/FE8-34-frontend-shared.md` for detail. Row
-34 is the last row (00–34) in the rotation table; per the table's own
-preamble the next iteration wraps back to Feature 00 (Cross-cutting
-baseline) rather than resetting this table to ⬜ itself. The PR number will
-be recorded here in a follow-up commit on this same branch once it is
-opened, per this rotation's own rule.
+**PR [#3093](https://github.com/thegspiro/the-logbook/pull/3093)**: branch
+`claude/security-review-frontend-shared`, Feature 34 (Frontend shared),
+pass 8. 2 fixes (FE8-34-1, FE8-34-2 — two new cache-exclusion gaps found by
+a fresh repo-wide sweep), 0 new OPEN/FLAGGED findings. Both of pass 7's
+standing HIGH findings (FE3-34-2, FE3-34-5) were re-verified and found
+**already fixed on `main`** — by other, non-security-review work that
+landed between pass 7 and this pass. See the Log entry below and
+`docs/security-review/FE8-34-frontend-shared.md` for detail. Row 34 is the
+last row (00–34) in the rotation table; per the table's own preamble the
+next iteration wraps back to Feature 00 (Cross-cutting baseline) rather
+than resetting this table to ⬜ itself.
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3084's merge, Feature 33, Core infrastructure, pass 6 — the state this pass's PR conflicted with), preserved for history</summary>
