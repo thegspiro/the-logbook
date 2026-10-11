@@ -3358,35 +3358,29 @@ loopback server, succeeds, fails cleanly on an oversized body, and returns
 
 ## Salesforce Integration — Clearing the Refresh Token Has No Reachable UI Control (INT-11, 2026-09-13)
 
+✅ **Resolved 2026-10-11 (owner decision: a dedicated "Switch to Client
+Credentials" button sending `""`).**
+
 `connect_integration`/`update_integration`
-(`backend/app/api/v1/endpoints/integrations.py`) special-case an explicit
-`config["refresh_token"] == ""` on a Salesforce integration: it clears the
-stored `refresh_token` and `access_token`, switching the integration from its
-interactive OAuth grant to Salesforce's client-credentials flow on the next
-sync — the documented way for a department to move off a colleague's
-personal OAuth connection onto the Connected App's own service credentials.
+(`backend/app/api/v1/endpoints/integrations.py`) already special-cased an
+explicit `config["refresh_token"] == ""` on a Salesforce integration: it clears
+the stored `refresh_token` and `access_token`, moving the integration from a
+person's interactive OAuth grant to the Connected App's client-credentials
+flow on the next sync. The page could not send it — `refresh_token:
+sfRefreshToken || undefined` drops a blank, and an omitted secret means "leave
+unchanged" — so an administrator who cleared the box and saved changed
+nothing.
 
-The frontend has no way to trigger it. `IntegrationsPage.tsx` builds the
-Salesforce config as `refresh_token: sfRefreshToken || undefined` — a blank
-field becomes `undefined`, which is dropped from the JSON payload entirely
-rather than sent as `""`. The backend's merge
-(`{**stored, **public_config}`) then leaves the old `refresh_token`
-untouched: an administrator who clears the field and saves, believing they
-have switched auth modes, sees no error and no confirmation either way — the
-org keeps authenticating as whoever the old refresh token belonged to.
-
-**Not fixed — needs a product decision on the shape.** Two options, and this
-review would not choose between them unilaterally: (1) a distinct "Switch to
-Client Credentials" control that sends the explicit `""` the backend already
-knows how to handle, or (2) changing the field's blank-submission semantics
-to always mean "clear" — which would need its own pass across every other
-field this same form treats as "blank = leave unchanged" (client secret,
-webhook secrets, API tokens across Documenso/Cal.com/PayPal), since widening
-one field's semantics without checking the others risks the opposite defect
-(a blank field silently wiping a working secret). No cross-tenant or
-credential-exposure angle — this is a credential-lifecycle correctness gap
-reachable only by an org's own `integrations.manage` holder acting on their
-own organization's integration.
+The Salesforce **Sync** panel now has a **Sign-in method** section with a
+**Switch to Client Credentials** button. After a confirmation that says what
+the Connected App needs, it sends `PATCH /integrations/{id}` with exactly
+`{"refresh_token": ""}` — no other field — and the backend behaviour above does
+the rest. The blank-means-unchanged rule for every secret field on the page
+is deliberately untouched (option 2, which would have risked wiping working
+secrets, was not chosen). Tested in `IntegrationsPage.test.tsx` (the request
+sent, and nothing sent on cancel) and
+`tests/test_salesforce_switch_to_client_credentials.py` (the tokens cleared,
+the client id/secret and public settings kept, an omitted token left alone).
 
 (Security review INT-27 pass 4, 2026-09-13:
 `docs/security-review/INT-27-integrations.md`.)
