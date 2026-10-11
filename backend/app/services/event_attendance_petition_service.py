@@ -76,6 +76,20 @@ REVIEW_PROMPT_CATEGORY = "attendance_request"
 MEMBER_UPDATE_CATEGORY = "attendance_request_update"
 
 
+def pending_petition_criteria(organization_id: str, reviewer_id: str) -> tuple:
+    """Pending requests in one department that ``reviewer_id`` could decide.
+
+    Their own are left out — nobody decides their own. Shared by the reviewer
+    list and the events hub's attention count, so the count is the length of
+    the department-wide list it links to.
+    """
+    return (
+        EventAttendancePetition.organization_id == organization_id,
+        EventAttendancePetition.status == AttendancePetitionStatus.PENDING,
+        EventAttendancePetition.user_id != reviewer_id,
+    )
+
+
 class PetitionNotFound(LookupError):
     """The event or petition does not exist in the caller's organization."""
 
@@ -247,11 +261,7 @@ class EventAttendancePetitionService:
                     Event.organization_id == organization_id,
                 ),
             )
-            .where(
-                EventAttendancePetition.organization_id == organization_id,
-                EventAttendancePetition.status == AttendancePetitionStatus.PENDING,
-                EventAttendancePetition.user_id != str(reviewer.id),
-            )
+            .where(*pending_petition_criteria(organization_id, str(reviewer.id)))
             # created_at is stored to the second, so the id breaks ties and
             # keeps the order stable between loads.
             .order_by(EventAttendancePetition.created_at, EventAttendancePetition.id)

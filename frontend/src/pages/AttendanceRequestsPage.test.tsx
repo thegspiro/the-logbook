@@ -50,6 +50,7 @@ describe('AttendanceRequestsPage', () => {
     mockCheckPermission.mockReset();
     mockCheckPermission.mockReturnValue(false);
     mockGetPending.mockResolvedValue([pending()]);
+    window.history.replaceState({}, '', '/events/attendance-requests');
   });
 
   it('lists requests on the viewer’s own events, linked to each event', async () => {
@@ -78,6 +79,28 @@ describe('AttendanceRequestsPage', () => {
 
     expect(mockGetPending).toHaveBeenLastCalledWith('all');
     expect(screen.getByRole('button', { name: 'All events' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  // The events hub's attention row counts every event and links here with
+  // ?scope=all; opening on "My events" would show a different number.
+  it('opens on every event when the hub links here for the whole department', async () => {
+    mockCheckPermission.mockReturnValue(true);
+    window.history.replaceState({}, '', '/events/attendance-requests?scope=all');
+    renderWithRouter(<AttendanceRequestsPage />);
+
+    expect(await screen.findByText('Phone died at the door')).toBeInTheDocument();
+    expect(mockGetPending).toHaveBeenCalledWith('all');
+    expect(mockGetPending).not.toHaveBeenCalledWith('mine');
+    expect(screen.getByRole('button', { name: 'All events' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('ignores ?scope=all for a member who may not see every event', async () => {
+    window.history.replaceState({}, '', '/events/attendance-requests?scope=all');
+    renderWithRouter(<AttendanceRequestsPage />);
+
+    expect(await screen.findByText('Phone died at the door')).toBeInTheDocument();
+    expect(mockGetPending).toHaveBeenCalledWith('mine');
+    expect(mockGetPending).not.toHaveBeenCalledWith('all');
   });
 
   it('approves from the list with the event’s times and drops the row', async () => {

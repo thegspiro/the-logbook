@@ -690,6 +690,23 @@ def is_pending_validation(test: SkillTest) -> bool:
     return getattr(test, "validated_at", None) is None
 
 
+def pending_validation_criteria(organization_id: str) -> tuple:
+    """``is_pending_validation`` as SQL: the officer review queue for one org.
+
+    One definition for every count of that queue — the records tab's filter,
+    the CSV export behind it, the summary badge and the training hub's
+    attention item — so the badge can never disagree with the list it opens.
+    """
+    from app.models.skills_testing import SkillTest, SkillTestStatus
+
+    return (
+        SkillTest.organization_id == organization_id,
+        SkillTest.is_practice.is_(False),
+        SkillTest.status == SkillTestStatus.COMPLETED.value,
+        SkillTest.validated_at.is_(None),
+    )
+
+
 def is_under_correction(test: SkillTest) -> bool:
     """Whether ``test`` is a submission an officer sent back, not yet resubmitted.
 
