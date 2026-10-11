@@ -5,7 +5,7 @@ Request and response schemas for the medical screening endpoints.
 """
 
 from datetime import date, datetime
-from typing import Any, Dict, List, Optional, overload
+from typing import Any, Dict, List, Literal, Optional, overload
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -252,6 +252,40 @@ class ComplianceSummary(BaseModel):
         description="Compliant items whose record the subject recorded themself.",
     )
     items: List[ComplianceItem]
+
+
+ComplianceStanding = Literal["not_compliant", "expiring_soon", "compliant"]
+
+
+class ComplianceRosterRow(BaseModel):
+    """One member's or prospect's standing on the compliance roster.
+
+    Counts only. Which screening is missing is read by opening the row, a
+    per-subject read that is audit-logged with the subject named.
+    """
+
+    subject_id: str
+    subject_name: str
+    subject_type: str = Field(description="'user' or 'prospect'")
+    compliant_count: int
+    non_compliant_count: int
+    expiring_soon_count: int
+    standing: ComplianceStanding
+
+
+class ComplianceRoster(BaseModel):
+    """The department's screening standing, optionally filtered by standing.
+
+    The totals always describe every screenable member and open prospect; only
+    ``rows`` is filtered.
+    """
+
+    total_requirements: int
+    total_subjects: int
+    not_compliant: int
+    expiring_soon: int
+    compliant: int
+    rows: List[ComplianceRosterRow]
 
 
 class MyComplianceSummary(BaseModel):

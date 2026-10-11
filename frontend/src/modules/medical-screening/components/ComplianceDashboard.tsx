@@ -1,8 +1,9 @@
 /**
  * Compliance Dashboard
  *
- * Shows one member's or prospect's compliance on demand, and the org-wide
- * list of screenings expiring soon.
+ * The department's compliance roster (filterable — "Not compliant" is the
+ * overdue view), one member's or prospect's detail opened from it, and the
+ * org-wide list of screenings expiring soon.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -11,6 +12,7 @@ import { useMedicalScreeningStore } from '../store/medicalScreeningStore';
 import { SCREENING_TYPE_LABELS } from '../types';
 import { SelfRecordedBadge } from './SelfRecordedBadge';
 import { SubjectCompliancePanel, type ComplianceSubject } from './SubjectCompliancePanel';
+import { ComplianceRoster } from './ComplianceRoster';
 
 export const ComplianceDashboard: React.FC = () => {
   const { expiringScreenings, fetchExpiringScreenings } = useMedicalScreeningStore();
@@ -22,7 +24,8 @@ export const ComplianceDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <SubjectCompliancePanel subject={subject} onSubjectChange={setSubject} />
+      <ComplianceRoster onOpen={setSubject} />
+      <SubjectCompliancePanel subject={subject} onClose={() => setSubject(null)} />
 
       {/* Expiring Soon */}
       <div>

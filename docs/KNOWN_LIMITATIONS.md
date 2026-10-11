@@ -1237,6 +1237,8 @@ The overdue list's response shape was also corrected on the frontend:
 
 ## Medical Screening — No Per-Member Compliance Screen (2026-08-08)
 
+**Resolved 2026-10-11** — both screens in the table below are built.
+
 **The Add Record half of this entry is resolved (2026-10-05, owner decision,
 MS-13).** It was filed as "The Add Record Form Attaches to Nobody": the dialog
 had no member or prospect control, so every record it created counted toward
@@ -1254,10 +1256,10 @@ delete the unattached copy.
 `docs/training/13-medical-screening.md` pictures two per-member compliance
 screens that do not exist:
 
-| Guide section                      | What exists                                                                                                                                                                                                                                               | State        |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| Member compliance detail view      | **Built 2026-10-11 (owner decision: build it).** The Compliance tab's **Show compliance for** picker (members and open prospects) renders the server's `ComplianceSummary` for the chosen subject, requirement by requirement (`SubjectCompliancePanel`). | ✅ Built     |
-| Compliance tab filtered to overdue | `ComplianceDashboard` has no filter controls of any kind.                                                                                                                                                                                                 | ❌ Not built |
+| Guide section                      | What exists                                                                                                                                                                                                                                                                                                                                                                                                                                | State    |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- |
+| Member compliance detail view      | **Built 2026-10-11 (owner decision: build it).** **View** on a roster row renders the server's `ComplianceSummary` for that member or prospect, requirement by requirement (`SubjectCompliancePanel`).                                                                                                                                                                                                                                     | ✅ Built |
+| Compliance tab filtered to overdue | **Built 2026-10-11 (owner decision: add filter).** `GET /medical-screening/compliance?standing=` returns every screenable member and open prospect graded by the same `_grade` rule as the per-subject summary, with totals; the tab's **Show** filter offers Everyone / Not compliant (overdue or missing) / Expiring within 30 days / Compliant, applied on the server and audit-logged with the subjects returned (`ComplianceRoster`). | ✅ Built |
 
 ## Grants & Fundraising — Pledges and Fundraising Events (2026-08-08)
 

@@ -1,22 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useState } from 'react';
 import type { ComplianceSummary } from '../types';
 
-const mockListSubjects = vi.fn();
 const mockGetUserCompliance = vi.fn();
 const mockGetProspectCompliance = vi.fn();
 
 vi.mock('../services/api', () => ({
   medicalScreeningService: {
-    listSubjects: (...a: unknown[]) => mockListSubjects(...a) as unknown,
     getUserCompliance: (...a: unknown[]) => mockGetUserCompliance(...a) as unknown,
     getProspectCompliance: (...a: unknown[]) => mockGetProspectCompliance(...a) as unknown,
   },
 }));
 
-import { SubjectCompliancePanel, type ComplianceSubject } from './SubjectCompliancePanel';
+import { SubjectCompliancePanel } from './SubjectCompliancePanel';
 import { useMedicalScreeningStore } from '../store/medicalScreeningStore';
 
 const summary = (overrides: Partial<ComplianceSummary> = {}): ComplianceSummary => ({
@@ -62,20 +59,10 @@ const summary = (overrides: Partial<ComplianceSummary> = {}): ComplianceSummary 
   ...overrides,
 });
 
-const Harness = () => {
-  const [subject, setSubject] = useState<ComplianceSubject | null>(null);
-  return <SubjectCompliancePanel subject={subject} onSubjectChange={setSubject} />;
-};
-
 describe('SubjectCompliancePanel', () => {
   beforeEach(() => {
-    mockListSubjects.mockReset();
     mockGetUserCompliance.mockReset();
     mockGetProspectCompliance.mockReset();
-    mockListSubjects.mockResolvedValue({
-      members: [{ id: 'u-1', name: 'Jake Thompson' }],
-      prospects: [{ id: 'p-1', name: 'Alex Rivera' }],
-    });
     mockGetUserCompliance.mockResolvedValue(summary());
     mockGetProspectCompliance.mockResolvedValue(
       summary({
@@ -94,15 +81,11 @@ describe('SubjectCompliancePanel', () => {
   });
 
   it("shows a member's requirements as the server graded them", async () => {
-    const user = userEvent.setup();
-    render(<Harness />);
-
-    const picker = await screen.findByLabelText('Show compliance for');
-    await waitFor(() => expect(picker).toBeEnabled());
-    await user.selectOptions(picker, 'user:u-1');
+    render(<SubjectCompliancePanel subject={{ type: 'user', id: 'u-1', name: 'Jake Thompson' }} onClose={vi.fn()} />);
 
     expect(await screen.findByText('2 of 3 requirements met · 1 not met · 1 expiring soon')).toBeInTheDocument();
     expect(mockGetUserCompliance).toHaveBeenCalledWith('u-1');
+    expect(screen.getByRole('heading', { name: 'Jake Thompson' })).toBeInTheDocument();
     expect(screen.getByText('Met')).toBeInTheDocument();
     expect(screen.getByText('Expires in 9 days')).toBeInTheDocument();
     expect(screen.getByText('No qualifying record')).toBeInTheDocument();
@@ -110,12 +93,7 @@ describe('SubjectCompliancePanel', () => {
   });
 
   it('reads a prospect through the prospect endpoint and does not call zero requirements compliant', async () => {
-    const user = userEvent.setup();
-    render(<Harness />);
-
-    const picker = await screen.findByLabelText('Show compliance for');
-    await waitFor(() => expect(picker).toBeEnabled());
-    await user.selectOptions(picker, 'prospect:p-1');
+    render(<SubjectCompliancePanel subject={{ type: 'prospect', id: 'p-1', name: 'Alex Rivera' }} onClose={vi.fn()} />);
 
     expect(await screen.findByText('No screening requirements are active.')).toBeInTheDocument();
     expect(mockGetProspectCompliance).toHaveBeenCalledWith('p-1');
@@ -123,11 +101,19 @@ describe('SubjectCompliancePanel', () => {
     expect(screen.queryByText(/requirements met/)).not.toBeInTheDocument();
   });
 
-  it('shows nothing until someone is chosen', async () => {
-    render(<Harness />);
-    await screen.findByLabelText('Show compliance for');
+  it('renders nothing and asks for nothing until someone is chosen', () => {
+    const { container } = render(<SubjectCompliancePanel subject={null} onClose={vi.fn()} />);
 
+    expect(container).toBeEmptyDOMElement();
     expect(mockGetUserCompliance).not.toHaveBeenCalled();
-    expect(screen.queryByText(/requirements met/)).not.toBeInTheDocument();
+  });
+
+  it('closes', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<SubjectCompliancePanel subject={{ type: 'user', id: 'u-1', name: 'Jake Thompson' }} onClose={onClose} />);
+
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

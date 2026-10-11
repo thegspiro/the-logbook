@@ -156,11 +156,12 @@ frontend/src/modules/medical-screening/
 
 ### Compliance
 
-| Method | Path                                                          | Permission               | Description                                         |
-| ------ | ------------------------------------------------------------- | ------------------------ | --------------------------------------------------- |
-| `GET`  | `/api/v1/medical-screening/compliance/{user_id}`              | `medical_screening.view` | User compliance summary                             |
-| `GET`  | `/api/v1/medical-screening/compliance/prospect/{prospect_id}` | `medical_screening.view` | Prospect compliance summary                         |
-| `GET`  | `/api/v1/medical-screening/expiring`                          | `medical_screening.view` | Expiring screenings (query: `days=30`, range 1-365) |
+| Method | Path                                                          | Permission               | Description                                                                                                                       |
+| ------ | ------------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/v1/medical-screening/compliance`                        | `medical_screening.view` | Department roster: every member and open prospect graded, with totals (query: `standing=not_compliant\|expiring_soon\|compliant`) |
+| `GET`  | `/api/v1/medical-screening/compliance/{user_id}`              | `medical_screening.view` | User compliance summary                                                                                                           |
+| `GET`  | `/api/v1/medical-screening/compliance/prospect/{prospect_id}` | `medical_screening.view` | Prospect compliance summary                                                                                                       |
+| `GET`  | `/api/v1/medical-screening/expiring`                          | `medical_screening.view` | Expiring screenings (query: `days=30`, range 1-365)                                                                               |
 
 ---
 

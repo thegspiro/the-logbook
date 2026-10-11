@@ -15,8 +15,9 @@ vi.mock('../store/medicalScreeningStore', () => ({
   useMedicalScreeningStore: () => ({ expiringScreenings, fetchExpiringScreenings }),
 }));
 
-// The per-member panel has its own tests and its own requests.
+// The roster and per-member panel have their own tests and their own requests.
 vi.mock('./SubjectCompliancePanel', () => ({ SubjectCompliancePanel: () => null }));
+vi.mock('./ComplianceRoster', () => ({ ComplianceRoster: () => null }));
 
 import { ComplianceDashboard } from './ComplianceDashboard';
 

@@ -9,14 +9,12 @@
  * the server audit-logs.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { CheckCircle, XCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import { useMedicalScreeningStore } from '../store/medicalScreeningStore';
-import { medicalScreeningService } from '../services/api';
-import { SCREENING_STATUS_LABELS, SCREENING_TYPE_LABELS, type ComplianceItem, type ScreeningSubjects } from '../types';
+import { SCREENING_STATUS_LABELS, SCREENING_TYPE_LABELS, type ComplianceItem } from '../types';
 import { SelfRecordedBadge } from './SelfRecordedBadge';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
-import { getErrorMessage } from '../../../utils/errorHandling';
 
 /** Matches the window `get_compliance_status` counts as expiring soon. */
 const EXPIRING_SOON_DAYS = 30;
@@ -24,20 +22,13 @@ const EXPIRING_SOON_DAYS = 30;
 export interface ComplianceSubject {
   type: 'user' | 'prospect';
   id: string;
+  name: string;
 }
 
 interface SubjectCompliancePanelProps {
   subject: ComplianceSubject | null;
-  onSubjectChange: (subject: ComplianceSubject | null) => void;
+  onClose: () => void;
 }
-
-const encode = (subject: ComplianceSubject | null) => (subject ? `${subject.type}:${subject.id}` : '');
-
-const decode = (value: string): ComplianceSubject | null => {
-  const [type, id] = value.split(':');
-  if (!id || (type !== 'user' && type !== 'prospect')) return null;
-  return { type, id };
-};
 
 const itemState = (item: ComplianceItem): { label: string; tone: 'met' | 'soon' | 'unmet' } => {
   if (!item.is_compliant) {
@@ -50,26 +41,9 @@ const itemState = (item: ComplianceItem): { label: string; tone: 'met' | 'soon' 
   return { label: 'Met', tone: 'met' };
 };
 
-export const SubjectCompliancePanel: React.FC<SubjectCompliancePanelProps> = ({ subject, onSubjectChange }) => {
+export const SubjectCompliancePanel: React.FC<SubjectCompliancePanelProps> = ({ subject, onClose }) => {
   const { compliance, complianceLoading, error, fetchUserCompliance, fetchProspectCompliance, clearCompliance } =
     useMedicalScreeningStore();
-  const [subjects, setSubjects] = useState<ScreeningSubjects | null>(null);
-  const [subjectsError, setSubjectsError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    medicalScreeningService
-      .listSubjects()
-      .then((data) => {
-        if (!cancelled) setSubjects(data);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setSubjectsError(getErrorMessage(err, 'Could not load members and prospects.'));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     if (!subject) {
@@ -87,46 +61,18 @@ export const SubjectCompliancePanel: React.FC<SubjectCompliancePanelProps> = ({ 
       ? compliance
       : null;
 
+  if (!subject) return null;
+
   return (
     <section aria-labelledby="subject-compliance-heading" className="space-y-3">
-      <h3 id="subject-compliance-heading" className="text-theme-text-primary text-sm font-medium">
-        Member or prospect compliance
-      </h3>
-      <label className="form-label block">
-        Show compliance for
-        <select
-          className="form-input mt-1 block w-full sm:max-w-md"
-          value={encode(subject)}
-          onChange={(event) => onSubjectChange(decode(event.target.value))}
-          disabled={!subjects}
-        >
-          <option value="">Choose a member or prospect…</option>
-          {subjects && subjects.members.length > 0 && (
-            <optgroup label="Members">
-              {subjects.members.map((member) => (
-                <option key={member.id} value={`user:${member.id}`}>
-                  {member.name}
-                </option>
-              ))}
-            </optgroup>
-          )}
-          {subjects && subjects.prospects.length > 0 && (
-            <optgroup label="Prospects">
-              {subjects.prospects.map((prospect) => (
-                <option key={prospect.id} value={`prospect:${prospect.id}`}>
-                  {prospect.name}
-                </option>
-              ))}
-            </optgroup>
-          )}
-        </select>
-      </label>
-      {subjectsError && (
-        <p className="text-sm text-red-700 dark:text-red-300" role="alert">
-          {subjectsError}
-        </p>
-      )}
-
+      <div className="flex items-center justify-between gap-2">
+        <h3 id="subject-compliance-heading" className="text-theme-text-primary text-sm font-medium">
+          {subject.name}
+        </h3>
+        <button type="button" className="btn-secondary btn-sm" onClick={onClose}>
+          Close
+        </button>
+      </div>
       {subject && complianceLoading && !shown && (
         <p className="text-theme-text-muted flex items-center gap-2 text-sm" role="status">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading compliance…
@@ -141,12 +87,7 @@ export const SubjectCompliancePanel: React.FC<SubjectCompliancePanelProps> = ({ 
       {shown && (
         <div className="card space-y-3 p-4" aria-live="polite">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <p className="text-theme-text-primary font-medium">
-              {shown.subject_name || 'Unnamed'}
-              <span className="text-theme-text-muted ml-2 text-xs">
-                {shown.subject_type === 'prospect' ? 'Prospect' : 'Member'}
-              </span>
-            </p>
+            <p className="text-theme-text-muted text-xs">{shown.subject_type === 'prospect' ? 'Prospect' : 'Member'}</p>
             {shown.total_requirements === 0 ? (
               <p className="text-theme-text-muted text-sm">No screening requirements are active.</p>
             ) : (
