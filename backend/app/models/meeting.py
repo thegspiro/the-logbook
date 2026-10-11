@@ -40,6 +40,9 @@ class MeetingType(str, enum.Enum):
     SPECIAL = "special"
     COMMITTEE = "committee"
     BOARD = "board"
+    TRUSTEE = "trustee"
+    EXECUTIVE = "executive"
+    ANNUAL = "annual"
     OTHER = "other"
 
 

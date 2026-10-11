@@ -4455,16 +4455,15 @@ each row carries the evidence and the file.
 Found driving W51 (`docs/workflow-review/W51-minutes.md`).
 
 - **W51-4 — Executive, Trustee and Annual meetings cannot be recorded.**
-  - Minutes support eight meeting types, but a meeting record
-    (`meetings.meeting_type`, a MySQL ENUM) accepts five.
-  - The Minutes page now offers only those five instead of failing with a 422.
-    So a closed executive session cannot be recorded through the UI at all,
-    although the minutes side, and its member restriction on executive
-    minutes, exists.
-  - Recording one needs a migration widening the ENUM, and a mapping for the
-    three types in `MinuteService.create_from_meeting`. Until that mapping
-    exists, an executive meeting's minutes would be typed "business", which
-    members can read.
+  ✅ Resolved (2026-10-11), as the owner chose: migration `2cfc5a75105e`
+  widens `meetings.meeting_type` to the minutes' eight types,
+  `MinuteService.create_from_meeting` maps each to the minutes type of the same
+  name (so an executive meeting's minutes keep the executive read restriction)
+  with that type's default sections, and the Minutes page offers all eight.
+  The downgrade folds the three into `other`.
+  - Still true: the **meeting record** itself (title, agenda, notes) is read
+    under `meetings.view` whatever its type; only the minutes carry the
+    executive restriction.
 - **W51-8 — Minutes created from meetings before 2026-10-03 carry a shifted
   date.**
   - `create_from_meeting` read the meeting's local date and time as UTC. A

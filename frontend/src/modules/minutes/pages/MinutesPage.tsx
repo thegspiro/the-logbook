@@ -72,16 +72,6 @@ const MEETING_TYPES: { value: MeetingType; label: string; color: string }[] = [
   { value: 'other', label: 'Other', color: 'bg-theme-surface-secondary text-theme-text-primary' },
 ];
 
-/**
- * The types a meeting record accepts. `meetings.meeting_type` is a database
- * ENUM of these five; trustee, executive and annual exist only on minutes
- * (`meeting_minutes.meeting_type`), so offering them here produced a 422
- * every time (W51-4). Adding them to meetings needs a migration — see
- * docs/KNOWN_LIMITATIONS.md.
- */
-const MEETING_RECORD_TYPES: readonly MeetingType[] = ['business', 'special', 'committee', 'board', 'other'];
-const MEETING_RECORD_TYPE_OPTIONS = MEETING_TYPES.filter((t) => MEETING_RECORD_TYPES.includes(t.value));
-
 const MINUTES_STATUS_LABELS: Record<string, string> = {
   draft: 'Draft',
   submitted: 'Awaiting approval',
@@ -381,7 +371,7 @@ const MinutesPage: React.FC = () => {
                 className="form-input"
               >
                 <option value="all">All Types</option>
-                {MEETING_RECORD_TYPE_OPTIONS.map((t) => (
+                {MEETING_TYPES.map((t) => (
                   <option key={t.value} value={t.value}>
                     {t.label}
                   </option>
@@ -745,7 +735,7 @@ const MinutesPage: React.FC = () => {
                           }
                           className="form-input"
                         >
-                          {MEETING_RECORD_TYPE_OPTIONS.map((t) => (
+                          {MEETING_TYPES.map((t) => (
                             <option key={t.value} value={t.value}>
                               {t.label}
                             </option>

@@ -1143,14 +1143,14 @@ carry their state: **Draft**, **Awaiting approval**, **Approved** or
    items, motions (with mover, seconder, vote results), discussions,
    adjournment — and any **action items**.
 
-**Meeting Type offers Business, Special, Committee, Board and Other**
-_(2026-10-03)_. The dialog used to offer Trustee, Executive and Annual as well,
-and a meeting of any of those three was refused every time with _"Make sure it
-has a title and a date"_ although it had both — a meeting record accepts only
-the five types. Minutes themselves still know all eight; recording an
-executive (closed) session as its own meeting type needs a database change the
-owner has not yet decided (`docs/KNOWN_LIMITATIONS.md`). A refused create now
-shows the server's own reason.
+**Meeting Type offers Business, Special, Committee, Board, Trustee, Executive,
+Annual and Other** _(2026-10-11)_. A meeting record accepted only five of these
+until this release, so between 3 and 11 October the dialog offered those five
+and a closed executive session could not be recorded at all. Minutes written
+from a meeting keep its type — an **Executive** meeting's minutes are executive
+minutes, which members cannot read even once approved, and each of the three
+new types starts with its own sections. A refused create shows the server's
+own reason.
 
 ![Meeting minutes page with the meeting type selector and attendee list](./images/04-14-meeting-minutes.png)
 

@@ -46,6 +46,20 @@ from app.utils.org_scoping import assert_all_in_org, assert_in_org
 from app.utils.org_timezone import resolve_scheduling_timezone
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
+_DEFAULT_SECTIONS_BY_TYPE = {
+    "special": DEFAULT_SPECIAL_SECTIONS,
+    "committee": DEFAULT_COMMITTEE_SECTIONS,
+    "trustee": DEFAULT_TRUSTEE_SECTIONS,
+    "executive": DEFAULT_EXECUTIVE_SECTIONS,
+    "annual": DEFAULT_ANNUAL_SECTIONS,
+}
+
+
+def _default_sections_for(meeting_type) -> list:
+    """The starting sections for a meeting type; business for anything else."""
+    value = getattr(meeting_type, "value", meeting_type)
+    return _DEFAULT_SECTIONS_BY_TYPE.get(value, DEFAULT_BUSINESS_SECTIONS)
+
 
 class MinuteService:
     """Service for meeting minutes management"""
@@ -146,15 +160,7 @@ class MinuteService:
 
         # If no template and no sections, generate default sections for the meeting type
         if not minutes_dict.get("sections"):
-            mt = minutes_dict.get("meeting_type", "business")
-            defaults_map = {
-                "special": DEFAULT_SPECIAL_SECTIONS,
-                "committee": DEFAULT_COMMITTEE_SECTIONS,
-                "trustee": DEFAULT_TRUSTEE_SECTIONS,
-                "executive": DEFAULT_EXECUTIVE_SECTIONS,
-                "annual": DEFAULT_ANNUAL_SECTIONS,
-            }
-            default = defaults_map.get(mt, DEFAULT_BUSINESS_SECTIONS)
+            default = _default_sections_for(minutes_dict.get("meeting_type"))
             minutes_dict["sections"] = [
                 {
                     "order": s["order"],
@@ -937,11 +943,17 @@ class MinuteService:
             return None
 
         # Map meeting type to minutes meeting type
+        # Every meeting type has a minutes type of the same name. Executive is
+        # the one that matters: falling back to "business" would publish a
+        # closed session's minutes to every member once approved (W51-4).
         type_map = {
             "business": MinutesMeetingType.BUSINESS,
             "special": MinutesMeetingType.SPECIAL,
             "committee": MinutesMeetingType.COMMITTEE,
             "board": MinutesMeetingType.BOARD,
+            "trustee": MinutesMeetingType.TRUSTEE,
+            "executive": MinutesMeetingType.EXECUTIVE,
+            "annual": MinutesMeetingType.ANNUAL,
             "other": MinutesMeetingType.OTHER,
         }
         meeting_type_val = (
@@ -982,11 +994,7 @@ class MinuteService:
                 )
 
         # Build default sections based on meeting type
-        section_defaults = DEFAULT_BUSINESS_SECTIONS
-        if minutes_type == MinutesMeetingType.SPECIAL:
-            section_defaults = DEFAULT_SPECIAL_SECTIONS
-        elif minutes_type == MinutesMeetingType.COMMITTEE:
-            section_defaults = DEFAULT_COMMITTEE_SECTIONS
+        section_defaults = _default_sections_for(minutes_type)
 
         # The meeting's date and start time are the department's wall clock,
         # not UTC. Combining them as UTC put a 7 PM meeting at 2 PM, and a
