@@ -31,6 +31,12 @@ def _all(items):
     return result
 
 
+def _rows(items):
+    result = MagicMock()
+    result.all.return_value = items
+    return result
+
+
 def _scalar(value):
     result = MagicMock()
     result.scalar.return_value = value
@@ -176,6 +182,7 @@ class TestFinalizeShiftArchivesPrompt:
                 _all([]),  # open attendance to auto-close
                 _scalar(0),  # call count snapshot
                 _scalar(0),  # total minutes snapshot
+                _rows([]),  # approved pre-shift minutes: none
                 _all([]),  # attendance rows for per-member call counts
             ]
         )
