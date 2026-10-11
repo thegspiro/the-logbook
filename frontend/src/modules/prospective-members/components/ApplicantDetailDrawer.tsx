@@ -575,6 +575,45 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 </div>
               </div>
 
+              {/* Referral — the prospect's own columns, not form answers. A
+                  guest sign-in stamps referral_source with the event they
+                  walked in from. */}
+              {(applicant.referral_source || applicant.referred_by_name || applicant.interest_reason) && (
+                <section
+                  aria-labelledby="applicant-referral-heading"
+                  className="border-theme-surface-border border-b p-4"
+                >
+                  <h3
+                    id="applicant-referral-heading"
+                    className="text-theme-text-muted mb-2 text-xs font-medium tracking-wider uppercase"
+                  >
+                    How They Found Us
+                  </h3>
+                  <dl className="space-y-2 text-sm">
+                    {applicant.referral_source && (
+                      <div>
+                        <dt className="text-theme-text-muted text-xs">Referral source</dt>
+                        <dd className="text-theme-text-primary break-words">{applicant.referral_source}</dd>
+                      </div>
+                    )}
+                    {applicant.referred_by_name && (
+                      <div>
+                        <dt className="text-theme-text-muted text-xs">Referred by</dt>
+                        <dd className="text-theme-text-primary">{applicant.referred_by_name}</dd>
+                      </div>
+                    )}
+                    {applicant.interest_reason && (
+                      <div>
+                        <dt className="text-theme-text-muted text-xs">Why they want to join</dt>
+                        <dd className="text-theme-text-primary break-words whitespace-pre-wrap">
+                          {applicant.interest_reason}
+                        </dd>
+                      </div>
+                    )}
+                  </dl>
+                </section>
+              )}
+
               {/* Application Data — always visible regardless of current step */}
               {(() => {
                 const formArtifact = applicant.stage_history

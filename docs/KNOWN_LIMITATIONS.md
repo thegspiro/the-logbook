@@ -1660,7 +1660,17 @@ term shows "Not applied yet — press Enter or Apply to search" under the box,
 linked to the input by `aria-describedby`. A filled box above unfiltered rows
 now says so. `AuditLogPage.searchApply.test.tsx` covers it.
 
-## Prospects — `referral_source` Is Stored But Never Shown (2026-08-10)
+## Prospects — `referral_source` Is Stored But Never Shown (2026-08-10, resolved 2026-10-11)
+
+**✅ Resolved 2026-10-11 (owner decision: show in the drawer — add to the
+`Applicant` type and mapper).** `referral_source`, `interest_reason` and the
+referrer are now on `Applicant`, mapped by `mapProspectToApplicant`, and shown
+in the drawer's **How They Found Us** section. `referred_by` is a user id, so
+the detail response gained `referred_by_name` (resolved in `get_prospect`,
+never stored); it is filled only when the referrer belongs to the prospect's
+organization, so a legacy cross-org `referred_by` names nobody. The list
+endpoint still omits the three fields — the drawer is the place to read them.
+The history below is kept for context.
 
 A guest sign-in stamps the prospect's `referral_source` with
 `"Attended: <event name>"`, and the detail endpoint returns it. No screen

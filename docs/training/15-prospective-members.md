@@ -481,6 +481,10 @@ the sections that do not apply to this applicant are simply absent:
 
 - **Contact Information**: Email and phone, editable in place
 - **Desired Membership Type**: Regular or administrative
+- **How They Found Us**: the referral source (a guest sign-in records
+  "Attended: _event name_"), the member who referred them, and why they want to
+  join — each line only when it is on file, and the section is absent when none
+  is. A referrer from another department is never named.
 - **Application Data**: What they submitted, when there is a linked application
 - **Current Stage**: The stage and when they entered it
 - **Linked Events**: Orientations, ride-alongs and open houses, with **Link Event**

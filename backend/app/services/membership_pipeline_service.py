@@ -1562,6 +1562,7 @@ class MembershipPipelineService:
                 # blocked advancing anyone past it, including in bulk.
                 selectinload(ProspectiveMember.interviews),
                 selectinload(ProspectiveMember.target_role),
+                selectinload(ProspectiveMember.referrer),
             )
             # Refresh identity-map instances: the prospect's pipeline/steps
             # may already be cached in this session from an earlier call, and
@@ -1588,6 +1589,17 @@ class MembershipPipelineService:
             # leave a stale copy on every application that wanted it.
             prospect.target_role_name = (
                 prospect.target_role.name if prospect.target_role else None
+            )
+            # The drawer shows who referred the applicant, and a member id is
+            # not a name. Only an in-org referrer is named: rows written
+            # before referred_by was validated may point at another
+            # department's member, whose name must not cross over (XC-1).
+            referrer = prospect.referrer
+            prospect.referred_by_name = (
+                referrer.display_name
+                if referrer is not None
+                and str(referrer.organization_id) == str(prospect.organization_id)
+                else None
             )
         return prospect
 

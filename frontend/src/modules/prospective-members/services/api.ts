@@ -375,6 +375,9 @@ export function mapProspectToApplicant(data: BackendProspectResponse): Applicant
     // reader and no producer until the columns landed.
     target_role_id: data.target_role_id || undefined,
     target_role_name: data.target_role_name || undefined,
+    referral_source: data.referral_source || undefined,
+    interest_reason: data.interest_reason || undefined,
+    referred_by_name: data.referred_by_name || undefined,
     deactivated_at: data.deactivated_at || undefined,
     deactivated_reason: data.deactivated_reason || undefined,
     reactivated_at: data.reactivated_at || undefined,
