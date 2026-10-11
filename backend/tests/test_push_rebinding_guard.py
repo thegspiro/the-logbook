@@ -45,6 +45,50 @@ def test_rebinding_or_mixed_dns_never_reaches_webpush(service, monkeypatch, answ
     outbound.assert_not_called()
 
 
+@pytest.mark.parametrize("environment", ["development", "test", "prod", ""])
+def test_any_environment_name_is_pinned_by_default(service, monkeypatch, environment):
+    """MSG-15: pinning used to run only for ENVIRONMENT exactly "production"
+    or "staging", so a deployment left at the default sent unpinned."""
+    monkeypatch.setattr(push_module.settings, "ENVIRONMENT", environment)
+    monkeypatch.setattr(
+        push_module.socket, "getaddrinfo", lambda *args, **kw: [_answer("127.0.0.1")]
+    )
+    outbound = MagicMock()
+    monkeypatch.setattr(push_module, "webpush", outbound)
+
+    with pytest.raises(ValueError, match="public IPs"):
+        service._send_one(_SUB, "{}")
+
+    outbound.assert_not_called()
+
+
+def test_the_test_only_bypass_sends_unpinned(service, monkeypatch):
+    monkeypatch.setattr(push_module.settings, "ENVIRONMENT", "development")
+    monkeypatch.setattr(push_module, "_UNPINNED_SENDS_FOR_TESTS", True)
+    outbound = MagicMock()
+    monkeypatch.setattr(push_module, "webpush", outbound)
+
+    service._send_one(_SUB, "{}")
+
+    assert outbound.call_args.kwargs["requests_session"] is None
+
+
+@pytest.mark.parametrize("environment", ["production", "staging"])
+def test_the_bypass_never_unpins_production(service, monkeypatch, environment):
+    monkeypatch.setattr(push_module.settings, "ENVIRONMENT", environment)
+    monkeypatch.setattr(push_module, "_UNPINNED_SENDS_FOR_TESTS", True)
+    monkeypatch.setattr(
+        push_module.socket, "getaddrinfo", lambda *args, **kw: [_answer("10.0.0.1")]
+    )
+    outbound = MagicMock()
+    monkeypatch.setattr(push_module, "webpush", outbound)
+
+    with pytest.raises(ValueError, match="public IPs"):
+        service._send_one(_SUB, "{}")
+
+    outbound.assert_not_called()
+
+
 def test_validated_address_is_bound_to_transport_and_tls_name(service, monkeypatch):
     monkeypatch.setattr(push_module.settings, "ENVIRONMENT", "production")
     monkeypatch.setattr(

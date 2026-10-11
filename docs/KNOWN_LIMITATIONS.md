@@ -3602,6 +3602,15 @@ idempotency mechanism, not an access-control defect.
 
 ## MSG-15 — Web Push's Send-Time DNS-Rebinding Pin Is Skipped Outside `ENVIRONMENT in ("production", "staging")` (2026-09-06)
 
+> ✅ **Resolved (2026-10-11), as the owner chose: pin by default, with an
+> explicit test-only bypass.** `PushService._send_one` now pins every send
+> whatever `ENVIRONMENT` says. The only way round it is the module attribute
+> `push_service._UNPINNED_SENDS_FOR_TESTS`, which `tests/test_push_service.py`
+> sets so its local stand-in push service can be reached; it is not a setting,
+> so no deployment can switch it on, and production/staging pin even if it
+> were. Guard tests in `tests/test_push_rebinding_guard.py`. The history below
+> is kept as the record.
+
 `PushService._send_one` only builds the IP-pinned `requests` session that
 closes the check/use DNS-rebinding window
 (`_pinned_session`/`_resolve_public_address`) when `settings.ENVIRONMENT`

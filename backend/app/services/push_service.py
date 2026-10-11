@@ -194,6 +194,22 @@ class _PinnedHTTPSAdapter(requests.adapters.HTTPAdapter):
         return super().send(request, **kwargs)
 
 
+# Test-only bypass of the send-time pin (MSG-15). Every send is pinned unless
+# a test flips this, which the push tests do so a local stand-in push service
+# at http://127.0.0.1 can be reached. It is a module attribute and not a
+# setting on purpose: no environment variable or ENVIRONMENT value can turn
+# pinning off on a real deployment, and production/staging pin even if it is
+# set. Gating on ENVIRONMENT alone left every deployment not named exactly
+# "production" or "staging" unpinned.
+_UNPINNED_SENDS_FOR_TESTS = False
+
+
+def _pin_this_send() -> bool:
+    if settings.ENVIRONMENT in ("production", "staging"):
+        return True
+    return not _UNPINNED_SENDS_FOR_TESTS
+
+
 def _pinned_session(endpoint: str) -> requests.Session:
     hostname, address = _resolve_public_address(endpoint)
     session = _NoRedirectSession()
@@ -423,7 +439,7 @@ class PushService:
     def _send_one(self, sub_info: Dict[str, Any], payload: str) -> None:
         """Blocking pywebpush call, run off the event loop by the caller."""
         session = None
-        if settings.ENVIRONMENT in ("production", "staging"):
+        if _pin_this_send():
             # pywebpush accepts a requests session. Its adapter pins the socket
             # to the address validated above while preserving SNI and hostname
             # verification, closing the check/use DNS-rebinding window.
