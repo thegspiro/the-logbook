@@ -9,6 +9,7 @@ import type {
   FormsSummary,
   FormsListResponse,
   FormDetailDef,
+  FormPublishWarning,
   FormCreate,
   FormUpdate,
   FormFieldCreate,
@@ -58,6 +59,11 @@ export const formsService = {
 
   async deleteForm(formId: string): Promise<void> {
     await api.delete(`/forms/${formId}`);
+  },
+
+  async getPublishWarnings(formId: string): Promise<FormPublishWarning[]> {
+    const response = await api.get<{ warnings: FormPublishWarning[] }>(`/forms/${formId}/publish-warnings`);
+    return response.data.warnings;
   },
 
   async publishForm(formId: string): Promise<FormDetailDef> {

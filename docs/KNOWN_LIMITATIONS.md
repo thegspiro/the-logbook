@@ -144,10 +144,16 @@ but produces no pipeline row, with the reason on the submission's
 Migration `d19b2c2ae9b9` turns the toggle on for every organization that
 already had a published, public request form at upgrade time, so no existing
 department loses requests. **A department publishing its first request form
-after that upgrade must also turn the toggle on** — the settings screen does
-not yet couple the two, and the symptom is a form that accepts submissions and
-files no requests. Coupling them (or warning on the Forms publish action) is an
-open product decision.
+after that upgrade must also turn the toggle on** — the two are not coupled,
+and the symptom is a form that accepts submissions and files no requests.
+**Owner decision (2026-10-11): warn on publish.** Publishing on the Forms
+screen first reads `GET /forms/{id}/publish-warnings`; for a public form that
+files event requests while the toggle is off, it asks **Publish this form?**
+with the reason, and **Not yet** leaves the form a draft. The warning reuses the
+condition the intake refuses on, so the two cannot disagree
+(`tests/test_form_publish_warnings.py`, `FormsPage.publishWarning.test.tsx`).
+Turning a form public after it is published, or switching the toggle off later,
+does not warn — publishing is the one moment the owner chose.
 
 ## Claude (MCP) — Member Sign-In (OAuth) Residuals (2026-10-06)
 

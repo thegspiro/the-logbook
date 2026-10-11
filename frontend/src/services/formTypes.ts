@@ -123,6 +123,12 @@ export interface FormDef {
   created_by?: string;
 }
 
+/** `GET /forms/{id}/publish-warnings`: what publishing will not do, for the publish confirmation. */
+export interface FormPublishWarning {
+  code: string;
+  message: string;
+}
+
 export interface FormDetailDef extends FormDef {
   fields: FormField[];
   integrations: FormIntegration[];

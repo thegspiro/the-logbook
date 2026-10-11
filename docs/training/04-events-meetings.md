@@ -1404,7 +1404,9 @@ The Events module includes a **Public Outreach Request Pipeline** that lets comm
 2. Under **Pipeline**, switch on **Accept Public Requests**. It gates **both**
    ways a request arrives: the public request API and a Forms-module event
    request form (the kind **Generate Event Request Form** produces). While it
-   is off, a published form stops creating requests.
+   is off, a published form stops creating requests. Publishing such a form
+   from the Forms screen while it is off asks **Publish this form?** and says
+   so; choose **Not yet**, turn this on, and publish again.
 3. Under **Outreach Types**, add the program types your department offers:
    - Click **Add Type**, enter a key (e.g., `fire_safety_demo`) and label (e.g., "Fire Safety Demonstration")
    - These appear as options on the public request form
