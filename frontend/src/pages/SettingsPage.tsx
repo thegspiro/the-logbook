@@ -44,6 +44,7 @@ import {
   HeartPulse,
   Wallet,
   Printer,
+  AtSign,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getErrorMessage, toAppError } from '../utils/errorHandling';
@@ -57,6 +58,7 @@ import StorageSettingsSection from '../components/settings/StorageSettingsSectio
 import AuthSettingsSection from '../components/settings/AuthSettingsSection';
 import { MfaPolicyCard } from '../components/settings/MfaPolicyCard';
 import LabelPrintersSection from '../components/settings/LabelPrintersSection';
+import DepartmentEmailSection from '../components/settings/DepartmentEmailSection';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
 import SettingsPanelHead from '../components/settings/SettingsPanelHead';
 import { useSettingsAutosave } from '../hooks/useSettingsAutosave';
@@ -69,7 +71,7 @@ import { useEmailConnectionTest } from '../hooks/useEmailConnectionTest';
 // than derived from `sections`, so removing the entry above does not remove the
 // key here — and a stale key makes the render switch non-exhaustive, which is
 // how a removed section becomes a blank panel instead of a compile error.
-type SectionKey = 'general' | 'modules' | 'email' | 'storage' | 'labelPrinters' | 'authentication';
+type SectionKey = 'general' | 'modules' | 'email' | 'departmentEmail' | 'storage' | 'labelPrinters' | 'authentication';
 
 /**
  * Sub-pages across every section. One flat union rather than one per section:
@@ -102,6 +104,12 @@ const SECTIONS: SettingsSection<SectionKey, SubPageKey>[] = [
     ],
   },
   { key: 'email', label: 'Email', icon: Mail, description: 'Email platform and notification settings' },
+  {
+    key: 'departmentEmail',
+    label: 'Department Email',
+    icon: AtSign,
+    description: 'Addresses on your domain for new members',
+  },
   { key: 'storage', label: 'Storage', icon: HardDrive, description: 'File storage platform configuration' },
   {
     key: 'labelPrinters',
@@ -1300,6 +1308,12 @@ export const SettingsPage: React.FC = () => {
             profileName={profile?.name}
           />
         );
+
+      // ════════════════════════════════════════════
+      // DEPARTMENT EMAIL
+      // ════════════════════════════════════════════
+      case 'departmentEmail':
+        return <DepartmentEmailSection />;
 
       // ════════════════════════════════════════════
       // STORAGE

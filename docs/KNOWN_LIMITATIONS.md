@@ -2763,6 +2763,17 @@ rather than added here. See INV-28 in the same security-review doc.
 
 ## Membership — Department Email Generation Has No Settings Screen (2026-08-12)
 
+**✅ Resolved 2026-10-11 (owner decision: build a Department Email section in
+Organization settings).** **Settings → Organization → Department Email** now
+has the switch, the domain and the address format, with a live example, and an
+explicit Save (not autosave — half a domain must never be what a conversion
+uses). It refuses to save "on" without a domain, and normalizes what is typed
+(trims, drops a leading "@", lowercases) and rejects a URL. It writes through
+the general `PATCH /organization/settings`, which the generator already reads;
+`tests/test_department_email_settings_roundtrip.py` pins that the saved value
+drives the generated address and that switching it off stops generation. The
+original entry follows.
+
 The backend implements department email generation end to end.
 `DepartmentEmailSettings` (`enabled`, `domain`, `format`) is a real field on
 organization settings, `PUT /organizations/{id}/settings` accepts it, and

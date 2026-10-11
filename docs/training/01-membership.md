@@ -580,10 +580,12 @@ There are four formats:
 | firstlast                    | johnsmith@firedept.org  |
 | last.first                   | smith.john@firedept.org |
 
-> **Important.** There is no settings screen for this. It is off unless
-> someone has switched it on outside the app, with a domain and a format. Ask
-> your IT manager whether it is on for your department. See
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#membership--department-email-generation-has-no-settings-screen-2026-08-12).
+**To switch it on:** open **Settings → Organization → Department Email**.
+Switch on **Create department email addresses**, enter your domain
+(`firedept.org` — no `@`, no `https://`), pick a format, and select **Save**.
+The screen shows the address Jane Doe would get. It will not save the switch
+on without a domain. It is off by default. The setting applies to the next
+conversion; existing members' email addresses are not changed.
 
 When it is on:
 
@@ -2813,7 +2815,6 @@ have moved, been renamed or work differently.
   **Reject Selected**. They act only on the applicants you ticked.
 - There is no **Delete Member** button on the profile page. Deleting is a row
   action on **Members** or in **Member Management**.
-- There is no **Settings → Organization → Department Email** screen.
 
 ### Works differently now
 
