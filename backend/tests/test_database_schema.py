@@ -461,6 +461,10 @@ class TestColumnConstraints:
             # acting user) have no owning tenant; org-attributed rows are
             # stamped at write time and hash-bound from version 3 onward.
             "audit_logs",
+            # A public-portal request whose API key matches no stored key
+            # cannot be attributed to a tenant (PUB-8). Every per-org reader
+            # filters on organization_id, so these rows reach no department.
+            "public_portal_access_log",
         }
         for table_name, table in _tables.items():
             if "organization_id" in table.columns:
