@@ -3,8 +3,8 @@
  *
  * One decision per distinct person in the file, not per row. Exact matches by
  * membership number, email, username or name are settled automatically; the
- * reviewer maps the rest to an existing member or creates them as an inactive
- * record. A close name ("J. Smith" for "John Smith") is never matched for
+ * reviewer maps the rest to an existing member or creates them as an archived
+ * former-member record. A close name ("J. Smith" for "John Smith") is never matched for
  * them — it is listed here to be mapped by hand.
  */
 
@@ -76,7 +76,7 @@ const ReviewMembers: React.FC<ReviewMembersProps> = ({ analysis, busy, onMapping
                 })
               }
             >
-              Create all {creatable.length} unmatched as inactive
+              Create all {creatable.length} unmatched as archived
             </button>
           )}
           <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
@@ -138,7 +138,7 @@ const ReviewMembers: React.FC<ReviewMembersProps> = ({ analysis, busy, onMapping
                     <option value={AUTOMATIC}>
                       {member.status === 'matched' ? 'Matched automatically' : 'Choose…'}
                     </option>
-                    <option value={CREATE}>Create as an inactive member</option>
+                    <option value={CREATE}>Create as an archived former member</option>
                     <optgroup label="Map to an existing member">
                       {analysis.options.members
                         .slice()

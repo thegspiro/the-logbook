@@ -70,7 +70,7 @@ describe('history import labels', () => {
 
   it('names existing and new members', () => {
     expect(memberLabel(analysis, 'u-1')).toBe('Alice Ng');
-    expect(memberLabel(analysis, 'new:number:77')).toBe('Dana Former (new, inactive)');
+    expect(memberLabel(analysis, 'new:number:77')).toBe('Dana Former (new, archived)');
     expect(memberLabel(analysis, 'u-missing')).toBe('Unknown member');
   });
 

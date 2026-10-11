@@ -17,6 +17,8 @@ import type {
   BoardSort,
   DispositionUpdate,
   MySuggestionSummary,
+  PickKind,
+  PickOption,
   ReviewerOptions,
   ReviewFilter,
   ReviewSuggestionDetail,
@@ -32,6 +34,16 @@ import type {
 export const suggestionsService = {
   async listBoxes(): Promise<SuggestionBoxPublic[]> {
     const response = await api.get<SuggestionBoxPublic[]>('/suggestions/boxes');
+    return asArray(response.data);
+  },
+
+  /**
+   * The whole list for a pick question, filtered in the browser. Never a
+   * search request: what a member types is who they are reporting, and a
+   * query string would put it in the access log beside their address.
+   */
+  async pickOptions(kind: PickKind): Promise<PickOption[]> {
+    const response = await api.get<PickOption[]>('/suggestions/pick-options', { params: { kind } });
     return asArray(response.data);
   },
 

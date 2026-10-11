@@ -343,7 +343,7 @@ training record, an expiry is corrected by editing the training record that prod
 setting **Certifies** on a course does not backfill records already filed
 against it. Recorded as QUAL-1 in KNOWN_LIMITATIONS.md; resolved 2026-10-06 by
 the profile's Qualifications card and the qualifications CSV import — see
-[Entering Qualifications Directly](./training/01-membership.md#entering-qualifications-directly-2026-10-06).
+[Entering Qualifications Directly](./training/01-membership.md#entering-qualifications-directly).
 
 **An earlier draft of this audit said there was no write path at all**, and the
 training guides and screenshot plan inherited that. The mistake came from

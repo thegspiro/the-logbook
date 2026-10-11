@@ -1796,7 +1796,7 @@ expiration aboard.
 This is the direction a **recall** is worked from — you are holding the item and
 need to know which rigs to go to. The opposite direction ("what is expiring on my
 trucks") is the supply worklist at **Scheduling → Supply**; see
-[Shifts & Scheduling → Supply Tracking](./03-scheduling.md#supply-tracking-keeping-the-truck-and-the-shelf-in-step-2026-08-10).
+[Shifts & Scheduling → Supply Tracking](./03-scheduling.md#supply-tracking-keeping-the-truck-and-the-shelf-in-step).
 
 ### Stock Lot Edge Cases
 
@@ -2051,7 +2051,7 @@ Instead of searching by name, you can scan a member's QR code or barcode ID card
 
 This is especially useful on mobile during equipment distribution events where you need to process many members quickly.
 
-> **Hint:** Member ID scanning reads the member's **badge code**, which The Logbook issues for every member and which only a badge printed from the Member ID Card feature carries. The scanner asks the server, which answers only for members of your own department, so a hand-made QR code selects nobody. Cards printed before 2026-10-05 (membership number or short id) still scan until an administrator turns off **Accept old badges** (see [Badge codes](./01-membership.md#badge-codes-2026-10-05)). If the scan fails, fall back to name search.
+> **Hint:** Member ID scanning reads the member's **badge code**, which The Logbook issues for every member and which only a badge printed from the Member ID Card feature carries. The scanner asks the server, which answers only for members of your own department, so a hand-made QR code selects nobody. Cards printed before 2026-10-05 (membership number or short id) still scan until an administrator turns off **Accept old badges** (see [Badge codes](./01-membership.md#badge-codes)). If the scan fails, fall back to name search.
 
 ### Assigning Items from the Members Tab
 
@@ -3403,7 +3403,7 @@ are drawn from the same stock.
 
 **The old `/scheduling/equipment*` addresses no longer resolve** and land on the
 dashboard. The full before/after table is in
-[Scheduling → Equipment Check System](./03-scheduling.md#equipment-check-system),
+[Scheduling → Equipment Checks](./03-scheduling.md#equipment-checks),
 and the workflow itself is documented there and is unchanged.
 
 **Crews are unaffected at the point of use.** Check-in and the shift detail panel

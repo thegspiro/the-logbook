@@ -269,7 +269,7 @@ not merely in the sub-millisecond window before any organization exists. That
 made `create_system_owner`'s own single-owner guard (a plain read-then-write,
 never itself locked) newly and directly reachable as a two-caller race rather
 than only as a single-session replay: reproduced against a real database, two
-concurrent `POST /system-owner` calls both created a full-access "*" account.
+concurrent `POST /system-owner` calls both created a full-access "\*" account.
 Fixed the same way as this entry's own singleton race — lock the parent
 (`onboarding_status`, guaranteed to exist and be unique by this point) and make
 the existence check itself a locking read. See
@@ -1577,6 +1577,51 @@ exports are. Until then, `docs/training/16-integrations.md` says plainly that
 only the test runs, and its webhook payload example now matches what is
 actually sent (`event_type`, a Unix `timestamp`, a `sha256=`-prefixed
 signature) rather than the earlier invented shape.
+
+## Scheduling — Settings That Do Nothing, and Two Mismatches (2026-10-11)
+
+Found while rewriting `docs/training/03-scheduling.md` in plain language, and
+each checked against the code. The guide now describes what actually happens;
+whether to wire, relabel or remove each one is the owner's decision. Items 1–3
+are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
+
+1. **"Require officer shift completion report"** (Shift Reports settings). Its
+   only reader is the shift reminder (`scheduled_tasks.py`, ~line 1894), which
+   adds "A shift completion report is required before this shift can be
+   finalized." `finalize_shift` (`scheduling_service.py`) never checks for a
+   report, so a shift closes out without one despite the reminder's claim.
+2. **"Reviewer role"** (Shift Reports settings). Saved as
+   `report_review_role` in the training module config and read by nothing.
+   Approving reports is gated on `training.manage` alone
+   (`shift_completion.py`), so changing the role changes nothing.
+3. **Department Defaults** (default duration, minimum staffing, overtime
+   threshold). Stored and shown on the settings summary, but nothing applies
+   them: new shifts and templates do not pick them up, and no overtime warning
+   reads the threshold.
+4. **Start-of-shift reminder emails default on in the backend, off on the
+   screen.** `scheduled_tasks.py` (~line 2358) reads
+   `reminder_cfg.get("send_email", True)` ("sent by default"); the
+   Notifications panel's default is `send_email: false` and nothing seeds
+   `shift_reminders` when a department is created. Until someone saves that
+   panel, crews receive reminder emails while the box shows unticked. The
+   function's own docstring says the default is False.
+5. **Eligibility screen promises an override the server refuses.** The
+   membership-type exclusion card says "Admins can still assign them
+   manually", but officer assignment runs the eligibility check
+   (`enforce_position_eligibility=True`), which returns no positions for an
+   excluded type, and the assignment is refused with "Member is no longer
+   eligible for this shift". Shifts open to all members and administrative
+   members are the exceptions.
+6. **"Manage schedules" sees assign controls the server refuses.**
+   `ShiftDetailPanel.tsx` and `OpenShiftsTab.tsx` show **Assign someone** to
+   `scheduling.manage` holders, but creating, editing or removing an assignment
+   requires `scheduling.assign` or being the shift officer
+   (`endpoints/scheduling.py`); `scheduling.manage` does not imply it. The
+   officer fills the form and gets "Insufficient permissions".
+7. **A shift-panel hint points to a tab that no longer exists.**
+   `ShiftDetailPanel.tsx` (~line 3114) reads "Start check → Go to Checklists
+   tab". Equipment checks moved to Inventory; the working route is the panel's
+   **Complete Checklists** button.
 
 ## Admin — No Scheduled Tasks Page (2026-08-09)
 
@@ -4658,6 +4703,46 @@ affected shift the moment it deployed.
 
 Either way the gate stops depending on a reference nothing maintains. Until one
 is chosen, the log line is the only signal.
+
+## FAC2-5 — The Cross-Facility Maintenance And Inspection Lists Show At Most 100 Records (2026-10-11)
+
+`GET /facilities/maintenance` and `GET /facilities/inspections` both default to
+`limit=100` (max 500) and neither accepts a `search` parameter. The two
+cross-facility screens — `/facilities/maintenance` and
+`/facilities/inspections` — load one such page and then filter it in the browser.
+
+**One half of this was a live defect and is fixed** (FAC2-4, app-review B4 pass
+5). The maintenance endpoint already accepted `is_overdue` and `is_completed`
+and the screen simply was not forwarding them, so the dashboard's org-wide
+"Overdue maintenance" count could deep-link to a list that rendered "No
+maintenance records found" — the endpoint orders by `desc(created_at)`, and an
+overdue record is by nature an old one, so the truncation preferentially
+discarded exactly what the filter was looking for. The screen now asks the
+server for the filtered set.
+
+**What remains is an owner decision, because it needs an API change:**
+
+1. **The inspections "pending" tab cannot be resolved server-side at all.** The
+   endpoint takes `passed: bool | None`, where `None` means _no filter_ — so
+   "passed" and "failed" are expressible and "awaiting a result"
+   (`passed IS NULL`) is not. Forwarding two of the three and leaving the third
+   on a loaded page would make the screen's correctness vary by tab, so none of
+   them was changed. The fix is a tri-state `result` parameter
+   (`passed` / `failed` / `pending`) or a documented null sentinel.
+2. **Text search is still client-side on both screens**, so it matches within
+   the returned page rather than the organization. Searching a vendor name that
+   appears only on an older record finds nothing, with no indication that the
+   search was partial.
+3. **Neither screen paginates.** Even with the filter forwarded, an
+   organization with more than 100 overdue records sees a silently truncated
+   list. Maintenance records accumulate permanently and include back-dated
+   historic entries, so this is a matter of time rather than of scale.
+
+The shape of the fix is the one `GET /facilities/page` already uses for the
+facility grid: total metadata plus pages, with filters and search applied by the
+server. Doing it for these two endpoints would close all three items at once.
+Until then the two screens are reliable for small organizations and quietly
+partial for large ones.
 
 ## Process
 

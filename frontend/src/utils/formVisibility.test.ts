@@ -62,6 +62,38 @@ describe('conditionMatches', () => {
   });
 });
 
+describe('numeric rules (test_form_branching.py TestNumericRules)', () => {
+  const shown = (operator: string, threshold: string, answer?: string) =>
+    getVisibleFieldIds(
+      [field('years', 'number'), field('mentor', 'text', ['years', operator, threshold])],
+      answer === undefined ? {} : { years: answer }
+    ).has('mentor');
+
+  it.each([
+    ['at_least', '5', true],
+    ['at_least', '10', true],
+    ['at_least', '4.5', false],
+    ['at_most', '5', true],
+    ['at_most', '2', true],
+    ['at_most', '6', false],
+  ] as const)('%s 5 against %s is %s, inclusive', (operator, answer, expected) => {
+    expect(shown(operator, '5', answer)).toBe(expected);
+  });
+
+  it('compares 10 and 9 as numbers, not as text', () => {
+    expect(shown('at_least', '9', '10')).toBe(true);
+  });
+
+  it.each([undefined, '', 'lots'])('meets no threshold with the answer %s', (answer) => {
+    expect(shown('at_least', '1', answer)).toBe(false);
+    expect(shown('at_most', '1', answer)).toBe(false);
+  });
+
+  it('fails closed on an unusable threshold', () => {
+    expect(shown('at_least', 'many', '3')).toBe(true);
+  });
+});
+
 describe('getDescendantFieldIds', () => {
   it('returns the field and everything that branches from it', () => {
     expect(getDescendantFieldIds(intake, 'certified')).toEqual(new Set(['certified', 'which', 'card']));

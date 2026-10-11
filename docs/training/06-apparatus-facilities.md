@@ -1015,7 +1015,7 @@ its tracked positions, the lots and expiration dates aboard each one, and the
 ready stock on the shelf behind it. A crew can record what they used at the
 moment they use it rather than waiting for the next morning's check.
 
-See [Shifts & Scheduling → Supply Tracking](./03-scheduling.md#supply-tracking-keeping-the-truck-and-the-shelf-in-step-2026-08-10)
+See [Shifts & Scheduling → Supply Tracking](./03-scheduling.md#supply-tracking-keeping-the-truck-and-the-shelf-in-step)
 for the full workflow, and
 [Inventory → Dated Stock Lots and Receiving](./05-inventory.md#dated-stock-lots-and-receiving-2026-08-10)
 for the shelf side of it.

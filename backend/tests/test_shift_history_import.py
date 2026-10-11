@@ -8,7 +8,7 @@ The matching rules themselves are covered without a database in
 * **A commit writes what every hours reader counts** — a finalized shift,
   a confirmed assignment and an attendance row per member, or outside-agency
   hours — and nothing it should not: no notifications, no completion drafts.
-* **Former members become inactive records**, never accounts that can sign in.
+* **Former members become archived records**, never accounts that can sign in.
 * **A commit is final**, and importing the same history again adds nothing.
 """
 
@@ -366,7 +366,7 @@ class TestCommit:
         assert draft.summary["external_units_created"] == 1
         assert draft.summary["external_hours_created"] == 1
 
-    async def test_former_member_becomes_an_inactive_record(self, db_session, world):
+    async def test_former_member_becomes_an_archived_record(self, db_session, world):
         _, draft = await self._committed(
             db_session,
             world,
@@ -381,7 +381,8 @@ class TestCommit:
                 )
             )
         ).scalar_one()
-        assert created.status == UserStatus.INACTIVE
+        assert created.status == UserStatus.ARCHIVED
+        assert created.archived_at is not None
         # A record of someone who served, not a login.
         assert not created.is_active
         assert created.password_hash is None
