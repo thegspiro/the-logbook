@@ -593,7 +593,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                       />
                       <button
                         onClick={reminderCc.add}
-                        className="touch:min-h-11 rounded-lg bg-green-700 px-3 py-1 text-xs text-white hover:bg-green-800"
+                        className="touch:min-h-11 rounded-lg bg-green-800 px-3 py-1 text-xs text-white hover:bg-green-900"
                       >
                         Add
                       </button>
