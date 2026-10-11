@@ -1007,9 +1007,11 @@ When an event reaches its capacity limit:
 3. Waitlisted members are notified when promoted to "Going" — **in the app
    only**. No email goes out, so a member who reads only their inbox does not
    learn their seat is confirmed; tell them yourself if it matters (recorded as
-   an open item in `docs/KNOWN_LIMITATIONS.md`, 2026-09-28). An automatic
-   promotion also does not appear in **RSVP Activity**: the feed still shows the
-   member's "RSVP'd as Waitlisted" while the list above shows them Going
+   an open item in `docs/KNOWN_LIMITATIONS.md`, 2026-09-28). Since
+   2026-10-11 an automatic promotion appears in **RSVP Activity** as "… was
+   moved from Waitlisted to Going (automatically, when a spot opened up)", so
+   it is not mistaken for the member's own change. Promotions made before that
+   date were not recorded and do not appear
 4. The waitlist position is visible on the event detail page
 
 > **Edge case:** Waitlisted attendees are promoted in the order they RSVP'd. If multiple spots open simultaneously, multiple waitlisted members are promoted in order.

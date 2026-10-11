@@ -2049,6 +2049,7 @@ class EventService:
                     "new_status": entry.new_status,
                     "changed_at": entry.changed_at,
                     "changed_by": entry.changed_by,
+                    "is_automatic": bool(entry.is_automatic),
                     "user_name": user_names.get(entry.user_id, "Unknown"),
                     "changer_name": (
                         user_names.get(entry.changed_by, "Unknown")
@@ -2147,6 +2148,20 @@ class EventService:
 
         waitlisted_rsvp.status = RSVPStatus.GOING
         waitlisted_rsvp.updated_at = datetime.now(dt_timezone.utc)
+
+        # W19-3: record the promotion in RSVP Activity, marked automatic. A row
+        # with only a null changed_by would read as the member's own change.
+        self.db.add(
+            RSVPHistory(
+                rsvp_id=waitlisted_rsvp.id,
+                event_id=str(event_id),
+                user_id=str(waitlisted_rsvp.user_id),
+                old_status=RSVPStatus.WAITLISTED.value,
+                new_status=RSVPStatus.GOING.value,
+                changed_at=datetime.now(dt_timezone.utc),
+                is_automatic=True,
+            )
+        )
 
         await self.db.commit()
         await self.db.refresh(waitlisted_rsvp)

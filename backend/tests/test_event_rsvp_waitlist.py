@@ -720,6 +720,32 @@ class TestPromoteFromWaitlist:
         source = inspect.getsource(EventService.promote_from_waitlist)
         assert "1 + EventRSVP.guest_count <= event.max_attendees" in source
 
+    async def test_promotion_is_recorded_as_automatic_in_rsvp_history(self):
+        """W19-3: the promotion writes an rsvp_history row marked automatic,
+        so RSVP Activity does not end at "waitlisted" for a member listed as
+        Going, and does not credit the member with the change either."""
+        from app.models.event import RSVPHistory
+
+        ev = _event(max_attendees=5)
+        waitlisted = _waitlisted()
+        db = _db([_one(ev), _one(waitlisted), _scalar(3)])
+        await EventService(db).promote_from_waitlist("e1", "org-1")
+
+        added = [c.args[0] for c in db.add.call_args_list if c.args]
+        rows = [h for h in added if isinstance(h, RSVPHistory)]
+        assert len(rows) == 1
+        row = rows[0]
+        assert row.is_automatic is True
+        assert row.changed_by is None
+        assert (row.old_status, row.new_status) == ("waitlisted", "going")
+        assert (row.rsvp_id, row.user_id, row.event_id) == ("r1", "u9", "e1")
+
+    async def test_no_promotion_writes_no_history(self):
+        ev = _event(max_attendees=2)
+        db = _db([_one(ev), _one(_waitlisted()), _scalar(2)])
+        await EventService(db).promote_from_waitlist("e1", "org-1")
+        db.add.assert_not_called()
+
     async def test_promotion_notifies_member(self):
         from app.models.notification import NotificationLog
 

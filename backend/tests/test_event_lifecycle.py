@@ -621,6 +621,49 @@ class TestEventRSVP:
         assert err2 is None
         assert rsvp2.status.value == "waitlisted"
 
+    async def test_automatic_promotion_appears_in_rsvp_history(
+        self, db_session, setup_org_and_users
+    ):
+        """W19-3: a decline that frees a seat promotes the waitlisted member,
+        and RSVP Activity shows that move as automatic rather than as the
+        member's own change."""
+        org_id, user_id, user2_id = setup_org_and_users
+        svc = EventService(db_session)
+        event = await svc.create_event(
+            event_data=_make_event_create(
+                title="One Seat", requires_rsvp=True, max_attendees=1
+            ),
+            organization_id=uuid.UUID(org_id),
+            created_by=uuid.UUID(user_id),
+        )
+        for uid in (user_id, user2_id):
+            await svc.create_or_update_rsvp(
+                event_id=uuid.UUID(event.id),
+                user_id=uuid.UUID(uid),
+                rsvp_data=RSVPCreate(status="going"),
+                organization_id=uuid.UUID(org_id),
+            )
+        await svc.create_or_update_rsvp(
+            event_id=uuid.UUID(event.id),
+            user_id=uuid.UUID(user_id),
+            rsvp_data=RSVPCreate(status="not_going"),
+            organization_id=uuid.UUID(org_id),
+        )
+
+        history = await svc.get_rsvp_history(
+            event_id=uuid.UUID(event.id), organization_id=uuid.UUID(org_id)
+        )
+        promoted = [
+            h
+            for h in history
+            if h["user_id"] == user2_id and h["old_status"] == "waitlisted"
+        ]
+        assert len(promoted) == 1
+        assert promoted[0]["new_status"] == "going"
+        assert promoted[0]["is_automatic"] is True
+        assert promoted[0]["changed_by"] is None
+        assert all(not h["is_automatic"] for h in history if h is not promoted[0])
+
     async def test_resubmitting_a_waitlisted_rsvp_cannot_jump_the_queue(
         self, db_session, setup_org_and_users
     ):

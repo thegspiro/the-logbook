@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**303 tables · 4998 columns · 1008 foreign keys**
+**303 tables · 4999 columns · 1008 foreign keys**
 
 ---
 
@@ -205,7 +205,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`event_rsvps`](#event_rsvps) | `EventRSVP` | 21 | Event RSVP model for tracking attendance |
 | [`event_templates`](#event_templates) | `EventTemplate` | 29 | Event Template model for reusable event configurations |
 | [`events`](#events) | `Event` | 55 | Event model for managing department events |
-| [`rsvp_history`](#rsvp_history) | `RSVPHistory` | 8 | RSVP History model for tracking RSVP status changes. |
+| [`rsvp_history`](#rsvp_history) | `RSVPHistory` | 9 | RSVP History model for tracking RSVP status changes. |
 
 ### External_Shift_Hours
 
@@ -2902,6 +2902,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `new_status` | VARCHAR(20) | no |  |  |  |
 | `changed_at` | DATETIME | no | IDX | `now()` |  |
 | `changed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `is_automatic` | BOOL | no |  | `0` |  |
 
 **Indexes**
 
