@@ -7739,19 +7739,47 @@ class InventoryService:
         if not candidates:
             return []
 
-        lot_totals = await self._in_date_lot_totals(
-            str(organization_id), [i.id for i in candidates]
-        )
+        ready = await self.ready_on_hand(str(organization_id), candidates)
 
         low: List[Tuple[InventoryItem, int, bool]] = []
         for item in candidates:
-            from_lots = item.id in lot_totals
-            on_hand = lot_totals[item.id] if from_lots else (item.quantity or 0)
-            if on_hand <= (item.reorder_point or 0):
+            on_hand, from_lots = ready[item.id]
+            if self.is_at_or_below_reorder_point(on_hand, item.reorder_point):
                 low.append((item, on_hand, from_lots))
 
         low.sort(key=lambda row: row[1])
         return low
+
+    async def ready_on_hand(
+        self, organization_id: str, items: List[InventoryItem]
+    ) -> Dict[str, Tuple[int, bool]]:
+        """Ready units per item, as ``{item_id: (on_hand, from_lots)}``.
+
+        The one definition of shelf stock that both the daily low-stock alert
+        and the equipment-check auto-reorder read, so the two can never
+        disagree about whether an item is low. See
+        ``get_low_stock_items_for_alerts`` for why lot-stocked items are
+        counted from in-date lots and never from ``quantity``.
+        """
+        lot_totals = await self._in_date_lot_totals(
+            organization_id, [i.id for i in items]
+        )
+        ready: Dict[str, Tuple[int, bool]] = {}
+        for item in items:
+            from_lots = item.id in lot_totals
+            on_hand = lot_totals[item.id] if from_lots else (item.quantity or 0)
+            ready[item.id] = (on_hand, from_lots)
+        return ready
+
+    @staticmethod
+    def is_at_or_below_reorder_point(
+        on_hand: int, reorder_point: Optional[int]
+    ) -> bool:
+        """At or below, not strictly below: the reorder point is the last
+        quantity the department is willing to hold before ordering."""
+        if reorder_point is None:
+            return False
+        return on_hand <= reorder_point
 
     # ------------------------------------------------------------------
     # Stock Lots (ready replacement stock with lot # + expiration)
