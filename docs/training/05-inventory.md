@@ -1839,16 +1839,13 @@ corrections that change what you see:
 
 When a member departs the department (dropped, retired, etc.), a **Departure Clearance** is created to track the return of all assigned equipment.
 
-> **No screen for this yet _(2026-08-12)_.** Departure clearance is implemented
-> on the server — clearances can be initiated, listed, resolved item by item and
-> completed — but nothing in the application calls it. There is no Inventory
-> Admin button, no clearance page, and no way to work one through the interface;
-> it is reachable only via the API. The steps below describe the workflow, not a
-> screen you can currently open. The **property return report** generated when a
-> member is dropped is a different, working feature — see
+> **The clearance screen _(2026-10-11)_.** A clearance is worked at
+> **Inventory Admin > Needs attention > Unresolved departure clearance >
+> Review**, which opens `/inventory/admin/clearances/<id>`. Initiating one by
+> hand still has no button: dropping a member who holds property creates it.
+> The **property return report** generated when a member is dropped is a
+> different feature — see
 > [Membership > Property Return Process](./01-membership.md#member-status-management).
-> See
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#inventory--departure-clearance-is-backend-only-2026-08-12).
 
 <!-- Screenshot needed:
 _[Quartermaster at /inventory/admin: crop to the Needs attention card showing an "Unresolved departure clearance · <demo member> · 1 outstanding · Due <date> · Review" row. Requires a demo member dropped while holding an item.]_
@@ -1858,15 +1855,27 @@ _[Quartermaster at /inventory/admin: crop to the Needs attention card showing an
 
 **Required Permission:** `inventory.manage`
 
-1. Navigate to **Inventory Admin**.
-2. Click **Create Departure Clearance** for the departing member.
-3. The system generates a list of all items assigned to or checked out by the member.
-4. For each line item, choose a **disposition**:
-   - **Returned** — item received back in acceptable condition
-   - **Returned Damaged** — item received back but in damaged condition
-   - **Written Off** — item cannot be recovered (lost, destroyed)
-   - **Waived** — department chose not to require return
-5. When all items are accounted for, click **Complete Clearance**.
+1. Drop the member (or retire them) while they hold department property. The
+   clearance is created with one line per assignment, temporary loan and pool
+   issuance they hold.
+2. On **Inventory Admin**, the **Needs attention** list shows "Unresolved
+   departure clearance · _member_ · _n_ outstanding". Click **Review**.
+3. The clearance screen shows the totals (items, resolved, outstanding, value
+   outstanding) and every line with how it was held and its disposition.
+4. Click **Resolve** on a line and choose what happened to it:
+   - **Returned** — handed back in usable condition; choose the **Condition**
+   - **Returned damaged** — handed back damaged; the condition starts at Damaged
+   - **Written off** — lost or not coming back
+   - **Waived** — the department does not require it back
+
+   Add **Notes** if useful and click **Resolve**. A return is recorded on the
+   item itself (unassigned, checked in or returned to the pool) — do not also
+   return it on **Members**.
+
+5. When every line is resolved, add any **Closing notes** and click **Complete
+   clearance**. If leadership has decided the rest will not come back, click
+   **Close incomplete** instead; the confirmation says how many items and how
+   much value stay unresolved, and **Keep it open** backs out.
 
 ### Clearance Lifecycle
 
@@ -1891,10 +1900,10 @@ It used to be missing until something had already been returned, because the
 hub asked only for clearances in progress, and the row printed the member's
 internal id.
 
-Returning the items on **Members** gives the gear back but **does not resolve
-the clearance**, and no screen can resolve or complete one — so the clearance
-stays open and the member is never auto-archived. That is an open decision
-(workflow review W15-2) in `docs/KNOWN_LIMITATIONS.md`.
+Since 2026-10-11 **Review** on that row opens the clearance itself rather than
+the member's row. Returning the items on **Members** gives the gear back but
+**does not resolve the clearance** — resolve each line on the clearance
+instead, which performs the return for you, then complete it.
 
 ### Property return reminders now go out _(2026-09-24)_
 
@@ -2229,10 +2238,9 @@ FF Garcia currently has the following items assigned:
 
 When FF Garcia's status is changed to **Retired** by the membership officer, the system automatically generates a property return report. Lt. Park also manually creates the departure clearance:
 
-1. Navigates to **Inventory Admin**
-2. Clicks **Create Departure Clearance**
-3. Selects **Tom Garcia** from the member dropdown
-4. The system populates the clearance with all 7 items/issuances currently held by FF Garcia
+1. The status change creates the clearance, because FF Garcia still holds gear
+2. On **Inventory Admin**, Lt. Park clicks **Review** on "Unresolved departure clearance · Tom Garcia · 7 outstanding"
+3. The clearance lists all 7 items/issuances currently held by FF Garcia
 
 The clearance status is set to **Initiated**.
 

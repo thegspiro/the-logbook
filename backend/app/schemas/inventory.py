@@ -1387,6 +1387,9 @@ class DepartureClearanceResponse(UTCResponseBase):
     created_at: datetime
     updated_at: datetime
     line_items: List[ClearanceLineItemResponse] = []
+    # Filled by GET /clearances/{id} so the clearance screen can name the
+    # member without a second, member-scoped lookup.
+    member_name: Optional[str] = None
 
     model_config = _response_config
 

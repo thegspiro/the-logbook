@@ -523,6 +523,10 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
     renderWithRouter(<InventoryAdminHub />);
 
     expect(await screen.findByText(/Ian Two · 1 outstanding/)).toBeInTheDocument();
+    // Review opens the clearance record, where its lines are resolved.
+    expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toContain(
+      '/inventory/admin/clearances/c1'
+    );
     expect(screen.queryByText(/Done Member/)).not.toBeInTheDocument();
     expect(screen.queryByText(/fa936425-862b/)).not.toBeInTheDocument();
     expect(mockGetDepartureClearances).toHaveBeenCalledWith();

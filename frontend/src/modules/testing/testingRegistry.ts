@@ -718,6 +718,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'inventory',
       },
       {
+        path: '/inventory/admin/clearances/:clearanceId',
+        label: 'Admin — departure clearance',
+        permission: 'inventory.manage',
+        module: 'inventory',
+      },
+      {
         path: '/inventory/admin/write-offs',
         label: 'Admin — write-offs',
         permission: 'inventory.manage',

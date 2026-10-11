@@ -568,37 +568,38 @@ Compliance, Department Store, and Setup & Tools.
 
 ### Inventory Admin Pages
 
-| URL                               | Page                      | Permission                                                                    |
-| --------------------------------- | ------------------------- | ----------------------------------------------------------------------------- |
-| `/inventory/admin`                | Admin Dashboard           | `inventory.manage` **OR** `inventory.check_manage` **OR** `storefront.manage` |
-| `/inventory/admin/setup`          | Inventory Setup           | `inventory.manage`                                                            |
-| `/inventory/admin/items`          | Manage Items              | `inventory.manage`                                                            |
-| `/inventory/admin/pool`           | Pool Items                | `inventory.manage`                                                            |
-| `/inventory/admin/categories`     | Categories                | `inventory.manage`                                                            |
-| `/inventory/admin/maintenance`    | Maintenance Records       | `inventory.manage`                                                            |
-| `/inventory/admin/members`        | Members Inventory         | `inventory.manage`                                                            |
-| `/inventory/admin/charges`        | Charges & Fees            | `inventory.manage`                                                            |
-| `/inventory/admin/vendors`        | Vendors                   | `inventory.manage`                                                            |
-| `/inventory/admin/returns`        | Return Requests           | `inventory.manage`                                                            |
-| `/inventory/admin/requests`       | Equipment Requests        | `inventory.manage`                                                            |
-| `/inventory/admin/write-offs`     | Write-Off Requests        | `inventory.manage`                                                            |
-| `/inventory/admin/reorder`        | Reorder Requests          | `inventory.manage`                                                            |
-| `/inventory/admin/allowances`     | Issuance Allowances       | `inventory.manage`                                                            |
-| `/inventory/admin/impact-planner` | Impact Planner            | `inventory.manage`                                                            |
-| `/inventory/admin/kits`           | Equipment Kits Management | `inventory.manage`                                                            |
-| `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage`                                                            |
-| `/inventory/checkouts`            | Active Checkouts          | `inventory.manage`                                                            |
-| `/inventory/import`               | CSV Import                | `inventory.manage`                                                            |
-| `/inventory/admin/kits`           | Equipment Kits            | `inventory.manage`                                                            |
-| `/inventory/admin/variant-groups` | Variant Groups            | `inventory.manage`                                                            |
-| `/inventory/print-labels`         | Barcode Label Printing    | `inventory.manage`                                                            |
-| `/inventory/admin/nfc`            | NFC Tag Settings          | any of `settings.manage`, `organization.update_settings`                      |
-| `/inventory/tag/:code`            | NFC Tag Link (redirect)   | `inventory.view`                                                              |
-| `/inventory/put-away`             | Put Away by NFC           | `inventory.manage`                                                            |
-| `/inventory/shelf-audit`          | Shelf Audit by NFC        | `inventory.manage`                                                            |
-| `/inventory/admin/nfc/enroll`     | Tag Items in Bulk         | `inventory.manage`                                                            |
-| `/inventory/admin/not-seen`       | Items Not Seen            | `inventory.manage`                                                            |
-| `/inventory/kiosk`                | Self-Service Kiosk        | `inventory.kiosk`                                                             |
+| URL                                        | Page                      | Permission                                                                    |
+| ------------------------------------------ | ------------------------- | ----------------------------------------------------------------------------- |
+| `/inventory/admin`                         | Admin Dashboard           | `inventory.manage` **OR** `inventory.check_manage` **OR** `storefront.manage` |
+| `/inventory/admin/setup`                   | Inventory Setup           | `inventory.manage`                                                            |
+| `/inventory/admin/items`                   | Manage Items              | `inventory.manage`                                                            |
+| `/inventory/admin/pool`                    | Pool Items                | `inventory.manage`                                                            |
+| `/inventory/admin/categories`              | Categories                | `inventory.manage`                                                            |
+| `/inventory/admin/maintenance`             | Maintenance Records       | `inventory.manage`                                                            |
+| `/inventory/admin/members`                 | Members Inventory         | `inventory.manage`                                                            |
+| `/inventory/admin/charges`                 | Charges & Fees            | `inventory.manage`                                                            |
+| `/inventory/admin/vendors`                 | Vendors                   | `inventory.manage`                                                            |
+| `/inventory/admin/returns`                 | Return Requests           | `inventory.manage`                                                            |
+| `/inventory/admin/requests`                | Equipment Requests        | `inventory.manage`                                                            |
+| `/inventory/admin/write-offs`              | Write-Off Requests        | `inventory.manage`                                                            |
+| `/inventory/admin/clearances/:clearanceId` | Departure Clearance       | `inventory.manage`                                                            |
+| `/inventory/admin/reorder`                 | Reorder Requests          | `inventory.manage`                                                            |
+| `/inventory/admin/allowances`              | Issuance Allowances       | `inventory.manage`                                                            |
+| `/inventory/admin/impact-planner`          | Impact Planner            | `inventory.manage`                                                            |
+| `/inventory/admin/kits`                    | Equipment Kits Management | `inventory.manage`                                                            |
+| `/inventory/admin/variant-groups`          | Variant Groups Management | `inventory.manage`                                                            |
+| `/inventory/checkouts`                     | Active Checkouts          | `inventory.manage`                                                            |
+| `/inventory/import`                        | CSV Import                | `inventory.manage`                                                            |
+| `/inventory/admin/kits`                    | Equipment Kits            | `inventory.manage`                                                            |
+| `/inventory/admin/variant-groups`          | Variant Groups            | `inventory.manage`                                                            |
+| `/inventory/print-labels`                  | Barcode Label Printing    | `inventory.manage`                                                            |
+| `/inventory/admin/nfc`                     | NFC Tag Settings          | any of `settings.manage`, `organization.update_settings`                      |
+| `/inventory/tag/:code`                     | NFC Tag Link (redirect)   | `inventory.view`                                                              |
+| `/inventory/put-away`                      | Put Away by NFC           | `inventory.manage`                                                            |
+| `/inventory/shelf-audit`                   | Shelf Audit by NFC        | `inventory.manage`                                                            |
+| `/inventory/admin/nfc/enroll`              | Tag Items in Bulk         | `inventory.manage`                                                            |
+| `/inventory/admin/not-seen`                | Items Not Seen            | `inventory.manage`                                                            |
+| `/inventory/kiosk`                         | Self-Service Kiosk        | `inventory.kiosk`                                                             |
 
 > **NFC tags on items are opt-in** _(2026-09-24)_. `/inventory/admin/nfc` turns on `inventory.nfc_tracking_enabled` in the organization settings; until then every `/inventory/nfc*` and `/inventory/items/{id}/nfc-tags` endpoint answers 403. Once on, item detail shows an **NFC Tags** card to `inventory.manage` holders (link by writing a URL onto a blank tag, by reading the chip serial, or by typing the serial), and the distribute/return scanner gains **Tap NFC**. A written tag carries `/inventory/tag/<code>`: the code names the tag, not the item, so unlinking a tag stops its URL resolving, and any phone — an iPhone included — opens the item by tapping it. Only Chrome on Android can link tags or read them inside the app.
 >

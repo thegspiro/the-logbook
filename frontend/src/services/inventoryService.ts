@@ -7,6 +7,12 @@ import type { Symbology } from './labelService';
 import type { InventoryAuditFrequency } from '../constants/enums';
 import type { LabelSetup, LabelSetupSave } from '../modules/inventory/utils/labelSetups';
 import type {
+  ClearanceLineItem,
+  CompleteClearancePayload,
+  DepartureClearance,
+  ResolveClearanceItemPayload,
+} from '../modules/inventory/types/clearance';
+import type {
   ItemPin,
   UserCheckoutItem,
   UserInventoryResponse,
@@ -495,6 +501,28 @@ export const inventoryService = {
       }>;
       total: number;
     };
+  },
+
+  async getDepartureClearance(clearanceId: string): Promise<DepartureClearance> {
+    const response = await api.get<DepartureClearance>(`/inventory/clearances/${clearanceId}`);
+    return response.data;
+  },
+
+  async resolveClearanceItem(
+    clearanceId: string,
+    lineItemId: string,
+    data: ResolveClearanceItemPayload
+  ): Promise<ClearanceLineItem> {
+    const response = await api.post<ClearanceLineItem>(
+      `/inventory/clearances/${clearanceId}/items/${lineItemId}/resolve`,
+      data
+    );
+    return response.data;
+  },
+
+  async completeClearance(clearanceId: string, data: CompleteClearancePayload): Promise<DepartureClearance> {
+    const response = await api.post<DepartureClearance>(`/inventory/clearances/${clearanceId}/complete`, data);
+    return response.data;
   },
 
   async getLowStockItems(): Promise<LowStockAlert[]> {

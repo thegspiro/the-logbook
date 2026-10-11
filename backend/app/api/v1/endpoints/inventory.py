@@ -3744,7 +3744,20 @@ async def get_departure_clearance(
             detail="Clearance not found",
         )
 
-    return clearance
+    member = (
+        await db.execute(
+            select(User.first_name, User.last_name).where(
+                User.id == clearance.user_id,
+                User.organization_id == str(current_user.organization_id),
+            )
+        )
+    ).first()
+    response = DepartureClearanceResponse.model_validate(clearance)
+    if member:
+        response.member_name = (
+            f"{member.first_name or ''} {member.last_name or ''}".strip() or None
+        )
+    return response
 
 
 @router.get("/users/{user_id}/clearance", response_model=DepartureClearanceResponse)
