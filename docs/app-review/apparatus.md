@@ -34,6 +34,38 @@ the EVOC certificate date move, security-review pass 5, and `preferred_name`).
 sub-resources, whose invariants passes 1–4 verified and which this pass did not
 re-derive.
 
+**Correction (2026-10-11, found during app-review B4 pass 5).** This pass read
+the maintenance lifecycle "in full" on the **backend** and did not read the
+frontend form that drives it, and a MED defect was sitting there:
+
+`modules/apparatus/components/MaintenanceRecordModal.tsx` builds one payload out
+of sixteen conditional spreads — `...(f.vendor ? { vendor: f.vendor } : {})` —
+and sends it to `updateMaintenanceRecord` when editing and
+`createMaintenanceRecord` otherwise. On edit every cleared field is **omitted**,
+and the backend dumps update payloads with `exclude_unset`, so the omission means
+"leave this alone": the user empties the vendor, the cost or the notes, the toast
+says "Maintenance record updated", and the old value is still there. That is
+CLAUDE.md pitfall #1's update rule, which this document's own pass-2 and pass-3
+sections cite for the backend mirror-image of the same bug. All the affected
+columns (`vendor`, `cost`, `notes`, `performed_by`, `findings`, `work_performed`,
+`mileage_at_service`, `hours_at_service`, the three `next_due_*`) are nullable,
+so an explicit null is what the schema wants.
+
+A second defect sits behind it: `apparatus_service.update_maintenance_record`
+applies updates with a raw `for field, value in update_data.items(): setattr(...)`
+loop rather than the shared `apply_updates`. The raw loop does write a null
+through, so a frontend-only fix would function — but it loses `apply_updates`'
+guarantees: a null against a NOT NULL column becomes an `IntegrityError` → 500
+instead of a clean 400, and a field the model does not have is set silently
+instead of reported. A fix should do both halves.
+
+Recorded as **FAC2-6** in `docs/app-review/facilities.md` with the full
+mechanism. Not fixed in the facilities PR that found it — different module,
+different iteration — so it is **open** and belongs to this module's next pass.
+The lesson for this file is the one B4 pass 5 acted on: a pass that records
+`tsc --noEmit` as "no frontend change" has not reviewed the frontend, and should
+not describe its scope as having read a workflow "in full".
+
 ### Verified good ✅
 
 - **All 88 endpoints carry an auth dependency** — enumerated mechanically
