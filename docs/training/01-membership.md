@@ -2371,8 +2371,8 @@ ready** for the next card. Examples:
 ### In the record
 
 When a card is tapped at a station for admin hours, the entry's method reads
-**Nfc Station**. A member scanning a category's QR code with their own phone
-reads **Qr Scan**. These are different acts by different people, so an
+**ID Card Station**. A member scanning a category's QR code with their own
+phone reads **QR Scan**. These are different acts by different people, so an
 admin-hours check can tell a station tap from a member's own scan.
 
 ## Troubleshooting
