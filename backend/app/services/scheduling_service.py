@@ -41,6 +41,7 @@ from app.models.training import (
     ShiftCompletionReport,
     ShiftPattern,
     ShiftPosition,
+    ShiftPreWorkSession,
     ShiftStatus,
     ShiftSwapRequest,
     ShiftTemplate,
@@ -3014,11 +3015,17 @@ class SchedulingService:
             )
         ).scalar_one_or_none()
 
+        # Imported here: pre_shift_work_service imports this module.
+        from app.services.pre_shift_work_service import (
+            end_active_session_at_check_in,
+        )
+
         now = datetime.now(timezone.utc)
         if existing:
             if existing.checked_in_at:
                 return None, "Already checked in"
             existing.checked_in_at = now
+            await end_active_session_at_check_in(self.db, user_id, str(shift_id), now)
             await self.db.commit()
             await self.db.refresh(existing)
             return existing, None
@@ -3029,6 +3036,7 @@ class SchedulingService:
             checked_in_at=now,
         )
         self.db.add(attendance)
+        await end_active_session_at_check_in(self.db, user_id, str(shift_id), now)
         await self.db.commit()
         await self.db.refresh(attendance)
         return attendance, None
@@ -3205,6 +3213,17 @@ class SchedulingService:
             .where(Shift.shift_date < next_month_first)
         )
         total_minutes = hours_result.scalar() or 0
+        from app.services.pre_shift_work_service import approved_pre_work_minutes
+
+        prep_rows = await approved_pre_work_minutes(
+            self.db,
+            *scope,
+            Shift.shift_date >= first_of_month,
+            Shift.shift_date < next_month_first,
+        )
+        total_minutes = int(total_minutes) + int(
+            prep_rows[0].minutes if prep_rows else 0
+        )
         total_hours = hours_from_minutes(total_minutes)
 
         # Field names say which of the two measures each figure is. This one
@@ -8025,6 +8044,8 @@ class SchedulingService:
                     "shifts_attended": 0,
                     "worked_minutes": 0,
                     "worked_hours": 0.0,
+                    "pre_shift_minutes": 0,
+                    "pre_shift_hours": 0.0,
                     "shifts_scheduled": 0,
                     "scheduled_minutes": 0,
                     "scheduled_hours": 0.0,
@@ -8045,6 +8066,42 @@ class SchedulingService:
             entry["shifts_attended"] = row.shift_count
             entry["worked_minutes"] = int(row.minutes or 0)
             entry["worked_hours"] = hours_from_minutes(row.minutes or 0)
+
+        # Approved pre-shift work is worked time on that shift, so it joins
+        # worked rather than standing as a fourth figure; it adds minutes and
+        # never a shift. Reported alongside too, so the report can say how
+        # much of worked was prep.
+        from app.services.pre_shift_work_service import (
+            approved_pre_work_minutes_by_user,
+        )
+
+        prep = await approved_pre_work_minutes_by_user(
+            self.db, organization_id, start_date, end_date, finalized_only=True
+        )
+        missing_prep = [uid for uid in prep if uid not in members]
+        if missing_prep:
+            prep_users = await self.db.execute(
+                select(
+                    User.id.label("user_id"),
+                    User.email,
+                    User.first_name,
+                    User.last_name,
+                )
+                .where(User.id.in_(missing_prep))
+                .where(User.organization_id == str(organization_id))
+            )
+            for row in prep_users.all():
+                _entry(row)
+        for uid, prep_minutes in prep.items():
+            prep_entry = members.get(uid)
+            if prep_entry is None:
+                continue
+            prep_entry["pre_shift_minutes"] = prep_minutes
+            prep_entry["pre_shift_hours"] = hours_from_minutes(prep_minutes)
+            prep_entry["worked_minutes"] += prep_minutes
+            prep_entry["worked_hours"] = hours_from_minutes(
+                prep_entry["worked_minutes"]
+            )
 
         # Hours worked on another jurisdiction's apparatus, reported beside
         # worked rather than inside it: worked is attendance on this
@@ -8167,17 +8224,56 @@ class SchedulingService:
             query.group_by(year_col, month_col, Shift.is_finalized)
         )
 
+        # Approved pre-shift work adds minutes to the month of its shift, on
+        # the same credited/pending side as the shift itself: it becomes
+        # credit when the shift is finalized, like the attendance beside it.
+        from app.services.pre_shift_work_service import approved_pre_work_minutes
+
+        prep_filters: List[Any] = [
+            ShiftPreWorkSession.user_id == str(user_id),
+            Shift.organization_id == str(organization_id),
+        ]
+        if start_date is not None:
+            prep_filters.append(Shift.shift_date >= start_date)
+        if end_date is not None:
+            prep_filters.append(Shift.shift_date <= end_date)
+        prep_minutes: Dict[Tuple[int, int, bool], int] = {
+            (int(row.year), int(row.month), bool(row.finalized)): int(row.minutes or 0)
+            for row in await approved_pre_work_minutes(
+                self.db,
+                *prep_filters,
+                group_by=[
+                    year_col.label("year"),
+                    month_col.label("month"),
+                    Shift.is_finalized.label("finalized"),
+                ],
+            )
+        }
+
         buckets: Dict[Tuple[int, int], Dict[str, Any]] = {}
         for row in result.all():
             key = (int(row.year), int(row.month))
             entry = buckets.setdefault(key, self._empty_month_totals(*key))
+            minutes = int(row.minutes or 0) + prep_minutes.pop(
+                (key[0], key[1], bool(row.finalized)), 0
+            )
             if row.finalized:
                 entry["shifts"] = int(row.shift_count or 0)
-                entry["hours"] = hours_from_minutes(row.minutes or 0)
+                entry["hours"] = hours_from_minutes(minutes)
                 entry["calls"] = int(row.calls or 0)
             else:
                 entry["pending_shifts"] = int(row.shift_count or 0)
-                entry["pending_hours"] = hours_from_minutes(row.minutes or 0)
+                entry["pending_hours"] = hours_from_minutes(minutes)
+        # Prep on a shift the member has no attendance row for yet (they
+        # prepped, then an officer has still to record the shift itself).
+        for (year, month, finalized), minutes in prep_minutes.items():
+            entry = buckets.setdefault(
+                (year, month), self._empty_month_totals(year, month)
+            )
+            if finalized:
+                entry["hours"] = hours_from_minutes(minutes)
+            else:
+                entry["pending_hours"] = hours_from_minutes(minutes)
 
         external = await ExternalShiftHoursService(self.db).counted_totals_by_month(
             str(organization_id), str(user_id), start_date, end_date
@@ -8931,6 +9027,21 @@ class SchedulingService:
                     "total_hours": hours_from_minutes(row.total_minutes),
                 }
 
+            # Approved pre-shift work adds hours under the same finalized rule
+            # as the attendance above, and never a shift.
+            from app.services.pre_shift_work_service import (
+                approved_pre_work_minutes_by_user,
+            )
+
+            prep_map = await approved_pre_work_minutes_by_user(
+                self.db,
+                organization_id,
+                period_start,
+                period_end,
+                finalized_only=graded_by_shared_grader,
+                user_ids=[str(u) for u in user_ids],
+            )
+
             # Shifts worked on another jurisdiction's apparatus count toward
             # the requirement the same way a shift here does: one entry is
             # one shift, and its minutes are hours on duty.
@@ -8974,7 +9085,11 @@ class SchedulingService:
                 )
                 ext = external_map.get(user.id, {"shift_count": 0, "minutes": 0})
                 shift_count = int(att["shift_count"] or 0) + ext["shift_count"]
-                total_minutes = int(att["total_minutes"] or 0) + ext["minutes"]
+                total_minutes = (
+                    int(att["total_minutes"] or 0)
+                    + ext["minutes"]
+                    + prep_map.get(str(user.id), 0)
+                )
                 total_hours = hours_from_minutes(total_minutes)
                 leave_months = user_leave_months.get(user.id, 0)
 
@@ -9359,6 +9474,13 @@ class SchedulingService:
                 .with_for_update()
             )
             total_min = hours_result.scalar() or 0
+            # Pre-shift work an officer already approved belongs to this
+            # shift's hours; pending sessions join later, at their approval.
+            from app.services.pre_shift_work_service import PreShiftWorkService
+
+            total_min = int(total_min) + await PreShiftWorkService(
+                self.db
+            ).approved_minutes_for_shift(str(shift_id))
             # Not rounded: this is a stored snapshot, and the quarter-hour rule
             # is a reporting rule. A column holding 66.75 against attendance
             # rows summing to 66.7 is a database that disagrees with itself.

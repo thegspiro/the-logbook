@@ -186,6 +186,22 @@ describe('ShiftSettingsPanel', () => {
 
     await waitFor(() => expect(mockUpdateFeatureSettings).toHaveBeenCalledWith({ enforce_evoc: false }));
   });
+
+  it('shows pre-shift work as on when the response omits the field, matching the backend default', async () => {
+    renderPanel('general');
+    const toggle = await screen.findByRole('switch', { name: /allow pre-shift work/i });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('turns pre-shift work off as a single-key patch', async () => {
+    const user = userEvent.setup();
+    renderPanel('general');
+    const toggle = await screen.findByRole('switch', { name: /allow pre-shift work/i });
+
+    await user.click(toggle);
+
+    await waitFor(() => expect(mockUpdateFeatureSettings).toHaveBeenCalledWith({ pre_shift_work_enabled: false }));
+  });
 });
 
 describe('ShiftSettingsPanel signup window', () => {

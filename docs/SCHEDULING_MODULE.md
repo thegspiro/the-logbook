@@ -664,6 +664,45 @@ joins `Shift` to `ShiftAttendance` so each row embeds `shift_date`,
 `shift_start_time`, and `shift_end_time`, ordered by `shift_date` descending.
 (2026-05)
 
+### Pre-Shift Work _(2026-10-11)_
+
+```
+GET    /api/v1/scheduling/pre-shift-work/eligible-shifts?apparatus_id=  # Member: shifts they may prep for
+GET    /api/v1/scheduling/pre-shift-work/active                         # Member: running session or null
+POST   /api/v1/scheduling/pre-shift-work                                # Member: start {shift_id, apparatus_id?}
+POST   /api/v1/scheduling/pre-shift-work/{id}/end                       # Member: end {note?} → pending
+GET    /api/v1/scheduling/shifts/{id}/pre-shift-work                    # Shift officer / scheduling.manage
+GET    /api/v1/scheduling/pre-shift-work/pending                        # scheduling.manage: review queue
+POST   /api/v1/scheduling/pre-shift-work/{id}/review                    # Approve / adjust / reject
+```
+
+Prep done before a shift's check-in opens — the equipment check the afternoon
+before a 04:00 start — is timed as a `ShiftPreWorkSession` tied to that shift.
+The member scans the vehicle QR code or taps its NFC tag; while check-in is
+closed, the check-in page offers **Doing pre-shift work?**, lists the member's
+rostered shifts starting within 48 hours (the scanned vehicle's first), and the
+next scan ends the session. Checking in to the shift ends a session still
+running. A session over 24 hours needs an officer to record its end.
+
+**Separate from attendance on purpose.** Attendance is read as one row per
+member per shift (check-in, check-out, close-out, shift counts for
+compliance); a second row would raise `MultipleResultsFound` or count the
+shift twice. A session adds hours and never a shift.
+
+**Only approved time counts.** The shift officer or `scheduling.manage`
+approves, adjusts or rejects it from the close-out wizard, the shift panel, or
+the queue on Shift Close-Out. A shift officer cannot approve their own time.
+A shift may be finalized with sessions still pending; approving one afterwards
+refreshes the shift's `total_hours`. Approved minutes are included in the
+member hours report (`worked_minutes`, broken out as `pre_shift_minutes`), My
+Hours history, the scheduling summary and admin hub monthly hours, the Shift
+Compliance hours column, and shift totals — all through
+`approved_pre_work_minutes` in `pre_shift_work_service.py`.
+
+The department setting `scheduling.pre_shift_work_enabled` (Shift Settings →
+**Allow pre-shift work**) defaults on. Turning it off stops new sessions;
+running ones can still be ended and reviewed.
+
 ### Shifts With Other Departments
 
 ```

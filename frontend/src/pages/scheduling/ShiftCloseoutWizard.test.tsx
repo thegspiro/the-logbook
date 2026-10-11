@@ -27,6 +27,8 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     saveCloseoutAttendance: (...a: unknown[]) => mockSaveAttendance(...a) as unknown,
     saveCloseoutCalls: (...a: unknown[]) => mockSaveCalls(...a) as unknown,
     finalizeShift: (...a: unknown[]) => mockFinalize(...a) as unknown,
+    // The attendance step lists pre-shift work; none on these shifts.
+    getShiftPreShiftWork: vi.fn().mockResolvedValue([]),
   },
 }));
 

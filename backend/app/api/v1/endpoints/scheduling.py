@@ -34,6 +34,7 @@ from app.models.training import (
     ShiftAttendance,
     ShiftCall,
     ShiftPosition,
+    ShiftPreWorkSession,
     StandingShiftPattern,
     StandingShiftPeriod,
     SwapRequestStatus,
@@ -60,6 +61,12 @@ from app.schemas.scheduling import (
     PlatoonBulkAssignResult,
     PlatoonOverviewResponse,
     PositionRosterResponse,
+    PreShiftEligibleShiftsResponse,
+    PreShiftWorkDecision,
+    PreShiftWorkEnd,
+    PreShiftWorkReview,
+    PreShiftWorkSessionResponse,
+    PreShiftWorkStart,
     SchedulingEligibilitySettings,
     SchedulingEligibilitySettingsResponse,
     SchedulingFeatureSettings,
@@ -119,6 +126,10 @@ from app.services.event_request_service import (
 from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
     notify_summary,
+)
+from app.services.pre_shift_work_service import (
+    PreShiftWorkService,
+    approved_pre_work_minutes,
 )
 from app.services.scheduling_module_config_service import (
     apparatus_type_defaults_for_org,
@@ -470,9 +481,17 @@ async def _enrich_shifts(
             .where(ShiftAttendance.shift_id.in_(shift_ids))
             .group_by(ShiftAttendance.shift_id)
         )
+        prep_rows = await approved_pre_work_minutes(
+            service.db,
+            ShiftPreWorkSession.shift_id.in_(shift_ids),
+            group_by=[ShiftPreWorkSession.shift_id],
+        )
+        prep_by_shift = {str(r[0]): float(r.minutes or 0) for r in prep_rows}
         for row in hours_result.all():
-            total_min = float(row[1])
+            total_min = float(row[1]) + prep_by_shift.pop(str(row[0]), 0.0)
             hours_map[str(row[0])] = hours_from_minutes(total_min)
+        for sid, prep_min in prep_by_shift.items():
+            hours_map[sid] = hours_from_minutes(prep_min)
 
     enriched = []
     for s in shifts:
@@ -799,6 +818,9 @@ async def get_shift(
     # TypeError and 500s the whole shift detail response. The list endpoint
     # above coerces for the same reason.
     total_min = float(total_min_result.scalar() or 0)
+    total_min += await PreShiftWorkService(service.db).approved_minutes_for_shift(
+        str(shift_id)
+    )
     total_hours = hours_from_minutes(total_min) if total_min > 0 else None
 
     attendees = await service.enrich_attendance_records(
@@ -1404,6 +1426,185 @@ async def member_check_out(
         )
     enriched = await service.enrich_attendance_records([result])
     return enriched[0]
+
+
+# ============================================
+# Pre-Shift Work
+# ============================================
+
+
+@router.get(
+    "/pre-shift-work/eligible-shifts",
+    response_model=PreShiftEligibleShiftsResponse,
+)
+async def get_pre_shift_eligible_shifts(
+    apparatus_id: str | None = Query(None, max_length=36),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Upcoming shifts the caller may log pre-shift work against."""
+    enabled, shifts = await PreShiftWorkService(db).eligible_shifts(
+        str(current_user.id), current_user.organization_id, apparatus_id
+    )
+    return {"enabled": enabled, "shifts": shifts}
+
+
+@router.get(
+    "/pre-shift-work/active",
+    response_model=PreShiftWorkSessionResponse | None,
+)
+async def get_active_pre_shift_work(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The caller's running pre-shift session, or null."""
+    service = PreShiftWorkService(db)
+    session = await service.active_session(
+        str(current_user.id), current_user.organization_id
+    )
+    if session is None:
+        return None
+    return (await service.to_dicts([session], current_user.organization_id))[0]
+
+
+@router.get(
+    "/pre-shift-work/pending",
+    response_model=list[PreShiftWorkSessionResponse],
+)
+async def list_pre_shift_work_awaiting_review(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Department-wide queue of pre-shift time an officer still has to review."""
+    service = PreShiftWorkService(db)
+    sessions = await service.list_awaiting_review(current_user.organization_id)
+    return await service.to_dicts(sessions, current_user.organization_id)
+
+
+@router.post(
+    "/pre-shift-work",
+    response_model=PreShiftWorkSessionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def start_pre_shift_work(
+    body: PreShiftWorkStart,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Start timing pre-shift work for one of the caller's upcoming shifts."""
+    service = PreShiftWorkService(db)
+    try:
+        session = await service.start(
+            str(current_user.id),
+            current_user.organization_id,
+            str(body.shift_id),
+            body.apparatus_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if session is None:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    return (await service.to_dicts([session], current_user.organization_id))[0]
+
+
+@router.post(
+    "/pre-shift-work/{session_id}/end",
+    response_model=PreShiftWorkSessionResponse,
+)
+async def end_pre_shift_work(
+    session_id: UUID,
+    body: PreShiftWorkEnd,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """End the caller's running pre-shift session; it then awaits approval."""
+    service = PreShiftWorkService(db)
+    try:
+        session = await service.end(
+            str(current_user.id),
+            current_user.organization_id,
+            str(session_id),
+            body.note,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if session is None:
+        raise HTTPException(status_code=404, detail="Pre-shift work not found")
+    return (await service.to_dicts([session], current_user.organization_id))[0]
+
+
+@router.get(
+    "/shifts/{shift_id}/pre-shift-work",
+    response_model=list[PreShiftWorkSessionResponse],
+)
+async def list_shift_pre_shift_work(
+    shift_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Every pre-shift session logged against a shift, for its officer."""
+    await _authorize_shift_management(
+        SchedulingService(db), current_user, shift_id, "scheduling.manage"
+    )
+    service = PreShiftWorkService(db)
+    sessions = await service.list_for_shift(str(shift_id), current_user.organization_id)
+    return await service.to_dicts(sessions, current_user.organization_id)
+
+
+@router.post(
+    "/pre-shift-work/{session_id}/review",
+    response_model=PreShiftWorkSessionResponse,
+)
+async def review_pre_shift_work(
+    session_id: UUID,
+    body: PreShiftWorkReview,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Approve, adjust or reject a pre-shift session.
+
+    Open to ``scheduling.manage`` and to the shift's officer; the service
+    refuses a shift officer reviewing their own time.
+    """
+    service = PreShiftWorkService(db)
+    approve = body.decision == PreShiftWorkDecision.APPROVE
+    try:
+        session = await service.review(
+            current_user,
+            str(session_id),
+            can_manage=user_has_permission(current_user, "scheduling.manage"),
+            approve=approve,
+            approved_minutes=body.approved_minutes,
+            started_at=body.started_at,
+            ended_at=body.ended_at,
+            review_note=body.review_note,
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=safe_error_detail(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if session is None:
+        raise HTTPException(status_code=404, detail="Pre-shift work not found")
+
+    await log_audit_event(
+        db=db,
+        event_type=(
+            "shift_pre_work_approved" if approve else "shift_pre_work_rejected"
+        ),
+        event_category="scheduling",
+        severity="INFO",
+        event_data={
+            "organization_id": str(current_user.organization_id),
+            "session_id": str(session.id),
+            "shift_id": str(session.shift_id),
+            "member_id": str(session.user_id),
+            "duration_minutes": session.duration_minutes,
+            "approved_minutes": session.approved_minutes,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return (await service.to_dicts([session], current_user.organization_id))[0]
 
 
 @router.get("/apparatus/{apparatus_id}/active-shift")
@@ -4040,6 +4241,7 @@ async def get_scheduling_feature_settings(
         restrict_checkin_to_assigned=bool(
             lifecycle.get("restrict_checkin_to_assigned", False)
         ),
+        pre_shift_work_enabled=bool(lifecycle.get("pre_shift_work_enabled", True)),
         signup_closes_minutes_before=window["signup_closes_minutes_before"],
         late_signup_grace_minutes=window["late_signup_grace_minutes"],
         open_ended_shift_cushion_hours=open_ended_cushion_hours(org.settings or {}),
@@ -4101,6 +4303,11 @@ async def update_scheduling_feature_settings(
             restrict_checkin_to_assigned=(
                 data.restrict_checkin_to_assigned
                 if "restrict_checkin_to_assigned" in fields_set
+                else None
+            ),
+            pre_shift_work_enabled=(
+                data.pre_shift_work_enabled
+                if "pre_shift_work_enabled" in fields_set
                 else None
             ),
             # Guarded like every sibling field: each settings control sends
