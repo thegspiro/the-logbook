@@ -4659,6 +4659,46 @@ affected shift the moment it deployed.
 Either way the gate stops depending on a reference nothing maintains. Until one
 is chosen, the log line is the only signal.
 
+## FAC2-5 — The Cross-Facility Maintenance And Inspection Lists Show At Most 100 Records (2026-10-11)
+
+`GET /facilities/maintenance` and `GET /facilities/inspections` both default to
+`limit=100` (max 500) and neither accepts a `search` parameter. The two
+cross-facility screens — `/facilities/maintenance` and
+`/facilities/inspections` — load one such page and then filter it in the browser.
+
+**One half of this was a live defect and is fixed** (FAC2-4, app-review B4 pass
+5). The maintenance endpoint already accepted `is_overdue` and `is_completed`
+and the screen simply was not forwarding them, so the dashboard's org-wide
+"Overdue maintenance" count could deep-link to a list that rendered "No
+maintenance records found" — the endpoint orders by `desc(created_at)`, and an
+overdue record is by nature an old one, so the truncation preferentially
+discarded exactly what the filter was looking for. The screen now asks the
+server for the filtered set.
+
+**What remains is an owner decision, because it needs an API change:**
+
+1. **The inspections "pending" tab cannot be resolved server-side at all.** The
+   endpoint takes `passed: bool | None`, where `None` means _no filter_ — so
+   "passed" and "failed" are expressible and "awaiting a result"
+   (`passed IS NULL`) is not. Forwarding two of the three and leaving the third
+   on a loaded page would make the screen's correctness vary by tab, so none of
+   them was changed. The fix is a tri-state `result` parameter
+   (`passed` / `failed` / `pending`) or a documented null sentinel.
+2. **Text search is still client-side on both screens**, so it matches within
+   the returned page rather than the organization. Searching a vendor name that
+   appears only on an older record finds nothing, with no indication that the
+   search was partial.
+3. **Neither screen paginates.** Even with the filter forwarded, an
+   organization with more than 100 overdue records sees a silently truncated
+   list. Maintenance records accumulate permanently and include back-dated
+   historic entries, so this is a matter of time rather than of scale.
+
+The shape of the fix is the one `GET /facilities/page` already uses for the
+facility grid: total metadata plus pages, with filters and search applied by the
+server. Doing it for these two endpoints would close all three items at once.
+Until then the two screens are reliable for small organizations and quietly
+partial for large ones.
+
 ## Process
 
 ## OPS-7 — Audit Shipping Can Deliver A Batch Twice (2026-10-04)

@@ -5,6 +5,7 @@ import type { MaintenanceRecordCreate } from '../../../services/facilitiesServic
 import type { MaintenanceRecord, MaintenanceType } from '../types';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { getTodayLocalDate } from '../../../utils/dateFormatting';
+import { formCoercions } from '../../../utils/formValues';
 
 import { useConfirm } from '../../../contexts/ConfirmContext';
 interface MaintenanceFormData {
@@ -48,20 +49,29 @@ function recordToForm(record: MaintenanceRecord): MaintenanceFormData {
   };
 }
 
-function formToPayload(formData: MaintenanceFormData): MaintenanceRecordCreate {
-  const payload: MaintenanceRecordCreate = {
+/**
+ * On create a blank optional field is omitted; on edit it goes as an explicit
+ * null, because the backend dumps update payloads with `exclude_unset` and an
+ * omitted key means "leave this alone" — so clearing a vendor, a cost or a due
+ * date used to be lost behind a success toast (CLAUDE.md pitfall #1).
+ *
+ * `maintenance_type_id` is the exception: its column is NOT NULL, so a blank
+ * one is omitted in both modes rather than nulled.
+ */
+function formToPayload(formData: MaintenanceFormData, isEdit: boolean): MaintenanceRecordCreate {
+  const { text, pick, num } = formCoercions(isEdit);
+  return {
     facility_id: formData.facility_id,
     description: formData.description.trim(),
+    maintenance_type_id: formData.maintenance_type_id || undefined,
+    scheduled_date: pick(formData.scheduled_date),
+    due_date: pick(formData.due_date),
+    performed_by: text(formData.performed_by),
+    cost: num(formData.cost),
+    vendor: text(formData.vendor),
+    work_order_number: text(formData.work_order_number),
+    notes: text(formData.notes),
   };
-  if (formData.maintenance_type_id) payload.maintenance_type_id = formData.maintenance_type_id;
-  if (formData.scheduled_date) payload.scheduled_date = formData.scheduled_date;
-  if (formData.due_date) payload.due_date = formData.due_date;
-  if (formData.performed_by.trim()) payload.performed_by = formData.performed_by.trim();
-  if (formData.cost) payload.cost = Number(formData.cost);
-  if (formData.vendor.trim()) payload.vendor = formData.vendor.trim();
-  if (formData.work_order_number.trim()) payload.work_order_number = formData.work_order_number.trim();
-  if (formData.notes.trim()) payload.notes = formData.notes.trim();
-  return payload;
 }
 
 type StatusFilter = 'all' | 'pending' | 'completed' | 'overdue';
@@ -89,8 +99,24 @@ export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: 
     setIsLoading(true);
     setLoadError(false);
     try {
-      const params: { facility_id?: string } = {};
+      // The status filter is applied by the server, not just in the browser.
+      // The endpoint returns the 100 most recently *created* records, and an
+      // overdue record is by nature an old one — so filtering a loaded page
+      // client-side systematically hid the longest-overdue work, and the
+      // dashboard's org-wide overdue count could point at a list rendering
+      // "no records". The client-side pass below still runs, over the right
+      // set, so a filter change shows no stale rows while the fetch is in
+      // flight. Text search remains client-side: the endpoint has no search
+      // parameter, so it matches within the returned page.
+      const params: {
+        facility_id?: string;
+        is_completed?: boolean;
+        is_overdue?: boolean;
+      } = {};
       if (facilityId) params.facility_id = facilityId;
+      if (statusFilter === 'completed') params.is_completed = true;
+      if (statusFilter === 'pending') params.is_completed = false;
+      if (statusFilter === 'overdue') params.is_overdue = true;
       const [data, types] = await Promise.all([
         facilitiesService.getMaintenanceRecords(params),
         facilitiesService.getMaintenanceTypes(),
@@ -103,7 +129,7 @@ export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: 
     } finally {
       setIsLoading(false);
     }
-  }, [facilityId]);
+  }, [facilityId, statusFilter]);
 
   useEffect(() => {
     void loadRecords();
@@ -148,7 +174,7 @@ export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: 
     }
     setIsSaving(true);
     try {
-      const payload = formToPayload(formData);
+      const payload = formToPayload(formData, Boolean(editingRecord));
       if (editingRecord) {
         await facilitiesService.updateMaintenanceRecord(editingRecord.id, payload);
         toast.success('Record updated');
