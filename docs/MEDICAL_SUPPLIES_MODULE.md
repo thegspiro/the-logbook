@@ -220,13 +220,13 @@ Medical supplies use the same dated-lot machinery as other consumables
   were still listed as expiring stock, counted in the medical summary, and
   mailed in the supply-expiry alert — for an item nobody could issue.
 
-> **Open: the dashboard's Low stock disagrees with this page** _(W47-6)_. The
-> main dashboard's low-stock widget sums each category's `quantity` column,
-> which a lot-stocked item leaves at 0, so a category of lot-stocked supplies
-> reads as empty whatever its lots hold; and it counts medical categories that
-> the gear list it links to excludes. Medical Supplies' own **Low stock** tile
-> counts from item reorder points and is right. Recorded in
-> [KNOWN_LIMITATIONS](./KNOWN_LIMITATIONS.md).
+> **The dashboard's Low stock reads lots and leaves medical out** _(W47-6,
+> fixed 2026-10-11)_. The main dashboard's low-stock widget summed each
+> category's `quantity` column, which a lot-stocked item leaves at 0, and
+> counted medical categories the gear list it links to excludes. It now reads a
+> lot-stocked item from its in-date lots and leaves medical categories out;
+> Medical Supplies' own **Low stock** tile, counted from item reorder points, is
+> the medical figure.
 
 > **"On hand" is not editable on a lot-stocked item** _(fixed 2026-08-17)_. The
 > field writes `quantity`, but a lot-stocked item's count comes from its lots —

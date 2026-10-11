@@ -3257,7 +3257,9 @@ class TestTwentyFifthRoundFindings:
 
         monkeypatch.setattr(db_session, "execute", counting_execute)
         low = await InventoryService(db_session).get_low_stock_items(uuid.UUID(org_id))
-        assert len(statements) == 2
+        # The department's date (for in-date lots), the categories, and one
+        # query for every category's items — constant, not one per category.
+        assert len(statements) == 3
         assert [c["category_name"] for c in low] == ["Boots", "Coats"]
         assert [i["quantity"] for i in low[0]["items"]] == [1, 2, 3, 4, 5]
         assert [i["name"] for i in low[1]["items"]] == [
