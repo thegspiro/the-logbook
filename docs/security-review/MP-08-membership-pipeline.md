@@ -1191,6 +1191,11 @@ MP-23 (round 2) left as a documented residual limitation, not a bug.
 
 #### MP-26 — P2 — the fallback branch discarded an already-validated `step_id` in favor of an arbitrary sort-order guess — ✅ FIXED
 
+> **Residual resolved 2026-10-11 (owner decision 2026-10-05):** the remaining
+> sort-order guess — several vote stages, applicant on none, no
+> election-stage `step_id` — is now a 422 (`ElectionStageAmbiguousError`)
+> asking the caller to name the stage. See `docs/KNOWN_LIMITATIONS.md`.
+
 **What:** MP-23 (round 2) made `create_election_package` prefer
 `prospect.current_step` for the PII-minimization policy when `current_step`
 is itself an `election_vote` step of the governing pipeline. When it isn't —
@@ -2465,7 +2470,13 @@ with the same message as `_apply_status_change`, when either the target or
 the prospect's current status is `TRANSFERRED`. An ordinary status edit
 (e.g. `active` → `on_hold`) through this endpoint is unaffected.
 
-### MP-10 — MED — unbounded election-package list and creation — 🚩 FLAGGED
+### MP-10 — MED — unbounded election-package list and creation — 🚩 FLAGGED (creation ✅ resolved 2026-10-11)
+
+> **Owner decision 2026-10-05, built 2026-10-11:** regenerating replaces the
+> prospect's draft/ready package (deleted in the same transaction, under the
+> prospect row lock); packages on a ballot or decided are kept, and notes and
+> config carry over. The list endpoint stays unpaginated by decision. See
+> `docs/KNOWN_LIMITATIONS.md`.
 
 **What:** `list_election_packages` (`membership_pipeline_service.py:4638`)
 runs `result.scalars().all()` with no `limit`/pagination, and

@@ -624,6 +624,22 @@ election package, so they cannot be put on a ballot or advanced past this stage
 yet." — and offers **Create Package**. A pipeline with no vote stage is
 unaffected.
 
+**Regenerating replaces the package** _(2026-10-11)_. Using **Create
+Package** again for an applicant who already has a **Draft** or **Ready**
+package builds a fresh snapshot and removes the old one, so the applicant
+never has more than one package being prepared. Your coordinator notes and
+supporting statement carry over. A package already **Added to Ballot**,
+**Elected** or **Not Elected** is the record of that vote and is kept.
+
+**Pipelines with more than one vote stage** _(2026-10-11)_. If the applicant
+is not on a vote stage when a package is requested, and the pipeline has two
+or more vote stages, the request is refused with "This pipeline has more than
+one election vote stage and the applicant is not on any of them. Choose which
+election vote stage this package is for." — the package's privacy settings
+come from its vote stage, and the system no longer guesses which one. Create
+the package while the applicant is on the vote stage (an integration calling
+the API can instead send that stage as `step_id`).
+
 ### Package Workflow
 
 | Status              | Description                            |

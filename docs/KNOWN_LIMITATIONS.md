@@ -2645,7 +2645,23 @@ the reader. Four things are unchanged on purpose, each for the owner to revisit:
 - **A soft-deleted (deactivated) member still cannot be restored.** Service
   history does not change that; see the Deactivate dialog's wording.
 
-## Membership Pipeline — Election Packages Have No List Bound or Creation Cap (2026-08-25)
+## Membership Pipeline — Election Packages Have No List Bound or Creation Cap (2026-08-25, creation resolved 2026-10-11)
+
+**✅ Creation resolved 2026-10-11 (owner decision 2026-10-05: regenerating
+replaces the prior package).** `create_election_package` now deletes the
+prospect's existing **draft** or **ready** package in the same transaction as
+it inserts the new one, under a lock on the prospect row, so an application
+holds at most one package still being assembled however often it is
+regenerated. Packages **added to a ballot, elected or not elected** are the
+record of a vote and are kept. The coordinator's notes and the package
+config (the supporting statement) carry over to the new package unless the
+request supplies its own, and the activity log's `election_package_created`
+entry lists the `replaced_package_ids`. No API shape change; the behaviour
+change is that the old draft/ready package id stops existing. The list
+endpoint is still unpaginated — the owner did not choose pagination — but it
+is now bounded by applicants × votes held rather than by clicks.
+`tests/test_election_package_regenerate.py` pins it. The original finding
+follows.
 
 `GET /prospective-members/election-packages` (`list_election_packages`) runs
 `.scalars().all()` with no pagination or limit, and `POST
@@ -2745,7 +2761,22 @@ Recorded here rather than as a second entry (security review MP-08 pass 8,
 the residual is retry-safe and needs a rare compound failure, so no
 trash-and-restore scheme is built.
 
-## Membership Pipeline — A Pipeline With Multiple `election_vote` Stages Has No Single "Current Stage" Once Neither `current_step` Nor a Supplied `step_id` Identifies One (2026-09-02, narrowed 2026-09-02)
+## Membership Pipeline — A Pipeline With Multiple `election_vote` Stages Has No Single "Current Stage" Once Neither `current_step` Nor a Supplied `step_id` Identifies One (2026-09-02, narrowed 2026-09-02, resolved 2026-10-11)
+
+**✅ Resolved 2026-10-11 (owner decision 2026-10-05: require `step_id` only
+when the current step is not an election stage and the pipeline has more
+than one — 422 otherwise).** The sort-order guess is gone for that case:
+`create_election_package` raises `ElectionStageAmbiguousError` and
+`POST /prospects/{id}/election-package` answers **422** — "This pipeline has
+more than one election vote stage and the applicant is not on any of them.
+Choose which election vote stage this package is for." — when the applicant
+is not on an `election_vote` stage of the governing pipeline, the pipeline
+has two or more, and `step_id` is omitted or names a step of another type.
+An applicant on a vote stage, and every pipeline with one vote stage, need no
+`step_id` and behave as before. Multiple vote stages remain allowed.
+`tests/test_election_package_regenerate.py` (`TestAmbiguousElectionStage`) and
+the two updated cases in `tests/test_membership_pipeline_pass4_round4_codex.py`
+pin it. The history follows.
 
 `create_election_package` (`membership_pipeline_service.py`) resolves its
 PII-minimization `package_fields` policy from `prospect.current_step` when
