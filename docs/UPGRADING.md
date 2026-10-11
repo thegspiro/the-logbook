@@ -569,7 +569,10 @@ they have been inactive for the configured number of days (30–1095; a value
 outside that range is treated as the nearest bound, and an unreadable one
 skips the pipeline). Each run writes a `membership_pipeline.prospects_purged`
 audit event marked `trigger: auto_purge`, with the pipeline, the threshold and
-the purged ids. No email is sent before a purge.
+the purged ids. Seven days before an application is purged, the department's
+prospect coordinators (the withdrawal notice's recipients) get one email per
+run listing the applications due and their deletion dates; each application is
+warned once per inactive spell, and a failed send is retried on the next run.
 
 **Nothing already inactive is deleted straight away.** Migration
 `feecd81eef2d` adds `prospective_members.inactive_since` and sets it to the
