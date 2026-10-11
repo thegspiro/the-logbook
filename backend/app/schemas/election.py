@@ -667,6 +667,8 @@ class ElectionResponse(UTCResponseBase):
     reminder_hours_before_close: Optional[int] = None
     reminder_sent_at: Optional[datetime] = None
     nomination_deadline: Optional[datetime] = None
+    # Set by Close Nominations; the slate is frozen while it is (W50-38).
+    nominations_closed_at: Optional[datetime] = None
     tie_policy: str = "co_winners"
     status: str
     created_by: Optional[UUID] = None
@@ -989,6 +991,10 @@ class CandidateResponse(UTCResponseBase):
     # results count its votes under the target candidate.
     merged_into_candidate_id: Optional[str] = None
     accepted: bool
+    # A manager accepted for the nominee (W50-38): the list labels it
+    # "Accepted by manager". None when the nominee accepted themselves.
+    accepted_on_behalf_by: Optional[UUID] = None
+    accepted_on_behalf_at: Optional[datetime] = None
     is_write_in: bool
     created_at: datetime
     updated_at: datetime

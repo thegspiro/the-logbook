@@ -449,7 +449,9 @@ risks quietly weakening the chain's guarantee in the other direction (a
 walk that too easily accepts voided rows as explained could also let a
 real tamper event hide behind a bogus void reason).
 
-### ELEC-46 — MED — A manager can accept a nomination on the nominee's behalf; the slate is not frozen at Close Nominations — 🚩 FLAGGED (cross-ref: W50-38, `KNOWN_LIMITATIONS.md`)
+### ELEC-46 — MED — A manager can accept a nomination on the nominee's behalf; the slate is not frozen at Close Nominations — ✅ RESOLVED by owner decision (2026-10-08; cross-ref: W50-38, `KNOWN_LIMITATIONS.md`)
+
+**Resolution:** on-behalf acceptance is allowed before nominations close and is now labelled (`candidates.accepted_on_behalf_by` / `_at`), audited (`nomination_accepted_on_behalf`) and notified to the nominee; Close Nominations stamps `elections.nominations_closed_at`, after which `respond_to_nomination` and the manager toggle both refuse until nominations reopen. Guard: `tests/test_w50_manager_accept_frozen_slate.py`.
 
 **What:** `PATCH /{election_id}/candidates/{candidate_id}` accepts an
 `accepted: true` update from any `elections.manage` holder with **no

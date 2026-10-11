@@ -83,6 +83,8 @@ export interface Election {
   reminder_hours_before_close?: number;
   reminder_sent_at?: string;
   nomination_deadline?: string;
+  /** Set by Close Nominations; the slate is frozen while it is (W50-38). */
+  nominations_closed_at?: string | null;
   tie_policy?: TiePolicy;
   created_by?: string;
   // Actual close, distinct from the scheduled end_date. closed_by is null
@@ -264,6 +266,9 @@ export interface Candidate {
   nomination_date: string;
   nominated_by?: string;
   accepted: boolean;
+  /** A manager accepted for the nominee (W50-38) — labelled "Accepted by manager". */
+  accepted_on_behalf_by?: string | null;
+  accepted_on_behalf_at?: string | null;
   is_write_in: boolean;
   display_order: number;
   // Set when this write-in was consolidated into another candidate

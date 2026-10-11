@@ -2444,6 +2444,28 @@ async def update_candidate(
         )
 
     previous = {field: getattr(candidate, field) for field in CANDIDATE_IDENTITY_FIELDS}
+    # Acceptance goes through the service: it is refused once Close
+    # Nominations has frozen the slate, and a manager accepting a member's
+    # nomination for them is labelled and notified (W50-38).
+    if "accepted" in update_data:
+        accepted = update_data.pop("accepted")
+        if accepted is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="accepted cannot be null",
+            )
+        acceptance_error = await service.set_candidate_acceptance(
+            election, candidate, accepted, str(current_user.id)
+        )
+        if acceptance_error:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=acceptance_error
+            )
+    accepted_on_behalf = (
+        previous["accepted"] is False
+        and candidate.accepted
+        and candidate.accepted_on_behalf_by is not None
+    )
     for field, value in update_data.items():
         setattr(candidate, field, value)
 
@@ -2451,6 +2473,10 @@ async def update_candidate(
 
     await db.commit()
     await db.refresh(candidate)
+    if accepted_on_behalf:
+        await service.after_acceptance_on_behalf(
+            election, candidate, str(current_user.id)
+        )
 
     await log_audit_event(
         db=db,

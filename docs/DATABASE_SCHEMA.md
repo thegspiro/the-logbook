@@ -156,8 +156,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`candidates`](#candidates) | `Candidate` | 15 | Candidate model for election candidates |
-| [`elections`](#elections) | `Election` | 54 | Election model for managing elections within an organization |
+| [`candidates`](#candidates) | `Candidate` | 17 | Candidate model for election candidates |
+| [`elections`](#elections) | `Election` | 55 | Election model for managing elections within an organization |
 | [`manual_ballot_attestations`](#manual_ballot_attestations) | `ManualBallotAttestation` | 5 | One officer's confirmation that a paper-tally batch matches the |
 | [`manual_ballot_batches`](#manual_ballot_batches) | `ManualBallotBatch` | 14 | One paper-tally entry — the set of manual votes sharing a batch id. |
 | [`saved_ballot_templates`](#saved_ballot_templates) | `SavedBallotTemplate` | 11 | Organization-scoped, reusable snapshot of a structured ballot. |
@@ -2154,6 +2154,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `nomination_date` | DATETIME | no |  | `now()` |  |
 | `nominated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `accepted` | BOOL | no |  | `True` |  |
+| `accepted_on_behalf_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `accepted_on_behalf_at` | DATETIME | yes |  |  |  |
 | `is_write_in` | BOOL | no |  | `False` |  |
 | `merged_into_candidate_id` | VARCHAR(36) | yes |  |  |  |
 | `display_order` | INTEGER | no |  | `0` |  |
@@ -2195,6 +2197,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `reminder_hours_before_close` | INTEGER | yes |  |  |  |
 | `reminder_sent_at` | DATETIME | yes |  |  |  |
 | `nomination_deadline` | DATETIME | yes |  |  |  |
+| `nominations_closed_at` | DATETIME | yes |  |  |  |
 | `closed_at` | DATETIME | yes |  |  |  |
 | `closed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `status` | ENUM(`draft`, `nominations`, `open`, `closed`, `cancelled`) | no | IDX | `'draft'` |  |
@@ -10538,7 +10541,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (369 references)
+### → `users` (370 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10581,6 +10584,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `budget_requests` | `reviewed_by` | SET NULL | yes |
 | `budget_requests` | `submitted_by` | SET NULL | yes |
 | `budgets` | `created_by` | RESTRICT | no |
+| `candidates` | `accepted_on_behalf_by` | SET NULL | yes |
 | `candidates` | `nominated_by` | SET NULL | yes |
 | `candidates` | `user_id` | SET NULL | yes |
 | `check_item_deployed_lots` | `deployed_by` | SET NULL | yes |

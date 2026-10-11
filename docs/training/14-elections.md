@@ -254,7 +254,19 @@ candidates:
      nominee is emailed and must **accept** before they appear on the ballot;
      declining removes the entry (the audit log keeps the record)
 4. Click **Close Nominations** (or let the deadline do it) — the election
-   returns to Draft, where you finalize the ballot and open voting as usual
+   returns to Draft, where you order the ballot and open voting as usual.
+   **Closing freezes the slate** _(2026-10-08, W50-38)_: a nomination still
+   pending stays off the ballot (the Candidates tab marks it _"Not accepted
+   before nominations closed"_), and neither the nominee nor a manager can
+   accept or decline any more. To change the slate, open nominations again.
+
+**Accepting on a nominee's behalf** _(2026-10-08, W50-38)_. While nominations
+are open, an election manager can accept a pending nomination for the nominee
+(**Accept on their behalf** on the Candidates tab) — for a member who agreed in
+person or by phone. The candidate is labelled **Accepted by manager** wherever
+the list is shown, and the nominee is emailed that their nomination was
+accepted for them, with how to decline before nominations close. If the
+nominee later accepts themselves, the label is removed.
 
 Safeguards:
 

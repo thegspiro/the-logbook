@@ -475,7 +475,7 @@ export const ElectionDetailPage: React.FC = () => {
     try {
       const updated = await electionService.closeNominations(electionId);
       setElection(updated);
-      toast.success('Nominations closed — finalize the ballot, then open voting');
+      toast.success('Nominations closed — the slate is final. Order the ballot, then open voting');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to close nominations'));
     }

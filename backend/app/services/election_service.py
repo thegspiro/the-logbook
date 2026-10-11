@@ -96,6 +96,12 @@ REOPENED_TOKEN_MESSAGE = (
     "valid. Ask your secretary for a new ballot link."
 )
 
+# W50-38 (owner decision 2026-10-08): Close Nominations freezes the slate.
+SLATE_FROZEN_MESSAGE = (
+    "Nominations have closed, so the slate is final: acceptances can no "
+    "longer be changed. Reopen nominations to change it."
+)
+
 # W50-2 / ELEC-43 (owner decision 2026-10-08): a proxy ballot on an
 # anonymous election is allowed, but it is attributable — the vote row
 # stores whom it was cast for and the proxy holder sees every choice — so
@@ -4355,6 +4361,8 @@ class ElectionService:
             )
 
         election.status = ElectionStatus.NOMINATIONS
+        # Reopened nominations unfreeze the slate (W50-38).
+        election.nominations_closed_at = None
         await self.db.commit()
         await self.db.refresh(election)
 
@@ -4379,9 +4387,11 @@ class ElectionService:
     ) -> Tuple[Optional[Election], Optional[str]]:
         """Close the nomination phase, returning the election to DRAFT.
 
-        The secretary then finalizes the ballot (pending acceptances,
-        ordering) before opening voting — open_election validates that at
-        least one accepted candidate exists.
+        Closing freezes the slate (W50-38, owner decision 2026-10-08): a
+        nomination still pending at this point stays off the ballot, and
+        neither the nominee nor a manager can accept or decline it any
+        more. The secretary then orders the ballot and opens voting —
+        open_election validates that at least one accepted candidate exists.
         """
         result = await self.db.execute(
             select(Election)
@@ -4396,6 +4406,7 @@ class ElectionService:
             return None, "Election is not in the nomination phase"
 
         election.status = ElectionStatus.DRAFT
+        election.nominations_closed_at = datetime.now(timezone.utc)
         await self.db.commit()
         await self.db.refresh(election)
 
@@ -4541,6 +4552,138 @@ class ElectionService:
         )
         return candidate, None
 
+    @staticmethod
+    def slate_frozen(election: Election) -> bool:
+        """Whether Close Nominations has frozen the slate (W50-38)."""
+        return (
+            election.status != ElectionStatus.NOMINATIONS
+            and getattr(election, "nominations_closed_at", None) is not None
+        )
+
+    async def set_candidate_acceptance(
+        self,
+        election: Election,
+        candidate: Candidate,
+        accepted: bool,
+        acting_user_id: str,
+    ) -> Optional[str]:
+        """Apply a manager's Accept / un-Accept of a candidate (W50-38).
+
+        Refused once the slate is frozen. Accepting a member's nomination
+        for them (anyone but the nominee) is allowed before then, stamped
+        ``accepted_on_behalf_by`` / ``_at`` for the "accepted by manager"
+        label, audited, and the nominee is emailed. Does not commit.
+        """
+        if bool(candidate.accepted) == bool(accepted):
+            return None
+        if self.slate_frozen(election):
+            return SLATE_FROZEN_MESSAGE
+        candidate.accepted = accepted
+        on_behalf = (
+            accepted
+            and candidate.user_id is not None
+            and not candidate.is_write_in
+            and str(candidate.user_id) != str(acting_user_id)
+        )
+        if on_behalf:
+            candidate.accepted_on_behalf_by = str(acting_user_id)
+            candidate.accepted_on_behalf_at = datetime.now(timezone.utc)
+        else:
+            candidate.accepted_on_behalf_by = None
+            candidate.accepted_on_behalf_at = None
+        return None
+
+    async def after_acceptance_on_behalf(
+        self, election: Election, candidate: Candidate, acting_user_id: str
+    ) -> None:
+        """Audit and notify after a committed on-behalf acceptance."""
+        await self._audit(
+            "nomination_accepted_on_behalf",
+            {
+                "election_id": str(election.id),
+                "candidate_id": str(candidate.id),
+                "position": candidate.position,
+                "candidate_name": candidate.name,
+                "nominee_user_id": str(candidate.user_id),
+            },
+            user_id=str(acting_user_id),
+        )
+        await self._notify_accepted_on_behalf(election, candidate, acting_user_id)
+
+    async def _notify_accepted_on_behalf(
+        self, election: Election, candidate: Candidate, acting_user_id: str
+    ) -> None:
+        """Email the nominee that a manager accepted for them (W50-38).
+
+        Best-effort: a mail failure must not undo the acceptance.
+        """
+        try:
+            import html as html_mod
+
+            from app.services.email_service import EmailService, wrap_email_body
+
+            organization = (
+                await self.db.execute(
+                    select(Organization).where(
+                        Organization.id == str(election.organization_id)
+                    )
+                )
+            ).scalar_one_or_none()
+            nominee = (
+                await self.db.execute(
+                    select(User)
+                    .where(User.id == str(candidate.user_id))
+                    .where(User.organization_id == str(election.organization_id))
+                )
+            ).scalar_one_or_none()
+            if not organization or not nominee or not nominee.email:
+                return
+            manager = (
+                await self.db.execute(
+                    select(User)
+                    .where(User.id == str(acting_user_id))
+                    .where(User.organization_id == str(election.organization_id))
+                )
+            ).scalar_one_or_none()
+            manager_name = html_mod.escape(
+                (manager.full_name if manager else None) or "An election manager"
+            )
+            title = html_mod.escape(election.title)
+            position = html_mod.escape(candidate.position or "")
+            withdraw = (
+                "<p>If you do not wish to stand, sign in and decline from the "
+                "election's Nominations tab before nominations close.</p>"
+                if election.status == ElectionStatus.NOMINATIONS
+                else "<p>If you do not wish to stand, contact your secretary.</p>"
+            )
+            body_html = (
+                f"<p>{manager_name} accepted your nomination for "
+                f"<strong>{position}</strong> in <strong>{title}</strong> "
+                "on your behalf. Your name will appear on the ballot, "
+                "labelled as accepted by an election manager.</p>"
+                f"{withdraw}"
+            )
+            html_body = wrap_email_body(
+                organization,
+                title=f"Nomination accepted for you: {position}",
+                body_html=body_html,
+            )
+            await EmailService(organization).send_email(
+                to_emails=[nominee.email],
+                subject=(
+                    f"Your nomination for {candidate.position} was accepted "
+                    f"on your behalf — {election.title}"
+                ),
+                html_body=html_body,
+                db=self.db,
+                template_type="custom",
+            )
+        except Exception as e:
+            logger.warning(
+                f"Accepted-on-behalf notice failed | election={election.id} "
+                f"candidate={candidate.id} error={e}"
+            )
+
     async def respond_to_nomination(
         self,
         election_id: UUID,
@@ -4551,10 +4694,12 @@ class ElectionService:
     ) -> Tuple[bool, Optional[str]]:
         """Nominee accepts or declines their nomination.
 
-        Allowed during NOMINATIONS and afterwards while the election is
-        still DRAFT (a nominee may respond after the phase closes but
-        before the ballot opens). Declining removes the candidate row; the
-        audit log keeps the record.
+        Allowed during NOMINATIONS, and in a DRAFT whose nominations have
+        not been closed. Once Close Nominations has run the slate is frozen
+        (W50-38): the window in which a nominee could respond after the
+        phase closed was removed by owner decision, because a decline there
+        silently took a candidate off a ballot the officers had finalized.
+        Declining removes the candidate row; the audit log keeps the record.
         """
         result = await self.db.execute(
             select(Election)
@@ -4569,6 +4714,8 @@ class ElectionService:
             ElectionStatus.DRAFT,
         ):
             return False, "Nominations can no longer be changed for this election"
+        if self.slate_frozen(election):
+            return False, SLATE_FROZEN_MESSAGE
 
         cand_result = await self.db.execute(
             select(Candidate)
@@ -4597,6 +4744,10 @@ class ElectionService:
             ):
                 return False, office_ineligible_message(nominee.full_name)
             candidate.accepted = True
+            # The nominee's own acceptance replaces a manager's on their
+            # behalf, so the label no longer applies.
+            candidate.accepted_on_behalf_by = None
+            candidate.accepted_on_behalf_at = None
             event = "nomination_accepted"
         else:
             await self.db.delete(candidate)

@@ -921,7 +921,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `email_template_service.py:1954,1971`; `election_service.py:5297` (rollback deletes nothing).
 **Fix:** round 2 — the template states what happened per transition (votes kept; tokens invalidated N; ballots must be resent yes/no). Test: `test_election_leadership_alert_templates.py` extended.
 
-### W50-38 — MED — A manager can accept a nomination on the nominee's behalf; a pending nominee loses the tab when nominations close but the API still accepts/declines — FLAGGED (positions guard: S17, `3de83db`, corrected in `7aa3405`)
+### W50-38 — MED — A manager can accept a nomination on the nominee's behalf; a pending nominee loses the tab when nominations close but the API still accepts/declines — ✅ DECIDED & FIXED (2026-10-08) (positions guard: S17, `3de83db`, corrected in `7aa3405`)
+
+**Owner decision:** a manager may accept for a nominee before nominations close, with a persisted "Accepted by manager" label and a notice to the nominee; the slate freezes at Close Nominations. Migration `7adc810c57f9`; test `test_w50_manager_accept_frozen_slate.py`.
 
 **Did:** as `admin`, B2 step 8 (Accept on Blair's pending row), step 7 (a position removed while a nominee is pending); as `training_officer`, B2 steps 10/11 (decline by API after Close Nominations).
 **Saw:** the Accept → `PATCH …/candidates` 200 with the nominee not told, after the nominator had been refused "Only the nominee can respond"; after Close Nominations members see no tab yet decline → 200 and the Chief race silently lost a candidate; the orphaned nominee reads "UNASSIGNED".
