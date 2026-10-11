@@ -16,14 +16,36 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3077](https://github.com/thegspiro/the-logbook/pull/3077)**: branch
+`claude/security-review-locations-kiosk`, Feature 32 (Locations & kiosk),
+pass 6 (watchdog pickup — no `claude/security-review-*` PR or branch
+existed anywhere in the repo, ~70 hours after PR #3005 (Feature 31,
+Scheduled tasks, pass 6) merged, past this rotation's documented
+~90-minute stall threshold). 0 fixed, 0 new findings: the real delta since
+pass 5 (four new admin-hub attention items, a duplicate-room-name crash
+fix, SQLAlchemy 2.0 typed-column modernization, a kiosk staleness fix) was
+reviewed fresh against all seven checklist dimensions; the room-booking
+double-booking lock in the same file is EV-26, already reviewed and fixed
+under Feature 16, cross-referenced rather than re-derived. 15/15 routes
+unchanged; all prior findings (LOC-1 through LOC5-32-1) re-verified intact.
+Completion gate green (flake8/black/isort; migrations — 563 revisions,
+single head; 645 scoped backend tests; repo-tenancy guard suite, 86 tests;
+frontend typecheck/lint). See the Log entry below and
+`docs/security-review/LOC6-32-locations-kiosk.md` for detail.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3005's merge, Feature 31, Scheduled tasks, pass 6 — the state this pass's PR conflicted with), preserved for history</summary>
+
 **None.** PR #3005 (Feature 31, Scheduled tasks, pass 6) merged clean
 2026-10-08 15:16 UTC (confirmed via `pull_request_read`: `merged: true`).
 0 fixes needed beyond that pass's own description; the Log entry below
 already records it in full, so there is nothing further to record here.
 Rotation row 31 → ✅.
 
+</details>
+
 <details>
-<summary>Superseded — prior Open PR note (Feature 31, Scheduled tasks, pass 6, PR #3005, merged, nothing further to record), preserved for history</summary>
+<summary>Superseded — prior Open PR note (Feature 31, Scheduled tasks, pass 6, PR #3005, before it merged), preserved for history</summary>
 
 **PR [#3005](https://github.com/thegspiro/the-logbook/pull/3005)**: branch
 `claude/security-review-scheduled-tasks`, Feature 31 (Scheduled tasks),
