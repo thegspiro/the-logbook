@@ -1130,6 +1130,8 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/grants/donors', label: 'Donors', permission: 'fundraising.view', module: 'grants' },
       { path: '/grants/donations', label: 'Donations', permission: 'fundraising.view', module: 'grants' },
       { path: '/grants/donations/new', label: 'Record donation', permission: 'fundraising.manage', module: 'grants' },
+      { path: '/grants/pledges', label: 'Pledges', permission: 'fundraising.view', module: 'grants' },
+      { path: '/grants/events', label: 'Fundraising events', permission: 'fundraising.view', module: 'grants' },
       { path: '/grants/reports', label: 'Fundraising reports', permission: 'fundraising.view', module: 'grants' },
     ],
   },

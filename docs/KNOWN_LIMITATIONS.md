@@ -1269,16 +1269,28 @@ screens that do not exist:
 
 ## Grants & Fundraising — Pledges and Fundraising Events (2026-08-08)
 
-Same shape, found while capturing `docs/training/12-grants-fundraising.md`.
+**Resolved 2026-10-11 (owner decision: "build both pages and restore the
+Outstanding Pledges link").** **Pledges** (`/grants/pledges`) and
+**Fundraising Events** (`/grants/events`) are in both navigations, readable
+with `fundraising.view`, with create and edit for `fundraising.manage`. The
+dashboard's Outstanding Pledges tile links to the pledges page again.
+
+What remains, deliberately:
+
+- **A pledge is kept in step with donations by hand.** Nothing in the backend
+  moves a pledge's received amount or status when a donation arrives, so the
+  edit form asks for both. Linking a donation to a pledge would be a backend
+  change.
+- **Not on the forms:** a pledge's reminder switch and payment schedule
+  (nothing sends pledge reminders or reads the schedule), and an event's
+  sponsors and calendar-event link. All stay API-only.
+
+The original findings, for the record:
 
 - **Pledges.** `fundraisingService.listPledges` / `createPledge` /
-  `updatePledge` exist over a working API. The only consumer is a
-  `grantsStore` action that no component calls. The grants dashboard's
-  "Outstanding Pledges" KPI card linked to `/grants/pledges`, which has no
-  route — and because the router's catch-all redirects unknown paths to `/`,
-  clicking it bounced the user to the home dashboard with no error. The link
-  has been removed (the figure is real, the destination was not); restore it
-  when the page ships.
+  `updatePledge` existed over a working API with no page. The grants
+  dashboard's "Outstanding Pledges" KPI card linked to `/grants/pledges`,
+  which had no route, so its link was removed until the page shipped.
 - **Fundraising events.** `listFundraisingEvents` / `createFundraisingEvent` /
   `updateFundraisingEvent`: zero consumers, no route, no page.
 - **Recording a donation** _(resolved 2026-10-11 — see the "Record Donation" row above)_. `DonationsPage`'s primary action, "Record

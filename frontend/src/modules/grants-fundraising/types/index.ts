@@ -121,6 +121,26 @@ export const PledgeStatus = {
 } as const;
 export type PledgeStatus = (typeof PledgeStatus)[keyof typeof PledgeStatus];
 
+export const FundraisingEventType = {
+  DINNER: 'dinner',
+  GALA: 'gala',
+  AUCTION: 'auction',
+  RAFFLE: 'raffle',
+  GOLF_OUTING: 'golf_outing',
+  WALKATHON: 'walkathon',
+  OTHER: 'other',
+} as const;
+export type FundraisingEventType = (typeof FundraisingEventType)[keyof typeof FundraisingEventType];
+
+export const FundraisingEventStatus = {
+  PLANNING: 'planning',
+  OPEN: 'open',
+  SOLD_OUT: 'sold_out',
+  COMPLETED: 'completed',
+  CANCELLED: 'cancelled',
+} as const;
+export type FundraisingEventStatus = (typeof FundraisingEventStatus)[keyof typeof FundraisingEventStatus];
+
 // =============================================================================
 // Status Badge Color Mappings (Tailwind classes)
 // =============================================================================
@@ -462,17 +482,41 @@ export interface Pledge {
   organizationId: string;
   campaignId: string | null;
   donorId: string | null;
-  pledgedAmount: number;
-  fulfilledAmount: number;
+  pledgedAmount: number | string;
+  fulfilledAmount: number | string;
+  /** Calendar date, `YYYY-MM-DD`. */
   pledgeDate: string;
+  /** Calendar date, `YYYY-MM-DD`. */
   dueDate: string | null;
   status: PledgeStatus;
-  paymentSchedule: string | null;
+  paymentSchedule: Record<string, unknown> | null;
   reminderEnabled: boolean;
   notes: string | null;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** `POST /grants/pledges`. Blank optional fields are omitted. */
+export interface PledgeCreatePayload {
+  donorId?: string | undefined;
+  campaignId?: string | undefined;
+  pledgedAmount: string;
+  pledgeDate: string;
+  dueDate?: string | undefined;
+  notes?: string | undefined;
+}
+
+/** `PUT /grants/pledges/:id`. `null` clears a field. */
+export interface PledgeUpdatePayload {
+  donorId: string | null;
+  campaignId: string | null;
+  pledgedAmount: string;
+  pledgeDate: string;
+  dueDate: string | null;
+  fulfilledAmount: string;
+  status: PledgeStatus;
+  notes: string | null;
 }
 
 // =============================================================================
@@ -486,22 +530,57 @@ export interface FundraisingEvent {
   eventId: string | null;
   name: string;
   description: string | null;
-  eventType: string;
+  eventType: FundraisingEventType;
   eventDate: string;
   location: string | null;
-  ticketPrice: number | null;
+  ticketPrice: number | string | null;
   maxAttendees: number | null;
   currentAttendees: number;
-  revenueGoal: number | null;
-  actualRevenue: number;
-  expenses: number;
-  status: string;
+  revenueGoal: number | string | null;
+  actualRevenue: number | string;
+  expenses: number | string;
+  status: FundraisingEventStatus;
   registrationUrl: string | null;
-  sponsors: string | null;
+  sponsors: Record<string, unknown>[] | null;
   notes: string | null;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** `POST /grants/fundraising-events`. Blank optional fields are omitted. */
+export interface FundraisingEventCreatePayload {
+  name: string;
+  eventType: FundraisingEventType;
+  /** UTC instant. */
+  eventDate: string;
+  location?: string | undefined;
+  campaignId?: string | undefined;
+  ticketPrice?: string | undefined;
+  maxAttendees?: number | undefined;
+  revenueGoal?: string | undefined;
+  registrationUrl?: string | undefined;
+  description?: string | undefined;
+  notes?: string | undefined;
+}
+
+/** `PUT /grants/fundraising-events/:id`. `null` clears a field. */
+export interface FundraisingEventUpdatePayload {
+  name: string;
+  eventType: FundraisingEventType;
+  eventDate: string;
+  location: string | null;
+  campaignId: string | null;
+  ticketPrice: string | null;
+  maxAttendees: number | null;
+  revenueGoal: string | null;
+  registrationUrl: string | null;
+  description: string | null;
+  notes: string | null;
+  status: FundraisingEventStatus;
+  actualRevenue: string;
+  expenses: string;
+  currentAttendees: number;
 }
 
 // =============================================================================

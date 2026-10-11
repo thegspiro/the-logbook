@@ -2,7 +2,7 @@
  * Display labels shared across the Grants & Fundraising pages.
  */
 
-import { GrantCategory } from '../types';
+import { FundraisingEventStatus, FundraisingEventType, GrantCategory, PledgeStatus } from '../types';
 import type { Donor } from '../types';
 
 export const GRANT_CATEGORY_LABELS: Record<GrantCategory, string> = {
@@ -40,4 +40,46 @@ export const PAYMENT_STATUS_LABELS: Record<string, string> = {
   failed: 'Failed',
   refunded: 'Refunded',
   cancelled: 'Cancelled',
+};
+
+export const PLEDGE_STATUS_LABELS: Record<PledgeStatus, string> = {
+  [PledgeStatus.PENDING]: 'Pending',
+  [PledgeStatus.PARTIAL]: 'Partly received',
+  [PledgeStatus.OVERDUE]: 'Overdue',
+  [PledgeStatus.FULFILLED]: 'Fulfilled',
+  [PledgeStatus.CANCELLED]: 'Cancelled',
+};
+
+export const PLEDGE_STATUS_COLORS: Record<string, string> = {
+  [PledgeStatus.PENDING]: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300',
+  [PledgeStatus.PARTIAL]: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300',
+  [PledgeStatus.OVERDUE]: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300',
+  [PledgeStatus.FULFILLED]: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300',
+  [PledgeStatus.CANCELLED]: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300',
+};
+
+export const FUNDRAISING_EVENT_TYPE_LABELS: Record<FundraisingEventType, string> = {
+  [FundraisingEventType.DINNER]: 'Dinner',
+  [FundraisingEventType.GALA]: 'Gala',
+  [FundraisingEventType.AUCTION]: 'Auction',
+  [FundraisingEventType.RAFFLE]: 'Raffle',
+  [FundraisingEventType.GOLF_OUTING]: 'Golf outing',
+  [FundraisingEventType.WALKATHON]: 'Walkathon',
+  [FundraisingEventType.OTHER]: 'Other',
+};
+
+export const FUNDRAISING_EVENT_STATUS_LABELS: Record<FundraisingEventStatus, string> = {
+  [FundraisingEventStatus.PLANNING]: 'Planning',
+  [FundraisingEventStatus.OPEN]: 'Open',
+  [FundraisingEventStatus.SOLD_OUT]: 'Sold out',
+  [FundraisingEventStatus.COMPLETED]: 'Completed',
+  [FundraisingEventStatus.CANCELLED]: 'Cancelled',
+};
+
+export const FUNDRAISING_EVENT_STATUS_COLORS: Record<string, string> = {
+  [FundraisingEventStatus.PLANNING]: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300',
+  [FundraisingEventStatus.OPEN]: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300',
+  [FundraisingEventStatus.SOLD_OUT]: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300',
+  [FundraisingEventStatus.COMPLETED]: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-300',
+  [FundraisingEventStatus.CANCELLED]: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300',
 };
