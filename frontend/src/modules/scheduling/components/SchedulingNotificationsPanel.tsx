@@ -64,10 +64,14 @@ const DEFAULT_ASSIGNMENT_SETTINGS: AssignmentSettings = {
   cc_emails: [],
 };
 
+// send_email defaults to true because the reminder sender does
+// (`reminder_cfg.get("send_email", True)` in scheduled_tasks.py): a department
+// that never saved this panel receives reminder emails, so the box must show
+// ticked. A false default here showed it unticked while the emails went out.
 const DEFAULT_REMINDER_SETTINGS: ShiftReminderSettings = {
   enabled: true,
   lookahead_hours: 2,
-  send_email: false,
+  send_email: true,
   cc_emails: [],
 };
 
@@ -90,6 +94,7 @@ const AVAILABLE_ROLES = [
 
 export const SchedulingNotificationsPanel: React.FC = () => {
   const reminderLookaheadId = useId();
+  const reminderHeadingId = useId();
 
   // Shift decline/drop notification settings (stored in org settings)
   const [declineSettings, setDeclineSettings] = useState<DeclineSettings>(DEFAULT_DECLINE_SETTINGS);
@@ -486,10 +491,12 @@ export const SchedulingNotificationsPanel: React.FC = () => {
       </div>
 
       {/* Start-of-Shift Reminder Settings */}
-      <div className="border-theme-surface-border mt-5 border-t pt-5">
+      <section aria-labelledby={reminderHeadingId} className="border-theme-surface-border mt-5 border-t pt-5">
         <div className="mb-1 flex items-center gap-2">
           <Clock className="h-4 w-4 text-green-500" />
-          <h4 className="text-theme-text-primary text-sm font-semibold">Start-of-Shift Reminders</h4>
+          <h4 id={reminderHeadingId} className="text-theme-text-primary text-sm font-semibold">
+            Start-of-Shift Reminders
+          </h4>
           {savingReminder && <Loader2 className="text-theme-text-muted h-3 w-3 animate-spin" />}
         </div>
         <p className="text-theme-text-muted mb-3 text-xs">
@@ -615,7 +622,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
             )}
           </div>
         )}
-      </div>
+      </section>
 
       {/* Equipment Check Failure Alerts */}
       <div className="border-theme-surface-border mt-5 border-t pt-5">
