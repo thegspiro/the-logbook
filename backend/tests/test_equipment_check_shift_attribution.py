@@ -6,6 +6,8 @@ Apparatus module's table — so anything keyed on it sees nothing. These tests
 build such a department and read it back through the fleet board.
 
 * W46-12 — a check filed before its shift's date reaches the fleet board now.
+* W46-11 — the compliance report and failure log attribute a check to the
+  unit its shift was on.
 """
 
 import uuid
@@ -25,6 +27,7 @@ from app.models.training import (
     ShiftEquipmentCheck,
     ShiftEquipmentCheckItem,
 )
+from app.services.equipment_check_service import EquipmentCheckService
 from app.services.equipment_readiness_service import (
     READY_ATTENTION,
     STATUS_FAILED,
@@ -201,3 +204,39 @@ class TestEarlyCheckReachesTheFleet:
 
         assert [e["check_id"] for e in log["entries"]] == [check.id]
         assert log["entries"][0]["findings"] == ["SCBA bottle"]
+
+
+class TestReportsResolveThroughTheShift:
+    """W46-11."""
+
+    async def test_the_compliance_report_lists_the_basic_unit_with_its_checks(
+        self, db_session
+    ):
+        org_id, user_id, engine, template, item = await _department(db_session)
+        shift = await _shift(db_session, org_id, engine, date.today())
+        await _check(db_session, org_id, user_id, shift, template, item, "fail")
+
+        report = await EquipmentCheckService(db_session).get_compliance_report(org_id)
+
+        (row,) = report["apparatus"]
+        assert row["apparatus_id"] == engine.id
+        assert row["apparatus_name"] == "E-1"
+        assert row["has_checklist"] is True
+        assert (row["checks_completed"], row["fail_count"]) == (1, 1)
+        assert row["last_status"] == "fail"
+
+    async def test_the_failure_log_names_and_filters_by_the_basic_unit(
+        self, db_session
+    ):
+        org_id, user_id, engine, template, item = await _department(db_session)
+        shift = await _shift(db_session, org_id, engine, date.today())
+        await _check(db_session, org_id, user_id, shift, template, item, "fail")
+        service = EquipmentCheckService(db_session)
+
+        log = await service.get_failure_log(org_id, apparatus_id=engine.id)
+        other = await service.get_failure_log(org_id, apparatus_id=_uid())
+
+        assert log["total"] == 1
+        assert log["items"][0]["apparatus_id"] == engine.id
+        assert log["items"][0]["apparatus_name"] == "E-1"
+        assert other["total"] == 0

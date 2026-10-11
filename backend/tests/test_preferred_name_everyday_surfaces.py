@@ -58,6 +58,9 @@ class TestEquipmentCheckNameMap:
 
     async def test_compliance_report_keeps_the_legal_name(self):
         check = SimpleNamespace(
+            id="c1",
+            # Standalone: no shift to resolve the apparatus through.
+            shift_id=None,
             apparatus_id="a1",
             checked_by="u1",
             overall_status="pass",

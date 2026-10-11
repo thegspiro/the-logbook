@@ -4648,6 +4648,12 @@ needs a decision rather than a patch:
     - store the shift's id as the model now documents, and teach the report
       readers both tables, with a backfill from `shifts` for existing rows;
     - or resolve reports through the shift.
+  - ✅ Resolved 2026-10-11 (owner decision: resolve reports through the shift;
+    no backfill). The compliance report and the failure log (screen, CSV and
+    PDF) attribute a check to `shifts.apparatus_id`, falling back to the check's
+    own column only for a standalone check, and a department with no Apparatus
+    records is reported against its basic apparatus list. Stored rows are
+    unchanged. Still true: a checklist cannot name one basic unit (W46-20).
 - **W46-12 — A check can be filed before its shift's date and is then invisible
   to officers.**
   - My Checklists offers shifts from today onward, and the server accepts a

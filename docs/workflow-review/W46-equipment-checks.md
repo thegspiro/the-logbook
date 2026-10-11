@@ -222,7 +222,7 @@ Not driven:
 - The attributes go on the drag handle with the listeners (`handleProps`).
 - New builder case. Re-driven: the field is no longer inside a `role="button"`.
 
-### W46-11 — MED — Checks on basic apparatus are stored with no apparatus, so check reports show nothing by truck — FLAGGED
+### W46-11 — MED — Checks on basic apparatus are stored with no apparatus, so check reports show nothing by truck — ✅ FIXED (2026-10-11)
 
 **Did:** Two checks filed on Engine 1 (a basic apparatus). Then Check reports as `scheduling_officer`.
 **Saw:**
@@ -240,6 +240,10 @@ Not driven:
 - A department on basic apparatus also cannot write a truck-specific checklist (W46-8).
 
 Whether basic apparatus should become first-class for checks, or reports should resolve through the shift, is the owner's call. Mirrored in `KNOWN_LIMITATIONS.md`.
+
+**Fixed (2026-10-11), owner decision: resolve reports through the shift, no
+backfill.** The compliance report and failure log read the unit from the
+check's shift; a basic-apparatus department's units are listed by unit number.
 
 ### W46-12 — MED — A check filed before its shift's date is invisible on the fleet board and log until that date — ✅ FIXED (2026-10-11)
 

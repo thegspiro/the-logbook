@@ -3578,9 +3578,14 @@ include **Check Reports** or the fleet board, which stay with
   failures".
 
 **Still open** (in `docs/KNOWN_LIMITATIONS.md`): a new or re-scoped checklist
-counts as missed on days before it existed (W46-19); a check on a basic
-apparatus is stored with no apparatus, so per-truck reports are empty for it
-(W46-11).
+counts as missed on days before it existed (W46-19).
+
+**Per-truck reports work on basic apparatus** _(2026-10-11)_. A department
+that set its units up in onboarding rather than the Apparatus module now sees
+each unit under **Apparatus Compliance** on Check Reports, and the failure log
+(and its CSV and PDF) names the unit, because the report reads the unit from
+the check's shift. Checks filed before this change are reported the same way;
+nothing had to be re-entered.
 
 **A check filed ahead of its shift shows at once** _(2026-10-11)_. A crew that
 checks the rig the evening before a morning shift now sees that check on the
