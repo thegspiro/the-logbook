@@ -356,11 +356,11 @@ Each donor profile shows:
 
 ### Edge Cases
 
-| Scenario                 | Behavior                                              |
-| ------------------------ | ----------------------------------------------------- |
-| Donor linked to a member | `user_id` field connects to the member profile        |
-| Anonymous donor          | `is_anonymous = true`; name not shown in public views |
-| Donor deactivated        | Soft-delete; historical records preserved             |
+| Scenario                 | Behavior                                                                                                                                                                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Donor linked to a member | `user_id` field connects to the member profile                                                                                                                                                                           |
+| Anonymous donor          | `is_anonymous = true`; members with only `fundraising.view` see **Anonymous donor** with no contact details, and a search by the donor's name does not find the record. `fundraising.manage` holders see the full record |
+| Donor deactivated        | Soft-delete; historical records preserved                                                                                                                                                                                |
 
 ---
 
@@ -375,7 +375,7 @@ Each donor profile shows:
    - **Payment status** — defaults to Completed. Only a completed gift counts toward the campaign's raised total and the donor's giving history
    - **Campaign** — optional
    - **Donor** — choose from the donor directory, or leave it as "Not in the donor directory" and enter a name and email for a one-time gift
-   - **Anonymous** — keep the donor's name out of public views
+   - **Anonymous** — hide who gave from everyone who can only view fundraising (`fundraising.view`): the Donations list and the dashboard's recent donations show **Anonymous** and the API returns no donor name, email or link to the donor. Officers with `fundraising.manage` still see the donor, so receipts and thank-you letters can go out
    - **Dedication** — In honor of or In memory of, with the name
    - **Tax deductible** — on by default
    - **Notes**
@@ -404,12 +404,12 @@ Track whether receipts and thank-you letters have been sent:
 
 ### Edge Cases
 
-| Scenario                           | Behavior                                               |
-| ---------------------------------- | ------------------------------------------------------ |
-| Recurring donation                 | Records each occurrence separately; tracks frequency   |
-| Anonymous donation with dedication | Dedication shown; donor name hidden                    |
-| Donation to inactive campaign      | Allowed but logged; counted toward campaign total      |
-| Check donation                     | `check_number` is stored but API-only; put it in Notes |
+| Scenario                           | Behavior                                                                                                                               |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Recurring donation                 | Records each occurrence separately; tracks frequency                                                                                   |
+| Anonymous donation with dedication | Dedication shown; donor name, email and donor link hidden from `fundraising.view`-only members (amount, date and campaign still shown) |
+| Donation to inactive campaign      | Allowed but logged; counted toward campaign total                                                                                      |
+| Check donation                     | `check_number` is stored but API-only; put it in Notes                                                                                 |
 
 ---
 

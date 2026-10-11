@@ -15,7 +15,11 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import PaginationParams, require_permission
+from app.api.dependencies import (
+    PaginationParams,
+    require_permission,
+    user_has_permission,
+)
 from app.core.database import get_db
 from app.core.utils import ensure_found, safe_error_detail
 from app.models.user import User
@@ -56,6 +60,11 @@ from app.schemas.grant import (
     PledgeCreate,
     PledgeResponse,
     PledgeUpdate,
+)
+from app.services.donor_privacy import (
+    MANAGE_PERMISSION,
+    present_donation,
+    present_donor,
 )
 from app.services.fundraising_service import FundraisingService
 from app.services.grant_service import GrantService
@@ -1210,13 +1219,18 @@ async def list_donors(
     """
     try:
         service = FundraisingService(db)
-        return await service.list_donors(
+        # GF-8: a view-only caller sees an anonymous donor without identity,
+        # and cannot find one by searching for the name it hides either.
+        can_see_identity = user_has_permission(current_user, MANAGE_PERMISSION)
+        donors = await service.list_donors(
             organization_id=str(current_user.organization_id),
             donor_type=donor_type,
             search=search,
             skip=pagination.skip,
             limit=pagination.limit,
+            search_anonymous=can_see_identity,
         )
+        return [present_donor(d, can_see_identity) for d in donors]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1289,7 +1303,9 @@ async def get_donor(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Donor not found",
             )
-        return donor
+        return present_donor(
+            donor, user_has_permission(current_user, MANAGE_PERMISSION)
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -1368,7 +1384,7 @@ async def list_donations(
     """
     try:
         service = FundraisingService(db)
-        return await service.list_donations(
+        donations = await service.list_donations(
             organization_id=str(current_user.organization_id),
             campaign_id=str(campaign_id) if campaign_id else None,
             donor_id=str(donor_id) if donor_id else None,
@@ -1377,6 +1393,9 @@ async def list_donations(
             skip=pagination.skip,
             limit=pagination.limit,
         )
+        # GF-8: an anonymous gift's donor is hidden from view-only callers.
+        can_see_identity = user_has_permission(current_user, MANAGE_PERMISSION)
+        return [present_donation(d, can_see_identity) for d in donations]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1745,7 +1764,13 @@ async def get_dashboard(
             pending_applications=grant_data.get("pending_applications", 0),
             active_grants=grant_data.get("active_grants", 0),
             upcoming_deadlines=grant_data.get("upcoming_deadlines", []),
-            recent_donations=fundraising_data.get("recent_donations", []),
+            # GF-8: an anonymous gift's donor is hidden from view-only callers.
+            recent_donations=[
+                present_donation(
+                    d, user_has_permission(current_user, MANAGE_PERMISSION)
+                )
+                for d in fundraising_data.get("recent_donations", [])
+            ],
             compliance_tasks_due=grant_data.get("compliance_tasks_due", []),
             total_grant_funding=grant_data.get("total_grant_funding", 0),
             total_donors=fundraising_data.get("total_donors", 0),
