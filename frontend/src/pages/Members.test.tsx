@@ -409,11 +409,11 @@ describe('Members roster — membership coordinator (members.manage)', () => {
     expect(mockGetDirectory).not.toHaveBeenCalled();
   });
 
-  it('opens on the whole roster, archived included', async () => {
+  it('opens on All Current, which leaves archived members out', async () => {
     renderWithRouter(<Members />);
 
     await waitFor(() => expect(mockGetUsers).toHaveBeenCalledTimes(1));
-    expect(screen.getByLabelText('Filter by status')).toHaveValue('all');
+    expect(screen.getByLabelText('Filter by status')).toHaveValue('current');
   });
 
   it('offers the add and import prompt on an empty roster', async () => {
@@ -497,6 +497,29 @@ describe('Members roster — archived members', () => {
       mockRoster.mockResolvedValue([...ROSTER, ARCHIVED]);
     });
 
+    it('leaves archived members out of the opening list and the total', async () => {
+      await renderRoster();
+
+      expect(within(table()).getByText('Laura Adams')).toBeInTheDocument();
+      expect(within(table()).queryByText('Casey Former')).not.toBeInTheDocument();
+      // The card is a label and a number in one box; match the box whole.
+      expect(
+        screen.getByText(
+          (_, element) => element?.tagName === 'DIV' && element.textContent === `Total Members${ROSTER.length}`
+        )
+      ).toBeInTheDocument();
+    });
+
+    it('shows archived members under All Statuses', async () => {
+      const user = userEvent.setup();
+      await renderRoster();
+
+      await user.selectOptions(screen.getByLabelText('Filter by status'), 'all');
+
+      expect(await within(table()).findByText('Casey Former')).toBeInTheDocument();
+      expect(within(table()).getByText('Laura Adams')).toBeInTheDocument();
+    });
+
     it('offers an Archived filter that narrows the list to archived members', async () => {
       const user = userEvent.setup();
       await renderRoster();
@@ -508,7 +531,9 @@ describe('Members roster — archived members', () => {
     });
 
     it('offers Reactivate only on archived rows, in both layouts', async () => {
+      const user = userEvent.setup();
       await renderRoster();
+      await user.selectOptions(screen.getByLabelText('Filter by status'), 'all');
 
       expect(within(table()).getByLabelText('Reactivate Casey Former')).toBeInTheDocument();
       expect(within(cards()).getByLabelText('Reactivate Casey Former')).toBeInTheDocument();
@@ -519,6 +544,7 @@ describe('Members roster — archived members', () => {
       const user = userEvent.setup();
       await renderRoster();
       expect(mockRoster).toHaveBeenCalledTimes(1);
+      await user.selectOptions(screen.getByLabelText('Filter by status'), 'archived');
 
       await user.click(within(table()).getByLabelText('Reactivate Casey Former'));
       await screen.findByRole('group', { name: /Earlier service/ });
@@ -544,6 +570,9 @@ describe('Members roster — archived members', () => {
 
       const filter = screen.getByLabelText('Filter by status');
       expect(within(filter).queryByRole('option', { name: 'Archived' })).not.toBeInTheDocument();
+      // The directory never holds archived members, so All Current would only
+      // repeat All Statuses.
+      expect(within(filter).queryByRole('option', { name: 'All Current' })).not.toBeInTheDocument();
       expect(screen.queryByLabelText('Reactivate Casey Former')).not.toBeInTheDocument();
     });
   });
