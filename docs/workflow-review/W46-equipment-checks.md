@@ -241,7 +241,7 @@ Not driven:
 
 Whether basic apparatus should become first-class for checks, or reports should resolve through the shift, is the owner's call. Mirrored in `KNOWN_LIMITATIONS.md`.
 
-### W46-12 — MED — A check filed before its shift's date is invisible on the fleet board and log until that date — FLAGGED
+### W46-12 — MED — A check filed before its shift's date is invisible on the fleet board and log until that date — ✅ FIXED (2026-10-11)
 
 **Did:** `member` filed tomorrow's check at 23:09 Chicago time, with a failed camera and SCBA at 3 of 4. Then opened the fleet board as `scheduling_officer`.
 **Saw:**
@@ -255,6 +255,10 @@ Whether basic apparatus should become first-class for checks, or reports should 
 - or let the board read shifts up to the start of the next one.
 
 Mirrored in `KNOWN_LIMITATIONS.md`.
+
+**Fixed (2026-10-11), owner decision: widen the readiness window.** The board
+and log read a shift up to seven days ahead once a check has been filed against
+it, so the failed camera reaches the board the evening it is found.
 
 ### W46-13 — LOW — Fail and Out of service need no note — FLAGGED
 

@@ -3580,8 +3580,15 @@ include **Check Reports** or the fleet board, which stay with
 **Still open** (in `docs/KNOWN_LIMITATIONS.md`): a new or re-scoped checklist
 counts as missed on days before it existed (W46-19); a check on a basic
 apparatus is stored with no apparatus, so per-truck reports are empty for it
-(W46-11); and a check filed ahead of its shift's date does not show on the board
-(W46-12).
+(W46-11).
+
+**A check filed ahead of its shift shows at once** _(2026-10-11)_. A crew that
+checks the rig the evening before a morning shift now sees that check on the
+fleet board and in the check log straight away — a failed item puts the rig in
+**Needs attention** that evening, not when the date turns. The board shows it as
+a column after today. Only a shift with a check already filed is pulled forward,
+up to a week ahead; an upcoming shift nobody has checked yet is not shown as
+due.
 
 ## Requesting gear: the form browses now _(2026-09-05)_
 

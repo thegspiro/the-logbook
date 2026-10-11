@@ -111,6 +111,8 @@ MAX_LOG_DATES = 90
 DEFAULT_LOG_DATES = 14
 DEFAULT_STRIP_DATES = 7
 DEFAULT_EXPIRING_DAYS = 30
+# How far ahead a check filed before its shift's date is looked for (W46-12).
+EARLY_CHECK_LOOKAHEAD_DAYS = 7
 
 
 @dataclass
@@ -486,26 +488,103 @@ class EquipmentReadinessService:
         window is walked backwards from today over shifts that exist, so a
         department that runs shifts three days a week gets ``dates`` columns
         of real duty days rather than a fortnight mostly made of blanks.
-        """
-        by_apparatus, by_type, by_id = await self._load_templates(organization_id)
-        links = await self._load_shift_template_links(organization_id)
 
+        A shift after today joins the window when a check has already been
+        filed against it (W46-12): a crew that checks the rig the evening
+        before an early shift found whatever they found *now*, and a failure
+        that waits for the shift's date to reach the fleet board is a failure
+        nobody acts on in time. Such a date is an extra column after today; it
+        does not push a past duty day out of the window.
+        """
         # Look back generously to find `dates` distinct duty days, then trim.
         # Four times the window covers a department running shifts twice a
         # week; beyond that the lookback caps rather than scanning all history.
         lookback = min(max(dates * 4, dates + 30), 400)
+        shifts = await self._load_shifts(
+            organization_id, fleet, today - timedelta(days=lookback), today
+        )
+        shifts += await self._load_early_checked_shifts(organization_id, fleet, today)
+        if not shifts:
+            return [], []
+
+        expected = await self._expected_pairs(organization_id, fleet, shifts)
+        if not expected:
+            return [], []
+
+        past_dates = sorted(
+            {s.shift_date for s, _ in expected if s.shift_date <= today}
+        )
+        column_set = set(past_dates[-dates:]) | {
+            s.shift_date for s, _ in expected if s.shift_date > today
+        }
+        expected = [(s, t) for s, t in expected if s.shift_date in column_set]
+        if not expected:
+            return [], []
+
+        column_dates = sorted(column_set)
+        occasions = await self._resolve_occasions(
+            organization_id, fleet, expected, column_dates[0], column_dates[-1], today
+        )
+        return occasions, column_dates
+
+    async def _load_shifts(
+        self,
+        organization_id: str,
+        fleet: Dict[str, FleetUnit],
+        start: date,
+        end: date,
+    ) -> List[Shift]:
+        """Non-cancelled shifts on fleet units dated ``start``..``end``."""
         result = await self.db.execute(
             select(Shift).where(
                 Shift.organization_id == organization_id,
-                Shift.shift_date >= today - timedelta(days=lookback),
-                Shift.shift_date <= today,
+                Shift.shift_date >= start,
+                Shift.shift_date <= end,
                 Shift.status != ShiftStatus.CANCELLED,
                 Shift.apparatus_id.in_(list(fleet.keys())),
             )
         )
-        shifts = list(result.scalars().all())
-        if not shifts:
-            return [], []
+        return list(result.scalars().all())
+
+    async def _load_early_checked_shifts(
+        self, organization_id: str, fleet: Dict[str, FleetUnit], today: date
+    ) -> List[Shift]:
+        """Upcoming shifts a check has already been filed against (W46-12).
+
+        Bounded to ``EARLY_CHECK_LOOKAHEAD_DAYS`` ahead: the case is a crew
+        checking the rig before an early start, not a check filed weeks out.
+        """
+        result = await self.db.execute(
+            select(Shift)
+            .join(ShiftEquipmentCheck, ShiftEquipmentCheck.shift_id == Shift.id)
+            .where(
+                Shift.organization_id == organization_id,
+                ShiftEquipmentCheck.organization_id == organization_id,
+                Shift.shift_date > today,
+                Shift.shift_date <= today + timedelta(days=EARLY_CHECK_LOOKAHEAD_DAYS),
+                Shift.status != ShiftStatus.CANCELLED,
+                Shift.apparatus_id.in_(list(fleet.keys())),
+            )
+            .distinct()
+        )
+        # Re-checked here as well as in SQL: only a shift after today is an
+        # early one, and the main query already holds today and before.
+        return [s for s in result.scalars().all() if s.shift_date > today]
+
+    async def _expected_pairs(
+        self,
+        organization_id: str,
+        fleet: Dict[str, FleetUnit],
+        shifts: Sequence[Shift],
+    ) -> List[Tuple[Shift, EquipmentCheckTemplate]]:
+        """(shift, checklist) for every check a shift expected.
+
+        The definition of an expected check — one per shift per applicable
+        checklist — shared by the fleet board, the check log and the compliance
+        report, so the three cannot count differently.
+        """
+        by_apparatus, by_type, by_id = await self._load_templates(organization_id)
+        links = await self._load_shift_template_links(organization_id)
 
         # Only dates that actually expected a check become columns — a shift on
         # a rig with no template configured is not a missed check.
@@ -526,22 +605,22 @@ class EquipmentReadinessService:
             )
             for tmpl in templates:
                 expected.append((shift, tmpl))
+        return expected
 
-        if not expected:
-            return [], []
-
-        column_dates = sorted({shift.shift_date for shift, _ in expected})[-dates:]
-        column_set = set(column_dates)
-        expected = [(s, t) for s, t in expected if s.shift_date in column_set]
-        if not expected:
-            return [], []
-
+    async def _resolve_occasions(
+        self,
+        organization_id: str,
+        fleet: Dict[str, FleetUnit],
+        expected: List[Tuple[Shift, EquipmentCheckTemplate]],
+        start: date,
+        end: date,
+        today: date,
+    ) -> List[_Occasion]:
+        """Attach each expected check's submission, or decide why it has none."""
         checks = await self._load_checks(
             organization_id, [str(s.id) for s, _ in expected]
         )
-        unavailable = await self._unavailable_dates(
-            organization_id, fleet, column_dates[0], column_dates[-1]
-        )
+        unavailable = await self._unavailable_dates(organization_id, fleet, start, end)
 
         occasions: List[_Occasion] = []
         for shift, tmpl in expected:
@@ -573,8 +652,7 @@ class EquipmentReadinessService:
             else:
                 occ.status = STATUS_MISSED
             occasions.append(occ)
-
-        return occasions, column_dates
+        return occasions
 
     async def _load_checks(
         self, organization_id: str, shift_ids: List[str]

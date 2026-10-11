@@ -4657,6 +4657,13 @@ needs a decision rather than a patch:
     turns.
   - Either refuse checks ahead of the shift, or let the readiness window reach
     the next shift's start.
+  - ✅ Resolved 2026-10-11 (owner decision: widen the readiness window). The
+    fleet board and check log now also read a shift up to
+    `EARLY_CHECK_LOOKAHEAD_DAYS` (7) ahead **when a check has already been filed
+    against it**: the early check is a column after today, its findings count
+    on the board at once, and it is a log entry. An upcoming shift with nothing
+    filed stays off both, so the window of past duty days is unchanged
+    (`tests/test_equipment_check_shift_attribution.py`).
 - **W46-13 — Fail and Out of service carry no required note.** An item marked
   out of service takes the rig off the fleet board with no reason recorded.
   ✅ Resolved 2026-10-04 (#2882): the check form now requires a note on a Fail
