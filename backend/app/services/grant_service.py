@@ -28,8 +28,10 @@ from app.models.grant import (
     GrantNoteType,
     GrantOpportunity,
     GrantPriority,
+    assert_status_transition,
 )
 from app.models.user import User
+from app.utils.grant_spending import spending_warnings
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import (
@@ -488,6 +490,11 @@ class GrantService:
         await self._validate_application_fks(data, organization_id)
 
         old_status = application.application_status
+        # GF-7: a status change must be a step the grant lifecycle allows
+        # (APPLICATION_STATUS_TRANSITIONS) -- e.g. a closed grant cannot drop
+        # back to researching. Checked before anything is written.
+        if data.get("application_status") is not None:
+            assert_status_transition(old_status, data["application_status"])
 
         apply_updates(application, data, skip={"organization_id", "id"})
 
@@ -531,10 +538,11 @@ class GrantService:
     ) -> None:
         """Auto-generate standard compliance tasks when a grant is awarded.
 
-        Called on every transition *into* AWARDED (`update_application` has
-        no transition guard — that is GF-7's broader, still-open question),
-        so an awarded -> active -> awarded round-trip would otherwise
-        re-enter this method and append a second full set of tasks with the
+        Called on every transition *into* AWARDED. The GF-7 lifecycle no
+        longer allows active -> awarded, but an application created directly
+        as awarded and then edited still reaches here more than once, and an
+        awarded -> active -> awarded round-trip (possible before the
+        lifecycle existed) would otherwise re-enter this method and append a second full set of tasks with the
         same titles and due dates. Guarded by `compliance_tasks_generated` on
         the application itself, not by inspecting the tasks table: an
         earlier version of this guard matched on `task_type`, but that field
@@ -854,6 +862,36 @@ class GrantService:
         # model requires both.
         await self.db.refresh(expenditure)
         return expenditure
+
+    async def spending_warnings(
+        self,
+        application_id: str,
+        organization_id: str,
+        user_id: Optional[str] = None,
+        budget_item_id: Optional[str] = None,
+    ) -> List[str]:
+        """Warnings for a write that left the grant or a budget line overspent.
+
+        GF-7: overspend warns and never blocks -- the money has already been
+        spent when it is recorded. The warning is also written to the audit
+        log, so an overspend nobody acted on is still on record.
+        """
+        application = await self.get_application(application_id, organization_id)
+        if not application:
+            return []
+        warnings = spending_warnings(application, budget_item_id)
+        if warnings:
+            await self._audit(
+                "grant_overspend_recorded",
+                {
+                    "application_id": application.id,
+                    "budget_item_id": budget_item_id,
+                    "warnings": warnings,
+                },
+                severity="warning",
+                user_id=user_id,
+            )
+        return warnings
 
     async def update_expenditure(
         self, expenditure_id: str, data: Dict[str, Any], organization_id: str

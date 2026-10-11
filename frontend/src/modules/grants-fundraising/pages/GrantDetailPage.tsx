@@ -330,7 +330,7 @@ export const GrantDetailPage: React.FC = () => {
     runExpenditure(async () => {
       if (!id || !expenditureDescription || !expenditureAmount || !expenditureDate) return;
       try {
-        await addExpenditure(id, {
+        const recorded = await addExpenditure(id, {
           description: expenditureDescription,
           amount: parseFloat(expenditureAmount),
           expenditureDate,
@@ -339,6 +339,10 @@ export const GrantDetailPage: React.FC = () => {
           budgetItemId: expenditureBudgetItemId || null,
         });
         toast.success('Expenditure recorded');
+        // GF-7: an overspend is recorded anyway and reported, not refused.
+        for (const warning of recorded.warnings ?? []) {
+          toast(warning, { icon: '⚠️', duration: 8000 });
+        }
         resetExpenditureForm();
         setShowExpenditureModal(false);
       } catch {
@@ -560,6 +564,20 @@ export const GrantDetailPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Overspend (GF-7): measured on the server, warned about, never blocked */}
+      {application.overspentBy != null && Number(application.overspentBy) > 0 && (
+        <div className="mx-auto max-w-7xl px-6 pt-4">
+          <div className="alert-warning flex items-start gap-3" role="status">
+            <AlertTriangle className="text-theme-alert-warning-icon mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+            <p className="text-theme-text-primary text-sm">
+              Spending on this grant is {formatCurrency(Number(application.overspentBy))} over the{' '}
+              {formatCurrency(Number(application.amountAwarded ?? 0))} awarded. Expenditures are still recorded; check
+              the budget or the award amount with the funder.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Error display */}
       {error && (

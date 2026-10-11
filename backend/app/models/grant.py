@@ -64,35 +64,103 @@ class ApplicationStatus(str, Enum):
     CLOSED = "closed"
 
 
+# The grant lifecycle (GF-7): from each status, the statuses an application
+# may move to next. Staying put is always allowed and is not listed.
+#
+# - Before submission an application moves freely between the three drafting
+#   stages, and from any of them to Submitted, since a department reworks a
+#   proposal before it goes out and does not always record every stage.
+# - Once submitted it can only advance to a funder decision (or back from
+#   Under Review to Submitted, when a funder asks for a resubmission); a
+#   submitted application cannot quietly return to drafting.
+# - A denial can be reopened as new research for the next cycle; the denied
+#   record itself is the history of that attempt.
+# - An award runs Awarded -> Active -> Reporting -> Closed, with Active and
+#   Reporting alternating while a grant period has several reports. Awarded
+#   may close directly (an award declined or returned).
+# - Closed may reopen to Reporting only, for a report a funder asks for after
+#   closeout -- never back to an earlier, pre-award stage.
+APPLICATION_STATUS_TRANSITIONS: dict[
+    ApplicationStatus, frozenset[ApplicationStatus]
+] = {
+    ApplicationStatus.RESEARCHING: frozenset(
+        {
+            ApplicationStatus.PREPARING,
+            ApplicationStatus.INTERNAL_REVIEW,
+            ApplicationStatus.SUBMITTED,
+        }
+    ),
+    ApplicationStatus.PREPARING: frozenset(
+        {
+            ApplicationStatus.RESEARCHING,
+            ApplicationStatus.INTERNAL_REVIEW,
+            ApplicationStatus.SUBMITTED,
+        }
+    ),
+    ApplicationStatus.INTERNAL_REVIEW: frozenset(
+        {
+            ApplicationStatus.RESEARCHING,
+            ApplicationStatus.PREPARING,
+            ApplicationStatus.SUBMITTED,
+        }
+    ),
+    ApplicationStatus.SUBMITTED: frozenset(
+        {
+            ApplicationStatus.UNDER_REVIEW,
+            ApplicationStatus.AWARDED,
+            ApplicationStatus.DENIED,
+        }
+    ),
+    ApplicationStatus.UNDER_REVIEW: frozenset(
+        {
+            ApplicationStatus.SUBMITTED,
+            ApplicationStatus.AWARDED,
+            ApplicationStatus.DENIED,
+        }
+    ),
+    ApplicationStatus.AWARDED: frozenset(
+        {ApplicationStatus.ACTIVE, ApplicationStatus.CLOSED}
+    ),
+    ApplicationStatus.DENIED: frozenset({ApplicationStatus.RESEARCHING}),
+    ApplicationStatus.ACTIVE: frozenset(
+        {ApplicationStatus.REPORTING, ApplicationStatus.CLOSED}
+    ),
+    ApplicationStatus.REPORTING: frozenset(
+        {ApplicationStatus.ACTIVE, ApplicationStatus.CLOSED}
+    ),
+    ApplicationStatus.CLOSED: frozenset({ApplicationStatus.REPORTING}),
+}
+
+
+def allowed_next_statuses(current: "ApplicationStatus | str") -> list[str]:
+    """The statuses ``current`` may move to, in pipeline order."""
+    status = ApplicationStatus(current)
+    allowed = APPLICATION_STATUS_TRANSITIONS.get(status, frozenset())
+    return [s.value for s in ApplicationStatus if s in allowed]
+
+
+def assert_status_transition(
+    current: "ApplicationStatus | str", target: "ApplicationStatus | str"
+) -> None:
+    """Raise ValueError when ``current -> target`` is not a lifecycle step."""
+    old, new = ApplicationStatus(current), ApplicationStatus(target)
+    if old == new or new in APPLICATION_STATUS_TRANSITIONS.get(old, frozenset()):
+        return
+    allowed = allowed_next_statuses(old)
+    raise ValueError(
+        f"A grant cannot move from {old.value} to {new.value}. "
+        + (
+            f"From {old.value} it can move to: {', '.join(allowed)}."
+            if allowed
+            else f"{old.value} is final."
+        )
+    )
+
+
 # Named sets of statuses that a dashboard figure counts and that the
 # applications list can filter by (GF-27a). One definition for both: the
 # "Active Grants" card counts active *and* reporting, so the list it links to
 # must show exactly that set, not the one status the link used to carry.
-APPLICATION_STATUS_GROUPS: dict[str, tuple[ApplicationStatus, ...]] = {
-    # Awarded and being spent or reported on.
-    "active": (ApplicationStatus.ACTIVE, ApplicationStatus.REPORTING),
-    # Not yet decided by the funder.
-    "pending": (
-        ApplicationStatus.RESEARCHING,
-        ApplicationStatus.PREPARING,
-        ApplicationStatus.INTERNAL_REVIEW,
-        ApplicationStatus.SUBMITTED,
-        ApplicationStatus.UNDER_REVIEW,
-    ),
-    # Every status whose amount_awarded counts toward total grant funding.
-    "funded": (
-        ApplicationStatus.AWARDED,
-        ApplicationStatus.ACTIVE,
-        ApplicationStatus.REPORTING,
-        ApplicationStatus.CLOSED,
-    ),
-}
-
-
-# Named sets of statuses that a dashboard figure counts and that the
-# applications list can filter by (GF-27a). One definition for both: the
-# "Active Grants" card counts `active`, so the list it links to must show
-# exactly that set, not the one status the link used to carry.
 APPLICATION_STATUS_GROUPS: dict[str, tuple[ApplicationStatus, ...]] = {
     # Awarded and being spent or reported on.
     "active": (ApplicationStatus.ACTIVE, ApplicationStatus.REPORTING),

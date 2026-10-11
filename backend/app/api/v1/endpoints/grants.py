@@ -197,17 +197,18 @@ async def list_applications(
     """
     try:
         service = GrantService(db)
-        filters = {
-            "organization_id": str(current_user.organization_id),
+        organization_id = str(current_user.organization_id)
+        filters: dict[str, Optional[str]] = {
             "status": status_filter,
             "status_group": status_group,
             "priority": priority,
             "assigned_to": str(assigned_to) if assigned_to else None,
             "search": search,
         }
-        total = await service.count_applications(**filters)
+        total = await service.count_applications(organization_id, **filters)
         response.headers["X-Total-Count"] = str(total)
         return await service.list_applications(
+            organization_id,
             **filters,
             sort=sort,
             order=order,
@@ -668,7 +669,16 @@ async def create_expenditure(
             data=exp_data,
             user_id=str(current_user.id),
         )
-        return expenditure
+        # GF-7: recorded either way; an overspend comes back as a warning.
+        warnings = await service.spending_warnings(
+            str(app_id),
+            str(current_user.organization_id),
+            user_id=str(current_user.id),
+            budget_item_id=expenditure.budget_item_id,
+        )
+        return GrantExpenditureResponse.model_validate(expenditure).model_copy(
+            update={"warnings": warnings}
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -707,7 +717,16 @@ async def update_expenditure(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Expenditure not found",
             )
-        return expenditure
+        # GF-7: recorded either way; an overspend comes back as a warning.
+        warnings = await service.spending_warnings(
+            str(expenditure.application_id),
+            str(current_user.organization_id),
+            user_id=str(current_user.id),
+            budget_item_id=expenditure.budget_item_id,
+        )
+        return GrantExpenditureResponse.model_validate(expenditure).model_copy(
+            update={"warnings": warnings}
+        )
     except HTTPException:
         raise
     except ValueError as e:

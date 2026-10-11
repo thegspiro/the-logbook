@@ -157,6 +157,28 @@ Applications progress through 10 stages:
 | **Reporting**       | Performance reports due                     | File required reports        |
 | **Closed**          | Grant period complete                       | Final closeout               |
 
+### Moving an Application Between Stages
+
+An application can only move to the stages that make sense next, and the
+**Application Status** list on the edit form offers only those (plus the stage
+it is in now):
+
+| From                                      | Can move to                                    |
+| ----------------------------------------- | ---------------------------------------------- |
+| Researching, Preparing or Internal Review | any of the other two, or Submitted             |
+| Submitted                                 | Under Review, Awarded or Denied                |
+| Under Review                              | Submitted (a resubmission), Awarded or Denied  |
+| Awarded                                   | Active, or Closed (an award declined/returned) |
+| Active                                    | Reporting or Closed                            |
+| Reporting                                 | Active or Closed                               |
+| Denied                                    | Researching (try again next cycle)             |
+| Closed                                    | Reporting (a report asked for after closeout)  |
+
+So a submitted application cannot slip back into drafting, and a closed grant
+cannot return to Researching. Any other move is refused with a message naming
+the stages that are allowed. A **new** application can be recorded at any stage
+— useful when entering a grant the department already has.
+
 ### Pipeline View vs Table View
 
 Applications can be viewed in two ways:
@@ -201,6 +223,18 @@ Navigate to the **Expenditures** tab to record spending against the budget:
 5. Save
 
 ![Grant application budget tab with budgeted, spent, and remaining columns](./images/12-06-application-budget-tab.png)
+
+**Spending over the award or a budget line is recorded, with a warning.** An
+expenditure is never refused for being over — by the time it is entered the
+money has been spent, and refusing it would only make the books disagree with
+the bank. Instead:
+
+- after you record an expenditure that puts the grant over its **Amount
+  Awarded**, or its budget line over its budget, a warning appears saying by how
+  much;
+- the application page shows a standing warning while total spending is over
+  the amount awarded;
+- each overspend is written to the audit log.
 
 **[SCREENSHOT — CHECK `12-06-application-budget-tab.png`.** If the frame shows the add button, it now reads **Add Budget Item**, and the summary's "Match Required" figure is labelled **Match Amount**.**]**
 
