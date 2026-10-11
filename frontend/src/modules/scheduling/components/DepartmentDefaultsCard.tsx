@@ -33,7 +33,7 @@ export const DepartmentDefaultsCard: React.FC<DepartmentDefaultsCardProps> = ({ 
         <h3 className="text-theme-text-primary text-base font-semibold">Department Defaults</h3>
         {/* Pitfall #19: these three values are stored and shown on the settings summary, but no shift, template
             or overtime warning reads them yet. */}
-        <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-500">
+        <p className="text-theme-alert-warning-text mt-1 text-xs font-medium">
           Not in effect yet — these are saved, but new shifts and templates don&apos;t use them and no overtime warning
           reads the threshold.
         </p>

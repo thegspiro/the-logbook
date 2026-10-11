@@ -521,7 +521,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                       </p>
                       {/* Pitfall #19: the reminder text is this setting's only reader — close-out never checks for a
                           report — so the screen must not promise a block that does not happen. */}
-                      <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-500">
+                      <p className="text-theme-alert-warning-text mt-1 text-xs font-medium">
                         Not in effect yet — a shift can still be closed out without a report.
                       </p>
                     </div>
@@ -874,7 +874,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                     <option value="chief">Chief</option>
                   </select>
                   {/* Pitfall #19: nothing reads report_review_role; approving a report is gated on training.manage. */}
-                  <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-500">
+                  <p className="text-theme-alert-warning-text mt-1 text-xs font-medium">
                     Not in effect yet — anyone who can manage training can review reports, whatever is chosen here.
                   </p>
                 </div>
