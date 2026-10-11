@@ -28,6 +28,8 @@ interface ReviewShiftsProps {
   busy: boolean;
   onMappings: (payload: HistoryImportMappingsUpdate) => void;
   onRowDecision: (rowId: string, decision: MatchDecision | null) => void;
+  /** Keep these rows apart from the entries before them. */
+  onSplit: (rowIds: string[]) => void;
 }
 
 const PAGE_SIZE = 20;
@@ -42,7 +44,8 @@ const AttendanceLine: React.FC<{
   busy: boolean;
   showUnit?: boolean;
   onRowDecision: (rowId: string, decision: MatchDecision | null) => void;
-}> = ({ att, analysis, timezone, busy, showUnit = false, onRowDecision }) => {
+  onSplit: (rowIds: string[]) => void;
+}> = ({ att, analysis, timezone, busy, showUnit = false, onRowDecision, onSplit }) => {
   const seed = att.row_ids[0] ?? '';
   return (
     <li className="py-2">
@@ -76,6 +79,16 @@ const AttendanceLine: React.FC<{
             )}
           </div>
         </div>
+        {att.joined && (
+          <button
+            type="button"
+            className="btn-secondary shrink-0"
+            disabled={busy}
+            onClick={() => onSplit(att.row_ids.slice(1))}
+          >
+            Split apart
+          </button>
+        )}
         {att.needs_confirmation && (
           <div className="flex shrink-0 gap-2">
             <button type="button" className="btn-primary" disabled={busy} onClick={() => onRowDecision(seed, 'accept')}>
@@ -96,7 +109,14 @@ const AttendanceLine: React.FC<{
   );
 };
 
-const ReviewShifts: React.FC<ReviewShiftsProps> = ({ analysis, timezone, busy, onMappings, onRowDecision }) => {
+const ReviewShifts: React.FC<ReviewShiftsProps> = ({
+  analysis,
+  timezone,
+  busy,
+  onMappings,
+  onRowDecision,
+  onSplit,
+}) => {
   const [onlyReview, setOnlyReview] = useState(true);
   const [page, setPage] = useState(1);
 
@@ -197,6 +217,7 @@ const ReviewShifts: React.FC<ReviewShiftsProps> = ({ analysis, timezone, busy, o
                     timezone={timezone}
                     busy={busy}
                     onRowDecision={onRowDecision}
+                    onSplit={onSplit}
                   />
                 ))}
               </ul>
@@ -225,6 +246,7 @@ const ReviewShifts: React.FC<ReviewShiftsProps> = ({ analysis, timezone, busy, o
                 busy={busy}
                 showUnit
                 onRowDecision={onRowDecision}
+                onSplit={onSplit}
               />
             ))}
           </ul>

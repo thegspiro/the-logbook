@@ -338,6 +338,8 @@ from app.models.scheduling_module_config import SchedulingModuleConfig
 from app.models.security_alert import AlertType, SecurityAlertRecord, ThreatLevel
 from app.models.shift_history_import import (
     ShiftHistoryImport,
+    ShiftHistoryImportMapping,
+    ShiftHistoryImportMappingKind,
     ShiftHistoryImportRow,
     ShiftHistoryImportStatus,
 )
@@ -609,6 +611,8 @@ __all__ = [
     "PreWorkStatus",
     # Shift history import
     "ShiftHistoryImport",
+    "ShiftHistoryImportMapping",
+    "ShiftHistoryImportMappingKind",
     "ShiftHistoryImportRow",
     "ShiftHistoryImportStatus",
     # Shift equipment check models

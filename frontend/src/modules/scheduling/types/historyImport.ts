@@ -56,6 +56,8 @@ export interface HistoryImportRow {
   values: Record<string, string>;
   excluded: boolean;
   match_decision?: MatchDecision | null;
+  /** Split off the entry before it instead of being joined to it. */
+  keep_separate: boolean;
   skipped_reason?: string | null;
   errors: string[];
   start?: string | null;
@@ -93,6 +95,8 @@ export interface HistoryImportMember {
   candidate_ids: string[];
   reason: string;
   row_count: number;
+  /** Settled by a decision remembered from an earlier import. */
+  remembered: boolean;
 }
 
 export const UnitTargetKind = {
@@ -114,6 +118,8 @@ export interface HistoryImportUnit {
   new_agency_name: string;
   new_unit_name: string;
   row_count: number;
+  /** Settled by a decision remembered from an earlier import. */
+  remembered: boolean;
 }
 
 export interface HistoryImportPosition {
@@ -123,6 +129,8 @@ export interface HistoryImportPosition {
   status: string;
   seat?: string | null;
   row_count: number;
+  /** Settled by a decision remembered from an earlier import. */
+  remembered: boolean;
 }
 
 export interface HistoryImportAttendance {
@@ -250,6 +258,8 @@ export interface HistoryImportRowUpdate {
   excluded?: boolean;
   /** null clears an earlier decision. */
   match_decision?: MatchDecision | null;
+  /** Split this row off the entry before it (or rejoin it). */
+  keep_separate?: boolean;
 }
 
 export interface HistoryImportSettingsUpdate {

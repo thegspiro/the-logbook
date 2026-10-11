@@ -197,7 +197,11 @@ export function AdminHubFrame<K extends string>({
   const describedTabs = (tabs ?? []).flatMap(({ id, label, description, icon }) =>
     description && icon ? [{ id, label, description, icon, count: attentionCounts[id] }] : []
   );
-  const cardTabs = tabs && tabs.length > 0 && describedTabs.length === tabs.length ? describedTabs : undefined;
+  // A single card would be a control that does nothing — Inventory and
+  // Scheduling show only Overview to an officer who cannot edit their
+  // metrics — so one described tab draws no nav at all.
+  const cardTabs = tabs && tabs.length > 1 && describedTabs.length === tabs.length ? describedTabs : undefined;
+  const singleDescribedTab = tabs?.length === 1 && describedTabs.length === 1;
 
   const handleTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (!tabs || !activeTab || !onTabChange) return;
@@ -287,6 +291,7 @@ export function AdminHubFrame<K extends string>({
             metrics={summary?.metrics ?? []}
             loading={loading && summary === null}
             className="order-2 sm:order-1"
+            queueShown={Boolean(summary) && showAttentionQueue}
           />
           {summary && showAttentionQueue && (
             // `?? []` for the same reason `metrics` above has it, and the
@@ -326,7 +331,7 @@ export function AdminHubFrame<K extends string>({
             idPrefix={idPrefix}
           />
         )}
-        {tabs && !cardTabs && activeTab && onTabChange && (
+        {tabs && !cardTabs && !singleDescribedTab && activeTab && onTabChange && (
           <div className="border-theme-surface-border border-b">
             <div
               className="tab-scroll border-b-0"

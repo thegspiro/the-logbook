@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  GraduationCap,
   Info,
   Layers,
   ListChecks,
@@ -1574,23 +1573,11 @@ const CreatePipelinePage: React.FC = () => {
     // 320px phone for the wizard, which pushed the step bar off screen.
     <div>
       <div data-page-main className="mx-auto max-w-4xl py-6">
-        {/* Header */}
-        <div className="mb-8 flex items-center space-x-4">
-          <button
-            onClick={() => void navigate('/training/programs')}
-            className="btn-icon text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface shrink-0"
-            aria-label="Back to programs"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <div>
-            <h1 className="text-theme-text-primary flex items-center space-x-2 text-2xl font-bold">
-              <GraduationCap className="h-7 w-7 text-red-500" />
-              <span>Create Training Pipeline</span>
-            </h1>
-            <p className="text-theme-text-muted text-sm">Step-by-step wizard to build your training program</p>
-          </div>
-        </div>
+        {/* The hub's section nav already names this page, so the title stays for
+            heading navigation only. The back link went to the programs list,
+            which the same nav already offers one tap away. */}
+        <h2 className="sr-only">Create Training Pipeline</h2>
+        <p className="text-theme-text-muted mb-6 text-sm">Step-by-step wizard to build your training program</p>
 
         {/* Step indicator */}
         {/* Five 44px steps and their connectors fit a 320px phone only with

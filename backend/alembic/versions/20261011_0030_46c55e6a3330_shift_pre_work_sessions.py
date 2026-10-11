@@ -8,7 +8,7 @@ separate timed record tied to the shift, credited only once an officer
 approves it. Purely additive; no existing row is read or changed.
 
 Revision ID: 46c55e6a3330
-Revises: 0a55dae43a0a
+Revises: 376ec2fef6d3
 Create Date: 2026-10-11 00:30:03.514235
 
 """
@@ -20,7 +20,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "46c55e6a3330"
-down_revision: Union[str, None] = "0a55dae43a0a"
+down_revision: Union[str, None] = "376ec2fef6d3"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -765,18 +765,21 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
       renderWithRouter(<InventoryAdminHub />);
       expect(await screen.findByRole('heading', { name: 'Inventory Administration' })).toBeInTheDocument();
 
-      expect(screen.queryByRole('tab', { name: 'Settings' })).not.toBeInTheDocument();
+      // With Overview the only tab left, the hub draws no section nav at all.
+      expect(screen.queryByRole('tab')).not.toBeInTheDocument();
       expect(screen.queryByText('Headline metrics')).not.toBeInTheDocument();
       window.history.pushState({}, '', '/inventory/admin');
     });
 
-    it('keeps the Settings tab for the quartermaster', async () => {
+    it('keeps the metrics tab for the quartermaster', async () => {
       mockCheckPermission.mockReturnValue(true);
 
       renderWithRouter(<InventoryAdminHub />);
       expect(await screen.findByRole('heading', { name: 'Inventory Administration' })).toBeInTheDocument();
 
-      expect(screen.getByRole('tab', { name: 'Settings' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Headline Metrics' })).toHaveAccessibleDescription(
+        'Choose the figures shown at the top of this page'
+      );
     });
 
     it('still reports an EMS failure it can no longer show in the queue', async () => {
