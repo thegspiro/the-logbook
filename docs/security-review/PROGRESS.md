@@ -16,6 +16,15 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #3005 (Feature 31, Scheduled tasks, pass 6) merged clean
+2026-10-08 15:16 UTC (confirmed via `pull_request_read`: `merged: true`).
+0 fixes needed beyond that pass's own description; the Log entry below
+already records it in full, so there is nothing further to record here.
+Rotation row 31 → ✅.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 31, Scheduled tasks, pass 6, PR #3005, merged, nothing further to record), preserved for history</summary>
+
 **PR [#3005](https://github.com/thegspiro/the-logbook/pull/3005)**: branch
 `claude/security-review-scheduled-tasks`, Feature 31 (Scheduled tasks),
 pass 6 (watchdog pickup — the dedicated `/loop 30m /security-review` session
@@ -31,6 +40,8 @@ delta, not by this pass. Completion gate green (flake8/black/isort,
 migrations — 543 revisions, single head; registry sync 51/51; 291 scoped
 backend tests; frontend typecheck/lint). See the Log entry below and
 `docs/security-review/CRON6-31-scheduled-tasks.md` for detail.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 6, PR #2996, merged, nothing further to record), preserved for history</summary>
@@ -18416,7 +18427,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
@@ -18426,6 +18437,78 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-11 — Feature 32 (Locations & kiosk, pass 6) — 0 fixed, 0 new findings; EV-26's room-booking lock re-confirmed cross-referenced, not re-derived (watchdog pickup)
+
+Watchdog pickup: PR #3005 (Feature 31, Scheduled tasks, pass 6) merged
+2026-10-08 15:16 UTC. By the time this iteration started (2026-10-11, roughly
+70 hours later) — far past this rotation's documented ~90-minute stall
+threshold — no `claude/security-review-*` PR or branch existed anywhere in
+the repo (confirmed via `search_pull_requests`, `is:open head:claude/
+security-review-`, and `git branch -a`), and the dedicated `/loop 30m
+/security-review` session was not running. Feature 32 (Locations & kiosk)
+was the next `⬜` row. This iteration picked up pass 6 from outside that
+loop.
+
+Not a zero-diff pass: pass 5's baseline (`a5e83d9c`, merged 2026-10-04) to
+current `origin/main` touches 11 files pass 5 listed (586 insertions / 177
+deletions). Every hunk read and attributed:
+
+- **SQLAlchemy 2.0 `Mapped[]` typed-column modernization** in
+  `models/admin_hub.py` / `models/location.py` — declarative-style only, no
+  column/nullability/`ondelete` change (confirmed side-by-side).
+- **The room-booking double-booking race (`check_overlapping_events` taking
+  a `ROOM_BOOKING` org lock + a `.with_for_update()` locking read) is EV-26,
+  already reviewed, fixed, and tested under Feature 16 (Events & requests)
+  pass 7** (`docs/security-review/EV-16-events-requests.md`,
+  `KNOWN_LIMITATIONS.md`) — re-confirmed rather than re-derived, including
+  that every production caller still takes the method's `for_booking=True`
+  default.
+- **A second, distinct race in the same file** — the duplicate-room-name
+  guard query in `create_location`/`update_location` was unbounded, so two
+  concurrent creates of the same name could both pass it and leave a
+  duplicate pair whose _next_ read crashed with `MultipleResultsFound`
+  (rendered as a 500, not the intended 400). Fixed with `.limit(1)`; the
+  duplicate pair itself is still possible (deliberately — a display-name
+  clash is a data-quality nuisance, not a tenancy or capacity boundary, so
+  Pitfall #27's lock is not the applicable remedy) but the crash is gone.
+  Not flagged as a new finding: no application-code risk beyond the 500,
+  already closed by this same delta.
+- **`admin_hub_service.py` gains four new attention-queue items** (skills
+  tests awaiting validation, shift reports awaiting review/flagged, pending
+  attendance-petition decisions, storefront order windows past close) —
+  each independently re-verified org-scoped (server-derived
+  `ctx.organization_id`, no client-supplied id), each a single bounded
+  `_count_and_oldest` aggregate (no N+1), and each carrying no more than a
+  title/count/href already gated behind the summary endpoint's existing
+  `require_permission(spec.permission)`.
+- **`nfc_tag_service.py`:** a display-name correctness fix
+  (`format_display_name` now reads `preferred_name`) and a null-guard
+  (`if active and in_this_category`) that prevents a `TypeError`, not a
+  security change.
+- **`LocationKioskPage.tsx`** now clears stale `data` on a 404 refresh
+  instead of leaving the pre-revocation payload rendered behind a
+  "connected" icon — closes a real staleness gap in the kiosk's own
+  revoke-a-leaked-code threat model; already fixed in this delta.
+- Everything else in pass 5's surface is byte-identical.
+
+Route surface unchanged: 15/15 routes re-enumerated directly from source,
+same as pass 5's table (no route added, removed, or regated). All prior
+findings (LOC-1 through LOC5-32-1) re-verified intact by reading the
+current code directly, not assumed from the byte-diff — including LOC5-32-1
+itself (`event_description=None` unconditionally, matching the public
+sibling's redaction).
+
+Completion gate: flake8/black/isort clean over `app/ tests/ alembic/`;
+`validate_migrations.py --strict` passed (563 revisions, single head
+`4b7e1f0c9a2d`, no migration touches this feature's tables); 645 scoped
+backend tests passed (1 skipped, pre-existing); repo-tenancy guard suite (7
+files, including `test_room_booking_race.py`) passed, 86 tests; frontend
+`npm run typecheck` and `npm run lint` both clean. Full write-up:
+[`LOC6-32-locations-kiosk.md`](./LOC6-32-locations-kiosk.md).
+
+Rotation row 32 → ✅ (pending PR merge). Next: Feature 33 (Core
+infrastructure).
 
 ### 2026-10-08 — Feature 31 (Scheduled tasks, pass 6) — 0 fixed by this pass, 0 new findings; two standing flags confirmed independently fixed (watchdog pickup)
 
