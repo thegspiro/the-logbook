@@ -842,6 +842,8 @@ export interface PurchaseRequest {
   orderedAt?: string;
   receivedAt?: string;
   paidAt?: string;
+  /** When a complete QuickBooks export last carried this payment. */
+  qbExportedAt?: string | null;
   notes?: string;
   /** A typed link; the server passes it on only if it is HTTP(S). */
   receiptUrl?: string | null;
@@ -885,6 +887,8 @@ export interface ExpenseReport {
   denialReason?: string;
   paidAt?: string;
   paymentMethod?: string;
+  /** When a complete QuickBooks export last carried this payment. */
+  qbExportedAt?: string | null;
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -910,6 +914,11 @@ export interface CheckRequest {
   denialReason?: string;
   checkNumber?: string;
   checkDate?: string;
+  voidedAt?: string | null;
+  /** When a complete QuickBooks export last carried this payment. */
+  qbExportedAt?: string | null;
+  /** When the reversing entry for a void went to QuickBooks. */
+  qbVoidExportedAt?: string | null;
   notes?: string;
   createdAt: string;
   updatedAt: string;
