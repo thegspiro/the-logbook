@@ -39,6 +39,7 @@ import type {
   PreMeetingPackageSend,
   ProxyAuthorization,
   ProxyAuthorizationCreate,
+  ProxyAuthorizationList,
   ProxyVoteCreate,
   VotingMethod,
   SavedBallotTemplate,
@@ -401,12 +402,8 @@ export const electionService = {
   /**
    * Get proxy authorizations for an election
    */
-  async getProxyAuthorizations(
-    electionId: string
-  ): Promise<{ authorizations: ProxyAuthorization[]; proxy_voting_enabled: boolean }> {
-    const response = await api.get<{ authorizations: ProxyAuthorization[]; proxy_voting_enabled: boolean }>(
-      `/elections/${electionId}/proxy-authorizations`
-    );
+  async getProxyAuthorizations(electionId: string): Promise<ProxyAuthorizationList> {
+    const response = await api.get<ProxyAuthorizationList>(`/elections/${electionId}/proxy-authorizations`);
     return response.data;
   },
 

@@ -96,6 +96,26 @@ REOPENED_TOKEN_MESSAGE = (
     "valid. Ask your secretary for a new ballot link."
 )
 
+# W50-2 / ELEC-43 (owner decision 2026-10-08): a proxy ballot on an
+# anonymous election is allowed, but it is attributable — the vote row
+# stores whom it was cast for and the proxy holder sees every choice — so
+# the delegating member must acknowledge that before it is authorized.
+PROXY_ANONYMITY_WARNING = (
+    "This is an anonymous election, but a proxy ballot is not anonymous: "
+    "your proxy holder will see how you vote, and the ballot they cast for "
+    "you is stored linked to your name."
+)
+PROXY_ANONYMITY_ACK_REQUIRED = (
+    "This is an anonymous election: confirm that the delegating member has "
+    "been told, and accepts, that their proxy holder will see how they vote "
+    "and that the proxy ballot is stored linked to them."
+)
+PROXY_ANONYMITY_NOT_ACKNOWLEDGED = (
+    "This proxy authorization was created without the delegating member's "
+    "acknowledgement that a proxy ballot on an anonymous election is not "
+    "anonymous. Ask the secretary to revoke it and authorize the proxy again."
+)
+
 # " - Runoff Round 2" and friends, only at the very end of a title.
 # The shipped (subject, html, text) of each leadership alert, used when the
 # organization has no stored template of that type.
@@ -4111,6 +4131,59 @@ class ElectionService:
                 f"election={election.id} error={e}"
             )
 
+    async def _notify_proxy_delegator(
+        self, election, organization_id: UUID, delegating_user, proxy_user
+    ) -> None:
+        """Tell the delegating member a proxy was authorized for them, and
+        on an anonymous election that the proxy ballot is attributable.
+
+        Best-effort: a mail failure must never undo the authorization.
+        """
+        try:
+            import html as html_mod
+
+            from app.services.email_service import EmailService, wrap_email_body
+
+            if not delegating_user.email:
+                return
+            organization = (
+                await self.db.execute(
+                    select(Organization).where(Organization.id == str(organization_id))
+                )
+            ).scalar_one_or_none()
+            if not organization:
+                return
+            title = html_mod.escape(election.title)
+            holder = html_mod.escape(proxy_user.full_name or "your proxy holder")
+            warning = (
+                f"<p><strong>{html_mod.escape(PROXY_ANONYMITY_WARNING)}</strong></p>"
+                if election.anonymous_voting
+                else ""
+            )
+            body_html = (
+                f"<p>{holder} has been authorized to vote on your behalf in "
+                f"<strong>{title}</strong>.</p>"
+                f"{warning}"
+                "<p>If you did not ask for this, contact your secretary "
+                "before voting opens.</p>"
+            )
+            html_body = wrap_email_body(
+                organization,
+                title=f"Proxy authorized: {title}",
+                body_html=body_html,
+            )
+            await EmailService(organization).send_email(
+                to_emails=[delegating_user.email],
+                subject=f"Proxy authorized — {election.title}",
+                html_body=html_body,
+                db=self.db,
+                template_type="custom",
+            )
+        except Exception as e:
+            logger.warning(
+                f"Proxy delegator notice failed | election={election.id} error={e}"
+            )
+
     async def _notify_nominee(self, election, candidate, organization_id: UUID) -> None:
         """Email a third-party nominee that they must accept or decline.
 
@@ -5431,10 +5504,21 @@ class ElectionService:
         stats = await self.get_election_stats(election_id, organization_id)
         batches = await self.list_manual_ballot_batches(election_id, organization_id)
         integrity = await self.verify_vote_integrity(election_id, organization_id)
+        # A proxy ballot is attributable even on an anonymous election
+        # (W50-2), so the anonymity statement must not claim otherwise.
+        proxy_votes = (
+            await self.db.execute(
+                select(func.count(Vote.id))
+                .where(Vote.election_id == str(election_id))
+                .where(Vote.deleted_at.is_(None))
+                .where(Vote.is_proxy_vote.is_(True))
+            )
+        ).scalar() or 0
 
         data = {
             "election": {
                 "title": election.title,
+                "proxy_votes": int(proxy_votes),
                 # closed_at is NULL only on elections closed before the
                 # column existed; their scheduled end is the best record.
                 "closed_display": await self._org_local_time(
@@ -6885,9 +6969,18 @@ class ElectionService:
         proxy_type: str,
         reason: str,
         authorized_by: UUID,
+        anonymity_acknowledged: bool = False,
     ) -> Tuple[Optional[Dict], Optional[str]]:
         """
         Authorize one member to vote on behalf of another.
+
+        On an anonymous election the authorization requires
+        ``anonymity_acknowledged``: a proxy ballot stores whom it was cast
+        for (the signature covers it) and the proxy holder sees every
+        choice, so it is the one attributable ballot in the box. The owner
+        decided (2026-10-08, ELEC-43 / W50-2) to allow it on that condition
+        rather than refuse it; the acknowledgement is stamped on the record
+        and the delegating member is emailed the same warning.
 
         Returns: (authorization_record, error_message)
         """
@@ -6912,6 +7005,9 @@ class ElectionService:
         # Cannot be your own proxy
         if str(delegating_user_id) == str(proxy_user_id):
             return None, "A member cannot be their own proxy"
+
+        if election.anonymous_voting and not anonymity_acknowledged:
+            return None, PROXY_ANONYMITY_ACK_REQUIRED
 
         # Verify all users exist in the same org (single query per user)
         delegating_result = await self.db.execute(
@@ -6981,11 +7077,20 @@ class ElectionService:
             "authorized_by_name": authorizer.full_name,
             "authorized_at": datetime.now(timezone.utc).isoformat(),
             "revoked_at": None,
+            "anonymity_acknowledged_at": (
+                datetime.now(timezone.utc).isoformat()
+                if election.anonymous_voting
+                else None
+            ),
         }
         authorizations.append(auth_record)
         election.proxy_authorizations = authorizations
 
         await self.db.commit()
+
+        await self._notify_proxy_delegator(
+            election, organization_id, delegating_user, proxy_user
+        )
 
         await self._audit(
             "proxy_authorization_granted",
@@ -6998,6 +7103,9 @@ class ElectionService:
                 "proxy_user_name": proxy_user.full_name,
                 "proxy_type": proxy_type,
                 "reason": reason,
+                "anonymity_acknowledged": bool(
+                    auth_record["anonymity_acknowledged_at"]
+                ),
             },
             severity="warning",
             user_id=str(authorized_by),
@@ -7093,6 +7201,7 @@ class ElectionService:
             "election_id": str(election_id),
             "election_title": election.title,
             "proxy_voting_enabled": enabled,
+            "anonymous_voting": bool(election.anonymous_voting),
             "authorizations": election.proxy_authorizations or [],
         }
 
@@ -7145,9 +7254,6 @@ class ElectionService:
         org = org_result.scalar_one_or_none()
         if not org or not self._is_proxy_voting_enabled(org):
             return None, "Proxy voting is not enabled for this organization"
-        anonymity_error = self._proxy_anonymity_error(election)
-        if anonymity_error:
-            return None, anonymity_error
 
         # Locate the authorization
         auths = election.proxy_authorizations or []
@@ -7158,6 +7264,9 @@ class ElectionService:
             return None, "This proxy authorization has been revoked"
         if auth.get("proxy_user_id") != str(proxy_user_id):
             return None, "You are not the designated proxy for this authorization"
+        anonymity_error = self._proxy_anonymity_error(election, auth)
+        if anonymity_error:
+            return None, anonymity_error
 
         try:
             delegating_user_id = UUID(auth["delegating_user_id"])
@@ -9928,23 +10037,20 @@ class ElectionService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _proxy_anonymity_error(election: Election) -> Optional[str]:
-        """Refuse a proxy ballot on an anonymous election.
+    def _proxy_anonymity_error(election: Election, auth: Dict) -> Optional[str]:
+        """Refuse a proxy ballot on an anonymous election whose delegating
+        member never acknowledged that it is attributable.
 
         A proxy vote stores the delegating member's id in clear and its
-        signature covers it (ELEC-43, W50-2), so on an anonymous election
-        the proxy ballot would be the one attributable ballot in the box.
-        Whether to accept that (and tell the member) or to store the link
-        as a salted hash is an open owner decision; until it is made, proxy
-        voting runs on named elections only rather than quietly breaking
-        another member's anonymity.
+        signature covers it (ELEC-43, W50-2). The owner allowed that on an
+        anonymous election only with the member's acknowledgement, which
+        ``add_proxy_authorization`` now requires and stamps. An
+        authorization created before that rule carries no stamp; it is
+        refused rather than honoured, so no attributable ballot is cast on
+        an anonymous election without the member having agreed to it.
         """
-        if election.anonymous_voting:
-            return (
-                "Proxy voting is available on named (non-anonymous) elections "
-                "only: a proxy ballot records whom it was cast for, which an "
-                "anonymous election must not."
-            )
+        if election.anonymous_voting and not auth.get("anonymity_acknowledged_at"):
+            return PROXY_ANONYMITY_NOT_ACKNOWLEDGED
         return None
 
     def _active_proxy_authorization(
@@ -9980,23 +10086,30 @@ class ElectionService:
             )
         ).scalar_one_or_none()
         enabled = bool(org) and self._is_proxy_voting_enabled(org)
+        held = [
+            a
+            for a in (election.proxy_authorizations or [])
+            if a.get("proxy_user_id") == str(user_id) and not a.get("revoked_at")
+        ]
+        usable = [a for a in held if self._proxy_anonymity_error(election, a) is None]
         unavailable_reason = None
-        if not enabled:
+        if not held:
+            pass
+        elif not enabled:
             unavailable_reason = "Proxy voting is not enabled for this organization"
-        else:
-            unavailable_reason = self._proxy_anonymity_error(election)
+        elif not usable:
+            unavailable_reason = PROXY_ANONYMITY_NOT_ACKNOWLEDGED
         mine = [
             {
                 "authorization_id": a.get("id"),
                 "delegating_user_id": a.get("delegating_user_id"),
                 "delegating_user_name": a.get("delegating_user_name"),
             }
-            for a in (election.proxy_authorizations or [])
-            if a.get("proxy_user_id") == str(user_id) and not a.get("revoked_at")
+            for a in usable
         ]
         return {
-            "proxies": mine if unavailable_reason is None else [],
-            "unavailable_reason": unavailable_reason if mine else None,
+            "proxies": mine if enabled else [],
+            "unavailable_reason": unavailable_reason,
         }
 
     async def _get_or_create_approval_option(
@@ -10049,9 +10162,6 @@ class ElectionService:
         voter_id = user_id
         proxy: Optional[Dict] = None
         if proxy_authorization_id:
-            anonymity_error = self._proxy_anonymity_error(election)
-            if anonymity_error:
-                return None, anonymity_error
             auth, error = self._active_proxy_authorization(
                 election, proxy_authorization_id, user_id
             )
@@ -10059,6 +10169,9 @@ class ElectionService:
                 return None, error
             if auth is None:
                 return None, "Proxy authorization not found"
+            anonymity_error = self._proxy_anonymity_error(election, auth)
+            if anonymity_error:
+                return None, anonymity_error
             voter_id = UUID(auth["delegating_user_id"])
             proxy = {
                 "authorization_id": auth.get("id"),
@@ -10143,7 +10256,12 @@ class ElectionService:
         if not election:
             return None, "Election not found"
         if proxy_authorization_id:
-            anonymity_error = self._proxy_anonymity_error(election)
+            auth, error = self._active_proxy_authorization(
+                election, proxy_authorization_id, user_id
+            )
+            if error:
+                return None, error
+            anonymity_error = self._proxy_anonymity_error(election, auth)
             if anonymity_error:
                 return None, anonymity_error
 

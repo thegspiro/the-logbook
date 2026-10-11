@@ -647,6 +647,14 @@ export interface ProxyAuthorization {
   authorized_by_name?: string;
   authorized_at: string;
   revoked_at?: string;
+  /** Set when the delegating member acknowledged a proxy ballot on an anonymous election is attributable (W50-2). */
+  anonymity_acknowledged_at?: string | null;
+}
+
+export interface ProxyAuthorizationList {
+  authorizations: ProxyAuthorization[];
+  proxy_voting_enabled: boolean;
+  anonymous_voting?: boolean;
 }
 
 export interface ProxyAuthorizationCreate {
@@ -654,6 +662,8 @@ export interface ProxyAuthorizationCreate {
   proxy_user_id: string;
   proxy_type: 'single_election' | 'regular';
   reason: string;
+  /** Required true on an anonymous election (W50-2). */
+  anonymity_acknowledged?: boolean;
 }
 
 export interface ProxyVoteCreate {

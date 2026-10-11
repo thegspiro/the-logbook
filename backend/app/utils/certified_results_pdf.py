@@ -271,14 +271,22 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
         )
     )
     if election.get("anonymous_voting"):
-        story.append(
-            Paragraph(
-                "This was an anonymous election: the per-election anonymity "
-                "salt was destroyed at close, making voter de-anonymization "
-                "impossible.",
-                sub_style,
-            )
+        proxy_votes = int(election.get("proxy_votes") or 0)
+        text = (
+            "This was an anonymous election: the per-election anonymity "
+            "salt was destroyed at close, making voter de-anonymization "
+            "impossible"
         )
+        if proxy_votes:
+            # Proxy ballots are allowed on anonymous elections only with the
+            # delegating member's acknowledgement that they are attributable
+            # (W50-2), so the statement names the exception.
+            text += (
+                f", except for {proxy_votes} proxy vote(s), which are recorded "
+                "against the member they were cast for, as each delegating "
+                "member acknowledged when the proxy was authorized"
+            )
+        story.append(Paragraph(text + ".", sub_style))
 
     # ── Certification signatures ─────────────────────────────────────
     story.append(Paragraph("Certification", section_style))

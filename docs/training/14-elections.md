@@ -796,13 +796,31 @@ Vote** tab:
    recorded as theirs (double-vote prevention applies to them, not you) and
    marked as cast by you as their proxy
 
-**Named elections only.** A proxy vote records whom it was cast for, so on an
-**anonymous** election the proxy ballot is refused — the tab says so instead
-of offering the choice. Whether an anonymous election may accept an
-attributable proxy ballot is an open owner decision (ELEC-43 in
-`docs/KNOWN_LIMITATIONS.md`). Proxy voting must also be enabled in Election
-Settings. The holder can still use the delegating member's emailed link they
-are copied on.
+**A proxy ballot is not anonymous** _(2026-10-08, ELEC-43 / W50-2)_. A
+proxy vote records whom it was cast for, and the proxy holder sees every
+choice. On a named election that changes nothing. On an **anonymous**
+election it is allowed only with the delegating member's acknowledgement:
+
+- **Authorizing** on an anonymous election shows the warning _"a proxy
+  ballot is not anonymous: the proxy holder will see how the member votes,
+  and the ballot cast for them is stored linked to their name"_ and a
+  checkbox — _"The delegating member has been told this and accepts it"_.
+  **Add Authorization** stays disabled until it is ticked, and the server
+  refuses the authorization without it. Tick it only after the member has
+  agreed.
+- On every authorization the **delegating member is emailed** _"Proxy
+  authorized — <election>"_, naming the holder; on an anonymous election the
+  email carries the same warning.
+- An authorization created on an anonymous election **before** this rule
+  carries no acknowledgement, and its ballot is refused with _"Ask the
+  secretary to revoke it and authorize the proxy again"_. Revoke it and
+  authorize it again with the checkbox.
+- The **certified PDF** of an anonymous election that received proxy votes
+  says the salt was destroyed _"except for N proxy vote(s), which are
+  recorded against the member they were cast for"_.
+
+Proxy voting must also be enabled in Election Settings. The holder can still
+use the delegating member's emailed link they are copied on.
 
 ### Edge Cases
 

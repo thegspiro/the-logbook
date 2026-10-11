@@ -219,13 +219,11 @@ describe('ElectionBallot (ballot convergence, W50-10, W50-53)', () => {
   it('names why held proxies cannot be voted here', async () => {
     mockGetMyProxies.mockResolvedValue({
       proxies: [],
-      unavailable_reason: 'Proxy voting is available on named (non-anonymous) elections only.',
+      unavailable_reason: 'Proxy voting is not enabled for this organization',
     });
     renderWithRouter(<ElectionBallot electionId="el1" election={election} />);
 
-    expect(
-      await screen.findByText('Proxy voting is available on named (non-anonymous) elections only.')
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Proxy voting is not enabled for this organization')).toBeInTheDocument();
     expect(screen.queryByLabelText('Voting for')).not.toBeInTheDocument();
   });
 });

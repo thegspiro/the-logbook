@@ -1555,6 +1555,14 @@ class ProxyAuthorizationCreate(BaseModel):
         max_length=500,
         description="Why the proxy is being authorized",
     )
+    anonymity_acknowledged: bool = Field(
+        default=False,
+        description=(
+            "Required on an anonymous election: the delegating member has "
+            "been told, and accepts, that their proxy holder sees how they "
+            "vote and that the proxy ballot is stored linked to them."
+        ),
+    )
 
     @field_validator("proxy_type")
     @classmethod
@@ -1578,6 +1586,9 @@ class ProxyAuthorizationResponse(BaseModel):
     authorized_by_name: str
     authorized_at: str
     revoked_at: Optional[str] = None
+    # Set when the delegating member acknowledged that this proxy ballot is
+    # attributable (anonymous elections only; W50-2 / ELEC-43).
+    anonymity_acknowledged_at: Optional[str] = None
 
 
 class ProxyAuthorizationListResponse(BaseModel):
@@ -1586,6 +1597,7 @@ class ProxyAuthorizationListResponse(BaseModel):
     election_id: str
     election_title: str
     proxy_voting_enabled: bool
+    anonymous_voting: bool = False
     authorizations: List[ProxyAuthorizationResponse]
 
 

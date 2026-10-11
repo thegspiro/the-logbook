@@ -14,8 +14,10 @@ voting as a mode of that ballot. Before:
 A plain position is now served to both ballots as a ballot item
 (``position_ballot_items``), stored, deduplicated and tallied under the
 position name exactly as before, and the in-app ballot is submitted in the
-emailed ballot's shape through ``submit_member_ballot``. Proxy ballots run
-on named elections only until ELEC-43 is decided.
+emailed ballot's shape through ``submit_member_ballot``. Proxy ballots on
+anonymous elections need the delegating member's acknowledgement that they
+are attributable (ELEC-43 / W50-2, decided 2026-10-08;
+``test_w50_proxy_anonymity_ack.py``).
 """
 
 import json
@@ -345,7 +347,9 @@ class TestInAppBallot(TestElectionSetup):
         assert "out of date" in err
 
 
-async def _enable_proxy(db: AsyncSession, data: dict) -> str:
+async def _enable_proxy(
+    db: AsyncSession, data: dict, *, acknowledged: bool = False
+) -> str:
     await db.execute(
         text("UPDATE organizations SET settings = :s WHERE id = :id"),
         {
@@ -363,6 +367,7 @@ async def _enable_proxy(db: AsyncSession, data: dict) -> str:
         proxy_type="single_election",
         reason="Away on deployment",
         authorized_by=uuid.UUID(data["user1_id"]),
+        anonymity_acknowledged=acknowledged,
     )
     assert err is None, err
     return record["id"]
@@ -424,41 +429,6 @@ class TestProxyBallot(TestElectionSetup):
         )
         assert all(s["voted"] for s in delegator["items"])
         assert not any(s["voted"] for s in holder["items"])
-
-    async def test_a_proxy_ballot_on_an_anonymous_election_is_refused(
-        self, db_session: AsyncSession, setup_election
-    ):
-        data = setup_election
-        await _mixed(db_session, data, anonymous=True)
-        auth_id = await _enable_proxy(db_session, data)
-        svc = ElectionService(db_session)
-
-        _ballot, err = await svc.get_member_ballot(
-            uuid.UUID(data["user3_id"]),
-            uuid.UUID(data["election_id"]),
-            uuid.UUID(data["org_id"]),
-            proxy_authorization_id=auth_id,
-        )
-        assert "named (non-anonymous) elections only" in err
-
-        result, err = await svc.submit_member_ballot(
-            user_id=uuid.UUID(data["user3_id"]),
-            election_id=uuid.UUID(data["election_id"]),
-            organization_id=uuid.UUID(data["org_id"]),
-            votes=[{"ballot_item_id": CHIEF_ITEM_ID, "choice": data["candidate_a_id"]}],
-            proxy_authorization_id=auth_id,
-        )
-        assert result is None
-        assert "named (non-anonymous) elections only" in err
-        assert await _votes(db_session, data["election_id"]) == []
-
-        mine = await svc.get_my_proxy_authorizations(
-            uuid.UUID(data["election_id"]),
-            uuid.UUID(data["org_id"]),
-            uuid.UUID(data["user3_id"]),
-        )
-        assert mine["proxies"] == []
-        assert "named (non-anonymous)" in mine["unavailable_reason"]
 
     async def test_only_the_designated_holder_may_use_it(
         self, db_session: AsyncSession, setup_election

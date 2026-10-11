@@ -4072,6 +4072,11 @@ async def add_proxy_authorization(
     When ballot emails are sent, the proxy holder is automatically CC'd
     on the delegating member's ballot notification.
 
+    On an anonymous election a proxy ballot is attributable: it stores whom
+    it was cast for, and the proxy holder sees the choices. The request must
+    carry `anonymity_acknowledged: true`, recording that the delegating
+    member was told and accepts this; the member is also emailed the notice.
+
     Requires `elections.manage` permission.
     """
     service = ElectionService(db)
@@ -4083,6 +4088,7 @@ async def add_proxy_authorization(
         proxy_type=body.proxy_type,
         reason=body.reason,
         authorized_by=current_user.id,
+        anonymity_acknowledged=body.anonymity_acknowledged,
     )
 
     if error:

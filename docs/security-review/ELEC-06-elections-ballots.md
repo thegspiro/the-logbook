@@ -93,9 +93,8 @@ eligibility`'s "already voted in this election" applies only to a ballot
 - **Proxy ballot mode** (configured proxies could not vote) — **finished
   for named elections:** the Cast Vote tab's "Voting for" choice loads the
   delegating member's ballot and submits through `cast_proxy_vote`
-  (`commit=False`). Refused on an anonymous election
-  (`_proxy_anonymity_error`, also in `cast_proxy_vote`) while ELEC-43 is
-  undecided, so no attributable ballot can enter an anonymous box. Guard:
+  (`commit=False`). On an anonymous election it needs the delegating
+  member's acknowledgement (ELEC-43, decided 2026-10-08). Guard:
   `TestProxyBallot` in `tests/test_ballot_convergence.py`.
 - **W50-11** (a "(2 seats)" race declared one winner) — **fixed:
   `elections.seats_per_position`** (migration `8c4f2a6e1d93`, guarded,
@@ -316,7 +315,7 @@ every call site (12, same shape as pass 6) and confirmed none is inside the
 reverting the ELEC-38 narrowing or a backfill migration) stands exactly as
 pass 3 described it.
 
-### ELEC-43 — HIGH — A proxy ballot on an anonymous election is attributable — 🚩 FLAGGED (cross-ref: W50-2/S01, `KNOWN_LIMITATIONS.md`)
+### ELEC-43 — HIGH — A proxy ballot on an anonymous election is attributable — ✅ RESOLVED by owner decision (2026-10-08; cross-ref: W50-2/S01, `KNOWN_LIMITATIONS.md`)
 
 **What:** S01 (W50-2's fix) stops `vote_cast`/`vote_cast_token` audit rows
 from naming the voter on an anonymous election. It does not touch
@@ -354,6 +353,16 @@ salted hash that dies with the anonymity salt at close plus a migration
 over existing rows and a `_sign_vote` change — both are product/schema
 decisions, not a same-pass mechanical fix, and no proxy-vote UI exists
 today to drive urgency. Same disposition as `KNOWN_LIMITATIONS.md`.
+**Resolution (2026-10-08):** the owner chose (a) and made the
+disclosure an acknowledgement. An authorization on an anonymous election
+requires `anonymity_acknowledged` (refused otherwise) and is stamped
+`anonymity_acknowledged_at`; the delegating member is emailed the warning;
+an unstamped authorization on an anonymous election is refused at the
+ballot (`_proxy_anonymity_error(election, auth)`), so nothing created before
+the rule casts an attributable ballot unannounced; and the certified PDF's
+anonymity sentence names the proxy votes as the exception. The audit rows
+and vote columns keep the linkage in clear, by that decision. Guard:
+`tests/test_w50_proxy_anonymity_ack.py`.
 
 ### ELEC-44 — LOW — The election body and the public ballot lookup over-expose recipient list, live vote counts, and candidate identity ids — 🚩 FLAGGED (cross-ref: W50-70, `KNOWN_LIMITATIONS.md`)
 
