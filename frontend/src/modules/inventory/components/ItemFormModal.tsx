@@ -13,6 +13,7 @@ import { inventoryService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull, formCoercions } from '../../../utils/formValues';
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
+import { formatNumber } from '../../../utils/dateFormatting';
 import { Modal } from '../../../components/Modal';
 import type {
   InventoryItem,
@@ -268,6 +269,11 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
 
   /** Whether the selected category supports variant generation */
   const supportsVariants = !editItem && VARIANT_ITEM_TYPES.has(itemType);
+  // A lot-stocked item's real count is the sum of its in-date stock lots;
+  // `quantity` is a best-effort mirror that the next delivery's carry-forward
+  // overwrites. Matches MedicalItemFormModal: the form neither shows nor sends
+  // it for such an item (MSUP-15).
+  const isLotStocked = Boolean(editItem?.is_lot_stocked);
 
   // Turn off variant generation when category changes to one that doesn't support it
   useEffect(() => {
@@ -411,7 +417,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         // `tracking_type` re-shapes how the item is counted and is not a field
         // a blank box should clear.
         tracking_type: f.tracking_type || undefined,
-        quantity: f.quantity ? Number(f.quantity) : undefined,
+        quantity: isLotStocked ? undefined : f.quantity ? Number(f.quantity) : undefined,
         condition: f.condition || undefined,
         // This form has no Status control, but the backend requires an
         // AVAILABLE item to be in excellent/good/fair condition — so the last
@@ -963,17 +969,32 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
             </legend>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label className={lbl} htmlFor="item-quantity">
-                  {generateVariants ? 'Starting Quantity (each)' : 'Quantity'}
-                </label>
-                <input
-                  id="item-quantity"
-                  type="number"
-                  min="0"
-                  className={inp}
-                  value={f.quantity}
-                  onChange={(e) => up('quantity', e.target.value)}
-                />
+                {isLotStocked ? (
+                  <>
+                    <span className={lbl}>Quantity</span>
+                    {/* The field would write `quantity`, a column no lot backs;
+                        an admin "correcting" it to the lot total changes nothing
+                        a reader trusts and is overwritten by the next delivery. */}
+                    <p className="text-theme-text-muted border-theme-surface-border rounded-md border border-dashed px-3 py-2 text-sm">
+                      {formatNumber(editItem?.lot_stock ?? 0)} from stock lots — adjust by receiving a delivery or
+                      editing the item&apos;s lots.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <label className={lbl} htmlFor="item-quantity">
+                      {generateVariants ? 'Starting Quantity (each)' : 'Quantity'}
+                    </label>
+                    <input
+                      id="item-quantity"
+                      type="number"
+                      min="0"
+                      className={inp}
+                      value={f.quantity}
+                      onChange={(e) => up('quantity', e.target.value)}
+                    />
+                  </>
+                )}
               </div>
               <div>
                 <label className={lbl} htmlFor="item-unit_of_measure">

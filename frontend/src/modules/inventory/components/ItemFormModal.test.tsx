@@ -652,6 +652,45 @@ describe('ItemFormModal', () => {
     expect(payload.tracking_type).not.toBeNull();
   });
 
+  // MSUP-15: for a lot-stocked item `quantity` is a mirror no lot backs, so the
+  // form shows the lot total read-only and never writes the column.
+  describe('a lot-stocked pool item', () => {
+    const lotItem = () =>
+      makeItem({ name: 'Nitrile Gloves', tracking_type: 'pool', quantity: 3, is_lot_stocked: true, lot_stock: 40 });
+
+    it('shows the lot total instead of a Quantity input', () => {
+      render(<ItemFormModal {...baseProps} isOpen editItem={lotItem()} />);
+
+      expect(screen.queryByRole('spinbutton', { name: 'Quantity' })).not.toBeInTheDocument();
+      expect(screen.getByText(/40 from stock lots/)).toBeInTheDocument();
+    });
+
+    it('omits quantity from the update payload', async () => {
+      const user = userEvent.setup();
+      render(<ItemFormModal {...baseProps} isOpen editItem={lotItem()} />);
+
+      await user.click(screen.getByRole('button', { name: 'Update' }));
+
+      await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(1));
+      const payload = mockUpdateItem.mock.calls[0]?.[1] as Record<string, unknown>;
+      // undefined is dropped by JSON serialization, so the key never leaves the browser.
+      expect(payload.quantity).toBeUndefined();
+    });
+
+    it('still edits quantity for a pool item with no lots', async () => {
+      const user = userEvent.setup();
+      render(<ItemFormModal {...baseProps} isOpen editItem={makeItem({ tracking_type: 'pool', quantity: 3 })} />);
+
+      const qty = screen.getByRole('spinbutton', { name: 'Quantity' });
+      await user.clear(qty);
+      await user.type(qty, '7');
+      await user.click(screen.getByRole('button', { name: 'Update' }));
+
+      await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(1));
+      expect(mockUpdateItem.mock.calls[0]?.[1]).toMatchObject({ quantity: 7 });
+    });
+  });
+
   it('sends an explicit null when an edit unlinks the vendor', async () => {
     const user = userEvent.setup();
     mockGetVendors.mockResolvedValue([makeVendor()]);
