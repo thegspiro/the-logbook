@@ -8746,14 +8746,37 @@ class InventoryService:
         data: Dict[str, Any],
         current_user_id: str,
     ) -> Tuple[Optional[ReorderRequest], Optional[str]]:
-        """Update a reorder request and handle status transitions."""
+        """Update a reorder request's editable details under a row lock."""
         try:
-            reorder = await self.get_reorder_request(request_id, organization_id)
+            # INV-16: lock the row so this edit serializes against a concurrent
+            # receipt or transition, and read it with populate_existing so the
+            # quantity_received compared below is the committed value, not one
+            # the identity map held from before the lock was taken.
+            reorder = await self.db.scalar(
+                select(ReorderRequest)
+                .where(
+                    ReorderRequest.id == str(request_id),
+                    ReorderRequest.organization_id == str(organization_id),
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
             if not reorder:
                 return None, "Reorder request not found"
 
             if "quantity_received" in data:
                 return None, "Received quantity changes require the receiving workflow"
+
+            # receive_reorder's outstanding check assumes requested >= received;
+            # an edit lowering the order below what has already arrived would
+            # leave a negative outstanding quantity.
+            new_requested = data.get("quantity_requested")
+            received = reorder.quantity_received or 0
+            if new_requested is not None and new_requested < received:
+                return None, (
+                    f"Quantity requested cannot be lower than the {received} "
+                    "already received"
+                )
 
             await self._assert_reorder_fks_in_org(data, organization_id)
 

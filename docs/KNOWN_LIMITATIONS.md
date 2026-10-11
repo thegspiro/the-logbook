@@ -2899,6 +2899,15 @@ scoped to the other fields this PATCH still writes without a lock or version
 check (`notes`, `quantity_requested`, vendor/line details) — the underlying
 design choice above is unchanged, just smaller in surface.
 
+**Resolved (owner decision, docket INV-16, 2026-10-11):** closed without a
+contract change. `update_reorder_request` now reads the row with
+`SELECT … FOR UPDATE` (and `populate_existing`, so the comparison uses the
+committed `quantity_received`), which serializes a plain edit against a
+concurrent transition or receipt, and it refuses a `quantity_requested` below
+`quantity_received` with a 400. PATCH still takes no `expected_version`; a
+plain edit does not bump `version`. Pinned by
+`tests/test_inventory_reorder_edit_lock.py`.
+
 ## Inventory — "Complete Work" Always Creates a New Maintenance Record (2026-08-28)
 
 `InventoryMaintenancePage.tsx`'s maintenance-completion flow always calls

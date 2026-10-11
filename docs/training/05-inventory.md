@@ -702,6 +702,14 @@ they used to show the stored values (`partially_received`).
 _[Quartermaster at /inventory/admin/reorder: an Ordered request created on this page, with Receive stock open showing the red notice "This request isn't linked to an inventory item, so its stock can't be received here…" and the disabled Receive stock button. Do not submit.]_
 -->
 
+> **Editing an order that has started arriving** _(2026-10-11)_: **Edit** can
+> still change the quantity, vendor details and notes after a partial receipt,
+> but it refuses a **Quantity requested** lower than what has already been
+> received ("Quantity requested cannot be lower than the 6 already received").
+> To stop waiting for the rest, cancel the remainder through the workflow
+> rather than shrinking the order. An edit and a receipt arriving at the same
+> moment are applied one after the other, never interleaved.
+
 > **Edge case:** If an item's stock is replenished through a regular return or issuance reversal (not through the reorder workflow), the reorder request remains open. Admins should manually close or cancel outdated requests.
 
 ### Low Stock Alerts Are Email-Only
