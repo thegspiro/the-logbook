@@ -6,15 +6,26 @@ Reads ``capture-report.json`` (written by ``capture.mjs``) and, for every shot
 that captured successfully, swaps the corresponding placeholder block for a
 markdown image tag.
 
-A placeholder is one of two shapes:
+A placeholder is an HTML comment, so a member reading the guide never sees a
+request meant for whoever takes the screenshots:
+
+    <!-- Screenshot needed:
+    [Description of what to capture]
+    -->
+
+The block runs from the marker line through the line that closes the comment
+(the same line, for a one-line comment).
+
+The older blockquote shapes are still recognised, because branches written
+before the comment form still carry them:
 
     > **Screenshot placeholder:**
     > _[Description of what to capture]_
 
     > **[SCREENSHOT NEEDED]:** _Description of what to capture_
 
-Both are blockquotes, so the block runs from the marker line through the last
-consecutive ``>`` line.  Replacements are applied bottom-up within each file so
+A blockquote placeholder runs from the marker line through the last consecutive
+``>`` line.  Replacements are applied bottom-up within each file so
 earlier line numbers stay valid, and each one is verified against the marker
 text before anything is written — a stale line number is reported, not guessed
 at.
@@ -44,9 +55,14 @@ REPORT = HERE / "capture-report.json"
 # tracker reported "421 of 423 filled". A marker nothing can see is a capture
 # nobody schedules.
 MARKER = re.compile(
-    r"^>\s*\*\*\[?(?:Screenshot placeholder|Screenshot needed)",
+    r"^(?:>\s*\*\*\[?|<!--\s*)(?:Screenshot placeholder|Screenshot needed)",
     re.IGNORECASE,
 )
+
+
+def is_comment(line: str) -> bool:
+    """Whether the marker on ``line`` opens the HTML-comment form."""
+    return line.lstrip().startswith("<!--")
 
 
 def block_end(lines: list[str], start: int) -> int:
@@ -65,6 +81,15 @@ def block_end(lines: list[str], start: int) -> int:
     unrecorded. 11 markers across three guides were sitting in that position on
     2026-08-17, one of them lost exactly this way before the behavior was found.
     """
+    if is_comment(lines[start]):
+        # A comment ends where it closes. One that never closes would hide the
+        # rest of the guide when rendered; stopping at the marker line keeps a
+        # replacement from deleting everything below it.
+        for end in range(start, len(lines)):
+            if "-->" in lines[end]:
+                return end + 1
+        return start + 1
+
     end = start + 1
     while end < len(lines) and lines[end].startswith(">"):
         if MARKER.match(lines[end]):
@@ -86,7 +111,7 @@ def block_start(lines: list[str], start: int) -> int:
     swapping the placeholder for an image left the note ending on an empty
     quoted line.
     """
-    if start > 0 and lines[start - 1].strip() == ">":
+    if start > 0 and lines[start - 1].strip() == ">" and not is_comment(lines[start]):
         return start - 1
     return start
 

@@ -197,6 +197,24 @@ advance from page one succeeds uniformly and pictures nothing.
 > applicants are real records, so the shots pass every check and simply read
 > badly.
 
+## What a placeholder looks like
+
+A placeholder is an HTML comment, so members reading a guide on GitHub never see
+a request meant for whoever takes the screenshots:
+
+```markdown
+<!-- Screenshot needed:
+[Who is signed in, which page, and exactly what state the screen must be in]
+-->
+```
+
+`status_report.py` counts these and `apply_placeholders.py` replaces them. Both
+still recognise the older blockquote form (`> **Screenshot needed:**`), so a
+branch written before the comment form is counted and filled the same way, but
+new placeholders use the comment. Never put `--` inside the description: it is
+not allowed in an HTML comment, and `-->` would end the comment early and show
+the rest of the request to readers.
+
 ## How a shot finds its placeholder
 
 Each entry records the placeholder's `line`, but that is only a hint: applying

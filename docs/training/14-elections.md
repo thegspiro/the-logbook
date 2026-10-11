@@ -1313,8 +1313,9 @@ The fixes above were driven again in a real browser; these are what that found.
 - **The help pop-up on the Elections page** is as wide as its text rather than a
   word or two a line.
 
-> **Screenshot needed:**
-> _[A member voting in-app on an open demo election: the "Vote submitted for <position>" block with the receipt hash and the line "Save this receipt to verify your vote was counted. It cannot reveal how you voted." Demo data only.]_
+<!-- Screenshot needed:
+_[A member voting in-app on an open demo election: the "Vote submitted for <position>" block with the receipt hash and the line "Save this receipt to verify your vote was counted. It cannot reveal how you voted." Demo data only.]_
+-->
 
 ---
 

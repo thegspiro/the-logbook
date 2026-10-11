@@ -286,11 +286,12 @@ Select a template to start with a pre-configured form that you can customize.
 
 ---
 
-> **Screenshot needed:**
-> _[Forms manager (`forms.manage`) at `/forms`, **Starter Templates** tab: the
-> template grid showing the **Public** badge and the orange "Sends responses to
-> Membership" / "Sends responses to Events" hints on the two public templates.
-> Do not press **Use Template**, which creates a form.]_
+<!-- Screenshot needed:
+_[Forms manager (`forms.manage`) at `/forms`, **Starter Templates** tab: the
+template grid showing the **Public** badge and the orange "Sends responses to
+Membership" / "Sends responses to Events" hints on the two public templates.
+Do not press **Use Template**, which creates a form.]_
+-->
 
 ## Publishing and Sharing Forms
 
@@ -333,11 +334,12 @@ member until you change it**:
 > that returns them to the form afterwards. The same notice appears if a
 > submission is refused for want of a sign-in.
 
-> **Screenshot needed:**
-> _[A public form at `/f/<slug>` opened in a signed-out browser, for a form
-> whose **Allow submissions without signing in** is off: the **Sign in to
-> submit this form** notice above the first question, naming the department,
-> with its **Sign in** button.]_
+<!-- Screenshot needed:
+_[A public form at `/f/<slug>` opened in a signed-out browser, for a form
+whose **Allow submissions without signing in** is off: the **Sign in to
+submit this form** notice above the first question, naming the department,
+with its **Sign in** button.]_
+-->
 
 > **There is no "one submission per person" setting to switch on.** The form
 > builder has no control for it, and every form a department creates allows
@@ -427,11 +429,12 @@ all read** on the row clears the whole category, including any not yet loaded.
 A pinned notification never stacks. On the dashboard's **My Updates** card a
 stack is one row that opens this inbox.
 
-> **Screenshot needed:**
-> _[Notifications → **My Notifications** with a collapsed stack (for example
-> "3 attendance validations", **Latest:** line, **3 unread** badge and **Mark
-> all read**) above single notifications, then the same stack expanded showing
-> its individual rows.]_
+<!-- Screenshot needed:
+_[Notifications → **My Notifications** with a collapsed stack (for example
+"3 attendance validations", **Latest:** line, **3 unread** badge and **Mark
+all read**) above single notifications, then the same stack expanded showing
+its individual rows.]_
+-->
 
 ![Notification rules and logs page with summary cards and the rules list](./images/07-08-notification-rules.png)
 
@@ -474,11 +477,12 @@ Rules can be enabled/disabled individually with toggle switches. The summary car
 
 ![Create notification rule modal with its trigger and channel fields](./images/07-10-create-rule-modal.png)
 
-> **Screenshot needed:**
-> _[Administrator with `notifications.manage` at `/notifications?tab=rules`:
-> press **Add Rule**, name it "Gear request notices" and choose the trigger
-> **Equipment Request Update**, so its note is visible at the bottom of the dialog. Do
-> not press **Create Rule**.]_
+<!-- Screenshot needed:
+_[Administrator with `notifications.manage` at `/notifications?tab=rules`:
+press **Add Rule**, name it "Gear request notices" and choose the trigger
+**Equipment Request Update**, so its note is visible at the bottom of the dialog. Do
+not press **Create Rule**.]_
+-->
 
 **[SCREENSHOT — REPLACE `07-10-create-rule-modal.png`.** The trigger dropdown now also offers **Equipment Request Update** _(#2767)_, and the note under it reads "To stop it for the whole department, switch off **every** rule for this trigger — any one left on keeps it running. Members set their own email and text preferences separately." _(#2791)_. Re-take Create Notification Rule with **Event Reminder** chosen and that note in frame; never save**]**
 
@@ -727,24 +731,27 @@ Holders of `settings.manage` or `organization.update_settings` can turn on
 own switches say. It works in one direction only: an email the system itself
 requires cannot be made optional. Each change is written to the audit log.
 
-> **Screenshot needed:**
-> _[Communications → **Member Emails & Texts** as an administrator: the **Always
-> sent** cards, then **Members can turn off** with one card's **Require for every
-> member** switch on and badged **Required by your department**, and the top of
-> the **Text messages** section.]_
+<!-- Screenshot needed:
+_[Communications → **Member Emails & Texts** as an administrator: the **Always
+sent** cards, then **Members can turn off** with one card's **Require for every
+member** switch on and badged **Required by your department**, and the top of
+the **Text messages** section.]_
+-->
 
-> **Screenshot needed:**
-> _[Settings → **Notifications** as a member: **Email Notifications** on, the
-> **Emails you can turn off** list with **Event reminders** switched off, and
-> **Always emailed to you** below it.]_
+<!-- Screenshot needed:
+_[Settings → **Notifications** as a member: **Email Notifications** on, the
+**Emails you can turn off** list with **Event reminders** switched off, and
+**Always emailed to you** below it.]_
+-->
 
-> **Screenshot needed:**
-> _[Administrator with `settings.manage` at `/communications/member-emails`:
-> the full page with **Always sent**, **Members can turn off** and **Text
-> messages** all visible. Before capturing, switch on **Require for every
-> member** for one optional email (e.g. **Quartermaster duties**) so its card
-> shows **Required by your department** beside cards reading **On unless turned
-> off**; switch it back off afterwards.]_
+<!-- Screenshot needed:
+_[Administrator with `settings.manage` at `/communications/member-emails`:
+the full page with **Always sent**, **Members can turn off** and **Text
+messages** all visible. Before capturing, switch on **Require for every
+member** for one optional email (e.g. **Quartermaster duties**) so its card
+shows **Required by your department** beside cards reading **On unless turned
+off**; switch it back off afterwards.]_
+-->
 
 ### Edge Cases
 
@@ -825,13 +832,14 @@ created closed, because an open box needs a reviewer.
 To close a box, untick **Accepting submissions**. Its existing submissions stay
 readable by its reviewers.
 
-> **Screenshot needed:**
-> _[Holder of `suggestions.manage` (e.g. the demo chief) at
-> `/communications/suggestion-boxes` after a fresh demo seed: the **Suggestion
-> boxes** list showing the default **Compliance** box (submitter chooses,
-> follow-up allowed, its submission count, "Reviewers: Compliance Officer"),
-> **Training ideas** with its reviewers and any "Also notified:" line, and the
-> **Edit** and **Delete** buttons on each row. Nothing saved or deleted.]_
+<!-- Screenshot needed:
+_[Holder of `suggestions.manage` (e.g. the demo chief) at
+`/communications/suggestion-boxes` after a fresh demo seed: the **Suggestion
+boxes** list showing the default **Compliance** box (submitter chooses,
+follow-up allowed, its submission count, "Reviewers: Compliance Officer"),
+**Training ideas** with its reviewers and any "Also notified:" line, and the
+**Edit** and **Delete** buttons on each row. Nothing saved or deleted.]_
+-->
 
 To remove a box you no longer need, press **Delete** on it:
 
@@ -998,10 +1006,11 @@ list. The tab strip scrolls the tab you are on into view, and two tabs take
 shorter names — **Mine** for My submissions and **Follow up** for Follow up with
 a key — so all of them usually fit.
 
-> **Screenshot needed:**
-> _[Suggestions → **Review** on a phone, a submission open: its title and
-> details at the top of the screen, then the **Disposition** and **Internal
-> note**, with the mobile bottom navigation below.]_
+<!-- Screenshot needed:
+_[Suggestions → **Review** on a phone, a submission open: its title and
+details at the top of the screen, then the **Disposition** and **Internal
+note**, with the mobile bottom navigation below.]_
+-->
 
 ### Edge cases
 
@@ -1016,11 +1025,12 @@ a key — so all of them usually fit.
 
 ---
 
-> **Screenshot needed:**
-> _[Ordinary member at `/suggestions`, **Submit** tab, with the **Compliance**
-> box chosen: its description ("Report a compliance concern … Reviewed by the
-> Compliance Officer."), the anonymity hint and the follow-up hint visible.
-> Nothing typed or submitted.]_
+<!-- Screenshot needed:
+_[Ordinary member at `/suggestions`, **Submit** tab, with the **Compliance**
+box chosen: its description ("Report a compliance concern … Reviewed by the
+Compliance Officer."), the anonymity hint and the follow-up hint visible.
+Nothing typed or submitted.]_
+-->
 
 ## External Integrations
 

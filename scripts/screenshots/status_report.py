@@ -30,9 +30,11 @@ OUTPUT = DOCS_DIR / "SCREENSHOT_STATUS.md"
 # Keep in step with apply_placeholders.py, which explains why the `[` is
 # optional and unterminated: descriptive `**[SCREENSHOT NEEDED — …]**` markers
 # were invisible to this count, so the tracker read as nearly complete while 41
-# requested captures went unscheduled.
+# requested captures went unscheduled. The `<!--` alternative is the current
+# form: a placeholder is an HTML comment, so members reading a guide do not see
+# it. The blockquote form stays matched for branches written before that.
 MARKER = re.compile(
-    r"^>\s*\*\*\[?(?:Screenshot placeholder|Screenshot needed)",
+    r"^(?:>\s*\*\*\[?|<!--\s*)(?:Screenshot placeholder|Screenshot needed)",
     re.IGNORECASE,
 )
 IMAGE = re.compile(r"^!\[.*\]\(\./images/.*\.png\)$")

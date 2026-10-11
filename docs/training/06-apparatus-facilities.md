@@ -153,10 +153,11 @@ two are no longer confused.
   badge and icon with the status colour, but the text uses the theme's primary
   colour so it stays readable (some seeded colours measured under 2:1).
 
-> **Screenshot needed:** the empty fleet list (**No apparatus yet**) and the Add
-> Apparatus form with the intro line, the NFPA help text and the **CNG** fuel
-> option. See `SCREENSHOT_CURRENCY.md`, _Queued by the October 7 – 8
-> documentation pass_.
+<!-- Screenshot needed: the empty fleet list (**No apparatus yet**) and the Add
+Apparatus form with the intro line, the NFPA help text and the **CNG** fuel
+option. See `SCREENSHOT_CURRENCY.md`, _Queued by the October 7 – 8
+documentation pass_.
+-->
 
 ## Maintenance Scheduling
 
@@ -281,8 +282,9 @@ The facilities dashboard shows:
 
 > **Hint:** If your department has the Facilities module disabled, you will see a simplified **Locations** page that provides basic location management for events and meetings.
 
-> **Screenshot needed:**
-> _[Plain member (no locations.\* or settings permissions), /locations, department with at least one station holding a room. Stations and rooms listed, with no QR toggle, kiosk URL, Add Station, Add Room, edit, delete, Change or Run Setup Wizard control. Do not capture a kiosk URL or display code.]_
+<!-- Screenshot needed:
+_[Plain member (no locations.\* or settings permissions), /locations, department with at least one station holding a room. Stations and rooms listed, with no QR toggle, kiosk URL, Add Station, Add Room, edit, delete, Change or Run Setup Wizard control. Do not capture a kiosk URL or display code.]_
+-->
 
 ### Printing Facility Labels
 
@@ -376,8 +378,9 @@ on a page that asks the room what is in its check-in window right now:
   guessing.
 - **None** — "Nothing to check in to", with **Check again**.
 
-> **Screenshot needed:**
-> _[Signed in as a member, open `/locations/<room id>/check-in` for a room with two events in their check-in window → the "Which event are you here for?" page listing both events.]_
+<!-- Screenshot needed:
+_[Signed in as a member, open `/locations/<room id>/check-in` for a room with two events in their check-in window → the "Which event are you here for?" page listing both events.]_
+-->
 
 A writer whom the server does not give kiosk codes to (the Vice President, by
 default) sees a **Room NFC Tags** list instead of the room cards — "Write a tag
