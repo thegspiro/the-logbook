@@ -107,6 +107,32 @@ A folder marked **Document managers only** opens to `documents.manage`.
 > is none: a folder is created inside the folder you have open, which the
 > dialog names as its **Location**.
 
+### Managing a Folder _(2026-10-11)_
+
+**Required Permission:** `documents.manage`
+
+Each folder card carries a **Manage folder** (gear) button. It opens the
+folder's settings:
+
+- **Name** and **Description**.
+- **Who can open it** — **Organization** (every member who can open
+  Documents), **Leadership** (officers who manage the department's documents),
+  or **Specific roles** (tick one or more positions; **Save** waits until at
+  least one is ticked). The card then reads **Leadership only** or **Specific
+  roles only**. A personal folder under Member Files keeps its owner-only
+  access and is not offered these choices.
+- **Move** — browse to the folder it should sit in (or stay at **Top level**),
+  click **Move here**, then **Save**. The folder itself is not offered as a
+  destination, so it cannot be moved inside itself.
+- **Delete folder…** — asks first, naming what goes with it: the documents
+  directly in it and how many subfolders, with everything inside them. The files
+  are deleted too and it cannot be undone. **Keep it** backs out.
+
+**System folders** (the list above) keep their name and place and cannot be
+deleted: the module that made each one files into it. Their description and who
+can open them can still be changed. The server refuses a rename, move or delete
+of a system folder even from the API.
+
 ---
 
 ## Uploading and Managing Documents

@@ -239,6 +239,10 @@ export interface DocumentFolder {
   document_count: number;
   /** Who may open it: every member, leadership only, or its owner (+ leadership). */
   visibility?: 'organization' | 'leadership' | 'owner';
+  /** Position slugs; when set on an organization folder, only those positions open it. */
+  allowed_roles?: string[] | null;
+  /** Created by the application for a module; cannot be renamed, moved or deleted. */
+  is_system?: boolean;
   created_at: string;
   updated_at: string;
   created_by?: string;

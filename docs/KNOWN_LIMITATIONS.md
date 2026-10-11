@@ -4770,6 +4770,18 @@ Found driving W53 (`docs/workflow-review/W53-documents.md`, W53-4).
   - what deleting a non-empty folder does;
   - whether system folders may be renamed or moved.
 
+**Resolved 2026-10-11 (owner decision).** Each folder card has **Manage
+folder** (`FolderManageDialog`): rename, description, **Who can open it** —
+Organization / Leadership / Specific roles (`visibility` plus
+`allowed_roles`, positions listed by the new `GET /documents/folders/role-options`
+under `documents.manage`, since `GET /roles` needs `positions.view`) — move by
+browsing to a destination, and delete. Delete cascades to every subfolder and
+document behind a `useConfirm` naming the document count and subfolder count.
+System folders cannot be renamed, moved or deleted: the dialog does not offer
+it, and `update_folder` now refuses a rename (400) as it already refused a move,
+alongside `delete_folder`'s refusal. Not offered: `owner` visibility (personal
+folders keep theirs) and `required_permissions` (set by modules, not by hand).
+
 ## Legal Documents — History, Attribution and Formatting Gaps (2026-10-04)
 
 Found driving W54 (`docs/workflow-review/W54-org-chart-and-legal.md`, W54-3 to

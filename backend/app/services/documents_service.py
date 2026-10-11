@@ -603,6 +603,16 @@ class DocumentsService:
         # at the same layer as the other folder-specific validation below.
         if folder.is_system and "parent_id" in update_data:
             raise ValueError("Cannot move a system folder")
+        # W53-4 (owner decision): a system folder cannot be renamed either.
+        # Its name is how the module that created it, and every member told
+        # "it's in Member Files", finds it. Re-sending the same name is not a
+        # rename, so a form that posts every field it owns still saves.
+        if (
+            folder.is_system
+            and "name" in update_data
+            and update_data["name"] != folder.name
+        ):
+            raise ValueError("Cannot rename a system folder")
 
         # DOC-6 (XC-1): validate re-pointed FKs are in-org before applying.
         if "parent_id" in update_data:
