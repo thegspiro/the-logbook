@@ -945,7 +945,9 @@ async def close_stale_sessions(
     service = AdminHoursService(db)
     try:
         count = await service.auto_close_stale_sessions(
-            organization_id=str(current_user.organization_id)
+            organization_id=str(current_user.organization_id),
+            actor_user_id=str(current_user.id),
+            actor_username=current_user.username,
         )
         return {"closed_count": count}
     except Exception as e:

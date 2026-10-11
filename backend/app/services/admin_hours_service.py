@@ -14,6 +14,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
+from app.core.audit import log_audit_event
 from app.models.admin_hours import (
     EVENT_TYPE_WITHOUT_ADMIN_HOURS_REASON,
     EVENT_TYPES_WITHOUT_ADMIN_HOURS,
@@ -1466,7 +1467,10 @@ class AdminHoursService:
     # =========================================================================
 
     async def auto_close_stale_sessions(
-        self, organization_id: Optional[str] = None
+        self,
+        organization_id: Optional[str] = None,
+        actor_user_id: Optional[str] = None,
+        actor_username: Optional[str] = None,
     ) -> int:
         """Auto-close sessions that exceeded their category's max_hours_per_session.
 
@@ -1474,6 +1478,13 @@ class AdminHoursService:
         endpoint does this so an officer can't close/mutate other tenants'
         active sessions); the global scheduled task omits it to sweep all orgs.
         Returns the number of sessions auto-closed.
+
+        Each close rewrites a member's paid time, so each one writes its own
+        audit event (owner decision CRON2-31-13: one event per session, not one
+        summary per run) — a member disputing a capped session must be able to
+        find the record for that session alone. ``actor_user_id`` names the
+        officer when the manual endpoint triggers the sweep; the scheduled run
+        leaves it unset and the event records ``trigger="scheduled"``.
         """
         now = datetime.now(timezone.utc)
         query = (
@@ -1491,7 +1502,7 @@ class AdminHoursService:
             query = query.where(AdminHoursEntry.organization_id == organization_id)
         result = await self.db.execute(query)
         rows = result.all()
-        closed = 0
+        closed_entries: List[Tuple[AdminHoursEntry, float]] = []
 
         for entry, max_hours in rows:
             max_duration = timedelta(hours=max_hours)
@@ -1504,7 +1515,7 @@ class AdminHoursService:
                 )
                 # Auto-closed entries go to pending for review
                 entry.status = AdminHoursEntryStatus.PENDING
-                closed += 1
+                closed_entries.append((entry, max_hours))
                 logger.info(
                     "Auto-closed stale session {} for user {} ({}h limit)",
                     entry.id,
@@ -1512,9 +1523,39 @@ class AdminHoursService:
                     max_hours,
                 )
 
-        if closed:
+        if closed_entries:
             await self.db.flush()
-        return closed
+            await self._audit_auto_closed(closed_entries, actor_user_id, actor_username)
+        return len(closed_entries)
+
+    async def _audit_auto_closed(
+        self,
+        closed_entries: List[Tuple[AdminHoursEntry, float]],
+        actor_user_id: Optional[str],
+        actor_username: Optional[str],
+    ) -> None:
+        trigger = "manual" if actor_user_id else "scheduled"
+        for entry, max_hours in closed_entries:
+            await log_audit_event(
+                db=self.db,
+                event_type="admin_hours.session_auto_closed",
+                event_category="administration",
+                severity="warning",
+                event_data={
+                    "entry_id": str(entry.id),
+                    "member_user_id": str(entry.user_id),
+                    "category_id": str(entry.category_id),
+                    "clock_in_at": _ensure_utc(entry.clock_in_at).isoformat(),
+                    "clock_out_at": _ensure_utc(entry.clock_out_at).isoformat(),
+                    "duration_minutes": entry.duration_minutes,
+                    "max_hours_per_session": max_hours,
+                    "new_status": AdminHoursEntryStatus.PENDING.value,
+                    "trigger": trigger,
+                },
+                user_id=actor_user_id,
+                username=actor_username,
+                organization_id=str(entry.organization_id),
+            )
 
     # =========================================================================
     # Helpers

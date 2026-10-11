@@ -3186,6 +3186,14 @@ January 1 to today, not the last 365 days.
   (hours)** and **Max hours per session** are set on each category in the
   **Categories** tab. What the summary ranks is hours logged, not the limits
   they were logged under.
+- **A session that runs past its category's Max hours per session is closed
+  for the member** _(2026-10-11)_. Every 30 minutes the system caps a
+  forgotten clock-in at the limit, sets it to Pending Review and notes
+  "Auto-closed: exceeded _N_h session limit" on the entry. Each one is also
+  written to the audit log as its own `admin_hours.session_auto_closed`
+  event — the member, the entry, the capped times and whether the scheduled
+  run or an officer's **Close Stale Sessions** (Categories tab) did it — so a disputed session
+  can be looked up on its own.
 
 <!-- Screenshot needed:
 _[Admin holding admin_hours.manage at `/admin-hours/manage`, Categories tab: two categories, one with Require approval on and a 4h threshold, one with it off — one row showing "Approval: Required", "Auto-approved under 4h" and "Manual entries: always reviewed" side by side, and one showing "Approval: Not required" and "Manual entries: always reviewed" side by side.]_

@@ -3677,12 +3677,18 @@ measure — a product/architecture decision, not a drive-by.
 
 ## CRON2-31-13 — A Scheduled-Task Gap Left Open by This Rotation's Pass (2026-08-27)
 
-- **`run_admin_hours_auto_close` has no audit trail**
-  (`admin_hours_service.py`'s `auto_close_stale_sessions`) — force-closes a
-  member's open admin-hours session (a money-adjacent paid-hours state
-  change) with no `log_audit_event()` call anywhere in that file. What to
-  log (per-session vs. one batched summary event) is a design choice for
-  the admin-hours feature to make deliberately.
+- ✅ **Resolved 2026-10-11 (owner decision: one audit event per closed
+  session).** `run_admin_hours_auto_close` used to force-close a member's
+  open admin-hours session (a money-adjacent paid-hours state change) with no
+  audit trail. `auto_close_stale_sessions` now writes one
+  `admin_hours.session_auto_closed` event (`administration`, `warning`) per
+  closed session, stamped with the session's organization and carrying the
+  entry, the member, the category, the capped clock-in/out, the duration, the
+  limit applied and `trigger` — `scheduled` for the 30-minute task (no acting
+  user), `manual` with the officer named when **Close Stale Sessions** is
+  pressed. Not a batched summary: a member disputing a capped session can find
+  the record for that session alone. Tested in
+  `tests/test_admin_hours_auto_close_audit.py`.
 
 See `docs/security-review/CRON2-31-scheduled-tasks.md` for the full pass
 (12 findings fixed, 2 flagged, one of those since fixed).
