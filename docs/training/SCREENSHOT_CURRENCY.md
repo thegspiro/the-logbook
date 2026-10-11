@@ -17,6 +17,42 @@ names and alt text are unchanged, so `manifest.mjs` entries still match.
 | `00-09-account-settings.png` | **REPLACE** | The page title reads **My Account** (was User Settings), and the Appearance tab's description reads "Theme and phone navigation bar" |
 | `00-24-dashboard-my-department.png`, `00-25-dashboard-organization.png` | **REPLACE** | Both still show the pre-2026-08-24 tab strip (**My Department** / **Organization**); the tabs now read **Personal** / **My Department** |
 
+## Moved out of 03-scheduling.md by the plain-language rewrite, 2026-10-11
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+placeholders, image file names and alt text are unchanged.
+
+### New screens (no image exists)
+
+| Guide | Section | Capture brief |
+| ----- | ------- | ------------- |
+| 03-scheduling.md | Call Logging → claiming a call another unit logged | `03-84-closeout-shared-call-picker`: close-out step 2 on a phone, **Already logged by another unit** listing one ticked call (Medic 1 · EMS · Aug 19) above the typed rows, the total reading the tick plus the typed calls |
+| 03-scheduling.md | Shift Swap Requests → picking up an open swap | `03-85-open-swap-pickup`: Requests tab on a phone, **Open shifts you can pick up** above the list, one card (day, time, Engine 5, Driver/Operator, from a named member, reason) with **Pick up** |
+| 03-scheduling.md | Equipment Checks → building a template | Builder on a phone (390×844): the same engine template, compact rows, the blockers bar along the bottom |
+| 03-scheduling.md | Shift Reports → skill linkage | A mixed green/amber skill linkage on the report form; never captured |
+
+### Existing images to replace or check
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| Every desktop shot of the scheduling page (`03-01`, `03-04`, `03-61`, `03-62` among them) | **REPLACE** | The subtitle reads "See the schedule, sign up for shifts, and request swaps and time off" (was "Manage schedules, sign up for shifts, and handle trades") |
+| `03-05-open-shifts.png`, `03-100-open-shifts-member.png`, `03-105-open-shifts-admin.png` | **REPLACE** | The intro reads "Shifts with open seats. Sign up for one and it goes straight onto your schedule."; the old one promised an officer would confirm the signup |
+| `03-02-shift-detail-panel.png`, `03-05-assignment-form.png` | **CHECK** | Taken of the older right-hand drawer; may show the old **Add Assignment** form. Compare with `03-102` / `03-58` |
+| `03-82-call-volume-count-only.png` | **REPLACE** | The count-only report reads **Total Calls**, **Avg Calls/Day**, **Peak Calls**, with no per-unit footnote |
+| `03-67-swap-request-dialog.png` | **REPLACE** | Three cards (Open Swap, Specific Shift, Exchange With a Member); Open Swap's subtitle is "Offered to members cleared for your seat; it stays yours until one picks it up". Alt text still says "two swap-type cards" |
+| `03-47-settings-desktop.png` | **REPLACE** | Seven sections including **Outside Apparatus**; General reads "Shift defaults, overtime, and close-out" |
+| `03-48-settings-phone.png` | **CHECK** | Seven-section strip; settings use full width on phones |
+| `20-16-scheduling-admin-hub.png` | **REPLACE** | **Outside Apparatus** card added; Shift Templates / Shift Patterns / Who Can Fill What descriptions reworded. Shoot on a department with shifts so the setup guide is hidden |
+| `03-31-shift-edit-times.png` | **CHECK** | The shift form may have changed since it was taken |
+| `03-61-review-queue-batch.png` | **REPLACE** | **New report** is a separate button beside the view strip (was **+ New** inside it) |
+| `03-62-flagged-queue.png` | **REPLACE** | Same strip change; the expanded card shows only the reviewer's comment box |
+| `03-46-finalized-badge.png` | **CHECK** | Alt text mentions a pass-down note under the badge; the closed-out badge shows none |
+| `03-63-batch-report-form.png` | **CHECK** | Alt text mentions "shared hours and calls"; calls are entered per member |
+| `03-22-equipment-check-builder.png` | **REPLACE** | Predates the one-list builder; the shot shows a sidebar, progress strip and readiness card that no longer exist. Demo: engine template with three locations, one nested, one item of each answer type, **Before publishing** showing two items. Viewport at least 1440px |
+| `03-72-check-item-controls.png` | **CHECK** | May predate the **Note required** state on a failed item |
+| `03-80-submitted-check-phone.png` | note | The queued/offline half of its description is not pictured; the harness cannot simulate a dropped connection honestly |
+| Placeholder "Scheduling Admin → Settings → Notifications → the 'Not in effect yet' notice above the six switches" | **RETIRE** | The six switches and the notice no longer exist; the placeholder can never be filled |
+
 ## Queued by the October 7 – 8 documentation pass, 2026-10-08
 
 Covers PRs #2981–#2996. Audit:
