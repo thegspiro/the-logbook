@@ -269,7 +269,7 @@ not merely in the sub-millisecond window before any organization exists. That
 made `create_system_owner`'s own single-owner guard (a plain read-then-write,
 never itself locked) newly and directly reachable as a two-caller race rather
 than only as a single-session replay: reproduced against a real database, two
-concurrent `POST /system-owner` calls both created a full-access "*" account.
+concurrent `POST /system-owner` calls both created a full-access "\*" account.
 Fixed the same way as this entry's own singleton race — lock the parent
 (`onboarding_status`, guaranteed to exist and be unique by this point) and make
 the existence check itself a locking read. See
@@ -811,6 +811,25 @@ each module folder on that module's rights. Two things it did not do:
   `documents.manage` is refused at the first step. Apparatus and finance
   upload through their own module endpoints since this change; facilities
   would need the same (`app/services/module_documents.py` is the shared path).
+  Since 2026-10-11 that upload lands in General Documents first (no document
+  is unfiled any more), and the link files the uploader's own document from
+  there into the facility folder.
+- **Files in the `documents` area are not stored per record** (found
+  2026-10-11). Library uploads and the apparatus and finance documents that
+  `module_documents` creates are written flat under `<org>/documents/`,
+  where every other area adds the record (`<org>/<area>/<record>/`). Access
+  is unaffected — reads are confined to the organization and the area, and the
+  document row decides who may download — but a document's file cannot be
+  found or purged by directory.
+- **An event's attachment references are confined to the organization, not
+  the event** (found 2026-10-11). Event create/update payloads accept an
+  `attachments` list, checked only for being in the organization's
+  event-attachments area — deliberately, because duplicating an event and
+  generating recurring occurrences share one file. So event A can reference a
+  file uploaded to event B, and it is served under A's visibility. Only
+  someone who can write events can set that list, and they can already open
+  every event's attachments, so it grants nothing new today.
+  `GET /events/{id}/attachments` also returns the stored `file_path`.
 
 ## File Storage — What Encryption at Rest Does Not Cover (2026-10-09)
 
@@ -1433,6 +1452,15 @@ inside that one:
   API also has no read-only scope (`com.intuit.quickbooks.accounting` grants
   read and write), so the connection must confine itself to the calls it
   needs.
+- **"Sent" means the file was produced, not that QuickBooks imported it.**
+  _(2026-10-11)_ The export stamps a payment once its file is complete; it
+  cannot see whether the Treasurer then imported the file. A file downloaded
+  and never imported leaves its payments marked as sent; the Treasurer sends
+  that period again with `includeExported`. The live connection would close
+  this, since it would know what QuickBooks accepted.
+- **Only voided checks are reversed.** Paid purchase requests and expense
+  reports cannot be un-paid in the module, so there is nothing to reverse; a
+  refund or correction after export is entered in QuickBooks by hand.
 - **The CSV import is journal entries, with the limits that brings.** They do
   not appear on a vendor's record in QuickBooks and may not be counted on its
   1099 report; a department paying contractors checks that report before
@@ -1589,6 +1617,65 @@ exports are. Until then, `docs/training/16-integrations.md` says plainly that
 only the test runs, and its webhook payload example now matches what is
 actually sent (`event_type`, a Unix `timestamp`, a `sha256=`-prefixed
 signature) rather than the earlier invented shape.
+
+## Scheduling — Settings That Do Nothing, and Two Mismatches (2026-10-11)
+
+Found while rewriting `docs/training/03-scheduling.md` in plain language, and
+each checked against the code. The guide now describes what actually happens;
+whether to wire, relabel or remove each one is the owner's decision. Items 1–3
+are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
+
+1. **"Require officer shift completion report"** (Shift Reports settings). Its
+   only reader is the shift reminder (`scheduled_tasks.py`, ~line 1894), which
+   adds "A shift completion report is required before this shift can be
+   finalized." `finalize_shift` (`scheduling_service.py`) never checks for a
+   report, so a shift closes out without one despite the reminder's claim.
+   **Labelled (2026-10-11):** the setting's description now says it changes
+   the reminder, and it shows "Not in effect yet — a shift can still be closed
+   out without a report." Enforcing it at close-out is still open.
+2. **"Reviewer role"** (Shift Reports settings). Saved as
+   `report_review_role` in the training module config and read by nothing.
+   Approving reports is gated on `training.manage` alone
+   (`shift_completion.py`), so changing the role changes nothing.
+   **Labelled (2026-10-11):** both places it is chosen (Shift Reports settings
+   and the My Training settings page) show "Not in effect yet — anyone who can
+   manage training can review reports, whatever is chosen here." Wiring it is
+   still open.
+3. **Department Defaults** (default duration, minimum staffing, overtime
+   threshold). Stored and shown on the settings summary, but nothing applies
+   them: new shifts and templates do not pick them up, and no overtime warning
+   reads the threshold. **Labelled (2026-10-11):** the card shows "Not in
+   effect yet". Applying the defaults is still open.
+4. **Start-of-shift reminder emails default on in the backend, off on the
+   screen.** `scheduled_tasks.py` (~line 2358) reads
+   `reminder_cfg.get("send_email", True)` ("sent by default"); the
+   Notifications panel's default is `send_email: false` and nothing seeds
+   `shift_reminders` when a department is created. Until someone saves that
+   panel, crews receive reminder emails while the box shows unticked. The
+   function's own docstring says the default is False.
+   **Resolved (2026-10-11):** the panel now defaults the box to ticked, so it
+   shows what is sent, and the docstring matches the code. The backend default
+   is unchanged on purpose: switching it off would silently stop reminder
+   emails for every department that never saved the panel.
+5. **Eligibility screen promises an override the server refuses.** The
+   membership-type exclusion card says "Admins can still assign them
+   manually", but officer assignment runs the eligibility check
+   (`enforce_position_eligibility=True`), which returns no positions for an
+   excluded type, and the assignment is refused with "Member is no longer
+   eligible for this shift". Shifts open to all members and administrative
+   members are the exceptions.
+6. **"Manage schedules" sees assign controls the server refuses.**
+   `ShiftDetailPanel.tsx` and `OpenShiftsTab.tsx` show **Assign someone** to
+   `scheduling.manage` holders, but creating, editing or removing an assignment
+   requires `scheduling.assign` or being the shift officer
+   (`endpoints/scheduling.py`); `scheduling.manage` does not imply it. The
+   officer fills the form and gets "Insufficient permissions".
+7. **A shift-panel hint points to a tab that no longer exists.**
+   `ShiftDetailPanel.tsx` (~line 3114) reads "Start check → Go to Checklists
+   tab". Equipment checks moved to Inventory; the working route is the panel's
+   **Complete Checklists** button.
+   **Resolved (2026-10-11):** the hint now reads "Not started — use Complete
+   Checklists above".
 
 ## Admin — No Scheduled Tasks Page (2026-08-09)
 

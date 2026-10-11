@@ -333,6 +333,44 @@ class DocumentsService:
         document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
         return document_folder
 
+    async def general_folder(
+        self, organization_id: UUID, created_by: UUID
+    ) -> DocumentFolder:
+        """The organization's General Documents root.
+
+        Where a document is filed when no folder is chosen. Every document
+        lives in a folder so that a folder's rights decide who can read it; an
+        unfiled document used to be readable by every documents.view holder,
+        outside any folder's rules. Created with the rest of the system roots
+        if the organization does not have it yet.
+        """
+        folder = await self.general_root(organization_id)
+        if folder is None:
+            # Imported here: document_service builds the system roots and is
+            # the heavier module; nothing else here needs it.
+            from app.services.document_service import DocumentService
+
+            await DocumentService(self.db).initialize_system_folders(
+                organization_id, created_by
+            )
+            folder = await self.general_root(organization_id)
+        if folder is None:
+            raise RuntimeError("General Documents folder could not be created")
+        return folder
+
+    async def general_root(self, organization_id: UUID) -> Optional[DocumentFolder]:
+        """The General Documents root if it exists; never creates it."""
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.organization_id == str(organization_id))
+            .where(DocumentFolder.slug == "general")
+            .where(DocumentFolder.is_system.is_(True))
+            .where(DocumentFolder.parent_id.is_(None))
+            .order_by(DocumentFolder.created_at, DocumentFolder.id)
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     @staticmethod
     def _folder_admits_user(
         folder: DocumentFolder, user: User, *, require_write: bool = False
@@ -464,7 +502,9 @@ class DocumentsService:
         boundary the folder/document list enforces — so a direct by-id fetch
         cannot bypass a leadership-only, owner-only (a member's personal files),
         or role-restricted folder. Documents with no folder are organization
-        level and visible to anyone holding documents.view.
+        level and visible to anyone holding documents.view. None should
+        exist: uploads and moves file into General Documents instead, and
+        migration dcb8a46ac50c filed the ones already there.
         """
         if not document.folder_id:
             return True

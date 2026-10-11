@@ -23,7 +23,7 @@ upgrades an empty database, and ``create_all`` builds the column from the
 model).
 
 Revision ID: edb445ae5806
-Revises: 4b7e1f0c9a2d
+Revises: dcb8a46ac50c
 Create Date: 2026-10-11 10:30:05.000000
 
 """
@@ -35,7 +35,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "edb445ae5806"
-down_revision: Union[str, None] = "4b7e1f0c9a2d"
+down_revision: Union[str, None] = "dcb8a46ac50c"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

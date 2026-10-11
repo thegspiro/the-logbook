@@ -2110,7 +2110,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
     Controlled by org.settings["shift_reminders"]:
       - enabled (bool, default True)
       - lookahead_hours (int, default 2)
-      - send_email (bool, default False)
+      - send_email (bool, default True — emails go out until a department turns them off)
       - cc_emails (list[str], default [])
     """
     from datetime import timedelta

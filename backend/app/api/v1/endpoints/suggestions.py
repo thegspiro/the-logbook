@@ -55,6 +55,8 @@ from app.schemas.suggestion import (
     ForwardCreate,
     MessageCreate,
     MySuggestionSummary,
+    PickKind,
+    PickOption,
     PublishRequest,
     ReviewerOptions,
     ReviewSuggestionDetail,
@@ -172,6 +174,21 @@ async def list_open_boxes(
     service = SuggestionService(db)
     boxes = await service.list_open_boxes(current_user.organization_id)
     return service.public_box_views(boxes)
+
+
+@router.get("/pick-options", response_model=List[PickOption])
+async def list_pick_options(
+    kind: PickKind = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The members or vehicles a pick question offers, as ids and names.
+
+    The whole list in one request, filtered in the browser: a search request
+    would put what a member typed — the name of the person they are reporting
+    — in the access log beside their own address and the time.
+    """
+    return await SuggestionService(db).pick_options(current_user.organization_id, kind)
 
 
 @router.post(

@@ -431,6 +431,23 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Documents with no folder are filed into General Documents (2026-10-11)
+
+The upgrade moves every document that had no folder into its department's
+**General Documents** folder (creating that folder if the department never
+had one). Who can open each one does not change — General Documents is open
+to everyone who could see the document before — but its folder now governs
+it. From now on:
+
+- An upload with no folder chosen goes to General Documents; the upload form
+  says so.
+- Moving a document "out of its folder" moves it to General Documents, and
+  needs write access there like any other move. A document can no longer be
+  taken out of a restricted folder into a place the whole department can read.
+
+The migration is reversible: a downgrade returns each moved document to no
+folder unless somebody has filed it elsewhere since.
+
 ### Stored files are encrypted; confirm the key is kept safe (2026-10-09)
 
 Phase 4 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).
@@ -468,6 +485,25 @@ completed" until the administrator visits `/onboarding/encryption-key`.
 earlier releases serve an encrypted file's raw bytes. The database part does
 roll back: `cd backend && alembic downgrade c6c4ffcfdfb3` drops
 `encryption_key_custody`, and the notice returns after a re-upgrade.
+
+### QuickBooks exports send each payment once, and reverse voided checks (2026-10-11)
+
+Migration `3f3bd6f3c7e4` records which payments an export has carried.
+
+- **Payments an earlier export already carried are left out** of later
+  exports. The upgrade marks what your past successful exports carried (every
+  payment in an export's date range made before that export ran), so the first
+  export afterwards sends only what is new. To send a period again, pass
+  `includeExported: true`. Partial or failed exports mark nothing.
+- **A check voided after it was exported now gets a reversing entry**
+  (`CR-…-V`) in the next export covering the day it was voided. Before this
+  change a voided check stayed in QuickBooks as an expense. The upgrade dates
+  checks already voided from their last change, and a check the backfill finds
+  was exported before it was voided gets its reversal in the next export
+  covering that date. **Review voided checks in QuickBooks before your next
+  export:** if you already reversed or deleted one there by hand, delete the
+  `CR-…-V` entry after importing, or it will be reversed twice.
+- **A second export while one is still being prepared is refused** (409).
 
 ### QuickBooks exports follow Intuit's import limits (2026-10-09)
 

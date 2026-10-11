@@ -20,7 +20,7 @@ path's construction site.
 A seventh site constructs ``User`` rows that are records rather than logins:
 the shift history import (``POST /scheduling/history-import/{id}/commit``,
 gated on ``scheduling.manage``) creates former members a department's old
-shift spreadsheet names. They are written ``inactive`` with no password hash,
+shift spreadsheet names. They are written ``archived`` with no password hash,
 so password sign-in and OAuth refuse them (``User.is_active``), and a reset
 request finds no local password to reset. One becomes a login only when an
 administrator changes its status through the member screens, which answer to
@@ -191,7 +191,7 @@ def test_self_registration_is_gated_by_settings_and_off_by_default() -> None:
 
 
 def test_history_import_commit_requires_scheduling_manage() -> None:
-    """The import writes inactive, passwordless member records, not logins.
+    """The import writes archived, passwordless member records, not logins.
 
     Pinned so the gate cannot widen silently: a scheduling officer may record
     who worked a shift years ago, which is not the same as granting access.

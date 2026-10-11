@@ -124,6 +124,7 @@ from app.services.finance_service import (
     AmendmentAlreadyReversedError,
     AmendmentDecidedError,
     BudgetLimitExceededError,
+    ExportInProgressError,
     FinanceEntityNotFoundError,
     FinanceService,
     ManualApprovalConflictError,
@@ -3296,6 +3297,16 @@ async def generate_export(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.manage")),
 ):
+    """Stream the period's payments as a QuickBooks journal-entry import.
+
+    **Requires permission: finance.manage**
+
+    Payments an earlier complete export carried are left out unless
+    ``includeExported`` is true, and a check voided after it was exported gets
+    a reversing entry dated the day it was voided. Payments are recorded as
+    exported only once the whole file has been produced. A second export while
+    one is still running is 409.
+    """
     service = FinanceService(db)
     try:
         csv_stream = await service.generate_export(
@@ -3304,13 +3315,14 @@ async def generate_export(
             data.date_range_start,
             data.date_range_end,
             data.file_format,
+            include_exported=data.include_exported,
         )
         return StreamingResponse(
             content=csv_stream,
             media_type="text/csv",
             headers={"Content-Disposition": "attachment; filename=finance_export.csv"},
         )
-    except BudgetLimitExceededError as e:
+    except (BudgetLimitExceededError, ExportInProgressError) as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))

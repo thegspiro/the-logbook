@@ -15,7 +15,12 @@ import {
   SuggestionIntakeQuestionType,
 } from '../../../constants/enums';
 import { useConfirm } from '../../../contexts/ConfirmContext';
-import { CONDITION_OPERATORS_WITH_VALUE, getDescendantFieldIds } from '../../../utils/formVisibility';
+import {
+  CONDITION_OPERATORS_WITH_VALUE,
+  NUMERIC_CONDITION_OPERATORS,
+  getDescendantFieldIds,
+} from '../../../utils/formVisibility';
+import { usePickOptions } from '../hooks/usePickOptions';
 import type { IntakeOption } from '../types/suggestions';
 import { type EditableQuestion, newQuestionId, toConditionalFields } from '../utils/suggestionRouting';
 
@@ -37,9 +42,33 @@ const CONDITION_OPERATORS = [
   { value: 'equals', label: 'is' },
   { value: 'not_equals', label: 'is not' },
   { value: 'contains', label: 'includes' },
+  { value: 'at_least', label: 'is at least' },
+  { value: 'at_most', label: 'is at most' },
   { value: 'not_empty', label: 'is answered' },
   { value: 'is_empty', label: 'is not answered' },
 ];
+// Mirrors RATING_VALUES in backend/app/schemas/suggestion.py.
+const RATING_VALUES = ['1', '2', '3', '4', '5'];
+
+/**
+ * The rules a follow-up may use under a question of `type`. The server
+ * (`_check_rule_value` in suggestion_intake.py) refuses the rest: a pick or a
+ * time can only be asked about as answered or not, and only numbers compare
+ * as "at least" / "at most".
+ */
+function operatorsFor(type: string): string[] {
+  switch (type) {
+    case SuggestionIntakeQuestionType.MEMBER:
+    case SuggestionIntakeQuestionType.APPARATUS:
+    case SuggestionIntakeQuestionType.TIME:
+      return ['not_empty', 'is_empty'];
+    case SuggestionIntakeQuestionType.RATING:
+    case SuggestionIntakeQuestionType.NUMBER:
+      return ['equals', 'not_equals', ...NUMERIC_CONDITION_OPERATORS, 'not_empty', 'is_empty'];
+    default:
+      return ['equals', 'not_equals', 'contains', 'not_empty', 'is_empty'];
+  }
+}
 
 export interface RouteTarget {
   id: string;
@@ -72,6 +101,12 @@ const IntakeQuestionsEditor: React.FC<IntakeQuestionsEditorProps> = ({
   anonymityMode,
 }) => {
   const { confirm } = useConfirm();
+  const vehicles = usePickOptions(
+    'apparatus',
+    questions.some((q) => q.type === SuggestionIntakeQuestionType.APPARATUS)
+  );
+  // Members are told to skip it, and the server does not enforce it.
+  const noVehicles = !vehicles.isLoading && !vehicles.failed && vehicles.options.length === 0;
   const fields = toConditionalFields(questions);
 
   // A box that promises anonymity cannot send a submission to one that
@@ -141,9 +176,18 @@ const IntakeQuestionsEditor: React.FC<IntakeQuestionsEditorProps> = ({
     const options = isChoice
       ? question.options.map((o) => (ROUTING_TYPES.includes(type) ? o : { ...o, routeToBoxId: null }))
       : [];
-    // A follow-up comparing against an option no longer offered could never
-    // appear; release it rather than leave it unreachable.
-    const released = isChoice ? questions : releaseDependents(questions, question.id);
+    // A follow-up comparing against an answer the new type cannot give could
+    // never appear; release it rather than leave it unreachable. Choice to
+    // choice keeps the options, and so the rules on them.
+    const keepsValues = isChoice && CHOICE_TYPES.includes(question.type);
+    const allowed = operatorsFor(type);
+    const released = questions.map((q) => {
+      const operator = q.conditionOperator ?? '';
+      const breaks = !allowed.includes(operator) || (CONDITION_OPERATORS_WITH_VALUE.includes(operator) && !keepsValues);
+      return q.conditionQuestionId === question.id && breaks
+        ? { ...q, conditionQuestionId: null, conditionOperator: null, conditionValue: null }
+        : q;
+    });
     onChange(released.map((q) => (q.id === question.id ? { ...q, type, options } : q)));
   };
 
@@ -270,6 +314,13 @@ const IntakeQuestionsEditor: React.FC<IntakeQuestionsEditorProps> = ({
               Required when shown
             </label>
 
+            {question.type === SuggestionIntakeQuestionType.APPARATUS && noVehicles && (
+              <p className="alert-warning text-sm" role="status">
+                No vehicles are on file, so members will be told to skip this question. Add vehicles under Apparatus (or
+                Scheduling) for it to be asked.
+              </p>
+            )}
+
             {isChoice && (
               <div className="space-y-2">
                 <span className="form-label">Options</span>
@@ -354,13 +405,14 @@ const IntakeQuestionsEditor: React.FC<IntakeQuestionsEditorProps> = ({
                     aria-label="Show only after this question"
                     className="form-input min-w-0 flex-1 basis-48"
                     value={question.conditionQuestionId ?? ''}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const nextParent = questions.find((q) => q.id === e.target.value);
                       update(question.id, {
                         conditionQuestionId: e.target.value || null,
-                        conditionOperator: e.target.value ? 'equals' : null,
+                        conditionOperator: nextParent ? (operatorsFor(nextParent.type)[0] ?? null) : null,
                         conditionValue: null,
-                      })
-                    }
+                      });
+                    }}
                   >
                     <option value="">Always</option>
                     {parents.map((p) => (
@@ -383,7 +435,7 @@ const IntakeQuestionsEditor: React.FC<IntakeQuestionsEditorProps> = ({
                         })
                       }
                     >
-                      {CONDITION_OPERATORS.map((op) => (
+                      {CONDITION_OPERATORS.filter((op) => operatorsFor(parent.type).includes(op.value)).map((op) => (
                         <option key={op.value} value={op.value}>
                           {op.label}
                         </option>
@@ -409,10 +461,26 @@ const IntakeQuestionsEditor: React.FC<IntakeQuestionsEditorProps> = ({
                             </option>
                           ))}
                       </select>
+                    ) : parent.type === SuggestionIntakeQuestionType.RATING ? (
+                      <select
+                        aria-label="Answer"
+                        className="form-input min-w-0 basis-24"
+                        value={question.conditionValue ?? ''}
+                        required
+                        onChange={(e) => update(question.id, { conditionValue: e.target.value || null })}
+                      >
+                        <option value="">Rating…</option>
+                        {RATING_VALUES.map((rating) => (
+                          <option key={rating} value={rating}>
+                            {rating}
+                          </option>
+                        ))}
+                      </select>
                     ) : (
                       <input
                         aria-label="Answer"
                         className="form-input min-w-0 flex-1 basis-40"
+                        type={parent.type === SuggestionIntakeQuestionType.NUMBER ? 'number' : 'text'}
                         value={question.conditionValue ?? ''}
                         maxLength={MAX_LABEL_LENGTH}
                         required

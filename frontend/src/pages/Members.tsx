@@ -43,6 +43,9 @@ import { displayNameOf } from '../utils/memberName';
  */
 type RosterMember = MemberDirectoryEntry & Partial<User>;
 
+/** Status-filter value for every member who is not archived. */
+const CURRENT_MEMBERS_FILTER = 'current';
+
 const Members: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
@@ -80,9 +83,11 @@ const Members: React.FC = () => {
   });
   const [searchQuery, setSearchQuery] = useState('');
   // A member's directory opens on Active (W15-4); the server already leaves
-  // archived members out of it. A coordinator keeps the whole roster, archived
-  // included, because those are the records they maintain.
-  const defaultFilterStatus = canManageMembers ? 'all' : UserStatus.ACTIVE;
+  // archived members out of it. A coordinator opens on everyone except the
+  // archived: the shift history import files every former member it meets as
+  // archived, so an older department's "All" is mostly people who left decades
+  // ago. They stay one filter choice away, under Archived or All Statuses.
+  const defaultFilterStatus = canManageMembers ? CURRENT_MEMBERS_FILTER : UserStatus.ACTIVE;
   const [filterStatus, setFilterStatus] = useState<string>(defaultFilterStatus);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -120,7 +125,7 @@ const Members: React.FC = () => {
 
       // Calculate stats from real data
       const calculatedStats: MemberStats = {
-        total: users.length,
+        total: users.filter((u) => u.status !== UserStatus.ARCHIVED).length,
         active: users.filter((u) => u.status === UserStatus.ACTIVE).length,
         inactive: users.filter((u) => u.status === UserStatus.INACTIVE).length,
         onLeave: users.filter((u) => u.status === UserStatus.LEAVE).length,
@@ -202,7 +207,10 @@ const Members: React.FC = () => {
         (member.membership_number && member.membership_number.toLowerCase().includes(searchLower)) ||
         (member.email && member.email.toLowerCase().includes(searchLower));
 
-      const matchesFilter = filterStatus === 'all' || member.status === filterStatus || filterStatus === member.status;
+      const matchesFilter =
+        filterStatus === 'all' ||
+        (filterStatus === CURRENT_MEMBERS_FILTER && member.status !== UserStatus.ARCHIVED) ||
+        member.status === filterStatus;
 
       return matchesSearch && matchesFilter;
     });
@@ -425,6 +433,7 @@ const Members: React.FC = () => {
                 onChange={(e) => setFilterStatus(e.target.value)}
                 className="form-input"
               >
+                {canManageMembers && <option value={CURRENT_MEMBERS_FILTER}>All Current</option>}
                 <option value="all">All Statuses</option>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>

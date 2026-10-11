@@ -38,6 +38,7 @@ from app.schemas.inventory import (
     InventoryCategoryResponse,
     InventoryCategoryUpdate,
     InventoryItemCreate,
+    InventoryItemCreateIfAbsentResult,
     InventoryItemResponse,
     InventoryItemUpdate,
     InventoryLotBulkCreate,
@@ -47,7 +48,11 @@ from app.schemas.inventory import (
     ItemRetireRequest,
     ItemsListResponse,
 )
-from app.services.inventory_service import InventoryService, ItemOutsideDomainError
+from app.services.inventory_service import (
+    InventoryService,
+    ItemNameTakenOutsideDomainError,
+    ItemOutsideDomainError,
+)
 from app.utils.org_timezone import resolve_org_today
 
 router = APIRouter()
@@ -386,6 +391,78 @@ async def create_medical_item(
         username=current_user.username,
     )
     return new_item
+
+
+@router.post(
+    "/items/create-if-absent", response_model=InventoryItemCreateIfAbsentResult
+)
+async def create_medical_item_if_absent(
+    item: InventoryItemCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("inventory.manage_medical", "inventory.manage")
+    ),
+):
+    """
+    Create a medical supply item, or return the one already carrying the name
+
+    The equipment check builder's create-and-link path for medical stock. The
+    gear counterpart (`POST /inventory/items/create-if-absent`) files the new
+    row with no category, which made it gear: it never appeared on the
+    Medical Supplies page and the supply officer could not see the item a
+    rig's checklist was counting. This route requires a medical category, so
+    the row lands where the EMS officer manages it.
+
+    A pool name already on file in the medical domain is handed back with
+    `created: false`. One filed as gear or uniforms is refused with 409 — the
+    caller asked for medical stock, and linking a gear row would leave the
+    position off the supply officer's list. The response does not describe
+    the other row.
+
+    **Authentication required**
+    **Requires permission: inventory.manage_medical or inventory.manage**
+    """
+    service = InventoryService(db)
+    org_id = str(current_user.organization_id)
+    data = item.model_dump(exclude_unset=True)
+
+    await _require_medical_category(service, str(data.get("category_id") or ""), org_id)
+
+    try:
+        new_item, created, error = await service.create_item_if_absent(
+            organization_id=org_id,
+            item_data=data,
+            created_by=current_user.id,
+            item_types=MEDICAL_ITEM_TYPES,
+        )
+    except ItemNameTakenOutsideDomainError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "An item with this name already exists outside Medical "
+                "Supplies. Ask your quartermaster to move it into a medical "
+                "category, or choose a different name."
+            ),
+        )
+
+    if error or new_item is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=sanitize_error_message(error or "Could not create the item"),
+        )
+
+    if created:
+        await log_audit_event(
+            db=db,
+            event_type="medical_item_created",
+            event_category="inventory",
+            severity="info",
+            event_data={"item_id": str(new_item.id), "item_name": new_item.name},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+    return InventoryItemCreateIfAbsentResult(item=new_item, created=created)
 
 
 @router.patch("/items/{item_id}", response_model=InventoryItemResponse)

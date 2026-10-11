@@ -234,6 +234,12 @@ const ExpenseReportDetailPage: React.FC = () => {
               <p className="text-theme-text-primary text-sm capitalize">{er.paymentMethod}</p>
             </div>
           )}
+          {er.qbExportedAt && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Sent to QuickBooks</p>
+              <p className="text-theme-text-primary text-sm">{formatDateTime(er.qbExportedAt, tz)}</p>
+            </div>
+          )}
         </div>
 
         {er.description && (

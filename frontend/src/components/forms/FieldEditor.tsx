@@ -10,7 +10,11 @@ import { useDialog } from '../../hooks/useDialog';
 import { X, Plus, Trash2, GripVertical, GitBranch } from 'lucide-react';
 import type { FormFieldCreate, FormFieldOption } from '../../services/api';
 import { FieldType } from '../../constants/enums';
-import { CONDITION_OPERATORS_WITH_VALUE, getDescendantFieldIds } from '../../utils/formVisibility';
+import {
+  CONDITION_OPERATORS_WITH_VALUE,
+  NUMERIC_CONDITION_OPERATORS,
+  getDescendantFieldIds,
+} from '../../utils/formVisibility';
 
 const FIELD_TYPES = [
   { value: 'text', label: 'Text', icon: 'Aa' },
@@ -44,6 +48,8 @@ const CONDITION_OPERATORS = [
   { value: 'contains', label: 'Contains' },
   { value: 'not_empty', label: 'Is answered (not empty)' },
   { value: 'is_empty', label: 'Is not answered (empty)' },
+  { value: 'at_least', label: 'Is at least' },
+  { value: 'at_most', label: 'Is at most' },
 ];
 
 const NEEDS_OPTIONS = ['select', 'multiselect', 'checkbox', 'radio'];
@@ -165,6 +171,11 @@ const FieldEditor = ({
   );
   const selectedConditionField = conditionTargets.find((f) => f.id === conditionFieldId);
   const conditionNeedsValue = CONDITION_OPERATORS_WITH_VALUE.includes(conditionOperator);
+  // "At least" / "at most" compare numbers, so they are offered only under a
+  // number question; the server refuses them anywhere else.
+  const offeredOperators = CONDITION_OPERATORS.filter(
+    (op) => selectedConditionField?.field_type === FieldType.NUMBER || !NUMERIC_CONDITION_OPERATORS.includes(op.value)
+  );
 
   const addOption = () => {
     setOptions([...options, { value: '', label: '' }]);
@@ -620,7 +631,12 @@ const FieldEditor = ({
                       // An answer picked for the previous question is
                       // meaningless against a different one.
                       setConditionValue('');
-                      if (!e.target.value) {
+                      const nextParent = conditionTargets.find((f) => f.id === e.target.value);
+                      if (
+                        !e.target.value ||
+                        (NUMERIC_CONDITION_OPERATORS.includes(conditionOperator) &&
+                          nextParent?.field_type !== FieldType.NUMBER)
+                      ) {
                         setConditionOperator('');
                       }
                     }}
@@ -654,7 +670,7 @@ const FieldEditor = ({
                       }}
                       className="form-input"
                     >
-                      {CONDITION_OPERATORS.map((op) => (
+                      {offeredOperators.map((op) => (
                         <option key={op.value} value={op.value}>
                           {op.label}
                         </option>
