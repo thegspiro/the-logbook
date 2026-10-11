@@ -74,6 +74,7 @@ type LoadError = { message: string; hint: string | null };
 
 const CONTACT_SECRETARY_HINT = "If you think this is a mistake, contact your organization's secretary.";
 const REOPENED_PREFIX = 'This election was closed and reopened';
+const BALLOT_CHANGED_PREFIX = 'The ballot changed after this link was sent';
 
 const describeLoadError = (detail: string): LoadError => {
   if (detail === 'This ballot has already been fully submitted') {
@@ -94,6 +95,10 @@ const describeLoadError = (detail: string): LoadError => {
         'This election was closed and reopened, so this ballot link no longer works. Ask your secretary for a new ballot link.',
       hint: null,
     };
+  }
+  // A ballot change retires every outstanding link (W50-47).
+  if (detail.startsWith(BALLOT_CHANGED_PREFIX)) {
+    return { message: detail, hint: null };
   }
   if (detail === 'This link was replaced by a newer ballot email') {
     return {

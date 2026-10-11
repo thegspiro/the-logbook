@@ -517,6 +517,17 @@ When you click **Send Ballots**, the system:
 
 ![The banner after a ballot send, naming each member who was skipped and why](./images/14-24-ballot-send-skipped.png)
 
+**Changing the ballot after ballots went out** _(2026-10-08, W50-47)_. A
+ballot link shows the ballot as it was when the link was sent. So when you
+change the ballot items, the positions or who may vote on which (for example
+after rolling an open election back to draft), every link already sent that
+has not been used is retired. The detail page then shows **"Every ballot link
+already sent was invalidated because the ballot changed"** until ballots go
+out again — with **Resend Ballot Emails** on an open election, or a reminder to
+send once voting is open on a draft. A member who opens an old link reads that
+the ballot changed and a new email is coming. Saving the ballot without
+changing it retires nothing.
+
 Two things report the result. A **toast** gives the counts — "Ballots sent to N
 voter(s)", plus "M failed" and "M skipped (see banner below)" when either
 applies — and it disappears. A **banner** stays on the page and names each

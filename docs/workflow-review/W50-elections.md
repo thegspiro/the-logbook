@@ -989,7 +989,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `frontend/src/pages/ElectionsSettingsPage.tsx:149-155, 190-237`; `components/settings/SettingsToggle.tsx:22-36`.
 **Fix:** queue row 33 — render the label and description beside each toggle. Test: `ElectionsSettingsPage.w50-labels.test.tsx` (`getByText('Non-voter reminders')`).
 
-### W50-47 — MED — A ballot item added after tokens were issued never appears on already-sent links, and nothing prompts a resend — FLAGGED
+### W50-47 — MED — A ballot item added after tokens were issued never appears on already-sent links, and nothing prompts a resend — ✅ DECIDED & FIXED (2026-10-08)
+
+**Owner decision:** invalidate tokens and prompt a resend through the W50-36 banner. A ballot change retires every outstanding link; `GET /elections/{id}` reports `ballots_must_be_resent` / `ballots_resend_reason`. Test: `test_w50_stale_token_items.py`.
 
 **Did:** as `admin`, B3 step 17: a token minted before `late-b` was added, looked up after.
 **Saw:** 200 with `chief-b, motion-b` only while the Ballot tab shows four items.

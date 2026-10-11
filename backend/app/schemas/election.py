@@ -669,6 +669,11 @@ class ElectionResponse(UTCResponseBase):
     nomination_deadline: Optional[datetime] = None
     # Set by Close Nominations; the slate is frozen while it is (W50-38).
     nominations_closed_at: Optional[datetime] = None
+    # Ballot links already sent were retired — by a ballot change (W50-47)
+    # or a reopen (W50-36) — and no ballot email has gone out since.
+    # Resolved by the endpoint; reason is "ballot_changed" or "reopened".
+    ballots_must_be_resent: bool = False
+    ballots_resend_reason: Optional[str] = None
     tie_policy: str = "co_winners"
     status: str
     created_by: Optional[UUID] = None

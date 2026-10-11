@@ -95,6 +95,12 @@ REOPENED_TOKEN_MESSAGE = (
     "This election was closed and reopened, so this ballot link is no longer "
     "valid. Ask your secretary for a new ballot link."
 )
+# W50-47: a ballot change retires every outstanding link.
+BALLOT_CHANGED_TOKEN_MESSAGE = (
+    "The ballot changed after this link was sent, so it is no longer valid. "
+    "A new ballot email will be sent; if you do not receive one, ask your "
+    "secretary for a new ballot link."
+)
 
 # W50-38 (owner decision 2026-10-08): Close Nominations freezes the slate.
 SLATE_FROZEN_MESSAGE = (
@@ -7143,6 +7149,93 @@ class ElectionService:
         self.db.add(voting_token)
         return voting_token, raw_token
 
+    # The fields whose change alters what an issued ballot link shows: the
+    # contests themselves and who may vote on which (snapshotted on the token
+    # as eligible_item_ids / eligible_positions at issue).
+    BALLOT_SHAPE_FIELDS = ("ballot_items", "positions", "position_eligibility")
+
+    async def invalidate_tokens_for_ballot_change(self, election: Election) -> int:
+        """Retire every live ballot link because the ballot changed (W50-47).
+
+        A link serves the item ids snapshotted when it was minted, so one
+        sent before an item was added kept showing the old ballot and
+        nothing prompted a resend. The owner decided (2026-10-08) to
+        invalidate outstanding tokens on a ballot change and prompt a resend
+        through the W50-36 banner. Stamped ``superseded_at`` as well as
+        expired, so the lookup says the link was retired rather than that
+        voting is over, and ``ballot_resend_state`` can report it.
+        Does not commit; returns the number of links retired.
+        """
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        result = await self.db.execute(
+            sql_update(VotingToken)
+            .where(VotingToken.election_id == str(election.id))
+            .where(VotingToken.used.is_(False))
+            .where(VotingToken.superseded_at.is_(None))
+            .where(VotingToken.expires_at > now)
+            .values(expires_at=now, superseded_at=now)
+        )
+        return result.rowcount or 0
+
+    def _retired_by_reopen(self, election: Election, retired_at: Any) -> bool:
+        """Whether links retired at ``retired_at`` were retired by a
+        CLOSED -> OPEN rollback (W50-36) rather than a ballot change
+        (W50-47): the rollback record carrying ``ballots_must_be_resent``
+        is stamped in the same request."""
+        retired_at = self._ensure_utc(retired_at)
+        if retired_at is None:
+            return False
+        for record in reversed(election.rollback_history or []):
+            if not record.get("ballots_must_be_resent"):
+                continue
+            try:
+                at = self._ensure_utc(
+                    datetime.fromisoformat(record.get("timestamp", ""))
+                )
+            except ValueError:
+                continue
+            return at is not None and abs((at - retired_at).total_seconds()) <= 2
+        return False
+
+    async def ballot_resend_state(
+        self, election: Election
+    ) -> Tuple[bool, Optional[str]]:
+        """Whether ballot links already sent were retired and no ballot
+        email has gone out since — the detail page's resend banner.
+
+        Returns ``(must_resend, reason)``, reason ``"reopened"`` (a
+        CLOSED -> OPEN rollback regenerated the salt, W50-36) or
+        ``"ballot_changed"`` (W50-47). Derived from the tokens rather than
+        stored: the latest real (non-test) link retirement later than the
+        last ballot or reminder send. A reminder retires links too, but it
+        stamps ``reminder_sent_at`` after doing so, and a send stamps
+        ``email_sent_at`` after its own retirements, so neither reads as
+        outstanding.
+        """
+        if not election.email_sent:
+            return False, None
+        latest = (
+            await self.db.execute(
+                select(func.max(VotingToken.superseded_at))
+                .where(VotingToken.election_id == str(election.id))
+                .where(VotingToken.is_test.is_(False))
+                .where(VotingToken.used.is_(False))
+            )
+        ).scalar()
+        latest = self._ensure_utc(latest)
+        if latest is None:
+            return False, None
+        sends = [
+            self._ensure_utc(t)
+            for t in (election.email_sent_at, election.reminder_sent_at)
+            if t is not None
+        ]
+        if sends and latest <= max(sends):
+            return False, None
+        if self._retired_by_reopen(election, latest):
+            return True, "reopened"
+        return True, "ballot_changed"
+
     async def _token_voter_id(
         self, election: Election, voting_token: VotingToken
     ) -> Optional[str]:
@@ -9280,6 +9373,15 @@ class ElectionService:
             )
             if (newer.scalar() or 0) > 0:
                 return None, None, SUPERSEDED_TOKEN_MESSAGE
+            retired_by = (
+                await self.db.execute(
+                    select(Election).where(Election.id == voting_token.election_id)
+                )
+            ).scalar_one_or_none()
+            if retired_by is not None and not self._retired_by_reopen(
+                retired_by, voting_token.superseded_at
+            ):
+                return None, None, BALLOT_CHANGED_TOKEN_MESSAGE
             return None, None, REOPENED_TOKEN_MESSAGE
 
         # Check if token has expired

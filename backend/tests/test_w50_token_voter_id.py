@@ -123,46 +123,40 @@ class TestTokenVoterId(TestElectionSetup):
         [vote] = await _link_votes(db_session, data["election_id"])
         assert vote.voter_id is None
 
+    @pytest.mark.parametrize("anonymous", [False, True])
     async def test_send_ballot_emails_sets_user_id_on_named_elections_only(
-        self, db_session: AsyncSession, setup_election
+        self, db_session: AsyncSession, setup_election, anonymous
     ):
         data = setup_election
+        await _anonymous(db_session, data, anonymous)
 
         async def _accept(batch):
             return [True] * len(batch)
 
-        async def _token_ids() -> set:
-            rows = await db_session.execute(
-                select(VotingToken.id).where(
-                    VotingToken.election_id == data["election_id"]
+        with patch(
+            "app.services.email_service.EmailService.send_batch",
+            new=AsyncMock(side_effect=_accept),
+        ):
+            sent, failed, *_rest = await ElectionService(db_session).send_ballot_emails(
+                election_id=uuid.UUID(data["election_id"]),
+                organization_id=uuid.UUID(data["org_id"]),
+                recipient_user_ids=[uuid.UUID(data["user3_id"])],
+                base_ballot_url="https://fd.example/ballot",
+            )
+        assert (sent, failed) == (1, 0)
+        [token] = (
+            (
+                await db_session.execute(
+                    select(VotingToken).where(
+                        VotingToken.election_id == data["election_id"]
+                    )
                 )
             )
-            return {row[0] for row in rows.all()}
-
-        for anonymous in (False, True):
-            await _anonymous(db_session, data, anonymous)
-            # Both sends land within the same second, so created_at cannot
-            # tell the new token from the old one; diff the ids instead.
-            before = await _token_ids()
-            with patch(
-                "app.services.email_service.EmailService.send_batch",
-                new=AsyncMock(side_effect=_accept),
-            ):
-                sent, failed, *_rest = await ElectionService(
-                    db_session
-                ).send_ballot_emails(
-                    election_id=uuid.UUID(data["election_id"]),
-                    organization_id=uuid.UUID(data["org_id"]),
-                    recipient_user_ids=[uuid.UUID(data["user3_id"])],
-                    base_ballot_url="https://fd.example/ballot",
-                )
-            assert (sent, failed) == (1, 0)
-            (new_id,) = (await _token_ids()) - before
-            newest = await db_session.get(VotingToken, new_id)
-            if anonymous:
-                assert newest.user_id is None
-            else:
-                assert newest.user_id == data["user3_id"]
+            .scalars()
+            .all()
+        )
+        expected = None if anonymous else data["user3_id"]
+        assert token.user_id == expected
 
 
 # ── Migration ────────────────────────────────────────────────────────────

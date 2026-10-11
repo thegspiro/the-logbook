@@ -230,6 +230,10 @@ async def _build_election_response(
         election, UUID(str(election.organization_id))
     )
     response.closed_by_name = await ElectionService(db).closed_by_name(election)
+    (
+        response.ballots_must_be_resent,
+        response.ballots_resend_reason,
+    ) = await ElectionService(db).ballot_resend_state(election)
     if election.meeting:
         response.meeting_title = election.meeting.title
         response.meeting_type = (
@@ -1103,6 +1107,18 @@ async def get_election(
     return await _build_election_response(db, election)
 
 
+def _as_update_value(field: str, stored: Any) -> Any:
+    """The stored value in the shape ``ElectionUpdate`` dumps it, so a save
+    that resubmits an unchanged ballot compares equal and does not retire
+    every issued link (W50-47). A stored value the schema no longer accepts
+    compares unequal, which errs toward retiring links — never toward
+    serving a ballot that no longer matches."""
+    try:
+        return ElectionUpdate(**{field: stored}).model_dump(exclude_unset=True)[field]
+    except (ValueError, TypeError, KeyError):
+        return stored
+
+
 @router.patch("/{election_id}", response_model=ElectionResponse)
 async def update_election(
     election_id: UUID,
@@ -1368,11 +1384,24 @@ async def update_election(
                 ),
             )
 
+    # A link serves the ballot snapshotted when it was minted, so a changed
+    # ballot retires every outstanding link and the detail page prompts a
+    # resend (W50-47). Compared by value: the edit form resubmits fields it
+    # did not change.
+    ballot_changed = any(
+        field in update_data
+        and update_data[field] != _as_update_value(field, getattr(election, field))
+        for field in service.BALLOT_SHAPE_FIELDS
+    )
+
     for field, value in update_data.items():
         if field in ALLOWED_ELECTION_UPDATE_FIELDS:
             setattr(election, field, value)
 
     election.updated_at = datetime.now(timezone.utc)
+    links_invalidated = 0
+    if ballot_changed:
+        links_invalidated = await service.invalidate_tokens_for_ballot_change(election)
 
     await db.commit()
     await db.refresh(election)
@@ -1381,11 +1410,12 @@ async def update_election(
         db=db,
         event_type="election_updated",
         event_category="elections",
-        severity="info",
+        severity="warning" if links_invalidated else "info",
         event_data={
             "election_id": str(election_id),
             "title": election.title,
             "updated_fields": list(update_data.keys()),
+            "ballot_links_invalidated": links_invalidated,
         },
         user_id=str(current_user.id),
     )

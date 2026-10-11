@@ -92,6 +92,9 @@ export interface Election {
   closed_at?: string | null;
   closed_by?: string | null;
   closed_by_name?: string | null;
+  /** Ballot links already sent were retired and not yet resent (W50-36 / W50-47). */
+  ballots_must_be_resent?: boolean;
+  ballots_resend_reason?: 'ballot_changed' | 'reopened' | null;
   // Corrections to the result after close, oldest first (W50-9)
   results_revisions?: ResultsRevision[] | null;
   created_at: string;
