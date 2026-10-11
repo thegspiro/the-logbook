@@ -19,7 +19,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.inventory_service import InventoryService, is_pool_without_stock
+from app.services.inventory_service import (
+    InventoryService,
+    ItemNameTakenOutsideDomainError,
+    is_pool_without_stock,
+)
 
 pytestmark = [pytest.mark.integration]
 from app.models.inventory import (
@@ -1330,6 +1334,142 @@ class TestCreateItemIfAbsent:
         assert item is None
         assert created is False
         assert err is not None
+
+
+class TestCreateItemIfAbsentInADomain:
+    """The medical route's variant: one domain, the whole catalog searched."""
+
+    async def _category(self, svc, org_id, user_id, name, item_type):
+        category, err = await svc.create_category(
+            organization_id=uuid.UUID(org_id),
+            category_data={"name": name, "item_type": item_type},
+            created_by=uuid.UUID(user_id),
+        )
+        assert err is None
+        return category
+
+    @pytest.mark.asyncio
+    async def test_a_new_name_is_filed_in_the_requested_category(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        airway = await self._category(svc, org_id, user_id, "Airway", "medical")
+
+        item, created, err = await svc.create_item_if_absent(
+            org_id,
+            {
+                "name": "OPA Kit",
+                "tracking_type": "pool",
+                "quantity": 0,
+                "category_id": uuid.UUID(airway.id),
+            },
+            user_id,
+            item_types=MEDICAL_ITEM_TYPES,
+        )
+
+        assert err is None
+        assert created is True
+        assert str(item.category_id) == str(airway.id)
+        assert await svc.item_in_domain(item.id, org_id, MEDICAL_ITEM_TYPES)
+
+    @pytest.mark.asyncio
+    async def test_a_medical_name_on_file_comes_back(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        airway = await self._category(svc, org_id, user_id, "Airway", "medical")
+        first, _ = await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={
+                "name": "OPA Kit",
+                "tracking_type": "pool",
+                "quantity": 4,
+                "category_id": uuid.UUID(airway.id),
+            },
+            created_by=uuid.UUID(user_id),
+        )
+
+        item, created, err = await svc.create_item_if_absent(
+            org_id,
+            {
+                "name": "opa kit",
+                "tracking_type": "pool",
+                "quantity": 0,
+                "category_id": uuid.UUID(airway.id),
+            },
+            user_id,
+            item_types=MEDICAL_ITEM_TYPES,
+        )
+
+        assert err is None
+        assert created is False
+        assert item.id == first.id
+
+    @pytest.mark.asyncio
+    async def test_a_name_filed_as_gear_is_refused_not_duplicated(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        trauma = await self._category(svc, org_id, user_id, "Trauma", "medical")
+        await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={"name": "Tourniquet", "tracking_type": "pool", "quantity": 2},
+            created_by=uuid.UUID(user_id),
+        )
+
+        with pytest.raises(ItemNameTakenOutsideDomainError):
+            await svc.create_item_if_absent(
+                org_id,
+                {
+                    "name": "Tourniquet",
+                    "tracking_type": "pool",
+                    "quantity": 0,
+                    "category_id": uuid.UUID(trauma.id),
+                },
+                user_id,
+                item_types=MEDICAL_ITEM_TYPES,
+            )
+
+        count = await db_session.scalar(
+            text(
+                "SELECT COUNT(*) FROM inventory_items "
+                "WHERE organization_id = :org AND name = 'Tourniquet'"
+            ),
+            {"org": org_id},
+        )
+        assert count == 1
+
+    @pytest.mark.asyncio
+    async def test_without_a_domain_the_gear_route_still_links_anything(
+        self, db_session, setup_org_and_user
+    ):
+        """The existing gear-side behaviour is unchanged by the new parameter."""
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        trauma = await self._category(svc, org_id, user_id, "Trauma", "medical")
+        first, _ = await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={
+                "name": "Tourniquet",
+                "tracking_type": "pool",
+                "quantity": 2,
+                "category_id": uuid.UUID(trauma.id),
+            },
+            created_by=uuid.UUID(user_id),
+        )
+
+        item, created, err = await svc.create_item_if_absent(
+            org_id,
+            {"name": "Tourniquet", "tracking_type": "pool", "quantity": 0},
+            user_id,
+        )
+
+        assert err is None
+        assert created is False
+        assert item.id == first.id
 
 
 # ── Barcode Label Generation Tests ─────────────────────────────────

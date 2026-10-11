@@ -868,6 +868,15 @@ type**, optional help text, and whether it is required. Reorder with the arrows.
   and only they can read it. Reviewers there see the answers with their question
   wording.
 
+**Answer types _(2026-10-11)_.** Besides text and choices, a question can be a
+**Rating** (1 to 5, shown to reviewers as "4 / 5"), a **Time** (24-hour
+HH:MM, kept as entered), **Pick a member** or **Pick a vehicle**. The member and
+vehicle lists come from your own department; the name is saved with the answer,
+so a reviewer can still read it after the member leaves or the vehicle is
+retired. A department with no vehicles on file skips vehicle questions instead of
+blocking the form. A follow-up can also appear when a rating or number is **at
+least** or **at most** a value (forms with number fields get the same two rules).
+
 Rules that protect the submitter: a route must stay inside your department and
 cannot point at the box itself; a box that **requires anonymity** cannot route to
 a box that refuses it, and anonymity holds wherever an answer sends the

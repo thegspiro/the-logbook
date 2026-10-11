@@ -1202,6 +1202,28 @@ describe('EquipmentCheckTemplateBuilder remaining mutation regressions', () => {
     expect(addCheckItemsBulk.mock.calls[0]?.[2]).toBe(addCheckItemsBulk.mock.calls[1]?.[2]);
   });
 
+  it('offers to match a bulk paste to the catalog where it landed', async () => {
+    const user = userEvent.setup();
+    addCheckItemsBulk.mockResolvedValueOnce({
+      items: [
+        { ...template.compartments[0]?.items[0], id: 'mask', name: 'Mask', sortOrder: 2, inventoryItemId: undefined },
+        { ...template.compartments[0]?.items[0], id: 'hood', name: 'Hood', sortOrder: 3, inventoryItemId: undefined },
+      ],
+      createdCount: 2,
+    });
+    mockViewport('laptop');
+    renderBuilder();
+    const paste = (await screen.findAllByPlaceholderText(/press Enter/i))[0] as HTMLElement;
+    await user.type(paste, 'Mask{Shift>}{Enter}{/Shift}Hood');
+    await user.click(screen.getByRole('button', { name: 'Add all' }));
+
+    expect(await screen.findByText(/2 pasted items are not linked/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Match to catalog' })).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: 'Not now' }));
+    expect(screen.queryByText(/pasted items are not linked/)).not.toBeInTheDocument();
+  });
+
   it('retains an individually deleted row when persistence fails', async () => {
     deleteCheckItem.mockRejectedValueOnce(new Error('denied'));
     renderBuilder();

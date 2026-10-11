@@ -989,7 +989,7 @@ button claims the first open seat you are cleared for.
 ![The Schedule tab on a phone: the month header with the All shifts / Needs staffing / My shifts filter, the days-this-week-still-need-people warning, and the top of the bar grid above the bottom navigation](./images/19-35-schedule-board-phone.png)
 
 The chips, the claim button and the reasons it can be missing are described in
-[The Schedule Board and Standing Shifts](./03-scheduling.md#the-schedule-board-and-standing-shifts-2026-08-23--08-24).
+[The Schedule Board and Standing Shifts](./03-scheduling.md#the-schedule-board-and-standing-shifts).
 
 ### Settings on a phone
 

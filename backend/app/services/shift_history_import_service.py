@@ -958,10 +958,13 @@ class ShiftHistoryImportService:
         now: datetime,
         counts: Dict[str, int],
     ) -> Dict[str, str]:
-        """Inactive member records for the people the reviewer chose to create.
+        """Archived member records for the people the reviewer chose to create.
 
         No password and no invitation: these are records of people who served,
-        not accounts. An inactive member cannot sign in, and no email is sent.
+        not accounts. An archived member cannot sign in, and no email is sent.
+        Archived rather than inactive, because these are former members:
+        inactive reads as a current member who has stopped attending, which
+        kept them on the current roster as though they might be expected back.
         """
         created: Dict[str, str] = {}
         taken_usernames = {
@@ -996,8 +999,9 @@ class ShiftHistoryImportService:
                 membership_number=identity.membership_number or None,
                 password_hash=None,
                 email_verified=False,
-                status=UserStatus.INACTIVE,
+                status=UserStatus.ARCHIVED,
                 status_changed_at=now,
+                archived_at=now,
                 status_change_reason=(
                     f"Created by shift history import of {draft.source_filename}"
                 )[:1000],

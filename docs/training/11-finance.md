@@ -1513,6 +1513,15 @@ An export is **refused** — with a message naming what to fix, and no file — 
 
 Running an export (`POST /finance/export/transactions`) has no screen yet; see [Finance — QuickBooks Export Gaps](../KNOWN_LIMITATIONS.md#finance--quickbooks-export-gaps-2026-10-08).
 
+**Each payment is sent once** _(2026-10-11)_. QuickBooks does not stop you importing the same entry twice, so the export keeps track instead:
+
+- A payment a complete export has already carried is **left out** of later exports. Exporting September and then the whole quarter sends September's payments only once. The purchase request, expense report or check request page shows **Sent to QuickBooks** with the date.
+- To send a period again — for example after deleting its entries in QuickBooks — ask for **already-sent payments to be included** (`includeExported`). Do not import the file over entries that are still in QuickBooks, or they will be doubled.
+- If an export is interrupted before the whole file is produced, nothing is marked as sent; the next export carries those payments.
+- Only one export runs at a time. A second one started while the first is still being prepared is refused; wait for it to finish.
+
+**A voided check is reversed** _(2026-10-11)_. If a check was already sent to QuickBooks and is then voided, the next export covering the day it was voided carries a **reversing entry**: Journal No **`CR-…-V`**, dated the void day, putting the amount back into the account the check was drawn on and taking it out of the expense account the check was posted to. The check's page shows **Voided** and **Void sent to QuickBooks**. A check voided before it was ever sent appears in neither file.
+
 ### Importing into QuickBooks Online
 
 Intuit's requirements for a journal-entry import _(checked 2026-10-09)_. They are also listed at the bottom of **Finance › QuickBooks Export**:

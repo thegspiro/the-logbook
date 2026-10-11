@@ -73,6 +73,7 @@ from app.schemas.suggestion import (
 )
 from app.services import file_storage_service as file_storage
 from app.services import suggestion_intake as intake
+from app.services.apparatus_options import department_apparatus_options
 from app.services.file_storage_service import StorageArea
 from app.utils.image_processing import optimize_image
 from app.utils.mime_validation import detect_mime_type
@@ -473,6 +474,56 @@ class SuggestionService:
                     other.intake_questions, [box.id]
                 )
 
+    async def pick_options(
+        self, organization_id: str, kind: str
+    ) -> List[Dict[str, str]]:
+        """What a member- or apparatus-pick question offers: ids and names.
+
+        Nothing beyond what any signed-in member already sees — member names
+        through the forms member lookup, vehicles through the shift-template
+        picker — and no contact details, rank or status.
+        """
+        if kind == "member":
+            members = await self._active_members(organization_id)
+            return [
+                {"id": uid, "name": name}
+                for uid, name in sorted(members.items(), key=lambda m: m[1].lower())
+            ]
+        vehicles, _ = await department_apparatus_options(self.db, organization_id)
+        return [{"id": str(v.id), "name": v.name} for v in vehicles if v.id]
+
+    async def _active_members(
+        self, organization_id: str, ids: Optional[Iterable[str]] = None
+    ) -> Dict[str, str]:
+        query = select(User).where(
+            User.organization_id == str(organization_id), User.is_active
+        )
+        if ids is not None:
+            query = query.where(User.id.in_([str(i) for i in ids]))
+        users = (await self.db.execute(query)).scalars().all()
+        return {u.id: _display_name(u) or u.id for u in users}
+
+    async def _pick_names_for(
+        self, box: SuggestionBox, answers: Dict[str, str]
+    ) -> Dict[str, Dict[str, str]]:
+        """The members and vehicles ``answers`` may name, looked up in the
+        box's own department so an id from elsewhere is never accepted."""
+        questions = box.intake_questions
+        picks: Dict[str, Dict[str, str]] = {}
+        member_ids = intake.answered_pick_ids(questions, answers, "member")
+        if member_ids:
+            picks["member"] = await self._active_members(
+                box.organization_id, member_ids
+            )
+        if intake.has_question_type(questions, "apparatus"):
+            # The whole list, not just the answer: an empty fleet is what tells
+            # resolve_answers to skip a question nobody could answer.
+            vehicles, _ = await department_apparatus_options(
+                self.db, box.organization_id
+            )
+            picks["apparatus"] = {str(v.id): v.name for v in vehicles if v.id}
+        return picks
+
     async def reviewer_options(self, organization_id: str) -> Dict[str, Any]:
         positions = await self.db.execute(
             select(Position.id, Position.name)
@@ -769,9 +820,9 @@ class SuggestionService:
             )
         if len(screenshots) > MAX_SCREENSHOTS:
             raise ValueError(f"At most {MAX_SCREENSHOTS} screenshots may be attached.")
-        snapshot, route = intake.resolve_answers(
-            box.intake_questions, intake.parse_answers(answers)
-        )
+        parsed = intake.parse_answers(answers)
+        picks = await self._pick_names_for(box, parsed)
+        snapshot, route = intake.resolve_answers(box.intake_questions, parsed, picks)
         destination = await self._route_destination(box, route)
         target = destination or box
         # A member who opened an always-anonymous box was promised anonymity

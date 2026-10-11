@@ -82,12 +82,14 @@ import { DialogPortal } from '@/components/DialogPortal';
 import { DialogPanel } from '@/components/ux/DialogPanel';
 import { Modal } from '@/components/Modal';
 import { NfcTagsCard } from '@/modules/inventory/components/NfcTagsCard';
+import { CloneChecklistDialog } from '@/modules/inventory/components/CloneChecklistDialog';
 import { useInventoryNfcEnabled } from '@/modules/inventory/hooks/useInventoryNfcEnabled';
 import InventoryItemPicker from '@/modules/inventory/components/InventoryItemPicker';
 import CatalogQuickAdd from '@/modules/inventory/components/CatalogQuickAdd';
 import InventoryMatchModal from '@/modules/inventory/components/InventoryMatchModal';
 import type { CatalogAddPayload } from '@/modules/inventory/components/CatalogQuickAdd';
 import { useAuthStore } from '@/stores/authStore';
+import { useEnabledModules } from '@/hooks/useEnabledModules';
 import { blankToNull, numberOrNull } from '@/utils/formValues';
 import { parseCsvRecords, csvValue } from '@/utils/csv';
 import {
@@ -581,7 +583,22 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Writing to the catalog is a separate grant from building checklists, so a
   // scheduling officer without it is offered linking but not creation —
   // showing the affordance anyway would just produce a 403 they cannot act on.
-  const canManageInventory = useAuthStore((s) => s.checkPermission)('inventory.manage');
+  const checkPermission = useAuthStore((s) => s.checkPermission);
+  const canManageInventory = checkPermission('inventory.manage');
+  // Medical stock is served by its own module and its own grants, so an EMS
+  // supply officer holding only the medical pair can still find and create
+  // the supplies a rig's checklist counts. Each half of the catalog is
+  // searched only when the viewer can read it — the backend would 403 the
+  // other — and medical waits on the module answer so an organization that
+  // has Medical Supplies switched off is not sent a refused request per key.
+  const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
+  const medicalModuleOn = !modulesLoading && isModuleOn('medical_supplies');
+  const catalogScope = {
+    gear: checkPermission('inventory.view'),
+    medical: medicalModuleOn && (checkPermission('inventory.view_medical') || checkPermission('inventory.view')),
+  };
+  const canManageMedical =
+    medicalModuleOn && (checkPermission('inventory.manage_medical') || checkPermission('inventory.manage'));
   // Only a saved compartment can carry a tag, so a new template has nothing
   // to ask about until it is saved.
   const { enabled: nfcEnabled } = useInventoryNfcEnabled(isEditing);
@@ -657,7 +674,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // delete just removed. This flag is a superset of every one of those gaps
   // by construction, since it covers the whole function.
   const [saveOperationActive, setSaveOperationActive] = useState(false);
-  const [cloning, setCloning] = useState(false);
+  const [cloneOpen, setCloneOpen] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   /**
    * Whether this checklist has been live on crews' shifts during this visit —
@@ -1620,6 +1637,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [quickAddValues, setQuickAddValues] = useState<Record<string, string>>({});
   const [bulkPasteMode, setBulkPasteMode] = useState<Record<string, boolean>>({});
   const [bulkPasteValues, setBulkPasteValues] = useState<Record<string, string>>({});
+  // Compartment key -> how many names its last bulk paste added unlinked.
+  const [pasteLinkPrompts, setPasteLinkPrompts] = useState<Record<string, number>>({});
   const [showEquipmentPresets, setShowEquipmentPresets] = useState<Record<string, boolean>>({});
   const [bulkItemPending, setBulkItemPending] = useState<Record<string, boolean>>({});
   const bulkIdempotencyKeys = useRef<Record<string, { key: string; payload: string }>>({});
@@ -1817,6 +1836,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         const newItems = result.items.map(itemFormFromResponse);
         updateCompartmentField(compartmentIdx, { items: [...comp.items, ...newItems] });
         toast.success(`Added ${result.createdCount} item${result.createdCount !== 1 ? 's' : ''}`);
+        // A pasted list arrives as bare names. Matching them is one click
+        // away in a menu nobody opens mid-build, so ask here, while the list
+        // is in front of the person who typed it.
+        const unlinked = newItems.filter((i) => i.checkType !== 'header' && !i.inventoryItemId).length;
+        if (templateId && unlinked > 0) {
+          setPasteLinkPrompts((prev) => ({ ...prev, [key]: unlinked }));
+        }
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to add items'));
         return;
@@ -2586,19 +2612,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Clone template
   // ---------------------------------------------------------------------------
 
-  const handleClone = async () => {
-    if (!templateId) return;
-    setCloning(true);
-    try {
-      const cloned = await equipmentCheckService.cloneEquipmentCheckTemplate(templateId, '');
-      setIsDirty(false);
-      toast.success('Template cloned');
-      void navigate(`/inventory/admin/checklists/templates/${cloned.id}`, { replace: true });
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to clone template'));
-    } finally {
-      setCloning(false);
-    }
+  const handleCloned = (cloned: EquipmentCheckTemplate) => {
+    setCloneOpen(false);
+    setIsDirty(false);
+    void navigate(`/inventory/admin/checklists/templates/${cloned.id}`, { replace: true });
   };
 
   // ---------------------------------------------------------------------------
@@ -3483,6 +3500,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <InventoryItemPicker
               value={item.inventoryItemId || undefined}
               canCreateInventory={canManageInventory}
+              canCreateMedical={canManageMedical}
+              searchScope={catalogScope}
               createTrackingType={trackingTypeForCheck(item.checkType)}
               onChange={(id) => updateItemFieldWithAutoSave(compIdx, itemIdx, { inventoryItemId: id ?? '' })}
             />
@@ -4671,6 +4690,33 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </div>
             )}
 
+            {(pasteLinkPrompts[key] ?? 0) > 0 && (
+              <div role="status" className="alert-info my-2 flex flex-wrap items-center gap-2 text-xs">
+                <Link2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span className="min-w-0 flex-1">
+                  {pasteLinkPrompts[key]} pasted item{pasteLinkPrompts[key] !== 1 ? 's are' : ' is'} not linked to
+                  inventory or Medical Supplies yet.
+                </span>
+                <button
+                  type="button"
+                  className="touch:min-h-11 font-semibold underline"
+                  onClick={() => {
+                    setPasteLinkPrompts((prev) => ({ ...prev, [key]: 0 }));
+                    setShowInventoryMatch(true);
+                  }}
+                >
+                  Match to catalog
+                </button>
+                <button
+                  type="button"
+                  className="touch:min-h-11 underline"
+                  onClick={() => setPasteLinkPrompts((prev) => ({ ...prev, [key]: 0 }))}
+                >
+                  Not now
+                </button>
+              </div>
+            )}
+
             {!isLaptop && comp.items.length > 0 && (
               <button
                 type="button"
@@ -4742,6 +4788,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       onChange={(value) => setQuickAddValues((previous) => ({ ...previous, [key]: value }))}
                       onAdd={(payload) => handleQuickAdd(idx, payload)}
                       canCreateInventory={canManageInventory}
+                      canCreateMedical={canManageMedical}
+                      searchScope={catalogScope}
                       autoFocus
                       inputId={`quick-add-${key}`}
                       placeholder="Add or search items…"
@@ -5191,12 +5239,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 {isEditing && templateId && (
                   <button
                     type="button"
-                    onClick={() => void handleClone()}
-                    disabled={cloning}
+                    onClick={() => setCloneOpen(true)}
                     className="btn-secondary flex min-h-9 items-center gap-1.5 px-3 text-[13px] disabled:opacity-50"
                   >
-                    {cloning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />}{' '}
-                    Clone
+                    <Copy className="h-3.5 w-3.5" /> Clone
                   </button>
                 )}
               </div>
@@ -5517,11 +5563,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         {isEditing && templateId && (
           <button
             type="button"
-            onClick={() => void handleClone()}
-            disabled={cloning}
+            onClick={() => setCloneOpen(true)}
             className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm disabled:opacity-50"
           >
-            {cloning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />} Clone checklist
+            <Copy className="h-4 w-4" /> Clone checklist
           </button>
         )}
         <button
@@ -6671,6 +6716,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           </div>
         </div>
       )}
+
+      <CloneChecklistDialog
+        template={cloneOpen && templateId ? { id: templateId, name: form.name } : null}
+        onClose={() => setCloneOpen(false)}
+        onCloned={handleCloned}
+      />
 
       {nfcCompartment && (
         <Modal isOpen onClose={() => setNfcCompartment(null)} title={`NFC tags: ${nfcCompartment.name}`} size="lg">

@@ -112,6 +112,26 @@ SQLAlchemy models typed with `Mapped`; mypy errors cleared across `app/`; fronte
 tests now type-check (`typecheck:tests`); screenshot placeholders hidden from
 readers (`docs/training` placeholders stay for the capture tools).
 
+## Late additions (merged 2026-10-11 10:50 – 12:01 UTC)
+
+- **Suggestion intake answer types:** rating, time, pick a member, pick a vehicle,
+  and "at least / at most" follow-up rules (shared with Forms number fields). No
+  schema change. `GET /suggestions/pick-options` returns whole lists, never a
+  search, so typed names stay out of the access log. Training 07.
+- **Equipment-check builder links to medical supplies** and **Clone checklist**
+  asks for the target apparatus (it never worked before). Training 05.
+- **Shift history import creates former members as archived**, not inactive
+  (migration `990e288940bc`, touches only rows the import wrote). The roster opens
+  on **All Current**; the Total Members card excludes archived members. Training 03.
+- **QuickBooks export sends each payment once** and reverses a check voided after
+  export (migration `3f3bd6f3c7e4`; `includeExported` re-sends a period). Already
+  in training 11 and `docs/UPGRADING.md`.
+- The Scheduling guide (03) was rewritten in plain language the same day; the new
+  section here was re-applied on top of it. Its inline screenshot notes moved to
+  `SCREENSHOT_CURRENCY.md`.
+- Migration head moved past the three listed above: `3f3bd6f3c7e4` and
+  `990e288940bc` are also new. Run `alembic heads`.
+
 ## Documentation changes in this pass
 
 | File                                                                                                           | Change                                            |

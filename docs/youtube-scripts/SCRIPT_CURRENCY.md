@@ -773,7 +773,7 @@ unchanged. Nothing to re-record.
 never walked in the member guide — the only mention is the dashboard tile, which
 is where the edit above went. A department that wants the full board explained
 to members is better served by
-[`training/03-scheduling.md`](../training/03-scheduling.md#what-the-board-lists-and-what-it-leaves-out-2026-09-13),
+[`training/03-scheduling.md`](../training/03-scheduling.md#what-the-board-lists-and-what-it-leaves-out),
 which now carries it. **Do not add a chapter for it** without deciding that the
 member guide's scope is changing; it is currently a dashboard-and-mobile script
 by design.

@@ -147,6 +147,22 @@ describe('FormBuilder branching and clearing (workflow review W60)', () => {
     expect(options).toEqual(['No condition (always show)', 'Years of service']);
   });
 
+  it('offers "at least" and "at most" only under a number question', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<FormBuilder formId="form-1" />);
+
+    await user.click(await screen.findByRole('button', { name: 'Edit Card number' }));
+    const dialog = editorDialog();
+    const ruleLabels = () =>
+      within(within(dialog).getByLabelText('...meets this condition'))
+        .getAllByRole('option')
+        .map((o) => o.textContent);
+    expect(ruleLabels()).not.toContain('Is at least');
+
+    await user.selectOptions(within(dialog).getByLabelText('Show when this field...'), 'years');
+    expect(ruleLabels()).toEqual(expect.arrayContaining(['Is at least', 'Is at most']));
+  });
+
   it('refuses an "equals" rule with no answer to compare against', async () => {
     const user = userEvent.setup();
     renderWithRouter(<FormBuilder formId="form-1" />);

@@ -62,6 +62,19 @@ _DEADLOCK_MYSQL_CODE = 1213
 _MULTI_VALUE_FIELD_TYPES = frozenset(
     {FieldType.CHECKBOX.value, FieldType.MULTISELECT.value}
 )
+# Rules that compare answers as numbers. They mean nothing against free text,
+# so the builder only offers them under a numeric question.
+NUMERIC_CONDITION_OPERATORS = frozenset({"at_least", "at_most"})
+
+
+# A plain decimal, and nothing else: Python's float() and JavaScript's
+# Number() disagree on "1_000", "0x10" and "1e3", and the browser twin in
+# formVisibility.ts must reach the same answer as this one.
+_PLAIN_NUMBER = re.compile(r"-?[0-9]+(\.[0-9]+)?")
+
+
+def as_plain_number(text: str) -> Optional[float]:
+    return float(text) if _PLAIN_NUMBER.fullmatch(text) else None
 
 
 def _is_deadlock(exc: OperationalError) -> bool:
@@ -421,6 +434,20 @@ class FormsService:
             return len(parent_value) > 0
         if operator == "is_empty":
             return len(parent_value) == 0
+        if operator in NUMERIC_CONDITION_OPERATORS:
+            threshold = as_plain_number(expected)
+            if threshold is None:
+                # A rule with no usable threshold fails closed, like an
+                # unknown operator: shown, and still required.
+                return True
+            answer = as_plain_number(parent_value)
+            # No answer, or not a number, never meets a threshold — the same
+            # as "equals" against a blank answer.
+            if answer is None:
+                return False
+            return (
+                answer >= threshold if operator == "at_least" else answer <= threshold
+            )
         return True
 
     @staticmethod
@@ -480,6 +507,8 @@ class FormsService:
         field_id: Optional[str],
         condition_field_id: Optional[str],
         fields: Iterable[Any],
+        condition_operator: Optional[str] = None,
+        numeric_types: Iterable[str] = (FieldType.NUMBER.value,),
     ) -> Optional[str]:
         """Why a field may not branch from ``condition_field_id``, or None.
 
@@ -500,6 +529,11 @@ class FormsService:
         parent_type = getattr(parent_type, "value", parent_type)
         if parent_type == FieldType.SECTION_HEADER.value:
             return "A field cannot depend on a section header"
+        if (
+            condition_operator in NUMERIC_CONDITION_OPERATORS
+            and parent_type not in set(numeric_types)
+        ):
+            return "'At least' and 'at most' only apply to a number question"
         if field_id is None:
             return None
         cursor: Optional[str] = str(condition_field_id)
@@ -1002,7 +1036,10 @@ class FormsService:
                 return None, "Form not found"
 
             condition_error = self._condition_error(
-                None, field_data.get("condition_field_id"), form.fields
+                None,
+                field_data.get("condition_field_id"),
+                form.fields,
+                field_data.get("condition_operator"),
             )
             if condition_error:
                 return None, condition_error
@@ -1049,14 +1086,21 @@ class FormsService:
             if not field:
                 return None, "Field not found"
 
+            # The parent and the rule can change separately, so judge the
+            # pair the field will hold once this update is applied.
+            parent_id = update_data.get("condition_field_id", field.condition_field_id)
+            operator = update_data.get("condition_operator", field.condition_operator)
+            if parent_id and (
+                "condition_field_id" in update_data
+                or "condition_operator" in update_data
+            ):
+                condition_error = self._condition_error(
+                    str(field.id), parent_id, form.fields, operator
+                )
+                if condition_error:
+                    return None, condition_error
             if "condition_field_id" in update_data:
-                if update_data["condition_field_id"]:
-                    condition_error = self._condition_error(
-                        str(field.id), update_data["condition_field_id"], form.fields
-                    )
-                    if condition_error:
-                        return None, condition_error
-                else:
+                if not update_data["condition_field_id"]:
                     # Removing the controlling question removes the rule; an
                     # operator left behind with no field to read is meaningless.
                     update_data = {

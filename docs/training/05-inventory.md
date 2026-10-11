@@ -1796,7 +1796,7 @@ expiration aboard.
 This is the direction a **recall** is worked from — you are holding the item and
 need to know which rigs to go to. The opposite direction ("what is expiring on my
 trucks") is the supply worklist at **Scheduling → Supply**; see
-[Shifts & Scheduling → Supply Tracking](./03-scheduling.md#supply-tracking-keeping-the-truck-and-the-shelf-in-step-2026-08-10).
+[Shifts & Scheduling → Supply Tracking](./03-scheduling.md#supply-tracking-keeping-the-truck-and-the-shelf-in-step).
 
 ### Stock Lot Edge Cases
 
@@ -3403,7 +3403,7 @@ are drawn from the same stock.
 
 **The old `/scheduling/equipment*` addresses no longer resolve** and land on the
 dashboard. The full before/after table is in
-[Scheduling → Equipment Check System](./03-scheduling.md#equipment-check-system),
+[Scheduling → Equipment Checks](./03-scheduling.md#equipment-checks),
 and the workflow itself is documented there and is unchanged.
 
 **Crews are unaffected at the point of use.** Check-in and the shift detail panel
@@ -3497,6 +3497,25 @@ it through migration `f73b449bdb8b` (see
 [the hub section](#cards-no-longer-promise-pages-you-cannot-open)). It does not
 include **Check Reports** or the fleet board, which stay with
 `inventory.check_view`.
+
+### Medical supplies and cloning in the builder _(2026-10-11)_
+
+- **Item search covers gear and medical supplies together**, medical first with a
+  badge, each half only when you may read it and the module is on. A rig's gauze
+  can now link to the Medical Supplies catalog instead of staying free text.
+- **Create in Medical Supplies** (in both builder pickers, with a category
+  dropdown) is offered to holders of `inventory.manage_medical` or
+  `inventory.manage`. It refuses when the name is already filed as gear, and no
+  create is offered when part of the catalog search failed.
+- After pasting a list into a saved location, the builder offers **Match to
+  catalog**.
+- **Clone checklist now works.** The list's Clone button and the builder's
+  Tools → Clone checklist ask **which apparatus to copy onto** (full Apparatus
+  records only). The copy is named "<apparatus> - <template>" and starts switched
+  off, which the dialog says.
+
+> **Screenshot needed:** a builder item picker showing a medical result with its
+> badge and **Create in Medical Supplies**; the clone dialog.
 
 ### What changed in the builder _(2026-09-30 – 2026-10-04)_
 

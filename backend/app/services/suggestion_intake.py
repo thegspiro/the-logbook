@@ -15,24 +15,42 @@ browser and the server cannot disagree about which questions were shown.
 """
 
 import json
-import math
+import re
 import uuid
 from datetime import date
 from types import SimpleNamespace
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from app.schemas.suggestion import (
     CHOICE_QUESTION_TYPES,
+    NUMERIC_QUESTION_TYPES,
+    PICK_QUESTION_TYPES,
+    RATING_VALUES,
     ROUTING_QUESTION_TYPES,
     IntakeQuestion,
 )
-from app.services.forms_service import FormsService
+from app.services.forms_service import (
+    NUMERIC_CONDITION_OPERATORS,
+    FormsService,
+    as_plain_number,
+)
 
 # A submission's answers arrive as one multipart field; this bounds the parse.
 MAX_ANSWERS_PAYLOAD_BYTES = 64 * 1024
 MAX_TEXT_ANSWER_LENGTH = 500
 MAX_TEXTAREA_ANSWER_LENGTH = 5000
 _VALUE_OPERATORS = frozenset({"equals", "not_equals", "contains"})
+_PRESENCE_OPERATORS = frozenset({"not_empty", "is_empty"})
+# A pick answer is an id and a time answer a clock reading; a follow-up can
+# only sensibly ask whether either was given.
+_PRESENCE_ONLY_PARENT_TYPES = PICK_QUESTION_TYPES | {"time"}
+# 24-hour wall-clock time as the member's own clock reads it — not an instant,
+# so it is stored and shown as entered, never converted between timezones.
+_TIME = re.compile(r"([01][0-9]|2[0-3]):[0-5][0-9]")
+
+# Names of the records a pick question can be answered with, by kind: the
+# member or vehicle id mapped to the name a reviewer reads.
+PickNames = Mapping[str, Mapping[str, str]]
 
 
 def _as_fields(questions: Sequence[Dict[str, Any]]) -> List[SimpleNamespace]:
@@ -75,20 +93,40 @@ def normalize_questions(questions: Sequence[IntakeQuestion]) -> Optional[List[Di
         parent_id = entry["condition_question_id"]
         if not parent_id:
             continue
-        error = FormsService._condition_error(entry["id"], parent_id, fields)
+        operator = entry["condition_operator"]
+        error = FormsService._condition_error(
+            entry["id"],
+            parent_id,
+            fields,
+            operator,
+            numeric_types=NUMERIC_QUESTION_TYPES,
+        )
         if error:
             raise ValueError(f"'{entry['label']}': {error}.")
-        parent = by_id[parent_id]
-        if (
-            parent["type"] in CHOICE_QUESTION_TYPES
-            and entry["condition_operator"] in _VALUE_OPERATORS
-            and entry["condition_value"] not in {o["value"] for o in parent["options"]}
-        ):
-            raise ValueError(
-                f"'{entry['label']}' depends on an answer '{parent['label']}' "
-                "does not offer."
-            )
+        _check_rule_value(entry, by_id[parent_id])
     return stored
+
+
+def _check_rule_value(entry: Dict[str, Any], parent: Dict[str, Any]) -> None:
+    """Refuse a rule whose value the parent can never give, which would leave
+    a follow-up no member could ever see."""
+    operator = entry["condition_operator"]
+    value = entry["condition_value"]
+    kind = parent["type"]
+    unreachable = f"'{entry['label']}' depends on an answer '{parent['label']}' "
+    if kind in _PRESENCE_ONLY_PARENT_TYPES and operator not in _PRESENCE_OPERATORS:
+        raise ValueError(
+            f"'{entry['label']}' can only depend on whether "
+            f"'{parent['label']}' is answered."
+        )
+    if kind in CHOICE_QUESTION_TYPES and operator in _VALUE_OPERATORS:
+        if value not in {o["value"] for o in parent["options"]}:
+            raise ValueError(unreachable + "does not offer.")
+    if kind == "rating" and operator not in _PRESENCE_OPERATORS:
+        if value not in RATING_VALUES:
+            raise ValueError(unreachable + "cannot give; ratings run 1 to 5.")
+    if operator in NUMERIC_CONDITION_OPERATORS and as_plain_number(value or "") is None:
+        raise ValueError(f"'{entry['label']}' needs a number to compare against.")
 
 
 def route_ids(questions: Optional[Sequence[Dict[str, Any]]]) -> List[str]:
@@ -157,11 +195,45 @@ def parse_answers(raw: Optional[str]) -> Dict[str, str]:
     return answers
 
 
-def _checked_answer(question: Dict[str, Any], value: str) -> Tuple[str, str]:
+def answered_pick_ids(
+    questions: Optional[Sequence[Dict[str, Any]]],
+    answers: Mapping[str, str],
+    kind: str,
+) -> List[str]:
+    """The ids given to ``kind`` pick questions, for the caller to look up
+    before ``resolve_answers`` checks them."""
+    return [
+        answers[q["id"]]
+        for q in questions or []
+        if q["type"] == kind and answers.get(q["id"])
+    ]
+
+
+def has_question_type(questions: Optional[Sequence[Dict[str, Any]]], kind: str) -> bool:
+    return any(q["type"] == kind for q in questions or [])
+
+
+def _checked_answer(
+    question: Dict[str, Any], value: str, picks: PickNames
+) -> Tuple[str, str]:
     """``(stored value, display text)`` for one non-empty answer, or a
     ``ValueError`` naming the question."""
     label = question["label"]
     kind = question["type"]
+    if kind in PICK_QUESTION_TYPES:
+        # Only a record of this department's, looked up by the caller, is a
+        # valid answer; its name is kept so the reviewer can read it after
+        # the member leaves or the vehicle is retired.
+        name = picks.get(kind, {}).get(value)
+        if name is None:
+            raise ValueError(f"'{label}' has an answer that is not on the list.")
+        return value, name
+    if kind == "rating":
+        if value not in RATING_VALUES:
+            raise ValueError(f"'{label}' needs a rating from 1 to 5.")
+        return value, f"{value} / 5"
+    if kind == "time" and not _TIME.fullmatch(value):
+        raise ValueError(f"'{label}' needs a time.")
     if kind in CHOICE_QUESTION_TYPES:
         labels = {o["value"]: o["label"] for o in question["options"]}
         chosen = (
@@ -182,13 +254,10 @@ def _checked_answer(question: Dict[str, Any], value: str) -> Tuple[str, str]:
         raise ValueError(
             f"'{label}' is limited to {MAX_TEXTAREA_ANSWER_LENGTH} characters."
         )
-    if kind == "number":
-        try:
-            number = float(value)
-        except ValueError as exc:
-            raise ValueError(f"'{label}' needs a number.") from exc
-        if not math.isfinite(number):
-            raise ValueError(f"'{label}' needs a number.")
+    # The same plain-decimal reading "at least" / "at most" use, so an
+    # accepted answer is always one a numeric rule can compare.
+    if kind == "number" and as_plain_number(value) is None:
+        raise ValueError(f"'{label}' needs a number.")
     if kind == "date":
         try:
             date.fromisoformat(value)
@@ -198,7 +267,9 @@ def _checked_answer(question: Dict[str, Any], value: str) -> Tuple[str, str]:
 
 
 def resolve_answers(
-    questions: Optional[Sequence[Dict[str, Any]]], answers: Dict[str, str]
+    questions: Optional[Sequence[Dict[str, Any]]],
+    answers: Dict[str, str],
+    picks: Optional[PickNames] = None,
 ) -> Tuple[Optional[List[Dict[str, str]]], Optional[str]]:
     """Check ``answers`` against the questions a member was shown.
 
@@ -211,21 +282,28 @@ def resolve_answers(
     in question order. ``resolveRoute`` in the frontend's
     ``modules/communications/utils/suggestionRouting.ts`` previews the same
     rule; this one decides.
+
+    ``picks`` holds the names of the members and vehicles a pick answer may
+    name. A department with no vehicles on file has nothing to pick, so an
+    apparatus question is skipped there rather than left blocking the form.
     """
     if not questions:
         return None, None
+    picks = picks or {}
     visible = FormsService._visible_field_ids(_as_fields(questions), answers)
     snapshot: List[Dict[str, str]] = []
     route: Optional[str] = None
     for question in questions:
         if question["id"] not in visible:
             continue
+        if question["type"] == "apparatus" and not picks.get("apparatus"):
+            continue
         value = answers.get(question["id"], "")
         if not value:
             if question.get("required"):
                 raise ValueError(f"Please answer '{question['label']}'.")
             continue
-        stored, display = _checked_answer(question, value)
+        stored, display = _checked_answer(question, value, picks)
         snapshot.append(
             {
                 "question_id": question["id"],
