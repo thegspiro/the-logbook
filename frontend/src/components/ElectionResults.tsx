@@ -279,10 +279,15 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
         </div>
       )}
 
-      {/* Results by Position */}
+      {/* Results per contest — each position and each ballot item is graded
+          on its own; nothing is pooled across them (W50-7). */}
       {results.results_by_position && results.results_by_position.length > 0 && (
         <div className="space-y-4">
-          <h3 className="text-theme-text-primary text-lg font-medium">Results by Position</h3>
+          <h3 className="text-theme-text-primary text-lg font-medium">
+            {results.results_by_position.some((r) => r.ballot_item_id)
+              ? 'Results by Ballot Item'
+              : 'Results by Position'}
+          </h3>
           {results.results_by_position.map((positionResult) => {
             const contestName = positionResult.label || positionResult.position;
             return (
@@ -315,19 +320,21 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
         </div>
       )}
 
-      {/* Overall Results (if no positions or single election) */}
-      {(!results.results_by_position || results.results_by_position.length === 0) &&
-        results.overall_results &&
-        results.overall_results.length > 0 && (
-          <div className="bg-theme-surface rounded-lg p-6 backdrop-blur-xs">
-            <h3 className="text-theme-text-primary mb-4 text-lg font-medium">Results</h3>
-            <div className="space-y-3">
-              {results.overall_results.map((candidate) => (
-                <CandidateResultCard key={candidate.candidate_id} candidate={candidate} />
-              ))}
-            </div>
+      {/* Candidates no contest claims (a legacy election whose candidates
+          have no position). Since W50-7 the backend never pools contests
+          here, so it is shown whenever it is non-empty. */}
+      {results.overall_results && results.overall_results.length > 0 && (
+        <div className="bg-theme-surface rounded-lg p-6 backdrop-blur-xs">
+          <h3 className="text-theme-text-primary mb-4 text-lg font-medium">
+            {results.results_by_position && results.results_by_position.length > 0 ? 'Other candidates' : 'Results'}
+          </h3>
+          <div className="space-y-3">
+            {results.overall_results.map((candidate) => (
+              <CandidateResultCard key={candidate.candidate_id} candidate={candidate} />
+            ))}
           </div>
-        )}
+        </div>
+      )}
     </div>
   );
 };

@@ -1101,6 +1101,12 @@ class PositionResults(BaseModel):
     # Set for a ballot-item contest, whose ``position`` is the item's id;
     # the screen, email and certified PDF show this instead.
     label: Optional[str] = None
+    # The ballot item this contest is (None for a plain position with no
+    # item) and how it is answered — "candidate_selection" for a race,
+    # "approval" for a motion. Each contest is graded on its own (W50-7);
+    # the runoff check reads vote_type to leave motions alone.
+    ballot_item_id: Optional[str] = None
+    vote_type: Optional[str] = None
     total_votes: int
     candidates: List[CandidateResult]
     is_tie: bool = False
@@ -1115,7 +1121,15 @@ class ElectionResults(BaseModel):
     total_votes: int
     total_eligible_voters: int
     voter_turnout_percentage: float
+    # One entry per contest — each position and each ballot item — graded
+    # on its own. This is the result.
     results_by_position: List[PositionResults]
+    # Only candidates that belong to no contest (a legacy election whose
+    # candidates carry no position). Before W50-7 this pooled every
+    # contest's candidates into one ranking — one motion's Approve against
+    # another's Deny, percentages over the whole ballot — and the results
+    # screen, PDF and runoff check read that pool for item-only ballots.
+    # Empty whenever every candidate is in a contest.
     overall_results: List[CandidateResult]
     # None means the election has no quorum rule at all (quorum_type
     # "none"), so no surface can honestly say "met" — a default of True

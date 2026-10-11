@@ -180,11 +180,25 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
         )
     )
 
-    # ── Results per position ─────────────────────────────────────────
-    for position in results.get("results_by_position", []):
+    # ── Results per contest ──────────────────────────────────────────
+    # One table per position and per ballot item, each graded on its own
+    # (W50-7). ``overall_results`` holds only candidates no contest claims
+    # (a legacy election whose candidates have no position); it is printed
+    # as its own table rather than dropped, and never pools contests.
+    contests = list(results.get("results_by_position", []))
+    if results.get("overall_results"):
+        contests.append(
+            {
+                "position": None if not contests else "Other candidates",
+                "candidates": results["overall_results"],
+                "is_tie": any(c.get("is_tied") for c in results["overall_results"]),
+            }
+        )
+    for position in contests:
         # A ballot item's position is its id; its title is what the reader knows.
         contest = position.get("label") or position.get("position")
-        story.append(Paragraph(f"Results — {_esc(contest)}", section_style))
+        heading = f"Results — {_esc(contest)}" if contest else "Results"
+        story.append(Paragraph(heading, section_style))
         rows = [["Candidate", "Votes", "%", "Outcome"]]
         for cand in position.get("candidates", []):
             if cand.get("is_winner"):
@@ -210,7 +224,7 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
             heading = "TIE" if policy == "co_winners" else "UNRESOLVED TIE"
             story.append(
                 Paragraph(
-                    f"{heading} for {_esc(position.get('position'))} — "
+                    f"{heading} for {_esc(contest or 'this election')} — "
                     f"{_TIE_POLICY_LABELS.get(policy, policy)}.",
                     warn_style,
                 )

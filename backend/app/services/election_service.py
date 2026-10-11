@@ -3268,9 +3268,14 @@ class ElectionService:
                     recorded_ballots,
                 )
 
+                position_item = _item_for_position(position)
                 results_by_position.append(
                     PositionResults(
                         position=position,
+                        ballot_item_id=(
+                            position_item.get("id") if position_item else None
+                        ),
+                        vote_type="candidate_selection",
                         total_votes=len(position_votes),
                         candidates=candidate_results,
                         is_tie=any(c.is_tied for c in candidate_results),
@@ -3320,32 +3325,40 @@ class ElectionService:
                 PositionResults(
                     position=contest_key,
                     label=item.get("title") or None,
+                    ballot_item_id=item.get("id") or None,
+                    vote_type=item.get("vote_type") or "candidate_selection",
                     total_votes=len(item_votes),
                     candidates=item_results,
                     is_tie=any(c.is_tied for c in item_results),
                 )
             )
 
-        # Overall results (all candidates regardless of position). The pool
-        # can only be graded by an item's rule when every candidate belongs
-        # to that one item — a general-vote ballot with no configured
-        # positions, which is what the results page renders when
-        # results_by_position is empty. A pool spanning several items keeps
-        # the election's rule, as it always has.
-        candidate_items = [_item_for_position(c.position) for c in candidates]
-        overall_item = None
-        if candidate_items and all(i is not None for i in candidate_items):
-            distinct = {id(i) for i in candidate_items}
-            if len(distinct) == 1:
-                overall_item = candidate_items[0]
-        overall_results = await self._calculate_candidate_results(
-            candidates,
-            all_votes,
-            election,
-            total_eligible,
-            overall_item,
-            recorded_ballots,
-        )
+        # Results are grouped per contest (W50-7, owner decision): the
+        # overall list holds only candidates no contest claims — a legacy
+        # election whose candidates carry no position — so it can never
+        # rank one contest's candidates against another's. When every
+        # candidate is in a contest it is empty.
+        contested_ids = {
+            str(c.candidate_id) for pr in results_by_position for c in pr.candidates
+        }
+        loose_candidates = [c for c in candidates if str(c.id) not in contested_ids]
+        overall_results: List[CandidateResult] = []
+        if loose_candidates:
+            loose_ids = {c.id for c in loose_candidates}
+            loose_items = [_item_for_position(c.position) for c in loose_candidates]
+            overall_item = None
+            if all(i is not None for i in loose_items):
+                distinct = {id(i) for i in loose_items}
+                if len(distinct) == 1:
+                    overall_item = loose_items[0]
+            overall_results = await self._calculate_candidate_results(
+                loose_candidates,
+                [v for v in all_votes if v.candidate_id in loose_ids],
+                election,
+                total_eligible,
+                overall_item,
+                recorded_ballots,
+            )
 
         # Check quorum. Stays None for quorum_type "none": there is no bar
         # to clear, so neither "met" nor "not met" is true (W50-48).
@@ -6135,18 +6148,30 @@ class ElectionService:
         # unopposed Secretary used to close with no runoff at all. The
         # per-position ``is_winner`` is consumed rather than re-derived — it
         # already carries the quorum clearing and tie_policy (W50 S06).
+        #
+        # Every race is a contest of its own — a configured position or a
+        # candidate-selection ballot item (W50-7). An item-only ballot used
+        # to fall through to the pooled ``overall_results``, where a motion's
+        # Approve could "win" and suppress the runoff a tied race needed.
+        # Motions (approval items) are decided in one round and never run
+        # off. Only a ballot with no contests at all (legacy candidates
+        # without a position) still reads the overall list.
         configured_positions = list(election.positions or [])
-        if configured_positions:
-            unresolved_positions = [
-                pr.position
-                for pr in results.results_by_position
-                if pr.position in configured_positions
-                and not any(c.is_winner for c in pr.candidates)
+        races = [
+            pr
+            for pr in results.results_by_position
+            if pr.position in configured_positions
+            or (pr.ballot_item_id and pr.vote_type == "candidate_selection")
+        ]
+        by_contests = bool(configured_positions) or bool(races)
+        if by_contests:
+            unresolved = [
+                pr for pr in races if not any(c.is_winner for c in pr.candidates)
             ]
-            if not unresolved_positions:
+            if not unresolved:
                 return None
         else:
-            unresolved_positions = []
+            unresolved = []
             if any(candidate.is_winner for candidate in results.overall_results):
                 return None
 
@@ -6176,24 +6201,25 @@ class ElectionService:
 
         advancing_candidates: List[Candidate] = []
         runoff_positions: List[str] = []
-        if configured_positions:
+        if by_contests:
             # Rank each unresolved race by its own tally, so a decided seat's
             # winner cannot "advance" against a candidate for another office.
-            for pr in results.results_by_position:
-                if pr.position not in unresolved_positions:
-                    continue
+            # A race's field is the candidates its own result lists, which
+            # covers an item keyed by its id or title as well as a position.
+            for pr in unresolved:
                 position_counts = {
                     str(c.candidate_id): c.vote_count for c in pr.candidates
                 }
                 ranked = sorted(
-                    (c for c in all_candidates if c.position == pr.position),
+                    (c for c in all_candidates if str(c.id) in position_counts),
                     key=lambda c: position_counts.get(str(c.id), 0),
                     reverse=True,
                 )
                 advancing = _advancing(ranked)
                 if advancing:
                     advancing_candidates.extend(advancing)
-                    runoff_positions.append(pr.position)
+                    if pr.position in configured_positions:
+                        runoff_positions.append(pr.position)
         else:
             # Aggregate vote counts at the DB level instead of loading all
             # vote rows into Python memory.
@@ -6233,11 +6259,10 @@ class ElectionService:
         # reached, on a 1-1 tie under most_votes, is wrong on the ballot every
         # voter reads (W50-34). The tie flags are consumed from the results,
         # never re-derived (pitfall 29).
-        if configured_positions:
+        if by_contests:
             tied_ids = {
                 str(c.candidate_id)
-                for pr in results.results_by_position
-                if pr.position in unresolved_positions
+                for pr in unresolved
                 for c in pr.candidates
                 if c.is_tied
             }

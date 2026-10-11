@@ -380,6 +380,9 @@ export interface PositionResults {
   // Set for a ballot-item contest, whose `position` is the item's id; show
   // this instead of the id wherever the contest is named
   label?: string | null;
+  // The ballot item this contest is, and how it is answered (W50-7)
+  ballot_item_id?: string | null;
+  vote_type?: string | null;
   total_votes: number;
   candidates: CandidateResult[];
   is_tie?: boolean;

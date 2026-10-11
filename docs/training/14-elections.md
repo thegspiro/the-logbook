@@ -919,6 +919,12 @@ the marks; the re-close certifies afresh.
   tally and result were reported nowhere — the Results tab, the report email
   and the certified PDF showed position races only. Each item is now reported
   with its own label and percentages.
+- **Nothing is pooled across items** _(2026-10-08, W50-7)_. A ballot of
+  motions with no position races used to be shown as one combined list, where
+  one motion's Approve competed with another motion's Deny for a single
+  "winner". The Results tab now reads **Results by Ballot Item** with one
+  table per item, the certified PDF prints one table per item, and a tied
+  race on such a ballot gets its runoff (a motion never does).
 - **Ties are named.** A tied race's report printed two 50% rows and never said
   "tie"; it now prints "Tie — co-winners per policy" or "Tie — runoff round
   created".

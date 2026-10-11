@@ -674,7 +674,7 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Saw:** "Results by Position — Chief" only; no "budget", "Rowan", "Approve" or "Deny" in any mail or PDF; `overall_results` pooled Approve rows with Blair for one cross-item `is_winner`, with percentages over 11 votes. EB1 "Votes Cast: 2" with one visible.
 **Expected:** every item's tally, per-item percentages and outcome on all three surfaces.
 **Where:** `frontend/src/modules/elections/components/ElectionResults.tsx:238-289`; `election_service.py:2592-2613`; the report template (~S:7227); the certified builder (S:4467-4541).
-**Fix:** S05 returns per-item results with a `label`, and the PDF and report use them (`test_w50_s05.py`). `review-backend-1.md` #4 found the tab still rendering the raw item id; `d6f828c` adds `label` to `PositionResults` and uses `label ?? position` in the heading and tie alert (`ElectionResults.w50-s25.test.tsx`).
+**Fix:** S05 returns per-item results with a `label`, and the PDF and report use them (`test_w50_s05.py`). **Pooled list (2026-10-08, owner decision: group per item):** `overall_results` now holds only candidates no contest claims; contests carry `ballot_item_id` / `vote_type`; the PDF, results screen and runoff check work per contest (`test_w50_grouped_results.py`). `review-backend-1.md` #4 found the tab still rendering the raw item id; `d6f828c` adds `label` to `PositionResults` and uses `label ?? position` in the heading and tie alert (`ElectionResults.w50-s25.test.tsx`).
 
 ### W50-8 — HIGH — "Print Blank Ballots" prints the position races only; the paper path cannot carry a motion or membership vote — ✅ FIXED (round 2, `7aa3405`), PDF half · confirmed live · ✅ DECIDED & FIXED (2026-10-05), recording half
 
