@@ -180,6 +180,17 @@ seeded position removes it.
 
 ![Step 4's permission rows for Chief, with 13 unenabled modules hidden and a Show all modules control](./images/20-10-onboarding-permission-rows.png)
 
+**Testing an SMTP server in step 8** _(2026-10-11)_. When **SMTP (any
+provider)** is tested and nothing answering as a mail server could be reached
+— a wrong address, a closed port, a host that does not exist, or something on
+that port that is not SMTP — the wizard gives one answer: _Could not reach an
+SMTP server with these settings_, with the port and encryption to check. It
+does not say which of those it was, because during setup the test can be
+pointed at any address on your network. The exact cause is in the backend log
+(`Onboarding SMTP test could not reach …`). Once a mail server answers, a
+refused password or a TLS mismatch is reported as specifically as before, and
+**Settings → Email → Test Connection** after setup keeps its detailed messages.
+
 ---
 
 <!-- Screenshot needed:

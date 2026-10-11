@@ -29,10 +29,11 @@ from sqlalchemy.orm import selectinload
 
 from app.api.dependencies import get_optional_current_user
 from app.api.v1.email_test_helper import (
+    UNIFORM_SMTP_UNREACHABLE_MESSAGE,
     test_cloudflare_email,
     test_gmail_connection,
     test_microsoft_connection,
-    test_smtp_connection,
+    test_smtp_connection_uniform,
 )
 from app.core.constants import ROLE_IT_MANAGER, ROLE_MEMBER
 from app.core.database import get_db
@@ -1724,8 +1725,10 @@ async def verify_email_configuration(
                     ),
                     details={"required": ["smtpPassword"]},
                 )
-            # Test self-hosted SMTP configuration
-            test_func = partial(test_smtp_connection, config)
+            # Self-hosted SMTP points at a host the caller chooses, before any
+            # account exists — connection-stage failures are made identical
+            # so the test cannot map the internal network (ONB-30-3).
+            test_func = partial(test_smtp_connection_uniform, config)
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -1738,6 +1741,18 @@ async def verify_email_configuration(
         return EmailTestResponse(success=success, message=message, details=details)
 
     except TimeoutError:
+        if platform in ("selfhosted", "other"):
+            # A hang (a slow DNS answer, a host that drops packets) is one more
+            # connection-stage outcome; give it the same answer as the rest.
+            logger.warning(
+                "Onboarding SMTP test exceeded {}s against a self-hosted server",
+                EMAIL_TEST_TIMEOUT,
+            )
+            return EmailTestResponse(
+                success=False,
+                message=UNIFORM_SMTP_UNREACHABLE_MESSAGE,
+                details={"error": "connection_failed"},
+            )
         return EmailTestResponse(
             success=False,
             message=f"Email connection test timed out after {EMAIL_TEST_TIMEOUT} seconds. The mail server may be unreachable or slow to respond.",
