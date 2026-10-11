@@ -16,11 +16,37 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3084](https://github.com/thegspiro/the-logbook/pull/3084)**: branch
+`claude/security-review-core-infrastructure`, Feature 33 (Core
+infrastructure), pass 6 (watchdog pickup — no `claude/security-review-*` PR
+or branch existed anywhere in the repo when this iteration started, shortly
+after PR #3077 (Feature 32, Locations & kiosk, pass 6) merged docs-only). 0
+fixed, 0 new findings; CI3-33-3 (HIGH, open since pass 3) re-verified **now
+fixed** by code already on `main` — `REGISTRATION_REQUIRES_APPROVAL` was
+retired entirely via a new `RETIRED_SETTINGS` mechanism, closing the gap
+between its documented claim and the unconditional `UserStatus.ACTIVE` on
+self-registration. CI3-33-4 (LOW) re-confirmed still open, unchanged. New
+code since pass 5 — a bounded per-IP allowlist exception on the country
+block (INT2-28), a templated-export-route matcher, export-exfiltration
+monitoring switched from a `Content-Length` header read to counting
+streamed bytes plus a new per-export audit row, and new Authentik/MCP-OAuth
+settings — all reviewed fresh against all seven checklist dimensions, no
+findings. Completion gate green (flake8/black/isort re-pinned to CI's exact
+versions; migrations — 566 revisions, single head; 694 scoped backend
+tests; 159 cross-cutting guard tests; 14,092 full backend unit tests;
+frontend typecheck/lint). See the Log entry below and
+`docs/security-review/CI6-33-core-infra.md` for detail.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3077's merge, Feature 32, Locations & kiosk, pass 6 — the state this pass's PR conflicted with), preserved for history</summary>
+
 **None.** PR #3077 (Feature 32, Locations & kiosk, pass 6) merged clean
 2026-10-11 13:44 UTC (confirmed via `pull_request_read`: `merged: true`,
 2 files changed — `PROGRESS.md` and the findings file only). Docs-only
 merge, so there is nothing further to record here beyond what the Log
 entry below already captures. Rotation row 32 → ✅.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 32, Locations & kiosk, pass 6, PR #3077, before it merged), preserved for history</summary>
