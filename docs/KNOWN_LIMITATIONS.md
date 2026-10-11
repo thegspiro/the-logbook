@@ -1622,6 +1622,10 @@ are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
    `shift_reminders` when a department is created. Until someone saves that
    panel, crews receive reminder emails while the box shows unticked. The
    function's own docstring says the default is False.
+   **Resolved (2026-10-11):** the panel now defaults the box to ticked, so it
+   shows what is sent, and the docstring matches the code. The backend default
+   is unchanged on purpose: switching it off would silently stop reminder
+   emails for every department that never saved the panel.
 5. **Eligibility screen promises an override the server refuses.** The
    membership-type exclusion card says "Admins can still assign them
    manually", but officer assignment runs the eligibility check
