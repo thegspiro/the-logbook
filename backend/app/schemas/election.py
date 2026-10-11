@@ -1010,6 +1010,33 @@ class CandidateResponse(UTCResponseBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class BallotCandidateResponse(UTCResponseBase):
+    """A candidate as a ballot shows it (W50-70): no member ids.
+
+    The emailed ballot's lookup and the in-app ballot served every
+    candidate's ``user_id`` and ``nominated_by`` to whoever held a token or
+    opened the Cast Vote tab — who nominated whom, and which member account
+    each name is, while voting is open. The owner decided ids are withheld
+    from everyone but election managers; a ballot needs only what it shows.
+    """
+
+    id: UUID
+    election_id: UUID
+    name: str = Field(..., min_length=1, max_length=200)
+    position: Optional[str] = Field(None, max_length=100)
+    statement: Optional[str] = None
+    photo_url: Optional[str] = Field(None, max_length=500)
+    display_order: int = 0
+    nomination_date: datetime
+    merged_into_candidate_id: Optional[str] = None
+    accepted: bool
+    is_write_in: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class CandidateAcceptance(BaseModel):
     """Schema for accepting/declining a nomination"""
 
@@ -1530,7 +1557,7 @@ class MemberBallotResponse(BaseModel):
     voter's per-item standing."""
 
     election: BallotElectionResponse
-    candidates: List[CandidateResponse] = []
+    candidates: List[BallotCandidateResponse] = []
     items: List[MemberBallotItemStatus] = []
     proxy: Optional[MemberBallotProxy] = None
 

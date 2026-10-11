@@ -1148,7 +1148,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** `POST /elections/{id}/clone` (S:4203-4322); `ElectionDetailPage.tsx` clone navigation.
 **Fix:** round 2 — the flag reset on clone; navigate to `?tab=ballot`. Test: the clone cases in `test_election_enhancements.py` extended.
 
-### W50-70 — LOW — Plain members can read the ballot-recipient list and live vote counts from `GET /elections/{id}` while `/results` is 403; the lookup body hands token holders every candidate's `user_id` — FLAGGED
+### W50-70 — LOW — Plain members can read the ballot-recipient list and live vote counts from `GET /elections/{id}` while `/results` is 403; the lookup body hands token holders every candidate's `user_id` — ✅ DECIDED & FIXED (2026-10-08)
+
+**Owner decision:** withhold while open — counts and recipients only to managers, ids stripped for others. Test: `test_w50_member_live_detail.py`.
 
 **Did:** as `treasurer`, B3 step 8; anonymous, B6 step 3 / B3 step 17.
 **Where:** `schemas/election.py` election response (P:528-572); the lookup `CandidateResponse` (E:651, P:830-854).

@@ -99,9 +99,10 @@ export interface Election {
   results_revisions?: ResultsRevision[] | null;
   created_at: string;
   updated_at: string;
-  total_votes?: number;
-  total_voters?: number;
-  voter_turnout_percentage?: number;
+  // Withheld (null) from non-managers while voting is open (W50-70)
+  total_votes?: number | null;
+  total_voters?: number | null;
+  voter_turnout_percentage?: number | null;
 }
 
 /**
@@ -186,7 +187,7 @@ export interface ElectionListItem {
   closed_at?: string | null;
   status: ElectionStatus;
   positions?: string[];
-  total_votes?: number;
+  total_votes?: number | null; // null for non-managers while open (W50-70)
   meeting_id?: string;
   meeting_title?: string;
   meeting_date?: string;

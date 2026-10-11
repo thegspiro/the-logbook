@@ -884,6 +884,15 @@ If results are hidden until close:
 
 > **Note on early closes** _(2026-10-05)_: closing releases the results. An election closed early at the meeting shows them on the **Results** tab straight away — to the officer who closed it and to every member who can view elections — exactly as it would have at the scheduled end. **Publish Results** is only needed to show results _before_ voting closes, which the app does not allow while voting is open.
 
+**What members see while voting is open** _(2026-10-08, W50-70)_. Only
+election managers see how many votes have been cast and who was sent a ballot
+while an election is open; for everyone else the vote count is left off the
+election list and the detail page until the election closes (or, if **results
+visible immediately** was set, the count shows but the recipient list still
+does not). Ballots — the emailed link and the Cast Vote tab — show each
+candidate's name and statement only, never which member account they are or
+who nominated them.
+
 **The Results & Publishing panel** _(changed 2026-10-05)_ appears once the
 election is open. It no longer carries a **Publish Results** / **Hide
 Results** switch: closing the election is what releases the results, so a

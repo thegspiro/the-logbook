@@ -55,6 +55,7 @@ from app.schemas.election import (
     AttendeeCheckInResponse,
     AttendeeListResponse,
     AttestManualBallotsResponse,
+    BallotCandidateResponse,
     BallotElectionResponse,
     BallotItem,
     BallotPreviewResponse,
@@ -212,10 +213,32 @@ async def _validate_election_links(
     )
 
 
+def _withholds_live_detail(election: Election, viewer: Optional[User]) -> bool:
+    """Whether ``viewer`` must not see who was sent a ballot or how many
+    have voted (W50-70, owner decision 2026-10-08).
+
+    While voting is open those are the election managers' alone: a member
+    reading the turnout mid-vote (or which named members got a ballot) can
+    act on it, which is why ``/results`` is already refused to them. A
+    ``results_visible_immediately`` election deliberately shows its tally,
+    so its counts stay; the recipient list never does.
+    """
+    return (
+        viewer is not None
+        and election.status == ElectionStatus.OPEN
+        and not user_has_permission(viewer, "elections.manage")
+    )
+
+
 async def _build_election_response(
-    db: AsyncSession, election: Election
+    db: AsyncSession, election: Election, viewer: Optional[User] = None
 ) -> ElectionResponse:
-    """Build an ElectionResponse with meeting details populated."""
+    """Build an ElectionResponse with meeting details populated.
+
+    ``viewer`` is the caller on a route an ``elections.view`` member can
+    reach; the open election's recipient list, voter list and (unless the
+    results are public) live counts are then withheld (W50-70).
+    """
     await _load_meeting_for_election(db, election)
     response: ElectionResponse = ElectionResponse.model_validate(election)
     # `total_votes`, `total_voters` and `voter_turnout_percentage` are declared
@@ -241,6 +264,15 @@ async def _build_election_response(
             if hasattr(election.meeting.meeting_type, "value")
             else election.meeting.meeting_type
         )
+    if _withholds_live_detail(election, viewer):
+        response.email_recipients = None
+        response.eligible_voters = None
+        response.ballots_must_be_resent = False
+        response.ballots_resend_reason = None
+        if not election.results_visible_immediately:
+            response.total_votes = None
+            response.total_voters = None
+            response.voter_turnout_percentage = None
     return response
 
 
@@ -333,7 +365,12 @@ async def list_elections(
                 status=election.status.value,
                 closed_at=election.closed_at,
                 positions=election.positions,
-                total_votes=vote_counts_map.get(election.id, 0),
+                total_votes=(
+                    None
+                    if _withholds_live_detail(election, current_user)
+                    and not election.results_visible_immediately
+                    else vote_counts_map.get(election.id, 0)
+                ),
                 meeting_id=election.meeting_id,
                 meeting_title=meeting_info.get("title"),
                 meeting_date=meeting_info.get("meeting_date"),
@@ -585,7 +622,7 @@ class BallotLookupResponse(BaseModel):
     """Election view + candidates for a token holder, in one round-trip."""
 
     election: BallotElectionResponse
-    candidates: list[CandidateResponse] = []
+    candidates: list[BallotCandidateResponse] = []
     # True for a token minted by send-test-ballot: the page shows a TEST
     # BALLOT banner so a preview is never mistaken for the real thing.
     is_test: bool = False
@@ -732,7 +769,7 @@ async def lookup_ballot_by_token(
 
     return BallotLookupResponse(
         election=response,
-        candidates=[CandidateResponse.model_validate(c) for c in candidates],
+        candidates=[BallotCandidateResponse.model_validate(c) for c in candidates],
         is_test=bool(voting_token.is_test),
     )
 
@@ -1104,7 +1141,7 @@ async def get_election(
             status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
-    return await _build_election_response(db, election)
+    return await _build_election_response(db, election, viewer=current_user)
 
 
 def _as_update_value(field: str, stored: Any) -> Any:
@@ -2630,7 +2667,9 @@ async def get_member_ballot(
     ]
     return MemberBallotResponse(
         election=election_view,
-        candidates=[CandidateResponse.model_validate(c) for c in ballot["candidates"]],
+        candidates=[
+            BallotCandidateResponse.model_validate(c) for c in ballot["candidates"]
+        ],
         items=ballot["items"],
         proxy=ballot["proxy"],
     )

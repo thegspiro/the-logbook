@@ -364,7 +364,9 @@ anonymity sentence names the proxy votes as the exception. The audit rows
 and vote columns keep the linkage in clear, by that decision. Guard:
 `tests/test_w50_proxy_anonymity_ack.py`.
 
-### ELEC-44 — LOW — The election body and the public ballot lookup over-expose recipient list, live vote counts, and candidate identity ids — 🚩 FLAGGED (cross-ref: W50-70, `KNOWN_LIMITATIONS.md`)
+### ELEC-44 — LOW — The election body and the public ballot lookup over-expose recipient list, live vote counts, and candidate identity ids — ✅ RESOLVED by owner decision (2026-10-08; cross-ref: W50-70, `KNOWN_LIMITATIONS.md`)
+
+**Resolution:** while OPEN, the election body withholds recipients, the voter list and (unless results are public) live counts from non-managers, the list withholds `total_votes` likewise, and the ballot lookup / in-app ballot serve `BallotCandidateResponse` without member ids. Guard: `tests/test_w50_member_live_detail.py`.
 
 **What:** `ElectionResponse` (`schemas/election.py:540-592`) includes
 `email_recipients: Optional[List[UUID]]` and (via `_build_election_response`)
