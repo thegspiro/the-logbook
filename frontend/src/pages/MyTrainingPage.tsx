@@ -453,6 +453,10 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave, canManageTr
                         </option>
                       ))}
                     </select>
+                    {/* Pitfall #19: nothing reads report_review_role; approving a report is gated on training.manage. */}
+                    <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-500">
+                      Not in effect yet — anyone who can manage training can review reports, whatever is chosen here.
+                    </p>
                   </div>
                 )}
               </div>
