@@ -57,6 +57,20 @@ from app.services.documents_service import (
 )
 
 
+async def _general_root(db_session, org_id) -> DocumentFolder:
+    """The org's General Documents root, made here so a stand-in caller
+    (not a users row) never has to create it."""
+    general = DocumentFolder(
+        organization_id=org_id,
+        name="General Documents",
+        slug="general",
+        is_system=True,
+    )
+    db_session.add(general)
+    await db_session.flush()
+    return general
+
+
 def _user(uid="u1", roles=None, rank=None):
     # roles: list of (permissions_list, slug)
     # `rank` is part of a real User and carries its own default permissions,
@@ -1278,15 +1292,17 @@ class TestUpdateAndDeleteDocumentRespectFolderAcl:
         )
         assert result.scalar_one_or_none() is not None
 
-    async def test_caller_with_the_folders_own_permission_can_still_unfile_it(
+    async def test_caller_with_the_folders_own_permission_can_still_move_it_out(
         self, db_session
     ):
         # Positive control: the fix must not block a caller who genuinely
-        # holds the folder's required permission.
+        # holds the folder's required permission. Moving "out" (folder_id:
+        # null) files the document into General Documents, never unfiled.
         org, folder, document = await self._org_and_sensitive_document(
             db_session, "fcvfd-acl-3"
         )
         caller = self._caller(org.id, facilities_permission=True)
+        general = await _general_root(db_session, org.id)
 
         result = await update_document(
             document.id,
@@ -1294,7 +1310,7 @@ class TestUpdateAndDeleteDocumentRespectFolderAcl:
             db=db_session,
             current_user=caller,
         )
-        assert result.folder_id is None
+        assert str(result.folder_id) == str(general.id)
 
     async def test_caller_with_the_folders_own_permission_can_still_delete_it(
         self, db_session
@@ -2205,11 +2221,14 @@ class TestFolderWriteTierPermission:
         )
         assert result.scalar_one_or_none() is not None
 
-    async def test_write_permission_can_unfile_and_delete_a_document(self, db_session):
+    async def test_write_permission_can_move_out_and_delete_a_document(
+        self, db_session
+    ):
         org, _root, _other, document = await self._org_with_sensitive_tree(
             db_session, "fcvfd-wt-3"
         )
         caller = self._write_capable_caller(org.id)
+        general = await _general_root(db_session, org.id)
 
         result = await update_document(
             document.id,
@@ -2217,7 +2236,8 @@ class TestFolderWriteTierPermission:
             db=db_session,
             current_user=caller,
         )
-        assert result.folder_id is None
+        # folder_id: null means General Documents, a real folder, not unfiled.
+        assert str(result.folder_id) == str(general.id)
 
     async def test_view_sensitive_alone_cannot_rename_the_folder(self, db_session):
         org, root, _other, _document = await self._org_with_sensitive_tree(

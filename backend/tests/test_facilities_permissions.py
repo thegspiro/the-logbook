@@ -512,8 +512,10 @@ async def test_shared_file_reference_leaves_an_already_filed_document_alone():
     must not happen is the *assignment* -- ``document.folder_id`` stays
     exactly what it was.
     """
-    user = SimpleNamespace(organization_id=str(uuid4()))
-    document = SimpleNamespace(id=str(uuid4()), folder_id="somewhere-else")
+    user = SimpleNamespace(organization_id=str(uuid4()), id=str(uuid4()))
+    document = SimpleNamespace(
+        id=str(uuid4()), folder_id="somewhere-else", uploaded_by=str(uuid4())
+    )
     facility = SimpleNamespace(id=str(uuid4()), name="Station 1")
 
     with patch(

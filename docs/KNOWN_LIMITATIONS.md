@@ -802,6 +802,25 @@ each module folder on that module's rights. Two things it did not do:
   `documents.manage` is refused at the first step. Apparatus and finance
   upload through their own module endpoints since this change; facilities
   would need the same (`app/services/module_documents.py` is the shared path).
+  Since 2026-10-11 that upload lands in General Documents first (no document
+  is unfiled any more), and the link files the uploader's own document from
+  there into the facility folder.
+- **Files in the `documents` area are not stored per record** (found
+  2026-10-11). Library uploads and the apparatus and finance documents that
+  `module_documents` creates are written flat under `<org>/documents/`,
+  where every other area adds the record (`<org>/<area>/<record>/`). Access
+  is unaffected — reads are confined to the organization and the area, and the
+  document row decides who may download — but a document's file cannot be
+  found or purged by directory.
+- **An event's attachment references are confined to the organization, not
+  the event** (found 2026-10-11). Event create/update payloads accept an
+  `attachments` list, checked only for being in the organization's
+  event-attachments area — deliberately, because duplicating an event and
+  generating recurring occurrences share one file. So event A can reference a
+  file uploaded to event B, and it is served under A's visibility. Only
+  someone who can write events can set that list, and they can already open
+  every event's attachments, so it grants nothing new today.
+  `GET /events/{id}/attachments` also returns the stored `file_path`.
 
 ## File Storage — What Encryption at Rest Does Not Cover (2026-10-09)
 
