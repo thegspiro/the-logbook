@@ -212,7 +212,11 @@ transitions and reminders:
 - **Auto-open**: DRAFT elections are opened at `start_date` only when the
   creator enabled **Open Automatically at Start Time** (`auto_open`). The
   real open path runs, so an invalid draft (e.g. no candidates) is skipped
-  and retried, never force-opened.
+  and retried, never force-opened. Since 2026-10-08 (W50-72) the ballots are
+  then emailed as the election's creator, with links on `FRONTEND_URL`; a
+  send that fails or reaches nobody leaves the election open and emails every
+  `elections.manage` holder to send them (`ballots_auto_sent` /
+  `ballots_auto_send_failed` audit events).
 - **Nomination auto-close**: an election in the nomination phase with a
   `nomination_deadline` returns to draft automatically once the deadline
   passes (audited as `nominations_auto_closed`).

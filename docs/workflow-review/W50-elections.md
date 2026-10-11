@@ -1161,7 +1161,9 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Did:** as `secretary`, A10 step 7 (absence observed); cause read from code (`election_service.py:5296-5302` against the forensics filter `:2255`).
 **Fix:** round 2 — the row written with `election_id` = parent and a mirror on the child. Test: `test_w50_s07.py` extended.
 
-### W50-72 — LOW — Auto-open mails nothing; the department's first ballot mail arrives as the pre-close "reminder" — FLAGGED
+### W50-72 — LOW — Auto-open mails nothing; the department's first ballot mail arrives as the pre-close "reminder" — ✅ DECIDED & FIXED (2026-10-08)
+
+**Owner decision:** auto-open sends ballots as the election's creator on the department's configured app URL; a failed send keeps the election open and alerts managers to resend. Test: `test_w50_auto_open_sends_ballots.py`.
 
 **Did:** as `admin`, B8 steps 8/9 (EB6 through the lifecycle task).
 **Where:** `election_service.py:4874-4899`; the `ElectionsSettingsPage.tsx` Features copy; `14-elections.md:437`.

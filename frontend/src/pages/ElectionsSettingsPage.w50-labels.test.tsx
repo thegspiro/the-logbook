@@ -27,7 +27,10 @@ const FEATURE_SWITCHES = [
   ['Nomination phase', 'Members nominate candidates (with accept/decline) before the ballot opens.'],
   ['Paper-ballot entry', 'Officers record in-room paper tallies into the results.'],
   ['Non-voter reminders', 'Manual and automatic reminder emails with fresh ballot links.'],
-  ['Scheduled opening', 'Elections flagged "open automatically" open themselves at their start time.'],
+  [
+    'Scheduled opening',
+    'Elections flagged "open automatically" open themselves at their start time and email the ballots.',
+  ],
 ] as const;
 
 describe('ElectionsSettingsPage — visible switch labels (W50-46)', () => {

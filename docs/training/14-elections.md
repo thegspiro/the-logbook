@@ -499,7 +499,7 @@ When the election is ready:
 
 1. Review all ballot items and candidates
 2. Click **Open Election** — status changes from Draft to Open, and the voter roll is frozen (see below)
-3. Opening sends no ballots. Send them yourself with **Send Ballot Emails** (see Ballot Distribution) — a scheduled opening (**Open Automatically at Start Time**) does not send them either
+3. Opening by hand sends no ballots. Send them yourself with **Send Ballot Emails** (see Ballot Distribution). A scheduled opening (**Open Automatically at Start Time**) does send them _(2026-10-08, W50-72)_: as the election's creator (replies go to them), with links on the department's configured app address. If that send fails or reaches nobody, the election still opens, and every member who can manage elections is emailed _"Action needed: ballots for <election> were not sent"_ — open the election and use **Send Ballot Emails**
 4. Once the ballots are out, voters can cast their votes via the in-app interface or the email ballot link
 
 > **Hint:** Send a **test ballot** to yourself first (`POST /elections/:id/send-test-ballot`) to verify the email rendering and voting link before sending to all members. Votes cast from a test ballot are flagged as test votes — they are excluded from results, statistics, and rosters, and they never consume your real vote.
@@ -596,12 +596,12 @@ instructions. Print it, hand it out, then enter the tallies via
 The `election_lifecycle` background task runs every 15 minutes and automates
 the routine timing work:
 
-| Automation                | Trigger                                                                                   | Opt-in?                                                                                                                                                  |
-| ------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Auto-close**            | An open election passes its end date                                                      | No — always on. Closing runs result finalization, runoff evaluation, and the anonymous-election privacy purge, so an overdue election is never left open |
-| **Auto-open**             | A draft election with **Open Automatically at Start Time** enabled reaches its start date | Yes (`auto_open` on the election)                                                                                                                        |
-| **Nomination auto-close** | The nomination deadline passes                                                            | Automatic when a deadline is set                                                                                                                         |
-| **Automatic reminder**    | The configured **Auto-Remind Non-Voters** window before close opens                       | Yes (`reminder_hours_before_close`)                                                                                                                      |
+| Automation                | Trigger                                                                                                                                    | Opt-in?                                                                                                                                                  |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Auto-close**            | An open election passes its end date                                                                                                       | No — always on. Closing runs result finalization, runoff evaluation, and the anonymous-election privacy purge, so an overdue election is never left open |
+| **Auto-open**             | A draft election with **Open Automatically at Start Time** enabled reaches its start date — and the ballots are emailed (since 2026-10-08) | Yes (`auto_open` on the election)                                                                                                                        |
+| **Nomination auto-close** | The nomination deadline passes                                                                                                             | Automatic when a deadline is set                                                                                                                         |
+| **Automatic reminder**    | The configured **Auto-Remind Non-Voters** window before close opens                                                                        | Yes (`reminder_hours_before_close`)                                                                                                                      |
 
 ### Reminding Non-Voters Manually
 
@@ -1292,7 +1292,9 @@ Drive"):
   2026-10-08 (W50-25): nothing is pre-selected on either ballot, and
   **Submit Ballot** stays disabled until every item has a choice or an
   explicit Abstain.
-- Scheduled opening (**Open Automatically at Start Time**) sends no ballots.
+- ~~Scheduled opening (**Open Automatically at Start Time**) sends no
+  ballots~~ — fixed 2026-10-08 (W50-72): it sends them, and alerts managers
+  if the send fails.
 - Several screen fixes found in the same review — the delete and close dialog
   wording, a close stamp on the election cards, a test-ballot banner on the
   ballot page, labels in Election Settings — were not yet merged on 4 October 2026.
