@@ -29,6 +29,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
+import ShiftPreShiftWorkSection from '../../modules/scheduling/components/ShiftPreShiftWorkSection';
 import type { CloseoutState, CloseoutAttendanceEntry, MemberCallCredit } from '../../modules/scheduling/types';
 import { formatCalendarDate, formatForDateTimeInput, localToUTC } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
@@ -545,6 +546,11 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
               {formatHours(combinedHours)} combined hours
             </strong>
           </div>
+          {/* Reviewed here because this is where the officer is already
+              settling everyone's hours. Approval is saved on its own and is not
+              part of the attendance save, so it can also wait until after
+              finalizing. */}
+          <ShiftPreShiftWorkSection shiftId={shiftId} className="border-theme-surface-border border-t pt-3" />
         </div>
       )}
 

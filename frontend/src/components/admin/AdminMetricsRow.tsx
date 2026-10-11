@@ -1,5 +1,6 @@
 import React from 'react';
 import type { AdminMetric } from '../../types/adminHub';
+import { PHONE_METRIC_SLOTS } from './metricSlots';
 
 /**
  * The four headline metrics on an administration page.
@@ -9,9 +10,12 @@ import type { AdminMetric } from '../../types/adminHub';
  * count that feeds the "Needs attention" queue below, which is why it is
  * always last and never configurable.
  *
- * On a phone the row compresses to two columns — the first two slots are the
- * ones that survive there, which is what the settings screen means when it
- * labels them "phone".
+ * On a phone the row compresses to two columns and shows only the first two
+ * slots — what the settings screen promises when it labels them "phone". The
+ * third open slot appears from sm up. The attention count is also dropped on
+ * a phone while the queue is showing, because the queue sits directly above
+ * it there and carries the same count in its own header; with no queue, the
+ * count is the only place it appears, so it stays.
  */
 
 interface AdminMetricsRowProps {
@@ -20,16 +24,25 @@ interface AdminMetricsRowProps {
   loading?: boolean;
   /** Layout the frame owns — the phone/desk order swap lives there. */
   className?: string | undefined;
+  /** Whether the attention queue is on screen, which then carries the fixed count on a phone. */
+  queueShown?: boolean | undefined;
 }
 
 const SKELETON_SLOTS = 4;
 
-const MetricCard: React.FC<{ metric: AdminMetric }> = ({ metric }) => (
+const MetricCard: React.FC<{ metric: AdminMetric; hiddenOnPhone: boolean }> = ({ metric, hiddenOnPhone }) => (
   // The attention slot borrows the queue's danger border when it is carrying
   // anything, so the row and the card below it read as one statement. At zero
   // it stays an ordinary card — nothing is wrong, and a red box saying so is
   // its own kind of noise.
-  <div className={`card p-3 sm:p-4 ${metric.fixed && metric.value !== '0' ? 'border-theme-alert-danger-border' : ''}`}>
+  // A labelled group, so a card is addressable by what it counts.
+  <div
+    role="group"
+    aria-label={metric.label}
+    className={`card p-3 sm:p-4 ${hiddenOnPhone ? 'max-sm:hidden' : ''} ${
+      metric.fixed && metric.value !== '0' ? 'border-theme-alert-danger-border' : ''
+    }`}
+  >
     <p className="text-theme-text-muted text-[11px] leading-snug font-semibold tracking-[0.12em] uppercase">
       {metric.label}
     </p>
@@ -40,7 +53,12 @@ const MetricCard: React.FC<{ metric: AdminMetric }> = ({ metric }) => (
   </div>
 );
 
-export const AdminMetricsRow: React.FC<AdminMetricsRowProps> = ({ metrics, loading = false, className = '' }) => {
+export const AdminMetricsRow: React.FC<AdminMetricsRowProps> = ({
+  metrics,
+  loading = false,
+  className = '',
+  queueShown = false,
+}) => {
   if (loading) {
     return (
       <div className={`grid grid-cols-2 gap-3 lg:grid-cols-4 ${className}`} aria-hidden="true">
@@ -63,7 +81,13 @@ export const AdminMetricsRow: React.FC<AdminMetricsRowProps> = ({ metrics, loadi
     // address it as the metrics row rather than as "a grid of four divs".
     <section aria-label="Headline metrics" className={`grid grid-cols-2 gap-3 lg:grid-cols-4 ${className}`}>
       {metrics.map((metric) => (
-        <MetricCard key={metric.key} metric={metric} />
+        <MetricCard
+          key={metric.key}
+          metric={metric}
+          hiddenOnPhone={
+            metric.fixed ? queueShown : metrics.filter((m) => !m.fixed).indexOf(metric) >= PHONE_METRIC_SLOTS
+          }
+        />
       ))}
     </section>
   );

@@ -74,18 +74,21 @@ describe('EventCreatePage', () => {
   });
 
   describe('Rendering', () => {
-    it('should display Create Event heading', () => {
+    // Rendered only as a tab of Events Administration, which owns the page's
+    // one <h1> and names this tab in its section nav; the title stays as a
+    // heading for screen-reader navigation.
+    it('keeps a Create Event heading below the hub title', () => {
       renderWithRouter(<EventCreatePage />);
 
-      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Create Event');
+      expect(screen.getByRole('heading', { level: 2, name: 'Create Event' })).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
     });
 
-    it('should display back to events link', () => {
+    // The hub's breadcrumb already leads back to Events.
+    it('carries no back link of its own', () => {
       renderWithRouter(<EventCreatePage />);
 
-      const backLink = screen.getByRole('link', { name: /back to events/i });
-      expect(backLink).toBeInTheDocument();
-      expect(backLink).toHaveAttribute('href', '/events');
+      expect(screen.queryByRole('link', { name: /back to events/i })).not.toBeInTheDocument();
     });
 
     it('should display the EventForm component', () => {

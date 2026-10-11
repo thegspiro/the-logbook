@@ -7,7 +7,6 @@ import {
   AlertCircle,
   CheckCircle,
   QrCode,
-  ArrowLeft,
   Link2,
   MapPin,
   Repeat,
@@ -294,23 +293,14 @@ const CreateTrainingSessionPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div data-page-main className="mx-auto max-w-5xl py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <button
-            onClick={() => void navigate('/training/officer')}
-            className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex min-h-11 items-center transition-colors"
-          >
-            <ArrowLeft className="mr-2 h-5 w-5" aria-hidden="true" />
-            Back to Training Dashboard
-          </button>
-          <h1 className="text-theme-text-primary flex items-center space-x-3 text-3xl font-bold">
-            <Calendar className="h-8 w-8 text-red-700" />
-            <span>Create Training Session</span>
-          </h1>
-          <p className="text-theme-text-muted mt-1">
-            Schedule a training event with automatic attendance tracking via QR code
-          </p>
-        </div>
+        {/* Rendered only inside Training Administration, whose section nav already
+            names this page; the title stays for heading navigation only, and the
+            old back link pointed at the hub the user is already on. The line
+            under it said something the nav does not, so it stays visible. */}
+        <h2 className="sr-only">Create Training Session</h2>
+        <p className="text-theme-text-muted mb-6">
+          Schedule a training event with automatic attendance tracking via QR code
+        </p>
 
         {/* Progress Steps */}
         <div className="card mb-8 p-6">

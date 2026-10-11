@@ -31,6 +31,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from loguru import logger
 from sqlalchemy import func, select
+from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import generate_uuid
@@ -43,6 +44,8 @@ from app.models.external_shift_hours import (
 )
 from app.models.shift_history_import import (
     ShiftHistoryImport,
+    ShiftHistoryImportMapping,
+    ShiftHistoryImportMappingKind,
     ShiftHistoryImportRow,
     ShiftHistoryImportStatus,
 )
@@ -292,6 +295,7 @@ class ShiftHistoryImportService:
         excluded: Optional[bool] = None,
         match_decision: Optional[str] = None,
         clear_match_decision: bool = False,
+        keep_separate: Optional[bool] = None,
     ) -> ShiftHistoryImportRow:
         row: Optional[ShiftHistoryImportRow] = (
             await self.db.execute(
@@ -321,6 +325,8 @@ class ShiftHistoryImportService:
             if match_decision not in _MATCH_DECISIONS:
                 raise ValueError("Decision must be 'accept' or 'separate'.")
             row.match_decision = match_decision
+        if keep_separate is not None:
+            row.keep_separate = keep_separate
         await self.db.commit()
         return row
 
@@ -589,6 +595,7 @@ class ShiftHistoryImportService:
                     edits=r.edits,
                     excluded=bool(r.excluded),
                     match_decision=r.match_decision,
+                    keep_separate=bool(r.keep_separate),
                 )
                 for r in stored_rows
             ),
@@ -598,6 +605,7 @@ class ShiftHistoryImportService:
         )
         org = await self._organization(org_id)
         own_units = await self._own_units(org_id)
+        saved = await self._saved_mappings(org_id)
         context = engine.AnalysisContext(
             organization_name=org.name if org else "",
             members=await self._members(org_id),
@@ -611,6 +619,9 @@ class ShiftHistoryImportService:
             unit_mappings=_as_mapping(draft.unit_mappings),
             position_mappings=_as_mapping(draft.position_mappings),
             existing_shift_decisions=_as_mapping(draft.existing_shift_decisions),
+            saved_member_mappings=saved["member"],
+            saved_unit_mappings=saved["unit"],
+            saved_position_mappings=saved["position"],
         )
         span = engine.date_span(parsed)
         if span is not None:
@@ -827,6 +838,10 @@ class ShiftHistoryImportService:
             )
             counts["external_hours_created"] += 1
 
+        await self._remember(
+            org_id, analysis, new_members, new_units, str(committed_by), now
+        )
+
         draft.status = _COMMITTED
         draft.committed_by = str(committed_by)
         draft.committed_at = now
@@ -839,6 +854,101 @@ class ShiftHistoryImportService:
             counts,
         )
         return draft
+
+    async def _saved_mappings(self, organization_id: str) -> Dict[str, Dict[str, Any]]:
+        """Remembered decisions by kind (member / unit / position), then key."""
+        result = await self.db.execute(
+            select(
+                ShiftHistoryImportMapping.kind,
+                ShiftHistoryImportMapping.source_key,
+                ShiftHistoryImportMapping.mapping,
+            ).where(ShiftHistoryImportMapping.organization_id == str(organization_id))
+        )
+        saved: Dict[str, Dict[str, Any]] = {
+            kind.value: {} for kind in ShiftHistoryImportMappingKind
+        }
+        for kind, key, mapping in result.all():
+            target = saved.get(kind)
+            if target is not None and isinstance(mapping, dict):
+                target[key] = mapping
+        return saved
+
+    async def _remember(
+        self,
+        organization_id: str,
+        analysis: engine.Analysis,
+        new_members: Dict[str, str],
+        new_units: Dict[str, str],
+        updated_by: str,
+        now: datetime,
+    ) -> None:
+        """Keep this import's decisions for the department's next file.
+
+        Only decisions a reviewer made (or a remembered one that was used
+        again) are kept; automatic matches are re-derived each time. Members
+        and outside units this commit created are remembered as the records
+        created, so a later file maps to them instead of creating them again.
+        """
+        entries: List[Tuple[str, str, Dict[str, Any]]] = []
+        for member in analysis.members:
+            if member.status == engine.MEMBER_MAPPED and member.user_id:
+                entries.append(
+                    (
+                        ShiftHistoryImportMappingKind.MEMBER.value,
+                        member.key,
+                        {"action": "map", "user_id": member.user_id},
+                    )
+                )
+            elif member.status == engine.MEMBER_CREATE and member.ref in new_members:
+                entries.append(
+                    (
+                        ShiftHistoryImportMappingKind.MEMBER.value,
+                        member.key,
+                        {"action": "map", "user_id": new_members[member.ref]},
+                    )
+                )
+        for unit in analysis.units:
+            if unit.status != engine.UNIT_MAPPED:
+                continue
+            if unit.target_kind == engine.NEW_EXTERNAL:
+                kind, unit_id = engine.EXTERNAL, new_units.get(unit.key)
+            else:
+                kind, unit_id = unit.target_kind or "", unit.target_id
+            if kind and unit_id:
+                entries.append(
+                    (
+                        ShiftHistoryImportMappingKind.UNIT.value,
+                        unit.key,
+                        {"action": kind, "id": unit_id},
+                    )
+                )
+        for position in analysis.positions:
+            if position.status == engine.POSITION_MAPPED and position.seat:
+                entries.append(
+                    (
+                        ShiftHistoryImportMappingKind.POSITION.value,
+                        position.key,
+                        {"seat": position.seat},
+                    )
+                )
+        for kind, key, mapping in entries:
+            # An upsert, so two imports committed at once that both settle the
+            # same name cannot fail on the unique key and roll a commit back.
+            statement = mysql_insert(ShiftHistoryImportMapping).values(
+                id=generate_uuid(),
+                organization_id=str(organization_id),
+                kind=kind,
+                source_key=key,
+                mapping=mapping,
+                updated_by=updated_by,
+            )
+            await self.db.execute(
+                statement.on_duplicate_key_update(
+                    mapping=statement.inserted.mapping,
+                    updated_by=statement.inserted.updated_by,
+                    updated_at=now,
+                )
+            )
 
     async def _create_members(
         self,
@@ -1090,6 +1200,7 @@ def analysis_view(
                 "values": row.values,
                 "excluded": row.excluded,
                 "match_decision": row.match_decision,
+                "keep_separate": row.keep_separate,
                 "skipped_reason": row.skipped_reason,
                 "errors": row.errors,
                 "start": row.start,
@@ -1142,6 +1253,7 @@ def analysis_view(
                 "candidate_ids": m.candidate_ids,
                 "reason": m.reason,
                 "row_count": len(m.row_ids),
+                "remembered": m.remembered,
             }
             for m in analysis.members
         ],
@@ -1157,6 +1269,7 @@ def analysis_view(
                 "new_agency_name": u.new_agency_name,
                 "new_unit_name": u.new_unit_name,
                 "row_count": len(u.row_ids),
+                "remembered": u.remembered,
             }
             for u in analysis.units
         ],
@@ -1167,6 +1280,7 @@ def analysis_view(
                 "status": p.status,
                 "seat": p.seat,
                 "row_count": len(p.row_ids),
+                "remembered": p.remembered,
             }
             for p in analysis.positions
         ],

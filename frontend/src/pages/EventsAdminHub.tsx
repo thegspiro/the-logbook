@@ -10,9 +10,10 @@
 
 import React, { Suspense, useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { CalendarPlus, History, Inbox, Megaphone, Plus, QrCode, Settings } from 'lucide-react';
+import { Plus, QrCode, Settings } from 'lucide-react';
 import { AdminHubFrame } from '../components/admin';
-import type { AdminHubAction, AdminHubTab } from '../components/admin';
+import type { AdminHubAction } from '../components/admin';
+import { EVENTS_ADMIN_TABS, type EventsAdminTab } from './eventsAdminTabs';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 
 const EventCreatePage = lazyWithRetry(() => import('./EventCreatePage').then((m) => ({ default: m.EventCreatePage })));
@@ -22,35 +23,8 @@ const PastEventsTab = lazyWithRetry(() => import('./PastEventsTab'));
 const EventRequestsTab = lazyWithRetry(() => import('./EventRequestsTab'));
 const EventsSettingsTab = lazyWithRetry(() => import('./EventsSettingsTab'));
 
-type AdminTab = 'create' | 'past_events' | 'requests' | 'analytics' | 'community' | 'settings';
-
-/**
- * Settings is always last — the frame's rule, on every module. Every tab is
- * described, so the frame draws them as cards that say what each one holds.
- */
-const tabs: AdminHubTab<AdminTab>[] = [
-  {
-    id: 'create',
-    label: 'Create Event',
-    description: 'A one-off or recurring event, or one from a template',
-    icon: CalendarPlus,
-  },
-  { id: 'past_events', label: 'Past Events', description: 'Events that have already happened', icon: History },
-  { id: 'requests', label: 'Requests', description: 'Community requests for outreach events', icon: Inbox },
-  { id: 'analytics', label: 'QR Code Analytics', description: 'Check-ins by QR code, device and error', icon: QrCode },
-  {
-    id: 'community',
-    label: 'Community Engagement',
-    description: 'How far public outreach events reach',
-    icon: Megaphone,
-  },
-  {
-    id: 'settings',
-    label: 'Settings',
-    description: 'Event types, categories, the request pipeline and metrics',
-    icon: Settings,
-  },
-];
+type AdminTab = EventsAdminTab;
+const tabs = EVENTS_ADMIN_TABS;
 
 const TabLoading = () => (
   <div className="flex h-64 items-center justify-center">

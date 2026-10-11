@@ -646,3 +646,112 @@ class TestRemovedMembers:
         # ...but still holds the number, so creating over it is refused here
         # rather than by the unique index at commit.
         assert [i.code for i in analysis.issues] == ["new_member_identifier_taken"]
+
+
+class TestRememberedDecisions:
+    """A department's decisions carry from one committed file to the next."""
+
+    async def test_a_former_member_created_once_is_not_created_again(
+        self, db_session, world
+    ):
+        row = "Dana Former,77,M7,2019-06-01,0700,1900,,Nozzle,"
+        service, first = await _draft(db_session, world, _csv(row))
+        await service.update_mappings(
+            first,
+            members={"number:77": {"action": "create"}},
+            units={
+                "|m7": {
+                    "action": "create_external",
+                    "agency_name": "Metro Fire",
+                    "unit_name": "M7",
+                }
+            },
+        )
+        await service.commit(world.org_id, first.id, world.admin)
+
+        _, second = await _draft(
+            db_session, world, _csv("Dana Former,77,M7,2019-06-02,0700,1900,,,")
+        )
+        analysis, _ = await service.analyze(second)
+        member, unit = analysis.members[0], analysis.units[0]
+        assert member.status == "mapped"
+        assert member.remembered
+        assert unit.target_kind == "external"
+        assert unit.remembered
+        assert analysis.can_commit
+
+        committed = await service.commit(world.org_id, second.id, world.admin)
+        assert committed.summary["members_created"] == 0
+        assert committed.summary["external_units_created"] == 0
+        created = await db_session.scalar(
+            select(func.count(User.id)).where(
+                User.organization_id == world.org_id,
+                User.membership_number == "77",
+            )
+        )
+        assert created == 1
+
+    async def test_a_discarded_draft_teaches_nothing(self, db_session, world):
+        service, draft = await _draft(
+            db_session, world, _csv("J. Ng,,A106E,2025-03-01,0700,0700,,,")
+        )
+        await service.update_mappings(
+            draft, members={"name:j. ng": {"action": "map", "user_id": world.alice}}
+        )
+        await service.discard(world.org_id, draft.id)
+
+        _, again = await _draft(
+            db_session, world, _csv("J. Ng,,A106E,2025-03-01,0700,0700,,,")
+        )
+        analysis, _ = await service.analyze(again)
+        assert analysis.members[0].ref is None
+
+    async def test_remembered_decisions_belong_to_one_department(
+        self, db_session, world
+    ):
+        service, draft = await _draft(
+            db_session, world, _csv("J. Ng,,A106E,2025-03-01,0700,0700,,,")
+        )
+        await service.update_mappings(
+            draft, members={"name:j. ng": {"action": "map", "user_id": world.alice}}
+        )
+        await service.commit(world.org_id, draft.id, world.admin)
+
+        other_org = await _add_org(db_session, "Elsewhere")
+        other_admin = await _add_user(db_session, other_org, "Olly", "Out", "5")
+        foreign = await service.create_draft(
+            other_org,
+            other_admin,
+            "h.csv",
+            _csv("J. Ng,,A106E,2025-03-01,0700,0700,,,"),
+            None,
+        )
+        analysis, _ = await service.analyze(foreign)
+        assert analysis.members[0].ref is None
+        assert not analysis.members[0].remembered
+
+    async def test_a_split_entry_commits_as_two_attendances(self, db_session, world):
+        service, draft = await _draft(
+            db_session,
+            world,
+            _csv(
+                "Alice Ng,101,A106E,2025-10-09,0600,0600,,,",
+                "Alice Ng,101,A106E,2025-10-10,0600,0730,,,",
+            ),
+        )
+        tail = (await service.rows(draft))[1]
+        await service.update_row(draft, tail.id, keep_separate=True)
+        analysis, _ = await service.analyze(draft)
+        assert analysis.can_commit
+
+        await service.commit(world.org_id, draft.id, world.admin)
+        minutes = sorted(
+            (
+                await db_session.execute(
+                    select(ShiftAttendance.duration_minutes)
+                    .join(Shift, Shift.id == ShiftAttendance.shift_id)
+                    .where(Shift.organization_id == world.org_id)
+                )
+            ).scalars()
+        )
+        assert minutes == [90, 24 * 60]

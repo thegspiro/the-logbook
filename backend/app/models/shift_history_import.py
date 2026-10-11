@@ -30,6 +30,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -152,6 +153,13 @@ class ShiftHistoryImportRow(Base):
     # match for a shift proposed from other rows: "accept" joins it,
     # "separate" keeps it a shift of its own.
     match_decision: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    # Reviewer split this row off the entry before it. Back-to-back entries
+    # for one member on one unit are joined automatically (a previous system
+    # that could not count past midnight logged one stretch as two rows); set,
+    # this row starts an attendance of its own instead.
+    keep_separate: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -168,5 +176,64 @@ class ShiftHistoryImportRow(Base):
         CheckConstraint(
             "match_decision IS NULL OR match_decision IN ('accept', 'separate')",
             name="ck_shift_history_import_rows_match_decision",
+        ),
+    )
+
+
+class ShiftHistoryImportMappingKind(str, Enum):
+    MEMBER = "member"
+    UNIT = "unit"
+    POSITION = "position"
+
+
+class ShiftHistoryImportMapping(Base):
+    """A review decision the department has committed, remembered for later
+    files.
+
+    A department brings its history in over several files, usually exported
+    from the same system, so the same names, vehicles and positions recur. A
+    decision is remembered only once an import using it is committed — a
+    discarded draft teaches nothing — and a draft's own decision always wins
+    over a remembered one.
+
+    A member or outside unit the commit *created* is remembered as a mapping
+    to the record it created, never as "create", so the next file cannot
+    create the same person or unit a second time.
+    """
+
+    __tablename__ = "shift_history_import_mappings"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    # The source value as the import keys it (``number:77``, ``|a106``,
+    # ``nozzle``). Bounded by the request schema's key limit.
+    source_key: Mapped[str] = mapped_column(String(600), nullable=False)
+    mapping: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    updated_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "kind",
+            "source_key",
+            name="uq_shift_history_import_mappings_org_kind_key",
+        ),
+        CheckConstraint(
+            "kind IN ('member', 'unit', 'position')",
+            name="ck_shift_history_import_mappings_kind",
         ),
     )

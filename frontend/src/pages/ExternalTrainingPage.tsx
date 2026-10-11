@@ -1518,11 +1518,12 @@ const ExternalTrainingPage: React.FC = () => {
     // the whole tab a second time on a phone.
     <div className="min-h-screen">
       <div className="py-6">
-        {/* Header */}
+        {/* The hub's section nav already names this page, so the title stays for
+            heading navigation only; the line under it says what the nav does not. */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-theme-text-primary text-2xl font-bold">External Training Integrations</h1>
-            <p className="text-theme-text-muted mt-1">
+            <h2 className="sr-only">External Training Integrations</h2>
+            <p className="text-theme-text-muted">
               Connect external training platforms to automatically sync completed training records
             </p>
           </div>

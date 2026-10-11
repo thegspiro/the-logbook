@@ -17,7 +17,7 @@ The downgrade drops the three columns. A routed submission stays in the box it
 was routed to; only the record of where it started, and its answers, are lost.
 
 Revision ID: 778c3de73086
-Revises: 0a55dae43a0a
+Revises: 46c55e6a3330
 Create Date: 2026-10-11 08:57:42.119049
 
 """
@@ -29,7 +29,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "778c3de73086"
-down_revision: Union[str, None] = "0a55dae43a0a"
+down_revision: Union[str, None] = "46c55e6a3330"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

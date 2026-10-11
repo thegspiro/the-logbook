@@ -107,8 +107,15 @@ const AnalyticsDashboardPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
       {/* Header */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">QR Code Analytics</h1>
-          <p className="text-theme-text-secondary mt-1">
+          {/* Embedded, the Events hub's section nav already names this page, so
+              the title stays for heading navigation only and the hub keeps the
+              page's one <h1>. Standalone, it is the page's own title. */}
+          {embedded ? (
+            <h2 className="sr-only">QR Code Analytics</h2>
+          ) : (
+            <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">QR Code Analytics</h1>
+          )}
+          <p className={`text-theme-text-secondary ${embedded ? '' : 'mt-1'}`}>
             {eventId ? 'Check-in scans for this event' : 'Check-in scans across all events'}
           </p>
         </div>

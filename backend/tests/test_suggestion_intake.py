@@ -577,7 +577,7 @@ def test_migration_adds_only_nullable_columns():
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    assert module.down_revision == "0a55dae43a0a"
+    assert module.down_revision == "46c55e6a3330"
     source = _REVISION.read_text()
     assert "nullable=False" not in source
     assert 'ondelete="SET NULL"' in source

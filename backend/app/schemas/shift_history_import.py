@@ -50,6 +50,8 @@ class ShiftHistoryImportRowUpdate(BaseModel):
     edits: Optional[Dict[str, Optional[str]]] = None
     excluded: Optional[bool] = None
     match_decision: Optional[Literal["accept", "separate"]] = None
+    # Split this row off the entry before it instead of joining the two.
+    keep_separate: Optional[bool] = None
 
     @field_validator("edits")
     @classmethod
@@ -135,6 +137,7 @@ class ImportRowView(BaseModel):
     values: Dict[str, str]
     excluded: bool
     match_decision: Optional[str] = None
+    keep_separate: bool = False
     skipped_reason: Optional[str] = None
     errors: List[str]
     start: Optional[datetime] = None
@@ -164,6 +167,8 @@ class ImportMemberView(BaseModel):
     candidate_ids: List[str]
     reason: str
     row_count: int
+    # Settled by a decision remembered from an earlier import.
+    remembered: bool = False
 
 
 class UnitCandidate(BaseModel):
@@ -182,6 +187,8 @@ class ImportUnitView(BaseModel):
     new_agency_name: str
     new_unit_name: str
     row_count: int
+    # Settled by a decision remembered from an earlier import.
+    remembered: bool = False
 
 
 class ImportPositionView(BaseModel):
@@ -190,6 +197,8 @@ class ImportPositionView(BaseModel):
     status: str
     seat: Optional[str] = None
     row_count: int
+    # Settled by a decision remembered from an earlier import.
+    remembered: bool = False
 
 
 class ImportAttendanceView(BaseModel):
