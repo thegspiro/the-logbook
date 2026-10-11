@@ -1018,6 +1018,10 @@ export const SuggestionIntakeQuestionType = {
   TEXTAREA: 'textarea',
   DATE: 'date',
   NUMBER: 'number',
+  RATING: 'rating',
+  TIME: 'time',
+  MEMBER: 'member',
+  APPARATUS: 'apparatus',
 } as const;
 export type SuggestionIntakeQuestionType =
   (typeof SuggestionIntakeQuestionType)[keyof typeof SuggestionIntakeQuestionType];
@@ -1030,6 +1034,10 @@ export const SUGGESTION_INTAKE_QUESTION_TYPE_LABELS: Record<string, string> = {
   textarea: 'Long text',
   date: 'Date',
   number: 'Number',
+  rating: 'Rating (1–5)',
+  time: 'Time',
+  member: 'Pick a member',
+  apparatus: 'Pick a vehicle',
 };
 
 /** Which year a membership number's {YYYY} and yearly restart follow. */
