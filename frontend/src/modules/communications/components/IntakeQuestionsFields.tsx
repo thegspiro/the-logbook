@@ -9,13 +9,17 @@
 
 import React from 'react';
 import { SuggestionIntakeQuestionType } from '../../../constants/enums';
+import { usePickOptions } from '../hooks/usePickOptions';
 import type { IntakeQuestion } from '../types/suggestions';
 import { savedQuestions, visibleQuestionIds } from '../utils/suggestionRouting';
+import PickAnswerField from './PickAnswerField';
 
 // Mirror MAX_TEXT_ANSWER_LENGTH / MAX_TEXTAREA_ANSWER_LENGTH in
 // backend/app/services/suggestion_intake.py, which enforce them.
 const MAX_TEXT_LENGTH = 500;
 const MAX_TEXTAREA_LENGTH = 5000;
+// Mirrors RATING_VALUES in backend/app/schemas/suggestion.py.
+const RATING_VALUES = ['1', '2', '3', '4', '5'] as const;
 
 interface IntakeQuestionsFieldsProps {
   questions: readonly IntakeQuestion[] | undefined;
@@ -34,6 +38,9 @@ function toggleChoice(current: string, value: string, checked: boolean): string 
 
 const IntakeQuestionsFields: React.FC<IntakeQuestionsFieldsProps> = ({ questions, values, onChange }) => {
   const saved = savedQuestions(questions);
+  const asks = (type: string) => saved.some((q) => q.type === type);
+  const members = usePickOptions('member', asks(SuggestionIntakeQuestionType.MEMBER));
+  const vehicles = usePickOptions('apparatus', asks(SuggestionIntakeQuestionType.APPARATUS));
   if (saved.length === 0) return null;
   const visible = visibleQuestionIds(saved, values);
 
@@ -62,6 +69,66 @@ const IntakeQuestionsFields: React.FC<IntakeQuestionsFieldsProps> = ({ questions
               {question.helpText}
             </p>
           ) : null;
+
+          if (
+            question.type === SuggestionIntakeQuestionType.MEMBER ||
+            question.type === SuggestionIntakeQuestionType.APPARATUS
+          ) {
+            const isMember = question.type === SuggestionIntakeQuestionType.MEMBER;
+            return (
+              <fieldset key={question.id} aria-describedby={helpId}>
+                <legend id={labelId} className="form-label">
+                  {label}
+                </legend>
+                <PickAnswerField
+                  inputId={inputId}
+                  labelId={labelId}
+                  helpId={helpId}
+                  noun={isMember ? 'member' : 'vehicle'}
+                  emptyMessage={
+                    isMember
+                      ? 'No members are on file to choose from.'
+                      : 'No vehicles are on file, so you can skip this question.'
+                  }
+                  state={isMember ? members : vehicles}
+                  value={value}
+                  onChange={(next) => onChange(question.id, next)}
+                />
+                {help}
+              </fieldset>
+            );
+          }
+
+          if (question.type === SuggestionIntakeQuestionType.RATING) {
+            return (
+              <fieldset key={question.id} aria-describedby={helpId}>
+                <legend id={labelId} className="form-label">
+                  {label}
+                </legend>
+                <div className="flex flex-wrap gap-4">
+                  {RATING_VALUES.map((rating) => (
+                    <label
+                      key={rating}
+                      className="text-theme-text-primary touch:min-h-[44px] flex items-center gap-1.5 text-sm"
+                    >
+                      <input
+                        type="radio"
+                        name={inputId}
+                        className="form-checkbox"
+                        value={rating}
+                        checked={value === rating}
+                        required={question.required}
+                        onChange={() => onChange(question.id, rating)}
+                      />
+                      {rating}
+                    </label>
+                  ))}
+                </div>
+                <p className="text-theme-text-muted mt-1 text-xs">1 is lowest, 5 is highest.</p>
+                {help}
+              </fieldset>
+            );
+          }
 
           if (
             question.type === SuggestionIntakeQuestionType.RADIO ||
@@ -142,9 +209,11 @@ const IntakeQuestionsFields: React.FC<IntakeQuestionsFieldsProps> = ({ questions
                   type={
                     question.type === SuggestionIntakeQuestionType.DATE
                       ? 'date'
-                      : question.type === SuggestionIntakeQuestionType.NUMBER
-                        ? 'number'
-                        : 'text'
+                      : question.type === SuggestionIntakeQuestionType.TIME
+                        ? 'time'
+                        : question.type === SuggestionIntakeQuestionType.NUMBER
+                          ? 'number'
+                          : 'text'
                   }
                   value={value}
                   maxLength={question.type === SuggestionIntakeQuestionType.TEXT ? MAX_TEXT_LENGTH : undefined}

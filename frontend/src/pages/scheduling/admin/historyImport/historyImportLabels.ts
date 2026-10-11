@@ -20,7 +20,7 @@ export const memberLabel = (analysis: HistoryImportAnalysis, ref: string): strin
   if (ref.startsWith(NEW_MEMBER_PREFIX)) {
     const key = ref.slice(NEW_MEMBER_PREFIX.length);
     const source = analysis.members.find((m) => m.key === key);
-    return `${source?.display_name || key} (new, inactive)`;
+    return `${source?.display_name || key} (new, archived)`;
   }
   return analysis.options.members.find((m) => m.id === ref)?.name ?? 'Unknown member';
 };

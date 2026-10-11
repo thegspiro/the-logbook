@@ -1364,7 +1364,7 @@ def analyze(parsed: List[ParsedRow], context: AnalysisContext) -> Analysis:
                     message=resolution.reason
                     or (
                         f"No member matches '{resolution.identity.display_name or resolution.key}'. "
-                        "Map the rows to a member, or create an inactive member."
+                        "Map the rows to a member, or create an archived former member."
                     ),
                     blocking=True,
                     row_ids=list(resolution.row_ids),

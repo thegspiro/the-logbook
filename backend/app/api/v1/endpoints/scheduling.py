@@ -10,7 +10,6 @@ from datetime import date, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -3666,73 +3665,11 @@ async def list_apparatus_options(
     Priority: full Apparatus module records > BasicApparatus records > hardcoded defaults.
     """
     from app.schemas.scheduling import ApparatusOption
+    from app.services.apparatus_options import department_apparatus_options
 
-    org_id = str(current_user.organization_id)
-    options: list[ApparatusOption] = []
-    source = "default"
-
-    # 1. Try the full Apparatus module
-    try:
-        from app.models.apparatus import Apparatus as FullApparatus
-        from app.models.apparatus import ApparatusType
-
-        result = await db.execute(
-            select(FullApparatus, ApparatusType.name.label("type_name"))
-            .join(
-                ApparatusType,
-                FullApparatus.apparatus_type_id == ApparatusType.id,
-                isouter=True,
-            )
-            .where(FullApparatus.organization_id == org_id)
-            .where(FullApparatus.is_archived.is_(False))
-            .order_by(FullApparatus.unit_number)
-        )
-        rows = result.all()
-        if rows:
-            for row in rows:
-                apparatus = row[0]
-                type_name = row[1] or "other"
-                options.append(
-                    ApparatusOption(
-                        id=apparatus.id,
-                        name=apparatus.name or apparatus.unit_number,
-                        unit_number=apparatus.unit_number,
-                        apparatus_type=type_name.lower(),
-                        source="apparatus",
-                        positions=normalize_stored_positions(apparatus.crew_positions),
-                        min_staffing=apparatus.min_staffing,
-                    )
-                )
-            source = "apparatus"
-    except Exception as exc:
-        # The full Apparatus module may not be installed for this org; fall
-        # through to BasicApparatus. Log so a genuine query failure (vs. the
-        # module simply being absent) is still diagnosable.
-        logger.debug(f"Apparatus module lookup failed, using fallback: {exc}")
-
-    # 2. Fall back to BasicApparatus if no full module records
-    if not options:
-        result = await db.execute(
-            select(BasicApparatus)
-            .where(BasicApparatus.organization_id == org_id)
-            .where(BasicApparatus.is_active.is_(True))
-            .order_by(BasicApparatus.unit_number)
-        )
-        basic_rows = result.scalars().all()
-        if basic_rows:
-            for ba in basic_rows:
-                options.append(
-                    ApparatusOption(
-                        id=ba.id,
-                        name=ba.name,
-                        unit_number=ba.unit_number,
-                        apparatus_type=ba.apparatus_type or "other",
-                        source="basic",
-                        positions=normalize_stored_positions(ba.positions),
-                        min_staffing=ba.min_staffing,
-                    )
-                )
-            source = "basic"
+    options, source = await department_apparatus_options(
+        db, str(current_user.organization_id)
+    )
 
     # 3. Fall back to hardcoded defaults, narrowed to what this kind of agency
     #    runs. An EMS-only service that has not entered its vehicles was
