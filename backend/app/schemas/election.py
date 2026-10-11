@@ -1691,6 +1691,23 @@ class VoteIntegrityResponse(BaseModel):
     chain_break_at: Optional[str] = None
     integrity_status: str
     error: Optional[str] = None
+    # Voided votes stay in the chain and are verified with it (W50-31);
+    # they are reported here rather than reading as a broken chain.
+    voided_votes: int = 0
+    voids: List["VoteVoidSummary"] = []
+
+
+class VoteVoidSummary(BaseModel):
+    """Voided votes sharing one officer and reason (W50-31)."""
+
+    count: int
+    voided_by: Optional[str] = None
+    voided_by_name: Optional[str] = None
+    reason: str = ""
+    voided_at: Optional[str] = None
+
+
+VoteIntegrityResponse.model_rebuild()
 
 
 class SoftDeleteVoteResponse(BaseModel):

@@ -2050,6 +2050,19 @@ export const ElectionDetailPage: React.FC = () => {
                           </span>
                         )}
                       </div>
+                      {/* A sanctioned void stays in the chain and is verified
+                          with it, so it is listed here rather than reading as
+                          a broken chain (W50-31). */}
+                      {(integrityResult.voids ?? []).length > 0 && (
+                        <ul className="text-theme-text-secondary mt-3 space-y-1 text-sm" data-testid="integrity-voids">
+                          {(integrityResult.voids ?? []).map((v) => (
+                            <li key={`${v.voided_by ?? ''}-${v.reason}-${v.voided_at ?? ''}`}>
+                              {v.count} vote(s) voided by {v.voided_by_name || 'an officer'}:{' '}
+                              {v.reason || 'no reason recorded'}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                       {integrityResult.tampered_vote_ids.length > 0 && (
                         <div className="mt-3 rounded-sm bg-red-500/20 p-3">
                           <p className="mb-1 text-sm font-semibold text-red-700 dark:text-red-300">

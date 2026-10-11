@@ -407,7 +407,9 @@ what the ballot already shows) does not by itself justify guessing at the
 right contract without the owner's input on what a recipient or attendee
 is meant to see.
 
-### ELEC-45 — MED — A sanctioned void certifies the election's vote chain CHAIN_BROKEN, while voiding the chain's tail evades detection entirely — 🚩 FLAGGED (cross-ref: W50-31, `KNOWN_LIMITATIONS.md`)
+### ELEC-45 — MED — A sanctioned void certifies the election's vote chain CHAIN_BROKEN, while voiding the chain's tail evades detection entirely — ✅ RESOLVED (2026-10-08, owner decision; cross-ref: W50-31, `KNOWN_LIMITATIONS.md`)
+
+**Resolution:** the owner chose "walk voids and report them". `verify_vote_integrity` no longer filters `deleted_at` before the walk: voided rows are signature-checked and chained like every other row, and returned as `voided_votes` / `voids` (officer, reason, time). A sanctioned void reads PASS with the void named on the Forensics panel and certified PDF, a tail void is reported rather than silent, and a voided row altered after the fact still fails. Guard: `tests/test_w50_integrity_with_voids.py`.
 
 **What:** `verify_vote_integrity` (`election_service.py:2045-2120`; pass 6 cited
 `1879-1945`, shifted by the intervening diff — re-read in full this pass) drops soft-deleted rows **before**

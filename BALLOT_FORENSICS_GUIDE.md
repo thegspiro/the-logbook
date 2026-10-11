@@ -253,13 +253,14 @@ The `audit_log.entries` array shows a chronological history:
   next vote is accepted and counted once; it used to fail with a server error
   on both voting routes. Their old receipt now reads "This vote was voided by
   an officer".
-- **Known gap — an officer's void breaks the integrity verdict.** The chain
-  check drops deleted rows before walking the chain, so a sanctioned void (a
-  single vote or a paper batch) makes **Run Check** report "Vote Integrity
-  Issue Detected" and the certified PDF print CHAIN_BROKEN, while voiding the
-  chain's last vote leaves PASS. Until the chain design records voids, read a
-  CHAIN_BROKEN alongside this list: if every gap is an officer's recorded
-  void, it is this gap, not tampering (`docs/KNOWN_LIMITATIONS.md`, W50-31).
+- **A void is walked with the chain and reported** _(2026-10-08, W50-31)_.
+  Voided votes stay in the hash chain and **Run Check** verifies them with
+  every other row, so an officer's own void (a single vote or a paper batch)
+  reads **PASS** with a line under it — _"N vote(s) voided by <officer>:
+  <reason>"_ — on the Forensics panel and on the certified PDF. Voiding the
+  chain's last vote is reported the same way rather than passing silently. A
+  voided row whose recorded fields were altered still fails its signature,
+  so CHAIN_BROKEN or FAIL now means something other than a recorded void.
 
 Soft-deleted votes are **never physically removed** from the database. They remain for full accountability. Check:
 

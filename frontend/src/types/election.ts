@@ -333,6 +333,17 @@ export interface VoteIntegrityResult {
   chain_verified: boolean;
   chain_break_at?: string | null;
   integrity_status: 'PASS' | 'FAIL' | 'CHAIN_BROKEN';
+  /** Voided votes are walked with the chain and reported, not dropped (W50-31). */
+  voided_votes?: number;
+  voids?: VoteVoidSummary[];
+}
+
+export interface VoteVoidSummary {
+  count: number;
+  voided_by?: string | null;
+  voided_by_name?: string | null;
+  reason: string;
+  voided_at?: string | null;
 }
 
 export interface VoterEligibility {

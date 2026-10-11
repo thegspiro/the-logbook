@@ -2339,6 +2339,14 @@ class ElectionService:
         ``vote_integrity_check`` audit row: the forensics report embeds this
         check on every read, and a critical row per page load buried the
         one the officer's Run Check wrote.
+
+        Voided (soft-deleted) votes stay in the chain and are walked and
+        verified like every other row (W50-31). Dropping them before the
+        walk made an officer's own sanctioned void read CHAIN_BROKEN — and
+        certified as such — while voiding the chain's tail left a silent
+        PASS. They are reported instead: ``voided_votes`` and ``voids``
+        (grouped by officer and reason). The counts above stay live rows
+        only, since a voided vote is not counted.
         """
         result = await self.db.execute(
             select(Election)
@@ -2350,15 +2358,15 @@ class ElectionService:
             return {"error": "Election not found"}
 
         votes_result = await self.db.execute(
-            select(Vote)
-            .where(Vote.election_id == str(election_id))
-            .where(Vote.deleted_at.is_(None))
+            select(Vote).where(Vote.election_id == str(election_id))
         )
         all_votes = votes_result.scalars().all()
+        live_votes = [v for v in all_votes if v.deleted_at is None]
+        voided = [v for v in all_votes if v.deleted_at is not None]
 
-        total = len(all_votes)
-        test_votes = sum(1 for v in all_votes if v.is_test)
-        real_votes = [v for v in all_votes if not v.is_test]
+        total = len(live_votes)
+        test_votes = sum(1 for v in live_votes if v.is_test)
+        real_votes = [v for v in live_votes if not v.is_test]
         counted_votes = len(await self._exclude_unattested(election_id, real_votes))
         pending_paper_votes = len(real_votes) - counted_votes
         valid = 0
@@ -2379,7 +2387,8 @@ class ElectionService:
 
         for vote in all_votes:
             if not vote.vote_signature:
-                unsigned += 1
+                if vote.deleted_at is None:
+                    unsigned += 1
                 continue
             recorded = getattr(vote, "signing_key_id", None)
             if recorded is not None and recorded not in (current_id, legacy_id):
@@ -2389,7 +2398,8 @@ class ElectionService:
             if recorded in (None, current_id) and hmac.compare_digest(
                 vote.vote_signature, self._sign_vote(vote, current_key)
             ):
-                valid += 1
+                if vote.deleted_at is None:
+                    valid += 1
                 continue
             if legacy_key is None or recorded == current_id:
                 tampered.append(str(vote.id))
@@ -2406,7 +2416,8 @@ class ElectionService:
             if cutover is not None and (voted_at is None or voted_at > cutover):
                 tampered.append(str(vote.id))
                 continue
-            valid += 1
+            if vote.deleted_at is None:
+                valid += 1
             legacy_verified += 1
 
         if legacy_verified:
@@ -2457,6 +2468,8 @@ class ElectionService:
         elif chain_broken:
             integrity_status = "CHAIN_BROKEN"
 
+        voids = await self._summarize_voids(voided)
+
         if tampered:
             logger.critical(
                 f"VOTE INTEGRITY FAILURE | election={election_id} "
@@ -2483,6 +2496,7 @@ class ElectionService:
                     "chain_verified": not chain_broken,
                     "chain_break_at": chain_break_at,
                     "integrity_status": integrity_status,
+                    "voided_votes": len(voided),
                 },
                 severity="critical" if (tampered or chain_broken) else "info",
             )
@@ -2500,7 +2514,55 @@ class ElectionService:
             "chain_verified": not chain_broken,
             "chain_break_at": chain_break_at,
             "integrity_status": integrity_status,
+            "voided_votes": len(voided),
+            "voids": voids,
         }
+
+    async def _summarize_voids(self, voided: List[Vote]) -> List[Dict]:
+        """Group voided votes by the officer and reason that voided them.
+
+        A paper-batch void stamps every vote with one officer and reason,
+        so it reads as one line ("12 votes voided by ..."), as a single-vote
+        void does. Ordered by when the void happened.
+        """
+        if not voided:
+            return []
+        groups: Dict[Tuple[Optional[str], str], Dict] = {}
+        for vote in voided:
+            key = (vote.deleted_by, vote.deletion_reason or "")
+            group = groups.setdefault(
+                key,
+                {
+                    "count": 0,
+                    "voided_by": vote.deleted_by,
+                    "voided_by_name": None,
+                    "reason": vote.deletion_reason or "",
+                    "voided_at": None,
+                },
+            )
+            group["count"] += 1
+            at = self._ensure_utc(vote.deleted_at)
+            if at and (group["voided_at"] is None or at > group["voided_at"]):
+                group["voided_at"] = at
+        officer_ids = {g["voided_by"] for g in groups.values() if g["voided_by"]}
+        names: Dict[str, str] = {}
+        if officer_ids:
+            rows = await self.db.execute(
+                select(User.id, User.first_name, User.last_name).where(
+                    User.id.in_(officer_ids)
+                )
+            )
+            for uid, first, last in rows.all():
+                names[str(uid)] = f"{first or ''} {last or ''}".strip()
+        epoch = datetime.min.replace(tzinfo=timezone.utc)
+        out = []
+        for group in sorted(groups.values(), key=lambda g: g["voided_at"] or epoch):
+            group["voided_by_name"] = names.get(str(group["voided_by"])) or None
+            group["voided_at"] = (
+                group["voided_at"].isoformat() if group["voided_at"] else None
+            )
+            out.append(group)
+        return out
 
     async def soft_delete_vote(
         self,

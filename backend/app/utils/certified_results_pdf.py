@@ -270,6 +270,20 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
             styles["Normal"],
         )
     )
+    # A sanctioned void stays in the chain and is verified with it (W50-31);
+    # the certificate names each one rather than letting it read as either
+    # tampering or nothing at all.
+    for void in integrity.get("voids") or []:
+        officer = void.get("voided_by_name") or "an officer"
+        reason = void.get("reason") or "no reason recorded"
+        story.append(
+            Paragraph(
+                f"{int(void.get('count') or 0)} vote(s) voided by "
+                f"{_esc(officer)}: {_esc(reason)}. Voided votes are kept, "
+                "verified with the chain and excluded from the results.",
+                sub_style,
+            )
+        )
     if election.get("anonymous_voting"):
         proxy_votes = int(election.get("proxy_votes") or 0)
         text = (
