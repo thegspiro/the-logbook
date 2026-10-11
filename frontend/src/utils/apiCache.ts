@@ -78,6 +78,10 @@ const UNCACHEABLE_PREFIXES = [
   '/training/records', // individual training records (scores, certs) — member PHI-adjacent
   '/training/skills-testing/tests', // per-member skills-test scores + evaluator notes (PHI)
   '/training/knowledge-tests', // answer keys (officers) and members' test scores
+  '/training/skill-evaluations', // evaluator_members on list + detail: a specific-users evaluator
+  // rule's permitted evaluators, resolved to id + display_name (PII), even though the rest of the
+  // row is an org-wide skill definition (no trailing slash so GET /training/skill-evaluations list
+  // is covered too)
   '/training/cohorts/', // cohort detail carries a resolved-name+email member roster (bare list is roster-free)
   '/training/programs/programs/', // per-program enrollment eligibility carries a full member roster + reason
   '/training/external/providers', // provider list itself: config.additional_headers can carry an
@@ -124,6 +128,9 @@ const UNCACHEABLE_PREFIXES = [
   '/documents', // private organizational documents (list + detail)
   '/compliance/', // compliance attestations, member compliance data (PII)
   '/integrations', // integration config (list + detail): API keys, webhook URLs, secrets
+  '/mcp-oauth/', // the signed-in member's own live Claude (MCP) connections and pending consent
+  // requests — self-scoped, but an authorization-state read that must not serve "still connected"
+  // for up to 90s after the member revokes it, matching '/roles/admin-access' below
   '/finance/', // budgets, purchase/expense/check requests & reimbursements tied to members (PII)
   '/grants', // grant applications and donor/fundraising records (PII); no trailing slash so GET /grants list is covered too
   '/roles/user/', // an arbitrary user's full permission set (authz data)
