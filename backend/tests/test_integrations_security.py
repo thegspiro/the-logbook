@@ -529,6 +529,11 @@ class TestTestConnectionEndpointSanitizesErrors:
     @staticmethod
     def _db_with_integration(integration):
         db = AsyncMock()
+        # AsyncSession.begin_nested() and add() are synchronous; left as
+        # AsyncMock children they return coroutines that the route's
+        # never-raising health bookkeeping discards unawaited.
+        db.begin_nested = MagicMock()
+        db.add = MagicMock()
         result = MagicMock()
         result.scalar_one_or_none.return_value = integration
         db.execute.return_value = result
