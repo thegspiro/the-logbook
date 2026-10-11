@@ -1,5 +1,24 @@
 # Screenshot currency
 
+## Moved out of 01-membership.md by the plain-language rewrite, 2026-10-11
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+`<!-- Screenshot needed … -->` placeholders, image file names and alt text are
+unchanged.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `01-01-member-directory.png` | **REPLACE** | The table gained a **Rank** column between the name and **Member #**. Re-shoot as an officer so **Member #** is present, with at least one member whose rank is set |
+| `01-02-member-profile.png` | **REPLACE** | Assigned Inventory is absent for a viewer without permission to manage equipment. Caption the capturing account's grants — the page differs by viewer |
+| `01-05-add-member-form.png` | **REPLACE** | One **Membership Number** field whose hint reads "Leave blank to assign … automatically" (the separate Membership ID box is gone); **Preferred Contact** is gone and **Status** offers Active, Inactive and On Leave; **Rank** and **Position** carry help lines; with **Set initial password** ticked a rules checklist sits under the password fields. Shoot with auto-numbering on |
+| `01-08-member-audit-history.png` | **REPLACE** | Each entry shows the time beside the date. Re-shoot filtered to profile updates, on a member with two edits on the same day |
+| `01-40-member-directory-member.png` | **CHECK** | Alt text says "name, member number and status only"; the member view also has a **Rank** column, and **Member #** is hidden until someone in the department is numbered |
+| `01-26-print-applicant-badges.png` | **REPLACE** | Bulk buttons read **Advance Selected**, **Hold Selected**, **Reject Selected**. Re-shoot the bar with two applicants selected (alt text still says "Advance All") |
+| `01-11-create-waiver.png` | **REPLACE** | **Applies To** has two checkboxes — **Training Requirements** and **Meeting Attendance & Shift Requirements**. Re-shoot with both ticked, so the line under them reads "Creates a leave of absence that automatically generates a training waiver" |
+| `01-19-create-waiver.png` | **REPLACE** | Same change as `01-11`. Re-shoot with only **Training Requirements** ticked, showing "Creates a standalone training waiver without a leave of absence" |
+| `19-37-member-id-cards.png` | **CHECK** | The frame shows a card in a "revoked" state, but the ID Cards panel offers no Revoke action (Suspend, Lost, Reactivate, delete). Confirm what the frame shows, or re-shoot with a suspended card |
+| Applicant conversion dialog; administrative member's ID card | **CHECK** | Both now show **Member class** (the conversion dialog asks for **Member class** and **Starting status**; an administrative member's card shows **Member Class** where others show **Rank**) |
+
 ## Moved out of 00-getting-started.md by the plain-language rewrite, 2026-10-08
 
 The guide no longer carries inline `[SCREENSHOT — REPLACE/CHECK …]` notes: a
