@@ -496,6 +496,19 @@ class VotingToken(Base):
     # Hashed voter identifier (for tracking without revealing identity)
     voter_hash: Mapped[str] = mapped_column(String(64), nullable=False)  # SHA256 hash
 
+    # The recipient, recorded at issue on a NAMED election only, so a link
+    # vote can carry voter_id and the who-voted roster can name it after the
+    # salt is destroyed at close (W50-3). Always NULL on an anonymous
+    # election: a user id beside this row's voter_hash would join every link
+    # vote back to its voter. NULL also on tokens issued before the column.
+    user_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey(
+            "users.id", ondelete="SET NULL", name="fk_voting_tokens_user_id_users"
+        ),
+        nullable=True,
+    )
+
     # Token metadata
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**303 tables · 4981 columns · 1002 foreign keys**
+**303 tables · 4982 columns · 1003 foreign keys**
 
 ---
 
@@ -162,7 +162,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`manual_ballot_batches`](#manual_ballot_batches) | `ManualBallotBatch` | 14 | One paper-tally entry — the set of manual votes sharing a batch id. |
 | [`saved_ballot_templates`](#saved_ballot_templates) | `SavedBallotTemplate` | 11 | Organization-scoped, reusable snapshot of a structured ballot. |
 | [`votes`](#votes) | `Vote` | 26 | Vote model for recording votes |
-| [`voting_tokens`](#voting_tokens) | `VotingToken` | 16 | Voting token model for secure anonymous ballot access |
+| [`voting_tokens`](#voting_tokens) | `VotingToken` | 17 | Voting token model for secure anonymous ballot access |
 
 ### Email Templates
 
@@ -2375,6 +2375,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `election_id` | VARCHAR(36) | no | FK, IDX |  | → `elections.id` ON DELETE CASCADE |
 | `token` | VARCHAR(128) | no | UQ |  |  |
 | `voter_hash` | VARCHAR(64) | no | IDX |  |  |
+| `user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `expires_at` | DATETIME | no |  |  |  |
 | `used` | BOOL | no |  | `0` |  |
@@ -10537,7 +10538,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (368 references)
+### → `users` (369 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10908,6 +10909,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `proxy_voter_id` | SET NULL | yes |
 | `votes` | `recorded_by` | SET NULL | yes |
 | `votes` | `voter_id` | SET NULL | yes |
+| `voting_tokens` | `user_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
 ### → `organizations` (247 references)

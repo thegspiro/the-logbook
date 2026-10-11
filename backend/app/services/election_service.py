@@ -6935,6 +6935,7 @@ class ElectionService:
         is_test: bool = False,
         eligible_item_ids: Optional[List[str]] = None,
         eligible_positions: Optional[List[str]] = None,
+        record_user_id: bool = False,
     ) -> Tuple[VotingToken, str]:
         """
         Generate a secure voting token for a user-election pair
@@ -6952,6 +6953,8 @@ class ElectionService:
             eligible_positions: Positions this voter may vote for, snapshotted
                 at send time from position_eligibility (None = unrestricted /
                 election without position rules)
+            record_user_id: Store the recipient on the token (named elections
+                only — W50-3); an anonymous election must pass False
 
         Returns:
             (VotingToken, raw_token) — the raw token exists only in this
@@ -6983,10 +6986,44 @@ class ElectionService:
             is_test=is_test,
             eligible_item_ids=eligible_item_ids,
             eligible_positions=eligible_positions,
+            user_id=str(user_id) if record_user_id else None,
         )
 
         self.db.add(voting_token)
         return voting_token, raw_token
+
+    async def _token_voter_id(
+        self, election: Election, voting_token: VotingToken
+    ) -> Optional[str]:
+        """The member a link vote is cast by, on a named election (W50-3).
+
+        A token issued since W50-3 carries ``user_id``. One issued before it
+        holds only the voter hash, so the hash is matched against the
+        organization's members with the election's salt — which still exists
+        while the election is open, the only time a token can vote. Anonymous
+        elections always answer None: the link vote must stay unattributable.
+        """
+        if election.anonymous_voting:
+            return None
+        if getattr(voting_token, "user_id", None):
+            return str(voting_token.user_id)
+        salt = election.voter_anonymity_salt
+        if not salt:
+            return None
+        user_ids = (
+            await self.db.execute(
+                select(User.id).where(
+                    User.organization_id == str(election.organization_id)
+                )
+            )
+        ).scalars()
+        for uid in user_ids:
+            if (
+                self._generate_voter_hash(uid, election.id, salt)
+                == voting_token.voter_hash
+            ):
+                return str(uid)
+        return None
 
     @staticmethod
     def _hash_voting_token(raw_token: str) -> str:
@@ -7869,6 +7906,7 @@ class ElectionService:
                     else None
                 ),
                 eligible_positions=eligible_positions,
+                record_user_id=not election.anonymous_voting,
             )
 
             # Build unique ballot URL with the RAW token (the row stores only
@@ -9434,7 +9472,9 @@ class ElectionService:
             id=str(uuid4()),
             election_id=election.id,
             candidate_id=candidate_id,
-            voter_id=None,  # Anonymous - not stored
+            # Named elections only (W50-3); the signature covers voter_hash,
+            # not voter_id, so recording it changes no signature.
+            voter_id=await self._token_voter_id(election, voting_token),
             voter_hash=voting_token.voter_hash,
             position=effective_position,
             vote_rank=vote_rank,
@@ -9664,6 +9704,10 @@ class ElectionService:
             else voting_token.voter_hash
         )
 
+        # Named elections record who cast a link vote (W50-3); None on an
+        # anonymous election.
+        token_voter_id = await self._token_voter_id(election, voting_token)
+
         def _create_token_vote(
             cand_id, vote_position: str, rank: Optional[int], discriminator: str
         ) -> Vote:
@@ -9683,7 +9727,7 @@ class ElectionService:
                 id=str(uuid4()),
                 election_id=election.id,
                 candidate_id=cand_id,
-                voter_id=None,
+                voter_id=token_voter_id,
                 voter_hash=voting_token.voter_hash,
                 position=vote_position,
                 vote_rank=rank,

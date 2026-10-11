@@ -928,6 +928,14 @@ On a named (non-anonymous) election, a member who voted by link used to stay
 on the non-voters list and receive "you have not yet voted" reminders, and
 turnout undercounted them.
 
+**…and named after the election closes** _(2026-10-08, W50-3)_. A link vote
+on a named election now records which member cast it — the ballot link is
+tied to its recipient when it is sent — so the **who-voted** roster still
+names link voters after close, when the election's salt is destroyed. A link
+sent before this change is matched to its member when the ballot is
+submitted. On an **anonymous** election nothing is recorded: link votes stay
+unattributable.
+
 ---
 
 ## Tie Handling
