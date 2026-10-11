@@ -1643,6 +1643,8 @@ are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
    `ShiftDetailPanel.tsx` (~line 3114) reads "Start check → Go to Checklists
    tab". Equipment checks moved to Inventory; the working route is the panel's
    **Complete Checklists** button.
+   **Resolved (2026-10-11):** the hint now reads "Not started — use Complete
+   Checklists above".
 
 ## Admin — No Scheduled Tasks Page (2026-08-09)
 
