@@ -156,15 +156,17 @@ A room is the place an item is kept: a station bay, a gear room, a supply
 closet. Name is the only required field; building and room number are optional
 and only help you tell two similar rooms apart later.
 
-> **Adding a room needs a location permission** _(2026-09-29)_. A room is a
-> location record, and creating one needs `locations.create` or
-> `locations.manage` — which the seeded Quartermaster position does not hold.
-> Without either, this step shows no form; it reads _"Adding a room needs
-> permission to create locations, which your position does not have. Use a room
-> listed above, or ask someone who manages locations to add the one you need."_
-> Before this, the form was offered anyway and every save failed with a
-> permission error. Whether quartermasters should be able to add rooms is an
-> open owner decision (see `docs/KNOWN_LIMITATIONS.md`).
+> **Adding a room needs a location permission** _(updated 2026-10-11)_. A room
+> is a location record, and creating one needs `locations.create` or
+> `locations.manage`. The seeded **Quartermaster** position now holds
+> `locations.create` — on departments onboarded before this change too, via a
+> migration that adds it to the stored Quartermaster position when that
+> position still manages inventory. It can add rooms but not edit or delete
+> them; that stays with whoever manages locations. A position without either
+> grant (for example, one an administrator removed it from) still sees no form
+> here; the step reads _"Adding a room needs permission to create locations,
+> which your position does not have. Use a room listed above, or ask someone
+> who manages locations to add the one you need."_
 
 ![Step 1 of the inventory setup workflow, with no rooms declared yet](./images/05-73-setup-rooms.png)
 
