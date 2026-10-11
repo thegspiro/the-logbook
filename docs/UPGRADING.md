@@ -504,6 +504,25 @@ earlier releases serve an encrypted file's raw bytes. The database part does
 roll back: `cd backend && alembic downgrade c6c4ffcfdfb3` drops
 `encryption_key_custody`, and the notice returns after a re-upgrade.
 
+### Large finance requests can require two approvers (2026-10-11)
+
+Migration `3c9c5025a380` adds `first_approved_by` and `first_approved_at` to
+purchase requests, check requests and expense reports. Nothing is backfilled.
+
+- **Nothing changes until you turn it on.** The new organization setting
+  `finance.dual_approval_threshold` is off by default. A member with
+  `settings.manage` sets it on **Finance > Settings > Approval Chains**; at or
+  above that amount, a request waits after its first approval until a
+  second, different person approves it.
+- **The manual approve and deny actions now also act on a request held for its
+  second approver**, even though it has approval steps. A request whose chain
+  is still running is refused (409) as before.
+- **The detail panel's approve message now reads "Approval recorded"** rather
+  than "Request approved", since an approval may be the first of two.
+- **Downgrading** drops the columns. A request held for its second approver at
+  that point stays waiting for approval, and the previous version lets any
+  approver approve it alone.
+
 ### QuickBooks exports send each payment once, and reverse voided checks (2026-10-11)
 
 Migration `3f3bd6f3c7e4` records which payments an export has carried.

@@ -68,6 +68,7 @@ import type {
   MonetaryAmount,
   StartFromLastYearResult,
   UnroutedApproval,
+  FinanceSettings,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
 
@@ -460,6 +461,14 @@ const stepDecisionBody = (notes?: string, overrideReason?: string) => ({
   notes: notes || undefined,
   ...(overrideReason ? { overrideReason } : {}),
 });
+
+export const financeSettingsService = {
+  /** The finance rules as the approval path reads them. */
+  async get(): Promise<FinanceSettings> {
+    const response = await api.get<FinanceSettings>('/finance/settings');
+    return response.data;
+  },
+};
 
 export const approvalService = {
   async getPending(): Promise<PendingApproval[]> {

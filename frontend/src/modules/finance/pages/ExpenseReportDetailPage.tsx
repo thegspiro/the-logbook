@@ -329,6 +329,8 @@ const ExpenseReportDetailPage: React.FC = () => {
         entityId={er.id}
         status={er.status}
         approvalStepCount={er.approvalSteps.length}
+        awaitingSecondApproval={er.awaitingSecondApproval}
+        firstApprovedBy={er.firstApprovedBy}
         requesterId={er.submittedBy}
         onDecided={() => void fetchExpenseReport(er.id)}
       />

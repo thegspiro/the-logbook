@@ -79,6 +79,7 @@ from app.schemas.finance import (
     ExportRequest,
     FinanceDashboardResponse,
     FinanceNamedOptionResponse,
+    FinanceSettingsResponse,
     FiscalYearAdoption,
     FiscalYearCreate,
     FiscalYearLock,
@@ -130,6 +131,7 @@ from app.services.finance_service import (
     ManualApprovalConflictError,
 )
 from app.utils import download_names
+from app.utils.finance_settings import load_finance_settings
 from app.utils.org_timezone import resolve_scheduling_timezone
 
 router = APIRouter()
@@ -1854,6 +1856,33 @@ async def get_pending_approvals(
     )
 
 
+@router.get("/settings", response_model=FinanceSettingsResponse)
+async def get_finance_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "finance.view",
+            "finance.approve",
+            "finance.manage",
+            "finance.configure_approvals",
+        )
+    ),
+):
+    """The department's finance rules, as the approval path reads them.
+
+    **Requires permission: finance.view, finance.approve, finance.manage or
+    finance.configure_approvals**
+
+    ``dualApprovalThreshold`` is null when off. It is changed through
+    ``PATCH /organization/settings`` (``settings.manage``), never here: it
+    binds the finance officers themselves.
+    """
+    resolved = await load_finance_settings(db, str(current_user.organization_id))
+    return FinanceSettingsResponse(
+        dual_approval_threshold=resolved.dual_approval_threshold
+    )
+
+
 @router.get("/approvals/unrouted", response_model=list[UnroutedApprovalResponse])
 async def get_unrouted_approvals(
     pagination: PaginationParams = Depends(),
@@ -1903,16 +1932,21 @@ async def manual_approve(
     """
     Approve a request that has no approval steps
 
-    Only a request waiting for approval with no approval chain applied can be
-    approved here; one with approval steps is approved through those steps.
-    The requester cannot approve their own request.
+    Only a request waiting for approval with no approval step still pending
+    can be approved here: one no approval chain applies to, or one held for a
+    second approver by the department's dual-approval threshold. A request
+    whose chain is still running is approved through its steps. The requester
+    cannot approve their own request, nor can someone who has already approved
+    a held request. Under the threshold, the first approval leaves the request
+    waiting for approval (``first_approved_by``) until a second person
+    approves it.
 
     **Authentication required**
     **Requires permission: finance.approve**
     """
     service = FinanceService(db)
     try:
-        await service.manual_approve(
+        entity = await service.manual_approve(
             entity_type,
             entity_id,
             str(current_user.id),
@@ -1927,6 +1961,8 @@ async def manual_approve(
                 "entity_type": entity_type.value,
                 "entity_id": entity_id,
                 "notes": data.notes,
+                # False when the threshold holds it for a second approver.
+                "completed": entity.status.value != "pending_approval",
             },
             user_id=str(current_user.id),
             username=current_user.username,
@@ -1949,8 +1985,9 @@ async def manual_deny(
     """
     Deny a request that has no approval steps
 
-    Only a request waiting for approval with no approval chain applied can be
-    denied here. A reason is required and is shown to the requester.
+    Only a request waiting for approval with no approval step still pending
+    can be denied here, as for approval. A reason is required and is shown to
+    the requester.
 
     **Authentication required**
     **Requires permission: finance.approve**
@@ -2205,6 +2242,9 @@ async def _with_approval_steps(
             step.step_order = record.step.step_order
         steps.append(step)
     payload.approval_steps = steps
+    payload.awaiting_second_approval = service.is_awaiting_second_approval(
+        entity_type, payload, records
+    )
     return payload
 
 

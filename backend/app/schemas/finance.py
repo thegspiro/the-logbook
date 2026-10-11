@@ -1007,6 +1007,19 @@ class UnroutedApprovalResponse(UTCResponseBase):
     entity_amount: Decimal
     requester_name: str
     submitted_at: datetime
+    # Held for a second, different approver by the dual-approval threshold.
+    awaiting_second_approval: bool = False
+    first_approved_by: Optional[str] = None
+
+
+class FinanceSettingsResponse(BaseModel):
+    """The finance rules the server applies (app/utils/finance_settings.py)."""
+
+    model_config = _RESPONSE_CONFIG
+
+    # None: off. Otherwise requests of this amount or more need two different
+    # approvers.
+    dual_approval_threshold: Optional[Decimal] = None
 
 
 class ManualDenyRequest(BaseModel):
@@ -1094,6 +1107,12 @@ class PurchaseRequestResponse(UTCResponseBase):
     priority: str
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
+    # A first approval held for a second approver by the dual-approval
+    # threshold, and whether the request is waiting on that second approval
+    # (set on detail responses, from FinanceService.is_awaiting_second_approval).
+    first_approved_by: Optional[str] = None
+    first_approved_at: Optional[datetime] = None
+    awaiting_second_approval: bool = False
     denial_reason: Optional[str] = None
     ordered_at: Optional[datetime] = None
     received_at: Optional[datetime] = None
@@ -1225,6 +1244,12 @@ class ExpenseReportResponse(UTCResponseBase):
     status: str
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
+    # A first approval held for a second approver by the dual-approval
+    # threshold, and whether the request is waiting on that second approval
+    # (set on detail responses, from FinanceService.is_awaiting_second_approval).
+    first_approved_by: Optional[str] = None
+    first_approved_at: Optional[datetime] = None
+    awaiting_second_approval: bool = False
     denial_reason: Optional[str] = None
     paid_at: Optional[datetime] = None
     payment_method: Optional[str] = None
@@ -1291,6 +1316,12 @@ class CheckRequestResponse(UTCResponseBase):
     status: str
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
+    # A first approval held for a second approver by the dual-approval
+    # threshold, and whether the request is waiting on that second approval
+    # (set on detail responses, from FinanceService.is_awaiting_second_approval).
+    first_approved_by: Optional[str] = None
+    first_approved_at: Optional[datetime] = None
+    awaiting_second_approval: bool = False
     denial_reason: Optional[str] = None
     check_number: Optional[str] = None
     check_date: Optional[datetime] = None

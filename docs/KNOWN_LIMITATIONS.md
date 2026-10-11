@@ -1380,6 +1380,27 @@ What remains limited, by design:
 **Owner decision needed** only if partial reversals, or reversals in a locked
 year, are wanted.
 
+## Finance — Dual Approval: What It Does Not Cover (2026-10-11)
+
+Large requests can need two different approvers
+(`finance.dual_approval_threshold`; see `docs/FINANCE_MODULE.md`, "Dual
+approval"). Four gaps are deliberate, pending a decision:
+
+- **Nobody is told a request is waiting for its second approval.** It is
+  listed on the Approvals screen and marked on its own page, but no email or
+  bell entry goes out.
+- **Any `finance.approve` holder may give the second approval**, not only the
+  approvers a chain names. The rule is "two different people", not "two named
+  officers"; a department that wants the second approver to be a specific
+  office needs a two-step chain naming it.
+- **People are told apart by account.** An approval from an emailed link
+  counts as the address the step names, so one person who is both a member and
+  an external email approver could be counted twice. Steps that auto-approve
+  count as nobody.
+- **The threshold is whole dollars and one figure for all three request
+  types.** A per-type or per-category threshold, or one in cents, is not
+  supported.
+
 ## Finance — Amendment Confirmation: What It Does Not Cover (2026-10-09)
 
 Amendments and reversals are entered pending and move money only once a
