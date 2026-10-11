@@ -187,8 +187,10 @@ export interface SchedulingFeatureSettings {
   /**
    * Members may log timed pre-shift work against an upcoming shift from the
    * vehicle check-in screen. Defaults on; an officer approves each session.
+   * Optional because a response from a backend that predates the field omits
+   * it, and absent means on.
    */
-  pre_shift_work_enabled: boolean;
+  pre_shift_work_enabled?: boolean;
   /** Minutes before start_time that member self-signup closes. 0 = at the start. */
   signup_closes_minutes_before: number;
   /** Minutes after start_time an officer may still seat somebody. */
