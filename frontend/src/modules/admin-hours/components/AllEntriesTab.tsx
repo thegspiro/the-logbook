@@ -15,6 +15,7 @@ import { getErrorMessage } from '@/utils/errorHandling';
 import { formatDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import toast from 'react-hot-toast';
+import { entryMethodLabel } from '../utils/entryMethod';
 
 const AllEntriesTab: React.FC = () => {
   const tz = useTimezone();
@@ -167,7 +168,7 @@ const AllEntriesTab: React.FC = () => {
                       {formatDuration(entry.durationMinutes)}
                     </td>
                     <td className="text-theme-text-secondary px-4 py-3 text-sm">
-                      <span className="capitalize">{entry.entryMethod.replace(/_/g, ' ')}</span>
+                      <span>{entryMethodLabel(entry.entryMethod)}</span>
                       {entry.entryMethod === 'event_attendance' && entry.sourceEventId && (
                         <Link
                           to={`/events/${entry.sourceEventId}`}

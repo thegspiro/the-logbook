@@ -38,6 +38,7 @@ import { endOfReportingDayUTC, startOfReportingDayUTC } from '../utils/reporting
 import { addHoursExact, syncEndToStartExact, resolveEndUtc, type DerivedEndTime } from '../utils/entryTimes';
 import QuickDurationButtons from '../components/QuickDurationButtons';
 import MyEntryEditForm from '../components/MyEntryEditForm';
+import { entryMethodLabel } from '../utils/entryMethod';
 
 const PAGE_SIZE = 20;
 
@@ -938,7 +939,7 @@ const AdminHoursPage: React.FC = () => {
                     </div>
                     <div className="text-theme-text-muted text-sm">
                       {formatDate(entry.clockInAt, tz)} | {formatDuration(entry.durationMinutes)} |{' '}
-                      {entry.entryMethod.replace('_', ' ')}
+                      {entryMethodLabel(entry.entryMethod)}
                     </div>
                     {entry.description && <p className="text-theme-text-muted truncate text-sm">{entry.description}</p>}
                     {entry.rejectionReason && (

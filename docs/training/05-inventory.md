@@ -2051,7 +2051,7 @@ Instead of searching by name, you can scan a member's QR code or barcode ID card
 
 This is especially useful on mobile during equipment distribution events where you need to process many members quickly.
 
-> **Hint:** Member ID scanning reads the member's **badge code**, which The Logbook issues for every member and which only a badge printed from the Member ID Card feature carries. The scanner asks the server, which answers only for members of your own department, so a hand-made QR code selects nobody. Cards printed before 2026-10-05 (membership number or short id) still scan until an administrator turns off **Accept old badges** (see [Badge codes](./01-membership.md#badge-codes-2026-10-05)). If the scan fails, fall back to name search.
+> **Hint:** Member ID scanning reads the member's **badge code**, which The Logbook issues for every member and which only a badge printed from the Member ID Card feature carries. The scanner asks the server, which answers only for members of your own department, so a hand-made QR code selects nobody. Cards printed before 2026-10-05 (membership number or short id) still scan until an administrator turns off **Accept old badges** (see [Badge codes](./01-membership.md#badge-codes)). If the scan fails, fall back to name search.
 
 ### Assigning Items from the Members Tab
 

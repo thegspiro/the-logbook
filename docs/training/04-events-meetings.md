@@ -2388,7 +2388,7 @@ The station lives at `/members/check-in-station` and needs `members.check_in`;
 issuing the cards needs `members.manage_id_cards`; and the whole feature is off
 until Settings → Integrations → **NFC ID Cards** is turned on. The full
 walkthrough is in
-[Membership → Member ID Cards and the Check-In Station](./01-membership.md#member-id-cards-and-the-check-in-station-2026-08-23).
+[Membership → Member ID Cards and the Check-In Station](./01-membership.md#member-id-cards-and-the-check-in-station).
 
 **What matters for events:** a station is armed against a specific event or
 meeting, retired and on-leave members are accepted (they attend meetings and
