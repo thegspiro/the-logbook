@@ -1004,6 +1004,34 @@ export const SUGGESTION_ANONYMITY_LABELS: Record<string, string> = {
   disabled: 'Always named',
 };
 
+/**
+ * The kinds of question a suggestion box can ask on submission. Mirrors
+ * `IntakeQuestionType` in `app/schemas/suggestion.py`. Only `select` and
+ * `radio` can route a submission to another box: a checkbox answer can name
+ * several options, and so several boxes.
+ */
+export const SuggestionIntakeQuestionType = {
+  SELECT: 'select',
+  RADIO: 'radio',
+  CHECKBOX: 'checkbox',
+  TEXT: 'text',
+  TEXTAREA: 'textarea',
+  DATE: 'date',
+  NUMBER: 'number',
+} as const;
+export type SuggestionIntakeQuestionType =
+  (typeof SuggestionIntakeQuestionType)[keyof typeof SuggestionIntakeQuestionType];
+
+export const SUGGESTION_INTAKE_QUESTION_TYPE_LABELS: Record<string, string> = {
+  select: 'Dropdown',
+  radio: 'Single choice',
+  checkbox: 'Checkboxes (pick any)',
+  text: 'Short text',
+  textarea: 'Long text',
+  date: 'Date',
+  number: 'Number',
+};
+
 /** Which year a membership number's {YYYY} and yearly restart follow. */
 export const MembershipYearBasis = {
   CALENDAR: 'calendar',

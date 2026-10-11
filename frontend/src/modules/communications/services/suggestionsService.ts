@@ -37,12 +37,22 @@ export const suggestionsService = {
 
   async submit(
     boxId: string,
-    data: { title: string; details: string; anonymous: boolean; screenshots: File[] }
+    data: {
+      title: string;
+      details: string;
+      anonymous: boolean;
+      screenshots: File[];
+      /** Intake answers keyed by question id; only the questions shown. */
+      answers?: Record<string, string> | undefined;
+    }
   ): Promise<SubmissionReceipt> {
     const form = new FormData();
     form.append('title', data.title);
     form.append('details', data.details);
     form.append('anonymous', data.anonymous ? 'true' : 'false');
+    if (data.answers && Object.keys(data.answers).length > 0) {
+      form.append('answers', JSON.stringify(data.answers));
+    }
     data.screenshots.forEach((file) => form.append('screenshots', file));
     const response = await api.post<SubmissionReceipt>(`/suggestions/boxes/${boxId}/submissions`, form, {
       headers: { 'Content-Type': 'multipart/form-data' },

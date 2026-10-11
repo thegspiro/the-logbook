@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**301 tables · 4954 columns · 995 foreign keys**
+**301 tables · 4957 columns · 996 foreign keys**
 
 ---
 
@@ -602,12 +602,12 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`suggestion_attachments`](#suggestion_attachments) | `SuggestionAttachment` | 9 | A screenshot, re-encoded to WebP on upload. The display name is |
 | [`suggestion_box_reviewers`](#suggestion_box_reviewers) | `SuggestionBoxReviewer` | 6 | One reviewer grant on a box: either a position or a single member. |
 | [`suggestion_box_watchers`](#suggestion_box_watchers) | `SuggestionBoxWatcher` | 6 | Someone told that a box received a submission, without being able to |
-| [`suggestion_boxes`](#suggestion_boxes) | `SuggestionBox` | 11 | A configurable intake box. |
+| [`suggestion_boxes`](#suggestion_boxes) | `SuggestionBox` | 12 | A configurable intake box. |
 | [`suggestion_forwards`](#suggestion_forwards) | `SuggestionForward` | 7 | One suggestion forwarded to a member or a position. |
 | [`suggestion_messages`](#suggestion_messages) | `SuggestionMessage` | 8 | One entry in a follow-up thread. |
 | [`suggestion_status_events`](#suggestion_status_events) | `SuggestionStatusEvent` | 7 | One step a reviewer took that the submitter can see: a disposition |
 | [`suggestion_votes`](#suggestion_votes) | `SuggestionVote` | 5 | One member's support for a published suggestion. |
-| [`suggestions`](#suggestions) | `Suggestion` | 18 |  |
+| [`suggestions`](#suggestions) | `Suggestion` | 20 |  |
 
 ### Testing_Checklist
 
@@ -8130,6 +8130,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `follow_up_enabled` | BOOL | no |  | `0` |  |
 | `is_active` | BOOL | no |  | `1` |  |
 | `public_board_enabled` | BOOL | no |  | `0` |  |
+| `intake_questions` | JSON | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
@@ -8252,6 +8253,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `follow_up_key_hash` | VARCHAR(64) | yes | UQ |  |  |
 | `title` | VARCHAR(200) | no |  |  |  |
 | `details` | TEXT | no |  |  |  |
+| `intake_answers` | JSON | yes |  |  |  |
+| `routed_from_box_id` | VARCHAR(36) | yes | FK |  | → `suggestion_boxes.id` ON DELETE SET NULL |
 | `disposition` | VARCHAR(32) | no |  | `new` |  |
 | `internal_note` | TEXT | yes |  |  |  |
 | `disposition_updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -11533,6 +11536,15 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `store_product_variants` | `product_id` | CASCADE | no |
 | `store_window_products` | `product_id` | CASCADE | no |
 
+### → `suggestion_boxes` (4 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `suggestion_box_reviewers` | `box_id` | CASCADE | no |
+| `suggestion_box_watchers` | `box_id` | CASCADE | no |
+| `suggestions` | `box_id` | CASCADE | no |
+| `suggestions` | `routed_from_box_id` | SET NULL | yes |
+
 ### → `course_cohort_classes` (3 references)
 
 | From table | Column | On delete | Nullable |
@@ -11604,14 +11616,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `store_order_events` | `order_id` | CASCADE | no |
 | `store_order_items` | `order_id` | CASCADE | no |
 | `store_payment_events` | `matched_order_id` | SET NULL | yes |
-
-### → `suggestion_boxes` (3 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `suggestion_box_reviewers` | `box_id` | CASCADE | no |
-| `suggestion_box_watchers` | `box_id` | CASCADE | no |
-| `suggestions` | `box_id` | CASCADE | no |
 
 ### → `admin_hours_categories` (2 references)
 

@@ -6,7 +6,11 @@
  * accident.
  */
 
-import type { SuggestionAnonymityMode, SuggestionDisposition } from '../../../constants/enums';
+import type {
+  SuggestionAnonymityMode,
+  SuggestionDisposition,
+  SuggestionIntakeQuestionType,
+} from '../../../constants/enums';
 
 /** `day` marks a timestamp truncated to protect an anonymous author. */
 export type TimestampPrecision = 'exact' | 'day';
@@ -14,6 +18,39 @@ export type TimestampPrecision = 'exact' | 'day';
 export interface ReviewerRef {
   id: string;
   name: string;
+}
+
+export interface IntakeOption {
+  value: string;
+  label: string;
+  /** Choosing this option moves the submission to that box. */
+  routeToBoxId?: string | null | undefined;
+}
+
+/**
+ * A question a box asks on submission. The `condition*` fields are the forms
+ * module's branching rule, so `getVisibleFieldIds` in `utils/formVisibility.ts`
+ * decides what is shown — see `toConditionalFields`.
+ */
+export interface IntakeQuestion {
+  /** Absent on a question not saved yet; the server assigns one. */
+  id?: string | null | undefined;
+  label: string;
+  helpText?: string | null | undefined;
+  type: SuggestionIntakeQuestionType;
+  required: boolean;
+  options: IntakeOption[];
+  conditionQuestionId?: string | null | undefined;
+  conditionOperator?: string | null | undefined;
+  conditionValue?: string | null | undefined;
+}
+
+/** One answered question, labels as they read when it was answered. */
+export interface IntakeAnswer {
+  questionId: string;
+  label: string;
+  value: string;
+  display: string;
 }
 
 export interface SuggestionBoxPublic {
@@ -24,6 +61,8 @@ export interface SuggestionBoxPublic {
   followUpEnabled: boolean;
   /** Members can see and vote on what this box's reviewers publish. */
   publicBoardEnabled: boolean;
+  /** Only routes to open boxes are included. Absent from an older server. */
+  intakeQuestions?: IntakeQuestion[] | undefined;
 }
 
 export interface SuggestionBoxAdmin extends SuggestionBoxPublic {
@@ -50,6 +89,8 @@ export interface SuggestionBoxWrite {
   watcherPositionIds: string[];
   watcherMemberIds: string[];
   publicBoardEnabled: boolean;
+  /** Omit to leave the box's questions as they are. */
+  intakeQuestions?: IntakeQuestion[] | undefined;
 }
 
 export interface ReviewerOptions {
@@ -61,6 +102,8 @@ export interface SubmissionReceipt {
   id: string | null;
   isAnonymous: boolean;
   followUpKey: string | null;
+  /** The box it landed in, which an answer may have changed. */
+  boxName?: string | null;
 }
 
 export interface SuggestionAttachment {
@@ -111,6 +154,7 @@ export interface SubmitterSuggestionDetail {
   messages: ThreadMessage[];
   /** Empty in a one-way box, where the submitter sees no status. */
   timeline: TimelineEntry[];
+  intakeAnswers?: IntakeAnswer[] | undefined;
   createdAt: string;
   timestampPrecision: TimestampPrecision;
 }
@@ -171,6 +215,9 @@ export interface ReviewSuggestionDetail {
   publishedTitle?: string | null;
   publishedSummary?: string | null;
   voteCount: number;
+  intakeAnswers?: IntakeAnswer[] | undefined;
+  /** The box the member submitted to, when an answer moved it here. */
+  routedFromBoxName?: string | null;
 }
 
 export interface ReviewSummary {
