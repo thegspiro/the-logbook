@@ -4479,22 +4479,23 @@ Found driving W51 (`docs/workflow-review/W51-minutes.md`).
 
 Found driving W52 (`docs/workflow-review/W52-action-items.md`).
 
-- **W52-6 — Nothing can be assigned to a member.**
-  - The only screen that creates action items, the minutes page, takes a typed
-    assignee name. `minutes_action_items.assignee_id` stays empty, so the
-    Action Items page's "Assigned to me" never matches anything created there.
-  - Meeting action items, which do carry a user (`assigned_to`), have no
-    screen at all.
-  - The fix is a member picker on the minutes form, setting `assignee_id`
-    alongside the name. Decide who may be assigned, and whether items already
-    assigned by name should be matched to members.
-- **W52-7 — An assignee cannot close their own item.**
-  - Every action-item update needs `minutes.manage`, so a member assigned an
-    item can neither mark it in progress nor done. The secretary closes it for
-    them.
-  - One option: let the assignee change only status and completion notes, keyed
-    on `assignee_id`, which depends on W52-6. It widens a write permission, so
-    it is the owner's decision.
+- **W52-6 — Nothing can be assigned to a member.** ✅ Resolved (2026-10-11),
+  as the owner chose (picker only; any active member; old items stay
+  name-only): the minutes page's action-item form picks from every active
+  member (`GET /minutes-records/action-item-assignees`, `minutes.manage`),
+  the server refuses an `assignee_id` that is not an active member of the
+  department and stores that member's name beside it, and items assigned by
+  name before this are left as they are — they show their name but never match
+  "Assigned to me".
+  - Still open: meeting action items (`assigned_to`) have no screen.
+- **W52-7 — An assignee cannot close their own item.** ✅ Resolved
+  (2026-10-11), as the owner chose: `PUT /minutes-records/{id}/action-items/
+{item_id}` accepts the item's assignee, keyed on `assignee_id`, for `status`
+  and `completion_notes` only (another field is a 403, someone else's item a
+  404). The Action Items page offers **Update status** on those items, and its
+  feed now always includes items assigned to the caller by member — even on
+  minutes they cannot otherwise read (a draft or an executive session); only
+  the item is shown, never the minutes.
 
 ## Documents — Folders Cannot Be Restricted or Managed From the Screen (2026-10-04)
 

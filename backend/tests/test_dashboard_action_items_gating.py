@@ -5,7 +5,8 @@ gate each half in-code the way its owning module does — otherwise a member wit
 neither permission reads every action item's description org-wide (the XC-2
 re-exposure DASH-1 only closed the inner minutes restricted-split for). The
 meeting half needs meetings.view OR minutes.view; the minutes half needs
-minutes.view. DB mocked; no MySQL.
+minutes.view, except that an item assigned to the caller by member is always
+served to them (W52-7). DB mocked; no MySQL.
 
 The module gate sits in front of both halves and is patched out here rather
 than exercised — that the Minutes module switches the whole feed off is
@@ -35,6 +36,13 @@ def _empty_result():
     return result
 
 
+_OWN_ITEMS = "minutes_action_items.assignee_id = 'u1'"
+
+
+def _sql(statement) -> str:
+    return str(statement.compile(compile_kwargs={"literal_binds": True}))
+
+
 def _user():
     return SimpleNamespace(id="u1", organization_id="org-1", positions=[])
 
@@ -48,7 +56,11 @@ def _minutes_on():
 
 
 class TestActionItemsGating:
-    async def test_member_with_no_permission_reads_nothing(self):
+    async def test_member_with_no_permission_reads_only_items_assigned_to_them(
+        self,
+    ):
+        """W52-7: an assignee may update their own minutes item, so the feed
+        serves them that item whatever they can read — and nothing else."""
         db = MagicMock()
         db.execute = AsyncMock(return_value=_empty_result())
         with _minutes_on(), patch(
@@ -57,10 +69,11 @@ class TestActionItemsGating:
         ):
             items = await get_unified_action_items(None, False, db, _user())
         assert items == []
-        # Neither half was even queried.
-        db.execute.assert_not_awaited()
+        # Only the minutes half ran, restricted to the caller's own items.
+        assert db.execute.await_count == 1
+        assert _OWN_ITEMS in _sql(db.execute.await_args_list[0].args[0])
 
-    async def test_meetings_view_only_queries_only_the_meeting_half(self):
+    async def test_meetings_view_only_reads_minutes_items_assigned_to_them(self):
         db = MagicMock()
         db.execute = AsyncMock(return_value=_empty_result())
         with _minutes_on(), patch(
@@ -68,8 +81,9 @@ class TestActionItemsGating:
             side_effect=_perms("meetings.view"),
         ):
             await get_unified_action_items(None, False, db, _user())
-        # Meeting half ran; minutes half (needs minutes.view) was skipped.
-        assert db.execute.await_count == 1
+        # Meeting half ran in full; the minutes half only for the caller.
+        assert db.execute.await_count == 2
+        assert _OWN_ITEMS in _sql(db.execute.await_args_list[1].args[0])
 
     async def test_minutes_view_queries_both_halves(self):
         # minutes.view satisfies the meeting half's OR gate and the minutes half.
@@ -81,6 +95,10 @@ class TestActionItemsGating:
         ):
             await get_unified_action_items(None, False, db, _user())
         assert db.execute.await_count == 2
+        # A plain viewer's restriction to approved, non-executive minutes is
+        # widened by exactly one thing: their own items.
+        sql = _sql(db.execute.await_args_list[1].args[0])
+        assert f"OR {_OWN_ITEMS}" in sql
 
 
 if __name__ == "__main__":  # pragma: no cover

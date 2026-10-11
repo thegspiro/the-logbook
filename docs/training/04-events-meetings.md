@@ -1227,6 +1227,20 @@ Action items have:
 
 > **Hint:** Members see their own action items prominently. Officers can view and manage all action items across the department.
 
+**Assigning an item to a member** _(2026-10-11)_. On the minutes page, **Add
+Action Item** offers an **Assignee** list of every active member (or
+**Unassigned**) instead of a box for a typed name, and the item carries that
+member's name. Only an item assigned this way appears under **Assigned to me**;
+items assigned by a typed name before this release keep their name and are not
+matched to anyone.
+
+**Closing your own item** _(2026-10-11)_. If an item is assigned to you, the
+Action Items page shows **Update status** beside it, even when you cannot open
+the minutes it came from. You can set it to Pending, In Progress, Completed or
+Cancelled and add **Completion notes**; anything else about the item — its
+wording, due date, priority or assignee — is changed by whoever keeps the
+minutes.
+
 **Reminders.** An open or in-progress action item with a due date sends its
 assignee a reminder three days before it is due, one day before, and once it is
 overdue. The check runs once a day.

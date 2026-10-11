@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import (
     _collect_user_permissions,
     _has_permission,
+    get_current_active_user,
     require_permission,
 )
 from app.core.audit import log_audit_event
@@ -23,6 +24,7 @@ from app.core.utils import ensure_found, handle_service_errors
 from app.models.user import User
 from app.schemas.documents import PublishedDocumentResponse
 from app.schemas.minute import (
+    ActionItemAssignee,
     ActionItemCreate,
     ActionItemResponse,
     ActionItemUpdate,
@@ -197,6 +199,24 @@ async def list_templates(
         )
         for t in templates
     ]
+
+
+# Above `/{minutes_id}` for the same reason as `/templates`.
+@router.get("/action-item-assignees", response_model=list[ActionItemAssignee])
+async def list_action_item_assignees(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    The members an action item may be assigned to: every active member
+
+    Names and ids only — the picker on the minutes page needs nothing more,
+    and its users may not hold the member-list permissions.
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    return await MinuteService(db).list_assignable_members(current_user.organization_id)
 
 
 @router.get("/{minutes_id}", response_model=MinutesResponse)
@@ -599,14 +619,30 @@ async def update_action_item(
     item_id: str,
     data: ActionItemUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("minutes.manage")),
+    current_user: User = Depends(get_current_active_user),
 ):
-    """Update an action item (status can be updated even on approved minutes)"""
+    """
+    Update an action item (status can be updated even on approved minutes)
+
+    A holder of minutes.manage may change any field. Any other member may
+    change only the status and completion notes of an item assigned to them
+    by member (W52-7); someone else's item answers 404.
+
+    **Authentication required** — the minutes.manage check is made in code,
+    because the item's assignee may act without it.
+    """
+    can_manage = _has_permission(
+        "minutes.manage", _collect_user_permissions(current_user)
+    )
     service = MinuteService(db)
 
     async with handle_service_errors("Failed to update action item"):
         item = await service.update_action_item(
-            item_id, minutes_id, current_user.organization_id, data
+            item_id,
+            minutes_id,
+            current_user.organization_id,
+            data,
+            as_assignee=None if can_manage else str(current_user.id),
         )
 
     item = ensure_found(item, "Action item")

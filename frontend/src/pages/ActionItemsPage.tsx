@@ -7,13 +7,26 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router';
+import toast from 'react-hot-toast';
 import { CheckCircle2, Clock, Filter, ClipboardList, Loader2 } from 'lucide-react';
 import { dashboardService } from '../services/api';
 import type { ActionItemSummary } from '../services/api';
+import { minutesService } from '../modules/minutes/services/api';
 import { getErrorMessage } from '../utils/errorHandling';
+import { blankToNull } from '../utils/formValues';
 import { calendarDaysFromToday, formatCalendarDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
+import { useAuthStore } from '../stores/authStore';
 import { EmptyState } from '../components/ux';
+import { Modal } from '../components/Modal';
+
+/** What an assignee may set on their own minutes action item (W52-7). */
+const ASSIGNEE_STATUS_OPTIONS = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
+] as const;
 
 const STATUS_BADGES: Record<string, string> = {
   open: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
@@ -63,6 +76,41 @@ const ActionItemsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [assignedToMe, setAssignedToMe] = useState(false);
+  const currentUserId = useAuthStore((state) => state.user?.id);
+  const [editing, setEditing] = useState<ActionItemSummary | null>(null);
+  const [editStatus, setEditStatus] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  // Only minutes items carry an assignee_id the server can match an assignee
+  // on (W52-7); an item assigned by name only, or a meeting item, is not
+  // offered.
+  const isMine = (item: ActionItemSummary): boolean =>
+    item.source === 'minutes' && !!currentUserId && item.assignee_id === currentUserId;
+
+  const openEditor = (item: ActionItemSummary) => {
+    setEditing(item);
+    setEditStatus(item.status);
+    setEditNotes(item.completion_notes ?? '');
+  };
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    setSaving(true);
+    try {
+      await minutesService.updateActionItem(editing.source_id, editing.id, {
+        status: editStatus,
+        completion_notes: blankToNull(editNotes),
+      });
+      toast.success('Action item updated');
+      setEditing(null);
+      await fetchItems();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not update the action item'));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   useEffect(() => {
     void fetchItems();
@@ -183,50 +231,128 @@ const ActionItemsPage: React.FC = () => {
           {items.map((item) => (
             // A link, not a clickable div: the row was unreachable by keyboard
             // and unannounced to a screen reader (W52-4).
-            <Link
-              key={`${item.source}-${item.id}`}
-              to={item.source === 'meeting' ? '/minutes' : `/minutes/${item.source_id}`}
-              className="card-secondary hover:bg-theme-surface-hover block p-4"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <p className="text-theme-text-primary truncate text-sm font-medium">{item.description}</p>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                    <span
-                      className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${STATUS_BADGES[item.status] || 'bg-theme-surface-secondary text-theme-text-primary'}`}
-                    >
-                      {item.status.replace('_', ' ')}
-                    </span>
-                    {item.priority && (
+            <div key={`${item.source}-${item.id}`} className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+              <Link
+                to={item.source === 'meeting' ? '/minutes' : `/minutes/${item.source_id}`}
+                className="card-secondary hover:bg-theme-surface-hover block min-w-0 flex-1 p-4"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-theme-text-primary truncate text-sm font-medium">{item.description}</p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
                       <span
-                        className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${PRIORITY_BADGES[priorityLabel(item) ?? ''] || ''}`}
+                        className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${STATUS_BADGES[item.status] || 'bg-theme-surface-secondary text-theme-text-primary'}`}
                       >
-                        {priorityLabel(item)}
+                        {item.status.replace('_', ' ')}
                       </span>
+                      {item.priority && (
+                        <span
+                          className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${PRIORITY_BADGES[priorityLabel(item) ?? ''] || ''}`}
+                        >
+                          {priorityLabel(item)}
+                        </span>
+                      )}
+                      <span className="text-theme-text-muted text-xs">
+                        {item.source === 'meeting' ? 'Meeting' : 'Minutes'}
+                      </span>
+                      {item.assignee_name && (
+                        <span className="text-theme-text-muted text-xs">{item.assignee_name}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    {item.due_date ? (
+                      <div className={`text-sm ${getDueDateClass(item.due_date)}`}>
+                        <Clock className="mr-1 inline h-3 w-3" />
+                        {/* A calendar day: formatting it in the department's zone
+                          showed the day before (W52-1). */}
+                        {formatCalendarDate(item.due_date)}
+                      </div>
+                    ) : (
+                      <span className="text-theme-text-muted text-xs">No due date</span>
                     )}
-                    <span className="text-theme-text-muted text-xs">
-                      {item.source === 'meeting' ? 'Meeting' : 'Minutes'}
-                    </span>
-                    {item.assignee_name && <span className="text-theme-text-muted text-xs">{item.assignee_name}</span>}
                   </div>
                 </div>
-                <div className="shrink-0 text-right">
-                  {item.due_date ? (
-                    <div className={`text-sm ${getDueDateClass(item.due_date)}`}>
-                      <Clock className="mr-1 inline h-3 w-3" />
-                      {/* A calendar day: formatting it in the department's zone
-                          showed the day before (W52-1). */}
-                      {formatCalendarDate(item.due_date)}
-                    </div>
-                  ) : (
-                    <span className="text-theme-text-muted text-xs">No due date</span>
-                  )}
-                </div>
-              </div>
-            </Link>
+              </Link>
+              {isMine(item) && (
+                <button
+                  type="button"
+                  onClick={() => openEditor(item)}
+                  aria-label={`Update status of ${item.description}`}
+                  className="btn-secondary touch:min-h-11 shrink-0 self-start rounded-lg px-3 py-2 text-sm sm:self-center"
+                >
+                  Update status
+                </button>
+              )}
+            </div>
           ))}
         </div>
       )}
+
+      <Modal
+        isOpen={editing !== null}
+        onClose={() => setEditing(null)}
+        title="Update action item"
+        size="sm"
+        footer={
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setEditing(null)}
+              className="btn-secondary rounded-lg px-4 py-2 text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void saveEdit()}
+              disabled={saving}
+              className="btn-primary rounded-lg px-4 py-2 text-sm disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        }
+      >
+        {editing && (
+          <div className="space-y-4">
+            <p className="text-theme-text-primary text-sm">{editing.description}</p>
+            <p className="text-theme-text-muted text-xs">
+              As the assignee you can change the status and add completion notes. Anything else is changed by whoever
+              keeps the minutes.
+            </p>
+            <div>
+              <label htmlFor="assignee-status" className="form-label">
+                Status
+              </label>
+              <select
+                id="assignee-status"
+                value={editStatus}
+                onChange={(e) => setEditStatus(e.target.value)}
+                className="form-input"
+              >
+                {ASSIGNEE_STATUS_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="assignee-notes" className="form-label">
+                Completion notes
+              </label>
+              <textarea
+                id="assignee-notes"
+                rows={3}
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                className="form-input"
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };
