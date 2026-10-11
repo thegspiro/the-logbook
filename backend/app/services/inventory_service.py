@@ -4215,11 +4215,18 @@ class InventoryService:
     ) -> Tuple[Optional[MaintenanceRecord], Optional[str]]:
         """Update an existing maintenance record"""
         try:
+            # INV-17: "Complete work" now closes an open record through this
+            # path instead of creating a new one, so two officers can complete
+            # the same record at once. The lock makes ``was_completed_before``
+            # below the committed value, so the item's condition and dates are
+            # updated by exactly one of them.
             result = await self.db.execute(
                 select(MaintenanceRecord)
                 .where(MaintenanceRecord.id == str(record_id))
                 .where(MaintenanceRecord.item_id == str(item_id))
                 .where(MaintenanceRecord.organization_id == str(organization_id))
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
             record = result.scalar_one_or_none()
 
@@ -4315,17 +4322,30 @@ class InventoryService:
         organization_id: UUID,
         skip: int = 0,
         limit: int = 100,
+        open_only: bool = False,
     ) -> List[MaintenanceRecord]:
-        """Get maintenance history for an item with pagination"""
-        result = await self.db.execute(
+        """Get maintenance history for an item with pagination.
+
+        ``open_only`` returns just the records not yet completed, oldest first,
+        for the "Complete work" picker (INV-17). The default ordering sorts by
+        ``completed_date`` descending, which puts every open record (NULL date)
+        last under MySQL — past the page limit on an item with a long history.
+        """
+        query = (
             select(MaintenanceRecord)
             .where(MaintenanceRecord.item_id == str(item_id))
             .where(MaintenanceRecord.organization_id == str(organization_id))
             .options(selectinload(MaintenanceRecord.technician))
-            .order_by(MaintenanceRecord.completed_date.desc())
-            .offset(skip)
-            .limit(limit)
         )
+        if open_only:
+            query = query.where(MaintenanceRecord.is_completed.is_(False)).order_by(
+                MaintenanceRecord.scheduled_date.is_(None),
+                MaintenanceRecord.scheduled_date.asc(),
+                MaintenanceRecord.created_at.asc(),
+            )
+        else:
+            query = query.order_by(MaintenanceRecord.completed_date.desc())
+        result = await self.db.execute(query.offset(skip).limit(limit))
         return list(result.scalars().all())
 
     # ============================================

@@ -37,6 +37,14 @@ const MAINTENANCE_TYPES = [
   { value: 'upgrade', label: 'Upgrade' },
 ] as const;
 
+/**
+ * Mirrors `INSPECTION_MAINTENANCE_TYPES` in backend `schemas/inventory.py`.
+ * "Complete work" carries no pass/fail result, and completing an inspection
+ * record moves the item's inspection clock, so an open inspection is never a
+ * record this action closes — it is recorded with "Record inspection".
+ */
+const INSPECTION_TYPES = new Set(['inspection', 'routine_inspection', 'advanced_inspection', 'independent_inspection']);
+
 const inputCls = 'form-input w-full';
 const labelCls = 'form-label';
 const thCls = 'px-3 py-2 text-xs font-medium text-theme-text-muted';
@@ -59,6 +67,13 @@ function getDueLabel(days: number | null): string {
   if (days < 0) return `${Math.abs(days)}d overdue`;
   if (days === 0) return 'Due today';
   return `${days}d`;
+}
+
+function openRecordLabel(record: MaintenanceRecord | undefined, tz: string): string {
+  if (!record) return '';
+  const type = record.maintenance_type.replace(/_/g, ' ');
+  const when = record.scheduled_date ? `due ${formatDate(record.scheduled_date, tz)}` : 'unscheduled';
+  return record.description ? `${type} (${when}): ${record.description}` : `${type} (${when})`;
 }
 
 const INITIAL_FORM = {
@@ -89,6 +104,13 @@ const InventoryMaintenancePage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [completedItem, setCompletedItem] = useState<InventoryItem | null>(null);
   const [formData, setFormData] = useState(INITIAL_FORM);
+  // INV-17: the open work "Complete work" closes. null while loading; the
+  // officer cannot save until it has loaded, or the old behaviour (a second,
+  // completed record beside the still-open one) would come back on a slow
+  // network.
+  const [openRecords, setOpenRecords] = useState<MaintenanceRecord[] | null>(null);
+  const [openRecordsFailed, setOpenRecordsFailed] = useState(false);
+  const [closingRecordId, setClosingRecordId] = useState('');
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -202,6 +224,34 @@ const InventoryMaintenancePage: React.FC = () => {
     };
   }, [requestedItemId, setSearchParams]);
 
+  const completing = modalItem !== null && formData.operation === 'complete';
+  const modalItemId = modalItem?.id;
+  useEffect(() => {
+    if (!completing || !modalItemId) return;
+    let cancelled = false;
+    setOpenRecords(null);
+    setOpenRecordsFailed(false);
+    setClosingRecordId('');
+    void (async () => {
+      try {
+        const records = (await inventoryService.getOpenMaintenanceRecords(modalItemId)).filter(
+          (record) => !INSPECTION_TYPES.has(record.maintenance_type)
+        );
+        if (cancelled) return;
+        setOpenRecords(records);
+        // The server returns them oldest first; the earliest is the default.
+        setClosingRecordId(records[0]?.id ?? '');
+      } catch (err: unknown) {
+        if (cancelled) return;
+        setOpenRecordsFailed(true);
+        toast.error(getErrorMessage(err, "Could not load this item's open maintenance"));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [completing, modalItemId]);
+
   const handleSave = async () => {
     if (!modalItem) return;
     if (!formData.description.trim()) {
@@ -224,8 +274,35 @@ const InventoryMaintenancePage: React.FC = () => {
       toast.error('Select a pass/fail result');
       return;
     }
+    const closing =
+      formData.operation === 'complete'
+        ? (openRecords ?? []).find((record) => record.id === closingRecordId)
+        : undefined;
     setIsSaving(true);
     try {
+      if (closing) {
+        // Close the open record rather than logging a second, completed one
+        // beside it — which left the original open forever (INV-17). Its task
+        // description stays; the performed work joins its notes.
+        const update: Partial<MaintenanceRecordCreate> = {
+          is_completed: true,
+          completed_date: formData.completed_date,
+          condition_after: formData.condition_after,
+          vendor_name: formData.vendor_name.trim(),
+          notes: [closing.notes, `Work performed: ${formData.description.trim()}`, formData.notes.trim()]
+            .filter(Boolean)
+            .join('\n'),
+        };
+        if (formData.next_due_date) update.next_due_date = formData.next_due_date;
+        if (formData.cost) update.cost = Number(formData.cost);
+        await inventoryService.updateMaintenanceRecord(modalItem.id, closing.id, update);
+        toast.success('Maintenance record completed');
+        setCompletedItem(modalItem);
+        setModalItem(null);
+        void loadData();
+        if (selectedItem?.id === modalItem.id) void loadHistory(modalItem);
+        return;
+      }
       const payload: MaintenanceRecordCreate = {
         item_id: modalItem.id,
         maintenance_type:
@@ -534,7 +611,7 @@ const InventoryMaintenancePage: React.FC = () => {
             </button>
             <button
               onClick={() => void handleSave()}
-              disabled={isSaving}
+              disabled={isSaving || (completing && openRecords === null)}
               className="btn-info btn-md flex items-center justify-center gap-2"
             >
               {isSaving && <Loader2 className="h-4 w-4 animate-spin" />} Save Record
@@ -575,6 +652,45 @@ const InventoryMaintenancePage: React.FC = () => {
               ))}
             </div>
           </fieldset>
+
+          {completing &&
+            (openRecords === null ? (
+              <p className="text-theme-text-muted text-sm" role="status">
+                {openRecordsFailed
+                  ? "This item's open maintenance could not be loaded. Close this form and try again."
+                  : 'Checking for open maintenance on this item…'}
+              </p>
+            ) : openRecords.length === 0 ? (
+              <p className="text-theme-text-secondary text-sm">
+                This item has no open maintenance, so this logs the work as a new, completed record.
+              </p>
+            ) : openRecords.length === 1 ? (
+              <p className="text-theme-text-secondary text-sm">
+                This completes the open {openRecordLabel(openRecords[0], tz)} rather than logging a new record.
+              </p>
+            ) : (
+              <div>
+                <label htmlFor="maintenance-closing-record" className={labelCls}>
+                  Open record being completed *
+                </label>
+                <select
+                  id="maintenance-closing-record"
+                  value={closingRecordId}
+                  onChange={(e) => setClosingRecordId(e.target.value)}
+                  className={inputCls}
+                  aria-describedby="maintenance-closing-record-hint"
+                >
+                  {openRecords.map((record) => (
+                    <option key={record.id} value={record.id}>
+                      {openRecordLabel(record, tz)}
+                    </option>
+                  ))}
+                </select>
+                <p id="maintenance-closing-record-hint" className="text-theme-text-muted mt-1 text-xs">
+                  This item has {openRecords.length} open records. The earliest is selected; the others stay open.
+                </p>
+              </div>
+            ))}
 
           {formData.operation === 'schedule' && (
             <div>

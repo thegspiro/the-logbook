@@ -2727,11 +2727,14 @@ async def get_item_maintenance_history(
     item_id: UUID,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    open_only: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
 ):
     """
     Get maintenance history for an item
+
+    ``open_only=true`` returns only records not yet completed, oldest first.
 
     **Authentication required**
     **Requires permission: inventory.view**
@@ -2742,6 +2745,7 @@ async def get_item_maintenance_history(
         organization_id=current_user.organization_id,
         skip=skip,
         limit=limit,
+        open_only=open_only,
     )
     responses = []
     for record in maintenance_records:

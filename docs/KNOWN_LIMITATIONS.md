@@ -2923,6 +2923,27 @@ than one), which needs new data-fetching in the modal and a decision about
 the multiple-open-records case. (Security review INV-17,
 `docs/security-review/INV-11-inventory.md`.)
 
+**Resolved (owner decision, docket INV-17, 2026-10-11):** "close the earliest
+open record (or let the officer pick when several) instead of creating a new
+one". Complete work now fetches the item's open records through
+`GET /inventory/items/{id}/maintenance?open_only=true` (a new, additive query
+parameter: open records only, earliest scheduled first — the default ordering
+by `completed_date` desc put every open record past the page limit on a long
+history) and completes the chosen one through the existing
+`PATCH /inventory/items/{id}/maintenance/{record_id}`. One open record is
+closed directly; several show a picker defaulting to the earliest; none falls
+back to creating a completed record as before. The record keeps its task
+description, and the performed work is appended to its notes.
+`update_maintenance_record` now reads the record `FOR UPDATE` so two officers
+completing the same record update the item once. **Narrowing that remains:**
+open _inspection_ records are deliberately not offered (Complete work carries
+no pass/fail, and completing an inspection moves the inspection clock), and
+**Record inspection** still creates a new record rather than closing a
+scheduled inspection — the same permanent-open shape for scheduled
+inspections, not covered by this decision. Pinned by
+`tests/test_inventory_maintenance_close_open.py` and
+`InventoryMaintenancePage.test.tsx`.
+
 ## Inventory — Fulfillment-Options and Requestable-Categories Catalog Reads Are Unbounded (2026-09-08)
 
 `get_fulfillment_options` (the quartermaster's request-fulfilment picker)

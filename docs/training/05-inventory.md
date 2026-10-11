@@ -1656,6 +1656,28 @@ Two fixes from workflow review W42:
 - **The completion date defaults to today in the department's timezone.** It
   defaulted to the UTC date, which from 7 PM Central onwards is tomorrow.
 
+### Complete work closes the open record _(2026-10-11)_
+
+**Complete work** used to log a new, completed record every time, so the repair
+or scheduled job it finished stayed open beside it forever — still counted as
+open maintenance on the item. It now closes the open record instead:
+
+- **One open record** — the form says "This completes the open repair (due …)"
+  and saving marks that record complete. Its task description is kept; what you
+  type under **Performed Work** is added to its notes as "Work performed: …",
+  with the technician, condition, cost and next due date you enter.
+- **Several open records** — an **Open record being completed** picker lists
+  them, with the earliest selected. Pick the one you actually finished; the
+  others stay open.
+- **No open records** — the work is logged as a new completed record, as before.
+
+Open **inspections** are never offered: Complete work records no pass or fail,
+and closing an inspection would move the item's inspection clock without a
+result. Record those with **Record inspection**. **Save Record** waits until the
+open records have loaded; if they cannot be loaded, close the form and try again
+rather than logging a duplicate. The item still stays out of service until you
+choose **Return to service**.
+
 ### Only an inspection moves the inspection clock _(2026-09-13)_
 
 An item on an inspection interval carries two dates: **last inspection** and

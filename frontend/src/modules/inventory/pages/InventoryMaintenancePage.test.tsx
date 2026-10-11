@@ -10,6 +10,8 @@ const mockGetItemMaintenanceHistory = vi.fn();
 const mockCreateMaintenanceRecord = vi.fn();
 const mockUpdateItem = vi.fn();
 const mockGetItem = vi.fn();
+const mockGetOpenMaintenanceRecords = vi.fn();
+const mockUpdateMaintenanceRecord = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
@@ -19,6 +21,8 @@ vi.mock('../../../services/api', () => ({
     createMaintenanceRecord: (...a: unknown[]) => mockCreateMaintenanceRecord(...a) as unknown,
     updateItem: (...a: unknown[]) => mockUpdateItem(...a) as unknown,
     getItem: (...a: unknown[]) => mockGetItem(...a) as unknown,
+    getOpenMaintenanceRecords: (...a: unknown[]) => mockGetOpenMaintenanceRecords(...a) as unknown,
+    updateMaintenanceRecord: (...a: unknown[]) => mockUpdateMaintenanceRecord(...a) as unknown,
   },
 }));
 
@@ -104,6 +108,10 @@ describe('InventoryMaintenancePage', () => {
     mockGetItemMaintenanceHistory.mockResolvedValue([]);
     mockCreateMaintenanceRecord.mockResolvedValue({});
     mockUpdateItem.mockResolvedValue({});
+    mockGetOpenMaintenanceRecords.mockReset();
+    mockGetOpenMaintenanceRecords.mockResolvedValue([]);
+    mockUpdateMaintenanceRecord.mockReset();
+    mockUpdateMaintenanceRecord.mockResolvedValue({});
   });
 
   it('shows the empty state when nothing is due', async () => {
@@ -260,6 +268,8 @@ describe('InventoryMaintenancePage — opened for one named item', () => {
     mockGetItemMaintenanceHistory.mockResolvedValue([]);
     mockGetItem.mockReset();
     mockGetItem.mockResolvedValue(makeItem({ id: 'far-off', name: 'Spare Nozzle' }));
+    mockGetOpenMaintenanceRecords.mockReset();
+    mockGetOpenMaintenanceRecords.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -329,5 +339,133 @@ describe('InventoryMaintenancePage — opened for one named item', () => {
 
     await waitFor(() => expect(mockGetMaintenanceDueItems).toHaveBeenCalled());
     expect(mockGetItem).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * INV-17: "Complete work" closes the item's open record instead of logging a
+ * second, completed one and leaving the first open forever.
+ */
+describe('InventoryMaintenancePage — completing open work', () => {
+  const openRepair = (overrides: Partial<MaintenanceRecord> = {}): MaintenanceRecord =>
+    makeRecord({
+      id: 'open-1',
+      maintenance_type: 'repair',
+      is_completed: false,
+      passed: undefined,
+      completed_date: undefined,
+      scheduled_date: '2026-09-01',
+      description: 'Replace strap',
+      ...overrides,
+    });
+
+  beforeEach(() => {
+    mockGetMaintenanceDueItems.mockReset();
+    mockGetMaintenanceDueItems.mockResolvedValue([makeItem()]);
+    mockGetItems.mockReset();
+    mockGetItems.mockResolvedValue({ items: [], total: 0 });
+    mockGetItemMaintenanceHistory.mockReset();
+    mockGetItemMaintenanceHistory.mockResolvedValue([]);
+    mockCreateMaintenanceRecord.mockReset();
+    mockCreateMaintenanceRecord.mockResolvedValue({});
+    mockUpdateMaintenanceRecord.mockReset();
+    mockUpdateMaintenanceRecord.mockResolvedValue({});
+    mockGetOpenMaintenanceRecords.mockReset();
+    mockGetOpenMaintenanceRecords.mockResolvedValue([]);
+    mockToastError.mockReset();
+  });
+
+  const fillCompletion = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.type(screen.getByPlaceholderText('Describe the work performed...'), 'New strap fitted');
+    await user.type(screen.getByLabelText('Technician / Vendor *'), 'Bench tech');
+    await user.selectOptions(screen.getByLabelText(/Condition After Work/), 'good');
+  };
+
+  it('closes the single open record instead of creating a new one', async () => {
+    mockGetOpenMaintenanceRecords.mockResolvedValue([openRepair({ notes: 'Strap frayed' })]);
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryMaintenancePage />);
+    await screen.findAllByText('Helmet');
+    await user.click(firstButton('Log Maintenance'));
+    await user.click(screen.getByRole('button', { name: 'Complete work' }));
+
+    expect(await screen.findByText(/completes the open repair/)).toBeInTheDocument();
+    await fillCompletion(user);
+    await user.click(screen.getByRole('button', { name: 'Save Record' }));
+
+    await waitFor(() => expect(mockUpdateMaintenanceRecord).toHaveBeenCalledTimes(1));
+    expect(mockGetOpenMaintenanceRecords).toHaveBeenCalledWith('it-1');
+    expect(mockCreateMaintenanceRecord).not.toHaveBeenCalled();
+    const [itemId, recordId, payload] = mockUpdateMaintenanceRecord.mock.calls[0] as [
+      string,
+      string,
+      Record<string, unknown>,
+    ];
+    expect(itemId).toBe('it-1');
+    expect(recordId).toBe('open-1');
+    expect(payload).toMatchObject({
+      is_completed: true,
+      condition_after: 'good',
+      vendor_name: 'Bench tech',
+      notes: 'Strap frayed\nWork performed: New strap fitted',
+    });
+    expect(payload).not.toHaveProperty('description');
+  });
+
+  it('lets the officer pick among several open records, defaulting to the earliest', async () => {
+    mockGetOpenMaintenanceRecords.mockResolvedValue([
+      openRepair(),
+      openRepair({
+        id: 'open-2',
+        maintenance_type: 'cleaning',
+        description: 'Deep clean',
+        scheduled_date: '2026-09-20',
+      }),
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryMaintenancePage />);
+    await screen.findAllByText('Helmet');
+    await user.click(firstButton('Log Maintenance'));
+    await user.click(screen.getByRole('button', { name: 'Complete work' }));
+
+    const picker = await screen.findByRole('combobox', { name: /Open record being completed/ });
+    expect(picker).toHaveValue('open-1');
+    await user.selectOptions(picker, 'open-2');
+    await fillCompletion(user);
+    await user.click(screen.getByRole('button', { name: 'Save Record' }));
+
+    await waitFor(() => expect(mockUpdateMaintenanceRecord).toHaveBeenCalledTimes(1));
+    expect(mockUpdateMaintenanceRecord.mock.calls[0]?.[1]).toBe('open-2');
+  });
+
+  it('never closes an open inspection, which needs a pass/fail result', async () => {
+    mockGetOpenMaintenanceRecords.mockResolvedValue([
+      openRepair({ id: 'insp-1', maintenance_type: 'inspection', description: 'Annual' }),
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryMaintenancePage />);
+    await screen.findAllByText('Helmet');
+    await user.click(firstButton('Log Maintenance'));
+    await user.click(screen.getByRole('button', { name: 'Complete work' }));
+
+    expect(await screen.findByText(/no open maintenance/)).toBeInTheDocument();
+    await fillCompletion(user);
+    await user.click(screen.getByRole('button', { name: 'Save Record' }));
+
+    await waitFor(() => expect(mockCreateMaintenanceRecord).toHaveBeenCalledTimes(1));
+    expect(mockUpdateMaintenanceRecord).not.toHaveBeenCalled();
+  });
+
+  it('does not save while it cannot tell which record is open', async () => {
+    mockGetOpenMaintenanceRecords.mockRejectedValue(new Error('offline'));
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryMaintenancePage />);
+    await screen.findAllByText('Helmet');
+    await user.click(firstButton('Log Maintenance'));
+    await user.click(screen.getByRole('button', { name: 'Complete work' }));
+
+    expect(await screen.findByText(/could not be loaded/)).toBeInTheDocument();
+    expect(mockToastError).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Save Record' })).toBeDisabled();
   });
 });
