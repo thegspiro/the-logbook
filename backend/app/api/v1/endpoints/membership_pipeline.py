@@ -7,7 +7,7 @@ step progression, and transfer to full membership.
 
 import asyncio
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import (
@@ -23,7 +23,7 @@ from fastapi import (
 )
 from loguru import logger
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -113,13 +113,21 @@ from app.utils.org_timezone import resolve_scheduling_timezone
 router = APIRouter(dependencies=[Depends(block_self_prospect_access)])
 
 
+# The widget shows a glance, not the queue: the most recent applicants, with a
+# "View all" link (queue_url) to the full list (owner decision, MP-08).
+PIPELINE_WIDGET_DETAIL_LIMIT = 10
+
+
 class PipelineWidgetResponse(BaseModel):
     """Privacy-preserving dashboard summary; never a substitute for the queue."""
 
     total: int
     by_status: dict[str, int]
     aging: dict[str, int]
+    # At most PIPELINE_WIDGET_DETAIL_LIMIT entries, most recently created
+    # first. ``details_truncated`` says more exist behind ``queue_url``.
     details: list[dict[str, str]] | None = None
+    details_truncated: bool = False
     queue_url: str = "/prospective-members?status=active"
 
 
@@ -139,40 +147,77 @@ async def pipeline_widget_summary(
     """
     from app.models.membership_pipeline import ProspectiveMember
 
-    now = datetime.now(timezone.utc)
-    prospect_query = select(ProspectiveMember).where(
-        ProspectiveMember.organization_id == current_user.organization_id
-    )
+    # Counted in SQL: loading every prospect row (PII columns included) to
+    # count them scaled with the department's whole applicant history.
+    scope = [ProspectiveMember.organization_id == current_user.organization_id]
     if hidden_prospect_ids:
-        prospect_query = prospect_query.where(
-            ProspectiveMember.id.notin_(hidden_prospect_ids)
-        )
-    rows = (await db.execute(prospect_query)).scalars().all()
+        scope.append(ProspectiveMember.id.notin_(hidden_prospect_ids))
+
     by_status: dict[str, int] = {}
-    aging = {"0_7_days": 0, "8_30_days": 0, "31_plus_days": 0}
-    for prospect in rows:
-        status_value = getattr(prospect.status, "value", prospect.status)
-        by_status[str(status_value)] = by_status.get(str(status_value), 0) + 1
-        created = prospect.created_at
-        if created and created.tzinfo is None:
-            created = created.replace(tzinfo=timezone.utc)
-        age = (now - (created or now)).days
-        aging[
-            "0_7_days" if age <= 7 else "8_30_days" if age <= 30 else "31_plus_days"
-        ] += 1
+    status_rows = await db.execute(
+        select(ProspectiveMember.status, func.count(ProspectiveMember.id))
+        .where(*scope)
+        .group_by(ProspectiveMember.status)
+    )
+    for status_value, count in status_rows.all():
+        key = str(getattr(status_value, "value", status_value))
+        by_status[key] = by_status.get(key, 0) + int(count)
+    total = sum(by_status.values())
+
+    # Buckets match the whole-days age the Python version computed:
+    # ``(now - created).days <= 7`` is ``created > now - 8 days``, and
+    # ``<= 30`` is ``created > now - 31 days``. A missing created_at counted
+    # as age 0, so it stays in the newest bucket.
+    now = datetime.now(timezone.utc)
+    created = ProspectiveMember.created_at
+    newest = or_(created.is_(None), created > now - timedelta(days=8))
+    middle = and_(
+        created <= now - timedelta(days=8), created > now - timedelta(days=31)
+    )
+    aging_row = (
+        await db.execute(
+            select(
+                func.coalesce(func.sum(case((newest, 1), else_=0)), 0),
+                func.coalesce(func.sum(case((middle, 1), else_=0)), 0),
+            ).where(*scope)
+        )
+    ).one()
+    week, month = int(aging_row[0]), int(aging_row[1])
+    aging = {
+        "0_7_days": week,
+        "8_30_days": month,
+        "31_plus_days": total - week - month,
+    }
+
     can_detail = user_has_permission(current_user, "prospective_members.manage")
     details = None
     if can_detail:
+        # Only the columns the widget shows, most recent first, capped.
+        detail_rows = await db.execute(
+            select(
+                ProspectiveMember.id,
+                ProspectiveMember.first_name,
+                ProspectiveMember.last_name,
+                ProspectiveMember.status,
+            )
+            .where(*scope)
+            .order_by(ProspectiveMember.created_at.desc(), ProspectiveMember.id.desc())
+            .limit(PIPELINE_WIDGET_DETAIL_LIMIT)
+        )
         details = [
             {
-                "id": str(p.id),
-                "name": p.full_name,
-                "status": str(getattr(p.status, "value", p.status)),
+                "id": str(row_id),
+                "name": f"{first or ''} {last or ''}".strip(),
+                "status": str(getattr(status_value, "value", status_value)),
             }
-            for p in rows
+            for row_id, first, last, status_value in detail_rows.all()
         ]
     return PipelineWidgetResponse(
-        total=len(rows), by_status=by_status, aging=aging, details=details
+        total=total,
+        by_status=by_status,
+        aging=aging,
+        details=details,
+        details_truncated=details is not None and total > len(details),
     )
 
 

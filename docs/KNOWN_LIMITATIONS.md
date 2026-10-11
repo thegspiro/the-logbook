@@ -2513,7 +2513,21 @@ package per prospect is a behavior change that could break an intended
 a response-envelope/frontend-contract change, not a drop-in. (Security review
 MP-10, `docs/security-review/MP-08-membership-pipeline.md`.)
 
-## Membership Pipeline — `/widget-summary` Loads Every Prospect Row to Count Them (2026-09-02)
+## Membership Pipeline — `/widget-summary` Loads Every Prospect Row to Count Them (2026-09-02, resolved 2026-10-11)
+
+**✅ Resolved 2026-10-11 (owner decision: counts via SQL `GROUP BY`; details
+capped at the 10 most recent + "View all").** `by_status` is one `GROUP BY`,
+the three aging buckets one `CASE` aggregate with the same whole-day
+boundaries as before, and `total` their sum — no prospect row is loaded to
+count. A manager's `details` selects only id, name and status for the
+`PIPELINE_WIDGET_DETAIL_LIMIT` (10) most recently created applicants, and the
+new `details_truncated` flag says more exist behind `queue_url`, the "View all"
+link. Response change is additive (`details_truncated`); the list is now a
+glance, not a roster. Note that no dashboard screen renders this widget yet
+(DASH-1 below — the registry still points at the wrong path), so the "View
+all" link exists in the API contract for whichever widget consumes it.
+`tests/test_pipeline_widget_summary_counts.py` pins the counts, the cap and
+the self-application exclusion. The original finding follows.
 
 `GET /prospective-members/widget-summary` (`pipeline_widget_summary`,
 `membership_pipeline.py:121-178`) loads every full `ProspectiveMember` row in
