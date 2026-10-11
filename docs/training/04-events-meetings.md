@@ -1838,9 +1838,12 @@ The ballot email dispatch system has been significantly hardened:
 ### Election Report Email
 
 **Send Report** sits in the **Results & Publishing** panel on the election
-page, under _Email Results Report — send final results to all eligible voters
-by email_. Results can also be exported from the Results tab or folded into the
-pre-meeting package.
+page, under _Email Results Report — Email the results report to the election
+secretary_. It appears once the election is closed, and is refused while
+voting is open. The report goes to the secretary, not to the voters: it
+carries the results, the ballot recipients, and the reason each skipped member
+did not receive a ballot. Results can also be exported from the Results tab or
+folded into the pre-meeting package.
 
 > **Corrected 2026-08-12.** This section said the button was "not yet built"
 > and did not exist. It does, on `PublishResultsPanel`, backed by
@@ -1848,12 +1851,16 @@ pre-meeting package.
 
 ### Upcoming Business Meetings
 
-**Not yet built.** The election detail page has no **Upcoming Business
-Meetings** section and no **Link to Election** control. The link itself is
-real — an election carries `meeting_id` and `event_id`, and an event it is
-linked to shows a **Linked Elections** card (see below) — but it is set when
-the election is created, or through the API, not from a list of candidate
-meetings.
+There is no separate **Upcoming Business Meetings** section; the link is set
+from the election itself. The election detail page shows a **Linked Meeting**
+field. While the election is in **draft**, an officer with `elections.manage`
+uses **Link a meeting** (or **(change)** once one is set) to open **Link
+Meeting or Event**, a picker listing upcoming events and meeting-minutes
+records. The election can also be linked when it is created. An event the
+election is linked to shows a **Linked Elections** card (see below).
+
+> **Corrected 2026-10-08.** This section said the election-side control was
+> not yet built. It exists on `ElectionDetailPage`.
 
 ### Edge Cases — Elections (2026-03-19)
 
@@ -2076,20 +2083,20 @@ matrix above.
 
 - **Per-recipient error handling**: If one ballot email fails, remaining recipients still receive their ballots
 - **Eligibility summary email**: The secretary who dispatched ballots receives a summary listing all sent and skipped voters with reasons (no email address, ineligible, already voted)
-- **Election report email**: New "Send Report Email" button emails formatted round-by-round results
+- **Election report email**: **Send Report** under **Email Results Report** on a closed election's **Results & Publishing** panel emails the results report to the election secretary (see [Election Report Email](#election-report-email))
 
 > **Corrected 2026-08-12.** Same as above: the summary is emailed to the
 > dispatching officer, not shown on the election page.
 
 ### Election Meeting Integration
 
-**Not yet built** — the same gap as [Upcoming Business Meetings](#upcoming-business-meetings). An election does carry a meeting/event link, and the linked event shows a **Linked Elections** card; what is missing is the section on the election side that lists meetings to link to.
+An election carries a meeting/event link, set from the **Linked Meeting** field on the election detail page while the election is in draft — see [Upcoming Business Meetings](#upcoming-business-meetings). The linked event shows a **Linked Elections** card, and the link is what **Import Attendees** reads.
 
 | Troubleshooting                     | Solution                                                                                                                            |
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | Ballot emails sent but 0 recipients | Fixed 2026-03-22 — eligibility now uses `membership_type`. Check that members have the correct membership type and email addresses. |
 | Election error messages are generic | Fixed 2026-03-22 — errors now include specific guidance.                                                                            |
-| Can't find report email button      | There is no such button. Export results from the Results tab, or send the pre-meeting package.                                      |
+| Can't find report email button      | It appears only once the election is closed: **Results & Publishing** panel, **Email Results Report**, **Send Report**.             |
 
 ---
 
@@ -2141,7 +2148,7 @@ This streamlines the workflow for in-meeting elections where only present member
 
 ### Quick-Link Buttons on Upcoming Meetings
 
-**Not yet built** — the same gap as [Upcoming Business Meetings](#upcoming-business-meetings) above. There is no Upcoming Meetings list on the election detail page and no quick-link button.
+There is no list of upcoming meetings with a quick-link button on each. A draft election is linked from its own **Linked Meeting** field instead, whose picker lists the upcoming events — see [Upcoming Business Meetings](#upcoming-business-meetings) above.
 
 ### Edge Cases
 
@@ -2190,7 +2197,8 @@ This endpoint is **rate-limited** to prevent brute-force attacks. It returns ver
 
 ### Send Report Endpoint
 
-A dedicated endpoint for emailing election results to eligible voters:
+A dedicated endpoint for emailing the election results report to the
+election secretary (the **Send Report** button calls it):
 
 ```
 POST /api/v1/elections/{id}/send-report

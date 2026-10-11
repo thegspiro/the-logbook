@@ -38,6 +38,7 @@ from app.models.training import (
     RequirementProgressStatus,
     RequirementSource,
     RequirementType,
+    SkillEvaluation,
     TrainingCategory,
     TrainingCourse,
     TrainingProgram,
@@ -45,7 +46,7 @@ from app.models.training import (
     TrainingStatus,
     TrainingType,
 )
-from app.models.user import User
+from app.models.user import Position, User
 from app.schemas.training_program import (
     ProgramEnrollmentCreate,
     ProgramMilestoneCreate,
@@ -529,6 +530,47 @@ class TrainingProgramService:
 
     # ==================== Training Requirement Methods ====================
 
+    async def _validate_required_skills(
+        self, skill_ids: Optional[List[str]], organization_id: UUID
+    ) -> Optional[str]:
+        """Verify every skill id on a SKILLS_EVALUATION requirement is the
+        caller's own skill evaluation (XC-1).
+
+        ``required_skills`` holds SkillEvaluation ids that shift completion
+        matches checkoffs against; a foreign id can never be satisfied, so the
+        requirement would sit unmeetable. Returns the message instead of
+        raising, to match this service's ``(result, error)`` convention.
+        """
+        try:
+            await assert_all_in_org(
+                self.db,
+                SkillEvaluation,
+                skill_ids,
+                organization_id,
+                label="required skill",
+            )
+        except ValueError as exc:
+            return str(exc)
+        return None
+
+    async def _validate_target_roles(
+        self, role_ids: Optional[List[Any]], organization_id: UUID
+    ) -> Optional[str]:
+        """Verify every position id in a program's ``target_roles`` is the
+        caller's own (XC-1). The schema accepts only UUIDs, so these are
+        position ids. Returns the message instead of raising."""
+        try:
+            await assert_all_in_org(
+                self.db,
+                Position,
+                normalize_id_list(role_ids),
+                organization_id,
+                label="target position",
+            )
+        except ValueError as exc:
+            return str(exc)
+        return None
+
     async def _validate_required_courses(
         self, course_ids: Optional[List[str]], organization_id: UUID
     ) -> Optional[str]:
@@ -643,6 +685,11 @@ class TrainingProgramService:
         )
         if course_error:
             return None, course_error
+        skill_error = await self._validate_required_skills(
+            requirement_data.required_skills, organization_id
+        )
+        if skill_error:
+            return None, skill_error
 
         # Create requirement
         requirement = TrainingRequirement(
@@ -745,6 +792,12 @@ class TrainingProgramService:
             )
             if course_error:
                 return None, course_error
+        if "required_skills" in updates:
+            skill_error = await self._validate_required_skills(
+                updates["required_skills"], organization_id
+            )
+            if skill_error:
+                return None, skill_error
 
         # Steps arrive as schema objects or legacy strings; store one shape.
         if "checklist_items" in updates:
@@ -801,6 +854,12 @@ class TrainingProgramService:
             structure_type = ProgramStructureType(program_data.structure_type)
         except ValueError:
             return None, f"Invalid structure type: {program_data.structure_type}"
+
+        roles_error = await self._validate_target_roles(
+            program_data.target_roles, organization_id
+        )
+        if roles_error:
+            return None, roles_error
 
         # Create program
         program = TrainingProgram(
@@ -880,6 +939,11 @@ class TrainingProgramService:
         )
         if requirement_error:
             return None, requirement_error
+        roles_error = await self._validate_target_roles(
+            prog.target_roles, organization_id
+        )
+        if roles_error:
+            return None, roles_error
 
         program = TrainingProgram(
             organization_id=organization_id,
@@ -1155,6 +1219,11 @@ class TrainingProgramService:
         # Both are JSON columns; model_dump leaves UUIDs as objects, which
         # json.dumps refuses at commit time.
         if data.get("target_roles"):
+            roles_error = await self._validate_target_roles(
+                data["target_roles"], organization_id
+            )
+            if roles_error:
+                return None, roles_error
             data["target_roles"] = normalize_id_list(data["target_roles"]) or None
         if data.get("reminder_conditions"):
             data["reminder_conditions"] = {
@@ -5463,6 +5532,21 @@ class TrainingProgramService:
                 "in imported program"
             )
 
+        # A program exported from another department carries that department's
+        # position ids, which mean nothing here; keep only this org's own
+        # rather than refusing the whole import over a field nothing reads (XC-1).
+        imported_target_roles = None
+        raw_roles = normalize_id_list(prog_data.get("target_roles") or [])
+        if raw_roles:
+            own_roles = await self.db.execute(
+                select(Position.id).where(
+                    Position.id.in_(raw_roles),
+                    Position.organization_id == str(organization_id),
+                )
+            )
+            kept = {str(row[0]) for row in own_roles.all()}
+            imported_target_roles = [r for r in raw_roles if r in kept] or None
+
         program = TrainingProgram(
             organization_id=organization_id,
             name=prog_data.get("name", "Imported Program"),
@@ -5470,7 +5554,7 @@ class TrainingProgramService:
             code=prog_data.get("code"),
             version=prog_data.get("version", 1),
             target_position=prog_data.get("target_position"),
-            target_roles=prog_data.get("target_roles"),
+            target_roles=imported_target_roles,
             structure_type=structure_type,
             allows_concurrent_enrollment=prog_data.get(
                 "allows_concurrent_enrollment", True

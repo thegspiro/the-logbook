@@ -581,6 +581,19 @@ class FormsService:
             if integration_type_str:
                 form_data["integration_type"] = integration_type_str
 
+            # A field created alongside its form has no sibling whose id the
+            # client could know yet, so any condition_field_id here names a
+            # field on some other form — possibly another organization's.
+            # add_field/update_field already refuse that; refuse it here too
+            # rather than persist a cross-form reference (XC-1).
+            for field_data in fields_data:
+                if isinstance(field_data, dict):
+                    condition_error = self._condition_error(
+                        None, field_data.get("condition_field_id"), []
+                    )
+                    if condition_error:
+                        return None, condition_error
+
             form = Form(
                 organization_id=organization_id, created_by=created_by, **form_data
             )

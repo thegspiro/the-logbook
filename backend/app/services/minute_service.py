@@ -42,7 +42,7 @@ from app.schemas.minute import (
 )
 from app.services.separation_of_duties import assert_different_person
 from app.utils.model_updates import apply_updates
-from app.utils.org_scoping import assert_in_org
+from app.utils.org_scoping import assert_all_in_org, assert_in_org
 from app.utils.org_timezone import resolve_scheduling_timezone
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
@@ -83,6 +83,15 @@ class MinuteService:
                 allow_none=True,
                 label="assignee",
             )
+        # Attendees are a JSON list; an entry may name a member by user_id or
+        # be a free-text guest (user_id omitted). A named member must be ours.
+        await assert_all_in_org(
+            self.db,
+            User,
+            [a.user_id for a in data.attendees or [] if a.user_id],
+            organization_id,
+            label="attendee",
+        )
 
         # Serialize attendees to dicts for JSON storage
         if minutes_dict.get("attendees"):
@@ -379,6 +388,14 @@ class MinuteService:
                 update_data["event_id"],
                 organization_id,
                 label="event",
+            )
+        if update_data.get("attendees"):
+            await assert_all_in_org(
+                self.db,
+                User,
+                [a.user_id for a in data.attendees or [] if a.user_id],
+                organization_id,
+                label="attendee",
             )
 
         # Serialize attendees

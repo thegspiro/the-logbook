@@ -26,6 +26,7 @@ from app.models.event import (
     EventType,
     default_reminder_target,
 )
+from app.models.location import Location
 from app.models.training import (
     ApprovalStatus,
     EnrollmentStatus,
@@ -168,6 +169,14 @@ class TrainingSessionService:
             self.db, User, instructor_id, organization_id
         ):
             return "Invalid instructor"
+
+        # getattr: only the create schemas carry a location_id. It is stored on
+        # the generated event, whose location name is read back with it.
+        location_id = getattr(session_data, "location_id", None)
+        if location_id and not await is_in_org(
+            self.db, Location, location_id, organization_id
+        ):
+            return "Invalid location"
 
         return None
 

@@ -2034,6 +2034,11 @@ This view shows:
 - Each member with summary counts (permanent assignments, active checkouts, issued items, overdue count)
 - Expandable rows showing detailed inventory per member
 - **Assign**, **Return** and **Sizes** buttons per member
+- For holders of `members.manage`, a **Former members still holding property**
+  panel above the list: each dropped member with items still out, when they
+  were dropped, the item count and value, and which reminders have gone, with
+  **Send due reminders** to run the daily reminder check on demand _(2026-10-05;
+  see [Membership](./01-membership.md))_
 
 ### Scanning a Member's ID Card
 
@@ -2304,10 +2309,14 @@ The system automatically:
 - Clears FF Garcia from the overdue property-return list
 - Logs the clearance completion in the audit trail
 
-> **Note (2026-08-08):** that overdue list is currently reachable only through the
-> API (`GET /users/overdue-property-returns`) — there is no screen for it. An
-> earlier version of this walkthrough said the count updates on a "Member
-> Lifecycle page", which does not exist. See
+> **Note (updated 2026-10-08):** that overdue list is the **Former members
+> still holding property** panel at the top of **Member Equipment** (and on
+> Members Admin → **Member Management**), shown to holders of
+> `members.manage` since 2026-10-05; FF Garcia drops off it once nothing is
+> left outstanding. An earlier version of this note said the list was
+> reachable only through the API, and an earlier version of this walkthrough
+> said the count updates on a "Member Lifecycle page", which does not exist.
+> See
 > [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#member-lifecycle--the-page-that-was-documented-but-never-built-2026-08-08).
 
 > **Hint:** If Lt. Park needed to close the clearance with outstanding items (e.g., FF Garcia is unreachable and has items that will never be returned), she could use **Close Incomplete** instead. This requires administrator permission and logs which items were left unresolved.

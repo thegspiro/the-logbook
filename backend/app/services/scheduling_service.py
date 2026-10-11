@@ -94,6 +94,7 @@ from app.utils.apparatus_ref import (
 from app.utils.hours import hours_from_minutes, sum_hours_to_quarter
 from app.utils.member_names import format_display_name
 from app.utils.membership import is_administrative
+from app.utils.org_scoping import assert_all_in_org, assert_in_org
 from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
 from app.utils.positions import (
     UnknownSeatError,
@@ -3629,10 +3630,60 @@ class SchedulingService:
     # Shift Pattern Management
     # ============================================
 
+    async def _pattern_refs_error(
+        self, data: Dict[str, Any], organization_id: UUID
+    ) -> Optional[str]:
+        """Check the client-supplied references a pattern stores (XC-1).
+
+        Validates only the keys present in *data*, so a partial update that
+        leaves a reference alone does not re-check it, and a null clears it.
+        Generation re-resolves every one of these in-org and drops what it
+        cannot find, so a foreign id never reaches a shift — but it was stored
+        anyway, and a pattern silently generating without its template or a
+        member is the result.
+        """
+        try:
+            if "template_id" in data:
+                await assert_in_org(
+                    self.db,
+                    ShiftTemplate,
+                    data["template_id"],
+                    organization_id,
+                    allow_none=True,
+                    label="shift template",
+                )
+            members = data.get("assigned_members")
+            if isinstance(members, list):
+                await assert_all_in_org(
+                    self.db,
+                    User,
+                    [m.get("user_id") for m in members if isinstance(m, dict)],
+                    organization_id,
+                    label="member",
+                )
+            config = data.get("schedule_config")
+            if isinstance(config, dict):
+                await assert_all_in_org(
+                    self.db,
+                    ShiftTemplate,
+                    [
+                        config.get("day_template_id"),
+                        config.get("night_template_id"),
+                    ],
+                    organization_id,
+                    label="shift template",
+                )
+        except ValueError as exc:
+            return str(exc)
+        return None
+
     async def create_pattern(
         self, organization_id: UUID, pattern_data: Dict[str, Any], created_by: UUID
     ) -> Tuple[Optional[ShiftPattern], Optional[str]]:
         """Create a new shift pattern"""
+        refs_error = await self._pattern_refs_error(pattern_data, organization_id)
+        if refs_error:
+            return None, refs_error
         return await self._crud_create(
             ShiftPattern, pattern_data, organization_id, created_by
         )
@@ -3670,6 +3721,9 @@ class SchedulingService:
         pattern = await self.get_pattern_by_id(pattern_id, organization_id)
         if not pattern:
             return None, "Shift pattern not found"
+        refs_error = await self._pattern_refs_error(update_data, organization_id)
+        if refs_error:
+            return None, refs_error
         return await self._crud_update(pattern, update_data)
 
     async def delete_pattern(

@@ -122,6 +122,7 @@ from app.services.upload_scanning import reject_if_malicious
 from app.utils import download_names
 from app.utils.contact_visibility import load_contact_policy
 from app.utils.event_attachments import is_path_in_org
+from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import resolve_scheduling_timezone
 
 router = APIRouter()
@@ -944,6 +945,23 @@ async def update_event_settings(
         )
         if fallback_ids - {str(f) for f in found}:
             raise HTTPException(status_code=400, detail="Position not found")
+
+    # XC-1: the default coordinator is a client-supplied user id that every new
+    # request is then assigned to. apply_default_assignee re-checks it at read
+    # time and skips a foreign one, but it should not be stored to begin with.
+    pipeline_update = updates_dict.get("request_pipeline") or {}
+    if "default_assignee_id" in pipeline_update:
+        try:
+            await assert_in_org(
+                db,
+                User,
+                pipeline_update["default_assignee_id"],
+                current_user.organization_id,
+                allow_none=True,
+                label="default coordinator",
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=safe_error_detail(e))
     for key, value in updates_dict.items():
         if key in EVENT_SETTINGS_DEFAULTS:
             if isinstance(value, dict) and isinstance(current_events.get(key), dict):

@@ -124,7 +124,7 @@ from app.services.election_service import (
     office_ineligible_message,
     position_ballot_items,
 )
-from app.utils.org_scoping import assert_in_org
+from app.utils.org_scoping import assert_all_in_org, assert_in_org
 
 router = APIRouter()
 
@@ -190,18 +190,26 @@ async def _load_meeting_for_election(db: AsyncSession, election: Election) -> No
 
 
 async def _validate_election_links(
-    db: AsyncSession, organization_id, meeting_id, event_id
+    db: AsyncSession, organization_id, meeting_id, event_id, eligible_voters=None
 ) -> None:
     """Reject a client-supplied meeting_id/event_id that isn't in the caller's org.
 
     Without this, an admin could point their election at another org's meeting
     or event id and read that org's attendee roster back through the
     import-attendees and election-detail endpoints (XC-1 cross-tenant leak).
+
+    ``eligible_voters`` is a JSON list of member ids. Every reader re-filters it
+    by organization, so a foreign id reaches no one — but it would still be
+    stored as a dangling reference and counted nowhere, silently shrinking the
+    roster the officer believes they set (XC-1).
     """
     if meeting_id:
         await assert_in_org(db, Meeting, meeting_id, organization_id, label="meeting")
     if event_id:
         await assert_in_org(db, Event, event_id, organization_id, label="event")
+    await assert_all_in_org(
+        db, User, eligible_voters, organization_id, label="eligible voter"
+    )
 
 
 async def _build_election_response(
@@ -365,6 +373,7 @@ async def create_election(
             current_user.organization_id,
             election_data.get("meeting_id"),
             election_data.get("event_id"),
+            election_data.get("eligible_voters"),
         )
     except ValueError as e:
         raise HTTPException(
@@ -1258,13 +1267,18 @@ async def update_election(
     # Validate a re-pointed meeting/event link is in-org before applying it,
     # so an admin can't repoint their election at another org's meeting/event
     # id and read that org's roster back (XC-1).
-    if update_data.get("meeting_id") or update_data.get("event_id"):
+    if (
+        update_data.get("meeting_id")
+        or update_data.get("event_id")
+        or update_data.get("eligible_voters")
+    ):
         try:
             await _validate_election_links(
                 db,
                 election.organization_id,
                 update_data.get("meeting_id"),
                 update_data.get("event_id"),
+                update_data.get("eligible_voters"),
             )
         except ValueError as e:
             raise HTTPException(
