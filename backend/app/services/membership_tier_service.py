@@ -312,26 +312,110 @@ class MembershipTierService:
         uses ids none of its members hold yet advances nobody until an admin
         sets a starting tier, rather than sorting its whole roster onto rung
         zero and climbing from there.
+
+        **The Organization row is locked for the whole scan** (owner decision
+        USR-10a). ``update_membership_tier_config`` refuses to remove a tier
+        members hold, and it decides that under the same lock; without this
+        one, a scan could commit a member onto a tier while an edit removing it
+        was between its occupancy count and its own commit. The lock is taken
+        first — before any member row — which is the order every writer of a
+        member's tier uses (``change_membership_type`` locks the Organization
+        before the member too), and released by the commit at the end of every
+        path, so a settings edit waits only as long as one scan. The tier
+        config is read off the locked row, so the scan always works from the
+        ladder as it stands once no edit can be in flight.
         """
         org_result = await self.db.execute(
-            select(Organization).where(Organization.id == str(organization_id))
+            select(Organization)
+            .where(Organization.id == str(organization_id))
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         organization = org_result.scalar_one_or_none()
         if not organization:
             return {"advanced": 0, "members": []}
 
         tier_config = (organization.settings or {}).get("membership_tiers", {})
+        skipped: Optional[str] = None
+        tiers: List[Dict[str, Any]] = []
         if not tier_config.get("auto_advance", True):
-            return {"advanced": 0, "members": [], "message": "Auto-advance is disabled"}
+            skipped = "Auto-advance is disabled"
+        else:
+            tiers = self._load_tiers(organization)
+            if not tiers:
+                skipped = "No membership tiers configured"
 
-        tiers = self._load_tiers(organization)
-        if not tiers:
-            return {
-                "advanced": 0,
-                "members": [],
-                "message": "No membership tiers configured",
-            }
+        advanced: List[Dict[str, Any]] = []
+        off_ladder = 0
+        if skipped is None:
+            advanced, off_ladder = await self._advance_members(
+                organization, organization_id, tiers
+            )
 
+        if advanced:
+            # Audit inside the same transaction as the change, and commit both
+            # together. Written after the mutations and before the commit on
+            # purpose: `log_audit_event` opens a SAVEPOINT, so an audit failure
+            # rolls back only itself and still lets the advancement land, while
+            # a success is durable with the row it describes rather than
+            # separately from it.
+            #
+            # The previous order — commit, then audit — lost the audit trail
+            # outright on the scheduled path. `log_audit_event` releasing its
+            # savepoint does not commit the outer transaction, `_for_each_org`
+            # never commits, and the task loop's
+            # `async with async_session_factory()` only closes the session, so
+            # the rows were discarded. Demonstrated: a cron-path advance moved
+            # a member from `active` to `senior` and wrote **zero**
+            # `membership_tier_auto_advanced` rows. The endpoint path happened
+            # to survive it only because FastAPI's `get_session` dependency
+            # commits on teardown — which is not something a service should
+            # depend on for its own audit trail, least of all this one: it
+            # changes a member's membership class unattended and clears the
+            # operational rank of anyone moved into an administrative tier,
+            # so the audit row is the only record that those permissions went
+            # away.
+            for entry in advanced:
+                await log_audit_event(
+                    db=self.db,
+                    event_type="membership_tier_auto_advanced",
+                    event_category="user_management",
+                    severity="info",
+                    event_data=entry,
+                    user_id=performed_by,
+                )
+        # Unconditional: with nothing advanced this is what releases the
+        # Organization lock, which would otherwise be held until whatever owns
+        # the session next commits — on the scheduled path, past every later
+        # organization's scan.
+        await self.db.commit()
+
+        if skipped is not None:
+            return {"advanced": 0, "members": [], "message": skipped}
+
+        logger.info(
+            f"Membership tier advance: {len(advanced)} members advanced, "
+            f"{off_ladder} not on the tier ladder, in org {organization_id}"
+        )
+
+        return {
+            "organization_id": organization_id,
+            "advanced": len(advanced),
+            "members": advanced,
+            "off_ladder": off_ladder,
+        }
+
+    async def _advance_members(
+        self,
+        organization: Organization,
+        organization_id: str,
+        tiers: List[Dict[str, Any]],
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """The scan itself; runs under ``advance_all``'s Organization lock.
+
+        Returns the advancements (one entry per member moved) and how many
+        members hold a ``membership_type`` that is not on this ladder.
+        """
         # Load all active / probationary members
         result = await self.db.execute(
             select(User).where(
@@ -445,48 +529,4 @@ class MembershipTierService:
                 }
             )
 
-        if advanced:
-            # Audit inside the same transaction as the change, and commit both
-            # together. Written after the mutations and before the commit on
-            # purpose: `log_audit_event` opens a SAVEPOINT, so an audit failure
-            # rolls back only itself and still lets the advancement land, while
-            # a success is durable with the row it describes rather than
-            # separately from it.
-            #
-            # The previous order — commit, then audit — lost the audit trail
-            # outright on the scheduled path. `log_audit_event` releasing its
-            # savepoint does not commit the outer transaction, `_for_each_org`
-            # never commits, and the task loop's
-            # `async with async_session_factory()` only closes the session, so
-            # the rows were discarded. Demonstrated: a cron-path advance moved
-            # a member from `active` to `senior` and wrote **zero**
-            # `membership_tier_auto_advanced` rows. The endpoint path happened
-            # to survive it only because FastAPI's `get_session` dependency
-            # commits on teardown — which is not something a service should
-            # depend on for its own audit trail, least of all this one: it
-            # changes a member's membership class unattended and clears the
-            # operational rank of anyone moved into an administrative tier,
-            # so the audit row is the only record that those permissions went
-            # away.
-            for entry in advanced:
-                await log_audit_event(
-                    db=self.db,
-                    event_type="membership_tier_auto_advanced",
-                    event_category="user_management",
-                    severity="info",
-                    event_data=entry,
-                    user_id=performed_by,
-                )
-            await self.db.commit()
-
-        logger.info(
-            f"Membership tier advance: {len(advanced)} members advanced, "
-            f"{off_ladder} not on the tier ladder, in org {organization_id}"
-        )
-
-        return {
-            "organization_id": organization_id,
-            "advanced": len(advanced),
-            "members": advanced,
-            "off_ladder": off_ladder,
-        }
+        return advanced, off_ladder

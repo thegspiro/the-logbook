@@ -2601,37 +2601,42 @@ non-manager view and leave every other caller unchanged.
 
 ## Users: A Membership-Tier Removal's Occupancy Check Can Still Miss an Unattended Batch Advancement (2026-09-14)
 
+✅ **Resolved 2026-10-11 (owner decision: hold the Organization lock for the
+whole `advance_all` scan — settings edits block while it runs).**
+
 `PUT /users/membership-tiers/config` (`update_membership_tier_config`,
 `member_status.py`) refuses to remove or rename a tier members currently
 hold, and `PATCH /users/{user_id}/membership-type` (`change_membership_type`)
-refuses to assign a tier that no longer exists. Security review pass 5 found
-and fixed the race between these two endpoints directly (both now lock the
-`Organization` row before deciding — see USR-10 in
-`docs/security-review/USR-07-users-organizations.md`), but not the same race
-against a third writer: `MembershipTierService.advance_all`, the unattended
-monthly/on-demand tier-advancement scan, writes `User.membership_type`
-without ever locking the `Organization` row. Under InnoDB's default
-REPEATABLE READ, `update_membership_tier_config`'s occupancy count is a
-plain read answering from a snapshot fixed before its own lock is acquired —
-if `advance_all` commits a member onto the tier being removed in the narrow
-window between that snapshot and the lock, the occupancy check can still
-miss it, landing a member on a tier id absent from the stored config.
+refuses to assign a tier that no longer exists. Security review pass 5 fixed
+the race between those two endpoints, but not against a third writer:
+`MembershipTierService.advance_all`, the unattended tier-advancement scan,
+wrote `User.membership_type` without locking the `Organization` row, so a
+scan committing a member onto a tier could pass an edit removing it.
 
-Not fixed: the only complete close is making `advance_all`'s member-row
-locks and this occupancy check share one consistent lock order — either
-holding the `Organization` lock for the scan's entire duration (a real,
-bounded availability cost to every settings edit in the org while the scan
-runs) or making the occupancy count itself a locking read scoped to the
-tiers being removed, which does not fully eliminate the same AB/BA deadlock
-risk USR-10's fix was designed to avoid (`advance_all` locks member rows one
-at a time across its own loop without ever touching the `Organization` row).
-Either is a deliberate change to `membership_tier_service.py`'s own,
-separately-tuned locking scheme (last touched in security review pass 2 for
-an unrelated race), not a one-file fix. Requires three conditions at once
-(the scan running, a concurrent config edit, and a narrow non-contending
-commit window) and is self-healing on the next `advance_all` run in the
-common case — an unrecognized `membership_type` is `off_ladder`-counted and
-skipped, not silently re-corrupted further. (Security review USR-10a,
+What changed:
+
+- **`advance_all` locks the `Organization` row first and holds it for the
+  whole scan**, reading the ladder off the locked row, and commits on every
+  path (including "auto-advance disabled" and "no tiers"), which is what
+  releases it. A tier-config save in that organization waits for the scan to
+  finish — normally well under a second, longer for a very large roster.
+- **The lock alone was not enough, and the edit now counts in a fresh
+  snapshot.** The occupancy count is a plain read, and InnoDB answers a plain
+  read from the snapshot taken at the transaction's first read — the auth
+  dependency's, before the lock was asked for — so an edit that waited out a
+  scan still counted the roster as it was before the scan. The edit now ends
+  its read-only transaction before taking the lock, so its count sees every
+  tier change committed before it. Demonstrated on real connections: without
+  this, both race tests fail.
+- **`change_membership_type` now locks the `Organization` row before the
+  member row**, the order the scan uses. The previous member-then-organization
+  order was safe only while the scan never took the organization lock; with
+  it, a manual tier change and a scan could each hold what the other waited
+  for.
+
+Tested in `tests/test_membership_tier_lock_race.py` (the scan against the edit
+on real connections) and the lock-order assertions in
+`tests/test_capacity_locking.py`. (Security review USR-10a,
 `docs/security-review/USR-07-users-organizations.md`.)
 
 ## Membership — Length of Service Across a Break: What Is Deliberately Left Alone (2026-09-24)

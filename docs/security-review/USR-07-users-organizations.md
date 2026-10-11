@@ -475,7 +475,18 @@ own — it is a structural guard against a _future_ regression, the same
 non-discriminating-test caveat pass 3's own USR-7 write-up flagged for a
 different test.
 
-### USR-10a — LOW — `_tier_member_counts` is not a locking read, so `update_membership_tier_config`'s occupancy check can still miss a `MembershipTierService.advance_all` write that commits between this transaction's snapshot and its lock acquisition — 🚩 FLAGGED
+### USR-10a — LOW — `_tier_member_counts` is not a locking read, so `update_membership_tier_config`'s occupancy check can still miss a `MembershipTierService.advance_all` write that commits between this transaction's snapshot and its lock acquisition — ✅ FIXED 2026-10-11
+
+> **Resolved 2026-10-11 (owner decision: option (a)).** `advance_all` locks the
+> `Organization` row first and holds it for the whole scan;
+> `change_membership_type` now takes the `Organization` lock before its member
+> lock, so every tier writer locks in one order; and
+> `update_membership_tier_config` ends its read-only transaction before taking
+> the lock, so its plain occupancy count is answered from a snapshot taken
+> after the lock — without that last step the lock alone does not close the
+> race (the edit's snapshot predates it). `tests/test_membership_tier_lock_race.py`
+> drives the scan against the edit on real connections; both tests fail with
+> the snapshot step removed. The analysis below is the original flag.
 
 **What:** the fix above closes the race between the two `member_status.py`
 endpoints. It does not close every direction of Pitfall #27's "the count

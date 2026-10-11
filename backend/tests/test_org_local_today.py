@@ -828,6 +828,9 @@ class TestMembership:
         db.execute = AsyncMock(
             side_effect=[_one(org), _scalars([member]), _scalars([])]
         )
+        # advance_all commits on every path: it is what releases the
+        # Organization lock the scan holds (USR-10a).
+        db.commit = AsyncMock()
 
         result = await MembershipTierService(db).advance_all("org-1", "admin")
 
