@@ -1004,10 +1004,14 @@ When an event reaches its capacity limit:
 
 1. New RSVPs are automatically added to the **waitlist**
 2. If a spot opens (someone changes to "Not Going"), the first waitlisted person is promoted
-3. Waitlisted members are notified when promoted to "Going" — **in the app
-   only**. No email goes out, so a member who reads only their inbox does not
-   learn their seat is confirmed; tell them yourself if it matters (recorded as
-   an open item in `docs/KNOWN_LIMITATIONS.md`, 2026-09-28). Since
+3. Waitlisted members are notified when promoted to "Going" — in the app and,
+   since 2026-10-11, **by email** (_"You're off the waitlist: …"_, with the
+   event's time and place and a link to it). A member can turn that email off
+   under **Settings → Notifications → Off the waitlist**; the bell entry stays
+   either way, and a department can make the email required on the Member
+   Emails & Texts page. Its wording is the **Off the Waitlist** template under
+   Communications → Email Templates. Before that date the promotion was told
+   in the app only. Since
    2026-10-11 an automatic promotion appears in **RSVP Activity** as "… was
    moved from Waitlisted to Going (automatically, when a spot opened up)", so
    it is not mistaken for the member's own change. Promotions made before that

@@ -2195,7 +2195,80 @@ class EventService:
                 e,
             )
 
+        # W19-1: and by email, the channel of record (pitfall 18) — the bell
+        # alone left a member who reads only their inbox unaware they now hold
+        # a seat. Their own "Off the waitlist" email switch is the reader for
+        # it. Non-fatal for the same reason as the bell.
+        try:
+            await self._email_waitlist_promotion(
+                event, str(waitlisted_rsvp.user_id), organization_id
+            )
+        except Exception as e:
+            logger.error(
+                "Failed to email waitlist promotion for user {} event {}: {}",
+                waitlisted_rsvp.user_id,
+                event.id,
+                e,
+            )
+
         return waitlisted_rsvp
+
+    async def _email_waitlist_promotion(
+        self, event: Event, user_id: str, organization_id: UUID
+    ) -> bool:
+        """Email a member promoted off *event*'s waitlist, unless they have
+        turned that email off. Returns whether an email was handed to the
+        mailer."""
+        from app.models.location import Location
+        from app.services.email_policy import (
+            EmailKind,
+            department_required_kinds,
+            member_receives_email,
+        )
+        from app.services.email_service import EmailService
+
+        user = (
+            await self.db.execute(
+                select(User)
+                .where(User.id == user_id)
+                .where(User.organization_id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        if not user or not user.email:
+            return False
+
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        if not member_receives_email(
+            user.notification_preferences,
+            EmailKind.EVENT_WAITLIST,
+            department_required_kinds(org),
+        ):
+            return False
+
+        location_name = event.location
+        if event.location_id:
+            location_name = (
+                await self.db.execute(
+                    select(Location.name)
+                    .where(Location.id == str(event.location_id))
+                    .where(Location.organization_id == str(organization_id))
+                )
+            ).scalar_one_or_none() or location_name
+
+        return await EmailService(organization=org).send_waitlist_promotion_email(
+            to_email=user.email,
+            recipient_name=user.display_name or user.email,
+            event_title=event.title,
+            event_start=event.start_datetime,
+            location_name=location_name,
+            event_url=f"{settings.FRONTEND_URL}/events/{event.id}",
+            db=self.db,
+            organization_id=str(organization_id),
+        )
 
     async def rsvp_to_series(
         self,

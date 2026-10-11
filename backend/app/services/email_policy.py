@@ -74,6 +74,7 @@ class EmailKind(str, enum.Enum):
 
     # Optional, about the member's own activity
     EVENT_REMINDERS = "event_reminders"
+    EVENT_WAITLIST = "event_waitlist"
     TRAINING_REMINDERS = "training_reminders"
     SHIFT_NOTICES = "shift_notices"
     INVENTORY_UPDATES = "inventory_updates"
@@ -200,6 +201,23 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         ),
         rationale="The events calendar and the bell carry the same dates.",
         legacy_preference="event_reminders",
+    ),
+    # Its own switch rather than a line under Event reminders (W19-1, owner
+    # decision): a promotion is news the member is now expected somewhere, not
+    # a reminder, and a member who mutes reminders should still be told.
+    EmailKind.EVENT_WAITLIST: EmailPolicy(
+        label="Off the waitlist",
+        required=False,
+        audience=_M,
+        includes=(
+            "A spot opened up on an event you were waitlisted for, and you "
+            "are now confirmed as going",
+        ),
+        rationale=(
+            "The bell carries the same notice, and the event shows you as "
+            "Going; with this off, a member who reads only email may not "
+            "learn their seat is confirmed."
+        ),
     ),
     EmailKind.TRAINING_REMINDERS: EmailPolicy(
         label="Training and certification reminders",
