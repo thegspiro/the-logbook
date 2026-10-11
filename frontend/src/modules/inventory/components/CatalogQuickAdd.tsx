@@ -14,13 +14,25 @@
  * Free text is still a first-class outcome: plenty of checklist lines ("Check
  * tire pressure", "Cab clean") are not stock and never will be. Enter adds
  * what was typed, exactly as before.
+ *
+ * Medical stock is searched alongside gear when `searchScope.medical` is on,
+ * and listed first. A new item can be created in Medical Supplies (with a
+ * medical category, so it lands on the supply officer's page) or as gear.
  */
 
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Loader2, Package, Plus, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { inventoryService } from '@/services/inventoryService';
+import type { InventoryItem } from '@/services/eventServices';
 import { getErrorMessage } from '@/utils/errorHandling';
+import MedicalCreatePanel from './MedicalCreatePanel';
+import {
+  getCatalogItemLots,
+  searchChecklistCatalog,
+  type CatalogDomain,
+  type CatalogSearchScope,
+} from '../utils/checklistCatalogSearch';
 
 export interface CatalogAddPayload {
   name: string;
@@ -36,14 +48,24 @@ interface CatalogResult {
   name: string;
   sub?: string;
   trackingType: string;
+  domain: CatalogDomain;
 }
+
+const GEAR_ONLY: CatalogSearchScope = { gear: true, medical: false };
 
 interface CatalogQuickAddProps {
   value: string;
   onChange: (value: string) => void;
   onAdd: (payload: CatalogAddPayload) => void | Promise<void>;
-  /** Whether the viewer may write to the catalog (inventory.manage). */
+  /** Whether the viewer may write to the gear catalog (inventory.manage). */
   canCreateInventory: boolean;
+  /**
+   * Whether the viewer may create medical supplies (inventory.manage_medical
+   * or inventory.manage). Only meaningful with `searchScope.medical` on.
+   */
+  canCreateMedical?: boolean;
+  /** Which halves of the catalog the viewer can read. Gear only by default. */
+  searchScope?: CatalogSearchScope;
   disabled?: boolean;
   autoFocus?: boolean;
   /**
@@ -59,6 +81,8 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   onChange,
   onAdd,
   canCreateInventory,
+  canCreateMedical = false,
+  searchScope = GEAR_ONLY,
   disabled = false,
   autoFocus = false,
   inputId,
@@ -69,6 +93,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   const [searching, setSearching] = useState(false);
   const [searchFailed, setSearchFailed] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [medicalDraft, setMedicalDraft] = useState<string | null>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestRef = useRef(0);
@@ -101,36 +126,36 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
 
-  const runSearch = useCallback((query: string, request: number) => {
-    void inventoryService
-      .getItems({ search: query, limit: 6, active_only: true })
-      .then((res) => {
-        if (request !== requestRef.current) return;
-        setSearchFailed(false);
-        setResults(
-          res.items.map((i) => {
-            const sub = [i.category_name, i.unit_of_measure].filter(Boolean).join(' · ');
-            return { id: i.id, name: i.name, trackingType: i.tracking_type, ...(sub ? { sub } : {}) };
-          })
-        );
-        setHighlightedIndex(-1);
-      })
-      .catch(() => {
-        // Not the same as an empty catalog. Saying "no catalog match" here
-        // invites the crew to add a plain checklist line for an item that is
-        // on file and linkable, which is the link this bar exists to make.
-        if (request !== requestRef.current) return;
-        setResults([]);
-        setSearchFailed(true);
-        setHighlightedIndex(-1);
-      })
-      .finally(() => {
-        if (request === requestRef.current) setSearching(false);
-      });
-  }, []);
+  const { gear: searchGear, medical: searchMedical } = searchScope;
+  const runSearch = useCallback(
+    (query: string, request: number) => {
+      void searchChecklistCatalog(query, { gear: searchGear, medical: searchMedical }, 6)
+        .then(({ hits, incomplete }) => {
+          if (request !== requestRef.current) return;
+          // A half that failed is not the same as an empty catalog. Saying
+          // "no catalog match" here invites the crew to add a plain checklist
+          // line for an item that is on file and linkable, which is the link
+          // this bar exists to make — so whatever did come back is shown, and
+          // creating is withheld until a search covers everything.
+          setSearchFailed(incomplete);
+          setResults(
+            hits.map(({ item: i, domain }) => {
+              const sub = [i.category_name, i.unit_of_measure].filter(Boolean).join(' · ');
+              return { id: i.id, name: i.name, trackingType: i.tracking_type, domain, ...(sub ? { sub } : {}) };
+            })
+          );
+          setHighlightedIndex(-1);
+        })
+        .finally(() => {
+          if (request === requestRef.current) setSearching(false);
+        });
+    },
+    [searchGear, searchMedical]
+  );
 
   const handleChange = (q: string) => {
     submittingRef.current = false;
+    setMedicalDraft(null);
     onChange(q);
     setOpen(true);
     setResults([]);
@@ -178,9 +203,9 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
    * answers "no" rather than propagating: expiration can be switched on by
    * hand afterwards, but an item that never got added cannot.
    */
-  const hasDatedStock = async (itemId: string): Promise<boolean> => {
+  const hasDatedStock = async (itemId: string, domain: CatalogDomain): Promise<boolean> => {
     try {
-      const lots = await inventoryService.getItemLots(itemId);
+      const lots = await getCatalogItemLots(itemId, domain);
       return lots.some((lot) => Boolean(lot.expiration_date));
     } catch {
       return false;
@@ -191,7 +216,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
     if (submittingRef.current) return;
     submittingRef.current = true;
     reset();
-    const hasExpiration = await hasDatedStock(result.id);
+    const hasExpiration = await hasDatedStock(result.id, result.domain);
 
     await onAdd({
       // The catalog's name, not the typed one: two records that read
@@ -227,7 +252,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
       // it may carry dated lots — an existing medication added as a bare count
       // would have its expiry neither shown nor checked. A row created just now
       // has no lots, so that lookup is skipped rather than asked and ignored.
-      const hasExpiration = created ? false : await hasDatedStock(item.id);
+      const hasExpiration = created ? false : await hasDatedStock(item.id, 'gear');
       await onAdd({
         name: item.name,
         inventoryItemId: item.id,
@@ -246,12 +271,45 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
     }
   };
 
+  /** Step one of a medical create: the panel below asks for the category. */
+  const startMedicalCreate = () => {
+    const name = value.trim();
+    if (!name) return;
+    reset();
+    setMedicalDraft(name);
+  };
+
+  const cancelMedicalCreate = () => {
+    const name = medicalDraft ?? '';
+    setMedicalDraft(null);
+    // Hand the name back so it is not retyped to add it another way.
+    onChange(name);
+    inputRef.current?.focus();
+  };
+
+  const finishMedicalCreate = async (item: InventoryItem, created: boolean) => {
+    setMedicalDraft(null);
+    const hasExpiration = created ? false : await hasDatedStock(item.id, 'medical');
+    await onAdd({
+      name: item.name,
+      inventoryItemId: item.id,
+      ...(item.tracking_type === 'pool' ? { checkType: 'count' as const } : {}),
+      ...(hasExpiration ? { hasExpiration: true } : {}),
+    });
+    inputRef.current?.focus();
+  };
+
   const typed = value.trim();
   const hasExactMatch = results.some((r) => r.name.trim().toLowerCase() === typed.toLowerCase());
   // Suppressed on a failed search for the same reason as the picker: the
   // create-if-absent behind it would not duplicate, but offering to add to a
   // catalog we could not reach reads as a promise the next click may not keep.
-  const showCreate = canCreateInventory && typed.length > 0 && !searching && !searchFailed && !hasExactMatch;
+  const canOfferCreate = typed.length > 0 && !searching && !searchFailed && !hasExactMatch;
+  const showCreate = canCreateInventory && canOfferCreate;
+  const showCreateMedical = canCreateMedical && searchMedical && canOfferCreate;
+  const gearCreateLabel = showCreateMedical
+    ? `Create “${typed}” as equipment or gear`
+    : `Create “${typed}” in inventory`;
 
   /**
    * Position the results list against the viewport rather than the input.
@@ -299,7 +357,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
       window.removeEventListener('scroll', measure, true);
       window.removeEventListener('resize', measure);
     };
-  }, [open, results.length, showCreate]);
+  }, [open, results.length, showCreate, showCreateMedical]);
 
   return (
     <div className="relative" ref={containerRef}>
@@ -394,6 +452,11 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
                 <span className="text-theme-text-primary block truncate text-sm">{r.name}</span>
                 {r.sub && <span className="text-theme-text-muted block truncate text-xs">{r.sub}</span>}
               </span>
+              {r.domain === 'medical' && (
+                <span className="badge shrink-0 bg-blue-500/10 text-[10px] text-blue-800 dark:text-blue-300">
+                  Medical
+                </span>
+              )}
               <span className="shrink-0 rounded bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:text-green-400">
                 Link
               </span>
@@ -404,6 +467,25 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
             <p role="status" className="text-theme-text-muted px-3 py-2 text-xs">
               Searching catalog…
             </p>
+          )}
+
+          {showCreateMedical && (
+            <button
+              type="button"
+              onClick={startMedicalCreate}
+              disabled={creating}
+              className="hover:bg-theme-surface-secondary border-theme-surface-border flex w-full items-center gap-2 border-t px-3 py-2 text-left disabled:opacity-50"
+            >
+              <Plus className="text-theme-text-muted h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1">
+                <span className="text-theme-text-primary block truncate text-sm">
+                  Create “{typed}” in Medical Supplies
+                </span>
+                <span className="text-theme-text-muted block text-xs">
+                  Choose a medical category, then it&rsquo;s added and linked
+                </span>
+              </span>
+            </button>
           )}
 
           {showCreate && (
@@ -419,7 +501,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
                 <Plus className="text-theme-text-muted h-4 w-4 shrink-0" />
               )}
               <span className="min-w-0 flex-1">
-                <span className="text-theme-text-primary block truncate text-sm">Create “{typed}” in inventory</span>
+                <span className="text-theme-text-primary block truncate text-sm">{gearCreateLabel}</span>
                 <span className="text-theme-text-muted block text-xs">Adds it to the catalog and links this item</span>
               </span>
             </button>
@@ -427,17 +509,22 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
 
           {searchFailed && !searching && (
             <p role="status" className="text-theme-text-muted px-3 py-2 text-xs">
-              Couldn&rsquo;t search the catalog. Press Enter to add “{typed}” as a plain checklist item, or try again to
-              link it.
+              {results.length > 0
+                ? 'Part of the catalog couldn’t be searched, so creating a new item is off for now.'
+                : `Couldn’t search the catalog. Press Enter to add “${typed}” as a plain checklist item, or try again to link it.`}
             </p>
           )}
 
-          {results.length === 0 && !searching && !searchFailed && !showCreate && (
+          {results.length === 0 && !searching && !searchFailed && !showCreate && !showCreateMedical && (
             <p className="text-theme-text-muted px-3 py-2 text-xs">
               No catalog match. Press Enter to add “{typed}” as a plain checklist item.
             </p>
           )}
         </div>
+      )}
+
+      {medicalDraft !== null && (
+        <MedicalCreatePanel name={medicalDraft} onCreated={finishMedicalCreate} onCancel={cancelMedicalCreate} />
       )}
     </div>
   );

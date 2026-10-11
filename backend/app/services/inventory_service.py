@@ -424,6 +424,17 @@ class ItemOutsideDomainError(LookupError):
     """
 
 
+class ItemNameTakenOutsideDomainError(LookupError):
+    """A domain-scoped create-if-absent found the name filed in another domain.
+
+    Raised rather than handing the row back: the caller asked for an item in
+    its own domain, and linking a gear row from the medical page would leave
+    the supply officer with a check position they cannot see on their own
+    list. Carries no details of the other row on purpose — a medical-only
+    officer is told the name is in use, not what it is.
+    """
+
+
 def storage_area_paths(areas) -> Dict[str, str]:
     """Map each area id to "Parent > Child", walking ``parent_id``.
 
@@ -8286,7 +8297,11 @@ class InventoryService:
         )
 
     async def create_item_if_absent(
-        self, organization_id: str, item_data: Dict[str, Any], created_by: str
+        self,
+        organization_id: str,
+        item_data: Dict[str, Any],
+        created_by: str,
+        item_types: Optional[Iterable[ItemType]] = None,
     ) -> Tuple[Optional[InventoryItem], bool, Optional[str]]:
         """Create a catalog row, or hand back the one already carrying the name.
 
@@ -8311,6 +8326,12 @@ class InventoryService:
         landing in the same instant can still both find nothing. Closing that
         needs the constraint and a backfill for the duplicate names already on
         file, which is a schema change rather than a caller fix.
+
+        ``item_types`` scopes the caller to one domain (the medical supplies
+        route passes ``MEDICAL_ITEM_TYPES``). The name is still looked up
+        across the whole catalog — that is what stops the duplicate — but a
+        match filed outside the domain raises
+        ``ItemNameTakenOutsideDomainError`` instead of being handed back.
         """
         name = (item_data.get("name") or "").strip()
         if not name:
@@ -8327,6 +8348,10 @@ class InventoryService:
         if item_data.get("tracking_type") == "pool":
             existing_id = await self._item_id_by_name(organization_id, name)
             if existing_id:
+                if item_types is not None and not await self.item_in_domain(
+                    existing_id, organization_id, item_types
+                ):
+                    raise ItemNameTakenOutsideDomainError(name)
                 return (
                     await self.get_item_by_id(existing_id, organization_id),
                     False,
