@@ -431,6 +431,26 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Facility folders open to every facilities role, and some files move (2026-10-11)
+
+The upgrade (migration `65128d5ccd50`) gives the Facility Files root, each
+facility's folder, and its Photos, Maintenance Records and Inspection Reports
+sub-folders to anyone with any facilities access — `facilities.view` upwards —
+where before they needed `facilities.view_sensitive`, `.edit` or `.manage`.
+Blueprints & Permits, Insurance & Leases and Capital Projects stay restricted.
+
+So that nothing restricted until now becomes readable as a side effect, files
+that sat loose in a facility's folder (or in Facility Files itself) are moved
+into restricted folders — a new **Facility Documents** sub-folder per
+facility, and a **Restricted Facility Files** folder under the root where no
+facility can be identified — and files a facility photo points to move into
+Photos. Folders a department created inside the tree are given the restricted
+tier. Every move and restamp is recorded, and a downgrade reverses them.
+
+After upgrading, look through **Photos**, **Maintenance Records** and
+**Inspection Reports**: anything filed there by hand is now readable by every
+facilities role.
+
 ### A setup-wizard session ends 24 hours after it began (2026-10-11)
 
 Only matters to an installation whose setup wizard is still open. An

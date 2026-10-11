@@ -28,11 +28,15 @@ from app.core.permissions import (
     permission_matches_any_write,
 )
 from app.models.document import (
+    FACILITY_ACCESS_PERMISSIONS,
     FACILITY_FOLDER_PERMISSIONS,
+    FACILITY_SUB_FOLDERS,
     Document,
     DocumentFolder,
     DocumentStatus,
     FolderVisibility,
+    facility_sub_folder_definition,
+    facility_sub_folder_permissions,
     system_folder_fields,
 )
 from app.models.facilities import FacilityDocument, FacilityPhoto
@@ -58,10 +62,12 @@ LIBRARY_MANAGER_PERMISSIONS = ["documents.manage"]
 
 # The facilities module gates its sensitive records — access codes, utility
 # accounts, capital projects, insurance policies, lease terms — on this set,
-# and the facility file tree stores the bytes behind those records. It has to
-# carry the same gate or the record is protected and the file it points at is
-# not. Kept identical to _SENSITIVE_READ_PERMISSIONS in the facilities
-# endpoint; tests/test_facility_folder_access.py asserts the two agree.
+# and the facility file tree's sensitive sub-folders store the bytes behind
+# those records. They have to carry the same gate or the record is protected
+# and the file it points at is not. Kept identical to
+# _SENSITIVE_READ_PERMISSIONS in the facilities endpoint;
+# tests/test_facility_folder_access.py asserts the two agree. The rest of the
+# tree is on FACILITY_ACCESS_PERMISSIONS (FAC-13).
 FACILITY_SENSITIVE_PERMISSIONS = FACILITY_FOLDER_PERMISSIONS
 
 # ============================================================================
@@ -1965,16 +1971,17 @@ class DocumentsService:
         Get or create a hierarchical folder structure for a facility
         under the 'Facility Files' system folder.
 
-        Folder hierarchy:
-          Facility Files/                           (organization visibility,
-                                                     facility permission gate)
-            └── Station 1 - Main St (display_name)/ (visibility=organization)
-                ├── Photos/
-                ├── Blueprints & Permits/
-                ├── Maintenance Records/
-                ├── Inspection Reports/
-                ├── Insurance & Leases/
-                └── Capital Projects/
+        Folder hierarchy (tiers per FAC-13 — "any" is FACILITY_ACCESS_PERMISSIONS,
+        "sensitive" is FACILITY_SENSITIVE_PERMISSIONS):
+          Facility Files/                           (any)
+            └── Station 1 - Main St (display_name)/ (any)
+                ├── Photos/                         (any)
+                ├── Blueprints & Permits/           (sensitive)
+                ├── Maintenance Records/            (any)
+                ├── Inspection Reports/             (any)
+                ├── Insurance & Leases/             (sensitive)
+                ├── Capital Projects/               (sensitive)
+                └── Facility Documents/             (sensitive)
 
         The whole get-or-create is a read-then-write with no uniqueness
         constraint behind it (Pitfall #27 shape): two requests that both see
@@ -2115,7 +2122,12 @@ class DocumentsService:
                 icon="building",
                 color="text-indigo-400",
                 visibility=FolderVisibility.ORGANIZATION,
-                required_permissions=list(FACILITY_SENSITIVE_PERMISSIONS),
+                # Any facilities access (FAC-13): the operational sub-folders
+                # below must be reachable at baseline facilities.view, and an
+                # ancestor's gate is ANDed into every child's. Nothing is filed
+                # directly in this folder — photos go to Photos, documents to
+                # the restricted Facility Documents folder.
+                required_permissions=list(FACILITY_ACCESS_PERMISSIONS),
                 is_system=False,
             )
             self.db.add(facility_folder)
@@ -2126,27 +2138,12 @@ class DocumentsService:
             )
 
             # Create standard sub-folders
-            from app.models.document import FACILITY_SUB_FOLDERS
-
             for sub_def in FACILITY_SUB_FOLDERS:
-                sub_folder = DocumentFolder(
-                    organization_id=organization_id,
-                    parent_id=facility_folder.id,
-                    name=sub_def["name"],
-                    slug=f"facility-{facility_id_str}-{sub_def['slug']}",
-                    description=sub_def["description"],
-                    icon=sub_def["icon"],
-                    color=sub_def["color"],
-                    sort_order=sub_def["sort_order"],
-                    visibility=FolderVisibility.ORGANIZATION,
-                    # Matches migration a9c4e7b2f631, which stamped the whole
-                    # facility tree (slug 'facilities' or 'facility-%') on
-                    # existing installs. Without it here, every facility
-                    # created after that deploy reopens the same leak.
-                    required_permissions=list(FACILITY_SENSITIVE_PERMISSIONS),
-                    is_system=False,
+                self.db.add(
+                    self._new_facility_sub_folder(
+                        organization_id, facility_folder, sub_def["slug"]
+                    )
                 )
-                self.db.add(sub_folder)
 
             await self.db.flush()
             logger.info(
@@ -2154,6 +2151,62 @@ class DocumentsService:
             )
 
         return facility_folder
+
+    @staticmethod
+    def _new_facility_sub_folder(
+        organization_id: UUID, facility_folder: DocumentFolder, sub_slug: str
+    ) -> DocumentFolder:
+        """An unsaved standard sub-folder of *facility_folder*, on its tier.
+
+        The tier comes from FACILITY_SUB_FOLDERS (FAC-13): migration
+        a9c4e7b2f631 stamped every facility folder sensitive, and the FAC-13
+        migration restamped the operational ones; this is the creation-side
+        half of the same rule.
+        """
+        definition = facility_sub_folder_definition(sub_slug)
+        return DocumentFolder(
+            organization_id=organization_id,
+            parent_id=facility_folder.id,
+            name=definition["name"],
+            slug=f"{facility_folder.slug}-{sub_slug}",
+            description=definition["description"],
+            icon=definition["icon"],
+            color=definition["color"],
+            sort_order=definition["sort_order"],
+            visibility=FolderVisibility.ORGANIZATION,
+            required_permissions=facility_sub_folder_permissions(sub_slug),
+            is_system=False,
+        )
+
+    async def ensure_facility_sub_folder(
+        self, organization_id: UUID, facility_folder: DocumentFolder, sub_slug: str
+    ) -> DocumentFolder:
+        """Get or create one standard sub-folder, locked, under a facility.
+
+        The caller must already hold the facility folder's row lock — which
+        ``ensure_facility_folder`` returns holding — so every creator of a
+        sub-folder is serialized on that parent first, and the locking lookup
+        below cannot meet a concurrent creator's gap lock (the FAC-45 shape).
+        Facilities created before a sub-folder joined FACILITY_SUB_FOLDERS
+        (Facility Documents, FAC-13), or whose sub-folder someone deleted,
+        get it here on first use.
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.parent_id == facility_folder.id)
+            .where(DocumentFolder.slug == f"{facility_folder.slug}-{sub_slug}")
+            .order_by(DocumentFolder.id)
+            .limit(1)
+            .with_for_update()
+        )
+        sub_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        if sub_folder is None:
+            sub_folder = self._new_facility_sub_folder(
+                organization_id, facility_folder, sub_slug
+            )
+            self.db.add(sub_folder)
+            await self.db.flush()
+        return sub_folder
 
     async def get_facility_sub_folders(
         self, organization_id: UUID, facility_id: str, current_user: User

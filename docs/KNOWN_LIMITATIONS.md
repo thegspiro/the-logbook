@@ -4199,6 +4199,30 @@ routes. Found in `docs/security-review/MS-09-medical-screening.md` (feature
 
 ## FAC-13 — Every Facility Folder Requires the Sensitive-Family Permission Set, Silencing Three Established-Baseline Categories for Their Intended Audience (2026-09-03)
 
+✅ **Resolved 2026-10-11 (owner decision: a new "any facilities access" tier,
+Blueprints & Permits stays sensitive; reclassify existing documents; restamp
+migration).** `FACILITY_ACCESS_PERMISSIONS` (`facilities.view`,
+`.view_sensitive`, `.edit`, `.manage`) now gates the Facility Files root, each
+per-facility folder, and Photos / Maintenance Records / Inspection Reports;
+Blueprints & Permits, Insurance & Leases, Capital Projects and a new
+restricted **Facility Documents** sub-folder keep `FACILITY_SENSITIVE_PERMISSIONS`.
+Write stays edit/manage on both tiers (the view grants are read-only), and
+`documents.view` alone still opens nothing. Item (3) below — files that would
+be exposed by loosening the parent — is handled by refiling rather than left
+open: `_validate_shared_document_reference` now files a photo into Photos and
+a facility document into Facility Documents (never the parent), and migration
+`65128d5ccd50` moves every file sitting directly in a facility's folder or the
+root into a restricted folder (photo-referenced files into Photos), moves a
+Documents-list file out of the three opened sub-folders, gives user-made
+folders in the tree the sensitive tier, and records everything for a real
+downgrade. Tested in `tests/test_facility_folder_tiers.py` and
+`tests/test_facility_folder_tier_migration.py`. **What remains:** the
+already-filed sub-case in item (3) — a facility-referenced document that was
+filed somewhere outside the facility tree stays where it was and is governed by
+that folder's own ACL — is unchanged; and files a sensitive-only person filed by
+hand into Photos, Maintenance Records or Inspection Reports are now readable by
+every facilities role, which is what the decision opens.
+
 `GET /{facility_id}/folders` is gated at baseline `facilities.view`/
 `.manage`, and FAC-5's design deliberately splits facility data into five
 **sensitive** families (access keys, utility accounts, capital projects,

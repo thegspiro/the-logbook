@@ -67,7 +67,27 @@ APPARATUS_FOLDER_PERMISSIONS = [
     "apparatus.edit",
     "apparatus.manage",
 ]
+# The facility tree has two tiers (owner decision FAC-13, 2026-10-11).
+#
+# FACILITY_FOLDER_PERMISSIONS is the sensitive tier — the five sensitive
+# record families (access keys, utility accounts, capital projects, insurance,
+# occupants) are gated on it, and so are the folders holding their files:
+# Blueprints & Permits, Insurance & Leases, Capital Projects and the
+# restricted Facility Documents folder.
+#
+# FACILITY_ACCESS_PERMISSIONS is "any facilities access": the baseline
+# facilities.view grant (secretary, quartermaster, safety and training
+# officers) plus every grant above it. It gates the Facility Files root, each
+# facility's own folder, and the operational Photos, Maintenance Records and
+# Inspection Reports sub-folders. Write is unchanged — the view tiers are
+# read-only, so only facilities.edit/manage admit a mutation on either tier.
 FACILITY_FOLDER_PERMISSIONS = [
+    "facilities.view_sensitive",
+    "facilities.edit",
+    "facilities.manage",
+]
+FACILITY_ACCESS_PERMISSIONS = [
+    "facilities.view",
     "facilities.view_sensitive",
     "facilities.edit",
     "facilities.manage",
@@ -163,10 +183,11 @@ SYSTEM_FOLDERS = [
         "sort_order": 9,
         "icon": "building",
         "color": "text-indigo-400",
-        # Facility permissions, rather than document leadership, are the
-        # sensitive-record contract for this entire tree.
+        # Facility permissions, rather than document leadership, gate this
+        # tree. The root admits any facilities access; the sensitive
+        # sub-folders beneath it narrow that (FAC-13).
         "visibility": FolderVisibility.ORGANIZATION,
-        "required_permissions": FACILITY_FOLDER_PERMISSIONS,
+        "required_permissions": FACILITY_ACCESS_PERMISSIONS,
     },
     {
         "slug": "events",
@@ -271,15 +292,28 @@ APPARATUS_SUB_FOLDERS = [
     },
 ]
 
-# Standard sub-folders auto-created inside each facility folder
+# Standard sub-folders auto-created inside each facility folder.
+#
+# ``sensitive`` picks the tier (FAC-13): True stamps FACILITY_FOLDER_PERMISSIONS,
+# False stamps FACILITY_ACCESS_PERMISSIONS. Photos, maintenance and inspection
+# records are operational and open to every facilities role; floor plans stay
+# sensitive (owner decision), as do the two FAC-5 sensitive families.
+#
+# ``documents`` is where a file attached through a facility's Documents list
+# is filed. Those records are gated on the sensitive tier, so their files are
+# too — they used to sit directly in the facility's own folder, which now
+# admits any facilities access and can no longer hold them.
+FACILITY_PHOTOS_SUB_FOLDER = "photos"
+FACILITY_DOCUMENTS_SUB_FOLDER = "documents"
 FACILITY_SUB_FOLDERS = [
     {
-        "slug": "photos",
+        "slug": FACILITY_PHOTOS_SUB_FOLDER,
         "name": "Photos",
         "description": "Building exterior, interior, and detail photos",
         "sort_order": 0,
         "icon": "camera",
         "color": "text-sky-400",
+        "sensitive": False,
     },
     {
         "slug": "blueprints-permits",
@@ -288,6 +322,7 @@ FACILITY_SUB_FOLDERS = [
         "sort_order": 1,
         "icon": "map",
         "color": "text-blue-400",
+        "sensitive": True,
     },
     {
         "slug": "maintenance",
@@ -296,6 +331,7 @@ FACILITY_SUB_FOLDERS = [
         "sort_order": 2,
         "icon": "wrench",
         "color": "text-amber-400",
+        "sensitive": False,
     },
     {
         "slug": "inspections",
@@ -304,6 +340,7 @@ FACILITY_SUB_FOLDERS = [
         "sort_order": 3,
         "icon": "clipboard-check",
         "color": "text-green-400",
+        "sensitive": False,
     },
     {
         "slug": "insurance-leases",
@@ -312,6 +349,7 @@ FACILITY_SUB_FOLDERS = [
         "sort_order": 4,
         "icon": "shield",
         "color": "text-red-400",
+        "sensitive": True,
     },
     {
         "slug": "capital-projects",
@@ -320,8 +358,33 @@ FACILITY_SUB_FOLDERS = [
         "sort_order": 5,
         "icon": "hard-hat",
         "color": "text-orange-400",
+        "sensitive": True,
+    },
+    {
+        "slug": FACILITY_DOCUMENTS_SUB_FOLDER,
+        "name": "Facility Documents",
+        "description": "Files attached to the facility's Documents list",
+        "sort_order": 6,
+        "icon": "file-text",
+        "color": "text-indigo-400",
+        "sensitive": True,
     },
 ]
+
+
+def facility_sub_folder_definition(sub_slug: str) -> dict:
+    """The FACILITY_SUB_FOLDERS entry for *sub_slug*."""
+    return next(d for d in FACILITY_SUB_FOLDERS if d["slug"] == sub_slug)
+
+
+def facility_sub_folder_permissions(sub_slug: str) -> list[str]:
+    """The ``required_permissions`` a facility sub-folder carries (a copy)."""
+    tier = (
+        FACILITY_FOLDER_PERMISSIONS
+        if facility_sub_folder_definition(sub_slug)["sensitive"]
+        else FACILITY_ACCESS_PERMISSIONS
+    )
+    return list(tier)
 
 
 class DocumentFolder(Base):
