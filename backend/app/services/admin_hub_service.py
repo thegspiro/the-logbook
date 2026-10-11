@@ -87,6 +87,7 @@ from app.schemas.admin_hub import (
     AdminMetricSettingsUpdate,
 )
 from app.services.organization_service import OrganizationService
+from app.services.pre_shift_work_service import approved_pre_work_minutes
 from app.services.scheduling_service import (
     SchedulingService,
     closeout_backlog_halves,
@@ -1497,7 +1498,14 @@ async def _scheduling_hours_this_month(ctx: MetricContext) -> tuple[str, str]:
             )
         )
     ).scalar()
-    hours = float(minutes or 0) / 60.0
+    prep_rows = await approved_pre_work_minutes(
+        ctx.db,
+        Shift.organization_id == ctx.organization_id,
+        Shift.shift_date >= month_start,
+        Shift.shift_date < next_month,
+    )
+    minutes = float(minutes or 0) + float(prep_rows[0].minutes if prep_rows else 0)
+    hours = minutes / 60.0
     return _fmt_hours(hours), f"since {month_start.strftime('%B')} 1"
 
 

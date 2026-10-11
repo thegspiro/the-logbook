@@ -121,6 +121,9 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
   // Department feature settings (overtime advisory + auto-generation).
   const [feature, setFeature] = useState<SchedulingFeatureSettings | null>(null);
   const [savingFeature, setSavingFeature] = useState(false);
+  // `!== false`: the feature ships on, so a response that predates the field
+  // (an older backend mid-deploy) reads as on, matching what the server does.
+  const preShiftWorkEnabled = feature?.pre_shift_work_enabled !== false;
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -576,6 +579,28 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                       feature.restrict_checkin_to_assigned ? 'translate-x-6' : 'translate-x-1'
                     }`}
                   />
+                </button>
+              </div>
+              <div className="border-theme-surface-border/60 flex items-center justify-between gap-4 border-t pt-4">
+                <div>
+                  <p className="text-theme-text-primary text-sm font-medium">Allow pre-shift work</p>
+                  <p className="text-theme-text-muted mt-0.5 text-sm">
+                    A member who scans the vehicle before check-in opens can time prep work, like an early equipment
+                    check, against an upcoming shift. An officer approves the time before it counts toward hours.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-label="Allow pre-shift work"
+                  aria-checked={preShiftWorkEnabled}
+                  disabled={savingFeature}
+                  onClick={() => {
+                    void saveFeature({ pre_shift_work_enabled: !preShiftWorkEnabled });
+                  }}
+                  className={`toggle-track-sm ${preShiftWorkEnabled ? 'bg-violet-600' : 'bg-theme-surface-border'}`}
+                >
+                  <span className={`toggle-knob-sm ${preShiftWorkEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>
               </div>
             </div>

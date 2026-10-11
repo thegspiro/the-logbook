@@ -3741,6 +3741,97 @@ class ShiftAttendance(Base):
         return f"<ShiftAttendance(shift_id={self.shift_id}, user_id={self.user_id})>"
 
 
+class PreWorkStatus(str, enum.Enum):
+    """Lifecycle of a pre-shift work session.
+
+    ``active`` while the member is still working, ``pending`` once they end it
+    and it awaits an officer, then ``approved`` or ``rejected``. Only
+    ``approved`` time is ever credited as hours.
+    """
+
+    ACTIVE = "active"
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class ShiftPreWorkSession(Base):
+    """Time a member spent preparing for a shift before its check-in opened.
+
+    Kept apart from ``ShiftAttendance`` on purpose. Attendance is read as one
+    row per member per shift in many places (check-in, check-out, close-out,
+    shift counts for compliance), so a second row for the prep hour would
+    either raise ``MultipleResultsFound`` or count the member's shift twice.
+    A session here adds approved *hours* to the shift and never a shift.
+    """
+
+    __tablename__ = "shift_pre_work_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    shift_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("shifts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # The vehicle whose QR code or NFC tag started the session, for context in
+    # the officer's review. No foreign key, like ``Shift.apparatus_id``: the id
+    # names a row in either ``apparatus`` or ``basic_apparatus`` depending on
+    # the department (see utils/apparatus_ref), so the service validates it
+    # in-org instead.
+    apparatus_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    ended_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    duration_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    status: Mapped[PreWorkStatus] = mapped_column(
+        Enum(PreWorkStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=PreWorkStatus.ACTIVE,
+        server_default=PreWorkStatus.ACTIVE.value,
+    )
+    # What the officer credited, which may differ from the measured duration.
+    approved_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    reviewed_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    review_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_pre_work_shift", "shift_id"),
+        Index("idx_pre_work_user_status", "user_id", "status"),
+        Index("idx_pre_work_org_status", "organization_id", "status"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<ShiftPreWorkSession(shift_id={self.shift_id}, "
+            f"user_id={self.user_id}, status={self.status})>"
+        )
+
+
 class ShiftCall(Base):
     """
     Shift Call model (Framework)

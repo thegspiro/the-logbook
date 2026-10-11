@@ -62,6 +62,7 @@ import { useSchedulingStore } from '../../modules/scheduling/store/schedulingSto
 import type { Assignment } from '../../types/scheduling';
 import { isShiftCheckCompleted, type ShiftCheckSummary } from '../../modules/inventory/types/equipmentCheck';
 import { useAuthStore } from '../../stores/authStore';
+import ShiftPreShiftWorkSection from '../../modules/scheduling/components/ShiftPreShiftWorkSection';
 import { useTimezone } from '../../hooks/useTimezone';
 import {
   calendarDaysBetween,
@@ -1618,6 +1619,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     )}
                   </div>
                 </div>
+              )}
+
+              {/* Pre-shift work logged against this shift. Here rather than only
+              in the close-out so an officer can review it on any department's
+              close-out, and after finalizing. Hidden while the wizard is open,
+              which shows the same list on its attendance step. */}
+              {canManageShift && !(showFinalizeChecklist && callTrackingMode === 'count_only') && (
+                <ShiftPreShiftWorkSection shiftId={shift.id} />
               )}
 
               {/* Close-out. A department that records call counts rather than

@@ -539,6 +539,84 @@ class ShiftAttendanceResponse(UTCResponseBase):
 
 
 # ============================================
+# Pre-Shift Work Schemas
+# ============================================
+
+
+class PreShiftWorkDecision(str, PyEnum):
+    APPROVE = "approve"
+    REJECT = "reject"
+
+
+class PreShiftEligibleShift(UTCResponseBase):
+    """An upcoming shift a member may log pre-shift work against."""
+
+    id: UUID
+    shift_date: date
+    start_time: datetime
+    end_time: Optional[datetime] = None
+    apparatus_id: Optional[str] = None
+    apparatus_name: Optional[str] = None
+    apparatus_unit_number: Optional[str] = None
+    position: Optional[str] = None
+    on_scanned_apparatus: bool = False
+
+
+class PreShiftEligibleShiftsResponse(BaseModel):
+    """``enabled`` is false when the department has turned the feature off."""
+
+    enabled: bool
+    shifts: List[PreShiftEligibleShift] = Field(default_factory=list)
+
+
+class PreShiftWorkStart(BaseModel):
+    shift_id: UUID
+    # The vehicle that was scanned; either apparatus table's id.
+    apparatus_id: Optional[str] = Field(default=None, max_length=36)
+
+
+class PreShiftWorkEnd(BaseModel):
+    note: Optional[str] = Field(default=None, max_length=2000)
+
+
+class PreShiftWorkReview(BaseModel):
+    """An officer's decision. Times are optional corrections, and ``ended_at``
+    is required only for a session the member never ended."""
+
+    decision: PreShiftWorkDecision
+    approved_minutes: Optional[int] = Field(default=None, ge=1, le=1440)
+    started_at: Optional[datetime] = None
+    ended_at: Optional[datetime] = None
+    review_note: Optional[str] = Field(default=None, max_length=2000)
+
+
+class PreShiftWorkSessionResponse(UTCResponseBase):
+    id: UUID
+    shift_id: UUID
+    user_id: UUID
+    user_name: Optional[str] = None
+    apparatus_id: Optional[str] = None
+    apparatus_name: Optional[str] = None
+    started_at: datetime
+    ended_at: Optional[datetime] = None
+    duration_minutes: Optional[int] = None
+    note: Optional[str] = None
+    status: str
+    approved_minutes: Optional[int] = None
+    reviewed_by: Optional[UUID] = None
+    reviewed_by_name: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    review_note: Optional[str] = None
+    created_at: Optional[datetime] = None
+    shift_date: Optional[date] = None
+    shift_start_time: Optional[datetime] = None
+    shift_end_time: Optional[datetime] = None
+    shift_apparatus_name: Optional[str] = None
+    shift_officer_id: Optional[UUID] = None
+    shift_is_finalized: bool = False
+
+
+# ============================================
 # Shift Detail & List Schemas
 # ============================================
 
@@ -1494,6 +1572,10 @@ class SchedulingFeatureSettings(BaseModel):
     # Lifecycle enforcement
     require_end_of_shift_checks: bool = False
     restrict_checkin_to_assigned: bool = False
+    # Members may log timed pre-shift work against an upcoming shift from the
+    # vehicle check-in screen while that shift's check-in is not yet open.
+    # Defaults on; an officer approves each session before it counts.
+    pre_shift_work_enabled: bool = True
     # Signup window. Self-signup closes this many minutes *before* the shift
     # starts; 0 keeps it open right up to the start instant, which is the
     # behaviour every existing department has (pitfall #19 — an absent setting

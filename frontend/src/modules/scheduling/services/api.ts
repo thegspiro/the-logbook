@@ -184,6 +184,13 @@ export interface SchedulingFeatureSettings {
   auto_generate_weeks: number;
   require_end_of_shift_checks: boolean;
   restrict_checkin_to_assigned: boolean;
+  /**
+   * Members may log timed pre-shift work against an upcoming shift from the
+   * vehicle check-in screen. Defaults on; an officer approves each session.
+   * Optional because a response from a backend that predates the field omits
+   * it, and absent means on.
+   */
+  pre_shift_work_enabled?: boolean;
   /** Minutes before start_time that member self-signup closes. 0 = at the start. */
   signup_closes_minutes_before: number;
   /** Minutes after start_time an officer may still seat somebody. */
@@ -232,6 +239,62 @@ export interface PlatoonGroup {
 export interface PlatoonOverview {
   platoons_enabled: boolean;
   groups: PlatoonGroup[];
+}
+
+/** An upcoming shift a member may log pre-shift work against. */
+export interface PreShiftEligibleShift {
+  id: string;
+  shift_date: string;
+  start_time: string;
+  end_time?: string | null;
+  apparatus_id?: string | null;
+  apparatus_name?: string | null;
+  apparatus_unit_number?: string | null;
+  position?: string | null;
+  /** True for a shift on the vehicle the member just scanned. */
+  on_scanned_apparatus: boolean;
+}
+
+export interface PreShiftEligibleShiftsResponse {
+  /** False when the department has turned pre-shift work off. */
+  enabled: boolean;
+  shifts: PreShiftEligibleShift[];
+}
+
+export type PreShiftWorkStatus = 'active' | 'pending' | 'approved' | 'rejected';
+
+export interface PreShiftWorkSession {
+  id: string;
+  shift_id: string;
+  user_id: string;
+  user_name?: string | null;
+  apparatus_id?: string | null;
+  apparatus_name?: string | null;
+  started_at: string;
+  ended_at?: string | null;
+  duration_minutes?: number | null;
+  note?: string | null;
+  status: PreShiftWorkStatus;
+  approved_minutes?: number | null;
+  reviewed_by?: string | null;
+  reviewed_by_name?: string | null;
+  reviewed_at?: string | null;
+  review_note?: string | null;
+  created_at?: string | null;
+  shift_date?: string | null;
+  shift_start_time?: string | null;
+  shift_end_time?: string | null;
+  shift_apparatus_name?: string | null;
+  shift_officer_id?: string | null;
+  shift_is_finalized: boolean;
+}
+
+export interface PreShiftWorkReview {
+  decision: 'approve' | 'reject';
+  approved_minutes?: number | undefined;
+  started_at?: string | undefined;
+  ended_at?: string | undefined;
+  review_note?: string | undefined;
 }
 
 export interface ShiftAttendanceRecord {
@@ -1025,6 +1088,43 @@ export const schedulingService = {
       if (err instanceof AxiosError && err.response?.status === 404) return null;
       throw err;
     }
+  },
+
+  // Pre-shift work
+  async getPreShiftEligibleShifts(apparatusId?: string): Promise<PreShiftEligibleShiftsResponse> {
+    const response = await api.get<PreShiftEligibleShiftsResponse>('/scheduling/pre-shift-work/eligible-shifts', {
+      params: apparatusId ? { apparatus_id: apparatusId } : {},
+    });
+    return { enabled: Boolean(response.data?.enabled), shifts: asArray(response.data?.shifts) };
+  },
+  async getActivePreShiftWork(): Promise<PreShiftWorkSession | null> {
+    const response = await api.get<PreShiftWorkSession | null>('/scheduling/pre-shift-work/active');
+    return response.data ?? null;
+  },
+  async startPreShiftWork(shiftId: string, apparatusId?: string): Promise<PreShiftWorkSession> {
+    const response = await api.post<PreShiftWorkSession>('/scheduling/pre-shift-work', {
+      shift_id: shiftId,
+      ...(apparatusId ? { apparatus_id: apparatusId } : {}),
+    });
+    return response.data;
+  },
+  async endPreShiftWork(sessionId: string, note?: string): Promise<PreShiftWorkSession> {
+    const response = await api.post<PreShiftWorkSession>(`/scheduling/pre-shift-work/${sessionId}/end`, {
+      note: note?.trim() || undefined,
+    });
+    return response.data;
+  },
+  async getShiftPreShiftWork(shiftId: string): Promise<PreShiftWorkSession[]> {
+    const response = await api.get<PreShiftWorkSession[]>(`/scheduling/shifts/${shiftId}/pre-shift-work`);
+    return asArray(response.data);
+  },
+  async getPreShiftWorkAwaitingReview(): Promise<PreShiftWorkSession[]> {
+    const response = await api.get<PreShiftWorkSession[]>('/scheduling/pre-shift-work/pending');
+    return asArray(response.data);
+  },
+  async reviewPreShiftWork(sessionId: string, review: PreShiftWorkReview): Promise<PreShiftWorkSession> {
+    const response = await api.post<PreShiftWorkSession>(`/scheduling/pre-shift-work/${sessionId}/review`, review);
+    return response.data;
   },
 
   // Swap Requests

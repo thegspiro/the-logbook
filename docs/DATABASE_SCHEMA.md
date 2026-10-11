@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**302 tables · 4963 columns · 997 foreign keys**
+**303 tables · 4978 columns · 1001 foreign keys**
 
 ---
 
@@ -658,6 +658,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`shift_equipment_check_seals`](#shift_equipment_check_seals) | `ShiftEquipmentCheckSeal` | 9 | The tamper seal a crew read on one sealed container during a check. |
 | [`shift_equipment_checks`](#shift_equipment_checks) | `ShiftEquipmentCheck` | 18 | A completed equipment checklist submission for a shift. |
 | [`shift_patterns`](#shift_patterns) | `ShiftPattern` | 17 | Recurring shift pattern for automatic schedule generation. |
+| [`shift_pre_work_sessions`](#shift_pre_work_sessions) | `ShiftPreWorkSession` | 15 | Time a member spent preparing for a shift before its check-in opened. |
 | [`shift_swap_requests`](#shift_swap_requests) | `ShiftSwapRequest` | 13 | Request to swap shifts between two members. |
 | [`shift_template_equipment_checks`](#shift_template_equipment_checks) | `ShiftTemplateEquipmentCheck` | 7 | One equipment checklist a shift template puts on the shifts it creates. |
 | [`shift_templates`](#shift_templates) | `ShiftTemplate` | 19 | Reusable shift template for quick shift creation. |
@@ -9419,6 +9420,36 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_shift_pattern_org` (`organization_id`)
 
+### `shift_pre_work_sessions`
+
+**ShiftPreWorkSession** · `app/models/training.py`
+
+> Time a member spent preparing for a shift before its check-in opened. Kept apart from ``ShiftAttendance`` on purpose. Attendance is read as one row per member per shift in many places (check-in, check-out, close-out, shift counts for compliance), so a second row for the prep hour would either raise ``MultipleResultsFound`` or count the member's shift twice. A session here adds approved *hours* to the shift and never a shift.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `shift_id` | VARCHAR(36) | no | FK, IDX |  | → `shifts.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `apparatus_id` | VARCHAR(36) | yes |  |  |  |
+| `started_at` | DATETIME | no |  |  |  |
+| `ended_at` | DATETIME | yes |  |  |  |
+| `duration_minutes` | INTEGER | yes |  |  |  |
+| `note` | TEXT | yes |  |  |  |
+| `status` | ENUM(`active`, `pending`, `approved`, `rejected`) | no |  | `active` |  |
+| `approved_minutes` | INTEGER | yes |  |  |  |
+| `reviewed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `reviewed_at` | DATETIME | yes |  |  |  |
+| `review_note` | TEXT | yes |  |  |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `idx_pre_work_org_status` (`organization_id`, `status`)
+- `idx_pre_work_shift` (`shift_id`)
+- `idx_pre_work_user_status` (`user_id`, `status`)
+
 ### `shift_swap_requests`
 
 **ShiftSwapRequest** · `app/models/training.py`
@@ -10503,7 +10534,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (366 references)
+### → `users` (368 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10800,6 +10831,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_history_imports` | `committed_by` | SET NULL | yes |
 | `shift_history_imports` | `created_by` | SET NULL | yes |
 | `shift_patterns` | `created_by` | SET NULL | yes |
+| `shift_pre_work_sessions` | `reviewed_by` | SET NULL | yes |
+| `shift_pre_work_sessions` | `user_id` | CASCADE | no |
 | `shift_swap_requests` | `requesting_user_id` | CASCADE | no |
 | `shift_swap_requests` | `reviewed_by` | SET NULL | yes |
 | `shift_swap_requests` | `target_user_id` | SET NULL | yes |
@@ -10874,7 +10907,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (246 references)
+### → `organizations` (247 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11076,6 +11109,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_history_import_mappings` | `organization_id` | CASCADE | no |
 | `shift_history_imports` | `organization_id` | CASCADE | no |
 | `shift_patterns` | `organization_id` | CASCADE | no |
+| `shift_pre_work_sessions` | `organization_id` | CASCADE | no |
 | `shift_swap_requests` | `organization_id` | CASCADE | no |
 | `shift_template_equipment_checks` | `organization_id` | CASCADE | no |
 | `shift_templates` | `organization_id` | CASCADE | no |
@@ -11250,6 +11284,21 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `suggestion_forwards` | `position_id` | CASCADE | yes |
 | `user_positions` | `position_id` | CASCADE | no |
 
+### → `shifts` (10 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `event_requests` | `staffing_shift_id` | SET NULL | yes |
+| `org_call_responses` | `shift_id` | SET NULL | yes |
+| `shift_assignments` | `shift_id` | CASCADE | no |
+| `shift_attendance` | `shift_id` | CASCADE | no |
+| `shift_calls` | `shift_id` | CASCADE | no |
+| `shift_completion_reports` | `shift_id` | SET NULL | yes |
+| `shift_equipment_checks` | `shift_id` | SET NULL | yes |
+| `shift_pre_work_sessions` | `shift_id` | CASCADE | no |
+| `shift_swap_requests` | `offering_shift_id` | CASCADE | no |
+| `shift_swap_requests` | `requesting_shift_id` | SET NULL | yes |
+
 ### → `training_courses` (10 references)
 
 | From table | Column | On delete | Nullable |
@@ -11279,20 +11328,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `skill_templates` | `requirement_id` | SET NULL | yes |
 | `skill_tests` | `requirement_id` | SET NULL | yes |
 | `training_sessions` | `requirement_id` | SET NULL | yes |
-
-### → `shifts` (9 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `event_requests` | `staffing_shift_id` | SET NULL | yes |
-| `org_call_responses` | `shift_id` | SET NULL | yes |
-| `shift_assignments` | `shift_id` | CASCADE | no |
-| `shift_attendance` | `shift_id` | CASCADE | no |
-| `shift_calls` | `shift_id` | CASCADE | no |
-| `shift_completion_reports` | `shift_id` | SET NULL | yes |
-| `shift_equipment_checks` | `shift_id` | SET NULL | yes |
-| `shift_swap_requests` | `offering_shift_id` | CASCADE | no |
-| `shift_swap_requests` | `requesting_shift_id` | SET NULL | yes |
 
 ### → `training_categories` (9 references)
 

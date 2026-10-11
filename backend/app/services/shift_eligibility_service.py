@@ -1007,6 +1007,8 @@ class ShiftEligibilityService:
             "restrict_checkin_to_assigned": bool(
                 sched.get("restrict_checkin_to_assigned", False)
             ),
+            # Absent means on: the feature ships enabled for every department.
+            "pre_shift_work_enabled": bool(sched.get("pre_shift_work_enabled", True)),
         }
 
     def get_signup_window_settings(self, org: Organization) -> Dict[str, int]:
@@ -1200,6 +1202,7 @@ class ShiftEligibilityService:
         auto_generate_weeks: Optional[int] = None,
         require_end_of_shift_checks: Optional[bool] = None,
         restrict_checkin_to_assigned: Optional[bool] = None,
+        pre_shift_work_enabled: Optional[bool] = None,
         signup_closes_minutes_before: Optional[int] = None,
         late_signup_grace_minutes: Optional[int] = None,
         enforce_evoc: Optional[bool] = None,
@@ -1234,6 +1237,8 @@ class ShiftEligibilityService:
             scheduling["require_end_of_shift_checks"] = require_end_of_shift_checks
         if restrict_checkin_to_assigned is not None:
             scheduling["restrict_checkin_to_assigned"] = restrict_checkin_to_assigned
+        if pre_shift_work_enabled is not None:
+            scheduling["pre_shift_work_enabled"] = pre_shift_work_enabled
         if signup_closes_minutes_before is not None:
             scheduling["signup_closes_minutes_before"] = signup_closes_minutes_before
         if late_signup_grace_minutes is not None:
