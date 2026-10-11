@@ -34,6 +34,7 @@ Anonymity invariants — every one is load-bearing, and the tests in
 """
 
 import asyncio
+import copy
 import hashlib
 import html
 import os
@@ -105,6 +106,61 @@ COMPLIANCE_BOX_DESCRIPTION = (
     "regulatory issue. Reviewed by the Compliance Officer."
 )
 COMPLIANCE_REVIEWER_SLUG = "compliance_officer"
+# The question the Compliance box starts with, in the stored (canonical) shape.
+# It sorts reports for the reviewer and routes nowhere: Compliance is the only
+# box a department starts with, so there is no other box to send one to. An
+# administrator can add a route on any option later. Migration ``4b7e1f0c9a2d``
+# carries a frozen copy for departments onboarded before it.
+COMPLIANCE_INTAKE_QUESTIONS: List[Dict[str, Any]] = [
+    {
+        "id": "compliance_concern_type",
+        "label": "What kind of concern is this?",
+        "help_text": None,
+        "type": "radio",
+        "required": True,
+        "options": [
+            {
+                "value": "policy",
+                "label": "Policy or procedure",
+                "route_to_box_id": None,
+            },
+            {"value": "safety", "label": "Safety", "route_to_box_id": None},
+            {
+                "value": "training_record",
+                "label": "Training record",
+                "route_to_box_id": None,
+            },
+            {
+                "value": "regulatory",
+                "label": "Regulatory or legal",
+                "route_to_box_id": None,
+            },
+            {"value": "other", "label": "Other", "route_to_box_id": None},
+        ],
+        "condition_question_id": None,
+        "condition_operator": None,
+        "condition_value": None,
+    },
+    {
+        "id": "compliance_immediate_risk",
+        "label": "Is anyone at immediate risk?",
+        # A suggestion box is read when a reviewer next opens it, which may be
+        # days later; it must not look like a way to report an emergency.
+        "help_text": (
+            "This box is not watched around the clock. If someone is in danger "
+            "now, contact the officer on duty or emergency services directly."
+        ),
+        "type": "radio",
+        "required": True,
+        "options": [
+            {"value": "yes", "label": "Yes", "route_to_box_id": None},
+            {"value": "no", "label": "No", "route_to_box_id": None},
+        ],
+        "condition_question_id": "compliance_concern_type",
+        "condition_operator": "equals",
+        "condition_value": "safety",
+    },
+]
 
 
 def hash_follow_up_key(key: str) -> str:
@@ -341,6 +397,7 @@ class SuggestionService:
             anonymity_mode=SuggestionAnonymityMode.ALLOWED.value,
             follow_up_enabled=True,
             is_active=position_id is not None,
+            intake_questions=copy.deepcopy(COMPLIANCE_INTAKE_QUESTIONS),
             reviewers=[],
             watchers=[],
         )
