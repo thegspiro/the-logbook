@@ -1172,6 +1172,8 @@ class MaintenanceRecordResponse(MaintenanceRecordBase):
 class LowStockItemDetail(BaseModel):
     """Schema for an individual item in a low stock category"""
 
+    # Additive (W41-5): lets a reorder raised from the alert link the item.
+    id: Optional[UUID] = None
     name: str
     quantity: int
 
@@ -2395,6 +2397,9 @@ class ReorderRequestCreate(BaseModel):
 class ReorderRequestUpdate(BaseModel):
     """Schema for updating a reorder request"""
 
+    # W41-5: link (or relink) the inventory item, which receiving requires.
+    # Refused once stock has been received against the current link.
+    item_id: Optional[UUID] = None
     item_name: Optional[str] = Field(None, min_length=1, max_length=255)
     quantity_requested: Optional[int] = Field(None, ge=1)
     quantity_received: Optional[int] = Field(None, ge=0)

@@ -669,9 +669,16 @@ When available stock drops to or below the reorder point, the item appears on th
 
 1. Navigate to **Inventory Admin > Reorder** (`/inventory/admin/reorder`).
 2. Click **Create Reorder Request**.
-3. Select the item to reorder.
+3. Under **Inventory item**, search for and pick the item the order restocks.
+   The item name fills in from it if you have not typed one. A **Quick fill
+   from low stock** chip links the category's lowest item for you.
 4. Enter the requested quantity and any notes.
 5. Submit the request.
+
+**Link the item** _(2026-10-11)_: stock can only be received against a linked
+item. A request can still be saved without one; link it later with **Edit**
+while it is pending or approved, or when you receive it (below). Once stock has
+been received against a request, its linked item can no longer be changed.
 
 ### Reorder Request Workflow
 
@@ -688,20 +695,17 @@ Each status transition is audit-logged with the user, timestamp, and any notes.
 The list, the status filter and the badges show these words _(2026-09-29)_ —
 they used to show the stored values (`partially_received`).
 
-> **Known limitation — a reorder made here cannot be received** _(2026-09-29,
-> workflow review W41-5)_. **Receive stock** needs the request linked to an
-> inventory item, and nothing on this page sets that link: the create and edit
-> forms have no item picker, and the low-stock quick fill copies only the item's
-> name. The **Receive stock** dialog now says an unlinked request cannot be
-> received here and is disabled, rather than failing at submit. Receive the
-> delivery with **Receive Stock** on the items list instead (see
-> [Receiving a delivery](#receiving-a-delivery)) until this is decided; it is
-> open in `docs/KNOWN_LIMITATIONS.md`.
+> **Receiving an order that was never linked** _(2026-10-11, workflow review
+> W41-5)_. **Receive stock** on a request with no linked item now opens with an
+> **Inventory item** search first: pick the item the delivery goes onto, then
+> fill in the quantity, storage location and unit cost as usual. The request
+> stays linked to that item. Until an item is picked, the receive fields stay
+> hidden and the button stays disabled.
 
 ![Reorder requests table with requested quantities and status](./images/05-14-reorder-requests.png)
 
 <!-- Screenshot needed:
-_[Quartermaster at /inventory/admin/reorder: an Ordered request created on this page, with Receive stock open showing the red notice "This request isn't linked to an inventory item, so its stock can't be received here…" and the disabled Receive stock button. Do not submit.]_
+_[Quartermaster at /inventory/admin/reorder: an Ordered request with no linked item, with Receive stock open showing the Inventory item search and the note "This order isn't linked to an inventory item yet…", Receive stock disabled. Do not submit.]_
 -->
 
 > **Editing an order that has started arriving** _(2026-10-11)_: **Edit** can

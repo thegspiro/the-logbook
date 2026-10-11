@@ -1080,7 +1080,8 @@ export interface LowStockAlert {
   item_type: string;
   current_stock: number;
   threshold: number;
-  items?: Array<{ name: string; quantity: number }>;
+  /** `id` lets a reorder raised from the alert link the item (W41-5). */
+  items?: Array<{ id?: string | null; name: string; quantity: number }>;
 }
 
 export interface MaintenanceRecord {
@@ -1879,6 +1880,8 @@ export interface ReorderRequestCreate {
 }
 
 export interface ReorderRequestUpdate {
+  /** Refused by the server once stock has been received against the link. */
+  item_id?: string | null | undefined;
   item_name?: string | undefined;
   quantity_requested?: number | undefined;
   quantity_received?: number | undefined;

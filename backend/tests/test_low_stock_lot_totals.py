@@ -96,12 +96,17 @@ class TestLowStockReadsLots:
         org = await _org(db_session)
         tape = await _category(db_session, org, "Tape", threshold=5)
         # The quantity column says 50; the lots, which are the real count, say 2.
-        await _item(db_session, org, tape, "Cloth tape", quantity=50, lots=[(2, 30)])
+        tape_item = await _item(
+            db_session, org, tape, "Cloth tape", quantity=50, lots=[(2, 30)]
+        )
 
         rows = await InventoryService(db_session).get_low_stock_items(org.id)
 
         assert [(r["category_name"], r["current_stock"]) for r in rows] == [("Tape", 2)]
-        assert rows[0]["items"] == [{"name": "Cloth tape", "quantity": 2}]
+        # The id lets a reorder raised from the alert link the item (W41-5).
+        assert rows[0]["items"] == [
+            {"id": tape_item.id, "name": "Cloth tape", "quantity": 2}
+        ]
 
     async def test_expired_lots_count_as_nothing(self, db_session):
         org = await _org(db_session)
@@ -117,8 +122,8 @@ class TestLowStockReadsLots:
     async def test_items_without_lots_still_read_quantity(self, db_session):
         org = await _org(db_session)
         gloves = await _category(db_session, org, "Gloves", threshold=10)
-        await _item(db_session, org, gloves, "Nitrile M", quantity=3)
-        await _item(db_session, org, gloves, "Nitrile L", lots=[(4, None)])
+        medium = await _item(db_session, org, gloves, "Nitrile M", quantity=3)
+        large = await _item(db_session, org, gloves, "Nitrile L", lots=[(4, None)])
 
         rows = await InventoryService(db_session).get_low_stock_items(org.id)
 
@@ -126,8 +131,8 @@ class TestLowStockReadsLots:
             ("Gloves", 7)
         ]
         assert rows[0]["items"] == [
-            {"name": "Nitrile M", "quantity": 3},
-            {"name": "Nitrile L", "quantity": 4},
+            {"id": medium.id, "name": "Nitrile M", "quantity": 3},
+            {"id": large.id, "name": "Nitrile L", "quantity": 4},
         ]
 
     async def test_medical_is_left_out_when_excluded(self, db_session):

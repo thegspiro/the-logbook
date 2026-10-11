@@ -4561,6 +4561,7 @@ class InventoryService:
             ranked = (
                 select(
                     InventoryItem.category_id,
+                    InventoryItem.id,
                     InventoryItem.name,
                     on_hand.label("quantity"),
                     rank,
@@ -4575,13 +4576,20 @@ class InventoryService:
                 .subquery()
             )
             items_result = await self.db.execute(
-                select(ranked.c.category_id, ranked.c.name, ranked.c.quantity)
+                select(
+                    ranked.c.category_id,
+                    ranked.c.id,
+                    ranked.c.name,
+                    ranked.c.quantity,
+                )
                 .where(ranked.c.rank <= LOW_STOCK_ITEMS_PER_CATEGORY)
                 .order_by(ranked.c.category_id, ranked.c.rank)
             )
             for row in items_result.all():
+                # The id lets a reorder raised from this alert link the item,
+                # which receiving it requires (W41-5).
                 item_details.setdefault(row.category_id, []).append(
-                    {"name": row.name, "quantity": int(row.quantity)}
+                    {"id": row.id, "name": row.name, "quantity": int(row.quantity)}
                 )
 
         return [
@@ -8937,6 +8945,19 @@ class InventoryService:
 
             if "quantity_received" in data:
                 return None, "Received quantity changes require the receiving workflow"
+
+            # W41-5: the item link may be set or corrected until stock arrives
+            # against it; after that, moving it would leave the received units
+            # posted to one item and the order naming another.
+            if (
+                "item_id" in data
+                and (reorder.quantity_received or 0) > 0
+                and str(data.get("item_id") or "") != str(reorder.item_id or "")
+            ):
+                return None, (
+                    "The linked item cannot change once stock has been received "
+                    "against it"
+                )
 
             # receive_reorder's outstanding check assumes requested >= received;
             # an edit lowering the order below what has already arrived would
