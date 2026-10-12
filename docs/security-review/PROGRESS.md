@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#TBD](https://github.com/thegspiro/the-logbook/pulls)**: branch
+**PR [#3096](https://github.com/thegspiro/the-logbook/pull/3096)**: branch
 `claude/security-review-auth-session`, Feature 01 (Auth & session
 lifecycle), pass 8 (watchdog pickup). 0 fixed by this pass, 0 new findings;
 all three standing items (AUTH-15, AUTH-17, AUTH-21) re-verified fixed by
