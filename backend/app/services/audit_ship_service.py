@@ -187,7 +187,12 @@ async def ship_new_audit_logs(
 
             # Advance the watermark durably per acknowledged batch, so a
             # failure mid-run never re-ships confirmed rows.
-            state.last_shipped_id = rows[-1].chain_seq
+            last_seq = rows[-1].chain_seq
+            if last_seq is None:
+                # The batch query selects sealed rows only; an unsealed one
+                # has no chain position for the watermark to advance to.
+                raise RuntimeError(f"Shipped audit row {rows[-1].id} is not sealed")
+            state.last_shipped_id = last_seq
             state.last_shipped_at = datetime.now(UTC)
             await db.commit()
             results["shipped_entries"] += len(rows)

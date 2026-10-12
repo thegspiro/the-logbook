@@ -595,7 +595,7 @@ class MinuteService:
         return await self.get_minutes(minutes_id, organization_id)
 
     async def reopen_minutes(
-        self, minutes_id: str, organization_id: UUID
+        self, minutes_id: str, organization_id: UUID | str
     ) -> Optional[Tuple[MeetingMinutes, dict]]:
         """Return approved minutes to draft so a correction can be made.
 

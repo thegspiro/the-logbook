@@ -16,8 +16,17 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from loguru import logger
-from sqlalchemy import Connection, case, delete, event, func, select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import (
+    Connection,
+    case,
+    delete,
+    event,
+    func,
+    insert,
+    select,
+    update,
+)
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import set_committed_value
@@ -29,6 +38,7 @@ from app.models.audit import (
     AuditLogCheckpoint,
     AuditShipState,
 )
+from app.utils.sql_results import rows_affected
 
 # Current hash-chain algorithm version. Version 1 was an *unkeyed* SHA-256 hash,
 # which is tamper-EVIDENT but not tamper-PROOF: anyone able to write audit rows
@@ -399,10 +409,25 @@ class AuditLogger:
             .with_for_update()
             .execution_options(populate_existing=True)
         )
+        # The locking read must be this transaction's first read: a plain read
+        # before it would fix the REPEATABLE READ snapshot ahead of the lock,
+        # and the pending-row read in seal_pending would then miss what the
+        # previous sealer committed while this one waited.
         head: AuditChainHead | None = (await db.execute(stmt)).scalar_one_or_none()
         if head is not None:
             return head
+        # Only reached when nothing created the row first (seal_audit_chain
+        # does, in its own transaction). Two sealers arriving here together
+        # both hold a gap lock and can deadlock on the insert; MySQL rolls one
+        # back whole and seal_audit_chain retries it.
+        await self._create_chain_head(db)
+        created: AuditChainHead = (await db.execute(stmt)).scalar_one()
+        return created
 
+    async def _create_chain_head(self, db: AsyncSession) -> None:
+        """Insert the chain-head row, seeded from the sealed tail, unless a
+        concurrent sealer already has. No sealer can extend the chain until
+        this row exists, so the tail read here cannot move underneath it."""
         last_seq = (await db.execute(select(func.max(AuditLog.chain_seq)))).scalar()
         last_hash = None
         if last_seq:
@@ -416,22 +441,18 @@ class AuditLogger:
         shipped = (
             await db.execute(select(func.max(AuditShipState.last_shipped_id)))
         ).scalar()
-        try:
-            async with db.begin_nested():
-                db.add(
-                    AuditChainHead(
-                        id=_CHAIN_HEAD_ID,
-                        last_seq=max(last_seq or 0, shipped or 0),
-                        last_hash=last_hash,
-                    )
-                )
-                await db.flush()
-        except IntegrityError:
-            # Another sealer created it first. The locked read below waits
-            # for that transaction to finish and then returns its row.
-            pass
-        created: AuditChainHead = (await db.execute(stmt)).scalar_one()
-        return created
+        # IGNORE: a sealer that lost the race skips the insert rather than
+        # failing; the caller's locked read then waits for the winner's
+        # transaction and returns its row.
+        await db.execute(
+            insert(AuditChainHead)
+            .prefix_with("IGNORE")
+            .values(
+                id=_CHAIN_HEAD_ID,
+                last_seq=max(last_seq or 0, shipped or 0),
+                last_hash=last_hash,
+            )
+        )
 
     async def _tail_hash(self, db: AsyncSession, head: AuditChainHead) -> str:
         """The hash the next sealed row links to.
@@ -522,7 +543,7 @@ class AuditLogger:
                 .values(**values)
                 .execution_options(synchronize_session=False)
             )
-            if result.rowcount != 1:
+            if rows_affected(result) != 1:
                 raise RuntimeError(
                     f"Audit row {row.id} was sealed by another transaction "
                     "while this one held the chain head"
@@ -589,7 +610,7 @@ class AuditLogger:
                 "errors": [],
             }
 
-        results = {
+        results: dict[str, Any] = {
             "verified": True,
             "total_checked": len(logs),
             "pending_seal": pending_seal,
@@ -636,6 +657,10 @@ class AuditLogger:
         else:
             cutover_id = self._cutover_in(logs, keyring)
         for i, log in enumerate(logs):
+            # The walk selects sealed rows only; an unsealed one here means
+            # the query changed, and checking it would read as tampering.
+            if log.previous_hash is None or log.current_hash is None:
+                raise ValueError(f"Audit entry {log.id} is not sealed")
             row_version = log.hash_version or _LEGACY_HASH_VERSION
             if row_version >= _KEYED_MIN_VERSION:
                 hash_error, calculated_hash = self._check_keyed_row(
@@ -700,7 +725,15 @@ class AuditLogger:
             # id order -- so a windowed check links only rows that are
             # adjacent on the chain. A full walk links every pair: a missing
             # position there is a deleted row and must fail.
-            if i > 0 and (not windowed or log.chain_seq == logs[i - 1].chain_seq + 1):
+            prior_seq = logs[i - 1].chain_seq if i > 0 else None
+            if i > 0 and (
+                not windowed
+                or (
+                    log.chain_seq is not None
+                    and prior_seq is not None
+                    and log.chain_seq == prior_seq + 1
+                )
+            ):
                 previous_log = logs[i - 1]
                 if log.previous_hash != previous_log.current_hash:
                     results["verified"] = False
@@ -817,6 +850,10 @@ class AuditLogger:
         keyring = _AuditKeyring()
         cutover_id = self._cutover_in(logs, keyring)
         for log in logs:
+            # The walk selects sealed rows only; an unsealed one here means
+            # the query changed, and checking it would read as tampering.
+            if log.previous_hash is None or log.current_hash is None:
+                raise ValueError(f"Audit entry {log.id} is not sealed")
             row_version = log.hash_version or _LEGACY_HASH_VERSION
 
             if (
@@ -1085,6 +1122,12 @@ class AuditLogger:
         )
         # Last on the chain, which is what the surviving head links to.
         last_row = rows[-1]
+        last_hash = last_row.current_hash
+        if last_hash is None:
+            # The clean-prefix check above admits sealed rows only; reaching
+            # here unsealed means it changed, and attesting a boundary with no
+            # hash would leave the surviving chain anchored to nothing.
+            raise ValueError(f"Audit entry {last_row.id} is not sealed")
 
         # Archives contain the complete, unredacted audit records.  Do not
         # rely on the process umask to keep either the directory or files
@@ -1109,11 +1152,11 @@ class AuditLogger:
                     )
 
         boundary_cp.archived_at = datetime.now(UTC)
-        boundary_cp.last_log_hash = last_row.current_hash
+        boundary_cp.last_log_hash = last_hash
         boundary_cp.archive_attestation = self.compute_archive_attestation(
             boundary_cp.first_log_id,
             boundary_cp.last_log_id,
-            last_row.current_hash,
+            last_hash,
         )
 
         await db.execute(delete(AuditLog).where(AuditLog.id <= purge_end))
@@ -1152,14 +1195,15 @@ class AuditLogger:
 
         if not logs:
             raise ValueError("No logs found in specified range")
-        if any(log.current_hash is None for log in logs):
+        sealed_hashes = [log.current_hash for log in logs if log.current_hash]
+        if len(sealed_hashes) != len(logs):
             # A checkpoint attests hashes; an unsealed row has none yet, and
             # attesting the range without it would make its later seal look
             # like an insertion into an attested range.
             raise ValueError("Range contains audit entries not yet sealed")
 
         # Calculate Merkle root (simplified - hash of all hashes)
-        all_hashes = "".join([log.current_hash for log in logs])
+        all_hashes = "".join(sealed_hashes)
         merkle_root = hashlib.sha256(all_hashes.encode()).hexdigest()
 
         # Create checkpoint hash
@@ -1198,19 +1242,65 @@ async def seal_audit_chain(max_batches: int = 20) -> int:
     """
     from app.core.database import async_session_factory
 
+    await _ensure_chain_head(async_session_factory)
     total = 0
     for _ in range(max_batches):
-        async with async_session_factory() as db:
-            try:
-                sealed = await audit_logger.seal_pending(db)
-                await db.commit()
-            except Exception:
-                await db.rollback()
-                raise
+        sealed = await _seal_one_batch(async_session_factory)
         total += sealed
         if sealed < _SEAL_BATCH_SIZE:
             break
     return total
+
+
+# MySQL deadlock and lock-wait-timeout. Either rolls back the whole sealing
+# transaction and leaves the chain as it was, so trying again is safe.
+_RETRYABLE_LOCK_ERRORS = {1213, 1205}
+_SEAL_ATTEMPTS = 3
+
+
+async def _ensure_chain_head(session_factory: Any) -> None:
+    """Create the chain-head row, if missing, in its own short transaction
+    so the sealing transactions only ever lock a row that exists.
+
+    An installation built by ``create_all`` has the table but not the row the
+    migration seeds. Concurrent callers here take no gap lock -- the existence
+    check is a plain read -- so their INSERT IGNOREs queue on the key rather
+    than deadlocking."""
+    async with session_factory() as db:
+        present = (
+            await db.execute(
+                select(AuditChainHead.id).where(AuditChainHead.id == _CHAIN_HEAD_ID)
+            )
+        ).scalar_one_or_none()
+        if present is not None:
+            return
+        try:
+            await audit_logger._create_chain_head(db)
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+
+
+async def _seal_one_batch(session_factory: Any) -> int:
+    for attempt in range(1, _SEAL_ATTEMPTS + 1):
+        async with session_factory() as db:
+            try:
+                sealed: int = await audit_logger.seal_pending(db)
+                await db.commit()
+                return sealed
+            except OperationalError as e:
+                await db.rollback()
+                code = e.orig.args[0] if e.orig is not None and e.orig.args else None
+                if code not in _RETRYABLE_LOCK_ERRORS or attempt == _SEAL_ATTEMPTS:
+                    raise
+                logger.warning(
+                    f"Audit sealing hit MySQL error {code}; retrying ({attempt})"
+                )
+            except Exception:
+                await db.rollback()
+                raise
+    return 0
 
 
 # One in-flight after-commit sealer per process. A burst of audited commits

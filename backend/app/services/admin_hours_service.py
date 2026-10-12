@@ -1537,6 +1537,9 @@ class AdminHoursService:
         closed_entries: List[Tuple[AdminHoursEntry, float]] = []
 
         for entry, max_hours in rows:
+            if max_hours is None:
+                # Excluded by the query; the column itself is nullable.
+                continue
             max_duration = timedelta(hours=max_hours)
             if now - _ensure_utc(entry.clock_in_at) > max_duration:
                 entry.clock_out_at = _ensure_utc(entry.clock_in_at) + max_duration
@@ -1578,7 +1581,11 @@ class AdminHoursService:
                     "member_user_id": str(entry.user_id),
                     "category_id": str(entry.category_id),
                     "clock_in_at": _ensure_utc(entry.clock_in_at).isoformat(),
-                    "clock_out_at": _ensure_utc(entry.clock_out_at).isoformat(),
+                    "clock_out_at": (
+                        _ensure_utc(entry.clock_out_at).isoformat()
+                        if entry.clock_out_at
+                        else None
+                    ),
                     "duration_minutes": entry.duration_minutes,
                     "max_hours_per_session": max_hours,
                     "new_status": AdminHoursEntryStatus.PENDING.value,

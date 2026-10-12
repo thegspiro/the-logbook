@@ -861,7 +861,10 @@ async def archive_member(
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Only dropped members can be archived. Current status: {member.status.value}",
+            detail=(
+                "Only dropped members can be archived. Current status: "
+                f"{member.status.value if member.status else 'unknown'}"
+            ),
         )
 
     try:

@@ -2162,7 +2162,7 @@ class DocumentsService:
 
     @staticmethod
     def _new_facility_sub_folder(
-        organization_id: UUID, facility_folder: DocumentFolder, sub_slug: str
+        organization_id: UUID | str, facility_folder: DocumentFolder, sub_slug: str
     ) -> DocumentFolder:
         """An unsaved standard sub-folder of *facility_folder*, on its tier.
 

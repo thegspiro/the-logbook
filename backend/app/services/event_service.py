@@ -2235,7 +2235,7 @@ class EventService:
         return waitlisted_rsvp
 
     async def _email_waitlist_promotion(
-        self, event: Event, user_id: str, organization_id: UUID
+        self, event: Event, user_id: str, organization_id: UUID | str
     ) -> bool:
         """Email a member promoted off *event*'s waitlist, unless they have
         turned that email off. Returns whether an email was handed to the

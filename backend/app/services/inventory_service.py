@@ -35,6 +35,7 @@ from app.core.audit import log_audit_event
 from app.models.inventory import (
     MEDICAL_ITEM_TYPES,
     AssignmentType,
+    ChargeStatus,
     CheckOutRecord,
     DepartureClearance,
     EquipmentKit,
@@ -5393,7 +5394,7 @@ class InventoryService:
         return results[:limit]
 
     async def find_storage_areas_by_code(
-        self, code: str, organization_id: UUID
+        self, code: str, organization_id: UUID | str
     ) -> List[StorageArea]:
         """Active storage areas whose label barcode is exactly ``code`` (INV-8).
 
@@ -7412,7 +7413,7 @@ class InventoryService:
         if not issuance:
             return False, "Issuance record not found"
 
-        issuance.charge_status = charge_status
+        issuance.charge_status = ChargeStatus(charge_status)
         if charge_amount is not None:
             issuance.charge_amount = charge_amount
         elif charge_status == "charged" and issuance.unit_cost_at_issuance:
@@ -7929,7 +7930,7 @@ class InventoryService:
         elif chosen == "charge_review":
             if req.return_type != ReturnRequestType.ISSUANCE or issuance is None:
                 raise ValueError("Charge review is only available for pool issuances")
-            issuance.charge_status = "pending"
+            issuance.charge_status = ChargeStatus.PENDING
         if follow:
             self.db.add(follow)
             await self.db.flush()
