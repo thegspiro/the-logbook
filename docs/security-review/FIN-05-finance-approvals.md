@@ -1,6 +1,236 @@
 # Security Review 05 — Finance & Approvals
 
-**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
+**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
+
+---
+
+## Pass 8 (2026-10-12) — real delta (budget amendments, fiscal-year planning, budget requests, receipts), 1 new finding flagged, three standing items re-verified (two already closed by other work)
+
+**Scope.** Pass 7's closing merge is `2c2ebaa7` (PR #2941). `git diff
+2c2ebaa7..origin/main --stat` scoped to this feature's domain
+(`endpoints/finance.py`, `services/finance_service.py`,
+`services/finance_budget_request_service.py`,
+`services/finance_budget_ownership.py`, `public/finance_approvals.py`,
+`models/finance.py`, `schemas/finance.py`, `core/audit.py`,
+`frontend/src/modules/finance`) shows **82 files changed, 20,664
+insertions(+), 1,507 deletions(-)** — the backend alone is 6,726
+insertions across six files. This is not a near-zero-delta pass: the feature
+roughly tripled in size since pass 7 (`endpoints/finance.py` 1,370 → 3,650
+lines, 69 → 105 routes; `finance_service.py` grew to 5,867 lines; a new
+1,145-line `finance_budget_request_service.py`). Read in full against the
+checklist rather than sampled: every one of the 105 routes was enumerated
+(method, path, handler, auth dependency/permission — see below), and every
+new service method the diff touches was read, not diffed-and-trusted.
+
+**What's new, by area:**
+
+- **Fiscal-year lifecycle** (`fiscal-years/{fy_id}/activate|begin-close|
+planning-stage|lock`, `.../open-items`, `.../start-from/{source_id}`):
+  adoption, a leadership-review planning stage, a year-end close/lock
+  sign-off, and copying last year's lines into a draft (`start_from`).
+- **Budget amendments** (`budgets/{id}/amendments`, `.../reverse`,
+  `.../confirm`, `.../reject`): a second-officer confirmation workflow for
+  extra money approved mid-year, plus a reversing-entry correction for a
+  mistaken amendment — both entered `pending` and applied only when a
+  **different** officer confirms (`assert_different_person`), both take the
+  budget row's lock before touching `amount_budgeted`
+  (CLAUDE.md Pitfall #27), both refuse a locked fiscal year, and the reversal
+  path additionally takes a _locking_ read for an existing reversal so two
+  concurrent reversal attempts cannot both see "none yet" (the same #27
+  shape applied to the uniqueness check itself, not just the money).
+- **Budget-line ownership and self-service budget requests**
+  (`my-budgets`, `my-budgets/summary`, `budgets/{id}` GET,
+  `budgets/{id}/amendments` GET, `budgets/{id}/transactions` GET, and the
+  whole `budget-requests` resource — list/my-lines/proposal-options/create/
+  get/update/submit/withdraw/delete/decide/review): a budget line is now
+  owned by a **position** (`finance_budget_ownership.py`'s
+  `owned_budgets_query`/`user_owns_budget`), and its holder can read their
+  own lines and propose next year's amount for them with no `finance.*`
+  permission at all — every one of these routes carries only
+  `Depends(get_current_user)` and does its own self-scoping in the handler
+  or service (`_authorize_budget_view` for reads; `user_owns_budget`/
+  `user_holds_position` for writes). This is the single largest new
+  authorization surface in the feature and was read as such: every write
+  path either requires `finance.manage` outright or explicitly checks
+  ownership/position-holding before accepting a client-supplied
+  `budgetId`/`categoryId`/`stationId`/`ownerPositionId` (`assert_in_org` on
+  each FK — `create_request`, `finance_budget_request_service.py:517-531`).
+- **Receipts on purchase requests and expense line items**
+  (`.../receipt` upload/download, four routes): routed through the
+  app-wide `module_documents.store_as_document`/`serve_document`/
+  `discard_file` with `RECEIPT_FILE_RULES` — the same shared, already-
+  reviewed scanned-upload service the storefront and apparatus/facilities
+  receipts use, not a new trust boundary. A non-manager can only attach a
+  receipt to their own request, and not once it has left the status window
+  that status-guard constants (`_PR_RECEIPT_CLOSED*`, `_ER_RECEIPT_*`)
+  define.
+- **`finance.budget_review`**, a new permission gating `confirm_budget_
+amendment`/`reject_budget_amendment` (as an OR-alternative to
+  `finance.manage`) and `review_budget_request` (leadership's change to a
+  Treasurer-decided request). Confirmed **not** baseline-granted: searched
+  `core/permissions.py`'s `DEFAULT_POSITIONS` for the string — zero matches
+  — so no seeded position (including `member`/`firefighter`) carries it,
+  per CLAUDE.md Pitfall #23/Checklist §2.
+- **`core/audit.py`** gained signing-key rotation support (a `signing_key_
+id` fingerprint per row, `_AuditKeyring`, SECRET_KEY-fallback
+  verification before a cut-over row) — a cross-cutting change, not
+  finance-specific, that this feature only consumes through `log_audit_
+event()`'s unchanged call signature. Out of this feature's scope to
+  re-review in full (it belongs to Feature 00/28's own sweeps); confirmed
+  only that every finance `log_audit_event` call site still compiles
+  against it and the full backend suite (below) passes.
+
+**New finding this pass:**
+
+### FIN8-05-1 — MED — `decide_budget_request` has no separation-of-duties guard, unlike its own sibling `review_budget_request` — OPEN (flagged)
+
+**What:** `FinanceBudgetRequestService.review_request` (leadership review of
+a Treasurer-decided request) explicitly refuses a reviewer who owns the
+line or submitted the request:
+
+```python
+if str(request.submitted_by or "") == str(reviewer_id) or (
+    await self._acts_as_owner(request, org_id, reviewer_id)
+):
+    raise BudgetRequestForbiddenError(...)
+```
+
+`decide_request` — the Treasurer's own decision on a submitted request,
+gated by `finance.manage` — has no equivalent check anywhere in its body
+(`backend/app/services/finance_budget_request_service.py:635-714`). Nothing
+stops the same `finance.manage` holder who submitted a request from also
+deciding it.
+
+**Where:** `backend/app/services/finance_budget_request_service.py:635`
+(`decide_request`); compare `:842` (`review_request`'s guard).
+
+**Failure scenario, concrete:** a `finance.manage` holder (the Treasurer)
+also holds a position that owns a budget line (plausible — the Treasurer's
+own office, or a small department where the Treasurer wears a second hat).
+`create_request` lets a manager create a request for **any** line,
+including one they personally own (`is_manager=True` bypasses the
+ownership check at `finance_budget_request_service.py:503-509`). The same
+person then calls `POST /budget-requests/{id}/decide` with
+`decision=approve`, writing their own requested amount straight into the
+draft-year budget line (`_write_amount`) with no second person involved at
+any point in the Treasurer-decision step. Contrast `review_request`, written
+by the same feature in the same pass, which explicitly blocks exactly this
+for the leadership-review step one stage later.
+
+**Impact:** a single `finance.manage` holder can self-approve their own
+unit's budget request, with no audit trail distinguishing it from an
+arm's-length decision (the audit event records `decided_by` but nothing
+flags same-person). Lower severity than a money-movement SoD gap (FIN-4):
+nothing is disbursed, the amount still passes every ceiling/locked-year
+check, and leadership review (if the department uses that planning stage)
+still gets a chance to catch it via `review_request`'s own guard — but a
+department that skips leadership review for most years has no check at all
+on this specific self-dealing path.
+
+**Why not fixed:** this is the exact shape CLAUDE.md's established pattern
+for this file treats as a product decision, not a drive-by fix — compare
+FIN-4 (disbursement SoD, flagged, not fixed, pending a `finance.disburse`
+permission) and OPS-8 (`record_dues_payment`, flagged, not fixed). Adding
+`assert_different_person(decided_by, request.submitted_by, ...)`
+unconditionally would also block the only-finance-officer department from
+ever deciding a request they raised themselves (the same operational
+tension OPS-8 and the amendment-confirmation docs already name for a
+single-officer department) — a behavior change needing an owner call on
+whether to accept that cost, add an override, or leave the leadership-
+review stage as the sole backstop. No guard test was added for the same
+reason FIN-4/OPS-8 have none: there is nothing to regress-test for a
+behavior that is not changing.
+
+**Disposition: FIN8-05-1 OPEN (flagged).** Mirrored into
+`docs/KNOWN_LIMITATIONS.md`.
+
+**Re-verified, standing items — one correction, two closed by other work:**
+
+- **FIN-30** — `list_dues_payments` (`finance_service.py:4909`) still
+  eager-loads a member's entire payment ledger with no `.offset()`/
+  `.limit()`. Unchanged; correctly flagged rather than fixed (a response-
+  shape change).
+- **`record_dues_payment` has no separation-of-duties guard** (OPS-8) —
+  unchanged; `kwargs.get("recorded_by")` is still passed straight through
+  with no `assert_different_person` call.
+- **`get_pending_approvals` per-assignee filtering — correction, not a
+  re-confirmation.** Pass 7 (2026-10-05) stated this was "unchanged; still
+  no per-step assignee column to filter on." That was already **wrong on
+  the day it was written** — `docs/KNOWN_LIMITATIONS.md`'s own "Finance:
+  correctness/DoS polish" row dates the fix to 2026-10-04, one day earlier.
+  Read directly, not taken on either doc's word: `get_pending_approvals`
+  (`finance_service.py:2846`) now matches every pending step against the
+  caller via `user_matches_step`/`finance_approver_matching.py` (the same
+  function `approve_step`/`deny_step` gate on) and returns only the steps
+  the caller can act on, unless they hold `finance.configure_approvals`
+  (an approvals admin, who sees every row with the ones they are not named
+  on flagged `requires_override`). Pass 7's claim is corrected here rather
+  than silently carried forward.
+- **The eight non-ledger status-transition locks** (`submit_purchase_
+request`/`submit_expense_report`/`submit_check_request`/`mark_pr_
+ordered`/`mark_pr_received`/`update_purchase_request`/`update_expense_
+report`/`update_check_request`) — **re-verified FIXED by other,
+  non-security-review work, not still open as pass 6/7 stated.** Commit
+  `1eae838d` ("let every member raise their own finance requests",
+  2026-10-07 — two days _after_ pass 7), landed while adding
+  `restrict_to_user` self-service scoping, now routes all eight through
+  `get_purchase_request`/`get_expense_report`/`get_check_request`'s
+  `for_update=True` path (confirmed by direct read of all eight methods,
+  not the commit message). A guard test already exists —
+  `tests/test_capacity_locking.py::TestFinanceWorkflowLocking` (added in
+  the same commit) — and passes against current code (55/55 in that file,
+  run below). FIN-31's pass-5 scope decision to defer these eight is
+  therefore **closed**, not merely unchanged.
+
+**Verified good ✅ (re-confirmed by direct read of current code, not
+re-derived from pass 7's word):** all 105 routes enumerated by method,
+path, handler and gate — every one carries either `require_permission`
+(appropriate to its sensitivity: `.manage` for money-moving/config writes,
+`.view`/`.request`/`.manage` OR-gates for the request lifecycle,
+`.approve` for the approval queue, `.configure_approvals` for chain admin,
+`.budget_review` for the two leadership-review actions) or `get_current_
+user` with explicit self-scoping in the handler/service body (`my-budgets`,
+the budget-owner reads, the whole `budget-requests` self-service surface) —
+no route falls through to an unguarded `get_current_user` with no scoping
+at all; `_validate_finance_fks`/`_validate_owner_position`/
+`_validate_budget_category_fks`/`assert_in_org` cover every client-supplied
+`budget_id`/`category_id`/`fiscal_year_id`/`station_id`/`apparatus_id`/
+`facility_id`/`owner_position_id`/`parent_category_id` on every create/
+update path touched by this pass's diff (walked each one, not sampled);
+every `ondelete="SET NULL"` FK in `models/finance.py` pairs with
+`nullable=True` (scripted check across all 40 SET NULL columns, zero
+violations — Pitfall #2); `add_budget_amendment`/`reverse_budget_
+amendment`/`confirm_budget_amendment`/`_pending_amendment`/`create_
+budget_request`/`decide_request`/`review_request`/`start_from` all take
+their row locks in the documented order (fiscal year, then request/
+amendment, then line) and use locking reads for their own uniqueness
+checks (`_assert_no_live_duplicate`, the reversal-exists check) rather than
+a plain `SELECT` that could answer from a pre-lock snapshot; receipt
+upload/download goes through `module_documents` only, no bespoke file
+handling; the one `.like()` still declares `escape=LIKE_ESCAPE_CHAR`; the
+one CSV export (`export_transactions`) still uses only `SafeCsvWriter`,
+capped at `max_records=10_000`; every `except` routes through `safe_error_
+detail()`; `public/finance_approvals.py` is unchanged from pass 7's
+byte-identical, independently-verified state (re-confirmed: `git diff
+2c2ebaa7..origin/main -- backend/app/api/public/finance_approvals.py`
+returns no lines).
+
+**Completion gate (pass 8):** `flake8 app/ tests/ alembic/` (7.3.0, CI's
+pin) — clean. `black --check app/ tests/ alembic/` (26.5.1) — clean.
+`isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin) — clean.
+`validate_migrations.py --strict` — 572 revisions, single head
+`3c9c5025a380`. `check_route_permissions.py --strict` — 265 routes, 0
+errors, 0 warnings. `generate_schema_docs.py` re-run — zero diff against
+committed `docs/DATABASE_SCHEMA.md`. `pytest tests/test_capacity_locking.py`
+— 55 passed. `pytest tests/ -q -k "finance or dues or approval or budget or
+export"` — 1,097 passed, 1 skipped (pre-existing, `py_vapid`), 0 failed.
+Full backend unit suite (`pytest tests/ -m "not integration and not slow
+and not docker"`) — **14,262 passed, 1 skipped (pre-existing, `py_vapid`),
+0 failed.** Frontend: `npx vitest run src/modules/finance/` — 27 files, 435
+tests, all passed. `npx vitest run src/modules/testing/testingRegistry.
+test.ts` — 12 passed. `npx playwright test src/e2e/mobile-route-integrity.
+spec.ts --project=chromium` — 1 passed. `npm run typecheck` — 0 errors.
+`npm run lint` — 0 errors, 0 warnings.
 
 ---
 
