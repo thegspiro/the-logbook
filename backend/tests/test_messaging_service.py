@@ -12,6 +12,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy.engine import CursorResult
 
 from app.api.v1.endpoints import messages as messages_endpoint
 from app.models.user import ACTIVE_ACCOUNT_STATUSES
@@ -286,7 +287,7 @@ class TestReadAckVisibilityGate:
                         return_value=SimpleNamespace(read_at=None)
                     )
                 ),
-                SimpleNamespace(rowcount=1),
+                MagicMock(spec=CursorResult, rowcount=1),
             ]
         )
         db.add = MagicMock()
@@ -339,8 +340,8 @@ class TestReadAckVisibilityGate:
         db.execute = AsyncMock(
             side_effect=[
                 MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
-                SimpleNamespace(rowcount=0),
-                SimpleNamespace(rowcount=1),
+                MagicMock(spec=CursorResult, rowcount=0),
+                MagicMock(spec=CursorResult, rowcount=1),
             ]
         )
         db.commit = AsyncMock()

@@ -62,7 +62,7 @@ class CompetencyMatrixService:
 
     async def get_competency_matrix(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         requirement_ids: Optional[List[str]] = None,
         user_ids: Optional[List[str]] = None,
     ) -> Dict:

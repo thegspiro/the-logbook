@@ -9,11 +9,11 @@ without a real database. Each department is swept against its own date.
 """
 
 from datetime import date
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy.dialects import mysql
+from sqlalchemy.engine import CursorResult
 
 from app.services import scheduled_tasks
 from app.services.scheduled_tasks import run_mark_overdue_maintenance
@@ -33,7 +33,7 @@ async def test_marks_apparatus_and_facility_overdue():
 
     async def cap(statement, *a, **k):
         captured.append(statement)
-        return SimpleNamespace(rowcount=2)
+        return MagicMock(spec=CursorResult, rowcount=2)
 
     db = MagicMock()
     db.execute = AsyncMock(side_effect=cap)
@@ -62,7 +62,7 @@ async def test_marks_apparatus_and_facility_overdue():
 
 async def test_zero_when_nothing_overdue():
     db = MagicMock()
-    db.execute = AsyncMock(return_value=SimpleNamespace(rowcount=0))
+    db.execute = AsyncMock(return_value=MagicMock(spec=CursorResult, rowcount=0))
     db.commit = AsyncMock()
     out = await run_mark_overdue_maintenance(db)
     assert out["marked_overdue"] == 0

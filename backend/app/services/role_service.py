@@ -29,6 +29,7 @@ from app.services.admin_continuity_service import (
     assert_role_change_retains_administrator,
 )
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
+from app.utils.sql_results import rows_affected
 
 
 def slugify(name: str) -> str:
@@ -727,7 +728,7 @@ class RoleManagementService:
                 user_roles.c.user_id == user_id, user_roles.c.position_id == role_id
             )
         )
-        if result.rowcount == 0:
+        if rows_affected(result) == 0:
             return False  # Wasn't assigned
 
         # Audit log

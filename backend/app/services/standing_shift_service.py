@@ -122,7 +122,7 @@ class StandingShiftService:
     # Matching
     # ------------------------------------------------------------------
 
-    async def _org_tz(self, organization_id: UUID) -> ZoneInfo:
+    async def _org_tz(self, organization_id: UUID | str) -> ZoneInfo:
         # Shared with shift generation on purpose: the two must agree, or a
         # department that never set a timezone gets one answer about which
         # half of the day a shift starts in and the other gets the opposite.
@@ -171,7 +171,7 @@ class StandingShiftService:
 
     async def _shifts_on_dates(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         dates: List[date],
     ) -> Dict[date, List[Shift]]:
         if not dates:
@@ -193,8 +193,8 @@ class StandingShiftService:
 
     async def preview(
         self,
-        organization_id: UUID,
-        user_id: UUID,
+        organization_id: UUID | str,
+        user_id: UUID | str,
         pattern: StandingShiftPattern,
         weekday: int,
         period: StandingShiftPeriod,
@@ -275,8 +275,8 @@ class StandingShiftService:
 
     async def _held_shift_ids(
         self,
-        organization_id: UUID,
-        user_id: UUID,
+        organization_id: UUID | str,
+        user_id: UUID | str,
         dates: List[date],
     ) -> set:
         if not dates:
@@ -297,8 +297,8 @@ class StandingShiftService:
 
     async def create(
         self,
-        organization_id: UUID,
-        user_id: UUID,
+        organization_id: UUID | str,
+        user_id: UUID | str,
         *,
         pattern: StandingShiftPattern,
         weekday: int,
@@ -396,8 +396,8 @@ class StandingShiftService:
 
     async def list_for_user(
         self,
-        organization_id: UUID,
-        user_id: UUID,
+        organization_id: UUID | str,
+        user_id: UUID | str,
         active_only: bool = True,
     ) -> List[StandingShiftClaim]:
         query = (
@@ -413,7 +413,7 @@ class StandingShiftService:
     async def get_claim(
         self,
         claim_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Optional[StandingShiftClaim]:
         result = await self.db.execute(
             select(StandingShiftClaim)
@@ -425,8 +425,8 @@ class StandingShiftService:
 
     async def claim_covering_shift(
         self,
-        organization_id: UUID,
-        user_id: UUID,
+        organization_id: UUID | str,
+        user_id: UUID | str,
         shift: Shift,
     ) -> Optional[StandingShiftClaim]:
         """The member's active claim that this shift belongs to, if any.
@@ -512,7 +512,7 @@ class StandingShiftService:
 
     async def apply_to_shift(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         shift: Shift,
         assign: Any,
     ) -> int:

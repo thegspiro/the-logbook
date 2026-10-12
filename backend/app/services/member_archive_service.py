@@ -272,7 +272,7 @@ async def reactivate_member(
     if member.status != UserStatus.ARCHIVED:
         raise ValueError(
             f"Only archived members can be reactivated. "
-            f"Current status: {member.status.value}"
+            f"Current status: {getattr(member.status, 'value', member.status)}"
         )
 
     # Before the status changes: unrecorded earlier service ends where the

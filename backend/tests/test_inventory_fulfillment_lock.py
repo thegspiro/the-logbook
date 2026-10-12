@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 from sqlalchemy.dialects import mysql
+from sqlalchemy.engine import CursorResult
 
 from app.models.inventory import RequestStatus
 from app.services.inventory_service import InventoryService
@@ -67,7 +68,7 @@ async def test_fulfillment_aborts_when_claim_lost_to_concurrent_call():
 
     # ...but the atomic APPROVED -> FULFILLED claim matches zero rows because a
     # concurrent fulfill already claimed it.
-    claim_result = MagicMock()
+    claim_result = MagicMock(spec=CursorResult)
     claim_result.rowcount = 0
 
     db = MagicMock()

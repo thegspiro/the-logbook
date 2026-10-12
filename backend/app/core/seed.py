@@ -62,7 +62,7 @@ async def seed_organization(
     return organization
 
 
-async def seed_roles(db: AsyncSession, organization_id: uuid.UUID):
+async def seed_roles(db: AsyncSession, organization_id: uuid.UUID | str):
     """
     Seed default roles for an organization
 

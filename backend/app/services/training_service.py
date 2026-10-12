@@ -76,7 +76,7 @@ class TrainingService:
         self.db = db
 
     async def get_user_training_stats(
-        self, user_id: UUID, organization_id: UUID
+        self, user_id: UUID, organization_id: UUID | str
     ) -> UserTrainingStats:
         """
         Get comprehensive training statistics for a user
@@ -141,7 +141,7 @@ class TrainingService:
 
     async def get_training_hours_by_type(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         user_id: Optional[UUID] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
@@ -183,7 +183,7 @@ class TrainingService:
 
     async def generate_training_report(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         start_date: date,
         end_date: date,
         user_id: Optional[UUID] = None,
@@ -453,7 +453,7 @@ class TrainingService:
         self,
         requirement,
         user_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         completed_records: Optional[Sequence[Any]],
         today: date,
     ) -> List[Any]:
@@ -512,7 +512,7 @@ class TrainingService:
         self,
         requirement,
         user_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         completed_records: Optional[Sequence[Any]],
         rolling_months: int,
         today: date,
@@ -544,7 +544,7 @@ class TrainingService:
         self,
         requirement,
         user_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         completed_records: Optional[Sequence[Any]],
         today: date,
     ) -> Optional[date]:
@@ -948,8 +948,8 @@ class TrainingService:
     async def check_requirement_progress(
         self,
         user_id: UUID,
-        requirement_id: UUID,
-        organization_id: UUID,
+        requirement_id: UUID | str,
+        organization_id: UUID | str,
         waivers: Optional[List[WaiverPeriod]] = None,
         requirement: Optional[TrainingRequirement] = None,
         completed_records: Optional[Sequence[Any]] = None,
@@ -1452,7 +1452,7 @@ class TrainingService:
         )
 
     async def get_all_requirements_progress(
-        self, user_id: UUID, organization_id: UUID, year: Optional[int] = None
+        self, user_id: UUID, organization_id: UUID | str, year: Optional[int] = None
     ) -> List[RequirementProgress]:
         """
         Get progress for all requirements applicable to a user
@@ -1467,7 +1467,7 @@ class TrainingService:
     async def get_requirements_progress_for(
         self,
         user_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         requirements: List[TrainingRequirement],
     ) -> List[RequirementProgress]:
         """Progress against the given requirements, waivers fetched once.
@@ -1704,7 +1704,7 @@ class TrainingService:
     async def _catch_up_join_date(
         self,
         user_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         requirements: Sequence[TrainingRequirement],
     ) -> Optional[date]:
         """The member's ``member_join_date``, read without loading the row.
@@ -1730,7 +1730,7 @@ class TrainingService:
         return join_date_from(row[0], row[1])
 
     async def get_applicable_requirements(
-        self, user_id: UUID, organization_id: UUID, year: Optional[int] = None
+        self, user_id: UUID, organization_id: UUID | str, year: Optional[int] = None
     ) -> List[TrainingRequirement]:
         """The active requirements that apply to a user, in a stable order."""
         # NOTE: `year` defaults to None → the year filter below is skipped (all
@@ -1780,9 +1780,9 @@ class TrainingService:
 
     async def get_expiring_certifications(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         days_ahead: int = 90,
-        user_id: Optional[UUID] = None,
+        user_id: UUID | str | None = None,
     ) -> List[TrainingRecord]:
         """
         Get certifications that are expiring within the specified number of days,
