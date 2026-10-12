@@ -1017,7 +1017,7 @@ class UnroutedApprovalResponse(UTCResponseBase):
 # ============================================
 
 
-class BudgetVsActualRow(BaseModel):
+class BudgetVsActualRowResponse(BaseModel):
     """One budget line, through the report's date."""
 
     model_config = _RESPONSE_CONFIG
@@ -1041,7 +1041,7 @@ class BudgetVsActualRow(BaseModel):
     running_spent_differs: bool = False
 
 
-class BudgetVsActualTotals(BaseModel):
+class BudgetVsActualTotalsResponse(BaseModel):
     model_config = _RESPONSE_CONFIG
 
     original_budget: Decimal
@@ -1052,18 +1052,18 @@ class BudgetVsActualTotals(BaseModel):
     remaining: Decimal
 
 
-class BudgetVsActualReport(BaseModel):
+class BudgetVsActualReportResponse(BaseModel):
     model_config = _RESPONSE_CONFIG
 
     fiscal_year_id: str
     fiscal_year_name: str
     as_of: date
     includes_committed: bool
-    rows: list[BudgetVsActualRow]
-    totals: BudgetVsActualTotals
+    rows: list[BudgetVsActualRowResponse]
+    totals: BudgetVsActualTotalsResponse
 
 
-class AmendmentLogRow(UTCResponseBase):
+class AmendmentLogRowResponse(UTCResponseBase):
     model_config = _RESPONSE_CONFIG
 
     amendment_id: str
@@ -1083,17 +1083,17 @@ class AmendmentLogRow(UTCResponseBase):
     decision_note: Optional[str] = None
 
 
-class AmendmentLogReport(BaseModel):
+class AmendmentLogReportResponse(BaseModel):
     model_config = _RESPONSE_CONFIG
 
     fiscal_year_id: str
     fiscal_year_name: str
-    rows: list[AmendmentLogRow]
+    rows: list[AmendmentLogRowResponse]
     # Net of the confirmed rows: what the amendments moved the year's budget by.
     confirmed_net: Decimal
 
 
-class PaymentsRegisterRow(BaseModel):
+class PaymentsRegisterRowResponse(BaseModel):
     model_config = _RESPONSE_CONFIG
 
     # The department's calendar day the money moved.
@@ -1110,12 +1110,12 @@ class PaymentsRegisterRow(BaseModel):
     amount: Decimal
 
 
-class PaymentsRegisterReport(BaseModel):
+class PaymentsRegisterReportResponse(BaseModel):
     model_config = _RESPONSE_CONFIG
 
     start: date
     end: date
-    rows: list[PaymentsRegisterRow]
+    rows: list[PaymentsRegisterRowResponse]
     total: Decimal
 
 

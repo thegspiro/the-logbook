@@ -31,7 +31,7 @@ from app.models.finance import (
 )
 from app.models.user import User
 from app.schemas.finance import (
-    AmendmentLogReport,
+    AmendmentLogReportResponse,
     ApprovalActionRequest,
     ApprovalChainCreate,
     ApprovalChainResponse,
@@ -61,7 +61,7 @@ from app.schemas.finance import (
     BudgetSummaryResponse,
     BudgetTransactionPageResponse,
     BudgetUpdate,
-    BudgetVsActualReport,
+    BudgetVsActualReportResponse,
     CheckRequestCreate,
     CheckRequestResponse,
     CheckRequestUpdate,
@@ -100,7 +100,7 @@ from app.schemas.finance import (
     MyBudgetRequestLinesResponse,
     MyBudgetResponse,
     MyBudgetsSummaryResponse,
-    PaymentsRegisterReport,
+    PaymentsRegisterReportResponse,
     PendingApprovalResponse,
     PurchaseRequestCreate,
     PurchaseRequestResponse,
@@ -1900,7 +1900,7 @@ def _amount_cell(value) -> Decimal | str:
     return Decimal(value).quantize(Decimal("0.01"))
 
 
-@router.get("/reports/budget-vs-actual", response_model=BudgetVsActualReport)
+@router.get("/reports/budget-vs-actual", response_model=BudgetVsActualReportResponse)
 async def budget_vs_actual_report(
     fiscal_year_id: str = Query(...),
     as_of: Optional[date] = Query(None),
@@ -1982,7 +1982,7 @@ async def budget_vs_actual_report(
     )
 
 
-@router.get("/reports/amendment-log", response_model=AmendmentLogReport)
+@router.get("/reports/amendment-log", response_model=AmendmentLogReportResponse)
 async def amendment_log_report(
     fiscal_year_id: str = Query(...),
     format: str = _REPORT_FORMAT,
@@ -2059,7 +2059,7 @@ _REGISTER_KINDS = {
 }
 
 
-@router.get("/reports/payments-register", response_model=PaymentsRegisterReport)
+@router.get("/reports/payments-register", response_model=PaymentsRegisterReportResponse)
 async def payments_register_report(
     start: date = Query(...),
     end: date = Query(...),
