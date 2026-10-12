@@ -401,3 +401,69 @@ describe('ApplicantDetailDrawer referral details', () => {
     expect(screen.queryByRole('heading', { name: 'How They Found Us' })).not.toBeInTheDocument();
   });
 });
+
+/**
+ * The dialog shell. This surface was a right-edge `drawer-panel`; it is now a
+ * centred dialog on the shared stack, like the shift detail panel.
+ */
+describe('ApplicantDetailDrawer dialog shell', () => {
+  function renderWithClose(onClose: () => void) {
+    renderWithRouter(
+      <ApplicantDetailDrawer
+        applicant={applicant}
+        isOpen
+        onClose={onClose}
+        onConvert={vi.fn()}
+        isLastStage={false}
+        isFirstStage={false}
+      />
+    );
+  }
+
+  it('renders as a centred modal dialog, not a side drawer', async () => {
+    renderWithClose(vi.fn());
+    await screen.findByText('Stage History');
+
+    const dialog = screen.getByRole('dialog', { name: 'Applicant details' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveClass('items-center', 'justify-center');
+    expect(dialog).not.toHaveClass('drawer-panel');
+  });
+
+  it('closes on Escape and on the close button', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderWithClose(onClose);
+    await screen.findByText('Stage History');
+
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('button', { name: 'Close detail panel' }));
+    expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not close on a click on the scrim', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderWithClose(onClose);
+    await screen.findByText('Stage History');
+
+    await user.click(screen.getByRole('dialog', { name: 'Applicant details' }));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('renders nothing when closed', () => {
+    renderWithRouter(
+      <ApplicantDetailDrawer
+        applicant={applicant}
+        isOpen={false}
+        onClose={vi.fn()}
+        onConvert={vi.fn()}
+        isLastStage={false}
+        isFirstStage={false}
+      />
+    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
