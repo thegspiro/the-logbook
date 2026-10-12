@@ -14,7 +14,7 @@
 
 import React from 'react';
 import { Link } from 'react-router';
-import { BarChart3, ClipboardList, Clock, SlidersHorizontal, Truck } from 'lucide-react';
+import { BarChart3, ClipboardList, Clock, Link2, SlidersHorizontal, Truck } from 'lucide-react';
 import { useAuthStore } from '../../../stores/authStore';
 import { EquipmentCheckTemplateList } from '../components/EquipmentCheckTemplateList';
 import { Breadcrumbs } from '../../../components/ux';
@@ -75,6 +75,14 @@ const RELATED: RelatedLink[] = [
     // Tracks the route, which tracks what the worklist's endpoint accepts.
     // `scheduling.manage` is not among them.
     anyPermission: ['inventory.check_view', 'inventory.manage'],
+  },
+  {
+    label: 'Catalog links',
+    description: 'Checklist lines not yet connected to inventory, matched once across every template',
+    path: '/inventory/admin/checklists/catalog-links',
+    icon: Link2,
+    // The report and the link step both run on the authoring grant.
+    anyPermission: ['inventory.check_manage'],
   },
   {
     label: 'Checklist settings',
