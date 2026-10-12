@@ -6,11 +6,13 @@ import type { SuggestionBoxPublic } from '../types/suggestions';
 
 const mockListBoxes = vi.fn();
 const mockSubmit = vi.fn();
+const mockPickOptions = vi.fn();
 
 vi.mock('../services/suggestionsService', () => ({
   suggestionsService: {
     listBoxes: (...args: unknown[]) => mockListBoxes(...args) as unknown,
     submit: (...args: unknown[]) => mockSubmit(...args) as unknown,
+    pickOptions: (...args: unknown[]) => mockPickOptions(...args) as unknown,
   },
 }));
 
@@ -161,6 +163,7 @@ describe('SuggestionSubmitForm', () => {
       await user.click(screen.getByRole('radio', { name: 'Yes' }));
       expect(screen.getByText(/this will be sent to/)).toHaveTextContent('Compliance');
 
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
       await fillAndSubmit(/^Submit$/);
       expect(mockSubmit).toHaveBeenCalledWith(
         'b1',
@@ -177,18 +180,25 @@ describe('SuggestionSubmitForm', () => {
       await user.type(screen.getByLabelText(/Where did it happen/), 'Engine 2');
       await user.click(screen.getByRole('radio', { name: 'No' }));
 
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
       await fillAndSubmit(/^Submit$/);
       expect(mockSubmit).toHaveBeenCalledWith('b1', expect.objectContaining({ answers: { safety: 'no' } }));
     });
 
-    it('warns when the route leads to a box that records names', async () => {
+    it('warns when going back and re-answering leads to a box that records names', async () => {
       renderWithRouter(<SuggestionSubmitForm />);
       const user = userEvent.setup();
       await user.selectOptions(await screen.findByLabelText('Suggestion box'), 'b1');
+      await user.click(screen.getByRole('radio', { name: 'No' }));
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
       await user.click(screen.getByLabelText(/Submit anonymously/));
+
+      await user.click(screen.getByRole('button', { name: 'Back to the questions' }));
       await user.click(screen.getByRole('radio', { name: 'Yes' }));
 
       expect(screen.getByRole('alert')).toHaveTextContent('does not accept anonymous submissions');
+      await user.type(screen.getByLabelText(/Where did it happen/), 'Bay');
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
       expect(screen.queryByLabelText(/Submit anonymously/)).not.toBeInTheDocument();
     });
 
@@ -202,10 +212,74 @@ describe('SuggestionSubmitForm', () => {
       await user.selectOptions(await screen.findByLabelText('Suggestion box'), 'b1');
       await user.click(screen.getByRole('radio', { name: 'Yes' }));
       await user.type(screen.getByLabelText(/Where did it happen/), 'Bay');
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
 
       expect(screen.queryByLabelText(/Submit anonymously/)).not.toBeInTheDocument();
       await fillAndSubmit(/Submit anonymously/);
       expect(mockSubmit).toHaveBeenCalledWith('b1', expect.objectContaining({ anonymous: true }));
+    });
+
+    it('asks the questions first and the suggestion after, keeping answers on the way back', async () => {
+      renderWithRouter(<SuggestionSubmitForm />);
+      const user = userEvent.setup();
+      await user.selectOptions(await screen.findByLabelText('Suggestion box'), 'b1');
+
+      expect(screen.getByRole('heading', { name: /Step 1 of 2/ })).toBeInTheDocument();
+      expect(screen.queryByLabelText('Title')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Details')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('radio', { name: 'Yes' }));
+      await user.type(screen.getByLabelText(/Where did it happen/), 'Engine 2');
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+      expect(screen.getByRole('heading', { name: /Step 2 of 2/ })).toHaveFocus();
+      expect(screen.getByLabelText('Title')).toBeInTheDocument();
+      expect(screen.queryByRole('radio', { name: 'Yes' })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Back to the questions' }));
+      expect(screen.getByRole('radio', { name: 'Yes' })).toBeChecked();
+      expect(screen.getByLabelText(/Where did it happen/)).toHaveValue('Engine 2');
+    });
+
+    it('does not continue past an unanswered required question', async () => {
+      renderWithRouter(<SuggestionSubmitForm />);
+      const user = userEvent.setup();
+      await user.selectOptions(await screen.findByLabelText('Suggestion box'), 'b1');
+
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+      expect(screen.getByRole('heading', { name: /Step 1 of 2/ })).toBeInTheDocument();
+      expect(screen.queryByLabelText('Title')).not.toBeInTheDocument();
+    });
+
+    it('keeps a single page for a box with no questions', async () => {
+      mockListBoxes.mockResolvedValue([box({ id: 'b3', name: 'Ideas' })]);
+      renderWithRouter(<SuggestionSubmitForm />);
+
+      expect(await screen.findByLabelText('Title')).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: /Step/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
+    });
+
+    it('holds the questions step until a required member pick is made', async () => {
+      mockPickOptions.mockReset();
+      mockPickOptions.mockResolvedValue([{ id: 'u1', name: 'Riley Member' }]);
+      mockListBoxes.mockResolvedValue([
+        box({
+          id: 'b4',
+          name: 'Conduct',
+          intakeQuestions: [{ id: 'who', label: 'Who is this about?', type: 'member', required: true, options: [] }],
+        }),
+      ]);
+      renderWithRouter(<SuggestionSubmitForm />);
+      const user = userEvent.setup();
+
+      await user.click(await screen.findByRole('button', { name: 'Continue' }));
+      expect(screen.queryByLabelText('Title')).not.toBeInTheDocument();
+
+      await user.click(await screen.findByRole('button', { name: 'Riley Member' }));
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+      expect(screen.getByLabelText('Title')).toBeInTheDocument();
     });
   });
 });
