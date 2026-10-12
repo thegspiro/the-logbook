@@ -8,13 +8,22 @@
 /** A single day entry in a cycle: "on" | "off" | "day" | "night" */
 export type CycleEntry = 'on' | 'off' | 'day' | 'night';
 
+/** A shift a weekday can carry in a weekly preset. */
+export type WeekdayShiftType = 'day' | 'night';
+
 export interface PresetPatternDef {
   id: string;
   name: string;
   shortName: string;
   description: string;
   /** The backend pattern_type to use when creating this pattern. */
-  patternType: 'platoon';
+  patternType: 'platoon' | 'weekly';
+  /**
+   * Weekly presets only: the shifts each weekday carries, keyed by JS weekday
+   * (0 = Sunday … 6 = Saturday). A weekday may carry both a day and a night
+   * shift, which a one-entry-per-day cycle cannot express.
+   */
+  weekdayShifts?: Partial<Record<number, WeekdayShiftType[]>>;
   /** For simple on/off patterns (no cycle_pattern). */
   daysOn?: number;
   /** For simple on/off patterns (no cycle_pattern). */
@@ -26,7 +35,7 @@ export interface PresetPatternDef {
   /** Whether this pattern has day/night distinction. */
   hasDayNight: boolean;
   /** Category for grouping. */
-  category: 'simple' | 'complex' | 'rotating';
+  category: 'simple' | 'complex' | 'rotating' | 'weekly';
 }
 
 export const PRESET_PATTERNS: PresetPatternDef[] = [
@@ -210,5 +219,16 @@ export const PRESET_PATTERNS: PresetPatternDef[] = [
     ],
     hasDayNight: true,
     category: 'rotating',
+  },
+  {
+    id: 'weekend-only',
+    name: 'Weekend Only',
+    shortName: 'Weekend',
+    description: 'Friday night, Saturday day and night, and Sunday day. Every weekend, nothing on weekdays.',
+    patternType: 'weekly',
+    weekdayShifts: { 5: ['night'], 6: ['day', 'night'], 0: ['day'] },
+    cycleDays: 7,
+    hasDayNight: true,
+    category: 'weekly',
   },
 ];

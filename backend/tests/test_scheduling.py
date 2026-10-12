@@ -917,6 +917,158 @@ class TestPatternGeneration:
         assert err is None
         assert len(shifts) == 4  # 2 Mon + 2 Wed
 
+    async def _weekend_pattern(self, svc, org_id, user_id, **config):
+        day_template, _ = await svc.create_template(
+            uuid.UUID(org_id),
+            {
+                "name": "Weekend Day",
+                "start_time_of_day": "06:00",
+                "end_time_of_day": "18:00",
+                "duration_hours": 12.0,
+            },
+            uuid.UUID(user_id),
+        )
+        night_template, _ = await svc.create_template(
+            uuid.UUID(org_id),
+            {
+                "name": "Weekend Night",
+                "start_time_of_day": "18:00",
+                "end_time_of_day": "06:00",
+                "duration_hours": 12.0,
+            },
+            uuid.UUID(user_id),
+        )
+        schedule_config = {
+            # JS weekdays: 5=Fri, 6=Sat, 0=Sun
+            "weekday_shifts": {"5": ["night"], "6": ["day", "night"], "0": ["day"]},
+            "weekdays": [0, 5, 6],
+            "day_template_id": day_template.id,
+            "night_template_id": night_template.id,
+        }
+        schedule_config.update(config)
+        pattern, err = await svc.create_pattern(
+            uuid.UUID(org_id),
+            {
+                "name": "Weekend Only",
+                "pattern_type": PatternType.WEEKLY,
+                "template_id": day_template.id,
+                "start_date": date(2026, 10, 9),
+                "schedule_config": schedule_config,
+            },
+            uuid.UUID(user_id),
+        )
+        assert err is None
+        return pattern
+
+    @pytest.mark.asyncio
+    async def test_weekday_shifts_generate_a_day_and_night_on_saturday(
+        self, db_session, setup_template
+    ):
+        org_id, user_id, _, _ = setup_template
+        svc = SchedulingService(db_session)
+        pattern = await self._weekend_pattern(svc, org_id, user_id)
+
+        # Fri 2026-10-09 through Thu 2026-10-15: one weekend.
+        shifts, err = await svc.generate_shifts_from_pattern(
+            uuid.UUID(pattern.id),
+            uuid.UUID(org_id),
+            date(2026, 10, 9),
+            date(2026, 10, 15),
+            uuid.UUID(user_id),
+        )
+        assert err is None
+        by_date: dict = {}
+        for shift in shifts:
+            by_date.setdefault(shift.shift_date, []).append(shift)
+
+        assert sorted(by_date) == [
+            date(2026, 10, 9),
+            date(2026, 10, 10),
+            date(2026, 10, 11),
+        ]
+        assert len(by_date[date(2026, 10, 9)]) == 1  # Friday night
+        assert len(by_date[date(2026, 10, 11)]) == 1  # Sunday day
+
+        saturday = sorted(by_date[date(2026, 10, 10)], key=lambda s: s.start_time)
+        assert len(saturday) == 2
+        day, night = saturday
+        assert day.end_time == night.start_time
+        assert night.end_time > night.start_time
+
+        friday_night = by_date[date(2026, 10, 9)][0]
+        assert friday_night.end_time - friday_night.start_time == timedelta(hours=12)
+
+    @pytest.mark.asyncio
+    async def test_weekday_shifts_repeat_each_weekend_and_skip_weekdays(
+        self, db_session, setup_template
+    ):
+        org_id, user_id, _, _ = setup_template
+        svc = SchedulingService(db_session)
+        pattern = await self._weekend_pattern(svc, org_id, user_id)
+
+        # Fri 2026-10-09 through Sun 2026-10-18 spans two weekends.
+        shifts, err = await svc.generate_shifts_from_pattern(
+            uuid.UUID(pattern.id),
+            uuid.UUID(org_id),
+            date(2026, 10, 9),
+            date(2026, 10, 18),
+            uuid.UUID(user_id),
+        )
+        assert err is None
+        assert len(shifts) == 8  # 4 shifts per weekend
+        assert {s.shift_date.weekday() for s in shifts} == {4, 5, 6}
+
+    @pytest.mark.asyncio
+    async def test_weekday_shifts_are_not_duplicated_on_regeneration(
+        self, db_session, setup_template
+    ):
+        org_id, user_id, _, _ = setup_template
+        svc = SchedulingService(db_session)
+        pattern = await self._weekend_pattern(svc, org_id, user_id)
+
+        args = (
+            uuid.UUID(pattern.id),
+            uuid.UUID(org_id),
+            date(2026, 10, 9),
+            date(2026, 10, 11),
+            uuid.UUID(user_id),
+        )
+        first, err = await svc.generate_shifts_from_pattern(*args)
+        assert err is None
+        assert len(first) == 4
+
+        second, err = await svc.generate_shifts_from_pattern(*args)
+        assert err is None
+        assert second == []
+
+    @pytest.mark.asyncio
+    async def test_malformed_weekday_shifts_are_ignored(
+        self, db_session, setup_template
+    ):
+        org_id, user_id, _, _ = setup_template
+        svc = SchedulingService(db_session)
+        pattern = await self._weekend_pattern(
+            svc,
+            org_id,
+            user_id,
+            weekday_shifts={
+                "6": ["day", "bogus"],
+                "9": ["day"],
+                "x": ["night"],
+                "0": "night",
+            },
+        )
+
+        shifts, err = await svc.generate_shifts_from_pattern(
+            uuid.UUID(pattern.id),
+            uuid.UUID(org_id),
+            date(2026, 10, 9),
+            date(2026, 10, 11),
+            uuid.UUID(user_id),
+        )
+        assert err is None
+        assert [s.shift_date for s in shifts] == [date(2026, 10, 10)]
+
     @pytest.mark.asyncio
     async def test_platoon_pattern(self, db_session, setup_template):
         org_id, user_id, _, template = setup_template
