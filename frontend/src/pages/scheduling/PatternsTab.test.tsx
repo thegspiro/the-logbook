@@ -216,6 +216,42 @@ describe('PatternsTab', () => {
     });
   });
 
+  describe('weekly pattern shifts in the list', () => {
+    const WEEKEND = {
+      ...PATTERN,
+      id: 'pat-w',
+      name: 'Weekend Only',
+      pattern_type: 'weekly' as const,
+      schedule_config: {
+        weekdays: [0, 5, 6],
+        weekday_shifts: { 5: ['night'], 6: ['day', 'night'], 0: ['day'] },
+      },
+    };
+
+    it('names the shifts each covered weekday carries', async () => {
+      mockGetPatterns.mockResolvedValue([WEEKEND]);
+      renderWithRouter(<PatternsTab />);
+
+      expect(await screen.findByText('Friday: Night')).toBeInTheDocument();
+      expect(screen.getByText('Saturday: Day + Night')).toBeInTheDocument();
+      expect(screen.getByText('Sunday: Day')).toBeInTheDocument();
+      expect(screen.queryByText(/^Monday:/)).not.toBeInTheDocument();
+    });
+
+    it('ignores malformed weekday_shifts and keeps a plain weekly pattern as it was', async () => {
+      mockGetPatterns.mockResolvedValue([
+        {
+          ...WEEKEND,
+          schedule_config: { weekdays: [1], weekday_shifts: { 9: ['day'], x: ['night'], 1: 'day' } },
+        },
+      ]);
+      renderWithRouter(<PatternsTab />);
+
+      await screen.findByText('Weekend Only');
+      expect(screen.queryByText('Weekly shifts')).not.toBeInTheDocument();
+    });
+  });
+
   it('tells the officer about driver seats generation left unfilled', async () => {
     mockGenerate.mockResolvedValue({
       shifts_created: 11,

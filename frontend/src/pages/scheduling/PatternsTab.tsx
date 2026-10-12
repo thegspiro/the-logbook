@@ -51,6 +51,26 @@ const PATTERN_TYPE_LABELS: Record<string, string> = {
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/**
+ * The shifts a stored weekly pattern carries per weekday, or null when it has
+ * none (a plain weekly pattern). schedule_config is unvalidated JSON, so
+ * anything malformed is dropped, mirroring what the generator will accept.
+ */
+const readWeekdayShifts = (config: Record<string, unknown>): Partial<Record<number, WeekdayShiftType[]>> | null => {
+  const raw = config.weekday_shifts;
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const parsed: Partial<Record<number, WeekdayShiftType[]>> = {};
+  for (const [key, types] of Object.entries(raw)) {
+    const weekday = Number(key);
+    if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6 || !Array.isArray(types)) continue;
+    const valid = (['day', 'night'] as const).filter((t) => types.includes(t));
+    if (valid.length > 0) parsed[weekday] = valid;
+  }
+  return Object.keys(parsed).length > 0 ? parsed : null;
+};
+
 const inputCls = 'form-input px-3 text-sm focus:ring-violet-500';
 
 const LazyFallback = () => (
@@ -959,6 +979,7 @@ export const PatternsTab: React.FC = () => {
             const templateName = templates.find((t) => t.id === pattern.template_id)?.name;
             const config: Record<string, unknown> = pattern.schedule_config ?? {};
             const weekdays = config.weekdays as number[] | undefined;
+            const weekdayShifts = readWeekdayShifts(config);
             const cyclePattern = config.cycle_pattern as string[] | undefined;
             const patternPlatoons = Array.isArray(config.platoons)
               ? config.platoons.filter((platoon): platoon is string => typeof platoon === 'string')
@@ -1030,18 +1051,30 @@ export const PatternsTab: React.FC = () => {
                         </p>
                         {weekdays && weekdays.length > 0 && (
                           <div className="mt-1 flex gap-1">
-                            {WEEKDAY_LABELS.map((label, i) => (
-                              <span
-                                key={i}
-                                className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${
-                                  weekdays.includes(i)
-                                    ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400'
-                                    : 'text-theme-text-muted opacity-40'
-                                }`}
-                              >
-                                {label.charAt(0)}
-                              </span>
-                            ))}
+                            {WEEKDAY_LABELS.map((label, i) => {
+                              const shifts = weekdayShifts?.[i] ?? [];
+                              return (
+                                <span
+                                  key={i}
+                                  className={`flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-medium ${
+                                    weekdays.includes(i)
+                                      ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400'
+                                      : 'text-theme-text-muted opacity-40'
+                                  }`}
+                                >
+                                  {label.charAt(0)}
+                                  {shifts.includes('day') && (
+                                    <Sun className="h-2.5 w-2.5 text-amber-500" aria-hidden="true" />
+                                  )}
+                                  {shifts.includes('night') && (
+                                    <Moon
+                                      className="h-2.5 w-2.5 text-indigo-700 dark:text-indigo-400"
+                                      aria-hidden="true"
+                                    />
+                                  )}
+                                </span>
+                              );
+                            })}
                           </div>
                         )}
                         {cyclePattern && <CycleStrip config={config} />}
@@ -1115,6 +1148,26 @@ export const PatternsTab: React.FC = () => {
                             </span>
                           ))}
                         </div>
+                      </div>
+                    )}
+
+                    {weekdayShifts && (
+                      <div className="space-y-2">
+                        <p className="text-theme-text-secondary text-xs font-medium">Weekly shifts</p>
+                        <ul className="flex flex-wrap gap-1.5">
+                          {WEEKDAY_NAMES.map((name, i) => {
+                            const shifts = weekdayShifts[i];
+                            if (!shifts) return null;
+                            return (
+                              <li
+                                key={name}
+                                className="text-theme-text-secondary rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-[11px]"
+                              >
+                                {name}: {shifts.map((s) => (s === 'day' ? 'Day' : 'Night')).join(' + ')}
+                              </li>
+                            );
+                          })}
+                        </ul>
                       </div>
                     )}
 
