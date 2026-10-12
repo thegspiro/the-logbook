@@ -16,6 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #3093 (Feature 34, Frontend shared, pass 8) merged clean
+2026-10-12 02:45 UTC (confirmed via `pull_request_read`: `merged: true`,
+4 files changed — `PROGRESS.md`, `FE8-34-frontend-shared.md`,
+`apiCache.ts`, `apiCache.test.ts`). Not docs-only (the two cache-exclusion
+fixes landed with it), but it is already fully recorded in the Log entry
+below, so there is nothing further to add here. Rotation row 34 stays ✅.
+Row 34 was the last row (00–34) in the rotation table, so this (watchdog)
+iteration wraps back to Feature 00 (Cross-cutting baseline, pass 9) rather
+than resetting the table to ⬜.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3093, Feature 34, Frontend shared, pass 8, before it merged), preserved for history</summary>
+
 **PR [#3093](https://github.com/thegspiro/the-logbook/pull/3093)**: branch
 `claude/security-review-frontend-shared`, Feature 34 (Frontend shared),
 pass 8. 2 fixes (FE8-34-1, FE8-34-2 — two new cache-exclusion gaps found by
@@ -27,6 +40,8 @@ landed between pass 7 and this pass. See the Log entry below and
 last row (00–34) in the rotation table; per the table's own preamble the
 next iteration wraps back to Feature 00 (Cross-cutting baseline) rather
 than resetting this table to ⬜ itself.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3084's merge, Feature 33, Core infrastructure, pass 6 — the state this pass's PR conflicted with), preserved for history</summary>
@@ -18524,6 +18539,64 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-12 — Feature 00 (Cross-cutting baseline, pass 8) — 0 application-security findings; 1 security-tooling regression found and fixed (watchdog pickup)
+
+Watchdog pickup: the dedicated `/loop 30m /security-review` session had no
+open security-review PR or branch anywhere in the repo — confirmed via
+`list_pull_requests` (state=open) and `search_pull_requests`
+(`head:claude/security-review-`), both empty — and `main`'s last
+security-review merge (PR #3093, Feature 34 pass 8) was from 2026-10-11
+22:45 UTC with no iteration since. Row 34 was the rotation table's last row,
+so this iteration wraps back to Feature 00 rather than resetting the whole
+table to ⬜, per the table's own preamble.
+
+Re-swept all 13 established sweep classes against the 646 commits since
+pass 7's baseline (`532340e3` → `3f429ede`). **0 new application-security
+findings** — every class re-verified clean, including the 7 new class-7
+(unbounded-tracker) candidates, each read directly and confirmed bounded or
+request-scoped, and the one class-13 (raw-exception-text) candidate the AST
+walk flagged, which turned out to be wrapped in a domain-specific sanitizer
+(`sanitize_integration_error`) rather than unwrapped.
+
+**One real finding, about this review's own tooling, fixed: SEC8-00-1
+(LOW).** `backend/scripts/json_column_ast_sweep.py` — built in pass 3 to
+enumerate every JSON-shaped model column for pitfall #12 checks — matched
+only `Column(...)` calls. Every model in `app/models/*.py` has since moved
+to SQLAlchemy 2.0's `mapped_column(...)` declarative style, so a real run
+printed "0 distinct attribute names, 0 declarations" instead of the
+documented ~180-and-growing baseline. The script's exit code is always 0
+("a reporting tool, not a gate"), so this had no CI signal and could have
+stood silently for an arbitrary number of passes. Fixed by widening the
+matched call names to `{"Column", "mapped_column"}`; re-run against current
+`main`: 202 distinct names, 256 declarations, across 50 files. Guard test
+added (`tests/test_json_column_ast_sweep.py`) pinning both declaration
+styles plus a real-tree sanity floor, so a future declaration-style change
+this matcher doesn't follow fails a test instead of silently printing a
+smaller number. Full write-up:
+[`SEC-00-cross-cutting-baseline.md`](./SEC-00-cross-cutting-baseline.md)'s
+**Pass 8** section.
+
+Also re-confirmed unchanged: the outbound-URL DNS-rebinding TOCTOU
+(`KNOWN_LIMITATIONS.md`, still open, same disposition); the 2 raw-SQL
+string-interpolation sites (unchanged lines); `audit_ship_service.py` no
+longer constructs its own `httpx` client directly but now routes through
+the same DNS-rebinding-safe `create_integration_client()` factory
+`integration_services/base.py` provides — a hardening, not a regression.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+`app/ tests/ alembic/`; `validate_migrations.py --strict` passed (571
+revisions, single head, no migration this pass); `check_route_permissions.py
+--strict` passed (265 routes, 0 errors/0 warnings); scoped backend tests
+(`test_json_column_ast_sweep.py` plus the other 9 guard-test files this
+pass's classes depend on) 209 passed; frontend `npm run typecheck` 0
+errors; `npm run lint` 0 errors (exit 0, `--max-warnings 10`); frontend
+structural guards (6 files) 26 passed.
+
+No `KNOWN_LIMITATIONS.md` change — the one finding was fixed, not flagged,
+and describes review tooling rather than an operator-facing behavior.
+Rotation row 00 → ✅ (pending PR merge). Next: Feature 01 (Auth & session
+lifecycle).
 
 ### 2026-10-11 — Feature 34 (Frontend shared, pass 8) — 2 fixed, 0 new findings; both pass-7 HIGH findings re-verified now fixed by other work
 
