@@ -254,13 +254,22 @@ export const PatternsTab: React.FC = () => {
 
       if (creationMode === 'preset' && selectedPreset) {
         patternType = selectedPreset.patternType;
-        if (selectedPreset.cyclePattern) {
-          scheduleConfig.cycle_pattern = selectedPreset.cyclePattern;
+        if (selectedPreset.weekdayShifts) {
+          // The generator reads weekday_shifts; weekdays is written alongside
+          // so the pattern list's day chips show which days are covered.
+          scheduleConfig.weekday_shifts = selectedPreset.weekdayShifts;
+          scheduleConfig.weekdays = Object.keys(selectedPreset.weekdayShifts)
+            .map(Number)
+            .sort((a, b) => a - b);
         } else {
-          daysOn = selectedPreset.daysOn;
-          daysOff = selectedPreset.daysOff;
+          if (selectedPreset.cyclePattern) {
+            scheduleConfig.cycle_pattern = selectedPreset.cyclePattern;
+          } else {
+            daysOn = selectedPreset.daysOn;
+            daysOff = selectedPreset.daysOff;
+          }
+          rotationDays = selectedPreset.cycleDays;
         }
-        rotationDays = selectedPreset.cycleDays;
       } else if (creationMode === 'custom') {
         patternType = 'platoon';
         const hasOnDuty = customCyclePattern.some((e) => e !== 'off');

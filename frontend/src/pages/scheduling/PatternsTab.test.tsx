@@ -7,11 +7,13 @@ import { renderWithRouter } from '../../test/utils';
 const mockGetPatterns = vi.fn();
 const mockGetTemplates = vi.fn();
 const mockGenerate = vi.fn();
+const mockCreatePattern = vi.fn();
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
     getPatterns: (...a: unknown[]) => mockGetPatterns(...a) as unknown,
     getTemplates: (...a: unknown[]) => mockGetTemplates(...a) as unknown,
     generateShiftsFromPattern: (...a: unknown[]) => mockGenerate(...a) as unknown,
+    createPattern: (...a: unknown[]) => mockCreatePattern(...a) as unknown,
   },
 }));
 
@@ -66,6 +68,8 @@ beforeEach(() => {
   mockGetTemplates.mockResolvedValue([TEMPLATE]);
   mockGenerate.mockReset();
   mockGenerate.mockResolvedValue({ shifts_created: 11 });
+  mockCreatePattern.mockReset();
+  mockCreatePattern.mockResolvedValue({ ...PATTERN, id: 'pat-2' });
   mockToastSuccess.mockReset();
   mockToastError.mockReset();
 });
@@ -93,6 +97,42 @@ describe('PatternsTab', () => {
     expect(screen.getByRole('group', { name: 'Active Days' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mon' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Sun' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('creates the Weekend Only preset as a weekly pattern with per-weekday shifts', async () => {
+    mockGetTemplates.mockResolvedValue([
+      TEMPLATE,
+      { ...TEMPLATE, id: 'tpl-2', name: 'Night Shift A', start_time_of_day: '19:00', end_time_of_day: '07:00' },
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<PatternsTab />);
+
+    await user.click(await screen.findByRole('button', { name: 'New Pattern' }));
+    await user.click(await screen.findByRole('button', { name: /Weekend Only/ }));
+
+    expect(screen.getByLabelText('Pattern Name *')).toHaveValue('Weekend Only');
+    await user.selectOptions(screen.getByLabelText(/Day Shift Template/), 'tpl-1');
+    await user.selectOptions(screen.getByLabelText(/Night Shift Template/), 'tpl-2');
+    await user.type(screen.getByLabelText('Start Date *'), '2026-10-09');
+    await user.click(screen.getByRole('button', { name: 'Create Pattern' }));
+
+    expect(mockCreatePattern).toHaveBeenCalledWith({
+      name: 'Weekend Only',
+      description: expect.stringContaining('Friday night') as unknown,
+      pattern_type: 'weekly',
+      template_id: 'tpl-1',
+      start_date: '2026-10-09',
+      end_date: undefined,
+      days_on: undefined,
+      days_off: undefined,
+      rotation_days: undefined,
+      schedule_config: {
+        weekday_shifts: { 0: ['day'], 5: ['night'], 6: ['day', 'night'] },
+        weekdays: [0, 5, 6],
+        day_template_id: 'tpl-1',
+        night_template_id: 'tpl-2',
+      },
+    });
   });
 
   it('tells the officer about driver seats generation left unfilled', async () => {

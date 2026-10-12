@@ -3735,6 +3735,32 @@ class SchedulingService:
             return False, "Shift pattern not found"
         return await self._crud_delete(pattern)
 
+    @staticmethod
+    def _parse_weekday_shifts(config: Any) -> dict[int, list[str]]:
+        """Read ``schedule_config["weekday_shifts"]`` defensively.
+
+        Maps a JS weekday (0=Sun … 6=Sat) to the shift types ("day"/"night")
+        that weekday carries. The config is unvalidated JSON, and an exception
+        here would abort generation for the whole pattern, so anything
+        malformed is dropped rather than raised. Absence returns an empty
+        dict, which keeps the plain ``weekdays`` behaviour.
+        """
+        raw = config.get("weekday_shifts") if isinstance(config, dict) else None
+        if not isinstance(raw, dict):
+            return {}
+        parsed: dict[int, list[str]] = {}
+        for key, types in raw.items():
+            try:
+                weekday = int(key)
+            except (TypeError, ValueError):
+                continue
+            if weekday < 0 or weekday > 6 or not isinstance(types, list):
+                continue
+            valid = [t for t in ("day", "night") if t in types]
+            if valid:
+                parsed[weekday] = valid
+        return parsed
+
     async def generate_shifts_from_pattern(
         self,
         pattern_id: UUID,
@@ -3802,8 +3828,11 @@ class SchedulingService:
             day_tmpl_color = template.color
             night_tmpl_color = template.color
 
-            if cycle_pattern_cfg and any(
-                e in ("day", "night") for e in cycle_pattern_cfg
+            weekday_shifts_cfg = self._parse_weekday_shifts(config)
+
+            if weekday_shifts_cfg or (
+                cycle_pattern_cfg
+                and any(e in ("day", "night") for e in cycle_pattern_cfg)
             ):
                 raw_day_id = config.get("day_template_id")
                 raw_night_id = config.get("night_template_id")
@@ -3868,34 +3897,40 @@ class SchedulingService:
                     return len(cycle_pattern_cfg)
                 return (pattern.days_on or 1) + (pattern.days_off or 1)
 
-            def _occurrence(current: date, offset: int) -> tuple[bool, str]:
-                """Return (has_shift, entry_type) for a date.
+            def _entry_types(current: date, offset: int) -> list[str]:
+                """Return the shift types a date produces (empty for none).
 
-                ``offset`` shifts the platoon cycle by N days and only applies
-                to PLATOON patterns.
+                Only a weekly pattern with ``weekday_shifts`` can yield more
+                than one — a weekend's Saturday carries both a day and a night
+                shift. ``offset`` shifts the platoon cycle by N days and only
+                applies to PLATOON patterns.
                 """
                 if pattern.pattern_type == PatternType.DAILY:
-                    return True, "on"
+                    return ["on"]
                 if pattern.pattern_type == PatternType.WEEKLY:
-                    weekdays = config.get("weekdays", [])
                     # Frontend stores weekdays in JS convention
                     # (0=Sun, …, 6=Sat); convert from Python's 0=Mon.
                     js_weekday = (current.weekday() + 1) % 7
-                    return (js_weekday in weekdays), "on"
+                    if weekday_shifts_cfg:
+                        return list(weekday_shifts_cfg.get(js_weekday, []))
+                    weekdays = config.get("weekdays", [])
+                    return ["on"] if js_weekday in weekdays else []
                 if pattern.pattern_type == PatternType.PLATOON:
                     days_since = (current - pattern.start_date).days - offset
                     if cycle_pattern_cfg and len(cycle_pattern_cfg) > 0:
                         entry = cycle_pattern_cfg[days_since % len(cycle_pattern_cfg)]
                         if isinstance(entry, str) and entry != "off":
-                            return True, entry
-                        return False, "on"
+                            return [entry]
+                        return []
                     days_on = pattern.days_on or 1
                     days_off = pattern.days_off or 1
-                    return ((days_since % (days_on + days_off)) < days_on), "on"
+                    return (
+                        ["on"] if (days_since % (days_on + days_off)) < days_on else []
+                    )
                 if pattern.pattern_type == PatternType.CUSTOM:
                     custom_dates = config.get("dates", [])
-                    return (current.isoformat() in custom_dates), "on"
-                return False, "on"
+                    return ["on"] if current.isoformat() in custom_dates else []
+                return []
 
             # Build the list of tracks: (offset_days, members for that track).
             platoons_cfg = config.get("platoons") if isinstance(config, dict) else None
@@ -3972,9 +4007,8 @@ class SchedulingService:
             for offset, platoon_name, track_members in tracks:
                 current = start_date
                 while current <= end_date:
-                    has_shift, entry_type = _occurrence(current, offset)
-                    if has_shift:
-                        iso = current.isoformat()
+                    iso = current.isoformat()
+                    for entry_type in _entry_types(current, offset):
                         occ = occurrences.setdefault(
                             (current, entry_type),
                             {"platoon": platoon_name, "members": []},
