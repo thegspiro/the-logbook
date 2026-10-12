@@ -243,7 +243,8 @@ class TestUpdate:
         )
 
         assert program is None
-        assert error is not None and "same time" in error
+        assert error is not None
+        assert "same time" in error
 
     async def test_rejects_itself(self, db_session, setup_org_and_admin):
         org_id, admin_id = setup_org_and_admin
@@ -317,7 +318,8 @@ class TestUpdate:
         )
 
         assert program is None
-        assert error is not None and error.startswith("Officer already requires")
+        assert error is not None
+        assert error.startswith("Officer already requires")
 
 
 class TestDeleteDropsDanglingPrerequisite:
@@ -338,7 +340,8 @@ class TestDeleteDropsDanglingPrerequisite:
 
         ok, error = await svc.delete_training_program(uuid.UUID(recruit.id), org_id)
 
-        assert ok and error is None
+        assert ok
+        assert error is None
         stored = await _reload(db_session, driver.id)
         assert stored.prerequisite_program_ids == [hazmat.id]
 
