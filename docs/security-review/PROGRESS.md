@@ -16,6 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3137](https://github.com/thegspiro/the-logbook/pull/3137)**: branch
+`claude/security-review-finance-approvals`, Feature 05 (Finance &
+approvals), pass 8 (watchdog pickup). 0 fixed, 1 new finding flagged
+(FIN8-05-1, MED: `decide_budget_request` has no separation-of-duties
+guard, unlike its sibling `review_budget_request`; needs an owner call,
+mirrors FIN-4/OPS-8). One standing item corrected
+(`get_pending_approvals` per-assignee filtering — pass 7's "still
+unchanged" claim was already wrong when written; the fix landed
+2026-10-04) and one closed by other work (the eight non-ledger
+status-transition locks FIN-31 deferred, now fixed and guarded by commit
+`1eae838d`, 2026-10-07). See the Log entry below and
+`docs/security-review/FIN-05-finance-approvals.md`'s **Pass 8** section
+for detail. Row 05 → ✅ (pending this PR's merge); next is Feature 06
+(Elections & ballots).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3128's merge, Feature 04, Storefront & payments, pass 8 — the state this pass's PR opened from), preserved for history</summary>
+
 **None.** PR #3128 (Feature 04, Storefront & payments, pass 8) merged
 clean 2026-10-12 18:01:52 UTC (`pull_request_read`: `merged: true`; 5
 files changed — `PROGRESS.md`, `SF-04-storefront-payments.md`,
@@ -27,6 +45,8 @@ row 04 stays ✅. Confirmed via `search_pull_requests`
 (`is:open head:claude/security-review-`, 0 results) that no
 `claude/security-review-*` PR is open. Proceeding to Feature 05 (Finance &
 approvals), pass 8.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3128, Feature 04, Storefront & payments, pass 8, before it merged), preserved for history</summary>
