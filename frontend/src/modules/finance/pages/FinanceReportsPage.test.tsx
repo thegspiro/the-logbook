@@ -2,7 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '@/test/utils';
-import type { AmendmentLogReport, BudgetVsActualReport, FiscalYear, PaymentsRegisterReport } from '../types';
+import type {
+  AmendmentLogReport,
+  BudgetVsActualReport,
+  FiscalYear,
+  LateSubstantiationReport,
+  PaymentsRegisterReport,
+} from '../types';
 
 const mockListYears = vi.fn();
 const mockBudgetVsActual = vi.fn();
@@ -11,6 +17,8 @@ const mockAmendmentLog = vi.fn();
 const mockAmendmentLogCsv = vi.fn();
 const mockRegister = vi.fn();
 const mockRegisterCsv = vi.fn();
+const mockLate = vi.fn();
+const mockLateCsv = vi.fn();
 
 vi.mock('../services/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/api')>()),
@@ -22,6 +30,8 @@ vi.mock('../services/api', async (importOriginal) => ({
     amendmentLogCsv: (...args: unknown[]) => mockAmendmentLogCsv(...args) as unknown,
     paymentsRegister: (...args: unknown[]) => mockRegister(...args) as unknown,
     paymentsRegisterCsv: (...args: unknown[]) => mockRegisterCsv(...args) as unknown,
+    lateSubstantiation: (...args: unknown[]) => mockLate(...args) as unknown,
+    lateSubstantiationCsv: (...args: unknown[]) => mockLateCsv(...args) as unknown,
   },
 }));
 
@@ -141,6 +151,27 @@ const april: PaymentsRegisterReport = {
   ],
 };
 
+const lateReport: LateSubstantiationReport = {
+  start: '2026-10-01',
+  end: '2026-10-12',
+  total: '25.00',
+  rows: [
+    {
+      paidOn: '2026-10-09',
+      reportId: 'er-1',
+      reportNumber: 'ER-2026-0004',
+      memberName: 'Jamie Rivera',
+      description: 'Hotel, state conference',
+      budgetLine: 'Training, FY2026',
+      incurredOn: '2026-06-01',
+      submittedOn: '2026-09-15',
+      daysToSubmit: 106,
+      amount: '25.00',
+      acknowledgedByName: 'Pat Treasurer',
+    },
+  ],
+};
+
 const openAt = (search = '') => {
   window.history.pushState({}, '', `/finance/reports${search}`);
   return renderWithRouter(<FinanceReportsPage />);
@@ -156,6 +187,8 @@ describe('FinanceReportsPage', () => {
       mockAmendmentLogCsv,
       mockRegister,
       mockRegisterCsv,
+      mockLate,
+      mockLateCsv,
       mockSaveFile,
     ]) {
       mock.mockReset();
@@ -166,6 +199,7 @@ describe('FinanceReportsPage', () => {
     );
     mockAmendmentLog.mockResolvedValue(amendments);
     mockRegister.mockResolvedValue(april);
+    mockLate.mockResolvedValue(lateReport);
   });
 
   afterEach(() => {
@@ -272,5 +306,31 @@ describe('FinanceReportsPage', () => {
 
     expect(await screen.findByText('Glove Depot')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Payments register' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  describe('outside the accountable plan', () => {
+    it('lists late expenses paid this month so far, with who confirmed them', async () => {
+      openAt('?report=late-substantiation');
+
+      const row = await screen.findByRole('row', { name: /Hotel, state conference/ });
+      expect(mockLate).toHaveBeenCalledWith('2026-10-01', '2026-10-12');
+      expect(within(row).getByText('Jamie Rivera')).toBeInTheDocument();
+      expect(within(row).getByText('106 days later')).toBeInTheDocument();
+      expect(within(row).getByText('Pat Treasurer')).toBeInTheDocument();
+      expect(mockListYears).toHaveBeenCalled();
+    });
+
+    it('downloads the CSV for the period shown', async () => {
+      const file = { blob: new Blob(['x']), filename: 'outside-accountable-plan.csv' };
+      mockLateCsv.mockResolvedValue(file);
+      const user = userEvent.setup();
+      openAt('?report=late-substantiation');
+      await screen.findByRole('row', { name: /Hotel, state conference/ });
+
+      await user.click(screen.getByRole('button', { name: /Download CSV/ }));
+
+      await waitFor(() => expect(mockSaveFile).toHaveBeenCalledWith(file));
+      expect(mockLateCsv).toHaveBeenCalledWith('2026-10-01', '2026-10-12');
+    });
   });
 });

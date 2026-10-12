@@ -1479,6 +1479,30 @@ pending a decision:
   request can carry an uploaded receipt, but nothing requires it before
   payment, and check requests take none.
 
+## Finance — The Expense Deadline: What It Does Not Cover (2026-10-12)
+
+The accountable-plan substantiation deadline is described in
+[FINANCE_MODULE.md](./FINANCE_MODULE.md#the-deadline-for-claiming-expenses-2026-10-12).
+Left out on purpose:
+
+- **Cash advances and the 120-day return rule.** The finance module has no
+  advances, so the other half of the accountable-plan timing rules (returning
+  an unspent advance within 120 days) has nothing to apply to. Building it
+  means advances to members, settlement against expense reports, and the
+  return deadline: a separate change.
+- **Reports submitted before 2026-10-12** are never graded; when they were
+  submitted was not recorded, and inferring it from an approval step's creation
+  time would be a guess.
+- **Purchase requests and check requests** are not graded. A purchase request
+  is approved before money is spent, and a check request pays a third party;
+  the deadline concerns a member claiming back money they spent.
+- **No payroll or W-2 integration.** _Finance > Reports > Outside the
+  accountable plan_ lists the late reimbursements with a CSV; deciding whether
+  and how to report them as wages is the department's, with its tax adviser.
+- **The form's warning measures from today**, the earliest the report can be
+  submitted. A report drafted on time but submitted after the deadline is
+  graded at submission, which the warning cannot foresee.
+
 ## Finance — Board Reports: What They Do Not Cover (2026-10-12)
 
 **Finance › Reports** (`/finance/reports`) is described in

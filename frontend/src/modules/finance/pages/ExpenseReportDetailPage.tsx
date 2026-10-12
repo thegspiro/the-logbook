@@ -16,6 +16,7 @@ import { ArrowLeft, AlertTriangle, Receipt, Send, CheckCircle, Clock, XCircle, B
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
+import { LateLinesBadge } from '../components/LateLinesBadge';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { ReceiptControl } from '../components/ReceiptControl';
 import { expenseReportService } from '../services/api';
@@ -249,6 +250,23 @@ const ExpenseReportDetailPage: React.FC = () => {
           </div>
         )}
 
+        {(er.lateLineCount ?? 0) > 0 && (
+          <div className="alert-warning mt-4">
+            <p className="text-theme-alert-warning-title text-sm font-medium">
+              {er.lateLineCount === 1
+                ? '1 line was submitted after the department’s deadline for claiming expenses.'
+                : `${er.lateLineCount} lines were submitted after the department’s deadline for claiming expenses.`}
+            </p>
+            <p className="text-theme-alert-warning-text mt-0.5 text-sm">
+              Reimbursing late expenses falls outside the accountable plan, so the department may have to report them as
+              taxable pay.{' '}
+              {er.lateAcknowledgedAt
+                ? `An approver confirmed reviewing them on ${formatDateTime(er.lateAcknowledgedAt, tz)}.`
+                : 'An approver has to confirm reviewing them before the report is approved.'}
+            </p>
+          </div>
+        )}
+
         {er.denialReason && (
           <div className="alert-danger mt-4">
             <p className="text-theme-alert-danger-title text-xs font-medium">Denial Reason</p>
@@ -282,7 +300,14 @@ const ExpenseReportDetailPage: React.FC = () => {
               <tbody className="divide-theme-surface-border divide-y">
                 {er.lineItems.map((item) => (
                   <tr key={item.id}>
-                    <td className="text-theme-text-primary px-4 py-3 text-sm">{item.description}</td>
+                    <td className="text-theme-text-primary px-4 py-3 text-sm">
+                      {item.description}
+                      {item.substantiatedLate && (
+                        <div className="mt-1">
+                          <LateLinesBadge />
+                        </div>
+                      )}
+                    </td>
                     <td className="text-theme-text-secondary px-4 py-3 text-sm capitalize">
                       {item.expenseType ? (EXPENSE_TYPE_LABELS[item.expenseType] ?? item.expenseType) : '--'}
                     </td>
@@ -331,6 +356,8 @@ const ExpenseReportDetailPage: React.FC = () => {
         approvalStepCount={er.approvalSteps.length}
         awaitingSecondApproval={er.awaitingSecondApproval}
         firstApprovedBy={er.firstApprovedBy}
+        lateLineCount={er.lateLineCount}
+        awaitingLateAcknowledgement={er.awaitingLateAcknowledgement}
         requesterId={er.submittedBy}
         onDecided={() => void fetchExpenseReport(er.id)}
       />
@@ -344,6 +371,7 @@ const ExpenseReportDetailPage: React.FC = () => {
             steps={er.approvalSteps}
             subject={`${er.title} (${er.reportNumber})`}
             onDecided={() => void fetchExpenseReport(er.id)}
+            lateLines={er.lateLineCount}
           />
           <div className="space-y-0">
             {[...er.approvalSteps]

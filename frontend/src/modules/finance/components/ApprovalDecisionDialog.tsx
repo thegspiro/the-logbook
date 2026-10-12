@@ -10,6 +10,10 @@
  * step assigned to someone else (the backend's `requiresOverride`), the dialog
  * also asks for an override reason — the API refuses that decision without
  * one, and records it in the audit log.
+ *
+ * Approving an expense report with lines submitted after the department's
+ * substantiation deadline (`lateLines`) first asks the approver to confirm
+ * they have reviewed them; the API refuses the approval without that.
  */
 
 import React, { useState } from 'react';
@@ -17,8 +21,10 @@ import toast from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
 import { Modal } from '@/components/Modal';
 import { PromptDialog } from '@/components/ux/PromptDialog';
+import { useConfirm } from '@/contexts/ConfirmContext';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { useFinanceStore } from '../store/financeStore';
+import { lateLinesConfirmation } from './lateLinesConfirmation';
 
 /** The backend's limit on `overrideReason` (ApprovalActionRequest). */
 const OVERRIDE_REASON_MAX_LENGTH = 2000;
@@ -34,6 +40,8 @@ export interface ApprovalDecision {
    * the named approver of. Comes from the backend's `requiresOverride` flag.
    */
   override?: { assigneeLabel: string } | undefined;
+  /** Expense reports: lines submitted after the substantiation deadline. */
+  lateLines?: number | undefined;
 }
 
 interface ApprovalDecisionDialogProps {
@@ -195,16 +203,23 @@ const OverrideForm: React.FC<OverrideFormProps> = ({ decision, assigneeLabel, bu
 export const ApprovalDecisionDialog: React.FC<ApprovalDecisionDialogProps> = ({ decision, onClose, onDecided }) => {
   const approveStep = useFinanceStore((s) => s.approveStep);
   const denyStep = useFinanceStore((s) => s.denyStep);
+  const { confirm } = useConfirm();
   const [busy, setBusy] = useState(false);
 
   const isDeny = decision?.action === 'deny';
 
   const handleSubmit = async (notes: string, overrideReason?: string) => {
     if (!decision || busy) return;
+    const lateLines = decision.action === 'approve' ? (decision.lateLines ?? 0) : 0;
+    if (lateLines > 0 && !(await confirm(lateLinesConfirmation(lateLines)))) return;
     setBusy(true);
     try {
       if (decision.action === 'approve') {
-        await approveStep(decision.stepRecordId, notes || undefined, overrideReason);
+        if (lateLines > 0) {
+          await approveStep(decision.stepRecordId, notes || undefined, overrideReason, true);
+        } else {
+          await approveStep(decision.stepRecordId, notes || undefined, overrideReason);
+        }
         toast.success('Approved');
       } else {
         await denyStep(decision.stepRecordId, notes, overrideReason);

@@ -72,6 +72,7 @@ import type {
   AmendmentLogReport,
   BudgetVsActualReport,
   PaymentsRegisterReport,
+  LateSubstantiationReport,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
 
@@ -460,9 +461,10 @@ export const approvalChainService = {
 // Approvals
 // =============================================================================
 
-const stepDecisionBody = (notes?: string, overrideReason?: string) => ({
+const stepDecisionBody = (notes?: string, overrideReason?: string, acknowledgeLate?: boolean) => ({
   notes: notes || undefined,
   ...(overrideReason ? { overrideReason } : {}),
+  ...(acknowledgeLate ? { acknowledgeLateSubstantiation: true } : {}),
 });
 
 export const financeSettingsService = {
@@ -515,6 +517,19 @@ export const financeReportService = {
     const query = new URLSearchParams({ start, end, format: 'csv' });
     return fetchFile(api, `/finance/reports/payments-register?${query.toString()}`, 'payments-register.csv');
   },
+
+  /** Expense lines paid in the period that were claimed after the substantiation deadline. */
+  async lateSubstantiation(start: string, end: string): Promise<LateSubstantiationReport> {
+    const response = await api.get<LateSubstantiationReport>('/finance/reports/late-substantiation', {
+      params: { start, end },
+    });
+    return response.data;
+  },
+
+  async lateSubstantiationCsv(start: string, end: string): Promise<DownloadedFile> {
+    const query = new URLSearchParams({ start, end, format: 'csv' });
+    return fetchFile(api, `/finance/reports/late-substantiation?${query.toString()}`, 'outside-accountable-plan.csv');
+  },
 };
 
 export const approvalService = {
@@ -528,10 +543,20 @@ export const approvalService = {
    * the named approver of; it is sent only when given, and recorded in the
    * audit log.
    */
-  async approve(stepRecordId: string, notes?: string, overrideReason?: string): Promise<ApprovalStepRecord> {
+  /**
+   * `acknowledgeLate` confirms the approver has reviewed an expense report's
+   * lines submitted after the substantiation deadline; the API refuses to
+   * approve such a report without it.
+   */
+  async approve(
+    stepRecordId: string,
+    notes?: string,
+    overrideReason?: string,
+    acknowledgeLate?: boolean
+  ): Promise<ApprovalStepRecord> {
     const response = await api.post<ApprovalStepRecord>(
       `/finance/approvals/${stepRecordId}/approve`,
-      stepDecisionBody(notes, overrideReason)
+      stepDecisionBody(notes, overrideReason, acknowledgeLate)
     );
     return response.data;
   },
@@ -551,9 +576,15 @@ export const approvalService = {
   },
 
   /** Approve a request that has no approval steps. Refused (409) for one that has steps. */
-  async manualApprove(entityType: ApprovalEntityType, entityId: string, notes?: string): Promise<void> {
+  async manualApprove(
+    entityType: ApprovalEntityType,
+    entityId: string,
+    notes?: string,
+    acknowledgeLate?: boolean
+  ): Promise<void> {
     await api.post(`/finance/approvals/manual/${entityType}/${entityId}/approve`, {
       notes: notes || undefined,
+      ...(acknowledgeLate ? { acknowledgeLateSubstantiation: true } : {}),
     });
   },
 

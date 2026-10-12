@@ -785,6 +785,8 @@ export interface PendingApproval {
   canAct: boolean;
   /** The viewer is an approvals admin who is not the named approver, and must give an override reason to act. */
   requiresOverride: boolean;
+  /** Expense reports: lines submitted after the substantiation deadline; approving must acknowledge them. */
+  lateLineCount?: number;
 }
 
 /** Why nobody can act on an approval step, from the approver-coverage report. */
@@ -823,7 +825,18 @@ export interface UnroutedApproval {
   /** Held for a second, different approver by the dual-approval threshold. */
   awaitingSecondApproval?: boolean;
   firstApprovedBy?: string | null;
+  /** Expense reports: lines submitted after the substantiation deadline. */
+  lateLineCount?: number;
+  /** Held until an approver acknowledges the late lines. */
+  awaitingLateAcknowledgement?: boolean;
 }
+
+export const SubstantiationMode = {
+  OFF: 'off',
+  WARN: 'warn',
+  BLOCK: 'block',
+} as const;
+export type SubstantiationMode = (typeof SubstantiationMode)[keyof typeof SubstantiationMode];
 
 /** `GET /finance/settings`: the finance rules the server applies. */
 export interface FinanceSettings {
@@ -832,6 +845,10 @@ export interface FinanceSettings {
    * Changed through organization settings (`settings.manage`), not here.
    */
   dualApprovalThreshold: MonetaryAmount | null;
+  /** The accountable-plan deadline for expense reports. */
+  substantiationMode: SubstantiationMode;
+  /** Days allowed between incurring an expense and submitting it (1-60). */
+  substantiationDays: number;
 }
 
 export interface PurchaseRequest {
@@ -889,6 +906,8 @@ export interface ExpenseLineItem {
   receiptDocumentId?: string | null;
   receiptFileUrl?: string | null;
   merchant?: string;
+  /** Submitted after the department's substantiation deadline; decided at submission. */
+  substantiatedLate?: boolean;
   createdAt: string;
 }
 
@@ -918,6 +937,15 @@ export interface ExpenseReport {
   /** When a complete QuickBooks export last carried this payment. */
   qbExportedAt?: string | null;
   notes?: string;
+  /** When the member submitted it; null before submission was recorded. */
+  submittedAt?: string | null;
+  /** Lines submitted after the department's substantiation deadline. */
+  lateLineCount?: number;
+  /** The first approver who confirmed reviewing the late lines (null for an emailed approval). */
+  lateAcknowledgedBy?: string | null;
+  lateAcknowledgedAt?: string | null;
+  /** Held until an approver acknowledges the late lines (detail responses only). */
+  awaitingLateAcknowledgement?: boolean;
   createdAt: string;
   updatedAt: string;
   lineItems: ExpenseLineItem[];
@@ -1245,5 +1273,30 @@ export interface PaymentsRegisterReport {
   start: string;
   end: string;
   rows: PaymentsRegisterRow[];
+  total: MonetaryAmount;
+}
+
+/** An expense line reimbursed outside the accountable plan (claimed after the deadline). */
+export interface LateSubstantiationRow {
+  /** `YYYY-MM-DD`, the department's calendar day the report was paid. */
+  paidOn: string;
+  reportId: string;
+  reportNumber: string;
+  memberName: string;
+  description: string;
+  budgetLine?: string | null;
+  /** `YYYY-MM-DD`. */
+  incurredOn: string;
+  /** `YYYY-MM-DD`; null for a report submitted before submission was recorded. */
+  submittedOn?: string | null;
+  daysToSubmit?: number | null;
+  amount: MonetaryAmount;
+  acknowledgedByName?: string | null;
+}
+
+export interface LateSubstantiationReport {
+  start: string;
+  end: string;
+  rows: LateSubstantiationRow[];
   total: MonetaryAmount;
 }

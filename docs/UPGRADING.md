@@ -431,6 +431,32 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Expense reports can enforce a deadline for claiming expenses (2026-10-12)
+
+Migration `afaca8c1f812` adds `submitted_at`, `late_acknowledged_by` and
+`late_acknowledged_at` to expense reports and `substantiated_late` to expense
+line items. Nothing is backfilled. It also joins the two migration heads
+`a51a4e1d2443` and `bde76b481a16`, so `alembic upgrade head` has one head again.
+
+- **Nothing changes until you turn it on.** The new organization settings
+  `finance.substantiation_mode` (`off` by default, `warn` or `block`) and
+  `finance.substantiation_days` (1–60, default 60) are set by a member with
+  `settings.manage` on **Finance > Settings > Approval Chains**. Under `warn` a
+  report with a line older than the deadline still submits, but every approval
+  of it must confirm the late lines (`acknowledgeLateSubstantiation` on the
+  approve endpoints, `acknowledge_late_substantiation` on the emailed-token
+  endpoint; 400 without it). Under `block` it cannot be submitted.
+- **Reports submitted before this upgrade are never graded**, whatever the
+  setting: when they were submitted was not recorded.
+- **`GET /finance/settings` now answers `finance.request`**, so the expense form
+  can warn a member about a late date. It returns only the department's finance
+  rules.
+- **A receipt's download name now carries the date the expense was incurred**,
+  as written. It used the day before in time zones west of UTC.
+- **Downgrading** drops the columns. Which lines were late, and who confirmed
+  them, are lost; a report held for that confirmation stays waiting for
+  approval, and the previous version lets any approver approve it.
+
 ### A department runs one practical-skills system (2026-10-12)
 
 Training had two ways to record practical skills: **Skills Testing** (station

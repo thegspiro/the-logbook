@@ -723,6 +723,64 @@ Receipts**, linked by `receipt_document_id`, migration `c0bf0b155719`).
 - **Screen.** _Expense report_ disables **Submit for Approval** while any line
   has no receipt, with the count of lines still missing one beside it.
 
+## The deadline for claiming expenses _(2026-10-12)_
+
+Under an IRS accountable plan, a reimbursement is tax-free only if the expense
+is substantiated within a reasonable time of being incurred; the safe harbor is
+60 days (Treas. Reg. 1.62-2(g)(2)). A department sets what a late line does.
+
+**Settings** (`app/utils/finance_settings.py`, the reader; written through
+`PATCH /organization/settings` by `settings.manage`, like the dual-approval
+threshold, because it binds the finance officers):
+
+| Key                           | Values                 | Default |
+| ----------------------------- | ---------------------- | ------- |
+| `finance.substantiation_mode` | `off`, `warn`, `block` | `off`   |
+| `finance.substantiation_days` | whole days, 1–60       | 60      |
+
+Anything unreadable falls back to the default rather than raising (CLAUDE.md
+pitfall #19). The 60-day cap keeps a department from loosening the safe harbor.
+`GET /finance/settings` reports both, and answers `finance.request` so the
+expense form can warn a member while they enter a date.
+
+**Grading, once, at submission.** `submit_expense_report` records
+`submitted_at` and, unless the mode is `off`, marks each line whose incurred
+date is more than the allowed days before the submission day (the department's
+calendar) as `substantiated_late`. The incurred date is the date the member
+wrote (`expense_substantiation.incurred_day`), not a timezone conversion of its
+stored midnight. Under `block` a late line refuses the submission (400, naming
+up to three lines). The grading is stored, so changing the rule later does not
+re-grade a submitted report.
+
+**Approving under `warn`.** Every human approval of a report with a late line
+must acknowledge it — `acknowledgeLateSubstantiation: true` on
+`POST /finance/approvals/{id}/approve` and on the manual approve endpoint,
+`acknowledge_late_substantiation: true` on the emailed-token endpoint — or it is
+refused with 400 (`LateSubstantiationNotAcknowledgedError`). The first
+acknowledgement is recorded on the report (`late_acknowledged_by`,
+`late_acknowledged_at`; an emailed-token approval records the time with no
+user). A chain that would complete with nobody acknowledging — notification
+steps only — leaves the report waiting for approval with nothing pending in
+its chain, the same hold the dual-approval threshold uses; it is listed on
+**Approvals** under the manual decisions with `awaitingLateAcknowledgement`,
+and a manual approval that acknowledges completes it.
+
+**What the API reports.** Expense reports carry `submittedAt`,
+`lateLineCount`, `lateAcknowledgedBy`, `lateAcknowledgedAt` and, on detail
+responses, `awaitingLateAcknowledgement`; each line carries
+`substantiatedLate`. Pending approvals and the manual-decision list carry
+`lateLineCount`. The public token detail carries `late_line_count` (a count
+only).
+
+**Screens.** The expense form warns beside a date older than the deadline. The
+report's page marks each late line and says whether an approver has confirmed
+them. Approving asks _"Approve late expenses?"_ first, on the Approvals list, the
+report's page and the manual panel alike; the emailed-link page needs a tick.
+**Finance › Reports › Outside the accountable plan**
+(`GET /finance/reports/late-substantiation?start&end&format`, `finance.view`)
+lists every late line on a report paid in the period — member, incurred and
+submitted dates, days taken, who confirmed it, amount — with a CSV, for payroll.
+
 ## Board reports _(2026-10-12)_
 
 **Finance › Reports** (`/finance/reports`, `finance.view`) holds the three
@@ -1245,6 +1303,7 @@ Pages:
 
 - `GET /finance/reports/budget-vs-actual` _(built 2026-10-12)_ — through a chosen date, rather than over a range; see [Board reports](#board-reports-2026-10-12)
 - `GET /finance/reports/amendment-log` _(built 2026-10-12)_ — see [Board reports](#board-reports-2026-10-12)
+- `GET /finance/reports/late-substantiation` _(built 2026-10-12)_ — expense lines paid in a period that were claimed after the deadline; see [The deadline for claiming expenses](#the-deadline-for-claiming-expenses-2026-10-12)
 - `GET /finance/reports/payments-register` _(built 2026-10-12)_ — the unified log of money paid out, which the planned `transaction-log` described; see [Board reports](#board-reports-2026-10-12)
 - `GET /finance/reports/expense-summary` — by member, category, date range (planned)
 - `GET /finance/reports/dues-collection` — by schedule, with delinquency list (planned)

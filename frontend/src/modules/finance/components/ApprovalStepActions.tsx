@@ -28,6 +28,8 @@ interface ApprovalStepActionsProps {
   subject: string;
   /** Re-fetch the request after a decision is recorded. */
   onDecided: () => void;
+  /** Expense reports: lines submitted after the substantiation deadline. */
+  lateLines?: number | undefined;
 }
 
 export const ApprovalStepActions: React.FC<ApprovalStepActionsProps> = ({
@@ -35,6 +37,7 @@ export const ApprovalStepActions: React.FC<ApprovalStepActionsProps> = ({
   steps,
   subject,
   onDecided,
+  lateLines,
 }) => {
   const [decision, setDecision] = useState<ApprovalDecision | null>(null);
   const current = isPendingApproval ? findCurrentPendingStep(steps) : undefined;
@@ -52,6 +55,7 @@ export const ApprovalStepActions: React.FC<ApprovalStepActionsProps> = ({
       subject,
       stepName: current.stepName,
       override: requiresOverride ? { assigneeLabel: assigneeLabel || 'someone else' } : undefined,
+      lateLines,
     });
 
   const boxClass =

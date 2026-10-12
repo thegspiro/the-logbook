@@ -17,7 +17,10 @@ import { useRequestFormOptions } from '../hooks/useRequestFormOptions';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
-import { ExpenseType, EXPENSE_TYPE_LABELS } from '../types';
+import { ExpenseType, EXPENSE_TYPE_LABELS, SubstantiationMode, type FinanceSettings } from '../types';
+import { financeSettingsService } from '../services/api';
+import { useTimezone } from '@/hooks/useTimezone';
+import { calendarDaysBetween, getTodayLocalDate } from '@/utils/dateFormatting';
 
 // =============================================================================
 // Validation Schema
@@ -84,6 +87,43 @@ const FormSkeleton: React.FC = () => (
 );
 
 // =============================================================================
+// Late-line warning
+// =============================================================================
+
+/**
+ * Warns about a line older than the department's substantiation deadline while
+ * it is being entered. The server grades lines when the report is submitted;
+ * this is advice only, so a failed read of the rule just means no warning.
+ * Measured from today, the earliest the report can be submitted.
+ */
+function useLateLineWarning(): (dateIncurred: string) => string | null {
+  const tz = useTimezone();
+  const [rules, setRules] = useState<FinanceSettings | null>(null);
+
+  useEffect(() => {
+    let current = true;
+    financeSettingsService
+      .get()
+      .then((next) => {
+        if (current) setRules(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, []);
+
+  return (dateIncurred: string) => {
+    if (!rules || rules.substantiationMode === SubstantiationMode.OFF) return null;
+    const age = calendarDaysBetween(getTodayLocalDate(tz), dateIncurred);
+    if (age === null || age <= rules.substantiationDays) return null;
+    return rules.substantiationMode === SubstantiationMode.BLOCK
+      ? `More than ${rules.substantiationDays} days ago. The department does not accept expenses this old; this report cannot be submitted with this line.`
+      : `More than ${rules.substantiationDays} days ago. An approver will have to confirm this line, and the department may report its reimbursement as taxable pay.`;
+  };
+}
+
+// =============================================================================
 // Main Page Component
 // =============================================================================
 
@@ -97,6 +137,7 @@ const ExpenseReportFormPage: React.FC = () => {
 
   const [lineItems, setLineItems] = useState<LineItemEntry[]>([]);
   const [lineItemErrors, setLineItemErrors] = useState<Record<number, string>>({});
+  const lateWarning = useLateLineWarning();
 
   const {
     register,
@@ -357,13 +398,26 @@ const ExpenseReportFormPage: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className={labelClass}>Date *</label>
+                      <label htmlFor={`line-${String(index)}-date`} className={labelClass}>
+                        Date *
+                      </label>
                       <input
+                        id={`line-${String(index)}-date`}
                         type="date"
                         className={inputClass}
                         value={item.dateIncurred}
                         onChange={(e) => updateLineItem(index, 'dateIncurred', e.target.value)}
+                        aria-describedby={lateWarning(item.dateIncurred) ? `line-${String(index)}-late` : undefined}
                       />
+                      {lateWarning(item.dateIncurred) && (
+                        <p
+                          id={`line-${String(index)}-late`}
+                          className="mt-1 text-xs text-amber-800 dark:text-amber-300"
+                          role="status"
+                        >
+                          {lateWarning(item.dateIncurred)}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className={labelClass}>Type *</label>

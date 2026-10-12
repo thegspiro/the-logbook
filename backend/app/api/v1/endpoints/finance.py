@@ -92,6 +92,7 @@ from app.schemas.finance import (
     FiscalYearResponse,
     FiscalYearStageChange,
     FiscalYearUpdate,
+    LateSubstantiationReportResponse,
     ManualDenyRequest,
     MemberDuesPayment,
     MemberDuesResponse,
@@ -110,6 +111,7 @@ from app.schemas.finance import (
 )
 from app.services import module_documents
 from app.services.documents_service import DocumentsService
+from app.services.expense_substantiation import incurred_day
 from app.services.finance_approver_matching import ApproverMismatchError
 from app.services.finance_budget_ownership import (
     user_owns_any_budget,
@@ -2119,11 +2121,83 @@ async def payments_register_report(
     )
 
 
+@router.get(
+    "/reports/late-substantiation", response_model=LateSubstantiationReportResponse
+)
+async def late_substantiation_report(
+    start: date = Query(...),
+    end: date = Query(...),
+    format: str = _REPORT_FORMAT,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.view")),
+):
+    """Expense lines paid in a period that were submitted too late.
+
+    **Requires permission: finance.view**
+
+    Every line on an expense report paid between the two dates (inclusive, on
+    the department's calendar) that was submitted after the department's
+    substantiation deadline: reimbursed outside the accountable plan. A period
+    longer than 366 days is 400. ``format=csv`` downloads the same rows.
+    """
+    service = FinanceReportService(db)
+    try:
+        report = await service.late_substantiation(
+            str(current_user.organization_id), start, end
+        )
+    except Exception as e:
+        raise _report_error(e)
+    if format != "csv":
+        return report
+    rows = [
+        [
+            "Paid",
+            "Report",
+            "Member",
+            "Description",
+            "Budget line",
+            "Incurred",
+            "Submitted",
+            "Days to submit",
+            "Acknowledged by",
+            "Amount",
+        ]
+    ]
+    for row in report["rows"]:
+        rows.append(
+            [
+                row["paid_on"],
+                row["report_number"],
+                row["member_name"],
+                row["description"],
+                row["budget_line"] or "",
+                row["incurred_on"],
+                row["submitted_on"] or "",
+                "" if row["days_to_submit"] is None else row["days_to_submit"],
+                row["acknowledged_by_name"] or "",
+                _amount_cell(row["amount"]),
+            ]
+        )
+    rows.append(
+        ["", "", "", "", "", "", "", "", "Total", _amount_cell(report["total"])]
+    )
+    return _csv_download(
+        rows,
+        download_names.descriptive_filename(
+            "outside-accountable-plan",
+            report["start"],
+            report["end"],
+            extension=".csv",
+        ),
+    )
+
+
 @router.get("/settings", response_model=FinanceSettingsResponse)
 async def get_finance_settings(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
+            "finance.request",
             "finance.view",
             "finance.approve",
             "finance.manage",
@@ -2133,16 +2207,21 @@ async def get_finance_settings(
 ):
     """The department's finance rules, as the approval path reads them.
 
-    **Requires permission: finance.view, finance.approve, finance.manage or
-    finance.configure_approvals**
+    **Requires permission: finance.request, finance.view, finance.approve,
+    finance.manage or finance.configure_approvals**
 
-    ``dualApprovalThreshold`` is null when off. It is changed through
-    ``PATCH /organization/settings`` (``settings.manage``), never here: it
-    binds the finance officers themselves.
+    ``dualApprovalThreshold`` is null when off. ``substantiationMode`` and
+    ``substantiationDays`` are the accountable-plan deadline for expense
+    reports; ``finance.request`` reads them so the expense form can warn a
+    member before they submit a late line. All are changed through
+    ``PATCH /organization/settings`` (``settings.manage``), never here: they
+    bind the finance officers themselves.
     """
     resolved = await load_finance_settings(db, str(current_user.organization_id))
     return FinanceSettingsResponse(
-        dual_approval_threshold=resolved.dual_approval_threshold
+        dual_approval_threshold=resolved.dual_approval_threshold,
+        substantiation_mode=resolved.substantiation_mode,
+        substantiation_days=resolved.substantiation_days,
     )
 
 
@@ -2214,6 +2293,7 @@ async def manual_approve(
             entity_id,
             str(current_user.id),
             org_id=str(current_user.organization_id),
+            acknowledge_late=data.acknowledge_late_substantiation,
         )
         await log_audit_event(
             db=db,
@@ -2332,6 +2412,7 @@ async def approve_step(
             data.notes,
             org_id=str(current_user.organization_id),
             override_reason=data.override_reason,
+            acknowledge_late=data.acknowledge_late_substantiation,
         )
         await log_audit_event(
             db=db,
@@ -2508,6 +2589,13 @@ async def _with_approval_steps(
     payload.awaiting_second_approval = service.is_awaiting_second_approval(
         entity_type, payload, records
     )
+    if entity_type == ApprovalEntityType.EXPENSE_REPORT:
+        payload.awaiting_late_acknowledgement = (
+            service.is_awaiting_late_acknowledgement(payload, records)
+        )
+        # The acknowledgement is the first thing a held report waits for.
+        if payload.awaiting_late_acknowledgement:
+            payload.awaiting_second_approval = False
     return payload
 
 
@@ -3896,18 +3984,16 @@ async def download_expense_line_item_receipt(
     Readable by whoever may read the report itself: its submitter, a finance
     manager, or one of its approvers.
     """
-    org_id = str(current_user.organization_id)
     er = await _readable_expense_report(FinanceService(db), er_id, current_user)
     item = await _expense_line_item(er, item_id)
     if not item.receipt_document_id:
         raise HTTPException(status_code=404, detail="Receipt not found")
-    tz = await resolve_scheduling_timezone(db, org_id)
     return await module_documents.serve_document(
         db,
         item.receipt_document_id,
         current_user,
         name_parts=(er.report_number, item.merchant or item.description, "Receipt"),
         fallback="receipt",
-        day=download_names.local_day(item.date_incurred, tz),
+        day=incurred_day(item.date_incurred),
         folder_rights=False,
     )

@@ -50,6 +50,7 @@ from app.models.finance import (
     PurchaseRequestStatus,
 )
 from app.models.user import User
+from app.services.expense_substantiation import incurred_day
 from app.utils.member_names import format_display_name
 from app.utils.org_timezone import resolve_scheduling_timezone
 
@@ -572,6 +573,112 @@ class FinanceReportService:
             )
 
         rows.sort(key=lambda r: (r["paid_on"], r["number"], r["kind"]))
+        return {
+            "start": start,
+            "end": end,
+            "rows": rows,
+            "total": sum((r["amount"] for r in rows), ZERO),
+        }
+
+    # ------------------------------------------------------------------
+    # Outside the accountable plan
+    # ------------------------------------------------------------------
+
+    async def late_substantiation(self, org_id: str, start: date, end: date) -> dict:
+        """Reimbursements paid in the period for lines submitted too late.
+
+        A line submitted after the department's substantiation deadline was
+        reimbursed outside the accountable plan, so the department may have to
+        treat it as wages. One row per such line on an expense report paid in
+        the period, for the treasurer to hand to whoever runs payroll.
+        """
+        if end < start:
+            raise ValueError("The period's end must be on or after its start.")
+        if (end - start).days + 1 > MAX_REGISTER_DAYS:
+            raise ValueError(
+                f"This report covers at most {MAX_REGISTER_DAYS} days; "
+                "choose a shorter period."
+            )
+        tz = await resolve_scheduling_timezone(self.db, org_id)
+        window = _Window(_day_start(start, tz), _day_start(end + timedelta(days=1), tz))
+        labels = await self._line_labels(org_id)
+
+        submitter = aliased(User)
+        acknowledger = aliased(User)
+        result = await self.db.execute(
+            select(
+                ExpenseReport,
+                ExpenseLineItem,
+                submitter.first_name,
+                submitter.last_name,
+                submitter.preferred_name,
+                submitter.username,
+                acknowledger.first_name,
+                acknowledger.last_name,
+                acknowledger.preferred_name,
+                acknowledger.username,
+            )
+            .join(
+                ExpenseLineItem,
+                and_(
+                    ExpenseLineItem.expense_report_id == ExpenseReport.id,
+                    ExpenseLineItem.substantiated_late.is_(True),
+                ),
+            )
+            .outerjoin(
+                submitter,
+                and_(
+                    submitter.id == ExpenseReport.submitted_by,
+                    submitter.organization_id == org_id,
+                ),
+            )
+            .outerjoin(
+                acknowledger,
+                and_(
+                    acknowledger.id == ExpenseReport.late_acknowledged_by,
+                    acknowledger.organization_id == org_id,
+                ),
+            )
+            .where(
+                ExpenseReport.organization_id == org_id,
+                ExpenseReport.status == ExpenseReportStatus.PAID,
+                ExpenseReport.paid_at >= window.start,
+                ExpenseReport.paid_at < window.end,
+            )
+        )
+
+        rows = []
+        for er, item, *names in result.all():
+            if er.paid_at is None:  # excluded by the query; narrows the type
+                continue
+            incurred = incurred_day(item.date_incurred)
+            submitted = (
+                _aware(er.submitted_at).astimezone(tz).date()
+                if er.submitted_at is not None
+                else None
+            )
+            rows.append(
+                {
+                    "paid_on": _aware(er.paid_at).astimezone(tz).date(),
+                    "report_id": er.id,
+                    "report_number": er.report_number,
+                    "member_name": _name(*names[:4]),
+                    "description": item.description,
+                    "budget_line": (
+                        labels.get(item.budget_id) if item.budget_id else None
+                    ),
+                    "incurred_on": incurred,
+                    "submitted_on": submitted,
+                    "days_to_submit": (
+                        (submitted - incurred).days if submitted is not None else None
+                    ),
+                    "amount": _money(item.amount),
+                    "acknowledged_by_name": (
+                        _name(*names[4:]) if er.late_acknowledged_by else None
+                    ),
+                }
+            )
+        rows.sort(key=lambda r: (r["paid_on"], r["report_number"], r["incurred_on"]))
         return {
             "start": start,
             "end": end,

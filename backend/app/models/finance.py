@@ -1098,6 +1098,21 @@ class ExpenseReport(Base):
     paid_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # When the member submitted the report. Null on reports submitted before
+    # this was recorded (2026-10-12).
+    submitted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Under the department's "warn" substantiation rule, the first approver
+    # who confirmed reviewing the lines submitted outside the accountable
+    # plan's deadline (app/utils/finance_settings.py). An approval through an
+    # emailed token records the time with no user.
+    late_acknowledged_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    late_acknowledged_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # When a complete QuickBooks export file last carried this payment, and
     # which export. The export leaves out what is already stamped, so a
     # Treasurer who exports overlapping periods does not import it twice.
@@ -1189,6 +1204,12 @@ class ExpenseLineItem(Base):
         nullable=True,
     )
     merchant: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    # Submitted more than the department's substantiation deadline after it
+    # was incurred, decided once at submission so a later change to the rule
+    # does not re-grade a submitted report.
+    substantiated_late: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

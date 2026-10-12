@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**303 tables · 5005 columns · 1011 foreign keys**
+**303 tables · 5010 columns · 1012 foreign keys**
 
 ---
 
@@ -260,8 +260,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`check_requests`](#check_requests) | `CheckRequest` | 29 | Request to cut a check for payment |
 | [`dues_payments`](#dues_payments) | `DuesPayment` | 11 | A single payment received against a member's dues (FIN-6). |
 | [`dues_schedules`](#dues_schedules) | `DuesSchedule` | 15 | Schedule for dues collection |
-| [`expense_line_items`](#expense_line_items) | `ExpenseLineItem` | 11 | Individual line item within an expense report |
-| [`expense_reports`](#expense_reports) | `ExpenseReport` | 21 | Expense report submitted by a member for reimbursement |
+| [`expense_line_items`](#expense_line_items) | `ExpenseLineItem` | 12 | Individual line item within an expense report |
+| [`expense_reports`](#expense_reports) | `ExpenseReport` | 24 | Expense report submitted by a member for reimbursement |
 | [`finance_export_logs`](#finance_export_logs) | `ExportLog` | 12 | Log of an export attempt, including interrupted streams. |
 | [`finance_export_mappings`](#finance_export_mappings) | `ExportMapping` | 9 | Mapping between internal budget categories and QuickBooks accounts |
 | [`fiscal_years`](#fiscal_years) | `FiscalYear` | 21 | Fiscal year definition for the organization |
@@ -3979,6 +3979,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `receipt_url` | VARCHAR(500) | yes |  |  |  |
 | `receipt_document_id` | VARCHAR(36) | yes | FK |  | → `documents.id` ON DELETE SET NULL |
 | `merchant` | VARCHAR(300) | yes |  |  |  |
+| `substantiated_late` | BOOL | no |  | `0` |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 
 **Indexes**
@@ -4008,6 +4009,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `first_approved_at` | DATETIME | yes |  |  |  |
 | `denial_reason` | TEXT | yes |  |  |  |
 | `paid_at` | DATETIME | yes |  |  |  |
+| `submitted_at` | DATETIME | yes |  |  |  |
+| `late_acknowledged_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `late_acknowledged_at` | DATETIME | yes |  |  |  |
 | `qb_exported_at` | DATETIME | yes |  |  |  |
 | `qb_export_log_id` | VARCHAR(36) | yes | FK |  | → `finance_export_logs.id` ON DELETE SET NULL |
 | `payment_method` | VARCHAR(50) | yes |  |  |  |
@@ -10563,7 +10567,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (373 references)
+### → `users` (374 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10678,6 +10682,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `events` | `updated_by` | RESTRICT | yes |
 | `expense_reports` | `approved_by` | SET NULL | yes |
 | `expense_reports` | `first_approved_by` | SET NULL | yes |
+| `expense_reports` | `late_acknowledged_by` | SET NULL | yes |
 | `expense_reports` | `submitted_by` | RESTRICT | no |
 | `external_category_mappings` | `mapped_by` | SET NULL | yes |
 | `external_course_mappings` | `mapped_by` | SET NULL | yes |
