@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #<pending>**: branch `claude/security-review-storefront-payments`,
+**PR [#3128](https://github.com/thegspiro/the-logbook/pull/3128)**: branch `claude/security-review-storefront-payments`,
 Feature 04 (Storefront & payments), pass 8 (watchdog pickup). 2 fixed
 (SF8-04-1, a `refund_order` lost-update race of the same shape SF-9 was
 fixed for; one guard test added) — plus SF-9 and SF-11, both standing OPEN
