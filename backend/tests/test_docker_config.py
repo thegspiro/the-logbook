@@ -157,6 +157,19 @@ class TestBackendDockerfile:
         assert "main.py" in copy_text, "Production stage must COPY main.py"
         assert "app/" in copy_text, "Production stage must COPY app/ directory"
 
+    def test_production_ships_the_operator_scripts(self):
+        """The upgrade, key-rotation and encryption docs tell operators to run
+        `docker exec <backend> python scripts/...`; without this COPY every
+        production install answers "No such file or directory"."""
+        prod = next(s for s in self.stages if s["name"] == "production")
+        copies = " ".join(_get_instructions(prod, "COPY"))
+        assert "scripts/" in copies, "Production stage must COPY scripts/"
+
+    def test_production_drops_the_test_user_seeder(self):
+        prod = next(s for s in self.stages if s["name"] == "production")
+        runs = " ".join(_get_instructions(prod, "RUN"))
+        assert "rm -f scripts/seed_test_users.py" in runs
+
     def test_production_has_cmd(self):
         prod = next(s for s in self.stages if s["name"] == "production")
         cmds = _get_instructions(prod, "CMD")

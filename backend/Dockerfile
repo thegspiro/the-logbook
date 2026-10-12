@@ -83,6 +83,12 @@ COPY main.py .
 COPY app/ ./app/
 COPY alembic/ ./alembic/
 COPY alembic.ini .
+# Operator commands the docs tell an installation to run with `docker exec`
+# (relocate_uploads.py, encrypt_uploads.py, rotate_encryption_key.py, ...).
+# seed_test_users.py is removed: it creates accounts sharing one published
+# password and has no business on a production image.
+COPY scripts/ ./scripts/
+RUN rm -f scripts/seed_test_users.py
 
 # Change ownership
 RUN chown -R appuser:appuser /app

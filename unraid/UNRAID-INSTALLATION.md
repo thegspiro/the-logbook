@@ -893,6 +893,25 @@ docker pull ghcr.io/thegspiro/the-logbook:v1.0.0
 docker start TheLogbook
 ```
 
+### Running maintenance commands
+
+The upgrade, key-rotation and file-encryption guides give commands like
+`docker exec -it intranet-backend python scripts/<name>.py`. `intranet-backend`
+is the container name in the standard Docker Compose files. In the Unraid
+compose stack the backend container is **`logbook-backend`**, so use:
+
+```bash
+docker exec -it logbook-backend python scripts/relocate_uploads.py
+```
+
+Run them from the Unraid terminal (the `>_` icon at the top right of the web
+UI). Images built before 2026-10-12 do not contain `scripts/`; rebuild the
+stack after updating, or copy the folder in for a one-off run:
+
+```bash
+docker cp /mnt/user/appdata/the-logbook/backend/scripts logbook-backend:/app/
+```
+
 ---
 
 ## Advanced Configuration
