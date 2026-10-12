@@ -6,12 +6,45 @@
  */
 
 import React from 'react';
-import { Clock, Moon, Sun, Repeat } from 'lucide-react';
+import { CalendarDays, Clock, Moon, Sun, Repeat } from 'lucide-react';
 import { PRESET_PATTERNS } from './shiftPatternPresets';
-import type { PresetPatternDef, CycleEntry } from './shiftPatternPresets';
+import type { PresetPatternDef, CycleEntry, WeekdayShiftType } from './shiftPatternPresets';
+
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+const DAY_BG = 'bg-amber-400 dark:bg-amber-500';
+const NIGHT_BG = 'bg-indigo-500 dark:bg-indigo-400';
+
+/** Weekly preview strip: one cell per weekday, split when a day carries both shifts. */
+const WeeklyPreview: React.FC<{ pattern: PresetPatternDef }> = ({ pattern }) => {
+  const cells = WEEKDAY_NAMES.map((name, weekday) => {
+    const shifts: WeekdayShiftType[] = pattern.weekdayShifts?.[weekday] ?? [];
+    const label =
+      shifts.length === 0 ? 'Off' : shifts.map((s) => (s === 'day' ? 'Day shift' : 'Night shift')).join(' and ');
+    return { name, shifts, label };
+  });
+  const summary = cells.map((c) => `${c.name}: ${c.label}`).join(', ');
+  return (
+    <div className="mt-2 flex gap-0.5" role="img" aria-label={`Weekly pattern: ${summary}`}>
+      {cells.map((cell) => (
+        <div
+          key={cell.name}
+          className="bg-theme-surface-hover flex h-2 flex-1 flex-col overflow-hidden rounded-xs"
+          title={`${cell.name}: ${cell.label}`}
+          aria-hidden="true"
+        >
+          {cell.shifts.includes('day') && <div className={`flex-1 ${DAY_BG}`} />}
+          {cell.shifts.includes('night') && <div className={`flex-1 ${NIGHT_BG}`} />}
+        </div>
+      ))}
+    </div>
+  );
+};
 
 /** Small visual cycle preview strip. */
 const CyclePreview: React.FC<{ pattern: PresetPatternDef }> = ({ pattern }) => {
+  if (pattern.weekdayShifts) return <WeeklyPreview pattern={pattern} />;
+
   const entries: CycleEntry[] =
     pattern.cyclePattern ??
     Array.from({ length: pattern.cycleDays }, (_, i) =>
@@ -48,6 +81,7 @@ const CyclePreview: React.FC<{ pattern: PresetPatternDef }> = ({ pattern }) => {
 
 /** Icon for pattern category. */
 const CategoryIcon: React.FC<{ category: PresetPatternDef['category'] }> = ({ category }) => {
+  if (category === 'weekly') return <CalendarDays className="h-5 w-5" />;
   if (category === 'rotating') return <Repeat className="h-5 w-5" />;
   if (category === 'complex') return <Moon className="h-5 w-5" />;
   return <Sun className="h-5 w-5" />;
@@ -105,7 +139,7 @@ const PresetPatterns: React.FC<PresetPatternsProps> = ({ onSelect, selectedId })
                   <p className="text-theme-text-muted mt-0.5 line-clamp-2 text-xs">{preset.description}</p>
                   <div className="text-theme-text-muted mt-1.5 flex items-center gap-2 text-[10px]">
                     <Clock className="h-3 w-3" />
-                    <span>{preset.cycleDays}-day cycle</span>
+                    <span>{preset.weekdayShifts ? 'Repeats weekly' : `${preset.cycleDays}-day cycle`}</span>
                     {preset.hasDayNight && (
                       <span className="flex items-center gap-1">
                         <Sun className="h-3 w-3 text-amber-500" />

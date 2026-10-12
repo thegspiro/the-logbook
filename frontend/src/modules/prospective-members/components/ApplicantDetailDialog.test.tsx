@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
-import { ApplicantDetailDrawer } from './ApplicantDetailDrawer';
+import { ApplicantDetailDialog } from './ApplicantDetailDialog';
 import type { Applicant, StageHistoryEntry } from '../types';
 import { StepProgressStatus } from '../types';
 
@@ -83,7 +83,7 @@ const applicant = {
 
 function renderDrawer(overrides: Partial<Applicant> = {}) {
   return renderWithRouter(
-    <ApplicantDetailDrawer
+    <ApplicantDetailDialog
       applicant={{ ...applicant, ...overrides }}
       isOpen
       onClose={vi.fn()}
@@ -101,7 +101,7 @@ beforeEach(() => {
   mocks.getLinkedEvents.mockResolvedValue([]);
 });
 
-describe('ApplicantDetailDrawer stage progress', () => {
+describe('ApplicantDetailDialog stage progress', () => {
   // The strip matched COMPLETED only, so a stage the coordinator deliberately
   // skipped drew as a muted unreached bubble — while the timeline right below
   // it showed the completion stamp the skip had written.
@@ -139,7 +139,7 @@ describe('ApplicantDetailDrawer stage progress', () => {
   });
 });
 
-describe('ApplicantDetailDrawer skip action', () => {
+describe('ApplicantDetailDialog skip action', () => {
   // The Required flag was stored and badged in the stage list and read by no
   // logic at all: a stage a department had marked required could be stepped
   // over with two clicks. The server refuses it now; the button says so before
@@ -161,7 +161,7 @@ describe('ApplicantDetailDrawer skip action', () => {
   });
 });
 
-describe('ApplicantDetailDrawer approval status', () => {
+describe('ApplicantDetailDialog approval status', () => {
   // The panel read the required signers off the last history entry's
   // action_result, where they are never stored, so it said "No approval data
   // recorded yet" to the coordinator after the Chief and the President had
@@ -195,7 +195,7 @@ describe('ApplicantDetailDrawer approval status', () => {
   });
 });
 
-describe('ApplicantDetailDrawer activity log', () => {
+describe('ApplicantDetailDialog activity log', () => {
   // The reason for a rejection, hold or withdrawal is recorded in the activity
   // entry rather than written over the coordinator's notes, which is where it
   // used to land. The activity log is therefore the only place it can be read,
@@ -224,7 +224,7 @@ describe('ApplicantDetailDrawer activity log', () => {
 
   it('renders an entry whose details are missing or malformed', async () => {
     // `details` is unvalidated JSON: a bad value must degrade to "no detail to
-    // show" rather than taking the drawer down.
+    // show" rather than taking the dialog down.
     mocks.getActivity.mockResolvedValue([
       {
         id: 'act-2',
@@ -255,7 +255,7 @@ describe('ApplicantDetailDrawer activity log', () => {
   });
 });
 
-describe('ApplicantDetailDrawer conversion notes', () => {
+describe('ApplicantDetailDialog conversion notes', () => {
   // The Convert dialog's notes are recorded on the transfer's activity entry
   // and nowhere else, so the log has to show them.
   it('shows the notes recorded with a conversion', async () => {
@@ -279,8 +279,8 @@ describe('ApplicantDetailDrawer conversion notes', () => {
   });
 });
 
-describe('ApplicantDetailDrawer address', () => {
-  // The drawer showed an address only when it had a city, so an applicant who
+describe('ApplicantDetailDialog address', () => {
+  // The dialog showed an address only when it had a city, so an applicant who
   // gave a street and ZIP but no city appeared to have no address at all.
   it('shows an address that has a street but no city', async () => {
     renderDrawer({ address: { street: '1 Main St', zip_code: '62701' } });
@@ -297,7 +297,7 @@ describe('ApplicantDetailDrawer address', () => {
   });
 });
 
-describe('ApplicantDetailDrawer contact edit', () => {
+describe('ApplicantDetailDialog contact edit', () => {
   beforeEach(() => {
     mocks.updateApplicant.mockReset();
     mocks.updateApplicant.mockResolvedValue({});
@@ -338,7 +338,7 @@ describe('ApplicantDetailDrawer contact edit', () => {
   });
 });
 
-describe('ApplicantDetailDrawer checklist stage', () => {
+describe('ApplicantDetailDialog checklist stage', () => {
   const checklistApplicant = {
     current_stage_type: 'checklist',
     current_stage_config: {
@@ -370,7 +370,7 @@ describe('ApplicantDetailDrawer checklist stage', () => {
   });
 });
 
-describe('ApplicantDetailDrawer referral details', () => {
+describe('ApplicantDetailDialog referral details', () => {
   it('shows where the applicant came from, who referred them and why', async () => {
     renderDrawer({
       referral_source: 'Attended: Spring Open House',
@@ -406,10 +406,10 @@ describe('ApplicantDetailDrawer referral details', () => {
  * The dialog shell. This surface was a right-edge `drawer-panel`; it is now a
  * centred dialog on the shared stack, like the shift detail panel.
  */
-describe('ApplicantDetailDrawer dialog shell', () => {
+describe('ApplicantDetailDialog dialog shell', () => {
   function renderWithClose(onClose: () => void) {
     renderWithRouter(
-      <ApplicantDetailDrawer
+      <ApplicantDetailDialog
         applicant={applicant}
         isOpen
         onClose={onClose}
@@ -455,7 +455,7 @@ describe('ApplicantDetailDrawer dialog shell', () => {
 
   it('renders nothing when closed', () => {
     renderWithRouter(
-      <ApplicantDetailDrawer
+      <ApplicantDetailDialog
         applicant={applicant}
         isOpen={false}
         onClose={vi.fn()}

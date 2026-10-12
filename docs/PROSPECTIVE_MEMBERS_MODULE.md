@@ -42,7 +42,7 @@ frontend/src/modules/prospective-members/
 │   ├── PipelineKanban.tsx      # Kanban board view
 │   ├── PipelineTable.tsx       # Table view with sorting and pagination
 │   ├── ApplicantCard.tsx       # Card component for kanban columns
-│   ├── ApplicantDetailDrawer.tsx # Slide-out applicant details panel
+│   ├── ApplicantDetailDialog.tsx # Centred applicant details dialog
 │   ├── ApplicantActionPanels.tsx # Status-conditional action footer (active/hold/withdrawn/inactive) *(2026-04-11)*
 │   ├── ElectionPackageSection.tsx # Election ballot package display and management *(2026-04-11)*
 │   ├── LinkedEventsSection.tsx  # Linked events display with search and link/unlink *(2026-04-11)*
@@ -90,7 +90,7 @@ frontend/src/modules/prospective-members/
 
 ### Extracted Sub-Components _(2026-04-11)_
 
-The `ApplicantDetailDrawer` was decomposed into focused sub-components:
+The `ApplicantDetailDialog` was decomposed into focused sub-components:
 
 | Component                | Description                                                                                                                                                                                                                                                                                |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -172,9 +172,9 @@ Coordinators can link upcoming department events to individual applicants in the
 
 ### How It Works
 
-1. **Manual linking**: From the ApplicantDetailDrawer, coordinators can search and link any upcoming event to an applicant
+1. **Manual linking**: From the ApplicantDetailDialog, coordinators can search and link any upcoming event to an applicant
 2. **Auto-linking**: When a pipeline stage of type `meeting` activates for an applicant, the system automatically links the next upcoming event that matches the stage configuration
-3. **Linked event display**: The ApplicantDetailDrawer shows all linked events with date, time, type, and status
+3. **Linked event display**: The ApplicantDetailDialog shows all linked events with date, time, type, and status
 
 ### Database Model
 
