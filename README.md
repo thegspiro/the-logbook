@@ -214,7 +214,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml \
   -f docker-compose.external-services.yml up -d
 ```
 
-See [AWS Deployment Guide](docs/deployment/aws.md) for detailed AWS instructions or [Deployment Guide](wiki/Deployment-Guide.md) for other cloud platforms.
+See [AWS Deployment Guide](docs/deployment/aws.md) for detailed AWS instructions or [Production Deployment](wiki/Deployment-Production.md#cloud-platforms) for other cloud platforms.
 
 </details>
 
