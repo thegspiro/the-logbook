@@ -26,7 +26,6 @@
 ### 🎯 Getting Started
 
 - [Installation](Installation)
-- [Unraid Quick Start](Unraid-Quick-Start)
 - [Onboarding](Onboarding)
 - [Quick Reference](Quick-Reference)
 
