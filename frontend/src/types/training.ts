@@ -986,6 +986,11 @@ export interface ReminderConditions {
   send_if_below_percentage?: number | undefined;
 }
 
+export interface PrerequisiteProgramSummary {
+  id: string;
+  name: string;
+}
+
 // Training Program
 export interface TrainingProgram {
   id: string;
@@ -999,7 +1004,10 @@ export interface TrainingProgram {
   structure_type: ProgramStructureType;
   /** Members currently on this pipeline, withdrawn enrollments excluded. */
   enrolled_count: number;
+  /** Programs a member must have completed before enrolling in this one. */
   prerequisite_program_ids?: string[];
+  /** Names for the ids above; a since-deleted program is left out. */
+  prerequisite_programs?: PrerequisiteProgramSummary[];
   allows_concurrent_enrollment: boolean;
   time_limit_days?: number;
   warning_days_before: number;
@@ -1117,6 +1125,9 @@ export interface TrainingProgramUpdate {
   recert_interval_months?: number | undefined;
   recert_anchor_month?: number | undefined;
   recert_anchor_day?: number | undefined;
+  /** Omit to leave alone; `[]` or `null` clears every prerequisite. */
+  prerequisite_program_ids?: string[] | null | undefined;
+  allows_concurrent_enrollment?: boolean | undefined;
 }
 
 export interface ProgramPhaseUpdate {

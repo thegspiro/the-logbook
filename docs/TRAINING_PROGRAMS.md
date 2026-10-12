@@ -179,7 +179,8 @@ A pipeline is fully editable from the program detail page (Overview tab), gated 
 `training.manage`:
 
 - **Program details** — name, description, code, structure, time limits, target
-  position, template/active (`PATCH /training/programs/programs/{id}`).
+  position, template/active, prerequisite programs and concurrent enrollment
+  (`PATCH /training/programs/programs/{id}`).
 - **Phases** — add, edit (name/description/time limit/manual-advance), reorder, and
   delete (`…/phases`, `…/phases/reorder`, `…/phases/{phase_id}`).
 - **Requirements** — add, edit content/target, reorder within a phase, move between
@@ -212,13 +213,46 @@ re-derives enrolled members' progress-row percentages against the new target.
 
 #### Program Prerequisites
 
-- Set prerequisite programs (e.g., must complete "Recruit School" before "Driver Candidate")
-- Automatic validation during enrollment
-- Prevents enrollment if prerequisites not met
+_(2026-10-12)_ Set on the program itself — **Prerequisite programs** in the
+create wizard's first step and in **Edit pipeline details** — and stored in
+`training_programs.prerequisite_program_ids`. Example: a member must complete
+"Recruit School" before they can be enrolled in "Driver Operator".
+
+- **API.** `prerequisite_program_ids` (a list of program ids) is accepted by
+  `POST /training/programs/programs`, `POST …/programs/build` (inside `program`)
+  and `PATCH …/programs/{id}`. On `PATCH`, omitting the key leaves the list
+  alone; `[]` or `null` clears it. Every program response carries
+  `prerequisite_program_ids` and `prerequisite_programs` (`[{id, name}]`, one
+  query for the whole page; an id whose program no longer exists is left out).
+- **Validation** (400 on failure): every id must be a program in the caller's
+  department (`Invalid prerequisite program` — the same message whether the id
+  is unknown or another department's); a program cannot be its own
+  prerequisite; duplicates are dropped; and on an edit the whole department's
+  prerequisite graph is walked, so a choice that would make the prerequisites
+  circular — directly (A requires B requires A) or through a chain — is refused
+  by naming the program that already requires this one. A cycle would make
+  every program on it impossible to enroll in.
+- **Enforcement.** A member who has not **completed** every prerequisite
+  program is a hard stop in the enroll picker (status **Prerequisite**, "Must
+  first complete: …") and is skipped by bulk enrollment with an error. Cohort
+  roster sync still adds such a member and reports the reason as a warning (see
+  the cohort table below). The single-member `POST /training/programs/enrollments`
+  endpoint does not check prerequisites; no screen calls it.
+- **Templates are not offered** as prerequisites in the UI: nobody is enrolled
+  in a template, so nobody could complete one. The API does not refuse one.
+- **Deleting a program** removes it from every other program's prerequisite
+  list in the same transaction, so a deleted program cannot leave behind a gate
+  nobody can pass.
 
 #### Enrollment Controls
 
-- Concurrent enrollment restrictions (one program at a time, or multiple allowed)
+- **Allow members to be enrolled in other programs at the same time**
+  (`allows_concurrent_enrollment`, default **on**) — set in the wizard and the
+  edit dialog, accepted by the same three endpoints as above (`PATCH` refuses an
+  explicit `null`). Turning it **off** does not block anyone: the enroll picker
+  flags a member who is active in another program "Also enrolled in another
+  program" and still lets the officer enroll them. The detail page states the
+  setting under the program name.
 - Bulk member enrollment with validation
 - Custom target completion dates
 - Enrollment notes

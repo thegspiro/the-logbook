@@ -9,15 +9,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { renderWithRouter } from '../test/utils';
+import { createMockApiError, renderWithRouter } from '../test/utils';
 
 const mockBuildProgram = vi.fn();
 const mockGetRequirementsEnhanced = vi.fn();
 const mockGetCourses = vi.fn();
+const mockGetPrograms = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingProgramService: {
     buildProgram: (...a: unknown[]) => mockBuildProgram(...a) as unknown,
+    getPrograms: (...a: unknown[]) => mockGetPrograms(...a) as unknown,
     getRequirementsEnhanced: (...a: unknown[]) => mockGetRequirementsEnhanced(...a) as unknown,
   },
   trainingService: {
@@ -66,6 +68,8 @@ describe('CreatePipelinePage — linking existing requirements', () => {
     vi.clearAllMocks();
     mockGetRequirementsEnhanced.mockResolvedValue([cprRequirement]);
     mockGetCourses.mockResolvedValue([]);
+    mockGetPrograms.mockReset();
+    mockGetPrograms.mockResolvedValue([]);
     mockBuildProgram.mockResolvedValue({ id: 'prog-1' });
   });
 
@@ -145,6 +149,8 @@ describe('CreatePipelinePage — a one-list program', () => {
     vi.clearAllMocks();
     mockGetRequirementsEnhanced.mockResolvedValue([cprRequirement]);
     mockGetCourses.mockResolvedValue([]);
+    mockGetPrograms.mockReset();
+    mockGetPrograms.mockResolvedValue([]);
     mockBuildProgram.mockResolvedValue({ id: 'prog-2' });
   });
 
@@ -194,5 +200,90 @@ describe('CreatePipelinePage — a one-list program', () => {
       is_required: true,
       sort_order: 0,
     });
+  });
+});
+
+describe('CreatePipelinePage — enrollment rules', () => {
+  const existing = [
+    { id: 'prog-recruit', name: 'Recruit School', is_template: false },
+    { id: 'prog-blueprint', name: 'Recruit Blueprint', is_template: true },
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetRequirementsEnhanced.mockReset();
+    mockGetRequirementsEnhanced.mockResolvedValue([]);
+    mockGetCourses.mockReset();
+    mockGetCourses.mockResolvedValue([]);
+    mockGetPrograms.mockReset();
+    mockGetPrograms.mockResolvedValue(existing);
+    mockBuildProgram.mockReset();
+    mockBuildProgram.mockResolvedValue({ id: 'prog-3' });
+  });
+
+  const createFlexible = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getByRole('button', { name: /Next/ })); // requirements
+    await user.click(screen.getByRole('button', { name: /Next/ })); // milestones
+    await user.click(screen.getByRole('button', { name: /Next/ })); // review
+    await user.click(screen.getByRole('button', { name: /Create Pipeline/ }));
+    await waitFor(() => expect(mockBuildProgram).toHaveBeenCalledTimes(1));
+    return (mockBuildProgram.mock.calls[0]?.[0] as { program: Record<string, unknown> }).program;
+  };
+
+  it('offers other programs but not templates, and sends both settings', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreatePipelinePage />);
+
+    await user.type(screen.getByLabelText(/Program Name/), 'Driver Operator');
+    await user.selectOptions(screen.getByLabelText(/Structure Type/), 'flexible');
+    expect(screen.getByText('Members must complete these programs before they can enroll.')).toBeInTheDocument();
+    await user.click(await screen.findByRole('checkbox', { name: 'Recruit School' }));
+    expect(screen.queryByRole('checkbox', { name: 'Recruit Blueprint' })).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Allow members to be enrolled in other programs at the same time' })
+    );
+
+    const program = await createFlexible(user);
+
+    expect(program).toEqual({
+      name: 'Driver Operator',
+      description: undefined,
+      code: undefined,
+      target_position: undefined,
+      structure_type: 'flexible',
+      time_limit_days: undefined,
+      warning_days_before: 30,
+      is_template: false,
+      prerequisite_program_ids: ['prog-recruit'],
+      allows_concurrent_enrollment: false,
+    });
+  });
+
+  it('omits prerequisites when none are picked and allows concurrency by default', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreatePipelinePage />);
+
+    await user.type(screen.getByLabelText(/Program Name/), 'Annual CE');
+    await user.selectOptions(screen.getByLabelText(/Structure Type/), 'flexible');
+    await screen.findByRole('checkbox', { name: 'Recruit School' });
+
+    const program = await createFlexible(user);
+
+    expect(program['prerequisite_program_ids']).toBeUndefined();
+    expect(program['allows_concurrent_enrollment']).toBe(true);
+  });
+
+  it('shows the server’s refusal', async () => {
+    mockBuildProgram.mockReset();
+    mockBuildProgram.mockRejectedValue(createMockApiError('Invalid prerequisite program'));
+    const user = userEvent.setup();
+    renderWithRouter(<CreatePipelinePage />);
+
+    await user.type(screen.getByLabelText(/Program Name/), 'Driver Operator');
+    await user.selectOptions(screen.getByLabelText(/Structure Type/), 'flexible');
+    await user.click(await screen.findByRole('checkbox', { name: 'Recruit School' }));
+    await createFlexible(user);
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Invalid prerequisite program'));
   });
 });
