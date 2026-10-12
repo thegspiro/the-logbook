@@ -2183,36 +2183,56 @@ export const ShiftReportsTab: React.FC = () => {
                                   <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
                                     Skills Observed
                                   </label>
-                                  <div className="space-y-2">
+                                  {/* The chips wrap across the row; a picked skill's score
+                                      row sits in the list below rather than under its chip,
+                                      which is what kept the chips in a single column. */}
+                                  <div className="flex flex-wrap gap-1.5">
                                     {skillOptions.map((skill) => {
-                                      const skills = eval_?.skills_observed || [];
-                                      const selected = skills.find((s) => s.skill_name === skill);
+                                      const selected = (eval_?.skills_observed || []).some(
+                                        (s) => s.skill_name === skill
+                                      );
                                       return (
-                                        <div key={skill}>
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              const current = eval_?.skills_observed || [];
-                                              const exists = current.find((s) => s.skill_name === skill);
-                                              updateTraineeEval(
-                                                member.user_id,
-                                                'skills_observed',
-                                                exists
-                                                  ? current.filter((s) => s.skill_name !== skill)
-                                                  : [...current, { skill_name: skill, demonstrated: true }]
-                                              );
-                                            }}
-                                            className={`rounded-full border px-2 py-0.5 text-xs font-medium transition-colors ${
+                                        <button
+                                          key={skill}
+                                          type="button"
+                                          aria-pressed={selected}
+                                          onClick={() => {
+                                            const current = eval_?.skills_observed || [];
+                                            updateTraineeEval(
+                                              member.user_id,
+                                              'skills_observed',
                                               selected
-                                                ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
-                                                : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-green-500/30'
-                                            }`}
-                                          >
-                                            {selected ? '\u2713 ' : ''}
-                                            {skill}
-                                          </button>
-                                          {selected && (
-                                            <div className="mt-1 ml-4 flex items-center gap-1.5">
+                                                ? current.filter((s) => s.skill_name !== skill)
+                                                : [...current, { skill_name: skill, demonstrated: true }]
+                                            );
+                                          }}
+                                          className={`rounded-full border px-2 py-0.5 text-xs font-medium transition-colors ${
+                                            selected
+                                              ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
+                                              : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-green-500/30'
+                                          }`}
+                                        >
+                                          {selected ? '\u2713 ' : ''}
+                                          {skill}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                  {skillOptions.some((skill) =>
+                                    (eval_?.skills_observed || []).some((s) => s.skill_name === skill)
+                                  ) && (
+                                    <div className="mt-2 space-y-1.5">
+                                      {skillOptions.map((skill) => {
+                                        const selected = (eval_?.skills_observed || []).find(
+                                          (s) => s.skill_name === skill
+                                        );
+                                        if (!selected) return null;
+                                        return (
+                                          <div key={skill} className="flex flex-wrap items-center gap-1.5">
+                                            <span className="text-theme-text-secondary text-xs font-medium">
+                                              {skill}
+                                            </span>
+                                            <span className="flex items-center gap-1.5">
                                               <span className="text-theme-text-muted text-xs">Score:</span>
                                               {([1, 2, 3, 4, 5] as const).map((n) => {
                                                 const tip = ratingScaleLabels[String(n)] || `Level ${n}`;
@@ -2221,6 +2241,8 @@ export const ShiftReportsTab: React.FC = () => {
                                                     key={n}
                                                     type="button"
                                                     title={tip}
+                                                    aria-label={`${skill}: score ${n} (${tip})`}
+                                                    aria-pressed={selected.score === n}
                                                     onClick={() => {
                                                       const updated = (eval_?.skills_observed || []).map((s) =>
                                                         s.skill_name === skill
@@ -2245,12 +2267,12 @@ export const ShiftReportsTab: React.FC = () => {
                                                     `Level ${selected.score}`}
                                                 </span>
                                               )}
-                                            </div>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
+                                            </span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
                                 </div>
                               )}
 
