@@ -60,6 +60,7 @@
 - [Communications](Module-Communications)
 - [Public Programs](Public-Programs)
 - [Scheduling](Module-Scheduling)
+- [Shift History Import — user guide](Scheduling-History-Import)
 - [Admin Hours](Module-Admin-Hours)
 - [Member ID Cards & Check-In Station](Member-ID-Cards)
 - [Member ID Card — troubleshooting](../docs/TROUBLESHOOTING.md#member-id-card-issues)

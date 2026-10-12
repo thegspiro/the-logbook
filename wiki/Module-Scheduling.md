@@ -54,6 +54,7 @@ The Scheduling module manages shift scheduling, member self-service signup, swap
 - **Personal Calendar Feed & Automation** — _(2026-07-16)_ Members subscribe to their shifts in Google/Apple Calendar via a private ICS link; departments can auto-generate shifts from patterns on a rolling horizon and get overtime/hours advisories. See below
 - **Shifts With Other Departments** — _(2026-09-27 → 09-29)_ Members log time on another jurisdiction's apparatus by start and end time (+12 / +24 presets), picked from an officer-kept list; it counts on save and an officer can reject it. See [below](#september-24--october-4-2026)
 - **Setup Guide** — _(2026-09-29)_ The administration hub walks a new department through template → pattern → shifts on the calendar
+- **Shift History Import** — _(2026-10-09)_ Bring in shifts worked before the department used the system, from a CSV with one row per member per shift: reviewed as a draft, matched against members, units and shifts already on the schedule, then committed. See the [user guide](Scheduling-History-Import)
 
 ---
 
@@ -776,6 +777,7 @@ schedule to find the settings.
 | Shift Close-Out           | `/scheduling/admin/closeout`           | `scheduling.manage` |
 | Scheduling Reports        | `/scheduling/admin/reports`            | `scheduling.manage` |
 | Platoons                  | `/scheduling/admin/platoons`           | `scheduling.manage` |
+| Shift History Import      | `/scheduling/admin/history-import`     | `scheduling.manage` |
 | Who Can Fill What         | `/scheduling/admin/positions`          | `scheduling.manage` |
 | Settings (seven sections) | `/scheduling/admin/settings/<section>` | `scheduling.manage` |
 
