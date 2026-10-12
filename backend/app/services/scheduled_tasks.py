@@ -25,6 +25,9 @@ Recommended crontab (add to host or container cron):
 # Daily at 5:15 AM — expire training-program enrollments past their deadline
 15 5 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=enrollment_expiry
 
+# Daily at 7:15 AM — per-requirement due-date reminders and overdue notices
+15 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=program_requirement_deadlines
+
 # Monthly on the 1st at 8:00 AM — membership tier auto-advancement
 0 8 1 * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=membership_tier_advance
 
@@ -187,6 +190,15 @@ SCHEDULE = {
         "frequency": "weekly",
         "recommended_time": "Monday 07:30",
         "cron": "30 7 * * 1",
+    },
+    "program_requirement_deadlines": {
+        "description": (
+            "Email members a program's due-date reminders, then one overdue "
+            "notice, for requirements with a due-after-enrollment deadline"
+        ),
+        "frequency": "daily",
+        "recommended_time": "07:15",
+        "cron": "15 7 * * *",
     },
     "enrollment_expiry": {
         "description": "Expire training-program enrollments whose completion deadline has passed",
@@ -838,6 +850,24 @@ async def run_enrollment_deadline_warnings(db: AsyncSession) -> Dict[str, Any]:
         return result.get("warnings_sent", 0)
 
     return await _for_each_org(db, "enrollment_deadline_warnings", _process)
+
+
+async def run_program_requirement_deadlines(db: AsyncSession) -> Dict[str, Any]:
+    """Per-requirement due-date reminders and overdue notices.
+
+    Daily, unlike the weekly enrollment warning: each notice is recorded
+    against the due date it was sent for, so running every day sends each
+    step of the program's ramp once and never repeats one.
+    """
+    from app.services.program_requirement_deadlines import (
+        send_requirement_deadline_notices,
+    )
+
+    async def _process(db_session, org):
+        result = await send_requirement_deadline_notices(db_session, org.id)
+        return result.get("warnings_sent", 0) + result.get("overdue_sent", 0)
+
+    return await _for_each_org(db, "program_requirement_deadlines", _process)
 
 
 async def run_enrollment_expiry(db: AsyncSession) -> Dict[str, Any]:
@@ -7012,6 +7042,7 @@ TASK_RUNNERS = {
     "struggling_member_check": run_struggling_member_check,
     "enrollment_deadline_warnings": run_enrollment_deadline_warnings,
     "enrollment_expiry": run_enrollment_expiry,
+    "program_requirement_deadlines": run_program_requirement_deadlines,
     "recert_resets": run_recert_resets,
     "membership_tier_advance": run_membership_tier_advance,
     "property_return_reminders": run_property_return_reminders,
@@ -7118,6 +7149,8 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "membership_auto_purge": 86400,
     "recert_resets": 86400,
     "enrollment_expiry": 86400,
+    # Daily; idempotent per (requirement row, due date, ramp step).
+    "program_requirement_deadlines": 86400,
     "shift_pattern_generation": 86400,
     "swap_offer_expiry": 86400,
     "officer_directory_sync": 86400,

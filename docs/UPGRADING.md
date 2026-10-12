@@ -431,6 +431,27 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Program requirements with a due-after-enrollment setting start sending reminders (2026-10-12)
+
+A program requirement's **due after enrollment (days)** setting was stored —
+by cloning a program or importing one — but nothing read it. It now does, for
+every enrollment already running: the requirement is due that many days after
+the member enrolled, members are emailed on the program's reminder schedule,
+and a member whose date has **already passed** is sent **one** overdue notice
+on the first daily `program_requirement_deadlines` run after the upgrade (not a
+replay of every earlier reminder). Programs whose requirements never had the
+setting see no change.
+
+The same applies to a requirement's completion message: it is emailed from now
+on when a member completes the requirement. Completions from before the upgrade
+are marked as already announced by the migration, so nobody receives a message
+for training they finished earlier.
+
+To see which requirements are affected before upgrading, check the
+`program_requirements` rows with `custom_deadline_days` or
+`notification_message` set; an officer can clear either on the program's
+**Edit requirement** modal.
+
 ### Each document's file gets its own folder on disk (2026-10-11)
 
 Documents uploaded from this release on — through the Documents page, and the
