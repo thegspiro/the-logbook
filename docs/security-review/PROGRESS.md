@@ -16,6 +16,32 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3093](https://github.com/thegspiro/the-logbook/pull/3093)**: branch
+`claude/security-review-frontend-shared`, Feature 34 (Frontend shared),
+pass 8. 2 fixes (FE8-34-1, FE8-34-2 — two new cache-exclusion gaps found by
+a fresh repo-wide sweep), 0 new OPEN/FLAGGED findings. Both of pass 7's
+standing HIGH findings (FE3-34-2, FE3-34-5) were re-verified and found
+**already fixed on `main`** — by other, non-security-review work that
+landed between pass 7 and this pass. See the Log entry below and
+`docs/security-review/FE8-34-frontend-shared.md` for detail. Row 34 is the
+last row (00–34) in the rotation table; per the table's own preamble the
+next iteration wraps back to Feature 00 (Cross-cutting baseline) rather
+than resetting this table to ⬜ itself.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3084's merge, Feature 33, Core infrastructure, pass 6 — the state this pass's PR conflicted with), preserved for history</summary>
+
+**None.** PR #3084 (Feature 33, Core infrastructure, pass 6) merged clean
+2026-10-11 22:01 UTC (confirmed via `pull_request_read`: `merged: true`,
+2 files changed — `PROGRESS.md` and the findings file only). Docs-only
+merge, so there is nothing further to record here beyond what the Log
+entry below already captures. Rotation row 33 stays ✅.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3084, Feature 33, Core infrastructure, pass 6, before it merged), preserved for history</summary>
+
 **PR [#3084](https://github.com/thegspiro/the-logbook/pull/3084)**: branch
 `claude/security-review-core-infrastructure`, Feature 33 (Core
 infrastructure), pass 6 (watchdog pickup — no `claude/security-review-*` PR
@@ -36,6 +62,8 @@ versions; migrations — 566 revisions, single head; 694 scoped backend
 tests; 159 cross-cutting guard tests; 14,092 full backend unit tests;
 frontend typecheck/lint). See the Log entry below and
 `docs/security-review/CI6-33-core-infra.md` for detail.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3077's merge, Feature 32, Locations & kiosk, pass 6 — the state this pass's PR conflicted with), preserved for history</summary>
@@ -18488,7 +18516,7 @@ pass 7 — each row's prior PR is recorded in the Log, not repeated here.
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ✅     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.
@@ -18496,6 +18524,86 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-11 — Feature 34 (Frontend shared, pass 8) — 2 fixed, 0 new findings; both pass-7 HIGH findings re-verified now fixed by other work
+
+Step 0: `search_pull_requests` (`is:open head:claude/security-review-`)
+returned zero results. `pull_request_read` on PR #3084 (the row
+`PROGRESS.md` still named as "Open") confirmed `merged: true`, 2 files
+changed (`PROGRESS.md` and its own findings file) — docs-only, so nothing to
+record beyond clearing that row, which rides along uncommitted into this
+pass's own commit per the rotation's rule against a docs-only PR of its own.
+Feature 34 (Frontend shared) was the only `⬜` row.
+
+Diffed every feature-owned file against pass 7's baseline (`532340e3`, the
+merge landing `FE7-34-frontend-shared.md`) rather than trusting pass 7's own
+"byte-identical" list. It no longer held: two substantial, already-landed
+fixes closed both of pass 7's standing HIGH findings before this pass began —
+
+- **FE3-34-2** (a failed client-side logout leaving session cookies live):
+  `authStore.ts`'s `logout()` now retries the server confirmation with
+  backoff, treats a 401 as confirmation, and — if it still cannot confirm —
+  sets a persisted `signOutUnconfirmed` flag that a new, app-root,
+  non-dismissible `SignOutUnconfirmedNotice` blocks the screen on until a
+  retry succeeds.
+- **FE3-34-5** (an offline queue item syncing under the next member's
+  identity after a silently-failed sign-in purge): a new
+  `offlineQueueOwner.ts` stamps every entry in all four offline queues
+  (including a new `skillsTestOffline.ts`) with the member who queued it,
+  checked both at listing and per-entry at drain time; an entry written
+  before this existed is held for explicit review
+  (`offlineQueueQuarantine.ts` / `HeldOfflineItemsNotice.tsx`) rather than
+  auto-sent.
+
+Neither fix's commit is attributable with confidence through `git log` — the
+repository has the same grafted/squashed-commit history problem
+`CI6-33-core-infra.md` documented for a different file — so both are
+re-derived from the code's current state, not from a commit message. Both
+are confirmed by the absence of their former `KNOWN_LIMITATIONS.md` entries
+and by the existing guard-test suites (`authStore.test.ts`,
+`offlineQueueOwnership.test.ts`, `skillsTestOffline.test.ts`,
+`HeldOfflineItemsNotice.test.tsx`, `SignOutUnconfirmedNotice.test.tsx`) all
+still passing.
+
+A fresh repo-wide sweep for every new `api.get` call site since the baseline
+(not limited to feature-owned files) found two real cache-exclusion gaps,
+both fixed this pass: **FE8-34-1** — `GET /training/skill-evaluations`
+(list + detail) resolves a `specific_users` evaluator rule's member ids to
+`{id, name}` and was not excluded; **FE8-34-2** — `/mcp-oauth/connections`
+and `/mcp-oauth/requests/{id}` (a distinct top-level prefix from the already-
+excluded `/integrations/claude-mcp/oauth/*`) report the signed-in member's
+own live Claude/MCP authorization state and were not excluded either. Both
+added to `UNCACHEABLE_PREFIXES` with a guard test apiece in
+`apiCache.test.ts`. Every other new endpoint found in the sweep (new reads
+under `/finance`, `/scheduling`, `/apparatus`, `/admin-hours`, `/grants-
+fundraising`, `/medical-screening`, `/prospective-members` — all via module
+`createApiClient()` instances that carry no caching logic at all — plus new
+global-cached reads already covered by an existing prefix or substring entry,
+or carrying no member data) was confirmed to already be correctly handled.
+Enumerated every `axios.create()`/`createApiClient()` call site fresh: still
+exactly two `axios.create()` sites, and the same 13 module files plus now
+**four** second-client files (the new `historyImportApi.ts` joins the three
+from pass 7) — no bespoke instance anywhere, so CLAUDE.md Pitfall #7 holds by
+construction. `ProtectedRoute.tsx` is byte-identical to the pass-7 baseline,
+re-read in full regardless — no bypass found. No token, secret, or new XSS
+sink found in a repo-wide sweep of the diff. FE5-34-1's exclusion and
+permission gate are both unchanged and still correct; its broader ask
+remains an accepted, unchanged trade-off in `KNOWN_LIMITATIONS.md`.
+
+Completion gate: flake8/black/isort clean (CI's exact pins, installed
+against the repo's `python3.13`, the interpreter matching the backend's
+declared version — `python3`'s own default resolves to an unrelated 3.11
+with no pytest installed, a local environment quirk unrelated to any
+application code); `validate_migrations.py --strict` clean (571 revisions,
+single head); the two backend PII-exclusion ratchets (19 tests) and a
+broader scoped backend suite (343 tests, 1 pre-existing skip) both green;
+`npm run typecheck`/`npm run lint` both clean over the whole frontend; an
+18-file, 494-test scoped frontend suite covering every file this pass
+touched or re-verified, all green. Full write-up:
+`docs/security-review/FE8-34-frontend-shared.md`. Rotation row 34 → ✅
+(pending this PR's merge). Row 34 is the rotation table's last row (00–34);
+per the table's own preamble the next iteration wraps back to Feature 00
+(Cross-cutting baseline) for a fresh pass over the whole application.
 
 ### 2026-10-11 — Feature 33 (Core infrastructure, pass 6) — 0 fixed, 0 new findings; CI3-33-3 (HIGH) re-verified now fixed by other work (watchdog pickup)
 

@@ -739,6 +739,20 @@ describe('apiCache', () => {
       expect(isCacheable('/analytics/export')).toBe(false);
       expect(isCacheable('/analytics/metrics')).toBe(true); // aggregate, not per-user
     });
+
+    it('returns false for skill-evaluation rows carrying resolved evaluator names (FE8-34)', () => {
+      // list + detail both resolve a specific-users evaluator rule's member
+      // ids to id + display_name; the skill definition itself carries no PII.
+      expect(isCacheable('/training/skill-evaluations')).toBe(false);
+      expect(isCacheable('/training/skill-evaluations/s1')).toBe(false);
+    });
+
+    it('returns false for the member-scoped MCP OAuth connection state (FE8-34)', () => {
+      // Self-scoped (not another member's data), but an authorization-state
+      // read that must not say "still connected" for up to 90s after revoke.
+      expect(isCacheable('/mcp-oauth/connections')).toBe(false);
+      expect(isCacheable('/mcp-oauth/requests/req1')).toBe(false);
+    });
   });
 
   // ---- clearCache ----
