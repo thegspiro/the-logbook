@@ -208,7 +208,10 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
       passing_score: formData.requirement_type === 'knowledge_test' ? (formData.passing_score ?? null) : null,
       max_attempts: formData.requirement_type === 'knowledge_test' ? (formData.max_attempts ?? null) : null,
       frequency: formData.frequency,
-      ...(!isOneTime && formData.year ? { year: formData.year } : {}),
+      // Sent on every save, as null when the box is emptied: a stored year pins
+      // an annual window to that year, so an omitted key kept grading against
+      // the old year instead of falling back to the current one.
+      year: !isOneTime ? (formData.year ?? null) : null,
       allows_external_credit: formData.allows_external_credit,
       ...(formData.requirement_type === 'hours' || formData.requirement_type === 'shifts'
         ? { shift_credited: formData.shift_credited ?? formData.requirement_type === 'shifts' }
@@ -218,15 +221,24 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
       // the stored list in place, and a stale member category outranks role
       // and position targeting when the requirement decides who it applies to.
       required_membership_types: formData.required_membership_types,
-      ...(formData.due_date ? { due_date: formData.due_date } : {}),
-      ...(formData.start_date ? { start_date: formData.start_date } : {}),
+      // null when cleared, so emptying a date removes it instead of keeping the old one.
+      due_date: blankToNull(formData.due_date),
+      start_date: blankToNull(formData.start_date),
       due_date_type: formData.due_date_type,
       rolling_period_months:
         !isOneTime && formData.due_date_type === 'rolling' ? formData.rolling_period_months : undefined,
       period_start_month: usesCalendarPeriod ? formData.period_start_month : undefined,
       period_start_day: usesCalendarPeriod ? formData.period_start_day : undefined,
-      period_end_month: usesCalendarPeriod ? formData.period_end_month : undefined,
-      period_end_day: usesCalendarPeriod ? formData.period_end_day : undefined,
+      // null for "Default (end of year)" / "Last day of month": a stored end
+      // month keeps the custom window in force, so omitting it on a clear kept
+      // grading against the old window. The end day means nothing without an
+      // end month, and its input is disabled then, so it clears with it.
+      period_end_month: usesCalendarPeriod ? (formData.period_end_month ?? null) : undefined,
+      period_end_day: usesCalendarPeriod
+        ? formData.period_end_month
+          ? (formData.period_end_day ?? null)
+          : null
+        : undefined,
       include_current_month:
         formData.include_current_month_mode === 'inherit' ? null : formData.include_current_month_mode === 'include',
       // Sent on every save, as [] when none is selected, so removing the last

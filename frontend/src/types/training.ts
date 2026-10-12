@@ -827,23 +827,23 @@ export interface TrainingRequirementCreate {
   passing_score?: number | null | undefined;
   max_attempts?: number | null | undefined;
   frequency: RequirementFrequency;
-  year?: number | undefined;
+  year?: number | null | undefined;
   applies_to_all?: boolean | undefined;
   required_roles?: string[] | undefined;
   required_positions?: string[] | undefined;
   required_membership_types?: string[] | undefined;
   new_member_cutoff_date?: string | null | undefined;
   existing_member_deadline?: string | null | undefined;
-  start_date?: string | undefined;
-  due_date?: string | undefined;
+  start_date?: string | null | undefined;
+  due_date?: string | null | undefined;
   time_limit_days?: number | undefined;
   // Due date calculation fields
   due_date_type?: DueDateType | undefined;
   rolling_period_months?: number | undefined;
   period_start_month?: number | undefined;
   period_start_day?: number | undefined;
-  period_end_month?: number | undefined;
-  period_end_day?: number | undefined;
+  period_end_month?: number | null | undefined;
+  period_end_day?: number | null | undefined;
   include_current_month?: boolean | null | undefined;
   // Freshness window: a completion older than this many days doesn't count
   recency_days?: number | null | undefined;
@@ -878,23 +878,23 @@ export interface TrainingRequirementUpdate {
   passing_score?: number | null | undefined;
   max_attempts?: number | null | undefined;
   frequency?: RequirementFrequency;
-  year?: number | undefined;
+  year?: number | null | undefined;
   applies_to_all?: boolean | undefined;
   required_roles?: string[] | undefined;
   required_positions?: string[] | undefined;
   required_membership_types?: string[] | undefined;
   new_member_cutoff_date?: string | null | undefined;
   existing_member_deadline?: string | null | undefined;
-  start_date?: string | undefined;
-  due_date?: string | undefined;
+  start_date?: string | null | undefined;
+  due_date?: string | null | undefined;
   time_limit_days?: number | undefined;
   // Due date calculation fields
   due_date_type?: DueDateType | undefined;
   rolling_period_months?: number | undefined;
   period_start_month?: number | undefined;
   period_start_day?: number | undefined;
-  period_end_month?: number | undefined;
-  period_end_day?: number | undefined;
+  period_end_month?: number | null | undefined;
+  period_end_day?: number | null | undefined;
   include_current_month?: boolean | null | undefined;
   // Freshness window: a completion older than this many days doesn't count
   recency_days?: number | null | undefined;
