@@ -10,9 +10,14 @@ rule later does not re-grade a report already submitted.
 """
 
 from datetime import date, datetime
-from typing import Iterable, Sequence, TypeVar
+from typing import Iterable, Protocol, Sequence, TypeVar
 
-T = TypeVar("T")
+
+class _Incurred(Protocol):
+    date_incurred: datetime
+
+
+T = TypeVar("T", bound=_Incurred)
 
 
 def incurred_day(value: datetime) -> date:
@@ -32,10 +37,7 @@ def days_late(incurred: date, submitted: date, allowed_days: int) -> int:
 
 
 def late_items(items: Iterable[T], submitted: date, allowed_days: int) -> list[T]:
-    """The line items submitted more than *allowed_days* after they were incurred.
-
-    Each item needs a ``date_incurred`` datetime.
-    """
+    """The line items submitted more than *allowed_days* after they were incurred."""
     return [
         item
         for item in items

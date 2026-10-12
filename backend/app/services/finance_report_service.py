@@ -27,7 +27,7 @@ Dates are the department's calendar days (``resolve_scheduling_timezone``):
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, func, or_, select
@@ -647,7 +647,7 @@ class FinanceReportService:
             )
         )
 
-        rows = []
+        rows: list[dict[str, Any]] = []
         for er, item, *names in result.all():
             if er.paid_at is None:  # excluded by the query; narrows the type
                 continue
