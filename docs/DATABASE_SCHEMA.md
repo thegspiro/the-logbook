@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**303 tables · 5004 columns · 1011 foreign keys**
+**303 tables · 5005 columns · 1011 foreign keys**
 
 ---
 
@@ -671,7 +671,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`training_categories`](#training_categories) | `TrainingCategory` | 14 | Training Category model |
 | [`training_courses`](#training_courses) | `TrainingCourse` | 20 | Training Course model |
 | [`training_effectiveness_evaluations`](#training_effectiveness_evaluations) | `TrainingEffectivenessEvaluation` | 20 | Training Effectiveness Evaluation model |
-| [`training_module_configs`](#training_module_configs) | `TrainingModuleConfig` | 45 | Training Module Configuration model |
+| [`training_module_configs`](#training_module_configs) | `TrainingModuleConfig` | 46 | Training Module Configuration model |
 | [`training_programs`](#training_programs) | `TrainingProgram` | 23 | Training Program model |
 | [`training_records`](#training_records) | `TrainingRecord` | 42 | Training Record model |
 | [`training_requirements`](#training_requirements) | `TrainingRequirement` | 47 | Training Requirement model |
@@ -694,7 +694,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`prospects`](#prospects) | `Prospect` | 17 | Prospective member – someone who has expressed interest in joining |
 | [`sessions`](#sessions) | `Session` | 10 | User session model for tracking active sessions |
 | [`user_positions`](#user_positions) | _(association table)_ | 4 |  |
-| [`users`](#users) | `User` | 62 | User model with comprehensive authentication and profile support. |
+| [`users`](#users) | `User` | 63 | User model with comprehensive authentication and profile support. |
 
 ---
 
@@ -9879,6 +9879,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `show_skills_observed` | BOOL | yes |  | `1` |  |
 | `skills_result_disclosure` | VARCHAR(20) | yes |  | `full` |  |
 | `skills_result_release` | VARCHAR(20) | yes |  | `on_completion` |  |
+| `practical_skills_method` | VARCHAR(30) | yes |  |  |  |
 | `show_submission_history` | BOOL | yes |  | `1` |  |
 | `allow_member_report_export` | BOOL | yes |  | `0` |  |
 | `report_review_required` | BOOL | yes |  | `0` |  |
@@ -10510,6 +10511,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `notification_preferences` | JSON | yes |  | `dict()` |  |
 | `profile_visibility` | JSON | yes |  |  |  |
 | `bottom_nav_slots` | JSON | yes |  |  |  |
+| `dashboard_pulse` | JSON | yes |  |  |  |
 | `membership_type` | VARCHAR(50) | yes |  | `'active'` |  |
 | `member_class` | VARCHAR(20) | yes | IDX |  |  |
 | `member_status` | VARCHAR(20) | yes | IDX |  |  |

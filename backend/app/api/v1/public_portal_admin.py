@@ -13,6 +13,7 @@ from loguru import logger
 from sqlalchemy import and_, case, desc, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.api.dependencies import require_permission
 from app.core.database import get_db
@@ -213,9 +214,11 @@ async def list_api_keys(
     )
 
     if not include_inactive:
-        query = query.where(PublicPortalAPIKey.is_active == True)  # noqa: E712
+        query = query.where(PublicPortalAPIKey.is_active.is_(True))
 
-    query = query.order_by(desc(PublicPortalAPIKey.created_at))
+    query = query.order_by(desc(PublicPortalAPIKey.created_at)).options(
+        joinedload(PublicPortalAPIKey.config)
+    )
 
     result = await db.execute(query)
     api_keys = result.scalars().all()
@@ -303,12 +306,14 @@ async def update_api_key(
     **Requires permission: settings.manage**
     """
     result = await db.execute(
-        select(PublicPortalAPIKey).where(
+        select(PublicPortalAPIKey)
+        .where(
             and_(
                 PublicPortalAPIKey.id == key_id,
                 PublicPortalAPIKey.organization_id == str(current_user.organization_id),
             )
         )
+        .options(joinedload(PublicPortalAPIKey.config))
     )
     api_key = result.scalar_one_or_none()
 

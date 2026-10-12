@@ -41,7 +41,6 @@ from app.models.event_request import EventRequest, EventRequestStatus
 from app.models.inventory import (
     EquipmentRequest,
     InventoryItem,
-    ItemIssuance,
     ItemStatus,
     NFPAItemCompliance,
     RequestStatus,
@@ -97,6 +96,7 @@ from app.schemas.admin_hub import (
 from app.services.event_attendance_petition_service import (
     pending_petition_criteria,
 )
+from app.services.inventory_service import InventoryService
 from app.services.organization_service import OrganizationService
 from app.services.pre_shift_work_service import approved_pre_work_minutes
 from app.services.scheduling_service import (
@@ -108,6 +108,9 @@ from app.services.skills_testing_service import pending_validation_criteria
 from app.services.training_compliance import (
     compute_org_compliance_tally,
     count_active_requirements,
+)
+from app.services.training_module_config_service import (
+    get_practical_skills_method,
 )
 from app.utils.org_timezone import scheduling_timezone
 
@@ -719,6 +722,10 @@ async def _training_skills_passed(ctx: MetricContext) -> tuple[str, str]:
 
 
 async def _skills_testing_available(ctx: MetricContext) -> Optional[str]:
+    if await get_practical_skills_method(ctx.db, ctx.organization_id) != (
+        "skills_testing"
+    ):
+        return "The department records skills on shift reports"
     templates = await _scalar(
         ctx.db,
         select(func.count(SkillTemplate.id)).where(
@@ -860,8 +867,13 @@ async def _skill_test_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
     """Official skills tests a member scored that no officer has signed off.
 
     Until it is validated a pass credits nothing — not the pipeline step, not
-    the attempt count — so the candidate is waiting on this queue.
+    the attempt count — so the candidate is waiting on this queue. Left out for
+    a department on shift-report sign-offs: the records tab it opens is hidden.
     """
+    if await get_practical_skills_method(ctx.db, ctx.organization_id) != (
+        "skills_testing"
+    ):
+        return []
     count, oldest = await _count_and_oldest(
         ctx.db,
         SkillTest,
@@ -988,20 +1000,16 @@ async def _inventory_items_tracked(ctx: MetricContext) -> tuple[str, str]:
 
 
 async def _inventory_issued(ctx: MetricContext) -> tuple[str, str]:
-    count = await _scalar(
-        ctx.db,
-        select(func.count(ItemIssuance.id)).where(
-            ItemIssuance.organization_id == ctx.organization_id,
-            ItemIssuance.is_returned.is_(False),
-        ),
+    # The Members page's own per-member totals, summed, rather than a count of
+    # this screen's choosing. Counting open pool issuances alone left every
+    # permanently assigned radio and every temporary loan out of the figure, so
+    # a department with gear in every member's hands read "0, held by 0
+    # members" here while the Members page one click away listed them all.
+    holdings = await InventoryService(ctx.db).get_members_inventory_summary(
+        ctx.organization_id
     )
-    members = await _scalar(
-        ctx.db,
-        select(func.count(func.distinct(ItemIssuance.user_id))).where(
-            ItemIssuance.organization_id == ctx.organization_id,
-            ItemIssuance.is_returned.is_(False),
-        ),
-    )
+    count = sum(member["total_items"] for member in holdings)
+    members = sum(1 for member in holdings if member["total_items"] > 0)
     return _fmt_int(count), f"held by {members} {_plural(members, 'member')}"
 
 
@@ -2270,7 +2278,7 @@ MODULE_REGISTRY: dict[str, ModuleSpec] = {
             MetricSpec(
                 key="issued_to_members",
                 label="Issued to members",
-                description="Open issuances — gear a member still holds",
+                description="Gear a member still holds: assigned, on loan or issued from stock",
                 resolve=_inventory_issued,
             ),
             MetricSpec(

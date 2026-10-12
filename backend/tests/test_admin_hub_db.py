@@ -1438,3 +1438,118 @@ class TestEventsAttendanceRateOrgScoping:
 
         assert value == "50%"
         assert context == "1 of 2, last 90 days"
+
+
+class TestInventoryIssuedToMembers:
+    """The "Issued to members" headline counts what the Members page counts.
+
+    It used to count open pool issuances only, so a department whose gear was
+    all permanently assigned read "0, held by 0 members" on the administration
+    page while Inventory → Members, one click away, listed every item.
+    """
+
+    async def _metric(self, db_session, org, viewer) -> tuple[str, str]:
+        ctx = await AdminHubService(db_session)._context(viewer)
+        metric = next(
+            m
+            for m in MODULE_REGISTRY["inventory"].metrics
+            if m.key == "issued_to_members"
+        )
+        return await metric.resolve(ctx)
+
+    async def _item(self, db_session, org, name, tracking_type):
+        from app.models.inventory import InventoryItem, ItemStatus
+
+        item = InventoryItem(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            name=name,
+            tracking_type=tracking_type,
+            quantity=10,
+            status=ItemStatus.AVAILABLE,
+        )
+        db_session.add(item)
+        await db_session.flush()
+        return item
+
+    async def test_counts_assignments_loans_and_issued_stock(self, db_session):
+        from app.models.inventory import (
+            CheckOutRecord,
+            ItemAssignment,
+            ItemIssuance,
+            TrackingType,
+        )
+        from app.services.inventory_service import InventoryService
+
+        org = await _org(db_session)
+        viewer = await _member(db_session, org)
+        holder = await _member(db_session, org)
+        borrower = await _member(db_session, org)
+        radio = await self._item(
+            db_session, org, "Portable radio", TrackingType.INDIVIDUAL
+        )
+        light = await self._item(
+            db_session, org, "Scene light", TrackingType.INDIVIDUAL
+        )
+        gloves = await self._item(db_session, org, "Gloves", TrackingType.POOL)
+        db_session.add_all(
+            [
+                ItemAssignment(
+                    id=str(uuid.uuid4()),
+                    organization_id=org.id,
+                    item_id=radio.id,
+                    user_id=holder.id,
+                    is_active=True,
+                ),
+                CheckOutRecord(
+                    id=str(uuid.uuid4()),
+                    organization_id=org.id,
+                    item_id=light.id,
+                    user_id=borrower.id,
+                    checked_out_at=datetime.now(timezone.utc),
+                    is_returned=False,
+                ),
+                ItemIssuance(
+                    id=str(uuid.uuid4()),
+                    organization_id=org.id,
+                    item_id=gloves.id,
+                    user_id=holder.id,
+                    quantity_issued=2,
+                    is_returned=False,
+                ),
+            ]
+        )
+        await db_session.flush()
+
+        value, context = await self._metric(db_session, org, viewer)
+
+        assert (value, context) == ("4", "held by 2 members")
+        members_page = await InventoryService(db_session).get_members_inventory_summary(
+            org.id
+        )
+        assert sum(m["total_items"] for m in members_page) == 4
+
+    async def test_returned_gear_is_not_counted(self, db_session):
+        from app.models.inventory import ItemAssignment, TrackingType
+
+        org = await _org(db_session)
+        viewer = await _member(db_session, org)
+        radio = await self._item(
+            db_session, org, "Portable radio", TrackingType.INDIVIDUAL
+        )
+        db_session.add(
+            ItemAssignment(
+                id=str(uuid.uuid4()),
+                organization_id=org.id,
+                item_id=radio.id,
+                user_id=viewer.id,
+                is_active=False,
+                returned_date=datetime.now(timezone.utc),
+            )
+        )
+        await db_session.flush()
+
+        assert await self._metric(db_session, org, viewer) == (
+            "0",
+            "held by 0 members",
+        )

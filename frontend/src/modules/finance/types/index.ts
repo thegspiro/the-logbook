@@ -1148,3 +1148,102 @@ export interface FinanceDashboard {
   duesCollectionRate: number;
   recentTransactions: Record<string, unknown>[];
 }
+
+// =============================================================================
+// Board reports
+// =============================================================================
+
+/** One budget line, through the report's date. */
+export interface BudgetVsActualRow {
+  budgetId: string;
+  categoryName: string;
+  stationName?: string | null;
+  originalBudget: MonetaryAmount;
+  /** Confirmed amendments that had taken effect by the report's date. */
+  amendments: MonetaryAmount;
+  budget: MonetaryAmount;
+  /** Payments dated through the report's date. */
+  spent: MonetaryAmount;
+  /** Open commitments; reported only for a report run through today. */
+  committed?: MonetaryAmount | null;
+  remaining: MonetaryAmount;
+  percentUsed?: number | null;
+  /** Today's report only: the line's running total. */
+  runningSpent?: MonetaryAmount | null;
+  runningSpentDiffers: boolean;
+}
+
+export interface BudgetVsActualTotals {
+  originalBudget: MonetaryAmount;
+  amendments: MonetaryAmount;
+  budget: MonetaryAmount;
+  spent: MonetaryAmount;
+  committed?: MonetaryAmount | null;
+  remaining: MonetaryAmount;
+}
+
+export interface BudgetVsActualReport {
+  fiscalYearId: string;
+  fiscalYearName: string;
+  /** `YYYY-MM-DD`, the department's calendar. */
+  asOf: string;
+  includesCommitted: boolean;
+  rows: BudgetVsActualRow[];
+  totals: BudgetVsActualTotals;
+}
+
+export interface AmendmentLogRow {
+  amendmentId: string;
+  budgetId: string;
+  categoryName: string;
+  stationName?: string | null;
+  amount: MonetaryAmount;
+  isReversal: boolean;
+  reason: string;
+  approvedBy: string;
+  /** `YYYY-MM-DD`. */
+  approvedOn: string;
+  enteredByName?: string | null;
+  enteredAt: string;
+  status: string;
+  decidedByName?: string | null;
+  decidedAt?: string | null;
+  decisionNote?: string | null;
+}
+
+export interface AmendmentLogReport {
+  fiscalYearId: string;
+  fiscalYearName: string;
+  rows: AmendmentLogRow[];
+  /** Net of the confirmed rows. */
+  confirmedNet: MonetaryAmount;
+}
+
+export const PaymentKind = {
+  PURCHASE_REQUEST: 'purchase_request',
+  CHECK_REQUEST: 'check_request',
+  CHECK_VOID: 'check_void',
+  EXPENSE_REPORT: 'expense_report',
+} as const;
+export type PaymentKind = (typeof PaymentKind)[keyof typeof PaymentKind];
+
+export interface PaymentsRegisterRow {
+  /** `YYYY-MM-DD`, the department's calendar day the money moved. */
+  paidOn: string;
+  kind: PaymentKind;
+  entityId: string;
+  number: string;
+  payee: string;
+  description: string;
+  budgetLine?: string | null;
+  checkNumber?: string | null;
+  /** A void is negative: it puts back what the check took out. */
+  amount: MonetaryAmount;
+}
+
+export interface PaymentsRegisterReport {
+  start: string;
+  end: string;
+  rows: PaymentsRegisterRow[];
+  total: MonetaryAmount;
+}
