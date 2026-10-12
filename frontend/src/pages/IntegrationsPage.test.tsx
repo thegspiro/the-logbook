@@ -757,6 +757,84 @@ describe('IntegrationsPage', () => {
       expect(within(card).getByRole('button', { name: /Disconnect/ })).toBeEnabled();
     });
 
+    it('edits a connected integration in place, without reconnecting', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([mcpConnected]);
+      mockUpdateIntegration.mockResolvedValue({
+        ...mcpConnected,
+        config: { ...mcpConnected.config, oauth_enabled: true },
+      });
+
+      renderPage();
+      await screen.findByText('Claude (MCP)');
+      const card = screen.getByTestId('integration-card-claude-mcp');
+      await user.click(within(card).getByRole('button', { name: 'Claude (MCP) settings' }));
+
+      // Seeded from what is stored, not the connect defaults.
+      expect(screen.getByRole('heading', { name: 'Claude (MCP) settings' })).toBeInTheDocument();
+      expect(screen.getByLabelText('Access')).toHaveValue('read_write');
+      expect(screen.getByLabelText(/Share finance totals/)).toBeChecked();
+      expect(screen.getByLabelText(/Let members connect with their own account/)).not.toBeChecked();
+
+      await user.click(screen.getByLabelText(/Let members connect with their own account/));
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(mockUpdateIntegration).toHaveBeenCalledWith('mcp-1', {
+        access_mode: 'read_write',
+        expose_finance: true,
+        expose_medical_screening: false,
+        expose_full_schedule: false,
+        oauth_enabled: true,
+      });
+      expect(mockConnectIntegration).not.toHaveBeenCalled();
+      expect(mockDisconnectIntegration).not.toHaveBeenCalled();
+      await waitFor(() =>
+        expect(screen.queryByRole('heading', { name: 'Claude (MCP) settings' })).not.toBeInTheDocument()
+      );
+    });
+
+    it('keeps the form open when saving the settings fails', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([mcpConnected]);
+      mockUpdateIntegration.mockRejectedValue(new Error('audit unavailable'));
+
+      renderPage();
+      await screen.findByText('Claude (MCP)');
+      await user.click(
+        within(screen.getByTestId('integration-card-claude-mcp')).getByRole('button', {
+          name: 'Claude (MCP) settings',
+        })
+      );
+      await user.click(screen.getByTestId('settings-submit'));
+
+      await waitFor(() => expect(mockUpdateIntegration).toHaveBeenCalled());
+      expect(screen.getByRole('heading', { name: 'Claude (MCP) settings' })).toBeInTheDocument();
+      expect(screen.getByTestId('settings-submit')).toBeEnabled();
+    });
+
+    it('offers no settings button on an integration that is not connected', async () => {
+      mockGetIntegrations.mockResolvedValue([mcpAvailable]);
+
+      renderPage();
+      await screen.findByText('Claude (MCP)');
+      const card = screen.getByTestId('integration-card-claude-mcp');
+      expect(within(card).queryByRole('button', { name: 'Claude (MCP) settings' })).not.toBeInTheDocument();
+    });
+
+    it('returns to the connect form after the settings form is closed', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([mcpConnected, { ...mcpAvailable, id: 'mcp-2', name: 'Claude (MCP) 2' }]);
+
+      renderPage();
+      await screen.findByText('Claude (MCP)');
+      await user.click(screen.getByRole('button', { name: 'Claude (MCP) settings' }));
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      await user.click(screen.getByRole('button', { name: /^Connect$/ }));
+
+      expect(screen.getByRole('heading', { name: 'Connect Claude (MCP) 2' })).toBeInTheDocument();
+      expect(screen.getByTestId('connect-submit')).toBeInTheDocument();
+    });
+
     it('opens the service key panel from a connected card', async () => {
       const user = userEvent.setup();
       mockGetIntegrations.mockResolvedValue([mcpConnected]);

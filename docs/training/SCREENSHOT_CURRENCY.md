@@ -1,5 +1,27 @@
 # Screenshot currency
 
+## Claude (MCP) member sign-in walkthrough, captured 2026-10-12
+
+Guide 16's member sign-in section became a step-by-step walkthrough of
+connecting the claude.ai connector, with a troubleshooting table. Every image
+below was captured against the running build, with the backend started with
+`MCP_OAUTH_ENABLED=true` and `MCP_OAUTH_ISSUER_URL=http://localhost:3000` —
+without them the panel shows its "off on this server" notice and the consent
+screens are unreachable.
+
+| Image | Notes |
+| ----- | ----- |
+| `16-08-mcp-connect-form` (re-shot) | Now shows the fourth switch, **Let members connect with their own account**; viewport raised to 1500px to keep the Connect button in frame |
+| `16-10-mcp-member-signin-switch` | Connect form opened unsaved and the switch ticked in the browser only, clipped to that one control |
+| `16-15-mcp-settings` | The connected card's **Settings** form: connected with the member sign-in switch off, opened, the switch ticked in the browser and Save never pressed. `cleanup` disconnects |
+| `16-11-mcp-oauth-register-client` | Connected read-only with the department switch on; the panel's prefilled claude.ai form. The authorization server reads `http://localhost:3000/api/oauth` — the demo's address, which the guide's text says stands for the department's own. `cleanup` revokes every client and disconnects |
+| `16-12-mcp-oauth-client-secret` | The register request is a route mock; the ID and secret are visible placeholders with the real `lbmcp_` / `lbmcs_` prefixes |
+| `16-13-claude-consent` | As `nbelhaj`, through a genuine `/api/oauth/authorize` request for `mcp:read mcp:write` on a real registered client, so the read row reaches tools and the write row reaches nothing (the department is read-only) |
+| `16-14-claude-connections` | Same, then **Allow**; the browser's return to claude.ai is answered locally and the code is redeemed at `/api/oauth/token` so the connection is recorded. Disconnecting in `cleanup` ends it |
+
+claude.ai's own connector screens are deliberately not pictured: they belong to
+Anthropic and change independently of this repository.
+
 ## Queued by the October 11 – 12 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-11--12-2026).
@@ -558,7 +580,7 @@ A second reading of PRs #2651–#2846 checked each guide's screens against the c
 | `16-02-slack-connect` | **REPLACE** | Captured 2026-09-25, before #2802; the connect dialog note now reads 'Connecting turns this integration on for your organization. You can disconnect it at any time.' | #2802 |
 | `16-04-documenso-connect` | **REPLACE** | Same connect-dialog note change from #2802 | #2802 |
 | `16-06-paypal-connect` | **REPLACE** | Same connect-dialog note change from #2802 | #2802 |
-| `16-08-mcp-connect-form` | **REPLACE** | Full-height capture of the same connect dialog, which includes the note that #2802 reworded | #2802 |
+| `16-08-mcp-connect-form` | **CURRENT** | Recaptured 2026-10-12 with the reworded #2802 note and the **Let members connect with their own account** switch; alt text names the fourth switch | #2802 |
 | `17-01-privacy-choices` | **REPLACE** | Page title now 'My Account' and Security sidebar description changed; also the manifest captures /account?tab=security while the guide section it illustrates is My Account → Privacy → Privacy Choices, so the route should move to ?tab=privacy | #2807, #2759 |
 | `18-01-member-storefront` | **REPLACE** | Product button now reads 'Add to cart · $X'; the window card reads 'Ordering closes' | #2799 |
 | `18-03-order-windows` | **REPLACE** (also queued below) | Row buttons now read Open ordering / Close ordering / Record or Update vendor order; counts read '1 order' / 'N orders' | #2799 |

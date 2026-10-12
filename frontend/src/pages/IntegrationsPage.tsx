@@ -391,6 +391,14 @@ const IntegrationsPage: React.FC = () => {
   const [mcpExposeMedical, setMcpExposeMedical] = useState(false);
   const [mcpExposeFullSchedule, setMcpExposeFullSchedule] = useState(false);
   const [mcpOauthEnabled, setMcpOauthEnabled] = useState(false);
+  // The connect form doubles as the settings form for a connected Claude
+  // (MCP) integration. Reconnecting is not an option there: disconnect
+  // revokes the service key and ends every member connection.
+  const [editingSettings, setEditingSettings] = useState(false);
+  // Bumped after a settings save so the member sign-in panel re-reads its
+  // status without remounting, which would drop a client secret it is
+  // still showing.
+  const [mcpConfigVersion, setMcpConfigVersion] = useState(0);
   const [showMcpPanel, setShowMcpPanel] = useState(false);
   // While the panel is issuing or revoking a key its response carries the
   // one-time plaintext; closing it then would lose the only copy.
@@ -538,6 +546,7 @@ const IntegrationsPage: React.FC = () => {
     setMcpExposeMedical(stored['expose_medical_screening'] === true);
     setMcpExposeFullSchedule(stored['expose_full_schedule'] === true);
     setMcpOauthEnabled(stored['oauth_enabled'] === true);
+    setEditingSettings(false);
   };
 
   const getConfigFromForm = (integrationType: string): Record<string, unknown> => {
@@ -625,6 +634,28 @@ const IntegrationsPage: React.FC = () => {
             : 'Failed to connect integration'
         )
       );
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const handleSaveSettings = async (integrationId: string) => {
+    const integration = integrations.find((i) => i.id === integrationId);
+    if (!integration) return;
+
+    setConnecting(true);
+    try {
+      const updated = await integrationsService.updateIntegration(
+        integrationId,
+        getConfigFromForm(integration.integration_type)
+      );
+      setIntegrations((prev) => prev.map((i) => (i.id === integrationId ? updated : i)));
+      setShowConnectModal(null);
+      resetFormState();
+      setMcpConfigVersion((v) => v + 1);
+      toast.success(`${integration.name} settings saved`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save the settings'));
     } finally {
       setConnecting(false);
     }
@@ -1619,6 +1650,20 @@ const IntegrationsPage: React.FC = () => {
                     )}
                   {integration.status === ConnectionStatus.CONNECTED && canManage && (
                     <>
+                      {integration.integration_type === 'claude-mcp' && (
+                        <button
+                          onClick={() => {
+                            resetFormState(integration);
+                            setEditingSettings(true);
+                            setShowConnectModal(integration.id);
+                          }}
+                          aria-label={`${integration.name} settings`}
+                          className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors"
+                        >
+                          <Settings className="h-3.5 w-3.5" aria-hidden="true" />
+                          <span>Settings</span>
+                        </button>
+                      )}
                       {integration.integration_type === 'salesforce' && (
                         <button
                           onClick={() => setShowSyncPanel(!showSyncPanel)}
@@ -1696,7 +1741,7 @@ const IntegrationsPage: React.FC = () => {
             )) && (
             <>
               <McpServiceKeyPanel onClose={() => setShowMcpPanel(false)} onBusyChange={setMcpPanelBusy} />
-              <McpOAuthPanel onBusyChange={setMcpOAuthBusy} />
+              <McpOAuthPanel onBusyChange={setMcpOAuthBusy} configVersion={mcpConfigVersion} />
             </>
           )}
 
@@ -2040,7 +2085,9 @@ const IntegrationsPage: React.FC = () => {
                         <div className="flex items-center space-x-3">
                           <div className={`rounded-lg p-2 ${ui.bgColor} ${ui.color}`}>{ui.icon}</div>
                           <h3 id="integration-connect-title" className="text-theme-text-primary text-lg font-medium">
-                            {activation ? 'Activate' : 'Connect'} {selectedIntegration.name}
+                            {editingSettings
+                              ? `${selectedIntegration.name} settings`
+                              : `${activation ? 'Activate' : 'Connect'} ${selectedIntegration.name}`}
                           </h3>
                         </div>
                         <button
@@ -2079,9 +2126,11 @@ const IntegrationsPage: React.FC = () => {
                         <div className="flex items-start space-x-2">
                           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-indigo-700" />
                           <p className="text-sm text-indigo-700">
-                            {activation
-                              ? 'Activating turns this feature on for your organization. You can deactivate it at any time.'
-                              : 'Connecting turns this integration on for your organization. You can disconnect it at any time.'}
+                            {editingSettings
+                              ? "Saved settings apply to the next request a client makes. The service key and members' connections are kept."
+                              : activation
+                                ? 'Activating turns this feature on for your organization. You can deactivate it at any time.'
+                                : 'Connecting turns this integration on for your organization. You can disconnect it at any time.'}
                           </p>
                         </div>
                       </div>
@@ -2097,20 +2146,28 @@ const IntegrationsPage: React.FC = () => {
                         Cancel
                       </button>
                       <button
-                        data-testid="connect-submit"
+                        data-testid={editingSettings ? 'settings-submit' : 'connect-submit'}
                         onClick={() => {
-                          void handleConnect(selectedIntegration.id);
+                          if (editingSettings) {
+                            void handleSaveSettings(selectedIntegration.id);
+                          } else {
+                            void handleConnect(selectedIntegration.id);
+                          }
                         }}
                         disabled={connecting}
                         className="rounded-lg bg-indigo-600 px-4 py-2 text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
                       >
-                        {activation
+                        {editingSettings
                           ? connecting
-                            ? 'Activating...'
-                            : 'Activate'
-                          : connecting
-                            ? 'Connecting...'
-                            : 'Connect'}
+                            ? 'Saving...'
+                            : 'Save settings'
+                          : activation
+                            ? connecting
+                              ? 'Activating...'
+                              : 'Activate'
+                            : connecting
+                              ? 'Connecting...'
+                              : 'Connect'}
                       </button>
                     </div>
                   </DialogPanel>
