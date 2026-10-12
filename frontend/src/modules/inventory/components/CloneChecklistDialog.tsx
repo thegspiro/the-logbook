@@ -129,7 +129,7 @@ export const CloneChecklistDialog: React.FC<CloneChecklistDialogProps> = ({ temp
         </div>
       }
     >
-      <div className="modal-body space-y-3">
+      <div className="space-y-3">
         {template && (
           <p className="text-theme-text-secondary text-sm">
             Copies every compartment and item from &ldquo;{template.name}&rdquo; onto the apparatus you choose. The copy

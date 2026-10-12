@@ -324,7 +324,7 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
           </div>
         }
       >
-        <div className="modal-body space-y-4">
+        <div className="space-y-4">
           <p className="text-theme-text-secondary text-sm">
             {transition?.action === 'open'
               ? 'Members can place orders as soon as you open it.'
@@ -379,7 +379,7 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
           </div>
         }
       >
-        <div className="modal-body space-y-3">
+        <div className="space-y-3">
           <p className="text-theme-text-secondary text-sm">
             Records which vendor you ordered from and when, and marks every eligible order <strong>ordered</strong>. You
             can also email the members who ordered.
@@ -451,7 +451,7 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
           </div>
         }
       >
-        <div className="modal-body">
+        <div>
           {summary && (
             <>
               <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">

@@ -74,7 +74,7 @@ export const NotificationPreviewModal: React.FC<NotificationPreviewModalProps> =
 
   return (
     <Modal isOpen onClose={onClose} title={preview?.label ?? 'Notification preview'} size="xl">
-      <div className="modal-body space-y-4">
+      <div className="space-y-4">
         {loading && (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
