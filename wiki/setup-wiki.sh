@@ -132,6 +132,27 @@ echo -e "${GREEN}✓${NC} ${#WIKI_FILES[@]} pages staged for publication"
 WIKI_RETIRED=(
     "Unraid-Quick-Start.md"
     "Deployment-Guide.md"
+    # Per-pass change logs, merged into Recent-Changes-YYYY-MM.md.
+    "Recent-Changes-2026-08-10-to-16.md"
+    "Recent-Changes-2026-08-12-to-14.md"
+    "Recent-Changes-2026-08-15-to-16.md"
+    "Recent-Changes-2026-08-16-to-17.md"
+    "Recent-Changes-2026-08-17-to-19.md"
+    "Recent-Changes-2026-08-19-to-23.md"
+    "Recent-Changes-2026-08-23-to-24.md"
+    "Recent-Changes-2026-08-24-to-31.md"
+    "Recent-Changes-2026-08-31-to-09-06.md"
+    "Recent-Changes-2026-09-06-to-09-12.md"
+    "Recent-Changes-2026-09-12-to-09-15.md"
+    "Recent-Changes-2026-09-15-to-09-23.md"
+    "Recent-Changes-2026-09-24-to-10-04.md"
+    "Recent-Changes-2026-10-03-to-10-04.md"
+    "Recent-Changes-2026-10-04-to-10-05.md"
+    "Recent-Changes-2026-10-05-to-10-06.md"
+    "Recent-Changes-2026-10-06-to-10-07.md"
+    "Recent-Changes-2026-10-07-to-10-08.md"
+    "Recent-Changes-2026-10-08-to-10-11.md"
+    "Recent-Changes-2026-10-11-to-10-12.md"
 )
 
 for file in "${WIKI_RETIRED[@]}"; do

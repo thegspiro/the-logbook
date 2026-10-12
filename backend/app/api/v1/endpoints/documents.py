@@ -179,7 +179,10 @@ async def create_folder(
             )
     async with handle_service_errors("Unable to create folder"):
         result = await service.create_folder(
-            current_user.organization_id, folder_data, current_user.id
+            current_user.organization_id,
+            folder_data,
+            current_user.id,
+            acting_user=current_user,
         )
     await log_audit_event(
         db=db,
@@ -191,6 +194,8 @@ async def create_folder(
             "name": result.name,
             "parent_id": str(result.parent_id) if result.parent_id else None,
             "visibility": result.visibility.value,
+            "allowed_roles": result.allowed_roles,
+            "required_permissions": result.required_permissions,
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -275,7 +280,10 @@ async def update_folder(
     # create_folder.
     async with handle_service_errors("Unable to update folder"):
         updated = await service.update_folder(
-            folder_id, current_user.organization_id, update_data
+            folder_id,
+            current_user.organization_id,
+            update_data,
+            acting_user=current_user,
         )
     result = ensure_found(updated, "Folder")
     await log_audit_event(
@@ -283,7 +291,15 @@ async def update_folder(
         event_type="folder_updated",
         event_category="documents",
         severity="info",
-        event_data={"folder_id": str(folder_id), "fields": list(update_data.keys())},
+        event_data={
+            "folder_id": str(folder_id),
+            "fields": list(update_data.keys()),
+            # Who a folder opens to is the security-relevant part of an
+            # edit, so record the result, not only that it changed.
+            "visibility": result.visibility.value,
+            "allowed_roles": result.allowed_roles,
+            "required_permissions": result.required_permissions,
+        },
         user_id=str(current_user.id),
         username=current_user.username,
     )

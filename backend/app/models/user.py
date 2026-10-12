@@ -427,6 +427,17 @@ class User(Base):
     # the defaults rather than breaking the bar.
     bottom_nav_slots: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
 
+    # The member's own layout for the dashboard's Department pulse cards, as
+    # ``{"period", "cards": [{"id", "visible", "title"}]}``. NULL means never
+    # chosen, which falls back to the department default in
+    # ``Organization.settings["dashboard_pulse"]`` and then to the built-in
+    # layout. Written only as a whole by ``PUT /dashboard/pulse-layout`` and
+    # read through ``normalize_pulse_layout``, so a malformed value degrades to
+    # the default rather than breaking the dashboard.
+    dashboard_pulse: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
+
     # Department Membership (one per member, no permissions – purely classification)
     #
     # Three columns, two facts. ``member_class`` (operational / administrative

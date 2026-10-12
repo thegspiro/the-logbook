@@ -418,7 +418,7 @@ earliest `created_at` (then the lowest `id`), review the applications linked to
 the others, and set those others to `inactive`. Do not delete them. Re-run the
 query until it returns nothing, then upgrade, and read the migration log
 afterwards for anything the reconciliation merged. The full procedure is in the
-[August 12–14 change audit](./CHANGE_AUDIT_2026-08-12_TO_14.md#alembic-route-upgrade-data-path).
+[August 12–14 change audit](./CHANGE_AUDIT_2026-08.md#alembic-route-upgrade-data-path-7).
 
 ### `RATE_LIMIT_ENABLED` is enforced (2026-08-01)
 
@@ -502,6 +502,23 @@ folder unless somebody has filed it elsewhere since.
   columns (no backfill). `4b7e1f0c9a2d` then gives each Compliance box that is
   still an unedited seed a required "What kind of concern is this?" question; an
   edited box is left alone, and its downgrade removes only an untouched copy.
+
+### Folder access can be set by position and permission; some saves are refused (2026-10-12)
+
+Nothing here stops the stack from starting. The Documents folder dialogs, and
+`POST` / `PATCH /documents/folders`, now accept `required_permissions` on a
+custom folder. They refuse (400) a few saves that used to succeed silently:
+
+- a position that is not one of the department's;
+- positions together with leadership-only, or on a personal folder, where
+  they were stored but never applied;
+- a change to a built-in folder's module rights;
+- settings that would shut the person saving them out of the folder (a full
+  administrator is exempt).
+
+A folder already stored as leadership-only with positions keeps working as
+before. Its next access edit must clear the positions or choose
+Organization; the Manage folder dialog does that on its own.
 
 ### Stored files are encrypted; confirm the key is kept safe (2026-10-09)
 

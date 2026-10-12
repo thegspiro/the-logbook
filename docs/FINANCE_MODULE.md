@@ -723,6 +723,72 @@ Receipts**, linked by `receipt_document_id`, migration `c0bf0b155719`).
 - **Screen.** _Expense report_ disables **Submit for Approval** while any line
   has no receipt, with the count of lines still missing one beside it.
 
+## Board reports _(2026-10-12)_
+
+**Finance › Reports** (`/finance/reports`, `finance.view`) holds the three
+reports a treasurer takes to a board meeting. Each is a JSON endpoint for the
+screen and the same endpoint with `format=csv` for the download, built from one
+query, so the file matches what was shown. The page formats what the server
+sends and sums nothing itself (CLAUDE.md pitfall #29). **Print** uses the
+browser's print; the global print stylesheet drops the navigation and buttons,
+and the page hides its selectors, so the printout is the report under a heading
+naming the year and date it covers. There is no PDF generator; a browser's
+_Save as PDF_ does that job.
+
+All three are in `app/services/finance_report_service.py`
+(`FinanceReportService`). Every query filters `organization_id`; a fiscal year
+belonging to another department answers 404.
+
+| Endpoint                                                            | What it returns                                                                                   |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `GET /finance/reports/budget-vs-actual?fiscal_year_id&as_of&format` | each budget line of the year, through `as_of` (default: the department's today), with a total row |
+| `GET /finance/reports/amendment-log?fiscal_year_id&format`          | every amendment on the year's lines, oldest first, with who entered, approved and decided it      |
+| `GET /finance/reports/payments-register?start&end&format`           | every payment dated in the period, oldest first, with a total; at most 366 days (400 beyond that) |
+
+**Budget vs actual, through a date.** The report answers "where did this line
+stand at the end of the day on `as_of`", in the department's timezone
+(`resolve_scheduling_timezone`):
+
+- **Original** is the line's amount less every confirmed amendment, which is
+  what it was when the budget was set.
+- **Amendments** are the confirmed amendments that had taken effect by then:
+  the time a second officer confirmed it (`decided_at`), or, for one confirmed
+  before confirmation was recorded, when it was entered. Pending and rejected
+  amendments never count. **Budget** is the two together.
+- **Spent** is summed from the payments themselves, by their dates, the way
+  each moved the line's running total: a paid purchase request at `paid_at`
+  (actual amount, else the estimate), a check at `check_date` until its
+  `voided_at`, an expense report's line items at the report's `paid_at`.
+- **Committed** (approved, not yet paid) is shown only when `as_of` is today.
+  Encumbrances carry no history, so there is no honest figure for an earlier
+  date; `includesCommitted` says which kind of report it is, and the CSV leaves
+  the column blank.
+- On today's report each line also carries its running total
+  (`runningSpent`), and `runningSpentDiffers` flags a line whose running total
+  disagrees with the payments summed for it. The screen prints the running total
+  under the line name. A difference means the running total was adjusted by
+  hand or predates a payment's date being recorded; the report shows the dated
+  figure because that is the one that agrees with the payments register.
+
+**Payments register.** One row per payment in the period, each on the
+department's calendar day: purchases (`PR-`, payee is the vendor),
+reimbursements (`ER-`, payee is the member, budget line lists every line its
+items were charged to), checks (`CR-`, with the check number) and **voided
+checks**, which appear as a second, negative row on the day they were voided.
+For any period it totals to the change in **Spent** over the same period on
+the budget-vs-actual report, for payments charged to that year's lines.
+
+**Amendment log.** Every amendment with its line, amount, reversal flag,
+reason, the approval it cites (who and when), who entered it and when, and its
+status with who confirmed or rejected it and their note. `confirmedNet` is what
+the confirmed amendments moved the year's budget by.
+
+**CSV.** Written with `SafeCsvWriter`. Amounts are written as numbers, not
+formatted text, so a negative (a void, an overspent line) stays a number a
+spreadsheet will total. A text cell beginning `-` would have been escaped as a
+formula. Filenames come from `descriptive_filename` and name the year or
+period.
+
 ## Context
 
 Fire departments need internal financial workflows (budgets, purchase approvals, dues, expense reimbursements) but most use external accounting software like QuickBooks for actual bookkeeping. This module fills the gap: it provides the **internal operational finance workflows** that QuickBooks doesn't handle, with export capabilities to feed data into external accounting tools.
@@ -1177,11 +1243,12 @@ Pages:
 
 **Report endpoints:**
 
-- `GET /finance/reports/budget-vs-actual` — by category, with optional date range
-- `GET /finance/reports/expense-summary` — by member, category, date range
-- `GET /finance/reports/dues-collection` — by schedule, with delinquency list
-- `GET /finance/reports/purchase-orders` — by status, vendor, date range
-- `GET /finance/reports/transaction-log` — unified view of all financial transactions
+- `GET /finance/reports/budget-vs-actual` _(built 2026-10-12)_ — through a chosen date, rather than over a range; see [Board reports](#board-reports-2026-10-12)
+- `GET /finance/reports/amendment-log` _(built 2026-10-12)_ — see [Board reports](#board-reports-2026-10-12)
+- `GET /finance/reports/payments-register` _(built 2026-10-12)_ — the unified log of money paid out, which the planned `transaction-log` described; see [Board reports](#board-reports-2026-10-12)
+- `GET /finance/reports/expense-summary` — by member, category, date range (planned)
+- `GET /finance/reports/dues-collection` — by schedule, with delinquency list (planned)
+- `GET /finance/reports/purchase-orders` — by status, vendor, date range (planned)
 
 **QuickBooks Export:**
 
@@ -1219,7 +1286,7 @@ Export format:
 Pages:
 
 - `FinanceDashboardPage` (enhance from Phase 1) — budget gauges, approval queue, dues health, recent activity
-- `FinanceReportsPage` — `/finance/reports` — report selector with filters and export buttons
+- `FinanceReportsPage` — `/finance/reports` _(built 2026-10-12)_ — budget vs actual, amendment log and payments register, with CSV download and print (`finance.view`); see [Board reports](#board-reports-2026-10-12)
 - `QuickBooksExportSettingsPage` — `/finance/settings/quickbooks` _(built 2026-10-09)_ — QB mapping configuration (protected: `finance.manage`). Two tables:
   - **Budget categories** — every category with the account it posts to (and whether the category or its mapping supplies it), the account it is paid from, and a status: Ready, No account, No paid-from account, or More than one mapping. This is `GET /finance/export/readiness`, computed by `_classify_category_accounts` — the same function the export runs — so a category shown Ready is one the export accepts; the page decides nothing itself. Each row offers Add mapping or Edit mapping.
   - **Mappings** — every mapping, with edit and delete (confirmed first). A mapping whose `internal_category` names no budget category is flagged from the readiness report's `unmatchedMappingIds`, since the export never uses it.

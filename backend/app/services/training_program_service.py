@@ -1100,6 +1100,7 @@ class TrainingProgramService:
                 required_hours=req_input.required_hours,
                 required_shifts=req_input.required_shifts,
                 required_calls=req_input.required_calls,
+                required_call_types=getattr(req_input, "required_call_types", None),
                 passing_score=req_input.passing_score,
                 max_attempts=req_input.max_attempts,
                 checklist_items=checklist,

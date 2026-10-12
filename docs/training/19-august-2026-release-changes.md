@@ -11,8 +11,8 @@
 >   permissions taken off seeded positions, the migrations that do not reverse
 >   and the org-chart downgrade that loses data.
 > - **What changed, and when:** the change audits for each window, from the
->   [August 10–16 audit](../CHANGE_AUDIT_2026-08-10_TO_16.md) to the
->   [August 24–31 audit](../CHANGE_AUDIT_2026-08-24_TO_31.md).
+>   [August 10–16 audit](../CHANGE_AUDIT_2026-08.md#six-day-change-and-connection-audit--2026-08-10-through-2026-08-16) to the
+>   [August 24–31 audit](../CHANGE_AUDIT_2026-08.md#change-audit-august-2431-2026).
 
 ---
 

@@ -1881,6 +1881,24 @@ export interface ShiftCompletionReportCreate {
   save_as_draft?: boolean | undefined;
 }
 
+/**
+ * PUT /training/shift-reports/{id}. The backend dumps this with
+ * `exclude_unset`, so an omitted key leaves the stored value alone and only
+ * an explicit `null` clears one — hence `| null` on the clearable fields.
+ */
+export interface ShiftCompletionReportUpdate {
+  hours_on_shift?: number | undefined;
+  calls_responded?: number | undefined;
+  call_types?: string[] | undefined;
+  performance_rating?: number | null | undefined;
+  areas_of_strength?: string | null | undefined;
+  areas_for_improvement?: string | null | undefined;
+  officer_narrative?: string | null | undefined;
+  skills_observed?: SkillObservation[] | undefined;
+  tasks_performed?: TaskPerformed[] | undefined;
+  review_status?: string | undefined;
+}
+
 export interface ShiftCompletionReport {
   id: string;
   organization_id: string;

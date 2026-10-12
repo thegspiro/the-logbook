@@ -82,7 +82,9 @@ _DELIBERATELY_KEPT: dict[str, frozenset[str]] = {
         }
     ),
     # Carry nothing about the person.
-    "interface preferences": frozenset({"profile_visibility", "bottom_nav_slots"}),
+    "interface preferences": frozenset(
+        {"profile_visibility", "bottom_nav_slots", "dashboard_pulse"}
+    ),
     # Identifies the member who made the referral, not this one.
     "a pointer to somebody else": frozenset({"referred_by_user_id"}),
 }

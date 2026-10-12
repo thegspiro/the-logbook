@@ -430,4 +430,4 @@ The `_0005` upgrade is idempotent by skipping rows that already hold a grant.
 - [Role system](../ROLE_SYSTEM_README.md)
 - [Application pages](../APPLICATION_PAGES.md)
 - [Training guide 05 — Gear & supplies](./training/05-inventory.md)
-- [August 16–17 change audit](./CHANGE_AUDIT_2026-08-16_TO_17.md)
+- [August 16–17 change audit](./CHANGE_AUDIT_2026-08.md#change-audit-august-1617-2026)

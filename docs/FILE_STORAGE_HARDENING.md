@@ -91,6 +91,14 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
     notice that only a confirmation clears. Who confirmed, and when, is
     recorded and audited.
 26. **Encryption at rest is always on.** There is no switch.
+27. **The folder-access editor** (2026-10-12, settling decision 22):
+    - A custom folder can be restricted by position, by permission, or both.
+      Any one chosen permission admits.
+    - A built-in folder keeps its module rights. It can only be narrowed, with
+      leadership-only or specific positions.
+    - Access is set in the Create Folder dialog too.
+    - A save that would shut its editor out of the folder is refused, unless
+      the editor is a full administrator.
 
 ## Phases
 
@@ -186,7 +194,7 @@ keeps the earlier file, since it may be what an approver saw.
 `app/services/module_documents.py` is the shared path for both: store as a
 document, serve back with a descriptive name, delete with the file.
 
-Not done here: a screen for setting a custom folder's rights (decision 22);
+Not done here: a screen for setting a custom folder's rights (decision 22, since built: decision 27);
 facility files still upload through `/documents/upload`, which needs
 `documents.manage` on top of the facility grant.
 

@@ -19,6 +19,7 @@ from app.api.dependencies import (
     require_permission,
     user_has_permission,
 )
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.models.admin_hours import AdminHoursEntry, AdminHoursEntryStatus
 from app.models.apparatus import Apparatus
@@ -53,6 +54,12 @@ from app.models.training import (
     TrainingStatus,
 )
 from app.models.user import Organization, User, UserStatus
+from app.schemas.dashboard_pulse import (
+    DashboardPulseLayout,
+    DashboardPulseResponse,
+    resolve_pulse_layout,
+    stored_layout,
+)
 from app.services.apparatus_service import ApparatusService
 from app.services.dashboard_widget_service import PERIOD_LABELS, DashboardWidgetService
 from app.services.inventory_service import InventoryService
@@ -985,6 +992,119 @@ async def get_main_dashboard_widgets(
         fundraising=fundraising,
         community=community,
     )
+
+
+async def _pulse_response(
+    db: AsyncSession, organization_id: str, personal: object
+) -> DashboardPulseResponse:
+    """The layout a member's dashboard uses, resolved from both stores.
+
+    Takes plain values rather than the ``User``: the write handlers commit
+    first, and reading an attribute off an expired instance afterwards would
+    need a lazy load the async session cannot do.
+    """
+    organization = (
+        await db.execute(select(Organization).where(Organization.id == organization_id))
+    ).scalar_one_or_none()
+    stored = (
+        (organization.settings or {}).get("dashboard_pulse") if organization else None
+    )
+    return resolve_pulse_layout(stored, personal)
+
+
+@router.get("/pulse-layout", response_model=DashboardPulseResponse)
+async def get_pulse_layout(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> DashboardPulseResponse:
+    """The Department pulse layout for the calling member.
+
+    Self-scoped: the organization comes from the caller and there is no id in
+    the path. The layout is preference only — ``GET /dashboard/widgets`` still
+    decides which cards the caller may see.
+    """
+    return await _pulse_response(
+        db, str(current_user.organization_id), current_user.dashboard_pulse
+    )
+
+
+@router.put("/pulse-layout", response_model=DashboardPulseResponse)
+async def set_my_pulse_layout(
+    body: DashboardPulseLayout,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> DashboardPulseResponse:
+    """Save the calling member's own layout, replacing any earlier one."""
+    organization_id = str(current_user.organization_id)
+    saved = stored_layout(body)
+    # A fresh dict on every write, never an in-place mutation, so SQLAlchemy
+    # sees the change on a plain JSON column (pitfall #12).
+    current_user.dashboard_pulse = saved
+    await db.commit()
+    return await _pulse_response(db, organization_id, saved)
+
+
+@router.delete("/pulse-layout", response_model=DashboardPulseResponse)
+async def reset_my_pulse_layout(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> DashboardPulseResponse:
+    """Drop the member's own layout so the department default applies again."""
+    organization_id = str(current_user.organization_id)
+    current_user.dashboard_pulse = None
+    await db.commit()
+    return await _pulse_response(db, organization_id, None)
+
+
+@router.put("/pulse-layout/default", response_model=DashboardPulseResponse)
+async def set_department_pulse_layout(
+    body: DashboardPulseLayout,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+) -> DashboardPulseResponse:
+    """Save the department default layout for every member without their own."""
+    organization_id = str(current_user.organization_id)
+    personal = current_user.dashboard_pulse
+    await OrganizationService(db).update_organization_settings(
+        organization_id, {"dashboard_pulse": stored_layout(body)}
+    )
+    await log_audit_event(
+        db=db,
+        event_type="organization_settings_updated",
+        event_category="administration",
+        severity="info",
+        event_data={"settings_changed": ["dashboard_pulse"]},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return await _pulse_response(db, organization_id, personal)
+
+
+@router.delete("/pulse-layout/default", response_model=DashboardPulseResponse)
+async def reset_department_pulse_layout(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+) -> DashboardPulseResponse:
+    """Remove the department default so the built-in layout applies again."""
+    organization_id = str(current_user.organization_id)
+    personal = current_user.dashboard_pulse
+    await OrganizationService(db).update_organization_settings(
+        organization_id, {"dashboard_pulse": None}
+    )
+    await log_audit_event(
+        db=db,
+        event_type="organization_settings_updated",
+        event_category="administration",
+        severity="info",
+        event_data={"settings_changed": ["dashboard_pulse"], "reset": True},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return await _pulse_response(db, organization_id, personal)
 
 
 @router.get("/stats", response_model=DashboardStats)
