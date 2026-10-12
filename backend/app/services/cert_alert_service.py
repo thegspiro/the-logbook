@@ -81,7 +81,7 @@ class CertAlertService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_alert_config(self, organization_id: UUID) -> Dict:
+    async def get_alert_config(self, organization_id: UUID | str) -> Dict:
         """
         Get the organization's cert alert configuration.
 
@@ -106,7 +106,7 @@ class CertAlertService:
 
     async def get_expiring_certifications(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         within_days: int = 90,
         today: Optional[date] = None,
     ) -> List[TrainingRecord]:
@@ -130,7 +130,7 @@ class CertAlertService:
 
     async def get_expired_certifications(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         today: Optional[date] = None,
     ) -> List[TrainingRecord]:
         """Find all expired certifications that haven't been escalated yet."""
@@ -147,7 +147,7 @@ class CertAlertService:
         return list(result.scalars().all())
 
     async def _get_officers_with_roles(
-        self, organization_id: UUID, role_slugs: List[str]
+        self, organization_id: UUID | str, role_slugs: List[str]
     ) -> List[User]:
         """Get users with specific roles."""
         result = await self.db.execute(
@@ -161,7 +161,7 @@ class CertAlertService:
         return [u for u in users if any(r.slug in role_slugs for r in u.roles)]
 
     async def _get_officer_emails(
-        self, organization_id: UUID, role_slugs: List[str]
+        self, organization_id: UUID | str, role_slugs: List[str]
     ) -> List[str]:
         """Get email addresses for users with specific roles."""
         officers = await self._get_officers_with_roles(organization_id, role_slugs)
@@ -185,7 +185,7 @@ class CertAlertService:
 
     async def _log_in_app_notification(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         recipient_id: str,
         subject: str,
         message: str,
@@ -207,7 +207,7 @@ class CertAlertService:
             },
         )
 
-    async def process_alerts(self, organization_id: UUID) -> Dict[str, int]:
+    async def process_alerts(self, organization_id: UUID | str) -> Dict[str, int]:
         """
         Process all certification expiration alerts for an organization.
 

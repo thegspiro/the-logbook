@@ -38,6 +38,7 @@ from app.models.user import User
 from app.services.separation_of_duties import assert_different_person
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import resolve_org_today
+from app.utils.sql_results import rows_affected
 
 # The grant that lets someone approve. Named once so the enforcement message,
 # the endpoint gate, and the approver lookup cannot drift apart.
@@ -290,7 +291,7 @@ class DriverExceptionService:
                 review_notes=(review_notes or "").strip() or None,
             )
         )
-        if result.rowcount == 0:
+        if rows_affected(result) == 0:
             await self.db.rollback()
             raise ValueError(
                 "Another reviewer decided this request first. Reload to see "
@@ -336,7 +337,7 @@ class DriverExceptionService:
                 review_notes=(review_notes or "").strip() or None,
             )
         )
-        if result.rowcount == 0:
+        if rows_affected(result) == 0:
             await self.db.rollback()
             raise ValueError("Only an approved exception can be revoked")
 

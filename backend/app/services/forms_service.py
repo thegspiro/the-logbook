@@ -595,7 +595,10 @@ class FormsService:
     }
 
     async def create_form(
-        self, organization_id: UUID, form_data: Dict[str, Any], created_by: UUID
+        self,
+        organization_id: UUID | str,
+        form_data: Dict[str, Any],
+        created_by: UUID | str,
     ) -> Tuple[Optional[Form], Optional[str]]:
         """Create a new form with optional fields.
 
@@ -672,7 +675,7 @@ class FormsService:
         form: Form,
         fields: List[FormField],
         integration_type_str: str,
-        organization_id: UUID,
+        organization_id: UUID | str,
         logger: Any,
     ) -> None:
         """Build field-mappings from labels and create a FormIntegration.
@@ -758,7 +761,7 @@ class FormsService:
 
     async def get_forms(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         status: Optional[FormStatus] = None,
         category: Optional[FormCategory] = None,
         search: Optional[str] = None,
@@ -819,7 +822,7 @@ class FormsService:
         return forms, total
 
     async def get_submission_counts(
-        self, form_ids: List[UUID], organization_id: UUID
+        self, form_ids: List[UUID], organization_id: UUID | str
     ) -> Dict[str, int]:
         """Count submissions for several forms in one query.
 
@@ -841,7 +844,7 @@ class FormsService:
         return {str(form_id): count for form_id, count in result.all()}
 
     async def get_form_by_id(
-        self, form_id: UUID, organization_id: UUID
+        self, form_id: UUID, organization_id: UUID | str
     ) -> Optional[Form]:
         """Get form by ID with fields and integrations"""
         result = await self.db.execute(
@@ -866,7 +869,7 @@ class FormsService:
         return form
 
     async def update_form(
-        self, form_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
+        self, form_id: UUID, organization_id: UUID | str, update_data: Dict[str, Any]
     ) -> Tuple[Optional[Form], Optional[str]]:
         """Update a form"""
         try:
@@ -895,7 +898,7 @@ class FormsService:
             return None, safe_error_detail(e)
 
     async def delete_form(
-        self, form_id: UUID, organization_id: UUID
+        self, form_id: UUID, organization_id: UUID | str
     ) -> Tuple[bool, Optional[str]]:
         """Delete a form and all its fields/submissions.
 
@@ -939,7 +942,7 @@ class FormsService:
             return False, safe_error_detail(e)
 
     async def publish_form(
-        self, form_id: UUID, organization_id: UUID
+        self, form_id: UUID, organization_id: UUID | str
     ) -> Tuple[Optional[Form], Optional[str]]:
         """Publish a form (make it available for submissions)"""
         return await self.update_form(form_id, organization_id, {"status": "published"})
@@ -952,7 +955,7 @@ class FormsService:
     )
 
     async def get_publish_warnings(
-        self, form_id: UUID, organization_id: UUID
+        self, form_id: UUID, organization_id: UUID | str
     ) -> Optional[List[Dict[str, str]]]:
         """What publishing this form will not do, for the publish confirmation.
 
@@ -1002,7 +1005,7 @@ class FormsService:
         return any(i.is_active for i in rows)
 
     async def archive_form(
-        self, form_id: UUID, organization_id: UUID
+        self, form_id: UUID, organization_id: UUID | str
     ) -> Tuple[Optional[Form], Optional[str]]:
         """Archive a form"""
         return await self.update_form(form_id, organization_id, {"status": "archived"})
@@ -1084,7 +1087,7 @@ class FormsService:
                 )
 
     async def add_field(
-        self, form_id: UUID, organization_id: UUID, field_data: Dict[str, Any]
+        self, form_id: UUID, organization_id: UUID | str, field_data: Dict[str, Any]
     ) -> Tuple[Optional[FormField], Optional[str]]:
         """Add a field to a form"""
         try:
@@ -1124,7 +1127,7 @@ class FormsService:
         self,
         field_id: UUID,
         form_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         update_data: Dict[str, Any],
     ) -> Tuple[Optional[FormField], Optional[str]]:
         """Update a form field"""
@@ -1184,7 +1187,7 @@ class FormsService:
             return None, safe_error_detail(e)
 
     async def delete_field(
-        self, field_id: UUID, form_id: UUID, organization_id: UUID
+        self, field_id: UUID, form_id: UUID, organization_id: UUID | str
     ) -> Tuple[bool, Optional[str]]:
         """Delete a form field"""
         try:
@@ -1224,7 +1227,7 @@ class FormsService:
             return False, safe_error_detail(e)
 
     async def reorder_fields(
-        self, form_id: UUID, organization_id: UUID, field_order: List[str]
+        self, form_id: UUID, organization_id: UUID | str, field_order: List[str]
     ) -> Tuple[bool, Optional[str]]:
         """Reorder fields based on provided ID list"""
         try:
@@ -1250,9 +1253,9 @@ class FormsService:
     async def submit_form(
         self,
         form_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         data: Dict[str, Any],
-        submitted_by: Optional[UUID] = None,
+        submitted_by: UUID | str | None = None,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
     ) -> Tuple[Optional[FormSubmission], Optional[str]]:
@@ -1331,9 +1334,9 @@ class FormsService:
     async def _create_member_submission(
         self,
         form_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         data: Dict[str, Any],
-        submitted_by: Optional[UUID],
+        submitted_by: UUID | str | None,
         ip_address: Optional[str],
         user_agent: Optional[str],
     ) -> Tuple[Optional[FormSubmission], Optional[Form], Optional[str]]:
@@ -1586,7 +1589,7 @@ class FormsService:
     async def get_submissions(
         self,
         form_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         skip: int = 0,
         limit: int = 100,
     ) -> Tuple[List[FormSubmission], int]:
@@ -1613,7 +1616,7 @@ class FormsService:
         return submissions, total
 
     async def get_submission_by_id(
-        self, submission_id: UUID, organization_id: UUID
+        self, submission_id: UUID, organization_id: UUID | str
     ) -> Optional[FormSubmission]:
         """Get a specific submission"""
         result = await self.db.execute(
@@ -1629,7 +1632,7 @@ class FormsService:
         return form_submission
 
     async def reprocess_submission_integrations(
-        self, submission_id: UUID, organization_id: UUID
+        self, submission_id: UUID, organization_id: UUID | str
     ) -> Tuple[Optional[FormSubmission], Optional[str]]:
         """Re-run integrations for an existing submission."""
         try:
@@ -1663,7 +1666,7 @@ class FormsService:
             return None, safe_error_detail(e)
 
     async def delete_submission(
-        self, submission_id: UUID, organization_id: UUID
+        self, submission_id: UUID, organization_id: UUID | str
     ) -> Tuple[bool, Optional[str]]:
         """Delete a form submission"""
         try:
@@ -1725,7 +1728,7 @@ class FormsService:
     async def add_integration(
         self,
         form_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         integration_data: Dict[str, Any],
     ) -> Tuple[Optional[FormIntegration], Optional[str]]:
         """Add an integration to a form"""
@@ -1770,7 +1773,7 @@ class FormsService:
         self,
         integration_id: UUID,
         form_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         update_data: Dict[str, Any],
     ) -> Tuple[Optional[FormIntegration], Optional[str]]:
         """Update a form integration"""
@@ -1815,7 +1818,7 @@ class FormsService:
         self,
         integration_id: UUID,
         form_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Tuple[bool, Optional[str]]:
         """Delete a form integration"""
         try:
@@ -3359,7 +3362,7 @@ class FormsService:
 
     async def search_members(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         query: str,
         limit: int = 20,
         contact_policy: Optional[ContactPolicy] = None,
@@ -3429,7 +3432,7 @@ class FormsService:
     # Summary & Reporting
     # ============================================
 
-    async def get_summary(self, organization_id: UUID) -> Dict[str, Any]:
+    async def get_summary(self, organization_id: UUID | str) -> Dict[str, Any]:
         """Get forms summary statistics"""
         # Total forms (non-template)
         org_id_str = str(organization_id)

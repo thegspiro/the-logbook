@@ -27,7 +27,7 @@ class UserService:
 
     async def get_users_for_organization(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         include_contact_info: bool = False,
         contact_settings: Optional[Dict[str, Any]] = None,
         honor_member_choice: bool = True,
@@ -93,7 +93,7 @@ class UserService:
 
     async def get_directory_for_organization(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         include_contact_info: bool = False,
         contact_settings: Optional[Dict[str, Any]] = None,
     ) -> List[MemberDirectoryEntry]:

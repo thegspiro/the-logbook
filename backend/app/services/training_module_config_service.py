@@ -40,7 +40,7 @@ class TrainingModuleConfigService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_config(self, organization_id: UUID) -> TrainingModuleConfig:
+    async def get_config(self, organization_id: UUID | str) -> TrainingModuleConfig:
         """Get or create the config for an organization."""
         result = await self.db.execute(
             select(TrainingModuleConfig).where(
@@ -60,7 +60,7 @@ class TrainingModuleConfigService:
 
     async def update_config(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         updated_by: Optional[str] = None,
         **kwargs: Any,
     ) -> TrainingModuleConfig:
@@ -76,7 +76,9 @@ class TrainingModuleConfigService:
         await self.db.refresh(config)
         return config
 
-    async def get_member_visibility(self, organization_id: UUID) -> Dict[str, bool]:
+    async def get_member_visibility(
+        self, organization_id: UUID | str
+    ) -> Dict[str, bool]:
         """Return the visibility dict for a member (lightweight)."""
         config = await self.get_config(organization_id)
         visibility: Dict[str, bool] = config.to_visibility_dict()
