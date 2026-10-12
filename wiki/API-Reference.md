@@ -822,7 +822,7 @@ write: `scheduling.manage`. Hidden once a shift is finalized.
 > **This is the `detailed` call-tracking path.** A department on `count_only`
 > tracking does not use these endpoints — its volume lives in `org_calls` /
 > `org_call_responses` and is written through close-out. See
-> [Module-Scheduling → Call Volume Without an RMS](Module-Scheduling#call-volume-without-an-rms-2026-08-18--08-19).
+> [Module-Scheduling → Call Volume Without an RMS](Module-Scheduling#call-volume-without-an-rms).
 
 ```
 GET    /api/v1/scheduling/shifts/{shift_id}/calls                       # List calls for a shift

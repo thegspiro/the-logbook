@@ -45,7 +45,7 @@ minutes of setup saves a lot of hand-mapping later.
   shifts on the schedule, matched by **unit number** or **name**.
 - **Add other agencies' units, if your members rode on them.** Rows on another
   agency's unit (a county ambulance, a neighbouring department's engine) become
-  [outside-agency hours](Module-Scheduling#september-24--october-4-2026)
+  [outside-agency hours](Module-Scheduling#shifts-with-other-departments)
   rather than shifts. You can also add these units during review.
 - **Check the department's time zone** in Settings. A file is read in that zone
   unless you choose another one at upload.

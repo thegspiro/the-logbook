@@ -164,7 +164,7 @@ docker compose up -d
   in-date lot is actually behind each row — "swap it" and "order it" are
   different jobs.
 
-See [Scheduling](Module-Scheduling#supply-tracking-the-shelf-and-the-truck-as-one-loop-2026-08-10)
+See [Scheduling](Module-Scheduling#supply-tracking-the-shelf-and-the-truck-as-one-loop)
 and [Inventory](Module-Inventory).
 
 ### August 2026 — Email: One Design, and a Footer Library Instead of 35 Copies
