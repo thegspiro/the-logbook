@@ -431,6 +431,17 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### A failed equipment-check item needs a note on the server too (2026-10-12)
+
+The server now refuses, with a 400, an equipment check that marks an item
+**Fail** or **Out of service** without a note, unless a count, a reading or a
+past expiry date already explains it — the rule the check form has enforced
+since 2026-10-04. Nothing changes for anyone using the form. The one case to
+know about: a check saved for offline sending on a device that has not
+reloaded the app since before 2026-10-04, holding such an item, is refused when
+it finally sends, and the offline queue gives up on it after its retries. Have
+crews open the app online after upgrading so a pending check sends before then.
+
 ### Facility folders open to every facilities role, and some files move (2026-10-11)
 
 The upgrade (migration `65128d5ccd50`) gives the Facility Files root, each
