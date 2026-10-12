@@ -318,8 +318,11 @@ class TestElectionResults(TestElectionSetup):
         assert results is not None
         assert results.total_votes == 3
 
-        # Candidate A should be the winner
-        winner = [r for r in results.overall_results if r.is_winner]
+        # Candidate A should be the winner of the Chief race; results are
+        # per contest since W50-7, so the overall pool is empty here.
+        assert results.overall_results == []
+        [chief] = [p for p in results.results_by_position if p.position == "Chief"]
+        winner = [r for r in chief.candidates if r.is_winner]
         assert len(winner) >= 1
         winner_ids = [str(w.candidate_id) for w in winner]
         assert data["candidate_a_id"] in winner_ids

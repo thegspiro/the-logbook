@@ -17,6 +17,7 @@ import { describe, it, expect } from 'vitest';
 import type { ShiftRecord } from '../services/api';
 import { DEFAULT_SIGNUP_WINDOW, type SignupWindow } from './shiftBoard';
 import { closeoutQueue, waitingLabel } from './closeoutQueue';
+import { withoutKeys } from '../../../test/withoutKeys';
 
 const NOW = Date.parse('2026-09-05T12:00:00Z');
 
@@ -35,6 +36,10 @@ const shift = (over: Partial<ShiftRecord> & { id: string }): ShiftRecord => ({
   ...over,
 });
 
+/** A shift with no recorded end. */
+const openEndedShift = (over: Partial<ShiftRecord> & { id: string }): ShiftRecord =>
+  withoutKeys(shift(over), 'end_time');
+
 describe('closeoutQueue', () => {
   it('dates a shift with a recorded end from that end', () => {
     const queue = closeoutQueue([shift({ id: 'a' })], WINDOW, NOW);
@@ -46,11 +51,7 @@ describe('closeoutQueue', () => {
   });
 
   it('dates an open-ended shift from the end of its cushion, not its start', () => {
-    const queue = closeoutQueue(
-      [shift({ id: 'a', start_time: '2026-09-04T20:00:00Z', end_time: undefined })],
-      WINDOW,
-      NOW
-    );
+    const queue = closeoutQueue([openEndedShift({ id: 'a', start_time: '2026-09-04T20:00:00Z' })], WINDOW, NOW);
 
     expect(queue).toHaveLength(1);
     expect(queue[0]?.openEnded).toBe(true);
@@ -61,7 +62,7 @@ describe('closeoutQueue', () => {
   // The cushion is the department's, so a longer one makes the same shift a
   // shorter wait. It no longer decides whether the row appears at all.
   it('honours a longer cushion in the wait it reports', () => {
-    const rows = [shift({ id: 'a', start_time: '2026-09-04T20:00:00Z', end_time: undefined })];
+    const rows = [openEndedShift({ id: 'a', start_time: '2026-09-04T20:00:00Z' })];
 
     expect(closeoutQueue(rows, { ...WINDOW, openEndedCushionHours: 12 }, NOW)[0]?.waitingHours).toBe(4);
     expect(closeoutQueue(rows, { ...WINDOW, openEndedCushionHours: 24 }, NOW)[0]?.waitingHours).toBe(0);
@@ -76,7 +77,7 @@ describe('closeoutQueue', () => {
   it('lists a row the server returned even when this tab’s cushion disagrees', () => {
     // Started six hours ago: over on a 12-hour cushion only in the future, so
     // the old filter dropped it outright.
-    const rows = [shift({ id: 'a', start_time: '2026-09-05T06:00:00Z', end_time: undefined })];
+    const rows = [openEndedShift({ id: 'a', start_time: '2026-09-05T06:00:00Z' })];
 
     const queue = closeoutQueue(rows, WINDOW, NOW);
 
@@ -92,7 +93,7 @@ describe('closeoutQueue', () => {
     ['finalized', { is_finalized: true }],
     ['cancelled', { status: 'cancelled' as const }],
     ['not yet ended', { start_time: '2026-09-05T14:00:00Z', end_time: '2026-09-06T02:00:00Z' }],
-  ])('lists a %s row rather than second-guessing the server', (unused, over) => {
+  ])('lists a %s row rather than second-guessing the server', (_label, over) => {
     expect(closeoutQueue([shift({ id: 'a', ...over })], WINDOW, NOW)).toHaveLength(1);
   });
 

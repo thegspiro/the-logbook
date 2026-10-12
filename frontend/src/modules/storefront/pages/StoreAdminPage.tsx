@@ -19,7 +19,7 @@ import { Link, useSearchParams } from 'react-router';
 import { ArrowLeft, CalendarClock, Clock3, Loader2, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { AdminHubFrame, AdminMetricsSettings } from '../../../components/admin';
-import type { AdminHubAction, AdminHubTab } from '../../../components/admin';
+import type { AdminHubAction } from '../../../components/admin';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCurrency, formatDateTime } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -28,6 +28,7 @@ import { StoreOrdersTab } from '../components/StoreOrdersTab';
 import { StorePaymentsTab } from '../components/StorePaymentsTab';
 import { StoreSettingsTab } from '../components/StoreSettingsTab';
 import { StoreWindowsTab } from '../components/StoreWindowsTab';
+import { STORE_ADMIN_TABS, type StoreAdminTab } from './storeAdminTabs';
 import { useEnabledModules } from '../../../hooks/useEnabledModules';
 import { storefrontService } from '../services/api';
 import {
@@ -38,17 +39,8 @@ import {
   type StoreDashboard,
 } from '../types';
 
-type TabId = 'overview' | 'windows' | 'catalog' | 'orders' | 'payments' | 'settings';
-
-/** Settings is always last — the frame's rule, on every module. */
-const TABS: AdminHubTab<TabId>[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'windows', label: 'Order Windows' },
-  { id: 'catalog', label: 'Catalog' },
-  { id: 'orders', label: 'Orders' },
-  { id: 'payments', label: 'Payments' },
-  { id: 'settings', label: 'Settings' },
-];
+type TabId = StoreAdminTab;
+const TABS = STORE_ADMIN_TABS;
 
 const isTabId = (value: string | null): value is TabId => TABS.some((tab) => tab.id === value);
 
@@ -271,13 +263,13 @@ const StoreAdminPage: React.FC = () => {
                 <StatTile
                   label="New (24 hours)"
                   value={dashboard.newOrderCount}
-                  tone="text-blue-600 dark:text-blue-400"
+                  tone="text-blue-800 dark:text-blue-400"
                   onClick={() => openOrders({ recentHours: 24 })}
                 />
                 <StatTile
                   label="Collected (open window)"
                   value={formatCurrency(Number(dashboard.collectedThisWindow))}
-                  tone="text-green-600 dark:text-green-400"
+                  tone="text-green-800 dark:text-green-400"
                 />
               </div>
 

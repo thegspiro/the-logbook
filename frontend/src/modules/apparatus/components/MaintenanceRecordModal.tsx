@@ -9,7 +9,13 @@ import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { apparatusMaintenanceService, apparatusMaintenanceTypeService } from '../services/api';
-import type { ApparatusMaintenance, ApparatusMaintenanceCreate, ApparatusMaintenanceType } from '../types';
+import type {
+  ApparatusMaintenance,
+  ApparatusMaintenanceCreate,
+  ApparatusMaintenanceType,
+  ApparatusMaintenanceUpdate,
+} from '../types';
+import { blankToNull, numberOrNull } from '../../../utils/formValues';
 
 interface MaintenanceRecordModalProps {
   isOpen: boolean;
@@ -122,32 +128,58 @@ export const MaintenanceRecordModal: React.FC<MaintenanceRecordModalProps> = ({
 
     setSaving(true);
     try {
-      const payload: ApparatusMaintenanceCreate = {
-        apparatusId,
-        maintenanceTypeId: f.maintenanceTypeId,
-        isCompleted: f.isCompleted,
-        ...(f.scheduledDate ? { scheduledDate: f.scheduledDate } : {}),
-        ...(f.dueDate ? { dueDate: f.dueDate } : {}),
-        ...(f.completedDate ? { completedDate: f.completedDate } : {}),
-        ...(f.performedBy ? { performedBy: f.performedBy } : {}),
-        ...(f.description ? { description: f.description } : {}),
-        ...(f.workPerformed ? { workPerformed: f.workPerformed } : {}),
-        ...(f.findings ? { findings: f.findings } : {}),
-        ...(f.mileageAtService ? { mileageAtService: Number(f.mileageAtService) } : {}),
-        ...(f.hoursAtService ? { hoursAtService: Number(f.hoursAtService) } : {}),
-        ...(f.cost ? { cost: Number(f.cost) } : {}),
-        ...(f.vendor ? { vendor: f.vendor } : {}),
-        ...(f.invoiceNumber ? { invoiceNumber: f.invoiceNumber } : {}),
-        ...(f.nextDueDate ? { nextDueDate: f.nextDueDate } : {}),
-        ...(f.nextDueMileage ? { nextDueMileage: Number(f.nextDueMileage) } : {}),
-        ...(f.nextDueHours ? { nextDueHours: Number(f.nextDueHours) } : {}),
-        ...(f.notes ? { notes: f.notes } : {}),
-      };
-
       if (editRecord) {
+        // Ticking "Mark as completed" on an open record with no completed date
+        // lets the server stamp the department's today; a null here would land
+        // after that stamp and erase it. Otherwise a blank clears the date.
+        const completing = f.isCompleted && !editRecord.isCompleted;
+        // Every field the form owns, every save: the backend applies updates
+        // with exclude_unset, so a blank left out of the payload would keep
+        // the old value. A blank goes as null, which clears it.
+        const payload: ApparatusMaintenanceUpdate = {
+          maintenanceTypeId: f.maintenanceTypeId,
+          isCompleted: f.isCompleted,
+          scheduledDate: f.scheduledDate || null,
+          dueDate: f.dueDate || null,
+          ...(f.completedDate || !completing ? { completedDate: f.completedDate || null } : {}),
+          performedBy: blankToNull(f.performedBy),
+          description: blankToNull(f.description),
+          workPerformed: blankToNull(f.workPerformed),
+          findings: blankToNull(f.findings),
+          mileageAtService: numberOrNull(f.mileageAtService),
+          hoursAtService: numberOrNull(f.hoursAtService),
+          cost: numberOrNull(f.cost),
+          vendor: blankToNull(f.vendor),
+          invoiceNumber: blankToNull(f.invoiceNumber),
+          nextDueDate: f.nextDueDate || null,
+          nextDueMileage: numberOrNull(f.nextDueMileage),
+          nextDueHours: numberOrNull(f.nextDueHours),
+          notes: blankToNull(f.notes),
+        };
         await apparatusMaintenanceService.updateMaintenanceRecord(editRecord.id, payload);
         toast.success('Maintenance record updated');
       } else {
+        const payload: ApparatusMaintenanceCreate = {
+          apparatusId,
+          maintenanceTypeId: f.maintenanceTypeId,
+          isCompleted: f.isCompleted,
+          ...(f.scheduledDate ? { scheduledDate: f.scheduledDate } : {}),
+          ...(f.dueDate ? { dueDate: f.dueDate } : {}),
+          ...(f.completedDate ? { completedDate: f.completedDate } : {}),
+          ...(f.performedBy ? { performedBy: f.performedBy } : {}),
+          ...(f.description ? { description: f.description } : {}),
+          ...(f.workPerformed ? { workPerformed: f.workPerformed } : {}),
+          ...(f.findings ? { findings: f.findings } : {}),
+          ...(f.mileageAtService ? { mileageAtService: Number(f.mileageAtService) } : {}),
+          ...(f.hoursAtService ? { hoursAtService: Number(f.hoursAtService) } : {}),
+          ...(f.cost ? { cost: Number(f.cost) } : {}),
+          ...(f.vendor ? { vendor: f.vendor } : {}),
+          ...(f.invoiceNumber ? { invoiceNumber: f.invoiceNumber } : {}),
+          ...(f.nextDueDate ? { nextDueDate: f.nextDueDate } : {}),
+          ...(f.nextDueMileage ? { nextDueMileage: Number(f.nextDueMileage) } : {}),
+          ...(f.nextDueHours ? { nextDueHours: Number(f.nextDueHours) } : {}),
+          ...(f.notes ? { notes: f.notes } : {}),
+        };
         await apparatusMaintenanceService.createMaintenanceRecord(payload);
         toast.success('Maintenance record added');
       }

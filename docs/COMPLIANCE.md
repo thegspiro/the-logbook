@@ -47,7 +47,7 @@ Related documents:
 | TLS 1.2/1.3-only, HSTS, strict CSP, security headers                                                                      | `infrastructure/nginx/nginx.conf`, `SecurityHeadersMiddleware`                                                                                                            | ISO 27001 A.8.24/A.8.26                        |
 | Rate limiting, IP blocking, geo blocking, anomaly monitoring                                                              | `backend/app/core/security_middleware.py`, `geoip.py`, ip-security module                                                                                                 | ISO 27001 A.8.16                               |
 | Multi-tenant isolation (org-scoped queries, FK validation)                                                                | Enforced convention (CLAUDE.md Pitfall #14) + `docs/module-audit/` verification                                                                                           | ISO 27001 A.8.3, ISO 27017                     |
-| Segregation of duties (an approver may not approve their own request)                                                     | `backend/app/services/separation_of_duties.py` — 21 call sites across 9 modules, enumerated in [Segregation of duties — coverage](#segregation-of-duties--coverage) below | ISO 27001 A.5.3                                |
+| Segregation of duties (an approver may not approve their own request)                                                     | `backend/app/services/separation_of_duties.py` — 22 call sites across 9 modules, enumerated in [Segregation of duties — coverage](#segregation-of-duties--coverage) below | ISO 27001 A.5.3                                |
 | Administrator continuity (the last administrator cannot be demoted, deactivated or deleted)                               | `backend/app/services/admin_continuity_service.py`                                                                                                                        | ISO 27001 A.5.15/A.5.16, ISO 22301             |
 | Need-to-know redaction of member contact details in roster responses                                                      | `_redact_contact_fields()` in `backend/app/api/v1/endpoints/users.py`                                                                                                     | ISO 27001 A.5.12/A.8.12, ISO 27701             |
 | Deployment identifiers withheld from non-privileged org responses                                                         | `without_infrastructure()` in `backend/app/schemas/organization.py`                                                                                                       | ISO 27001 A.8.12                               |
@@ -89,6 +89,7 @@ sites were enumerated from the AST, not grepped (app-review A9 pass 3,
 | ----------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------- |
 | Finance           | `approve_step`, `manual_approve`                                                                  | approver vs. the entity's creator         |
 | Finance           | `mark_pr_paid`, `mark_expense_paid`, `issue_check`, `waive_dues`                                  | actor vs. requester / submitter / member  |
+| Finance           | `confirm_budget_amendment` (a budget amendment or reversal)                                       | confirming officer vs. whoever entered it |
 | Storefront        | `record_payment`, `mark_order_paid`, `waive_order_payment`, `refund_order`, `update_order_status` | actor vs. the order's member              |
 | Admin hours       | approve, bulk approve (unless the department sets `admin_hours.allow_self_approval`, see below)   | approver vs. the entry's owner            |
 | Training          | manual `review_submission`                                                                        | reviewer vs. submitter                    |
@@ -96,6 +97,15 @@ sites were enumerated from the AST, not grepped (app-review A9 pass 3,
 | Meeting minutes   | approve                                                                                           | approver vs. submitter                    |
 | Driver exceptions | approve (checked twice: against the requester **and** the exception's subject)                    | reviewer vs. requester / subject          |
 | Course cohorts    | `credit_missed_class`                                                                             | crediting officer vs. the credited member |
+
+**Dual approval** _(2026-10-11)_ is a second, separate control on finance
+requests and is not one of the call sites above: at or above a
+department-set threshold (`finance.dual_approval_threshold`, off by default,
+written only with `settings.manage`), a purchase request, check request or
+expense report needs two different approvers, and someone who has already
+approved a held request cannot give its second approval
+(`FinanceService._held_for_second_approver`, `manual_approve`). See
+`docs/FINANCE_MODULE.md`, "Dual approval".
 
 **Deliberately not guarded**, each for a stated reason — this half is the part
 worth keeping current:

@@ -9,10 +9,17 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 from pydantic.alias_generators import to_camel
 
 from app.schemas.base import UTCResponseBase
+from app.utils.external_url import safe_external_url
 
 # Shared config for response schemas that need camelCase serialization
 _response_config = ConfigDict(
@@ -268,6 +275,9 @@ class ApparatusStatusListItem(BaseModel):
     default_status: Optional[DefaultApparatusStatusEnum] = None
     is_available: bool
     is_operational: bool
+    # The edit form asks for a reason when this is set; without it in the list
+    # the form could not tell Out of Service from In Service.
+    requires_reason: bool = False
     is_archived_status: bool
     color: Optional[str] = None
     icon: Optional[str] = None
@@ -1425,7 +1435,27 @@ class ApparatusPhotoResponse(ApparatusPhotoBase):
     uploaded_by: Optional[str] = None
     uploaded_at: datetime
 
+    document_id: Optional[str] = None
+    file_url: Optional[str] = None
+
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def _set_file_url(self):
+        """Where a browser opens the file.
+
+        A stored file is served by the apparatus endpoint, behind the
+        Apparatus folder's rights. A row from before uploads existed carries
+        a typed link; only an HTTP(S) one is passed on, so a stored
+        ``javascript:`` value never reaches an ``href`` or ``src``.
+        """
+        if self.document_id:
+            self.file_url = (
+                f"/api/v1/apparatus/{self.apparatus_id}/photos/{self.id}/file"
+            )
+        else:
+            self.file_url = safe_external_url(self.file_path)
+        return self
 
 
 # =============================================================================
@@ -1472,7 +1502,27 @@ class ApparatusDocumentResponse(ApparatusDocumentBase):
     uploaded_by: Optional[str] = None
     uploaded_at: datetime
 
+    document_id: Optional[str] = None
+    file_url: Optional[str] = None
+
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def _set_file_url(self):
+        """Where a browser opens the file.
+
+        A stored file is served by the apparatus endpoint, behind the
+        Apparatus folder's rights. A row from before uploads existed carries
+        a typed link; only an HTTP(S) one is passed on, so a stored
+        ``javascript:`` value never reaches an ``href`` or ``src``.
+        """
+        if self.document_id:
+            self.file_url = (
+                f"/api/v1/apparatus/{self.apparatus_id}/documents/{self.id}/file"
+            )
+        else:
+            self.file_url = safe_external_url(self.file_path)
+        return self
 
 
 # =============================================================================

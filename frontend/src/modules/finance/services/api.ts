@@ -5,6 +5,7 @@
  */
 
 import { createApiClient } from '../../../utils/createApiClient';
+import { fetchFile, type DownloadedFile } from '../../../utils/fileDownload';
 import type {
   ApprovalChain,
   ApprovalChainCreatePayload,
@@ -19,6 +20,7 @@ import type {
   BudgetAmendment,
   BudgetAmendmentCreatePayload,
   BudgetAmendmentCreated,
+  BudgetAmendmentRejectPayload,
   BudgetAmendmentReversePayload,
   BudgetCategory,
   BudgetCategoryUpdatePayload,
@@ -36,7 +38,11 @@ import type {
   BudgetTransactionPage,
   BudgetUpdatePayload,
   CheckRequest,
+  DuesPayment,
+  DuesPaymentPayload,
   DuesSchedule,
+  DuesScheduleCreatePayload,
+  DuesScheduleUpdatePayload,
   DuesSummary,
   ExpenseLineItem,
   ExpenseReport,
@@ -45,9 +51,12 @@ import type {
   ExportMapping,
   ExportMappingCreatePayload,
   ExportMappingUpdatePayload,
+  ExportLog,
   ExportReadiness,
   FiscalYearOption,
   FiscalYearAdoptionPayload,
+  FiscalYearLockPayload,
+  FiscalYearOpenItem,
   FiscalYearUpdatePayload,
   FinanceNamedOption,
   MemberDues,
@@ -59,10 +68,17 @@ import type {
   MonetaryAmount,
   StartFromLastYearResult,
   UnroutedApproval,
+  FinanceSettings,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
 
 const api = createApiClient();
+
+function receiptForm(file: File): FormData {
+  const form = new FormData();
+  form.append('file', file);
+  return form;
+}
 
 // =============================================================================
 // Fiscal Years
@@ -101,9 +117,26 @@ export const fiscalYearService = {
     return response.data;
   },
 
-  /** A draft is adopted: it must be in board review, and `adoption` is the board's vote. */
-  async activate(id: string, adoption?: FiscalYearAdoptionPayload): Promise<FiscalYear> {
-    const response = await api.post<FiscalYear>(`/finance/fiscal-years/${id}/activate`, adoption);
+  /** Record the board's vote on a draft in board review; the year stays a draft until started. */
+  async adopt(id: string, adoption: FiscalYearAdoptionPayload): Promise<FiscalYear> {
+    const response = await api.post<FiscalYear>(`/finance/fiscal-years/${id}/adopt`, adoption);
+    return response.data;
+  },
+
+  /** Start an adopted draft on or after its start date, or reopen a year in its year-end close. */
+  async activate(id: string): Promise<FiscalYear> {
+    const response = await api.post<FiscalYear>(`/finance/fiscal-years/${id}/activate`);
+    return response.data;
+  },
+
+  async beginClose(id: string): Promise<FiscalYear> {
+    const response = await api.post<FiscalYear>(`/finance/fiscal-years/${id}/begin-close`);
+    return response.data;
+  },
+
+  /** What still stops a closing year from locking. */
+  async openItems(id: string): Promise<FiscalYearOpenItem[]> {
+    const response = await api.get<FiscalYearOpenItem[]>(`/finance/fiscal-years/${id}/open-items`);
     return response.data;
   },
 
@@ -113,8 +146,8 @@ export const fiscalYearService = {
     return response.data;
   },
 
-  async lock(id: string): Promise<FiscalYear> {
-    const response = await api.post<FiscalYear>(`/finance/fiscal-years/${id}/lock`);
+  async lock(id: string, signOff: FiscalYearLockPayload): Promise<FiscalYear> {
+    const response = await api.post<FiscalYear>(`/finance/fiscal-years/${id}/lock`, signOff);
     return response.data;
   },
 };
@@ -222,13 +255,13 @@ export const budgetService = {
     return response.data;
   },
 
-  /** Record extra money approved for a line; raises its budget by the amount. */
+  /** Record extra money approved for a line; pending until a second officer confirms it. */
   async addAmendment(id: string, data: BudgetAmendmentCreatePayload): Promise<BudgetAmendmentCreated> {
     const response = await api.post<BudgetAmendmentCreated>(`/finance/budgets/${id}/amendments`, data);
     return response.data;
   },
 
-  /** Cancel a mistaken amendment with a reversing entry; lowers the budget by it. */
+  /** Cancel a mistaken amendment with a reversing entry, pending like any amendment. */
   async reverseAmendment(
     id: string,
     amendmentId: string,
@@ -236,6 +269,25 @@ export const budgetService = {
   ): Promise<BudgetAmendmentCreated> {
     const response = await api.post<BudgetAmendmentCreated>(
       `/finance/budgets/${id}/amendments/${amendmentId}/reverse`,
+      data
+    );
+    return response.data;
+  },
+
+  /** Confirm a pending amendment; this is what moves the line's budget. */
+  async confirmAmendment(id: string, amendmentId: string): Promise<BudgetAmendmentCreated> {
+    const response = await api.post<BudgetAmendmentCreated>(`/finance/budgets/${id}/amendments/${amendmentId}/confirm`);
+    return response.data;
+  },
+
+  /** Reject a pending amendment, with the reason. The line is left as it was. */
+  async rejectAmendment(
+    id: string,
+    amendmentId: string,
+    data: BudgetAmendmentRejectPayload
+  ): Promise<BudgetAmendmentCreated> {
+    const response = await api.post<BudgetAmendmentCreated>(
+      `/finance/budgets/${id}/amendments/${amendmentId}/reject`,
       data
     );
     return response.data;
@@ -410,6 +462,14 @@ const stepDecisionBody = (notes?: string, overrideReason?: string) => ({
   ...(overrideReason ? { overrideReason } : {}),
 });
 
+export const financeSettingsService = {
+  /** The finance rules as the approval path reads them. */
+  async get(): Promise<FinanceSettings> {
+    const response = await api.get<FinanceSettings>('/finance/settings');
+    return response.data;
+  },
+};
+
 export const approvalService = {
   async getPending(): Promise<PendingApproval[]> {
     const response = await api.get<PendingApproval[]>('/finance/approvals/pending');
@@ -512,6 +572,17 @@ export const purchaseRequestService = {
     const response = await api.post<PurchaseRequest>(`/finance/purchase-requests/${id}/cancel`);
     return response.data;
   },
+
+  async uploadReceipt(id: string, file: File): Promise<PurchaseRequest> {
+    const response = await api.post<PurchaseRequest>(`/finance/purchase-requests/${id}/receipt`, receiptForm(file), {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  downloadReceipt(id: string): Promise<DownloadedFile> {
+    return fetchFile(api, `/finance/purchase-requests/${id}/receipt`, 'receipt');
+  },
 };
 
 // =============================================================================
@@ -542,6 +613,19 @@ export const expenseReportService = {
   async addLineItem(id: string, data: Partial<ExpenseLineItem>): Promise<ExpenseLineItem> {
     const response = await api.post<ExpenseLineItem>(`/finance/expense-reports/${id}/items`, data);
     return response.data;
+  },
+
+  async uploadLineItemReceipt(reportId: string, itemId: string, file: File): Promise<ExpenseLineItem> {
+    const response = await api.post<ExpenseLineItem>(
+      `/finance/expense-reports/${reportId}/items/${itemId}/receipt`,
+      receiptForm(file),
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  },
+
+  downloadLineItemReceipt(reportId: string, itemId: string): Promise<DownloadedFile> {
+    return fetchFile(api, `/finance/expense-reports/${reportId}/items/${itemId}/receipt`, 'receipt');
   },
 
   async submit(id: string): Promise<ExpenseReport> {
@@ -610,12 +694,12 @@ export const duesService = {
     return asArray(response.data);
   },
 
-  async createSchedule(data: Partial<DuesSchedule>): Promise<DuesSchedule> {
+  async createSchedule(data: DuesScheduleCreatePayload): Promise<DuesSchedule> {
     const response = await api.post<DuesSchedule>('/finance/dues-schedules', data);
     return response.data;
   },
 
-  async updateSchedule(id: string, data: Partial<DuesSchedule>): Promise<DuesSchedule> {
+  async updateSchedule(id: string, data: DuesScheduleUpdatePayload): Promise<DuesSchedule> {
     const response = await api.put<DuesSchedule>(`/finance/dues-schedules/${id}`, data);
     return response.data;
   },
@@ -636,21 +720,23 @@ export const duesService = {
     return asArray(response.data);
   },
 
-  async recordPayment(
-    duesId: string,
-    data: {
-      amountPaid: MonetaryAmount;
-      paymentMethod?: string;
-      transactionReference?: string;
-      notes?: string;
-    }
-  ): Promise<MemberDues> {
+  async recordPayment(duesId: string, data: DuesPaymentPayload): Promise<MemberDues> {
     const response = await api.put<MemberDues>(`/finance/dues/${duesId}`, data);
     return response.data;
   },
 
+  async listPayments(duesId: string): Promise<DuesPayment[]> {
+    const response = await api.get<DuesPayment[]>(`/finance/dues/${duesId}/payments`);
+    return asArray(response.data);
+  },
+
   async waive(duesId: string, reason: string): Promise<MemberDues> {
     const response = await api.post<MemberDues>(`/finance/dues/${duesId}/waive`, { reason });
+    return response.data;
+  },
+
+  async unwaive(duesId: string, reason: string): Promise<MemberDues> {
+    const response = await api.post<MemberDues>(`/finance/dues/${duesId}/unwaive`, { reason });
     return response.data;
   },
 
@@ -661,10 +747,6 @@ export const duesService = {
     return response.data;
   },
 };
-
-// =============================================================================
-// Export
-// =============================================================================
 
 // =============================================================================
 // Dashboard
@@ -707,5 +789,11 @@ export const exportMappingService = {
   async readiness(): Promise<ExportReadiness> {
     const response = await api.get<ExportReadiness>('/finance/export/readiness');
     return response.data;
+  },
+
+  /** Export history, newest first. */
+  async logs(params?: { skip?: number; limit?: number }): Promise<ExportLog[]> {
+    const response = await api.get<ExportLog[]>('/finance/export/logs', { params });
+    return asArray(response.data);
   },
 };

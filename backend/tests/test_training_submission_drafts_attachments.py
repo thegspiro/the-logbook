@@ -476,8 +476,6 @@ class TestAttachmentRoot:
         way the submission upload does and serves it through the record
         download.
         """
-        from fastapi.responses import FileResponse
-
         monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         monkeypatch.setattr(
             file_storage_service, "detect_mime_type", lambda content: "application/pdf"
@@ -513,8 +511,11 @@ class TestAttachmentRoot:
             "rec-1", 0, db=db, current_user=member
         )
 
-        assert isinstance(response, FileResponse)
-        assert response.path == os.path.realpath(attachment["file_path"])
+        # Served (decrypted) from the record route rather than refused.
+        assert response.status_code == 200
+        body = b"".join([chunk async for chunk in response.body_iterator])
+        assert body == b"%PDF-1.4"
+        assert response.headers["content-length"] == str(len(b"%PDF-1.4"))
 
     def test_a_path_outside_the_root_is_never_returned(self):
         org = "org-1"

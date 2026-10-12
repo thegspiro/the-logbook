@@ -28,11 +28,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.document import (
-    SYSTEM_FOLDERS,
     Document,
     DocumentFolder,
     DocumentStatus,
     DocumentType,
+    system_folder_fields,
 )
 from app.models.inventory import CheckOutRecord, ItemAssignment, ItemIssuance
 from app.models.user import Organization, User
@@ -285,7 +285,8 @@ class PropertyReturnService:
                 DocumentFolder.slug == self.SEPARATIONS_FOLDER_SLUG,
             )
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _lock_separations_folder(
         self, organization_id: str
@@ -311,7 +312,8 @@ class PropertyReturnService:
             )
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _get_or_create_separations_folder(
         self, organization_id: str, created_by: str
@@ -350,14 +352,10 @@ class PropertyReturnService:
         if folder is not None:
             return folder
 
-        folder_def = next(
-            s for s in SYSTEM_FOLDERS if s["slug"] == self.SEPARATIONS_FOLDER_SLUG
-        )
         folder = DocumentFolder(
             organization_id=organization_id,
             created_by=created_by,
-            is_system=True,
-            **folder_def,
+            **system_folder_fields(self.SEPARATIONS_FOLDER_SLUG),
         )
         self.db.add(folder)
         await self.db.flush()

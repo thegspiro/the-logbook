@@ -18,7 +18,7 @@ const mockGet = vi.fn<(url: string, config: Record<string, unknown>) => Promise<
 
 vi.mock('../../../utils/createApiClient', () => ({
   createApiClient: () => ({
-    get: (...args: unknown[]) => mockGet(...args) as unknown,
+    get: (url: string, config: Record<string, unknown>) => mockGet(url, config),
     post: vi.fn(),
     patch: vi.fn(),
     delete: vi.fn(),

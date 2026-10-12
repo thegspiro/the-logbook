@@ -54,6 +54,21 @@ _PROGRESS_RECORD_COLUMNS = (
 )
 
 
+def _same_requirement_value(stored: Any, sent: Any) -> bool:
+    """Whether a requirement edit leaves a field as it is.
+
+    The edit form sends list fields (categories, member categories, courses,
+    call types) on every save, as ``[]`` when nothing is selected, while rows
+    written by older clients or by create hold ``NULL`` for the same state.
+    Every grader treats the two alike, so a new-members-only save must too —
+    otherwise a save that changes nothing creates a copy instead of being
+    refused.
+    """
+    if stored in (None, []) and sent in (None, []):
+        return True
+    return stored == sent
+
+
 class TrainingService:
     """Service for training management"""
 
@@ -61,7 +76,7 @@ class TrainingService:
         self.db = db
 
     async def get_user_training_stats(
-        self, user_id: UUID, organization_id: UUID
+        self, user_id: UUID, organization_id: UUID | str
     ) -> UserTrainingStats:
         """
         Get comprehensive training statistics for a user
@@ -126,7 +141,7 @@ class TrainingService:
 
     async def get_training_hours_by_type(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         user_id: Optional[UUID] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
@@ -168,7 +183,7 @@ class TrainingService:
 
     async def generate_training_report(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         start_date: date,
         end_date: date,
         user_id: Optional[UUID] = None,
@@ -427,7 +442,7 @@ class TrainingService:
         # match, or the requirement name appearing in the record's course
         # name -- the same two criteria the fallback branch itself uses.
         if requirement.training_type:
-            return record.training_type == requirement.training_type
+            return bool(record.training_type == requirement.training_type)
         return bool(
             requirement.name
             and record.course_name
@@ -438,7 +453,7 @@ class TrainingService:
         self,
         requirement,
         user_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         completed_records: Optional[Sequence[Any]],
         today: date,
     ) -> List[Any]:
@@ -497,7 +512,7 @@ class TrainingService:
         self,
         requirement,
         user_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         completed_records: Optional[Sequence[Any]],
         rolling_months: int,
         today: date,
@@ -529,7 +544,7 @@ class TrainingService:
         self,
         requirement,
         user_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         completed_records: Optional[Sequence[Any]],
         today: date,
     ) -> Optional[date]:
@@ -550,7 +565,8 @@ class TrainingService:
         if not anchors:
             return None
         latest = max(anchors, key=lambda r: r.completion_date or date.min)
-        return latest.expiration_date
+        expiration: Optional[date] = latest.expiration_date
+        return expiration
 
     @staticmethod
     def evaluate_requirement_detail(
@@ -932,8 +948,8 @@ class TrainingService:
     async def check_requirement_progress(
         self,
         user_id: UUID,
-        requirement_id: UUID,
-        organization_id: UUID,
+        requirement_id: UUID | str,
+        organization_id: UUID | str,
         waivers: Optional[List[WaiverPeriod]] = None,
         requirement: Optional[TrainingRequirement] = None,
         completed_records: Optional[Sequence[Any]] = None,
@@ -1436,7 +1452,7 @@ class TrainingService:
         )
 
     async def get_all_requirements_progress(
-        self, user_id: UUID, organization_id: UUID, year: Optional[int] = None
+        self, user_id: UUID, organization_id: UUID | str, year: Optional[int] = None
     ) -> List[RequirementProgress]:
         """
         Get progress for all requirements applicable to a user
@@ -1451,7 +1467,7 @@ class TrainingService:
     async def get_requirements_progress_for(
         self,
         user_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         requirements: List[TrainingRequirement],
     ) -> List[RequirementProgress]:
         """Progress against the given requirements, waivers fetched once.
@@ -1658,7 +1674,7 @@ class TrainingService:
             key: value
             for key, value in updates.items()
             if key not in self._SPLIT_FORBIDDEN_FIELDS
-            and getattr(requirement, key) != value
+            and not _same_requirement_value(getattr(requirement, key), value)
         }
         if not changed:
             raise ValueError(
@@ -1688,7 +1704,7 @@ class TrainingService:
     async def _catch_up_join_date(
         self,
         user_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         requirements: Sequence[TrainingRequirement],
     ) -> Optional[date]:
         """The member's ``member_join_date``, read without loading the row.
@@ -1714,7 +1730,7 @@ class TrainingService:
         return join_date_from(row[0], row[1])
 
     async def get_applicable_requirements(
-        self, user_id: UUID, organization_id: UUID, year: Optional[int] = None
+        self, user_id: UUID, organization_id: UUID | str, year: Optional[int] = None
     ) -> List[TrainingRequirement]:
         """The active requirements that apply to a user, in a stable order."""
         # NOTE: `year` defaults to None → the year filter below is skipped (all
@@ -1764,9 +1780,9 @@ class TrainingService:
 
     async def get_expiring_certifications(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         days_ahead: int = 90,
-        user_id: Optional[UUID] = None,
+        user_id: UUID | str | None = None,
     ) -> List[TrainingRecord]:
         """
         Get certifications that are expiring within the specified number of days,
@@ -1791,4 +1807,4 @@ class TrainingService:
             query = query.where(TrainingRecord.user_id == str(user_id))
 
         result = await self.db.execute(query)
-        return result.scalars().all()
+        return list(result.scalars().all())

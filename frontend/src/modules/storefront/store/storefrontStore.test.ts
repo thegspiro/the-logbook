@@ -228,12 +228,17 @@ describe('storefrontStore', () => {
           isEnabled: true,
           storeName: 'Store',
           currency: 'USD',
+          showOpenOrderBanner: true,
           allowPickup: true,
           allowShipping: false,
           taxRate: '0',
           acceptedPaymentMethods: ['venmo'],
+          paymentMethods: [{ method: 'venmo', label: 'Venmo' }],
+          paymentPolicy: 'none',
+          sendsOrderConfirmation: true,
           products: [],
           window: { id: 'w1', name: 'Fall' },
+          otherOpenWindows: [],
         },
       });
       useStorefrontStore.getState().addToCart(offer(), undefined, 2);

@@ -33,6 +33,8 @@ import {
 /** The finance request routes' gates — see modules/finance/routes.tsx. */
 const FINANCE_REQUEST_READ_GATE = ['finance.request', 'finance.view', 'finance.manage'];
 const FINANCE_REQUEST_WRITE_GATE = ['finance.request', 'finance.manage'];
+// An expense report is also read by its approvers (the approvals queue links them to it).
+const FINANCE_EXPENSE_READ_GATE = [...FINANCE_REQUEST_READ_GATE, 'finance.approve'];
 
 export interface TestPageEntry {
   /** Route pattern exactly as declared in App.tsx or a module's routes.tsx. */
@@ -192,6 +194,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         isPublic: true,
       },
       { path: '/onboarding/system-owner', label: 'System owner creation', isPublic: true },
+      { path: '/onboarding/encryption-key', label: 'Encryption key safekeeping', isPublic: true },
       {
         path: '/onboarding/admin-user',
         label: 'Admin user (legacy URL)',
@@ -467,6 +470,18 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         permission: 'scheduling.manage',
         module: 'scheduling',
       },
+      {
+        path: '/scheduling/admin/history-import',
+        label: 'Shift history import',
+        permission: 'scheduling.manage',
+        module: 'scheduling',
+      },
+      {
+        path: '/scheduling/admin/history-import/:importId',
+        label: 'Shift history import — review',
+        permission: 'scheduling.manage',
+        module: 'scheduling',
+      },
       { path: '/scheduling/admin/platoons', label: 'Platoons', permission: 'scheduling.manage', module: 'scheduling' },
       {
         path: '/scheduling/admin/reports',
@@ -703,6 +718,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'inventory',
       },
       {
+        path: '/inventory/admin/clearances/:clearanceId',
+        label: 'Admin — departure clearance',
+        permission: 'inventory.manage',
+        module: 'inventory',
+      },
+      {
         path: '/inventory/admin/write-offs',
         label: 'Admin — write-offs',
         permission: 'inventory.manage',
@@ -906,6 +927,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
     checklistSection: '9. Meetings & Minutes',
     pages: [
       { path: '/minutes', label: 'Minutes', module: 'minutes' },
+      {
+        path: '/minutes/attendance',
+        label: 'Meeting attendance dashboard',
+        permission: 'meetings.manage',
+        module: 'minutes',
+      },
       { path: '/minutes/:minutesId', label: 'Minutes detail', module: 'minutes' },
     ],
   },
@@ -1034,7 +1061,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/finance/expenses/:id',
         label: 'Expense report detail',
-        anyPermission: FINANCE_REQUEST_READ_GATE,
+        anyPermission: FINANCE_EXPENSE_READ_GATE,
         module: 'finance',
       },
       {
@@ -1079,6 +1106,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
     pages: [
       { path: '/grants', label: 'Grants dashboard', permission: 'fundraising.view', module: 'grants' },
       { path: '/grants/opportunities', label: 'Grant opportunities', permission: 'fundraising.view', module: 'grants' },
+      {
+        path: '/grants/opportunities/new',
+        label: 'New grant opportunity',
+        permission: 'fundraising.manage',
+        module: 'grants',
+      },
       { path: '/grants/applications', label: 'Grant applications', permission: 'fundraising.view', module: 'grants' },
       {
         path: '/grants/applications/new',
@@ -1096,6 +1129,9 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/grants/campaigns', label: 'Campaigns', permission: 'fundraising.view', module: 'grants' },
       { path: '/grants/donors', label: 'Donors', permission: 'fundraising.view', module: 'grants' },
       { path: '/grants/donations', label: 'Donations', permission: 'fundraising.view', module: 'grants' },
+      { path: '/grants/donations/new', label: 'Record donation', permission: 'fundraising.manage', module: 'grants' },
+      { path: '/grants/pledges', label: 'Pledges', permission: 'fundraising.view', module: 'grants' },
+      { path: '/grants/events', label: 'Fundraising events', permission: 'fundraising.view', module: 'grants' },
       { path: '/grants/reports', label: 'Fundraising reports', permission: 'fundraising.view', module: 'grants' },
     ],
   },

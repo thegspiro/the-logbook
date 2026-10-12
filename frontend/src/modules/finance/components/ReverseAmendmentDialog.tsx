@@ -3,9 +3,10 @@
  *
  * An amendment is never edited or deleted (owner decision, 2026-10-09): the
  * correction is a reversing entry for the whole amount, with its own reason
- * and approval. Saving lowers the line's budget by the amendment's amount and
- * leaves the original amendment on record, so the dialog says both before the
- * Treasurer confirms.
+ * and approval. Saving enters the reversal pending; once a second officer
+ * confirms it, it lowers the line's budget by the amendment's amount. The
+ * original amendment stays on record, so the dialog says all of that before
+ * the Treasurer saves.
  *
  * The checks here only spare a round trip; the backend makes the same ones
  * (the approval date against the department's calendar, a locked year, what
@@ -75,7 +76,7 @@ export const ReverseAmendmentDialog: React.FC<ReverseAmendmentDialogProps> = ({
     setSaving(true);
     try {
       const result = await budgetService.reverseAmendment(budgetId, amendment.id, payload);
-      toast.success('Amendment reversed');
+      toast.success('Reversal recorded — awaiting confirmation by a second officer');
       onSaved(result);
     } catch (err: unknown) {
       // The API's own words: already reversed, a locked year, money spent.
@@ -117,7 +118,8 @@ export const ReverseAmendmentDialog: React.FC<ReverseAmendmentDialogProps> = ({
             Reversing the +{amount} amendment approved {formatDate(amendment.approvedOn, tz)} by {amendment.approvedBy}.
           </p>
           <p className="text-theme-text-primary font-medium">
-            This lowers the current budget by {amount}. The original amendment stays on record.
+            Once a second officer confirms it, this lowers the current budget by {amount}. The original amendment stays
+            on record.
           </p>
           <p>A reversal cannot be undone. If the money is needed again, record a new amendment.</p>
         </div>

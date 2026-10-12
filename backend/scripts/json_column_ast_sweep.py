@@ -2,10 +2,18 @@
 """
 AST sweep for JSON-typed SQLAlchemy model columns.
 
-Enumerates every model attribute declared as `Column(JSON, ...)`,
-`Column(MutableDict.as_mutable(JSON), ...)`, or `Column(EncryptedJSON, ...)`
-across `app/models/*.py`, by parsing each file with the `ast` module rather
-than scanning source lines.
+Enumerates every model attribute declared as `Column(JSON, ...)` /
+`mapped_column(JSON, ...)`, `Column(MutableDict.as_mutable(JSON), ...)` /
+`mapped_column(MutableDict.as_mutable(JSON), ...)`, or the `EncryptedJSON`
+equivalent of either, across `app/models/*.py`, by parsing each file with
+the `ast` module rather than scanning source lines. Both `Column` (1.x
+imperative style) and `mapped_column` (2.0 declarative style) are matched --
+see `COLUMN_CALL_NAMES` -- because this codebase's models have fully moved
+to `mapped_column`; a version of this sweep that only recognized `Column`
+silently reported 0 names, 0 declarations against the current tree (caught
+during security-review Feature 00, pass 8) rather than erroring, which is
+exactly the failure mode a reporting-only tool with no CI gate behind it can
+have for an unbounded time without anyone noticing.
 
 Recognized type names live in `JSON_LIKE_TYPE_NAMES` below, not just the
 literal `JSON` identifier -- `app/core/encrypted_types.EncryptedJSON` is a
@@ -44,17 +52,18 @@ drops the multiline third.
 
 Method: walk the parsed tree for every `ast.ClassDef`; for each of its
 direct-body statements that is an `ast.Assign` / `ast.AnnAssign` with a
-`Call` value, check whether that call's function name is `Column`
-(`Column(...)` or `sa.Column(...)`), then `ast.walk` the call's full
-argument subtree looking for a `Name` or `Attribute` node whose identifier
-is in `JSON_LIKE_TYPE_NAMES`. Walking the subtree (rather than inspecting
-only the first positional arg) is what makes
-`Column(MutableDict.as_mutable(JSON), ...)` match identically to a bare
-`Column(JSON, ...)` regardless of how deep the wrapping nests -- nothing
-about the walk depends on source formatting. Restricting to a class's
-*direct* body (not `ast.walk`-ing every Assign in the file) is what keeps
-a module-level constant that happens to be named `Column(...)`-shaped --
-none exist today -- from being misread as a model attribute.
+`Call` value, check whether that call's function name is in
+`COLUMN_CALL_NAMES` (`Column(...)`, `mapped_column(...)`, or either via a
+`sa.`-qualified attribute), then `ast.walk` the call's full argument
+subtree looking for a `Name` or `Attribute` node whose identifier is in
+`JSON_LIKE_TYPE_NAMES`. Walking the subtree (rather than inspecting only
+the first positional arg) is what makes
+`mapped_column(MutableDict.as_mutable(JSON), ...)` match identically to a
+bare `mapped_column(JSON, ...)` regardless of how deep the wrapping nests
+-- nothing about the walk depends on source formatting. Restricting to a
+class's *direct* body (not `ast.walk`-ing every Assign in the file) is what
+keeps a module-level constant that happens to be named `Column(...)`-shaped
+-- none exist today -- from being misread as a model attribute.
 
 Usage:
     cd backend
@@ -87,6 +96,15 @@ MODELS_DIR = Path(__file__).resolve().parent.parent / "app" / "models"
 # `EncryptedText` (also in `encrypted_types.py`) is deliberately absent: it
 # wraps `Text` and stores a scalar string, not a JSON value.
 JSON_LIKE_TYPE_NAMES = frozenset({"JSON", "EncryptedJSON"})
+
+
+# Call names that declare a mapped column. `Column(...)` is SQLAlchemy 1.x
+# imperative style; `mapped_column(...)` is the 2.0 declarative style this
+# codebase's models now use exclusively (CLAUDE.md: "SQLAlchemy 2.1 (async)")
+# -- every `app/models/*.py` declaration as of this fix is `mapped_column`,
+# with zero remaining `Column(...)` sites. Both names are kept so the sweep
+# does not go blind again if a future file mixes styles.
+COLUMN_CALL_NAMES = frozenset({"Column", "mapped_column"})
 
 
 def _call_target_name(call: ast.Call) -> str | None:
@@ -125,7 +143,7 @@ def _json_columns_in_class(cls: ast.ClassDef):
         value = stmt.value
         if not isinstance(value, ast.Call):
             continue
-        if _call_target_name(value) != "Column":
+        if _call_target_name(value) not in COLUMN_CALL_NAMES:
             continue
         if not _call_references_json(value):
             continue
@@ -199,7 +217,7 @@ def main() -> int:
 
     print(
         f"\n{total_names} distinct attribute names, "
-        f"{total_declarations} Column(...) declarations referencing JSON, "
+        f"{total_declarations} Column(...)/mapped_column(...) declarations referencing JSON, "
         f"across {total_files} files in {MODELS_DIR}."
     )
     return 0

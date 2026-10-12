@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from pydantic import ValidationError
 
-from app.models.finance import CheckRequest, PurchaseRequest
+from app.models.finance import CheckRequest, ExportLog, PurchaseRequest
 from app.schemas.finance import ExportRequest
 from app.services.finance_service import FinanceService
 
@@ -75,15 +75,19 @@ async def _consume(stream):
 
 
 def _service(db, accounts=None):
-    """A service whose account resolution is stubbed.
+    """A service whose account resolution and export bookkeeping are stubbed.
 
-    Resolution has its own database-backed tests; these sequence ``execute``
-    side effects for the stream alone.
+    Resolution, the in-progress guard and the stamping have their own
+    database-backed tests; these sequence ``execute`` side effects for the
+    stream alone. ``service.log`` is the export's log row.
     """
     service = FinanceService(db)
     service._resolve_export_accounts = AsyncMock(
         return_value={"b": ("Supplies", "Checking")} if accounts is None else accounts
     )
+    service.log = ExportLog(id="log", status="pending", record_count=0)
+    service._begin_export = AsyncMock(return_value=service.log)
+    service._stamp_exported = AsyncMock()
     return service
 
 
@@ -122,8 +126,9 @@ async def test_stream_is_batched_stable_safe_and_logged_successfully():
         amount=Decimal("3.00"),
     )
     # PR batches, terminating PR batch, check batch, terminating check batch.
-    db = _db([2, 1, 0], [[first], [second], [], [check], []])
-    stream = await _service(db).generate_export("org", "user", paid, paid, batch_size=1)
+    db = _db([2, 1, 0, 0], [[first], [second], [check]])
+    service = _service(db)
+    stream = await service.generate_export("org", "user", paid, paid, batch_size=1)
     content = await _consume(stream)
 
     rows = list(csv.reader(io.StringIO(content)))
@@ -149,10 +154,17 @@ async def test_stream_is_batched_stable_safe_and_logged_successfully():
     assert rows[2][3:6] == ["Checking", "", "1.00"]
     assert rows[1][6] == "'=cmd"
     assert rows[1][2] == 'one, "quoted"'
-    log = db.add.call_args.args[0]
+    log = service.log
     assert (log.status, log.record_count, log.error_message) == ("successful", 3, None)
-    # The timezone lookup, then PR batches and check batches.
-    assert db.execute.await_count == 6
+    # The timezone lookup, then one batch per purchase and one for the check:
+    # each type stops at its own count rather than asking for an empty batch.
+    assert db.execute.await_count == 4
+    # Stamped only after the whole file, with what it carried.
+    service._stamp_exported.assert_awaited_once()
+    kwargs = service._stamp_exported.await_args.kwargs
+    assert kwargs["purchases"] == ["a", "b"]
+    assert kwargs["checks"] == {("Supplies", "Checking"): ["c"]}
+    assert (kwargs["reports"], kwargs["voids"]) == (set(), [])
 
 
 @pytest.mark.asyncio
@@ -170,7 +182,7 @@ async def test_payment_dates_are_the_departments_calendar_day():
         estimated_amount=Decimal("1.00"),
     )
     purchase.budget_id = "b"
-    db = _db([1, 0, 0], [[purchase], [], []])
+    db = _db([1, 0, 0, 0], [[purchase]])
     stream = await _service(db).generate_export("org", "user", paid, paid)
     rows = list(csv.reader(io.StringIO(await _consume(stream))))
 
@@ -180,8 +192,10 @@ async def test_payment_dates_are_the_departments_calendar_day():
 @pytest.mark.asyncio
 async def test_row_limit_is_checked_before_log_or_stream_creation():
     now = datetime(2026, 1, 1, tzinfo=timezone.utc)
-    db = _db([10_001, 0, 0], [])
-    with pytest.raises(ValueError, match="at most 10000 rows"):
+    # 500 transactions are 1,000 rows and the header: one too many for
+    # QuickBooks Online's importer.
+    db = _db([500, 0, 0, 0], [])
+    with pytest.raises(ValueError, match="fewer than 1,000 rows"):
         await FinanceService(db).generate_export("org", "user", now, now)
     db.add.assert_not_called()
 
@@ -189,37 +203,41 @@ async def test_row_limit_is_checked_before_log_or_stream_creation():
 @pytest.mark.asyncio
 async def test_generator_failure_marks_log_failed_and_cleans_up():
     now = datetime(2026, 1, 1, tzinfo=timezone.utc)
-    db = _db([1, 0, 0], [])
+    db = _db([1, 0, 0, 0], [])
     db.execute.side_effect = RuntimeError("database disappeared")
-    stream = await _service(db).generate_export("org", "user", now, now)
+    service = _service(db)
+    stream = await service.generate_export("org", "user", now, now)
     assert "Journal No" in await anext(stream)
     with pytest.raises(RuntimeError, match="database disappeared"):
         await anext(stream)
 
-    log = db.add.call_args.args[0]
+    log = service.log
     assert (log.status, log.record_count) == ("failed", 0)
     assert log.error_message == "Export stream interrupted before completion"
     db.rollback.assert_awaited_once()
-    assert db.commit.await_count == 2  # pending, then terminal failure state
+    db.commit.assert_awaited_once()  # the terminal failure state
+    service._stamp_exported.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 async def test_client_closing_stream_does_not_create_success_log():
     now = datetime(2026, 1, 1, tzinfo=timezone.utc)
-    db = _db([1, 0, 0], [])
-    stream = await _service(db).generate_export("org", "user", now, now)
+    db = _db([1, 0, 0, 0], [])
+    service = _service(db)
+    stream = await service.generate_export("org", "user", now, now)
     await anext(stream)  # response header was sent, then the client disconnected
     await stream.aclose()
 
-    log = db.add.call_args.args[0]
+    log = service.log
     assert (log.status, log.record_count) == ("failed", 0)
     db.rollback.assert_awaited_once()
+    service._stamp_exported.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 async def test_unresolved_accounts_refuse_before_log_or_stream_creation():
     now = datetime(2026, 1, 1, tzinfo=timezone.utc)
-    db = _db([1, 0, 0], [])
+    db = _db([1, 0, 0, 0], [])
     service = FinanceService(db)
     service._resolve_export_accounts = AsyncMock(
         side_effect=ValueError("Set QuickBooks accounts before exporting")

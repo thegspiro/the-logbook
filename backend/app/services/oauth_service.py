@@ -163,7 +163,7 @@ class GoogleOAuthService:
         from google.oauth2 import id_token as google_id_token
 
         try:
-            idinfo = google_id_token.verify_oauth2_token(
+            idinfo: dict = google_id_token.verify_oauth2_token(
                 id_token_str,
                 google_requests.Request(),
                 settings.GOOGLE_CLIENT_ID,
@@ -298,7 +298,7 @@ class MicrosoftOAuthService:
         jwks_url = f"{_ms_authority()}/discovery/v2.0/keys"
         try:
             signing_key = PyJWKClient(jwks_url).get_signing_key_from_jwt(id_token_str)
-            claims = jwt.decode(
+            claims: dict = jwt.decode(
                 id_token_str,
                 signing_key.key,
                 algorithms=["RS256"],

@@ -212,6 +212,7 @@ export interface ActionItemSummary {
   due_date?: string;
   status: string;
   priority?: string;
+  completion_notes?: string | null;
   created_at: string;
 }
 

@@ -17,6 +17,7 @@ vi.mock('../modules/scheduling/services/api', () => ({
       hours_worked_this_month: 96,
     }),
     getBasicApparatus: vi.fn().mockResolvedValue([]),
+    getApparatusOptions: vi.fn().mockResolvedValue({ options: [], source: 'default' }),
     getTemplates: vi.fn().mockResolvedValue([]),
     getWeekCalendar: vi.fn().mockResolvedValue([]),
     getMonthCalendar: vi.fn().mockResolvedValue([]),
@@ -464,8 +465,10 @@ describe('SchedulingPage', () => {
         templatesLoaded: true,
         // The Apparatus field renders only when the department has apparatus,
         // and Shift Officer only alongside it.
-        apparatus: [{ id: 'a1', unit_number: 'Engine 1', is_active: true }] as never,
-        apparatusLoaded: true,
+        shiftApparatus: [
+          { id: 'a1', unit_number: 'Engine 1', name: 'Engine 1', apparatus_type: 'engine', source: 'apparatus' },
+        ],
+        shiftApparatusLoaded: true,
         members: [{ id: 'm1', label: 'A Member' }] as never,
         membersLoaded: true,
       });
@@ -479,8 +482,8 @@ describe('SchedulingPage', () => {
         useSchedulingStore.setState({
           templates: [],
           templatesLoaded: false,
-          apparatus: [],
-          apparatusLoaded: false,
+          shiftApparatus: [],
+          shiftApparatusLoaded: false,
           members: [],
           membersLoaded: false,
         });

@@ -9,7 +9,7 @@ Tests for the Salesforce integration:
 
 import time
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import jwt
@@ -1011,12 +1011,26 @@ def _patch_orchestration(monkeypatch):
     return calls
 
 
+def _auto_sync_db(rows):
+    """An AsyncMock session the auto-sync runner can actually drive.
+
+    ``begin_nested()`` and ``add()`` are synchronous on a real AsyncSession.
+    Left as AsyncMock attributes they return coroutines, so the health
+    bookkeeping's ``async with db.begin_nested()`` failed (silently — it never
+    raises) and left an un-awaited coroutine warning behind.
+    """
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=FakeExecuteResult(rows))
+    db.begin_nested = MagicMock(return_value=AsyncMock())
+    db.add = MagicMock()
+    return db
+
+
 async def test_auto_sync_skips_integrations_without_opt_in(monkeypatch):
     from app.services import scheduled_tasks as st
 
     integ = make_integration_row(config={"auto_sync_enabled": False})
-    db = AsyncMock()
-    db.execute = AsyncMock(return_value=FakeExecuteResult([integ]))
+    db = _auto_sync_db([integ])
     calls = _patch_orchestration(monkeypatch)
 
     result = await st.run_salesforce_auto_sync(db)
@@ -1031,8 +1045,7 @@ async def test_auto_sync_pushes_for_push_direction(monkeypatch):
     integ = make_integration_row(
         config={"auto_sync_enabled": True, "sync_direction": "push"}
     )
-    db = AsyncMock()
-    db.execute = AsyncMock(return_value=FakeExecuteResult([integ]))
+    db = _auto_sync_db([integ])
     calls = _patch_orchestration(monkeypatch)
 
     result = await st.run_salesforce_auto_sync(db)
@@ -1051,8 +1064,7 @@ async def test_auto_sync_pushes_and_pulls_for_both_direction(monkeypatch):
     integ = make_integration_row(
         config={"auto_sync_enabled": True, "sync_direction": "both"}
     )
-    db = AsyncMock()
-    db.execute = AsyncMock(return_value=FakeExecuteResult([integ]))
+    db = _auto_sync_db([integ])
     calls = _patch_orchestration(monkeypatch)
 
     await st.run_salesforce_auto_sync(db)
@@ -1065,8 +1077,7 @@ async def test_auto_sync_isolates_per_org_failures(monkeypatch):
     from app.services import scheduled_tasks as st
 
     integ = make_integration_row(config={"auto_sync_enabled": True})
-    db = AsyncMock()
-    db.execute = AsyncMock(return_value=FakeExecuteResult([integ]))
+    db = _auto_sync_db([integ])
 
     async def boom(_db, _org):
         raise RuntimeError("connection lost")

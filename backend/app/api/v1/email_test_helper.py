@@ -104,7 +104,7 @@ def test_smtp_connection(config: dict[str, Any]) -> tuple[bool, str, dict[str, A
         from_email = config.get("fromEmail")
 
         # Validate required fields
-        if not all([smtp_host, smtp_port, from_email]):
+        if not smtp_host or not smtp_port or not from_email:
             return (
                 False,
                 "Missing required SMTP configuration fields",

@@ -33,6 +33,7 @@ Navigate to **Grants & Fundraising** in the sidebar. The module must be enabled 
 | ------------------------------- | --------------------------------- | -------------------- |
 | `/grants`                       | Dashboard                         | `fundraising.view`   |
 | `/grants/opportunities`         | Grant Opportunities Library       | `fundraising.view`   |
+| `/grants/opportunities/new`     | Add Opportunity                   | `fundraising.manage` |
 | `/grants/applications`          | Application List (Pipeline/Table) | `fundraising.view`   |
 | `/grants/applications/new`      | Create Application                | `fundraising.manage` |
 | `/grants/applications/:id`      | Application Detail (5 tabs)       | `fundraising.view`   |
@@ -40,6 +41,9 @@ Navigate to **Grants & Fundraising** in the sidebar. The module must be enabled 
 | `/grants/campaigns`             | Fundraising Campaigns             | `fundraising.view`   |
 | `/grants/donors`                | Donor Directory/CRM               | `fundraising.view`   |
 | `/grants/donations`             | All Donations                     | `fundraising.view`   |
+| `/grants/donations/new`         | Record Donation                   | `fundraising.manage` |
+| `/grants/pledges`               | Pledges                           | `fundraising.view`   |
+| `/grants/events`                | Fundraising Events                | `fundraising.view`   |
 | `/grants/reports`               | Financial Reports                 | `fundraising.view`   |
 
 ### Permissions
@@ -51,7 +55,7 @@ Navigate to **Grants & Fundraising** in the sidebar. The module must be enabled 
 
 **Finding it.** With the module on, members holding `fundraising.view` see
 **Grants & Fundraising** in the sidebar (or the top bar), with Dashboard,
-Opportunities, Applications, Campaigns, Donors, Donations and Reports beneath
+Opportunities, Applications, Campaigns, Donors, Donations, Pledges, Events and Reports beneath
 it.
 
 ---
@@ -97,12 +101,14 @@ The opportunities library is a catalog of available grant programs. Pre-loaded w
 
 **Required Permission:** `fundraising.manage`
 
-1. Click **Add Opportunity**
-2. Fill in: name, agency, description, eligibility criteria, application URL
-3. Set deadline type: Fixed, Recurring, or Rolling
-4. Enter typical award range (min/max) and match requirements
-5. Add required documents list and federal program code
-6. Save
+1. Click **Add Opportunity** (shown only to `fundraising.manage` holders)
+2. Enter the **Program name** — the only required field — and, as you know them, the agency or funder, category, federal program code, description, eligible uses and who is eligible
+3. Enter the typical award range (smallest and largest). Tick **The department must contribute a local match** to give the match percentage and a note about it
+4. Choose the **Deadline**: Fixed date (the date is then required), Recurring (enter the next deadline if known) or Rolling (no date)
+5. Add the application and program-information links (http or https only) and any notes
+6. Click **Add opportunity**. You return to the library, where the new program is listed
+
+The required-documents list, tags and a recurring schedule can be stored through the API but are not on this form.
 
 ![Grant opportunities library showing available grant programs](./images/12-03-opportunities.png)
 
@@ -358,18 +364,22 @@ Each donor profile shows:
 
 ### Creating a Donation Record
 
-1. Navigate to **Grants > Donations** and click **Record Donation**
+1. Navigate to **Grants > Donations** and click **Record Donation** (shown only to `fundraising.manage` holders)
 2. Fill in:
-   - **Donor** — select from directory or enter details for one-time gift
-   - **Campaign** — which campaign (optional)
-   - **Amount** — donation amount
+   - **Amount** and **Date received** (both required; the date defaults to today)
    - **Payment Method** — Cash, Check, Credit Card, Bank Transfer, PayPal, Venmo, Other
-   - **Donation Date** — when received
-   - **Is Recurring** — toggle for recurring gifts (with frequency: weekly, monthly, quarterly, annually)
-   - **Is Anonymous** — whether to display donor name
-   - **Dedication** — In Honor Of or In Memory Of (with dedication name)
-   - **Tax Deductible** — flag for tax receipt purposes
-3. Save
+   - **Payment status** — defaults to Completed. Only a completed gift counts toward the campaign's raised total and the donor's giving history
+   - **Campaign** — optional
+   - **Donor** — choose from the donor directory, or leave it as "Not in the donor directory" and enter a name and email for a one-time gift
+   - **Anonymous** — keep the donor's name out of public views
+   - **Dedication** — In honor of or In memory of, with the name
+   - **Tax deductible** — on by default
+   - **Notes**
+3. Click **Record donation**. You return to the Donations list
+
+A link to `/grants/donations/new?donorId=…&campaignId=…` opens the form with that donor and campaign already chosen.
+
+Not on the form: the recurring-gift flag and frequency, the check number and transaction ID. The create API does not accept the last two; nothing acts on the recurring flag.
 
 ### Payment Statuses
 
@@ -388,21 +398,14 @@ Track whether receipts and thank-you letters have been sent:
 - `receipt_sent` / `receipt_sent_at` — tax receipt
 - `thank_you_sent` / `thank_you_sent_at` — thank-you letter
 
-> **Corrected 2026-08-12.** The form was never built. No component calls
-> `createDonation`, and the "Record Donation" button that pointed at
-> `/grants/donations/new` has been removed because that route does not exist —
-> the router's catch-all was silently bouncing anyone who clicked it to the
-> home dashboard. Donations reach the system through the API and through no
-> screen. Recorded in [Grants & Fundraising — Pledges and Fundraising Events](../KNOWN_LIMITATIONS.md#grants--fundraising--pledges-and-fundraising-events-2026-08-08).
-
 ### Edge Cases
 
-| Scenario                           | Behavior                                             |
-| ---------------------------------- | ---------------------------------------------------- |
-| Recurring donation                 | Records each occurrence separately; tracks frequency |
-| Anonymous donation with dedication | Dedication shown; donor name hidden                  |
-| Donation to inactive campaign      | Allowed but logged; counted toward campaign total    |
-| Check donation                     | `check_number` field available for reference         |
+| Scenario                           | Behavior                                               |
+| ---------------------------------- | ------------------------------------------------------ |
+| Recurring donation                 | Records each occurrence separately; tracks frequency   |
+| Anonymous donation with dedication | Dedication shown; donor name hidden                    |
+| Donation to inactive campaign      | Allowed but logged; counted toward campaign total      |
+| Check donation                     | `check_number` is stored but API-only; put it in Notes |
 
 ---
 
@@ -410,29 +413,33 @@ Track whether receipts and thank-you letters have been sent:
 
 Pledges track donation commitments that haven't been fulfilled yet.
 
-### Creating a Pledge
+Open **Grants & Fundraising > Pledges**, or click the **Outstanding Pledges** figure on the dashboard. The list shows each pledge's donor, campaign, amount pledged, amount received, what remains, due date and status, and filters by status.
 
-1. Navigate to **Grants > Donations** (pledges tab)
-2. Click **Create Pledge**
-3. Fill in: donor, campaign, pledged amount, pledge date, due date
-4. Optionally set a payment schedule and enable reminders
-5. Save
+### Recording a Pledge
+
+**Required Permission:** `fundraising.manage`
+
+1. Click **Record Pledge**
+2. Choose the **Donor** and **Campaign** (both optional), and enter the **Amount pledged** and **Pledge date** (required) and a **Due date** (optional)
+3. Click **Record pledge**. A new pledge starts as Pending
+
+### Recording What Came In
+
+Click the pencil on a pledge to edit it. Enter the **Amount received so far** and set the **Status** yourself: recording a donation does not update a pledge, so the two are kept in step by hand. Clearing the due date or notes and saving removes them.
+
+The stored reminder switch and payment schedule are not on the form: nothing sends pledge reminders or reads a schedule.
 
 ### Pledge Statuses
 
-| Status    | Description                   |
-| --------- | ----------------------------- |
-| Pending   | Pledged, no payments yet      |
-| Partial   | Some payments received        |
-| Fulfilled | Full amount received          |
-| Cancelled | Pledge withdrawn              |
-| Overdue   | Past due date, not fully paid |
+| Status          | Description                   |
+| --------------- | ----------------------------- |
+| Pending         | Pledged, nothing received yet |
+| Partly received | Some of it received           |
+| Fulfilled       | Full amount received          |
+| Cancelled       | Pledge withdrawn              |
+| Overdue         | Past due date, not fully paid |
 
-> **Corrected 2026-08-12.** There is no pledges page. The service methods
-> exist and their only consumer is a store action no component calls; the KPI
-> tile that linked to `/grants/pledges` has been removed because that route
-> does not exist either. The Outstanding Pledges figure on the dashboard is
-> real — its destination was not. Recorded in [Grants & Fundraising — Pledges and Fundraising Events](../KNOWN_LIMITATIONS.md#grants--fundraising--pledges-and-fundraising-events-2026-08-08).
+The dashboard's **Outstanding Pledges** figure is what remains on Pending and Partly received pledges. Overdue pledges are not in it.
 
 ---
 
@@ -440,14 +447,15 @@ Pledges track donation commitments that haven't been fulfilled yet.
 
 Event-based fundraising (dinners, galas, auctions, raffles, etc.) links campaigns to specific events.
 
-### Creating a Fundraising Event
+Open **Grants & Fundraising > Events**. Each event shows its type, date and time, location, campaign, revenue goal, money raised, expenses, net (raised less expenses) and attendance, newest first, and the list filters by status.
 
-1. Navigate to **Grants > Campaigns** and open a campaign
-2. Click **Add Fundraising Event**
-3. Fill in: name, event type, date, location, ticket price, max attendees
-4. Set revenue goal and registration URL
-5. Add sponsors (JSON list)
-6. Save
+### Adding a Fundraising Event
+
+**Required Permission:** `fundraising.manage`
+
+1. Click **Add Event**
+2. Enter the **Name**, **Type** and **Date and time** (required), and optionally the location, campaign, ticket price, capacity, revenue goal, registration link (http or https), description and notes
+3. Click **Add event**. A new event starts in Planning
 
 ### Event Types
 
@@ -455,16 +463,14 @@ Dinner, Gala, Auction, Raffle, Golf Outing, Walkathon, Other
 
 ### Tracking Results
 
-After the event, update:
+Click **Edit** on the event. The **Results** section sets:
 
-- **Actual Revenue** — total raised
-- **Expenses** — event costs
-- **Current Attendees** — actual attendance count
+- **Status** — Planning, Open, Sold out, Completed, Cancelled
+- **Attendance**
+- **Money raised**
+- **Expenses**
 
-> **Corrected 2026-08-12.** There is no fundraising-event screen:
-> `listFundraisingEvents`, `createFundraisingEvent` and
-> `updateFundraisingEvent` have zero consumers, no route and no page. Recorded
-> in [Grants & Fundraising — Pledges and Fundraising Events](../KNOWN_LIMITATIONS.md#grants--fundraising--pledges-and-fundraising-events-2026-08-08).
+Sponsors and a link to a calendar event can be stored through the API but are not on the form.
 
 ---
 

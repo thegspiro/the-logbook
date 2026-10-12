@@ -22,6 +22,7 @@ import React from 'react';
 import SchedulingHeader from '../../SchedulingHeader';
 import CloseoutQueueSection from './CloseoutQueueSection';
 import CloseoutSettingsSummary from './CloseoutSettingsSummary';
+import PreShiftWorkQueueSection from './PreShiftWorkQueueSection';
 
 const SchedulingCloseoutPage: React.FC = () => (
   <div className="min-h-screen">
@@ -35,6 +36,7 @@ const SchedulingCloseoutPage: React.FC = () => (
 
       <div className="space-y-6">
         <CloseoutQueueSection />
+        <PreShiftWorkQueueSection />
         <CloseoutSettingsSummary />
       </div>
     </div>

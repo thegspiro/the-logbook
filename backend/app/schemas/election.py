@@ -667,6 +667,13 @@ class ElectionResponse(UTCResponseBase):
     reminder_hours_before_close: Optional[int] = None
     reminder_sent_at: Optional[datetime] = None
     nomination_deadline: Optional[datetime] = None
+    # Set by Close Nominations; the slate is frozen while it is (W50-38).
+    nominations_closed_at: Optional[datetime] = None
+    # Ballot links already sent were retired — by a ballot change (W50-47)
+    # or a reopen (W50-36) — and no ballot email has gone out since.
+    # Resolved by the endpoint; reason is "ballot_changed" or "reopened".
+    ballots_must_be_resent: bool = False
+    ballots_resend_reason: Optional[str] = None
     tie_policy: str = "co_winners"
     status: str
     created_by: Optional[UUID] = None
@@ -989,12 +996,43 @@ class CandidateResponse(UTCResponseBase):
     # results count its votes under the target candidate.
     merged_into_candidate_id: Optional[str] = None
     accepted: bool
+    # A manager accepted for the nominee (W50-38): the list labels it
+    # "Accepted by manager". None when the nominee accepted themselves.
+    accepted_on_behalf_by: Optional[UUID] = None
+    accepted_on_behalf_at: Optional[datetime] = None
     is_write_in: bool
     created_at: datetime
     updated_at: datetime
 
     # Include vote count if results are visible
     vote_count: Optional[int] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BallotCandidateResponse(UTCResponseBase):
+    """A candidate as a ballot shows it (W50-70): no member ids.
+
+    The emailed ballot's lookup and the in-app ballot served every
+    candidate's ``user_id`` and ``nominated_by`` to whoever held a token or
+    opened the Cast Vote tab — who nominated whom, and which member account
+    each name is, while voting is open. The owner decided ids are withheld
+    from everyone but election managers; a ballot needs only what it shows.
+    """
+
+    id: UUID
+    election_id: UUID
+    name: str = Field(..., min_length=1, max_length=200)
+    position: Optional[str] = Field(None, max_length=100)
+    statement: Optional[str] = None
+    photo_url: Optional[str] = Field(None, max_length=500)
+    display_order: int = 0
+    nomination_date: datetime
+    merged_into_candidate_id: Optional[str] = None
+    accepted: bool
+    is_write_in: bool
+    created_at: datetime
+    updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -1063,6 +1101,12 @@ class PositionResults(BaseModel):
     # Set for a ballot-item contest, whose ``position`` is the item's id;
     # the screen, email and certified PDF show this instead.
     label: Optional[str] = None
+    # The ballot item this contest is (None for a plain position with no
+    # item) and how it is answered — "candidate_selection" for a race,
+    # "approval" for a motion. Each contest is graded on its own (W50-7);
+    # the runoff check reads vote_type to leave motions alone.
+    ballot_item_id: Optional[str] = None
+    vote_type: Optional[str] = None
     total_votes: int
     candidates: List[CandidateResult]
     is_tie: bool = False
@@ -1077,7 +1121,15 @@ class ElectionResults(BaseModel):
     total_votes: int
     total_eligible_voters: int
     voter_turnout_percentage: float
+    # One entry per contest — each position and each ballot item — graded
+    # on its own. This is the result.
     results_by_position: List[PositionResults]
+    # Only candidates that belong to no contest (a legacy election whose
+    # candidates carry no position). Before W50-7 this pooled every
+    # contest's candidates into one ranking — one motion's Approve against
+    # another's Deny, percentages over the whole ballot — and the results
+    # screen, PDF and runoff check read that pool for item-only ballots.
+    # Empty whenever every candidate is in a contest.
     overall_results: List[CandidateResult]
     # None means the election has no quorum rule at all (quorum_type
     # "none"), so no surface can honestly say "met" — a default of True
@@ -1519,7 +1571,7 @@ class MemberBallotResponse(BaseModel):
     voter's per-item standing."""
 
     election: BallotElectionResponse
-    candidates: List[CandidateResponse] = []
+    candidates: List[BallotCandidateResponse] = []
     items: List[MemberBallotItemStatus] = []
     proxy: Optional[MemberBallotProxy] = None
 
@@ -1555,6 +1607,14 @@ class ProxyAuthorizationCreate(BaseModel):
         max_length=500,
         description="Why the proxy is being authorized",
     )
+    anonymity_acknowledged: bool = Field(
+        default=False,
+        description=(
+            "Required on an anonymous election: the delegating member has "
+            "been told, and accepts, that their proxy holder sees how they "
+            "vote and that the proxy ballot is stored linked to them."
+        ),
+    )
 
     @field_validator("proxy_type")
     @classmethod
@@ -1578,6 +1638,9 @@ class ProxyAuthorizationResponse(BaseModel):
     authorized_by_name: str
     authorized_at: str
     revoked_at: Optional[str] = None
+    # Set when the delegating member acknowledged that this proxy ballot is
+    # attributable (anonymous elections only; W50-2 / ELEC-43).
+    anonymity_acknowledged_at: Optional[str] = None
 
 
 class ProxyAuthorizationListResponse(BaseModel):
@@ -1586,6 +1649,7 @@ class ProxyAuthorizationListResponse(BaseModel):
     election_id: str
     election_title: str
     proxy_voting_enabled: bool
+    anonymous_voting: bool = False
     authorizations: List[ProxyAuthorizationResponse]
 
 
@@ -1679,6 +1743,23 @@ class VoteIntegrityResponse(BaseModel):
     chain_break_at: Optional[str] = None
     integrity_status: str
     error: Optional[str] = None
+    # Voided votes stay in the chain and are verified with it (W50-31);
+    # they are reported here rather than reading as a broken chain.
+    voided_votes: int = 0
+    voids: List["VoteVoidSummary"] = []
+
+
+class VoteVoidSummary(BaseModel):
+    """Voided votes sharing one officer and reason (W50-31)."""
+
+    count: int
+    voided_by: Optional[str] = None
+    voided_by_name: Optional[str] = None
+    reason: str = ""
+    voided_at: Optional[str] = None
+
+
+VoteIntegrityResponse.model_rebuild()
 
 
 class SoftDeleteVoteResponse(BaseModel):

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import toast from 'react-hot-toast';
-import { renderWithRouter } from '../../test/utils';
+import { nth, renderWithRouter } from '../../test/utils';
 import { OpenShiftsTab } from './OpenShiftsTab';
 
 // Mock API services
@@ -147,7 +147,7 @@ describe('OpenShiftsTab', () => {
     renderWithRouter(<OpenShiftsTab />);
 
     const signupButtons = await screen.findAllByLabelText(/^Sign up for shift on /);
-    await user.click(signupButtons[0]);
+    await user.click(nth(signupButtons, 0));
 
     const position = await screen.findByLabelText('Position');
     expect(position).toHaveValue('driver');
@@ -168,11 +168,11 @@ describe('OpenShiftsTab', () => {
     renderWithRouter(<OpenShiftsTab />);
 
     const signupButtons = await screen.findAllByLabelText(/^Sign up for shift on /);
-    await user.click(signupButtons[0]);
+    await user.click(nth(signupButtons, 0));
     expect(await screen.findByRole('option', { name: 'Driver/Operator' })).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
-    await user.click(signupButtons[1]);
+    await user.click(nth(signupButtons, 1));
     const visibleOption = await screen.findByRole('option', { name: 'Officer' });
     expect(visibleOption).toBeVisible();
     expect(screen.getByLabelText('Position')).toHaveValue('officer');
@@ -198,7 +198,7 @@ describe('OpenShiftsTab', () => {
     expect(screen.getAllByRole('button', { name: /^Details for shift on / })).toHaveLength(mockShifts.length);
     expect(screen.queryByText(/officer will review/)).not.toBeInTheDocument();
 
-    await user.click(signupButtons[0] as HTMLElement);
+    await user.click(nth(signupButtons, 0));
     await user.click(await screen.findByRole('button', { name: 'Confirm Sign Up' }));
 
     await waitFor(() => {
@@ -226,7 +226,7 @@ describe('OpenShiftsTab', () => {
       renderWithRouter(<OpenShiftsTab />);
 
       const signupButtons = await screen.findAllByLabelText(/^Sign up for shift on /);
-      await user.click(signupButtons[0]);
+      await user.click(nth(signupButtons, 0));
 
       expect(await screen.findByRole('option', { name: 'Driver/Operator' })).toBeVisible();
       expect(screen.queryByRole('option', { name: 'Firefighter' })).not.toBeInTheDocument();
@@ -245,7 +245,7 @@ describe('OpenShiftsTab', () => {
       renderWithRouter(<OpenShiftsTab />);
 
       const signupButtons = await screen.findAllByLabelText(/^Sign up for shift on /);
-      await user.click(signupButtons[0]);
+      await user.click(nth(signupButtons, 0));
 
       expect(await screen.findByText(/Every seat you are cleared for/)).toBeVisible();
       expect(screen.queryByText(/not eligible to sign up/)).not.toBeInTheDocument();
@@ -262,7 +262,7 @@ describe('OpenShiftsTab', () => {
       renderWithRouter(<OpenShiftsTab />);
 
       const signupButtons = await screen.findAllByLabelText(/^Sign up for shift on /);
-      await user.click(signupButtons[0]);
+      await user.click(nth(signupButtons, 0));
 
       expect(await screen.findByText(/not eligible to sign up/)).toBeVisible();
       expect(screen.queryByText(/Every seat you are cleared for/)).not.toBeInTheDocument();
@@ -276,7 +276,7 @@ describe('OpenShiftsTab', () => {
       renderWithRouter(<OpenShiftsTab />);
 
       const signupButtons = await screen.findAllByLabelText(/^Sign up for shift on /);
-      await user.click(signupButtons[0]);
+      await user.click(nth(signupButtons, 0));
 
       expect(await screen.findByRole('option', { name: 'Driver/Operator' })).toBeVisible();
       expect(screen.getByRole('button', { name: 'Confirm Sign Up' })).toBeVisible();
@@ -349,7 +349,7 @@ describe('OpenShiftsTab', () => {
       renderWithRouter(<OpenShiftsTab />);
 
       const signupButtons = await screen.findAllByLabelText(/^Sign up for shift on /);
-      await user.click(signupButtons[0]);
+      await user.click(nth(signupButtons, 0));
 
       expect(await screen.findByLabelText('What would you like to do?')).toBeInTheDocument();
       // The crew-position picker has no business on a school visit.
@@ -361,7 +361,7 @@ describe('OpenShiftsTab', () => {
       renderWithRouter(<OpenShiftsTab />);
 
       const signupButtons = await screen.findAllByLabelText(/^Sign up for shift on /);
-      await user.click(signupButtons[0]);
+      await user.click(nth(signupButtons, 0));
 
       await screen.findByLabelText('What would you like to do?');
       expect(screen.getByRole('option', { name: 'Educator (2 needed)' })).toBeVisible();
@@ -373,7 +373,7 @@ describe('OpenShiftsTab', () => {
       renderWithRouter(<OpenShiftsTab />);
 
       const signupButtons = await screen.findAllByLabelText(/^Sign up for shift on /);
-      await user.click(signupButtons[0]);
+      await user.click(nth(signupButtons, 0));
 
       await screen.findByLabelText('What would you like to do?');
       await user.click(screen.getByRole('button', { name: 'Confirm Sign Up' }));
@@ -399,7 +399,7 @@ describe('OpenShiftsTab', () => {
       renderWithRouter(<OpenShiftsTab />);
 
       const signupButtons = await screen.findAllByLabelText(/^Sign up for shift on /);
-      await user.click(signupButtons[0]);
+      await user.click(nth(signupButtons, 0));
 
       expect(await screen.findByLabelText('Position')).toBeInTheDocument();
       expect(screen.queryByLabelText('What would you like to do?')).not.toBeInTheDocument();

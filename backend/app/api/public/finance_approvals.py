@@ -99,7 +99,7 @@ async def _load_record(db: AsyncSession, token: str) -> ApprovalStepRecord:
         .where(ApprovalStepRecord.approval_token == token)
         .options(selectinload(ApprovalStepRecord.step))
     )
-    record = result.scalar_one_or_none()
+    record: ApprovalStepRecord | None = result.scalar_one_or_none()
     # A token whose step has since been reassigned away from an email
     # approver no longer authorizes anything, so it reads as unknown — the
     # service refuses it the same way (ApprovalTokenNotValidError).

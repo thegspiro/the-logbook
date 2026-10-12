@@ -143,8 +143,7 @@ describe('pipelineService stage mapping', () => {
 
     const stage = await pipelineService.updateStage('pipeline-1', 'step-1', stageUpdate());
 
-    expect(stage.config).toHaveProperty(arrayKey);
-    expect(Array.isArray((stage.config as Record<string, unknown>)[arrayKey])).toBe(true);
+    expect(stage.config).toHaveProperty(arrayKey, expect.any(Array));
   });
 
   describe('creating a stage', () => {
@@ -170,5 +169,28 @@ describe('pipelineService stage mapping', () => {
       const payload = mockPost.mock.calls[0]?.[1] as Record<string, unknown>;
       expect(payload).toHaveProperty('sort_order', 4);
     });
+  });
+});
+
+describe('pipelineService final-stage flag', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('carries is_final_step through to the stage', async () => {
+    mockPut.mockResolvedValue({ data: backendStep({ is_final_step: true }) });
+
+    const stage = await pipelineService.updateStage('pipeline-1', 'step-1', stageUpdate());
+
+    expect(stage.is_final_step).toBe(true);
+  });
+
+  it('never sends the flag back on a stage edit', async () => {
+    mockPut.mockResolvedValue({ data: backendStep() });
+
+    await pipelineService.updateStage('pipeline-1', 'step-1', stageUpdate());
+
+    const payload = mockPut.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('is_final_step');
   });
 });

@@ -199,6 +199,7 @@ const SuggestionBoxesAdminPage: React.FC = () => {
         <SuggestionBoxFormModal
           box={editing}
           options={options}
+          boxes={boxes}
           onClose={() => setIsFormOpen(false)}
           onSaved={handleSaved}
         />

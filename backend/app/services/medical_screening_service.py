@@ -6,7 +6,7 @@ records, and compliance tracking.
 """
 
 from datetime import date, timedelta
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy import Select, and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +21,8 @@ from app.models.membership_pipeline import ProspectiveMember, ProspectStatus
 from app.models.user import User, UserStatus
 from app.schemas.medical_screening import (
     ComplianceItem,
+    ComplianceRoster,
+    ComplianceRosterRow,
     ComplianceSummary,
     ExpiringScreening,
     MyComplianceSummary,
@@ -63,6 +65,85 @@ _SCREENABLE_PROSPECT_STATUSES = (ProspectStatus.ACTIVE, ProspectStatus.ON_HOLD)
 def _is_self(actor_id: Optional[str], subject_user_id: Optional[str]) -> bool:
     """Whether the person writing a record is the member it is about."""
     return bool(actor_id) and str(actor_id) == str(subject_user_id or "")
+
+
+def _grade(
+    requirements: List[ScreeningRequirement],
+    records: List[ScreeningRecord],
+    today: date,
+) -> Tuple[List[ComplianceItem], int, int, int]:
+    """Grade one subject's records against the active requirements.
+
+    The single definition of "compliant" for this module: the per-subject
+    summary, the dashboard's own counts and the department roster are all
+    built from it, so no screen can grade a member differently from another.
+    Returns ``(items, compliant_count, expiring_soon_count,
+    self_recorded_count)``.
+    """
+    items: List[ComplianceItem] = []
+    compliant_count = 0
+    expiring_soon_count = 0
+    self_recorded_count = 0
+
+    for req in requirements:
+        # Find the most recent passing/completed record for this requirement type
+        matching_records = [
+            r
+            for r in records
+            if r.screening_type == req.screening_type
+            and r.status
+            in (
+                ScreeningStatus.PASSED.value,
+                ScreeningStatus.COMPLETED.value,
+                ScreeningStatus.WAIVED.value,
+            )
+        ]
+        matching_records.sort(key=lambda r: r.completed_date or date.min, reverse=True)
+
+        latest = matching_records[0] if matching_records else None
+        is_compliant = False
+        days_until_exp = None
+
+        if latest:
+            if latest.expiration_date:
+                is_compliant = latest.expiration_date >= today
+                days_until_exp = (latest.expiration_date - today).days
+                # `0 <=`, not `0 <`: a screening expiring **today** is the
+                # one most in need of flagging, and `get_expiring_soon`
+                # below already returns it (`expiration_date >= today`).
+                # Excluding it here meant the summary count and the list it
+                # links to disagreed about the same member on that single
+                # day — the count said nothing was due, the list named it.
+                # Keep the two windows in step: this is the other half of
+                # the same "expiring soon" definition, and the WAIVED
+                # divergence between them is recorded as MS2-7.
+                if 0 <= days_until_exp <= 30:
+                    expiring_soon_count += 1
+            else:
+                # No expiration = compliant indefinitely
+                is_compliant = True
+
+        self_recorded = bool(latest and latest.self_recorded)
+        if is_compliant:
+            compliant_count += 1
+            if self_recorded:
+                self_recorded_count += 1
+
+        items.append(
+            ComplianceItem(
+                requirement_id=req.id,
+                requirement_name=req.name,
+                screening_type=req.screening_type,
+                is_compliant=is_compliant,
+                last_screening_date=(latest.completed_date if latest else None),
+                expiration_date=(latest.expiration_date if latest else None),
+                days_until_expiration=days_until_exp,
+                status=latest.status if latest else None,
+                self_recorded=self_recorded,
+            )
+        )
+
+    return items, compliant_count, expiring_soon_count, self_recorded_count
 
 
 class MedicalScreeningService:
@@ -114,7 +195,10 @@ class MedicalScreeningService:
                 )
             )
         )
-        return result.scalar_one_or_none()
+        screening_requirement: Optional[ScreeningRequirement] = (
+            result.scalar_one_or_none()
+        )
+        return screening_requirement
 
     async def create_requirement(
         self,
@@ -218,7 +302,8 @@ class MedicalScreeningService:
                 )
             )
         )
-        return result.scalar_one_or_none()
+        screening_record: Optional[ScreeningRecord] = result.scalar_one_or_none()
+        return screening_record
 
     async def list_subjects(self, organization_id: str) -> ScreeningSubjects:
         """Members and prospects a new screening record can be filed against.
@@ -443,70 +528,9 @@ class MedicalScreeningService:
         )
 
         today = await resolve_org_today(self.db, organization_id)
-        items: List[ComplianceItem] = []
-        compliant_count = 0
-        expiring_soon_count = 0
-        self_recorded_count = 0
-
-        for req in requirements:
-            # Find the most recent passing/completed record for this requirement type
-            matching_records = [
-                r
-                for r in records
-                if r.screening_type == req.screening_type
-                and r.status
-                in (
-                    ScreeningStatus.PASSED.value,
-                    ScreeningStatus.COMPLETED.value,
-                    ScreeningStatus.WAIVED.value,
-                )
-            ]
-            matching_records.sort(
-                key=lambda r: r.completed_date or date.min, reverse=True
-            )
-
-            latest = matching_records[0] if matching_records else None
-            is_compliant = False
-            days_until_exp = None
-
-            if latest:
-                if latest.expiration_date:
-                    is_compliant = latest.expiration_date >= today
-                    days_until_exp = (latest.expiration_date - today).days
-                    # `0 <=`, not `0 <`: a screening expiring **today** is the
-                    # one most in need of flagging, and `get_expiring_soon`
-                    # below already returns it (`expiration_date >= today`).
-                    # Excluding it here meant the summary count and the list it
-                    # links to disagreed about the same member on that single
-                    # day — the count said nothing was due, the list named it.
-                    # Keep the two windows in step: this is the other half of
-                    # the same "expiring soon" definition, and the WAIVED
-                    # divergence between them is recorded as MS2-7.
-                    if 0 <= days_until_exp <= 30:
-                        expiring_soon_count += 1
-                else:
-                    # No expiration = compliant indefinitely
-                    is_compliant = True
-
-            self_recorded = bool(latest and latest.self_recorded)
-            if is_compliant:
-                compliant_count += 1
-                if self_recorded:
-                    self_recorded_count += 1
-
-            items.append(
-                ComplianceItem(
-                    requirement_id=req.id,
-                    requirement_name=req.name,
-                    screening_type=req.screening_type,
-                    is_compliant=is_compliant,
-                    last_screening_date=(latest.completed_date if latest else None),
-                    expiration_date=(latest.expiration_date if latest else None),
-                    days_until_expiration=days_until_exp,
-                    status=latest.status if latest else None,
-                    self_recorded=self_recorded,
-                )
-            )
+        items, compliant_count, expiring_soon_count, self_recorded_count = _grade(
+            requirements, records, today
+        )
 
         subject_type = "user" if user_id else "prospect"
         subject_id = user_id or prospect_id or ""
@@ -535,6 +559,86 @@ class MedicalScreeningService:
             is_fully_compliant=compliant_count == len(requirements),
             self_recorded_count=self_recorded_count,
             items=items,
+        )
+
+    async def get_compliance_roster(
+        self,
+        organization_id: str,
+        standing: Optional[str] = None,
+    ) -> ComplianceRoster:
+        """Every screenable member and open prospect, graded, without detail.
+
+        Each row is graded by :func:`_grade`, the same function behind the
+        per-subject summary, so the roster and the detail a row opens cannot
+        disagree. Counts only — which screening a row is missing is read by
+        opening that row, an audited per-subject read.
+
+        ``standing`` narrows the rows: ``not_compliant`` (any requirement unmet
+        — expired or never recorded), ``expiring_soon`` (all met, at least one
+        lapsing within 30 days) or ``compliant`` (all met, none lapsing soon).
+        The totals always describe the whole roster.
+
+        With no active requirement every row is ``not_applicable`` and every
+        total is zero: an empty requirement set grades nobody, so it must not
+        report the department as compliant (and ``?standing=compliant`` then
+        matches nobody).
+        """
+        requirements = await self.list_requirements(organization_id, is_active=True)
+        subjects = await self.list_subjects(organization_id)
+        records = await self.list_records(organization_id)
+        today = await resolve_org_today(self.db, organization_id)
+
+        by_user: Dict[str, List[ScreeningRecord]] = {}
+        by_prospect: Dict[str, List[ScreeningRecord]] = {}
+        for record in records:
+            # Both, not either: a converted prospect's records carry both ids,
+            # and the per-subject read filters on each id independently.
+            if record.user_id:
+                by_user.setdefault(str(record.user_id), []).append(record)
+            if record.prospect_id:
+                by_prospect.setdefault(str(record.prospect_id), []).append(record)
+
+        rows: List[ComplianceRosterRow] = []
+        for subject_type, people, held in (
+            ("user", subjects.members, by_user),
+            ("prospect", subjects.prospects, by_prospect),
+        ):
+            for person in people:
+                _, compliant, expiring, _ = _grade(
+                    requirements, held.get(str(person.id), []), today
+                )
+                not_met = len(requirements) - compliant
+                rows.append(
+                    ComplianceRosterRow(
+                        subject_id=str(person.id),
+                        subject_name=person.name,
+                        subject_type=subject_type,
+                        compliant_count=compliant,
+                        non_compliant_count=not_met,
+                        expiring_soon_count=expiring,
+                        standing=(
+                            "not_applicable"
+                            if not requirements
+                            else (
+                                "not_compliant"
+                                if not_met
+                                else "expiring_soon" if expiring else "compliant"
+                            )
+                        ),
+                    )
+                )
+
+        totals = {
+            key: sum(1 for row in rows if row.standing == key)
+            for key in ("not_compliant", "expiring_soon", "compliant")
+        }
+        return ComplianceRoster(
+            total_requirements=len(requirements),
+            total_subjects=len(rows),
+            not_compliant=totals["not_compliant"],
+            expiring_soon=totals["expiring_soon"],
+            compliant=totals["compliant"],
+            rows=[row for row in rows if standing is None or row.standing == standing],
         )
 
     async def get_my_compliance_summary(
@@ -670,7 +774,7 @@ class MedicalScreeningService:
 
         prospects: dict = {}
         if prospect_ids:
-            rows = await self.db.execute(
+            prospect_rows = await self.db.execute(
                 select(
                     ProspectiveMember.id,
                     ProspectiveMember.first_name,
@@ -682,18 +786,18 @@ class MedicalScreeningService:
             )
             prospects = {
                 pid: f"{first or ''} {last or ''}".strip()
-                for pid, first, last in rows.all()
+                for pid, first, last in prospect_rows.all()
             }
 
         requirements: dict = {}
         if requirement_ids:
-            rows = await self.db.execute(
+            requirement_rows = await self.db.execute(
                 select(ScreeningRequirement.id, ScreeningRequirement.name).where(
                     ScreeningRequirement.id.in_(requirement_ids),
                     ScreeningRequirement.organization_id == organization_id,
                 )
             )
-            requirements = {rid: name for rid, name in rows.all()}
+            requirements = {rid: name for rid, name in requirement_rows.all()}
 
         return {"users": users, "prospects": prospects, "requirements": requirements}
 

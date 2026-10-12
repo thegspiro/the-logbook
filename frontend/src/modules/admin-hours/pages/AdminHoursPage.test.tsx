@@ -309,7 +309,7 @@ describe('AdminHoursPage manual entry times', () => {
     fireEvent.change(start, { target: { value: '2026-09-01' } });
 
     // Re-typing the same date on the End field was the entire complaint.
-    expect(end.value).toBe('2026-09-01');
+    expect(end).toHaveValue('2026-09-01');
   });
 
   it('sets the end from the start when a duration is pressed', async () => {

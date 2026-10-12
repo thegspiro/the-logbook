@@ -67,7 +67,7 @@ async def _get_sf_integration(db: AsyncSession, organization_id: str) -> Integra
             Integration.status == "connected",
         )
     )
-    integration = result.scalar_one_or_none()
+    integration: Integration | None = result.scalar_one_or_none()
     if not integration:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -531,7 +531,8 @@ async def _get_salesforce_integration_any_status(
             Integration.integration_type == "salesforce",
         )
     )
-    return result.scalar_one_or_none()
+    integration: Integration | None = result.scalar_one_or_none()
+    return integration
 
 
 @router.get("/oauth/authorize")

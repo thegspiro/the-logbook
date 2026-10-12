@@ -27,6 +27,7 @@ from sqlalchemy import (
     or_,
     select,
     union_all,
+    update,
 )
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,6 +48,7 @@ from app.models.finance import (
     ApproverType,
     Budget,
     BudgetAmendment,
+    BudgetAmendmentStatus,
     BudgetCategory,
     BudgetPlanningStage,
     CheckRequest,
@@ -84,8 +86,10 @@ from app.services.separation_of_duties import (
     assert_different_person,
 )
 from app.utils.csv_export import SafeCsvWriter
+from app.utils.finance_settings import load_finance_settings
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
+from app.utils.org_locks import QUICKBOOKS_EXPORT, lock_organization_scope
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
 from app.utils.sql_search import LIKE_ESCAPE_CHAR
@@ -118,6 +122,26 @@ class BudgetLimitExceededError(Exception):
         super().__init__("Insufficient available budget")
 
 
+class ExportInProgressError(Exception):
+    """Another QuickBooks export of the department is still running (→ 409)."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Another QuickBooks export is still being prepared. Wait for it to "
+            "finish, then export again."
+        )
+
+
+class AmendmentDecidedError(Exception):
+    """The amendment was already confirmed or rejected (→ 409)."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "That amendment has already been confirmed or rejected. Refresh to "
+            "see where it stands."
+        )
+
+
 class AmendmentAlreadyReversedError(Exception):
     """The amendment already has a reversing entry (→ 409).
 
@@ -136,6 +160,35 @@ _MAX_BUDGET_AMOUNT = Decimal("9999999999.99")
 _LOCKED_YEAR_AMOUNT_MESSAGE = (
     "This fiscal year is locked. Budget amounts can no longer be changed or amended."
 )
+_AMOUNT_BY_AMENDMENT_MESSAGE = (
+    "Once a budget goes before the board, a line's amount changes only through "
+    "an amendment, which another officer confirms."
+)
+# Kept under safe_error_detail's 300 characters so the reason reaches the screen.
+_NEW_LINE_AT_ZERO_MESSAGE = (
+    "This budget has gone before the board, so a new line starts at zero. Add it, "
+    "then record an amendment for its amount, which another officer confirms."
+)
+
+
+def _amount_by_amendment(status, stage, is_locked) -> bool:
+    """Whether a line's amount now changes only through a confirmed amendment.
+
+    From board review on, the budget is what the board considered or adopted,
+    so a change is an amendment a second officer confirms -- not an edit one
+    person makes. Before that (taking requests, leadership review) the
+    Treasurer still shapes the draft directly. A locked year takes neither.
+    """
+    status = getattr(status, "value", status)
+    stage = getattr(stage, "value", stage)
+    if is_locked:
+        return True
+    if status in (FiscalYearStatus.ACTIVE.value, FiscalYearStatus.CLOSED.value):
+        return True
+    return stage in (
+        BudgetPlanningStage.BOARD_REVIEW.value,
+        BudgetPlanningStage.ADOPTED.value,
+    )
 
 
 class FinanceEntityNotFoundError(ValueError):
@@ -221,6 +274,46 @@ QB_JOURNAL_HEADER = [
 ]
 
 
+# QuickBooks Online imports a spreadsheet only if it has fewer than 1,000 rows,
+# the header included (Intuit, "Import journal entries"); each exported
+# transaction is two rows.
+QB_IMPORT_MAX_ROWS = 999
+
+# A pending export younger than this holds off a second one. An export the
+# process died in the middle of stays pending; past this it no longer blocks.
+QB_EXPORT_IN_PROGRESS_WINDOW = timedelta(minutes=15)
+
+# Appended to a voided check's request number to make its reversing entry's
+# Journal No: distinct from the original's, and recognisably tied to it.
+QB_VOID_SUFFIX = "-V"
+
+# QuickBooks requires a customer or vendor in the Name column of any journal
+# line posting to Accounts Receivable or Accounts Payable, and the export has
+# no Name to give. These are the standard names QuickBooks Online creates the
+# two accounts with ("Accounts Payable (A/P)"); a department that renamed them
+# is not caught here, which the mapping screen's checklist covers.
+_QB_NAME_REQUIRED_PREFIXES = ("accounts payable", "accounts receivable")
+
+
+def _needs_qb_name(account: Optional[str]) -> bool:
+    top_level = (account or "").split(":", 1)[0].strip().casefold()
+    return top_level.startswith(_QB_NAME_REQUIRED_PREFIXES)
+
+
+def _refuse_name_required(*accounts: Optional[str]) -> None:
+    """Refuse an account the journal-entry import cannot post to."""
+    for account in accounts:
+        if _needs_qb_name(account):
+            # Kept under safe_error_detail's 300 characters so the reason
+            # reaches the screen.
+            raise ValueError(
+                "Accounts Payable and Accounts Receivable can't be used: "
+                "QuickBooks needs a customer or vendor on those journal lines, "
+                "which the export doesn't carry. Use the bank or card account "
+                "the money is paid from, and an expense account for the category."
+            )
+
+
 def _qb_amount(value: Decimal) -> Decimal:
     return Decimal(value).quantize(Decimal("0.01"))
 
@@ -237,8 +330,9 @@ def _classify_category_accounts(
     The one definition of how a category reaches QuickBooks: the export uses it
     to post each transaction and the readiness report uses it to show what an
     export would do, so the two cannot disagree. ``problem`` is
-    ``duplicate_mappings``, ``no_account`` or ``no_offset``; ``None`` means the
-    category exports.
+    ``duplicate_mappings``, ``no_account``, ``no_offset`` or
+    ``payable_receivable`` (an account the import cannot post to without a
+    Name); ``None`` means the category exports.
     """
     if len(matches) > 1:
         return "", "", "duplicate_mappings"
@@ -251,6 +345,8 @@ def _classify_category_accounts(
         return account, offset, "no_account"
     if not offset:
         return account, offset, "no_offset"
+    if _needs_qb_name(account) or _needs_qb_name(offset):
+        return account, offset, "payable_receivable"
     return account, offset, None
 
 
@@ -336,82 +432,330 @@ class FinanceService:
         await self.db.refresh(fy, ["updated_at"])
         return fy
 
-    async def activate_fiscal_year(
+    async def adopt_fiscal_year(
         self,
         fy_id: str,
         org_id: str,
         *,
-        recorded_by: Optional[str] = None,
-        adopted_on: Optional[date] = None,
-        adoption_reference: Optional[str] = None,
+        recorded_by: str,
+        adopted_on: date,
+        adoption_reference: str,
         adoption_notes: Optional[str] = None,
     ) -> FiscalYear:
-        """Make a year the active one.
+        """Record the board's adoption of a draft year's budget.
 
-        A draft year's budget becomes spendable here, so activating one is
-        its adoption: it must have been before the board (``board_review``)
-        and the board's vote is recorded with it — the meeting date, not in
-        the future, and a motion or minutes reference. Re-activating a year
-        that is not a draft records nothing new.
+        Only from board review. The year stays a draft — the board usually
+        adopts before the year begins — and becomes spendable when the
+        Treasurer starts it (``activate_fiscal_year``). The record is final:
+        an adopted year's stage no longer moves.
         """
-        fy = await self.get_fiscal_year(fy_id, org_id)
-        if not fy:
-            raise ValueError("Fiscal year not found")
-        if fy.status == FiscalYearStatus.DRAFT:
-            if fy.planning_stage != BudgetPlanningStage.BOARD_REVIEW:
-                raise ValueError(
-                    f"{fy.name} is adopted from board review. Move it to board "
-                    "review first."
-                )
-            reference = (adoption_reference or "").strip()
-            if adopted_on is None or not reference:
-                raise ValueError(
-                    "Record the board's adoption: the meeting date and the "
-                    "motion or minutes reference."
-                )
-            if adopted_on > await resolve_org_today(self.db, org_id):
-                raise ValueError("The adoption date cannot be in the future.")
-            fy.adopted_on = adopted_on
-            fy.adoption_reference = reference
-            fy.adoption_notes = (adoption_notes or "").strip() or None
-            fy.adoption_recorded_by = recorded_by
-            fy.adoption_recorded_at = datetime.now(timezone.utc)
-            fy.planning_stage = None
-
-        # Deactivate any currently active fiscal year
-        result = await self.db.execute(
-            select(FiscalYear).where(
-                FiscalYear.organization_id == org_id,
-                FiscalYear.status == FiscalYearStatus.ACTIVE,
-                FiscalYear.id != fy_id,
+        fy = await self._fiscal_year_for_update(fy_id, org_id)
+        if fy.status != FiscalYearStatus.DRAFT or fy.is_locked:
+            raise ValueError(f"{fy.name} is not a draft fiscal year.")
+        if fy.planning_stage != BudgetPlanningStage.BOARD_REVIEW:
+            raise ValueError(
+                f"{fy.name} is adopted from board review. Move it to board "
+                "review first."
             )
-        )
-        for active_fy in result.scalars().all():
-            active_fy.status = FiscalYearStatus.CLOSED
+        reference = (adoption_reference or "").strip()
+        if not reference:
+            raise ValueError(
+                "Record the board's adoption: the meeting date and the motion "
+                "or minutes reference."
+            )
+        if adopted_on > await resolve_org_today(self.db, org_id):
+            raise ValueError("The adoption date cannot be in the future.")
+        fy.adopted_on = adopted_on
+        fy.adoption_reference = reference
+        fy.adoption_notes = (adoption_notes or "").strip() or None
+        fy.adoption_recorded_by = recorded_by
+        fy.adoption_recorded_at = datetime.now(timezone.utc)
+        fy.planning_stage = BudgetPlanningStage.ADOPTED
+        await self.db.flush()
+        await self.db.refresh(fy, ["updated_at"])
+        return fy
 
+    async def activate_fiscal_year(self, fy_id: str, org_id: str) -> FiscalYear:
+        """Start a year: make it the active one.
+
+        A draft must have been adopted by the board and have reached its start
+        date on the department's calendar. A year in its year-end close may be
+        reopened. Either way no other year may be active: the current year's
+        close is begun deliberately (``begin_year_end_close``), never as a side
+        effect of starting the next one.
+        """
+        fy = await self._fiscal_year_for_update(fy_id, org_id)
+        if fy.is_locked:
+            raise ValueError(f"{fy.name} is locked and cannot be reopened.")
+        if fy.status == FiscalYearStatus.ACTIVE:
+            raise ValueError(f"{fy.name} is already the active fiscal year.")
+        if fy.status == FiscalYearStatus.DRAFT:
+            if fy.planning_stage != BudgetPlanningStage.ADOPTED:
+                raise ValueError(
+                    f"{fy.name} has not been adopted by the board. Record the "
+                    "adoption before starting the year."
+                )
+            # A start date entered as a calendar day is stored as that day's
+            # midnight UTC, so its UTC date is the day the Treasurer chose.
+            starts = fy.start_date.date()
+            if await resolve_org_today(self.db, org_id) < starts:
+                raise ValueError(
+                    f"{fy.name} starts on {starts:%B} {starts.day}, {starts.year}; "
+                    "it can be started on or after that day."
+                )
+        other = (
+            await self.db.execute(
+                select(FiscalYear.name)
+                .where(
+                    FiscalYear.organization_id == org_id,
+                    FiscalYear.status == FiscalYearStatus.ACTIVE,
+                    FiscalYear.id != fy.id,
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if other is not None:
+            raise ValueError(
+                f"{other} is still the active fiscal year. Begin its year-end "
+                "close first."
+            )
         fy.status = FiscalYearStatus.ACTIVE
+        fy.planning_stage = None
+        fy.closing_started_at = None
         await self.db.flush()
         await self.db.refresh(fy, ["updated_at"])
         logger.info("Activated fiscal year {} for org {}", fy_id, org_id)
         return fy
 
-    async def lock_fiscal_year(self, fy_id: str, org_id: str) -> FiscalYear:
+    async def begin_year_end_close(self, fy_id: str, org_id: str) -> FiscalYear:
+        """Move the active year into its closing period.
+
+        Nothing new is raised or submitted against it from here; what was
+        already submitted can still be approved, paid, issued or cancelled
+        (``require_year_accepts``). Locking ends the period.
+        """
+        fy = await self._fiscal_year_for_update(fy_id, org_id)
+        if fy.status != FiscalYearStatus.ACTIVE:
+            raise ValueError(
+                f"{fy.name} is not the active fiscal year, so it has no "
+                "year-end close to begin."
+            )
+        fy.status = FiscalYearStatus.CLOSED
+        fy.closing_started_at = datetime.now(timezone.utc)
+        await self.db.flush()
+        await self.db.refresh(fy, ["updated_at"])
+        logger.info("Began year-end close of fiscal year {}", fy_id)
+        return fy
+
+    async def list_open_items(self, fy_id: str, org_id: str) -> list[dict]:
+        """What still has to be paid, issued, cancelled or denied before lock.
+
+        Submitted items still in approval, approved purchases not yet paid,
+        approved expense reports not yet paid and approved checks not yet
+        issued. Drafts are not open items: they moved no money, and nothing
+        submits them once the year is closing.
+        """
         fy = await self.get_fiscal_year(fy_id, org_id)
         if not fy:
-            raise ValueError("Fiscal year not found")
-        if fy.status == FiscalYearStatus.DRAFT:
-            # Locking closes a year for good; a draft is still being planned
-            # and has never been adopted, so locking it would end it unused.
+            raise FinanceEntityNotFoundError("Fiscal year not found")
+        sources = (
+            (
+                "purchase_request",
+                PurchaseRequest,
+                PurchaseRequest.request_number,
+                PurchaseRequest.title,
+                func.coalesce(
+                    PurchaseRequest.actual_amount, PurchaseRequest.estimated_amount
+                ),
+                (
+                    PurchaseRequestStatus.SUBMITTED,
+                    PurchaseRequestStatus.PENDING_APPROVAL,
+                    PurchaseRequestStatus.APPROVED,
+                    PurchaseRequestStatus.ORDERED,
+                    PurchaseRequestStatus.RECEIVED,
+                ),
+            ),
+            (
+                "expense_report",
+                ExpenseReport,
+                ExpenseReport.report_number,
+                ExpenseReport.title,
+                ExpenseReport.total_amount,
+                (
+                    ExpenseReportStatus.SUBMITTED,
+                    ExpenseReportStatus.PENDING_APPROVAL,
+                    ExpenseReportStatus.APPROVED,
+                ),
+            ),
+            (
+                "check_request",
+                CheckRequest,
+                CheckRequest.request_number,
+                CheckRequest.payee_name,
+                CheckRequest.amount,
+                (
+                    CheckRequestStatus.SUBMITTED,
+                    CheckRequestStatus.PENDING_APPROVAL,
+                    CheckRequestStatus.APPROVED,
+                ),
+            ),
+        )
+        items: list[dict] = []
+        for kind, model, number, label, amount, statuses in sources:
+            result = await self.db.execute(
+                select(model.id, number, label, model.status, amount)
+                .where(
+                    model.organization_id == org_id,
+                    model.fiscal_year_id == fy.id,
+                    model.status.in_(statuses),
+                )
+                .order_by(number)
+            )
+            for row in result.all():
+                items.append(
+                    {
+                        "kind": kind,
+                        "entity_id": row[0],
+                        "number": row[1],
+                        "description": row[2],
+                        "status": getattr(row[3], "value", row[3]),
+                        "amount": row[4],
+                    }
+                )
+        # An amendment awaiting its second officer is open too: locking would
+        # freeze the line with the decision still owed. entity_id is the line,
+        # which is where it is confirmed or rejected.
+        pending = await self.db.execute(
+            select(
+                BudgetAmendment.budget_id,
+                BudgetCategory.name,
+                BudgetAmendment.reason,
+                BudgetAmendment.amount,
+            )
+            .join(
+                Budget,
+                and_(
+                    Budget.id == BudgetAmendment.budget_id,
+                    Budget.organization_id == org_id,
+                ),
+            )
+            .outerjoin(
+                BudgetCategory,
+                and_(
+                    BudgetCategory.id == Budget.category_id,
+                    BudgetCategory.organization_id == org_id,
+                ),
+            )
+            .where(
+                BudgetAmendment.organization_id == org_id,
+                Budget.fiscal_year_id == fy.id,
+                BudgetAmendment.status == BudgetAmendmentStatus.PENDING,
+            )
+            .order_by(BudgetAmendment.created_at, BudgetAmendment.id)
+        )
+        for budget_id, category, reason, amount in pending.all():
+            items.append(
+                {
+                    "kind": "budget_amendment",
+                    "entity_id": budget_id,
+                    "number": f"Amendment to {category or 'a budget line'}",
+                    "description": reason,
+                    "status": BudgetAmendmentStatus.PENDING.value,
+                    "amount": amount,
+                }
+            )
+        return items
+
+    async def lock_fiscal_year(
+        self,
+        fy_id: str,
+        org_id: str,
+        *,
+        locked_by: str,
+        notes: str,
+    ) -> FiscalYear:
+        """Lock a reconciled year for good, with the Treasurer's sign-off.
+
+        Only from the closing period, and only once nothing is open: every
+        item must be paid, issued, cancelled or denied first. The year's row
+        is locked for the check, and the guards that admit new activity read
+        it under a share lock, so nothing can be submitted or paid beside a
+        lock that is landing.
+        """
+        reconciliation = (notes or "").strip()
+        if not reconciliation:
+            raise ValueError("Add the reconciliation notes for the sign-off.")
+        fy = await self._fiscal_year_for_update(fy_id, org_id)
+        if fy.is_locked:
+            raise ValueError(f"{fy.name} is already locked.")
+        if fy.status != FiscalYearStatus.CLOSED:
             raise ValueError(
-                f"{fy.name} is a draft that is still being planned, so it "
-                "cannot be locked."
+                f"{fy.name} can be locked only after its year-end close has " "begun."
+            )
+        open_items = await self.list_open_items(fy.id, org_id)
+        if open_items:
+            shown = ", ".join(item["number"] for item in open_items[:5])
+            more = f" and {len(open_items) - 5} more" if len(open_items) > 5 else ""
+            raise ValueError(
+                f"{fy.name} still has {len(open_items)} open "
+                f"{'item' if len(open_items) == 1 else 'items'}: {shown}{more}. "
+                "Pay, issue, cancel or deny each request, and confirm or reject "
+                "each amendment, before locking."
             )
         fy.is_locked = True
-        fy.status = FiscalYearStatus.CLOSED
+        fy.locked_by = locked_by
+        fy.locked_at = datetime.now(timezone.utc)
+        fy.lock_notes = reconciliation
         await self.db.flush()
         await self.db.refresh(fy, ["updated_at"])
         logger.info("Locked fiscal year {}", fy_id)
         return fy
+
+    async def _fiscal_year_for_update(self, fy_id: str, org_id: str) -> FiscalYear:
+        fy: FiscalYear | None = (
+            await self.db.execute(
+                select(FiscalYear)
+                .where(FiscalYear.id == fy_id, FiscalYear.organization_id == org_id)
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if fy is None:
+            raise FinanceEntityNotFoundError("Fiscal year not found")
+        return fy
+
+    async def require_year_accepts(
+        self, fiscal_year_id: Optional[str], org_id: str, *, action: str
+    ) -> None:
+        """Refuse finance activity a fiscal year no longer accepts.
+
+        ``new`` — raising, editing or submitting a request — needs an active
+        or draft year. ``finish`` — paying, issuing, voiding or cancelling
+        what is already in flight — needs only a year that is not locked, so a
+        closing year can settle its last bills. Read under a share lock so it
+        waits out a ``lock_fiscal_year`` that is landing.
+        """
+        if not fiscal_year_id:
+            return
+        row = (
+            await self.db.execute(
+                select(FiscalYear.name, FiscalYear.status, FiscalYear.is_locked)
+                .where(
+                    FiscalYear.id == fiscal_year_id,
+                    FiscalYear.organization_id == org_id,
+                )
+                .with_for_update(read=True)
+            )
+        ).one_or_none()
+        if row is None:
+            return
+        name, status, is_locked = row
+        if is_locked:
+            raise ValueError(f"{name} is locked; its records can no longer change.")
+        if action == "new" and status == FiscalYearStatus.CLOSED:
+            raise ValueError(
+                f"{name} is closing for year-end: new requests can no longer be "
+                "raised or submitted against it."
+            )
 
     async def get_active_fiscal_year(self, org_id: str) -> Optional[FiscalYear]:
         result = await self.db.execute(
@@ -501,6 +845,7 @@ class FinanceService:
 
     async def create_budget_category(self, org_id: str, **kwargs) -> BudgetCategory:
         await self._validate_budget_category_fks(org_id, kwargs)
+        _refuse_name_required(kwargs.get("qb_account_name"))
         cat = BudgetCategory(organization_id=org_id, **kwargs)
         self.db.add(cat)
         await self.db.flush()
@@ -511,6 +856,7 @@ class FinanceService:
         self, cat_id: str, org_id: str, **kwargs
     ) -> BudgetCategory:
         await self._validate_budget_category_fks(org_id, kwargs)
+        _refuse_name_required(kwargs.get("qb_account_name"))
         cat = await self.get_budget_category(cat_id, org_id)
         if not cat:
             raise ValueError("Budget category not found")
@@ -594,12 +940,19 @@ class FinanceService:
         line_owner = aliased(Position)
         category_owner = aliased(Position)
         # One grouped read of every line's amendments, joined once, so the
-        # list stays a single query however many lines it holds.
+        # list stays a single query however many lines it holds. Only a
+        # confirmed amendment has moved the line; pending ones are counted
+        # apart so the page can say some are waiting.
+        confirmed = BudgetAmendment.status == BudgetAmendmentStatus.CONFIRMED
+        pending = BudgetAmendment.status == BudgetAmendmentStatus.PENDING
         amendments = (
             select(
                 BudgetAmendment.budget_id.label("budget_id"),
-                func.sum(BudgetAmendment.amount).label("total"),
-                func.count(BudgetAmendment.id).label("n"),
+                func.sum(case((confirmed, BudgetAmendment.amount), else_=0)).label(
+                    "total"
+                ),
+                func.sum(case((confirmed, 1), else_=0)).label("n"),
+                func.sum(case((pending, 1), else_=0)).label("pending"),
             )
             .where(BudgetAmendment.organization_id == org_id)
             .group_by(BudgetAmendment.budget_id)
@@ -612,12 +965,15 @@ class FinanceService:
                 BudgetCategory.name.label("category_name"),
                 FiscalYear.name.label("fiscal_year_name"),
                 FiscalYear.status.label("fiscal_year_status"),
+                FiscalYear.planning_stage.label("fiscal_year_stage"),
+                FiscalYear.is_locked.label("fiscal_year_locked"),
                 FiscalYear.start_date.label("fiscal_year_start_date"),
                 Facility.name.label("station_name"),
                 line_owner.name.label("line_owner_name"),
                 category_owner.name.label("category_owner_name"),
                 func.coalesce(amendments.c.total, 0).label("amendments_total"),
                 func.coalesce(amendments.c.n, 0).label("amendment_count"),
+                func.coalesce(amendments.c.pending, 0).label("pending_amendments"),
             )
             .outerjoin(amendments, amendments.c.budget_id == Budget.id)
             .outerjoin(
@@ -662,11 +1018,12 @@ class FinanceService:
     def _budget_row(row) -> dict:
         """One budget line as the budget pages show it.
 
-        ``amount_budgeted`` is the current budget, amendments included. The
-        original budget is derived, not stored: the current amount less the
-        sum of the line's amendments. A direct edit of ``amount_budgeted``
-        therefore moves the original by the same amount, which is what the
-        edit means.
+        ``amount_budgeted`` is the current budget, confirmed amendments
+        included. The original budget is derived, not stored: the current
+        amount less the sum of the line's confirmed amendments. A direct edit
+        of ``amount_budgeted`` therefore moves the original by the same amount,
+        which is what the edit means. ``amount_editable`` says whether that
+        edit is still allowed (``_amount_by_amendment``).
         """
         budget = row[0]
         data = {
@@ -677,7 +1034,13 @@ class FinanceService:
         data.update(
             amendments_total=amendments_total,
             amendment_count=int(row.amendment_count or 0),
+            pending_amendment_count=int(row.pending_amendments or 0),
             original_amount=Decimal(budget.amount_budgeted or 0) - amendments_total,
+            amount_editable=not _amount_by_amendment(
+                row.fiscal_year_status,
+                row.fiscal_year_stage,
+                bool(row.fiscal_year_locked),
+            ),
         )
         effective_id, inherited = resolve_owner(
             budget.owner_position_id, row.category_owner_id
@@ -981,6 +1344,14 @@ class FinanceService:
                 "This fiscal year is closed. Budget lines can only be added to "
                 "a draft or active fiscal year."
             )
+        if (
+            fiscal_year is not None
+            and _amount_by_amendment(
+                fiscal_year.status, fiscal_year.planning_stage, fiscal_year.is_locked
+            )
+            and Decimal(kwargs.get("amount_budgeted") or 0) != 0
+        ):
+            raise ValueError(_NEW_LINE_AT_ZERO_MESSAGE)
         budget = Budget(organization_id=org_id, created_by=created_by, **kwargs)
         self.db.add(budget)
         await self.db.flush()
@@ -1008,16 +1379,36 @@ class FinanceService:
             # editable: they describe the line, they do not move money. An
             # unchanged amount is not a change, so a form that sends every
             # field it owns still saves.
-            if new_amount != budget.amount_budgeted and await self._year_is_locked(
-                budget.fiscal_year_id, org_id
-            ):
-                raise ValueError(_LOCKED_YEAR_AMOUNT_MESSAGE)
+            if new_amount != budget.amount_budgeted:
+                year = await self._year_state(budget.fiscal_year_id, org_id)
+                if year is not None and year.is_locked:
+                    raise ValueError(_LOCKED_YEAR_AMOUNT_MESSAGE)
+                if year is not None and _amount_by_amendment(
+                    year.status, year.planning_stage, year.is_locked
+                ):
+                    raise ValueError(_AMOUNT_BY_AMENDMENT_MESSAGE)
             if new_amount < budget.amount_spent + budget.amount_encumbered:
                 raise BudgetLimitExceededError()
         apply_updates(budget, kwargs)
         await self.db.flush()
         await self.db.refresh(budget, ["updated_at"])
         return budget
+
+    async def _year_state(self, fiscal_year_id: str, org_id: str):
+        """A line's fiscal year's status, stage and lock, read under a share lock.
+
+        The same share lock as ``_year_is_locked``, so a direct amount edit
+        waits out a stage move or a lock that is landing.
+        """
+        result = await self.db.execute(
+            select(FiscalYear.status, FiscalYear.planning_stage, FiscalYear.is_locked)
+            .where(
+                FiscalYear.id == fiscal_year_id,
+                FiscalYear.organization_id == org_id,
+            )
+            .with_for_update(read=True)
+        )
+        return result.one_or_none()
 
     async def _year_is_locked(self, fiscal_year_id: str, org_id: str) -> bool:
         """Whether a budget line's fiscal year is locked, read under a share lock.
@@ -1052,11 +1443,13 @@ class FinanceService:
         approved_by: str,
         approved_on: date,
     ) -> BudgetAmendment:
-        """Record extra money approved for a line and raise its budget by it.
+        """Record extra money approved for a line, pending a second officer.
 
-        One transaction: lock the line (the same locking read ``update_budget``
-        and the spend checks use, CLAUDE.md pitfall #27), refuse a locked
-        year, insert the amendment, and raise ``amount_budgeted``. Raises
+        Nothing moves yet: ``confirm_budget_amendment`` raises the line when
+        another officer confirms it. Locks the line (the same locking read
+        ``update_budget`` and the spend checks use, CLAUDE.md pitfall #27) and
+        refuses a locked year or a total past the column's limit now, so a
+        doomed amendment is refused to the person entering it. Raises
         ``FinanceEntityNotFoundError`` for a line that is not the org's.
 
         A request refused earlier for lack of funds is not reprocessed: the
@@ -1098,13 +1491,17 @@ class FinanceService:
             approved_by=approved_by,
             approved_on=approved_on,
             created_by=created_by,
+            status=BudgetAmendmentStatus.PENDING,
         )
         self.db.add(amendment)
-        budget.amount_budgeted = new_amount
         await self.db.flush()
         await self.db.refresh(amendment, ["created_at"])
-        await self.db.refresh(budget, ["updated_at"])
-        logger.info("Budget {} amended by {} in org {}", budget.id, amount, org_id)
+        logger.info(
+            "Budget {} amendment of {} entered, pending, in org {}",
+            budget.id,
+            amount,
+            org_id,
+        )
         return amendment
 
     async def reverse_budget_amendment(
@@ -1118,13 +1515,16 @@ class FinanceService:
         approved_by: str,
         approved_on: date,
     ) -> BudgetAmendment:
-        """Cancel a mistaken amendment with a reversing entry.
+        """Enter a reversing entry for a mistaken amendment, pending confirmation.
 
         A mistaken amendment is never edited or deleted (owner decision,
         2026-10-09). The reversal is a new row for the whole amount, negated,
-        carrying its own reason and approval, and ``amount_budgeted`` drops by
-        the amount. The original budget is unchanged, because it is the current
-        amount less the sum of every row and both moved by the same amount.
+        carrying its own reason and approval. Like an amendment it is entered
+        pending; ``amount_budgeted`` drops by the amount only when another
+        officer confirms it. The original budget is then unchanged, because it
+        is the current amount less the sum of every confirmed row and both
+        moved by the same amount. Only a confirmed amendment can be reversed: a
+        pending one is rejected instead.
 
         One transaction, locks taken in ``add_budget_amendment``'s order: the
         line first (the locking read the spend checks use, CLAUDE.md pitfall
@@ -1179,6 +1579,11 @@ class FinanceService:
                 "A reversal cannot itself be reversed. Record a new amendment "
                 "instead."
             )
+        if target.status != BudgetAmendmentStatus.CONFIRMED:
+            raise ValueError(
+                "Only a confirmed amendment can be reversed; a pending one is "
+                "rejected instead."
+            )
         existing = await self.db.execute(
             select(BudgetAmendment.id)
             .where(
@@ -1204,6 +1609,7 @@ class FinanceService:
             approved_on=approved_on,
             created_by=created_by,
             reverses_amendment_id=target.id,
+            status=BudgetAmendmentStatus.PENDING,
         )
         try:
             async with self.db.begin_nested():
@@ -1213,18 +1619,128 @@ class FinanceService:
             # Unreachable behind the locks above; the unique key answers if
             # some other writer ever skips them.
             raise AmendmentAlreadyReversedError()
-        budget.amount_budgeted = new_amount
-        await self.db.flush()
         await self.db.refresh(reversal, ["created_at"])
-        await self.db.refresh(budget, ["updated_at"])
         logger.info(
-            "Budget {} amendment {} reversed by {} in org {}",
+            "Budget {} amendment {} reversal {} entered, pending, in org {}",
             budget.id,
             target.id,
             reversal.id,
             org_id,
         )
         return reversal
+
+    async def _pending_amendment(
+        self, budget_id: str, amendment_id: str, org_id: str
+    ) -> tuple[Budget, BudgetAmendment]:
+        """The line and its pending amendment, both row-locked, in that order.
+
+        The order ``add_budget_amendment`` and ``reverse_budget_amendment`` take
+        them in, so two decisions on one amendment queue rather than both
+        seeing it pending.
+        """
+        budget = (
+            await self.db.execute(
+                select(Budget)
+                .where(Budget.id == budget_id, Budget.organization_id == org_id)
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if not budget:
+            raise FinanceEntityNotFoundError("Budget not found")
+        amendment = (
+            await self.db.execute(
+                select(BudgetAmendment)
+                .where(
+                    BudgetAmendment.id == amendment_id,
+                    BudgetAmendment.budget_id == budget.id,
+                    BudgetAmendment.organization_id == org_id,
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if not amendment:
+            raise FinanceEntityNotFoundError("Amendment not found")
+        if amendment.status != BudgetAmendmentStatus.PENDING:
+            raise AmendmentDecidedError()
+        return budget, amendment
+
+    async def confirm_budget_amendment(
+        self, budget_id: str, amendment_id: str, org_id: str, confirmed_by: str
+    ) -> BudgetAmendment:
+        """A second officer confirms a pending amendment, which applies it.
+
+        The confirmer is not the member who entered it (the caller's
+        permission -- ``finance.budget_review`` or ``finance.manage`` -- is the
+        endpoint's). The checks that matter for money are made again here, on
+        the line as it stands now: the year is not locked, the total stays in
+        the column's range, and a reversal leaves the line covering what is
+        spent and committed and still names a confirmed amendment.
+        """
+        budget, amendment = await self._pending_amendment(
+            budget_id, amendment_id, org_id
+        )
+        assert_different_person(
+            confirmed_by,
+            amendment.created_by,
+            action="confirm",
+            record="budget amendment",
+        )
+        if await self._year_is_locked(budget.fiscal_year_id, org_id):
+            raise ValueError(_LOCKED_YEAR_AMOUNT_MESSAGE)
+        new_amount = Decimal(budget.amount_budgeted or 0) + Decimal(amendment.amount)
+        if new_amount > _MAX_BUDGET_AMOUNT:
+            raise ValueError("That amendment would take the budget past its limit.")
+        if amendment.amount < 0 and (
+            new_amount < budget.amount_spent + budget.amount_encumbered
+        ):
+            raise BudgetLimitExceededError()
+        budget.amount_budgeted = new_amount
+        amendment.status = BudgetAmendmentStatus.CONFIRMED
+        amendment.decided_by = confirmed_by
+        amendment.decided_at = datetime.now(timezone.utc)
+        await self.db.flush()
+        await self.db.refresh(budget, ["updated_at"])
+        logger.info(
+            "Budget {} amendment {} confirmed, {} applied, in org {}",
+            budget.id,
+            amendment.id,
+            amendment.amount,
+            org_id,
+        )
+        return amendment
+
+    async def reject_budget_amendment(
+        self,
+        budget_id: str,
+        amendment_id: str,
+        org_id: str,
+        rejected_by: str,
+        *,
+        note: str,
+    ) -> BudgetAmendment:
+        """Reject a pending amendment, or withdraw one's own; nothing moves.
+
+        The note is required: the row stays on record with why it was not
+        applied. A rejected reversal gives up its link to the amendment it
+        named, so that amendment can be reversed again; the link would
+        otherwise hold the unique key, and the audit log keeps which it was.
+        """
+        note = (note or "").strip()
+        if not note:
+            raise ValueError("Say why the amendment is rejected.")
+        budget, amendment = await self._pending_amendment(
+            budget_id, amendment_id, org_id
+        )
+        amendment.status = BudgetAmendmentStatus.REJECTED
+        amendment.decided_by = rejected_by
+        amendment.decided_at = datetime.now(timezone.utc)
+        amendment.decision_note = note
+        amendment.reverses_amendment_id = None
+        await self.db.flush()
+        logger.info(
+            "Budget {} amendment {} rejected in org {}", budget.id, amendment.id, org_id
+        )
+        return amendment
 
     async def list_budget_amendments(self, budget_id: str, org_id: str) -> list[dict]:
         """A line's amendments, newest first, with who entered each.
@@ -1238,6 +1754,7 @@ class FinanceService:
             raise FinanceEntityNotFoundError("Budget not found")
         reversal = aliased(BudgetAmendment)
         reverser = aliased(User)
+        decider = aliased(User)
         result = await self.db.execute(
             select(
                 BudgetAmendment,
@@ -1245,8 +1762,13 @@ class FinanceService:
                 User.last_name,
                 User.preferred_name,
                 User.username,
+                decider.first_name.label("decider_first_name"),
+                decider.last_name.label("decider_last_name"),
+                decider.preferred_name.label("decider_preferred_name"),
+                decider.username.label("decider_username"),
                 reversal.id.label("reversal_id"),
                 reversal.created_at.label("reversal_created_at"),
+                reversal.status.label("reversal_status"),
                 reverser.first_name.label("reverser_first_name"),
                 reverser.last_name.label("reverser_last_name"),
                 reverser.preferred_name.label("reverser_preferred_name"),
@@ -1257,6 +1779,13 @@ class FinanceService:
                 and_(
                     User.id == BudgetAmendment.created_by,
                     User.organization_id == org_id,
+                ),
+            )
+            .outerjoin(
+                decider,
+                and_(
+                    decider.id == BudgetAmendment.decided_by,
+                    decider.organization_id == org_id,
                 ),
             )
             .outerjoin(
@@ -1282,16 +1811,24 @@ class FinanceService:
         rows = []
         for row in result.all():
             data = self._amendment_row(*row[:5])
+            decider_name = format_display_name(
+                row.decider_first_name,
+                row.decider_last_name,
+                row.decider_preferred_name,
+            )
+            data["decided_by_name"] = decider_name or row.decider_username or None
             if row.reversal_id is not None:
                 name = format_display_name(
                     row.reverser_first_name,
                     row.reverser_last_name,
                     row.reverser_preferred_name,
                 )
+                reversal_status = row.reversal_status
                 data.update(
                     reversed_by_amendment_id=row.reversal_id,
                     reversed_at=row.reversal_created_at,
                     reversed_by_name=name or row.reverser_username or None,
+                    reversal_status=getattr(reversal_status, "value", reversal_status),
                 )
             rows.append(data)
         return rows
@@ -2633,6 +3170,25 @@ class FinanceService:
             )
         )
 
+    @staticmethod
+    def _has_pending_step_records(entity_type_value, entity_id_column):
+        """EXISTS an approval step still waiting on someone for this entity.
+
+        A request whose chain has run to the end but is still waiting for
+        approval is held for a second approver by the dual-approval threshold
+        (``_held_for_second_approver``); with nothing left in its chain, the
+        manual path is how that approver acts. One predicate shared by the
+        listing and the manual actions, for the reason ``_has_step_records``
+        gives.
+        """
+        return exists(
+            select(1).where(
+                ApprovalStepRecord.entity_type == entity_type_value,
+                ApprovalStepRecord.entity_id == entity_id_column,
+                ApprovalStepRecord.status == ApprovalStepStatus.PENDING,
+            )
+        )
+
     async def _lock_unrouted_entity(
         self, entity_type: ApprovalEntityType, entity_id: str, org_id: str
     ):
@@ -2660,10 +3216,10 @@ class FinanceService:
             raise ManualApprovalConflictError(
                 f"This {label.lower()} is not waiting for approval"
             )
-        has_steps = await self.db.execute(
-            select(self._has_step_records(entity_type, entity_id))
+        has_pending_steps = await self.db.execute(
+            select(self._has_pending_step_records(entity_type, entity_id))
         )
-        if has_steps.scalar():
+        if has_pending_steps.scalar():
             raise ManualApprovalConflictError(
                 "This request has approval steps; approve it through those steps"
             )
@@ -2693,11 +3249,26 @@ class FinanceService:
             action="approve",
             record=entity_type.value.replace("_", " "),
         )
+        # A request held for a second approver cannot be completed by someone
+        # who has already approved it, through its chain or here.
+        if str(approver_id) in await self._approvers_so_far(
+            entity_type, entity, org_id
+        ):
+            raise SeparationOfDutiesError(
+                "You have already approved this request. It needs a second "
+                "approval from someone else."
+            )
         # Shared with the chain path so status, approved_by/approved_at and
         # budget encumbrance are handled identically.
-        await self._finalize_approval(entity_type, entity_id, approver_id, org_id)
+        completed = await self._finalize_approval(
+            entity_type, entity_id, approver_id, org_id
+        )
         logger.info(
-            "{} {} manually approved by {}", entity_type.value, entity_id, approver_id
+            "{} {} manually {} by {}",
+            entity_type.value,
+            entity_id,
+            "approved" if completed else "given its first approval",
+            approver_id,
         )
         return entity
 
@@ -2730,7 +3301,11 @@ class FinanceService:
     async def get_unrouted_approvals(
         self, org_id: str, *, skip: int = 0, limit: int = 100
     ) -> list[dict]:
-        """Requests waiting for approval that have no approval steps.
+        """Requests waiting for a manual approval decision.
+
+        Those no approval chain applies to, and those held for a second
+        approver by the dual-approval threshold — a chain that has run to its
+        end, or a first manual approval (``awaiting_second_approval``).
 
         The same row shape as get_pending_approvals, minus the step fields.
         """
@@ -2742,10 +3317,14 @@ class FinanceService:
                 PurchaseRequest.estimated_amount.label("amount"),
                 PurchaseRequest.requested_by.label("requester_id"),
                 PurchaseRequest.created_at.label("submitted_at"),
+                PurchaseRequest.first_approved_by.label("first_approved_by"),
+                self._has_step_records(
+                    ApprovalEntityType.PURCHASE_REQUEST, PurchaseRequest.id
+                ).label("has_steps"),
             ).where(
                 PurchaseRequest.organization_id == org_id,
                 PurchaseRequest.status == PurchaseRequestStatus.PENDING_APPROVAL,
-                ~self._has_step_records(
+                ~self._has_pending_step_records(
                     ApprovalEntityType.PURCHASE_REQUEST, PurchaseRequest.id
                 ),
             ),
@@ -2756,10 +3335,14 @@ class FinanceService:
                 ExpenseReport.total_amount,
                 ExpenseReport.submitted_by,
                 ExpenseReport.created_at,
+                ExpenseReport.first_approved_by,
+                self._has_step_records(
+                    ApprovalEntityType.EXPENSE_REPORT, ExpenseReport.id
+                ),
             ).where(
                 ExpenseReport.organization_id == org_id,
                 ExpenseReport.status == ExpenseReportStatus.PENDING_APPROVAL,
-                ~self._has_step_records(
+                ~self._has_pending_step_records(
                     ApprovalEntityType.EXPENSE_REPORT, ExpenseReport.id
                 ),
             ),
@@ -2770,10 +3353,14 @@ class FinanceService:
                 CheckRequest.amount,
                 CheckRequest.requested_by,
                 CheckRequest.created_at,
+                CheckRequest.first_approved_by,
+                self._has_step_records(
+                    ApprovalEntityType.CHECK_REQUEST, CheckRequest.id
+                ),
             ).where(
                 CheckRequest.organization_id == org_id,
                 CheckRequest.status == CheckRequestStatus.PENDING_APPROVAL,
-                ~self._has_step_records(
+                ~self._has_pending_step_records(
                     ApprovalEntityType.CHECK_REQUEST, CheckRequest.id
                 ),
             ),
@@ -2786,6 +3373,8 @@ class FinanceService:
                 entities.c.title,
                 entities.c.amount,
                 entities.c.submitted_at,
+                entities.c.first_approved_by,
+                entities.c.has_steps,
                 User.first_name,
                 User.last_name,
                 User.preferred_name,
@@ -2822,6 +3411,11 @@ class FinanceService:
                     "entity_amount": row.amount,
                     "requester_name": requester_name,
                     "submitted_at": row.submitted_at,
+                    # Its chain has run, or one approval is already recorded:
+                    # what it waits for is a second, different approver.
+                    "awaiting_second_approval": bool(row.has_steps)
+                    or bool(row.first_approved_by),
+                    "first_approved_by": row.first_approved_by,
                 }
             )
         return rows
@@ -2974,60 +3568,131 @@ class FinanceService:
         email: Optional[str] = result.scalar_one_or_none()
         return email
 
+    @staticmethod
+    def _approval_amount(entity_type: ApprovalEntityType, entity) -> Decimal:
+        if entity_type == ApprovalEntityType.PURCHASE_REQUEST:
+            return Decimal(entity.estimated_amount or 0)
+        if entity_type == ApprovalEntityType.EXPENSE_REPORT:
+            return Decimal(entity.total_amount or 0)
+        return Decimal(entity.amount or 0)
+
+    async def _approvers_so_far(
+        self, entity_type: ApprovalEntityType, entity, org_id: str
+    ) -> set[str]:
+        """Everyone who has approved the request, once each.
+
+        A chain step approved in the app counts as the member who approved it;
+        one approved from an emailed link (``acted_by`` is empty) as the
+        address the step names, a different person from any member. An
+        auto-approved step counts as nobody. A first approval given outside
+        the chain is on the request.
+        """
+        people: set[str] = set()
+        records = await self.get_approval_records(entity_type, entity.id, org_id)
+        for record in records:
+            if record.status != ApprovalStepStatus.APPROVED:
+                continue
+            if record.acted_by:
+                people.add(str(record.acted_by))
+            elif record.step is not None and record.step.approver_value:
+                people.add("email:" + record.step.approver_value.strip().lower())
+        if entity.first_approved_by:
+            people.add(str(entity.first_approved_by))
+        return people
+
+    async def _held_for_second_approver(
+        self,
+        entity_type: ApprovalEntityType,
+        entity,
+        approver_id: Optional[str],
+        org_id: str,
+    ) -> bool:
+        """Whether this approval leaves the request waiting for another person.
+
+        The department's dual-approval threshold: at or above it, a request is
+        approved only once two different people have approved it. This is the
+        one place both paths reach — the end of an approval chain and a manual
+        approval — so a single-step chain, or one person approving every step,
+        cannot complete a request above the threshold either. The first
+        approval given outside a chain is recorded on the request.
+        """
+        threshold = (
+            await load_finance_settings(self.db, org_id)
+        ).dual_approval_threshold
+        if threshold is None or self._approval_amount(entity_type, entity) < threshold:
+            return False
+        people = await self._approvers_so_far(entity_type, entity, org_id)
+        if approver_id:
+            people.add(str(approver_id))
+        if len(people) >= 2:
+            return False
+        if approver_id and not entity.first_approved_by:
+            entity.first_approved_by = approver_id
+            entity.first_approved_at = datetime.now(timezone.utc)
+            await self.db.flush()
+        logger.info("{} {} held for a second approver", entity_type.value, entity.id)
+        return True
+
+    def is_awaiting_second_approval(
+        self, entity_type: ApprovalEntityType, entity, records
+    ) -> bool:
+        """A request waiting for approval with nothing left in its chain.
+
+        Reported on the request so the screen offers the manual decision
+        rather than working out the hold itself (CLAUDE.md pitfall #29). It
+        follows the predicate the manual actions accept: no step still
+        pending, and either a chain that has run or a first approval recorded.
+        """
+        _model, pending_status, _label = self._unrouted_mapping(entity_type)
+        if entity.status != pending_status:
+            return False
+        if any(r.status == ApprovalStepStatus.PENDING for r in records):
+            return False
+        return bool(records) or bool(entity.first_approved_by)
+
     async def _finalize_approval(
         self,
         entity_type: ApprovalEntityType,
         entity_id: str,
         approver_id: Optional[str],
         org_id: str,
-    ) -> None:
-        """Set the entity status to APPROVED and update denormalized fields"""
+    ) -> bool:
+        """Set the entity status to APPROVED and update denormalized fields.
+
+        Returns False, changing only the first-approval record, when the
+        dual-approval threshold holds the request for a second approver.
+        """
+        model, _pending_status, _label = self._unrouted_mapping(entity_type)
+        result = await self.db.execute(
+            select(model).where(model.id == entity_id, model.organization_id == org_id)
+        )
+        entity = result.scalar_one_or_none()
+        if entity is None:
+            return False
+        if await self._held_for_second_approver(
+            entity_type, entity, approver_id, org_id
+        ):
+            return False
+
         now = datetime.now(timezone.utc)
+        entity.approved_by = approver_id
+        entity.approved_at = now
         if entity_type == ApprovalEntityType.PURCHASE_REQUEST:
-            result = await self.db.execute(
-                select(PurchaseRequest).where(
-                    PurchaseRequest.id == entity_id,
-                    PurchaseRequest.organization_id == org_id,
+            entity.status = PurchaseRequestStatus.APPROVED
+            # Encumber budget
+            if entity.budget_id:
+                await self._encumber_budget(
+                    entity.budget_id,
+                    entity.estimated_amount,
+                    entity.organization_id,
                 )
-            )
-            entity = result.scalar_one_or_none()
-            if entity:
-                entity.status = PurchaseRequestStatus.APPROVED
-                entity.approved_by = approver_id
-                entity.approved_at = now
-                # Encumber budget
-                if entity.budget_id:
-                    await self._encumber_budget(
-                        entity.budget_id,
-                        entity.estimated_amount,
-                        entity.organization_id,
-                    )
         elif entity_type == ApprovalEntityType.EXPENSE_REPORT:
-            result = await self.db.execute(
-                select(ExpenseReport).where(
-                    ExpenseReport.id == entity_id,
-                    ExpenseReport.organization_id == org_id,
-                )
-            )
-            entity = result.scalar_one_or_none()
-            if entity:
-                entity.status = ExpenseReportStatus.APPROVED
-                entity.approved_by = approver_id
-                entity.approved_at = now
-        elif entity_type == ApprovalEntityType.CHECK_REQUEST:
-            result = await self.db.execute(
-                select(CheckRequest).where(
-                    CheckRequest.id == entity_id,
-                    CheckRequest.organization_id == org_id,
-                )
-            )
-            entity = result.scalar_one_or_none()
-            if entity:
-                entity.status = CheckRequestStatus.APPROVED
-                entity.approved_by = approver_id
-                entity.approved_at = now
+            entity.status = ExpenseReportStatus.APPROVED
+        else:
+            entity.status = CheckRequestStatus.APPROVED
 
         await self.db.flush()
+        return True
 
     async def _finalize_denial(
         self,
@@ -3287,6 +3952,7 @@ class FinanceService:
     ) -> PurchaseRequest:
         await self._validate_finance_fks(org_id, kwargs)
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
+        await self.require_year_accepts(fiscal_year_id, org_id, action="new")
         pr = PurchaseRequest(
             organization_id=org_id,
             requested_by=requested_by,
@@ -3307,6 +3973,11 @@ class FinanceService:
         )
         if not pr:
             _raise_not_found("Purchase request", requester_id)
+        await self.require_year_accepts(pr.fiscal_year_id, org_id, action="new")
+        if kwargs.get("fiscal_year_id"):
+            await self.require_year_accepts(
+                kwargs["fiscal_year_id"], org_id, action="new"
+            )
         if pr.status not in (
             PurchaseRequestStatus.DRAFT,
             PurchaseRequestStatus.SUBMITTED,
@@ -3326,6 +3997,7 @@ class FinanceService:
         )
         if not pr:
             _raise_not_found("Purchase request", requester_id)
+        await self.require_year_accepts(pr.fiscal_year_id, org_id, action="new")
         if pr.status != PurchaseRequestStatus.DRAFT:
             raise ValueError("Only draft requests can be submitted")
 
@@ -3375,6 +4047,7 @@ class FinanceService:
         pr = await self.get_purchase_request(pr_id, org_id, for_update=True)
         if not pr:
             raise ValueError("Purchase request not found")
+        await self.require_year_accepts(pr.fiscal_year_id, org_id, action="finish")
         if pr.status != PurchaseRequestStatus.APPROVED:
             raise ValueError("Only approved requests can be marked as ordered")
         pr.status = PurchaseRequestStatus.ORDERED
@@ -3387,6 +4060,7 @@ class FinanceService:
         pr = await self.get_purchase_request(pr_id, org_id, for_update=True)
         if not pr:
             raise ValueError("Purchase request not found")
+        await self.require_year_accepts(pr.fiscal_year_id, org_id, action="finish")
         if pr.status != PurchaseRequestStatus.ORDERED:
             raise ValueError("Only ordered requests can be marked as received")
         pr.status = PurchaseRequestStatus.RECEIVED
@@ -3432,6 +4106,7 @@ class FinanceService:
             PurchaseRequestStatus.RECEIVED,
         ):
             raise ValueError("Request cannot be marked as paid in this status")
+        await self.require_year_accepts(pr.fiscal_year_id, org_id, action="finish")
 
         pr.status = PurchaseRequestStatus.PAID
         pr.paid_at = datetime.now(timezone.utc)
@@ -3481,6 +4156,7 @@ class FinanceService:
         pr: PurchaseRequest | None = result.scalar_one_or_none()
         if not pr:
             _raise_not_found("Purchase request", requester_id)
+        await self.require_year_accepts(pr.fiscal_year_id, org_id, action="finish")
         if pr.status in (PurchaseRequestStatus.PAID,):
             raise ValueError("Paid requests cannot be cancelled")
         if requester_id is not None and pr.status != PurchaseRequestStatus.DRAFT:
@@ -3575,6 +4251,7 @@ class FinanceService:
         for item_data in line_items or []:
             await self._validate_finance_fks(org_id, item_data)
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
+        await self.require_year_accepts(fiscal_year_id, org_id, action="new")
         er = ExpenseReport(
             organization_id=org_id,
             submitted_by=submitted_by,
@@ -3609,6 +4286,11 @@ class FinanceService:
         )
         if not er:
             _raise_not_found("Expense report", requester_id)
+        await self.require_year_accepts(er.fiscal_year_id, org_id, action="new")
+        if kwargs.get("fiscal_year_id"):
+            await self.require_year_accepts(
+                kwargs["fiscal_year_id"], org_id, action="new"
+            )
         if er.status not in (
             ExpenseReportStatus.DRAFT,
             ExpenseReportStatus.SUBMITTED,
@@ -3626,6 +4308,7 @@ class FinanceService:
         er = await self.get_expense_report(er_id, org_id, restrict_to_user=requester_id)
         if not er:
             _raise_not_found("Expense report", requester_id)
+        await self.require_year_accepts(er.fiscal_year_id, org_id, action="new")
         if er.status not in (ExpenseReportStatus.DRAFT,):
             raise ValueError("Can only add items to draft reports")
         await self._validate_finance_fks(org_id, kwargs)
@@ -3648,6 +4331,41 @@ class FinanceService:
         await self.db.refresh(item, ["created_at"])
         return item
 
+    async def reviews_entity(
+        self,
+        user: User,
+        entity_type: ApprovalEntityType,
+        entity_id: str,
+        org_id: str,
+        *,
+        submitted: bool,
+    ) -> bool:
+        """Whether ``user`` is one of this document's approvers.
+
+        Someone a step names (the rule approve/deny enforce), someone who has
+        already acted on a step, or an approvals administrator, who may act on
+        any step with an override reason. A submitted document no chain
+        applies to is approved by hand by any ``finance.approve`` holder
+        (``manual_approve``), so they are its approvers. They read the document
+        they are asked to decide on, its receipts included, without the
+        org-wide grant. A draft has no approvers.
+        """
+        if not submitted:
+            return False
+        if is_approvals_admin(user):
+            return True
+        records = await self.get_approval_records(entity_type, entity_id, org_id)
+        if not records:
+            return user_has_permission(user, FINANCE_APPROVE)
+        for record in records:
+            if record.acted_by and str(record.acted_by) == str(user.id):
+                return True
+            if record.step is not None and await user_matches_step(
+                self.db, user, record.step, org_id
+            ):
+                return True
+        return False
+
     async def submit_expense_report(
         self, er_id: str, org_id: str, requester_id: Optional[str] = None
     ) -> ExpenseReport:
@@ -3656,10 +4374,19 @@ class FinanceService:
         )
         if not er:
             _raise_not_found("Expense report", requester_id)
+        await self.require_year_accepts(er.fiscal_year_id, org_id, action="new")
         if er.status != ExpenseReportStatus.DRAFT:
             raise ValueError("Only draft reports can be submitted")
         if er.total_amount <= 0:
             raise ValueError("Expense report must have line items")
+        missing = [item for item in er.line_items if not item.receipt_document_id]
+        if missing:
+            named = ", ".join(f'"{item.description}"' for item in missing[:3])
+            more = f" and {len(missing) - 3} more" if len(missing) > 3 else ""
+            raise ValueError(
+                "Attach a receipt to every line before submitting. Missing: "
+                f"{named}{more}."
+            )
 
         er.status = ExpenseReportStatus.SUBMITTED
 
@@ -3720,6 +4447,7 @@ class FinanceService:
         )
         if er.status != ExpenseReportStatus.APPROVED:
             raise ValueError("Only approved reports can be marked as paid")
+        await self.require_year_accepts(er.fiscal_year_id, org_id, action="finish")
 
         er.status = ExpenseReportStatus.PAID
         er.paid_at = datetime.now(timezone.utc)
@@ -3793,6 +4521,7 @@ class FinanceService:
     ) -> CheckRequest:
         await self._validate_finance_fks(org_id, kwargs)
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
+        await self.require_year_accepts(fiscal_year_id, org_id, action="new")
         cr = CheckRequest(
             organization_id=org_id,
             requested_by=requested_by,
@@ -3812,6 +4541,11 @@ class FinanceService:
         )
         if not cr:
             _raise_not_found("Check request", requester_id)
+        await self.require_year_accepts(cr.fiscal_year_id, org_id, action="new")
+        if kwargs.get("fiscal_year_id"):
+            await self.require_year_accepts(
+                kwargs["fiscal_year_id"], org_id, action="new"
+            )
         if cr.status not in (
             CheckRequestStatus.DRAFT,
             CheckRequestStatus.SUBMITTED,
@@ -3831,6 +4565,7 @@ class FinanceService:
         )
         if not cr:
             _raise_not_found("Check request", requester_id)
+        await self.require_year_accepts(cr.fiscal_year_id, org_id, action="new")
         if cr.status != CheckRequestStatus.DRAFT:
             raise ValueError("Only draft requests can be submitted")
 
@@ -3900,6 +4635,7 @@ class FinanceService:
         )
         if cr.status != CheckRequestStatus.APPROVED:
             raise ValueError("Only approved requests can have checks issued")
+        await self.require_year_accepts(cr.fiscal_year_id, org_id, action="finish")
 
         cr.status = CheckRequestStatus.ISSUED
         cr.check_number = check_number
@@ -3927,10 +4663,13 @@ class FinanceService:
         cr: CheckRequest | None = result.scalar_one_or_none()
         if not cr:
             raise ValueError("Check request not found")
+        await self.require_year_accepts(cr.fiscal_year_id, org_id, action="finish")
         if cr.status != CheckRequestStatus.ISSUED:
             raise ValueError("Only issued checks can be voided")
 
         cr.status = CheckRequestStatus.VOIDED
+        # The date a check exported to QuickBooks is reversed on.
+        cr.voided_at = datetime.now(timezone.utc)
 
         # Reverse the spent amount through the same locked helper every other
         # budget mutation uses (Pitfall #27), rather than a duplicated inline
@@ -4044,8 +4783,24 @@ class FinanceService:
         schedule_id: Optional[str] = None,
         user_id: Optional[str] = None,
         status: Optional[str] = None,
-    ) -> list[MemberDues]:
-        query = select(MemberDues).where(MemberDues.organization_id == org_id)
+    ) -> list[dict]:
+        """Member dues rows, each with the member's display name.
+
+        The name rides along because the dues screen is read by a Treasurer
+        who holds ``finance.manage`` but not necessarily ``users.view``, so it
+        cannot look members up itself and would otherwise show a bare id.
+        """
+        query = (
+            select(
+                MemberDues,
+                User.first_name,
+                User.last_name,
+                User.preferred_name,
+                User.username,
+            )
+            .outerjoin(User, User.id == MemberDues.user_id)
+            .where(MemberDues.organization_id == org_id)
+        )
         if schedule_id:
             query = query.where(MemberDues.dues_schedule_id == schedule_id)
         if user_id:
@@ -4058,7 +4813,16 @@ class FinanceService:
             .limit(pagination.limit)
         )
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        rows = []
+        for dues, first_name, last_name, preferred_name, username in result.all():
+            data = {
+                column.key: getattr(dues, column.key)
+                for column in MemberDues.__table__.columns
+            }
+            name = format_display_name(first_name, last_name, preferred_name)
+            data["member_name"] = name or username or None
+            rows.append(data)
+        return rows
 
     async def record_dues_payment(
         self,
@@ -4287,6 +5051,9 @@ class FinanceService:
         return list(result.scalars().all())
 
     async def create_export_mapping(self, org_id: str, **kwargs) -> ExportMapping:
+        _refuse_name_required(
+            kwargs.get("qb_account_name"), kwargs.get("qb_offset_account_name")
+        )
         mapping = ExportMapping(organization_id=org_id, **kwargs)
         self.db.add(mapping)
         await self.db.flush()
@@ -4305,6 +5072,9 @@ class FinanceService:
         mapping: ExportMapping | None = result.scalar_one_or_none()
         if not mapping:
             raise ValueError("Export mapping not found")
+        _refuse_name_required(
+            kwargs.get("qb_account_name"), kwargs.get("qb_offset_account_name")
+        )
         apply_updates(mapping, kwargs)
         await self.db.flush()
         await self.db.refresh(mapping, ["updated_at"])
@@ -4438,6 +5208,8 @@ class FinanceService:
                 problems[name] = f"'{label}' has no account"
             elif problem == "no_offset":
                 problems[name] = f"'{label}' has no offset account"
+            elif problem == "payable_receivable":
+                problems[name] = f"'{label}' posts to Accounts Payable or Receivable"
             else:
                 resolved[budget_id] = (account, offset)
 
@@ -4472,32 +5244,77 @@ class FinanceService:
         date_end: datetime,
         file_format: str = "csv",
         batch_size: int = 500,
-        max_records: int = 10_000,
+        max_rows: int = QB_IMPORT_MAX_ROWS,
+        include_exported: bool = False,
     ) -> AsyncIterator[str]:
-        """Prepare a bounded export and return its incremental CSV stream."""
-        filters = (
+        """Prepare a bounded export and return its incremental CSV stream.
+
+        A payment a complete export already carried is left out unless
+        ``include_exported``: QuickBooks imports a second copy without
+        complaint (the duplicate-number warning has to be off for this
+        import), so exporting overlapping periods would double the books. A
+        check voided after it was exported gets a reversing entry, dated the
+        day it was voided, in the export covering that day.
+
+        Payments are stamped as exported only once the whole file has been
+        produced; an interrupted stream stamps nothing, so its payments go out
+        again with the next export.
+        """
+        pr_filters = [
             PurchaseRequest.organization_id == org_id,
             PurchaseRequest.status == PurchaseRequestStatus.PAID,
             PurchaseRequest.paid_at >= date_start,
             PurchaseRequest.paid_at <= date_end,
-        )
-        pr_count = await self.db.scalar(
-            select(func.count()).select_from(PurchaseRequest).where(*filters)
-        )
-        cr_filters = (
+        ]
+        cr_filters = [
             CheckRequest.organization_id == org_id,
-            CheckRequest.status == CheckRequestStatus.ISSUED,
             CheckRequest.check_date >= date_start,
             CheckRequest.check_date <= date_end,
-        )
-        cr_count = await self.db.scalar(
-            select(func.count()).select_from(CheckRequest).where(*cr_filters)
-        )
-        er_filters = (
+        ]
+        er_filters = [
             ExpenseReport.organization_id == org_id,
             ExpenseReport.status == ExpenseReportStatus.PAID,
             ExpenseReport.paid_at >= date_start,
             ExpenseReport.paid_at <= date_end,
+        ]
+        # Reversals of checks voided after QuickBooks received them. A check
+        # voided before it was ever exported needs nothing: it is in neither
+        # file, so the books never saw it.
+        void_filters = [
+            CheckRequest.organization_id == org_id,
+            CheckRequest.status == CheckRequestStatus.VOIDED,
+            CheckRequest.qb_exported_at.is_not(None),
+            CheckRequest.voided_at >= date_start,
+            CheckRequest.voided_at <= date_end,
+        ]
+        if include_exported:
+            # Sending a period again reproduces what was sent for it: a check
+            # voided since still had its original entry in that file.
+            cr_filters.append(
+                or_(
+                    CheckRequest.status == CheckRequestStatus.ISSUED,
+                    and_(
+                        CheckRequest.status == CheckRequestStatus.VOIDED,
+                        CheckRequest.qb_exported_at.is_not(None),
+                    ),
+                )
+            )
+        else:
+            pr_filters.append(PurchaseRequest.qb_exported_at.is_(None))
+            cr_filters.extend(
+                [
+                    CheckRequest.status == CheckRequestStatus.ISSUED,
+                    CheckRequest.qb_exported_at.is_(None),
+                ]
+            )
+            er_filters.append(ExpenseReport.qb_exported_at.is_(None))
+            void_filters.append(CheckRequest.qb_void_exported_at.is_(None))
+
+        pr_count = await self.db.scalar(
+            select(func.count()).select_from(PurchaseRequest).where(*pr_filters)
+        )
+        cr_count = await self.db.scalar(
+            select(func.count()).select_from(CheckRequest).where(*cr_filters)
         )
         line_count = await self.db.scalar(
             select(func.count())
@@ -4505,58 +5322,87 @@ class FinanceService:
             .join(ExpenseReport)
             .where(*er_filters)
         )
-        total = int(pr_count or 0) + int(cr_count or 0) + int(line_count or 0)
-        if total > max_records:
+        void_count = await self.db.scalar(
+            select(func.count()).select_from(CheckRequest).where(*void_filters)
+        )
+        total = (
+            int(pr_count or 0)
+            + int(cr_count or 0)
+            + int(line_count or 0)
+            + int(void_count or 0)
+        )
+        # Two rows per transaction (or expense line) plus the header. A file
+        # QuickBooks will not import is no use, and splitting one would let an
+        # expense report's entry straddle two files, so refuse instead.
+        rows = 2 * total + 1
+        if rows > max_rows:
             raise ValueError(
-                f"Synchronous exports support at most {max_records} rows; "
-                f"this request contains {total}. Narrow the date range"
+                f"QuickBooks Online imports files of fewer than {max_rows + 1:,} "
+                f"rows; this period would produce {rows:,}. Export a shorter "
+                "period, then the rest."
             )
         # Resolved before the log row so a refusal leaves no pending export.
+        # A check that carries the accounts it was exported to is posted (or
+        # reversed) against those, and needs no resolving.
         accounts = await self._resolve_export_accounts(
             org_id,
             [
                 select(PurchaseRequest.request_number, PurchaseRequest.budget_id).where(
-                    *filters
+                    *pr_filters
                 ),
                 select(CheckRequest.request_number, CheckRequest.budget_id).where(
-                    *cr_filters
+                    *cr_filters, CheckRequest.qb_export_account.is_(None)
                 ),
                 select(ExpenseReport.report_number, ExpenseLineItem.budget_id)
                 .select_from(ExpenseLineItem)
                 .join(ExpenseReport)
                 .where(*er_filters),
+                select(CheckRequest.request_number, CheckRequest.budget_id).where(
+                    *void_filters, CheckRequest.qb_export_account.is_(None)
+                ),
             ],
         )
 
-        log = ExportLog(
-            organization_id=org_id,
-            export_type="transactions",
-            date_range_start=date_start,
-            date_range_end=date_end,
-            record_count=0,
-            file_format=file_format,
-            exported_by=exported_by,
+        log = await self._begin_export(
+            org_id, exported_by, date_start, date_end, file_format
         )
-        self.db.add(log)
-        await self.db.commit()  # Persist pending before any bytes reach the client.
+
+        def check_accounts(cr: CheckRequest) -> tuple[str, str]:
+            if cr.qb_export_account and cr.qb_export_offset_account:
+                return cr.qb_export_account, cr.qb_export_offset_account
+            return accounts[cr.budget_id]
 
         def journal_lines(
             number: str,
             day: str,
             memo: str,
-            budget_id: str,
+            account: str,
+            paid_from: str,
             amount: Decimal,
             description: str,
         ) -> list[list]:
             # Money leaves the offset account and lands in the category's
             # account; QuickBooks groups consecutive lines sharing a Journal
             # No into one entry and rejects it unless the two sides balance.
-            account, offset = accounts[budget_id]
+            # A reversal passes the two accounts the other way round.
             value = _qb_amount(amount)
             return [
                 [number, day, memo, account, value, "", description],
-                [number, day, memo, offset, "", value, description],
+                [number, day, memo, paid_from, "", value, description],
             ]
+
+        def payee(cr: CheckRequest) -> str:
+            return (
+                f"{cr.payee_name} (check {cr.check_number})"
+                if cr.check_number
+                else cr.payee_name
+            )
+
+        # What this file carries, stamped only once all of it has been written.
+        sent_purchases: list[str] = []
+        sent_reports: set[str] = set()
+        sent_checks: dict[tuple[str, str], list[str]] = {}
+        sent_voids: list[str] = []
 
         async def stream() -> AsyncIterator[str]:
             output = io.StringIO()
@@ -4568,6 +5414,16 @@ class FinanceService:
                 output.truncate(0)
                 writer.writerows(rows)
                 return output.getvalue()
+
+            async def batches(statement, count: int):
+                for offset in range(0, count, batch_size):
+                    result = await self.db.execute(
+                        statement.offset(offset).limit(batch_size)
+                    )
+                    records = list(result.scalars())
+                    if not records:
+                        return
+                    yield records
 
             try:
                 yield csv_chunk([QB_JOURNAL_HEADER])
@@ -4583,56 +5439,52 @@ class FinanceService:
                     )
                     return aware.astimezone(org_tz).strftime("%m/%d/%Y")
 
-                for model, where, ordering, render in (
-                    (
-                        PurchaseRequest,
-                        filters,
-                        (PurchaseRequest.paid_at, PurchaseRequest.id),
-                        lambda pr: journal_lines(
+                async for purchases in batches(
+                    select(PurchaseRequest)
+                    .where(*pr_filters)
+                    .order_by(PurchaseRequest.paid_at, PurchaseRequest.id),
+                    int(pr_count or 0),
+                ):
+                    lines = []
+                    for pr in purchases:
+                        account, paid_from = accounts[pr.budget_id]
+                        lines += journal_lines(
                             pr.request_number,
                             local_day(pr.paid_at),
                             pr.title,
-                            pr.budget_id,
+                            account,
+                            paid_from,
                             pr.actual_amount or pr.estimated_amount,
                             pr.vendor or "",
-                        ),
-                    ),
-                    (
-                        CheckRequest,
-                        cr_filters,
-                        (CheckRequest.check_date, CheckRequest.id),
+                        )
+                        sent_purchases.append(pr.id)
+                    delivered += len(purchases)
+                    yield csv_chunk(lines)
+
+                async for checks in batches(
+                    select(CheckRequest)
+                    .where(*cr_filters)
+                    .order_by(CheckRequest.check_date, CheckRequest.id),
+                    int(cr_count or 0),
+                ):
+                    lines = []
+                    for cr in checks:
+                        account, paid_from = check_accounts(cr)
                         # The request number, not the check number, is the
                         # Journal No: it is unique across every exported type,
                         # so two entries can never merge into one.
-                        lambda cr: journal_lines(
+                        lines += journal_lines(
                             cr.request_number,
                             local_day(cr.check_date),
                             cr.memo or cr.purpose or "",
-                            cr.budget_id,
+                            account,
+                            paid_from,
                             cr.amount,
-                            (
-                                f"{cr.payee_name} (check {cr.check_number})"
-                                if cr.check_number
-                                else cr.payee_name
-                            ),
-                        ),
-                    ),
-                ):
-                    for offset in range(0, total, batch_size):
-                        result = await self.db.execute(
-                            select(model)
-                            .where(*where)
-                            .order_by(*ordering)
-                            .offset(offset)
-                            .limit(batch_size)
+                            payee(cr),
                         )
-                        records = list(result.scalars())
-                        if not records:
-                            break
-                        delivered += len(records)
-                        yield csv_chunk(
-                            [line for record in records for line in render(record)]
-                        )
+                        sent_checks.setdefault((account, paid_from), []).append(cr.id)
+                    delivered += len(checks)
+                    yield csv_chunk(lines)
 
                 # One journal entry per report: its lines are ordered by
                 # report, so they stay consecutive across batch boundaries.
@@ -4650,29 +5502,65 @@ class FinanceService:
                     records = list(result.all())
                     if not records:
                         break
+                    lines = []
+                    for item, er in records:
+                        account, paid_from = accounts[item.budget_id]
+                        lines += journal_lines(
+                            er.report_number,
+                            local_day(er.paid_at),
+                            er.title,
+                            account,
+                            paid_from,
+                            item.amount,
+                            (
+                                f"{item.merchant}: {item.description}"
+                                if item.merchant
+                                else item.description
+                            ),
+                        )
+                        sent_reports.add(er.id)
                     delivered += len(records)
-                    yield csv_chunk(
-                        [
-                            line
-                            for item, er in records
-                            for line in journal_lines(
-                                er.report_number,
-                                local_day(er.paid_at),
-                                er.title,
-                                item.budget_id,
-                                item.amount,
-                                (
-                                    f"{item.merchant}: {item.description}"
-                                    if item.merchant
-                                    else item.description
-                                ),
-                            )
-                        ]
-                    )
+                    yield csv_chunk(lines)
 
+                # Last, so a check exported and voided within one period is
+                # posted before it is reversed.
+                async for voids in batches(
+                    select(CheckRequest)
+                    .where(*void_filters)
+                    .order_by(CheckRequest.voided_at, CheckRequest.id),
+                    int(void_count or 0),
+                ):
+                    lines = []
+                    for cr in voids:
+                        account, paid_from = check_accounts(cr)
+                        # The original's accounts, swapped: the money goes
+                        # back to the account the check was drawn on.
+                        lines += journal_lines(
+                            f"{cr.request_number}{QB_VOID_SUFFIX}",
+                            local_day(cr.voided_at),
+                            f"Void: {cr.memo or cr.purpose or cr.request_number}",
+                            paid_from,
+                            account,
+                            cr.amount,
+                            f"{payee(cr)}, voided",
+                        )
+                        sent_voids.append(cr.id)
+                    delivered += len(voids)
+                    yield csv_chunk(lines)
+
+                stamped_at = datetime.now(timezone.utc)
+                await self._stamp_exported(
+                    org_id,
+                    log.id,
+                    stamped_at,
+                    purchases=sent_purchases,
+                    reports=sent_reports,
+                    checks=sent_checks,
+                    voids=sent_voids,
+                )
                 log.status = "successful"
                 log.record_count = delivered
-                log.completed_at = datetime.now(timezone.utc)
+                log.completed_at = stamped_at
                 await self.db.commit()
             except BaseException:
                 await self.db.rollback()
@@ -4685,17 +5573,130 @@ class FinanceService:
 
         return stream()
 
+    async def _begin_export(
+        self,
+        org_id: str,
+        exported_by: str,
+        date_start: datetime,
+        date_end: datetime,
+        file_format: str,
+    ) -> ExportLog:
+        """Record the export as pending, unless another is already running.
+
+        Two exports running at once would each choose the payments the other
+        has not stamped yet, and both files would carry them. The department's
+        export lock serializes the decision, and the read of a running export
+        is a locking read so it sees one committed while this request waited
+        for the lock (CLAUDE.md pitfall #27).
+        """
+        await lock_organization_scope(self.db, org_id, QUICKBOOKS_EXPORT)
+        running = await self.db.scalar(
+            select(ExportLog.id)
+            .where(
+                ExportLog.organization_id == org_id,
+                ExportLog.export_type == "transactions",
+                ExportLog.status == "pending",
+                ExportLog.exported_at
+                >= datetime.now(timezone.utc) - QB_EXPORT_IN_PROGRESS_WINDOW,
+            )
+            .limit(1)
+            .with_for_update()
+        )
+        if running is not None:
+            await self.db.rollback()
+            raise ExportInProgressError()
+        log = ExportLog(
+            organization_id=org_id,
+            export_type="transactions",
+            date_range_start=date_start,
+            date_range_end=date_end,
+            record_count=0,
+            file_format=file_format,
+            exported_by=exported_by,
+        )
+        self.db.add(log)
+        await self.db.commit()  # Persist pending before any bytes reach the client.
+        return log
+
+    async def _stamp_exported(
+        self,
+        org_id: str,
+        log_id: str,
+        stamped_at: datetime,
+        *,
+        purchases: list[str],
+        reports: set[str],
+        checks: dict[tuple[str, str], list[str]],
+        voids: list[str],
+    ) -> None:
+        """Mark what a completed export carried, and the accounts it used."""
+        stamp = {"qb_exported_at": stamped_at, "qb_export_log_id": log_id}
+        if purchases:
+            await self.db.execute(
+                update(PurchaseRequest)
+                .where(
+                    PurchaseRequest.organization_id == org_id,
+                    PurchaseRequest.id.in_(purchases),
+                )
+                .values(**stamp)
+            )
+        if reports:
+            await self.db.execute(
+                update(ExpenseReport)
+                .where(
+                    ExpenseReport.organization_id == org_id,
+                    ExpenseReport.id.in_(reports),
+                )
+                .values(**stamp)
+            )
+        for (account, offset), ids in checks.items():
+            await self.db.execute(
+                update(CheckRequest)
+                .where(CheckRequest.organization_id == org_id, CheckRequest.id.in_(ids))
+                .values(
+                    **stamp,
+                    qb_export_account=account,
+                    qb_export_offset_account=offset,
+                )
+            )
+        if voids:
+            await self.db.execute(
+                update(CheckRequest)
+                .where(
+                    CheckRequest.organization_id == org_id,
+                    CheckRequest.id.in_(voids),
+                )
+                .values(qb_void_exported_at=stamped_at, qb_void_export_log_id=log_id)
+            )
+
     async def list_export_logs(
         self, org_id: str, pagination: PaginationParams
-    ) -> list[ExportLog]:
+    ) -> list[dict]:
+        """Export history, newest first, each with who ran it by name."""
         result = await self.db.execute(
-            select(ExportLog)
+            select(
+                ExportLog,
+                User.first_name,
+                User.last_name,
+                User.preferred_name,
+                User.username,
+            )
+            .outerjoin(User, User.id == ExportLog.exported_by)
             .where(ExportLog.organization_id == org_id)
             .order_by(ExportLog.exported_at.desc(), ExportLog.id)
             .offset(pagination.skip)
             .limit(pagination.limit)
         )
-        return list(result.scalars().all())
+        rows = []
+        for log, first_name, last_name, preferred_name, username in result.all():
+            data = {
+                column.key: getattr(log, column.key)
+                for column in ExportLog.__table__.columns
+            }
+            name = format_display_name(first_name, last_name, preferred_name)
+            data["exported_by_name"] = name or username or None
+            rows.append(data)
+        return rows
 
     # ========================================
     # Dashboard

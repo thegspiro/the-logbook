@@ -1249,7 +1249,7 @@ def catch_up_deadline(req, join_date: Optional[date], today: date) -> Optional[d
     and for every new member, the requirement is graded normally.
     """
     cutoff = getattr(req, "new_member_cutoff_date", None)
-    deadline = getattr(req, "existing_member_deadline", None)
+    deadline: Optional[date] = getattr(req, "existing_member_deadline", None)
     if not (cutoff and deadline and join_date):
         return None
     if join_date < cutoff and today <= deadline:
@@ -1466,7 +1466,8 @@ async def _load_compliance_config(
         .options(selectinload(ComplianceConfig.profiles))
         .where(ComplianceConfig.organization_id == org_id)
     )
-    return result.scalars().first()
+    compliance_config: Optional[ComplianceConfig] = result.scalars().first()
+    return compliance_config
 
 
 @dataclass(frozen=True)

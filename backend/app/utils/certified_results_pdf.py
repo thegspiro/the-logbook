@@ -180,11 +180,25 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
         )
     )
 
-    # ── Results per position ─────────────────────────────────────────
-    for position in results.get("results_by_position", []):
+    # ── Results per contest ──────────────────────────────────────────
+    # One table per position and per ballot item, each graded on its own
+    # (W50-7). ``overall_results`` holds only candidates no contest claims
+    # (a legacy election whose candidates have no position); it is printed
+    # as its own table rather than dropped, and never pools contests.
+    contests = list(results.get("results_by_position", []))
+    if results.get("overall_results"):
+        contests.append(
+            {
+                "position": None if not contests else "Other candidates",
+                "candidates": results["overall_results"],
+                "is_tie": any(c.get("is_tied") for c in results["overall_results"]),
+            }
+        )
+    for position in contests:
         # A ballot item's position is its id; its title is what the reader knows.
         contest = position.get("label") or position.get("position")
-        story.append(Paragraph(f"Results — {_esc(contest)}", section_style))
+        heading = f"Results — {_esc(contest)}" if contest else "Results"
+        story.append(Paragraph(heading, section_style))
         rows = [["Candidate", "Votes", "%", "Outcome"]]
         for cand in position.get("candidates", []):
             if cand.get("is_winner"):
@@ -210,7 +224,7 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
             heading = "TIE" if policy == "co_winners" else "UNRESOLVED TIE"
             story.append(
                 Paragraph(
-                    f"{heading} for {_esc(position.get('position'))} — "
+                    f"{heading} for {_esc(contest or 'this election')} — "
                     f"{_TIE_POLICY_LABELS.get(policy, policy)}.",
                     warn_style,
                 )
@@ -270,15 +284,37 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
             styles["Normal"],
         )
     )
-    if election.get("anonymous_voting"):
+    # A sanctioned void stays in the chain and is verified with it (W50-31);
+    # the certificate names each one rather than letting it read as either
+    # tampering or nothing at all.
+    for void in integrity.get("voids") or []:
+        officer = void.get("voided_by_name") or "an officer"
+        reason = void.get("reason") or "no reason recorded"
         story.append(
             Paragraph(
-                "This was an anonymous election: the per-election anonymity "
-                "salt was destroyed at close, making voter de-anonymization "
-                "impossible.",
+                f"{int(void.get('count') or 0)} vote(s) voided by "
+                f"{_esc(officer)}: {_esc(reason)}. Voided votes are kept, "
+                "verified with the chain and excluded from the results.",
                 sub_style,
             )
         )
+    if election.get("anonymous_voting"):
+        proxy_votes = int(election.get("proxy_votes") or 0)
+        text = (
+            "This was an anonymous election: the per-election anonymity "
+            "salt was destroyed at close, making voter de-anonymization "
+            "impossible"
+        )
+        if proxy_votes:
+            # Proxy ballots are allowed on anonymous elections only with the
+            # delegating member's acknowledgement that they are attributable
+            # (W50-2), so the statement names the exception.
+            text += (
+                f", except for {proxy_votes} proxy vote(s), which are recorded "
+                "against the member they were cast for, as each delegating "
+                "member acknowledged when the proxy was authorized"
+            )
+        story.append(Paragraph(text + ".", sub_style))
 
     # ── Certification signatures ─────────────────────────────────────
     story.append(Paragraph("Certification", section_style))

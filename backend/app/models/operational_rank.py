@@ -6,10 +6,12 @@ Firefighter).  Department leadership can add, rename, reorder, and
 deactivate ranks through the admin settings UI.
 """
 
+from datetime import datetime
+from typing import Optional
+
 from sqlalchemy import (
     JSON,
     Boolean,
-    Column,
     DateTime,
     ForeignKey,
     Integer,
@@ -17,6 +19,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -34,27 +37,33 @@ class OperationalRank(Base):
 
     __tablename__ = "operational_ranks"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    rank_code = Column(String(100), nullable=False)
-    display_name = Column(String(200), nullable=False)
-    description = Column(Text, nullable=True)
-    sort_order = Column(Integer, nullable=False, default=0, server_default="0")
-    is_active = Column(Boolean, nullable=False, default=True, server_default="1")
+    rank_code: Mapped[str] = mapped_column(String(100), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
 
     # Shift positions this rank is eligible to sign up for.
     # e.g. ["officer", "driver", "firefighter", "ems"]
-    eligible_positions = Column(JSON, nullable=True, default=list)
+    eligible_positions: Mapped[Optional[list[str]]] = mapped_column(
+        JSON, nullable=True, default=list
+    )
 
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),

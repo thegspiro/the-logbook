@@ -11,7 +11,7 @@ import json
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 from uuid import UUID
 
 from loguru import logger
@@ -38,6 +38,7 @@ from app.models.training import (
     RequirementProgressStatus,
     RequirementSource,
     RequirementType,
+    SkillEvaluation,
     TrainingCategory,
     TrainingCourse,
     TrainingProgram,
@@ -45,7 +46,7 @@ from app.models.training import (
     TrainingStatus,
     TrainingType,
 )
-from app.models.user import User
+from app.models.user import Position, User
 from app.schemas.training_program import (
     ProgramEnrollmentCreate,
     ProgramMilestoneCreate,
@@ -92,6 +93,7 @@ from app.utils.org_timezone import (
     today_in,
 )
 from app.utils.phase_prerequisites import find_cycle
+from app.utils.sql_results import rows_affected
 
 # progress_notes keys written only through officer-gated paths: checklist
 # sign-off state and knowledge-test scoring. A member editing their own notes
@@ -187,7 +189,7 @@ class TrainingProgramService:
         enrollment: ProgramEnrollment,
         program: TrainingProgram,
         user: User,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> None:
         """Send enrollment notification to the member and their mentors/officers."""
         notif_service = NotificationsService(self.db)
@@ -529,8 +531,49 @@ class TrainingProgramService:
 
     # ==================== Training Requirement Methods ====================
 
+    async def _validate_required_skills(
+        self, skill_ids: Optional[List[str]], organization_id: UUID | str
+    ) -> Optional[str]:
+        """Verify every skill id on a SKILLS_EVALUATION requirement is the
+        caller's own skill evaluation (XC-1).
+
+        ``required_skills`` holds SkillEvaluation ids that shift completion
+        matches checkoffs against; a foreign id can never be satisfied, so the
+        requirement would sit unmeetable. Returns the message instead of
+        raising, to match this service's ``(result, error)`` convention.
+        """
+        try:
+            await assert_all_in_org(
+                self.db,
+                SkillEvaluation,
+                skill_ids,
+                organization_id,
+                label="required skill",
+            )
+        except ValueError as exc:
+            return str(exc)
+        return None
+
+    async def _validate_target_roles(
+        self, role_ids: Optional[List[Any]], organization_id: UUID | str
+    ) -> Optional[str]:
+        """Verify every position id in a program's ``target_roles`` is the
+        caller's own (XC-1). The schema accepts only UUIDs, so these are
+        position ids. Returns the message instead of raising."""
+        try:
+            await assert_all_in_org(
+                self.db,
+                Position,
+                normalize_id_list(role_ids),
+                organization_id,
+                label="target position",
+            )
+        except ValueError as exc:
+            return str(exc)
+        return None
+
     async def _validate_required_courses(
-        self, course_ids: Optional[List[str]], organization_id: UUID
+        self, course_ids: Optional[List[str]], organization_id: UUID | str
     ) -> Optional[str]:
         """Verify every course id a client linked to a requirement belongs to the
         caller's org, returning an error message if not.
@@ -570,7 +613,7 @@ class TrainingProgramService:
         return groups
 
     async def _validate_linked_requirements(
-        self, payload: Any, organization_id: UUID
+        self, payload: Any, organization_id: UUID | str
     ) -> Optional[str]:
         """Verify the existing requirements a build payload links are usable.
 
@@ -615,8 +658,8 @@ class TrainingProgramService:
     async def create_training_requirement(
         self,
         requirement_data: TrainingRequirementEnhancedCreate,
-        organization_id: UUID,
-        created_by: UUID,
+        organization_id: UUID | str,
+        created_by: UUID | str,
     ) -> Tuple[Optional[TrainingRequirement], Optional[str]]:
         """
         Create a new training requirement
@@ -643,6 +686,11 @@ class TrainingProgramService:
         )
         if course_error:
             return None, course_error
+        skill_error = await self._validate_required_skills(
+            requirement_data.required_skills, organization_id
+        )
+        if skill_error:
+            return None, skill_error
 
         # Create requirement
         requirement = TrainingRequirement(
@@ -684,7 +732,7 @@ class TrainingProgramService:
 
     async def get_requirements(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         source: Optional[str] = None,
         registry_name: Optional[str] = None,
         requirement_type: Optional[str] = None,
@@ -712,12 +760,12 @@ class TrainingProgramService:
             )
 
         result = await self.db.execute(query.order_by(TrainingRequirement.name))
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def update_training_requirement(
         self,
         requirement_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         updates: Dict[str, Any],
     ) -> Tuple[Optional[TrainingRequirement], Optional[str]]:
         """
@@ -745,6 +793,12 @@ class TrainingProgramService:
             )
             if course_error:
                 return None, course_error
+        if "required_skills" in updates:
+            skill_error = await self._validate_required_skills(
+                updates["required_skills"], organization_id
+            )
+            if skill_error:
+                return None, skill_error
 
         # Steps arrive as schema objects or legacy strings; store one shape.
         if "checklist_items" in updates:
@@ -788,8 +842,8 @@ class TrainingProgramService:
     async def create_training_program(
         self,
         program_data: TrainingProgramCreate,
-        organization_id: UUID,
-        created_by: UUID,
+        organization_id: UUID | str,
+        created_by: UUID | str,
     ) -> Tuple[Optional[TrainingProgram], Optional[str]]:
         """
         Create a new training program
@@ -801,6 +855,12 @@ class TrainingProgramService:
             structure_type = ProgramStructureType(program_data.structure_type)
         except ValueError:
             return None, f"Invalid structure type: {program_data.structure_type}"
+
+        roles_error = await self._validate_target_roles(
+            program_data.target_roles, organization_id
+        )
+        if roles_error:
+            return None, roles_error
 
         # Create program
         program = TrainingProgram(
@@ -836,8 +896,8 @@ class TrainingProgramService:
     async def build_program(
         self,
         payload: Any,
-        organization_id: UUID,
-        created_by: UUID,
+        organization_id: UUID | str,
+        created_by: UUID | str,
     ) -> Tuple[Optional[TrainingProgram], Optional[str]]:
         """Create a program and its full structure (phases, requirements,
         milestones) in a single transaction.
@@ -880,6 +940,11 @@ class TrainingProgramService:
         )
         if requirement_error:
             return None, requirement_error
+        roles_error = await self._validate_target_roles(
+            prog.target_roles, organization_id
+        )
+        if roles_error:
+            return None, roles_error
 
         program = TrainingProgram(
             organization_id=organization_id,
@@ -973,8 +1038,8 @@ class TrainingProgramService:
         program_id: Any,
         phase_id: Optional[Any],
         requirements: List[Any],
-        organization_id: UUID,
-        created_by: UUID,
+        organization_id: UUID | str,
+        created_by: UUID | str,
     ) -> Optional[str]:
         """Persist one build-payload requirement group under a phase (or under
         the program itself when ``phase_id`` is None). Returns an error message
@@ -1049,8 +1114,8 @@ class TrainingProgramService:
 
     async def get_program_by_id(
         self,
-        program_id: UUID,
-        organization_id: UUID,
+        program_id: UUID | str,
+        organization_id: UUID | str,
         include_phases: bool = False,
         include_requirements: bool = False,
     ) -> Optional[TrainingProgram]:
@@ -1072,11 +1137,12 @@ class TrainingProgramService:
             )
 
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        training_program: Optional[TrainingProgram] = result.scalar_one_or_none()
+        return training_program
 
     async def get_programs(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         target_position: Optional[str] = None,
         is_template: Optional[bool] = None,
     ) -> List[TrainingProgram]:
@@ -1132,7 +1198,7 @@ class TrainingProgramService:
     async def update_training_program(
         self,
         program_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         updates: TrainingProgramUpdate,
     ) -> Tuple[Optional[TrainingProgram], Optional[str]]:
         """
@@ -1154,6 +1220,11 @@ class TrainingProgramService:
         # Both are JSON columns; model_dump leaves UUIDs as objects, which
         # json.dumps refuses at commit time.
         if data.get("target_roles"):
+            roles_error = await self._validate_target_roles(
+                data["target_roles"], organization_id
+            )
+            if roles_error:
+                return None, roles_error
             data["target_roles"] = normalize_id_list(data["target_roles"]) or None
         if data.get("reminder_conditions"):
             data["reminder_conditions"] = {
@@ -1172,7 +1243,7 @@ class TrainingProgramService:
     async def delete_training_program(
         self,
         program_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Tuple[bool, Optional[str]]:
         """
         Permanently delete a program and everything under it — phases,
@@ -1251,7 +1322,7 @@ class TrainingProgramService:
         set of step ids feeds the completion math, so that is all we compare.
         """
         if field != "checklist_items":
-            return stored != new
+            return bool(stored != new)
         stored_ids = sorted(i["id"] for i in normalize_checklist_items(stored))
         new_ids = sorted(i["id"] for i in normalize_checklist_items(new))
         return stored_ids != new_ids
@@ -1454,7 +1525,7 @@ class TrainingProgramService:
             return None, "A phase cannot be its own prerequisite"
 
         if phase_id is not None:
-            graph: Dict[str, List[str]] = {
+            graph: Dict[str, Sequence[str]] = {
                 str(p.id): normalize_id_list(p.prerequisite_phase_ids) for p in phases
             }
             graph[str(phase_id)] = ids
@@ -1471,7 +1542,7 @@ class TrainingProgramService:
     async def create_program_phase(
         self,
         phase_data: ProgramPhaseCreate,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Tuple[Optional[ProgramPhase], Optional[str]]:
         """
         Create a new program phase
@@ -1529,7 +1600,7 @@ class TrainingProgramService:
         return phase, None
 
     async def _get_program_phase(
-        self, phase_id: UUID, program_id: UUID, organization_id: UUID
+        self, phase_id: UUID, program_id: UUID | str, organization_id: UUID | str
     ) -> Optional[ProgramPhase]:
         result = await self.db.execute(
             select(ProgramPhase)
@@ -1540,13 +1611,14 @@ class TrainingProgramService:
                 TrainingProgram.organization_id == str(organization_id),
             )
         )
-        return result.scalar_one_or_none()
+        program_phase: Optional[ProgramPhase] = result.scalar_one_or_none()
+        return program_phase
 
     async def update_program_phase(
         self,
         phase_id: UUID,
         program_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         updates: ProgramPhaseUpdate,
     ) -> Tuple[Optional[ProgramPhase], Optional[str]]:
         """
@@ -1582,7 +1654,7 @@ class TrainingProgramService:
     async def reorder_program_phases(
         self,
         program_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         phase_ids: List[UUID],
     ) -> Tuple[Optional[List[ProgramPhase]], Optional[str]]:
         """
@@ -1617,7 +1689,7 @@ class TrainingProgramService:
         self,
         phase_id: UUID,
         program_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Tuple[bool, Optional[str]]:
         """
         Delete a phase and everything anchored to it, cleaning up enrolled
@@ -1703,7 +1775,7 @@ class TrainingProgramService:
     async def get_program_phases(
         self,
         program_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> List[ProgramPhase]:
         """
         Get all phases for a program, ordered by phase_number
@@ -1718,7 +1790,7 @@ class TrainingProgramService:
             .where(ProgramPhase.program_id == str(program_id))
             .order_by(ProgramPhase.phase_number)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     # ==================== Program Requirement Methods ====================
 
@@ -1736,12 +1808,13 @@ class TrainingProgramService:
             .options(selectinload(ProgramRequirement.requirement))
             .where(ProgramRequirement.id == str(program_requirement_id))
         )
-        return result.scalar_one_or_none()
+        program_requirement: Optional[ProgramRequirement] = result.scalar_one_or_none()
+        return program_requirement
 
     async def add_requirement_to_program(
         self,
         program_requirement_data: ProgramRequirementCreate,
-        organization_id: UUID,
+        organization_id: UUID | str,
         acting_user_id: Optional[str] = None,
     ) -> Tuple[Optional[ProgramRequirement], Optional[str]]:
         """
@@ -1892,7 +1965,7 @@ class TrainingProgramService:
     async def update_program_requirement(
         self,
         program_requirement_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         updates: ProgramRequirementUpdate,
     ) -> Tuple[Optional[ProgramRequirement], Optional[str]]:
         """
@@ -1963,7 +2036,7 @@ class TrainingProgramService:
         self,
         program_requirement_id: UUID,
         program_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Tuple[bool, Optional[str]]:
         """
         Unlink a requirement from the program (auto-clean): delete its progress
@@ -2047,7 +2120,7 @@ class TrainingProgramService:
     async def reorder_program_requirements(
         self,
         program_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         program_requirement_ids: List[UUID],
     ) -> Tuple[Optional[List[ProgramRequirement]], Optional[str]]:
         """
@@ -2076,8 +2149,8 @@ class TrainingProgramService:
 
     async def get_program_requirements(
         self,
-        program_id: UUID,
-        organization_id: UUID,
+        program_id: UUID | str,
+        organization_id: UUID | str,
         phase_id: Optional[UUID] = None,
     ) -> List[ProgramRequirement]:
         """
@@ -2100,14 +2173,14 @@ class TrainingProgramService:
         query = query.order_by(ProgramRequirement.sort_order)
 
         result = await self.db.execute(query)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     # ==================== Program Milestone Methods ====================
 
     async def create_program_milestone(
         self,
         milestone_data: ProgramMilestoneCreate,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Tuple[Optional[ProgramMilestone], Optional[str]]:
         """
         Create a program milestone
@@ -2148,7 +2221,7 @@ class TrainingProgramService:
         return milestone, None
 
     async def _get_program_milestone(
-        self, milestone_id: UUID, program_id: UUID, organization_id: UUID
+        self, milestone_id: UUID, program_id: UUID, organization_id: UUID | str
     ) -> Optional[ProgramMilestone]:
         result = await self.db.execute(
             select(ProgramMilestone)
@@ -2159,13 +2232,14 @@ class TrainingProgramService:
                 TrainingProgram.organization_id == str(organization_id),
             )
         )
-        return result.scalar_one_or_none()
+        program_milestone: Optional[ProgramMilestone] = result.scalar_one_or_none()
+        return program_milestone
 
     async def update_program_milestone(
         self,
         milestone_id: UUID,
         program_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         updates: ProgramMilestoneUpdate,
     ) -> Tuple[Optional[ProgramMilestone], Optional[str]]:
         """Update a milestone's name/description/threshold/message."""
@@ -2186,7 +2260,7 @@ class TrainingProgramService:
         self,
         milestone_id: UUID,
         program_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Tuple[bool, Optional[str]]:
         """Delete a milestone (no enrollment side-effects — it's a notify hook)."""
         milestone = await self._get_program_milestone(
@@ -2204,8 +2278,8 @@ class TrainingProgramService:
     async def enroll_member(
         self,
         enrollment_data: ProgramEnrollmentCreate,
-        organization_id: UUID,
-        enrolled_by: Optional[UUID] = None,
+        organization_id: UUID | str,
+        enrolled_by: UUID | str | None = None,
     ) -> Tuple[Optional[ProgramEnrollment], Optional[str]]:
         """
         Enroll a member in a training program
@@ -2329,7 +2403,7 @@ class TrainingProgramService:
     async def get_enrollment_eligibility(
         self,
         program_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Optional[List[dict]]:
         """
         For every member of the org, decide whether they can be enrolled in this
@@ -2485,8 +2559,8 @@ class TrainingProgramService:
 
     async def get_member_enrollments(
         self,
-        user_id: UUID,
-        organization_id: UUID,
+        user_id: UUID | str,
+        organization_id: UUID | str,
         status: Optional[str] = None,
     ) -> List[ProgramEnrollment]:
         """
@@ -2513,12 +2587,12 @@ class TrainingProgramService:
                 populate_existing=True
             )
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_program_enrollments(
         self,
         program_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         status: Optional[str] = None,
     ) -> List[Tuple[ProgramEnrollment, User]]:
         """
@@ -2555,7 +2629,7 @@ class TrainingProgramService:
     async def get_enrollment_by_id(
         self,
         enrollment_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Optional[ProgramEnrollment]:
         """
         Get enrollment by ID with eager loading
@@ -2579,7 +2653,8 @@ class TrainingProgramService:
             # holds (expire_on_commit is off).
             .execution_options(populate_existing=True)
         )
-        return result.scalar_one_or_none()
+        program_enrollment: Optional[ProgramEnrollment] = result.scalar_one_or_none()
+        return program_enrollment
 
     # ==================== Linked Requirements Read Compliance ====================
 
@@ -2828,11 +2903,11 @@ class TrainingProgramService:
 
     async def update_requirement_progress(
         self,
-        progress_id: UUID,
-        organization_id: UUID,
+        progress_id: UUID | str,
+        organization_id: UUID | str,
         updates: RequirementProgressUpdate,
-        verified_by: Optional[UUID] = None,
-        acting_user_id: Optional[UUID] = None,
+        verified_by: UUID | str | None = None,
+        acting_user_id: UUID | str | None = None,
         can_manage: bool = False,
         completion_credit_id: Optional[str] = None,
         enforce_prerequisites: bool = True,
@@ -3029,7 +3104,7 @@ class TrainingProgramService:
                 progress.progress_percentage = 100.0
                 progress.completed_at = datetime.now(timezone.utc)
                 if verified_by:
-                    progress.verified_by = verified_by
+                    progress.verified_by = str(verified_by)
                     progress.verified_at = datetime.now(timezone.utc)
 
         # Knowledge/skills test score entry: an officer records a score and
@@ -3085,7 +3160,7 @@ class TrainingProgramService:
                 progress.progress_percentage = 100.0
                 progress.completed_at = datetime.now(timezone.utc)
                 if verified_by:
-                    progress.verified_by = verified_by
+                    progress.verified_by = str(verified_by)
                     progress.verified_at = datetime.now(timezone.utc)
             else:
                 # Failed attempt — recorded, but the requirement is not complete.
@@ -3133,7 +3208,7 @@ class TrainingProgramService:
             if completed == total:
                 progress.completed_at = datetime.now(timezone.utc)
                 if verified_by:
-                    progress.verified_by = verified_by
+                    progress.verified_by = str(verified_by)
                     progress.verified_at = datetime.now(timezone.utc)
             else:
                 progress.completed_at = None
@@ -3145,10 +3220,10 @@ class TrainingProgramService:
             claimed = prune_done_ids(
                 requirement.checklist_items, updates.checklist_claimed
             )
-            done = set((progress.progress_notes or {}).get("checklist_done") or [])
+            done_ids = set((progress.progress_notes or {}).get("checklist_done") or [])
             notes = copy.deepcopy(progress.progress_notes or {})
             notes["checklist_claimed"] = [
-                item_id for item_id in claimed if item_id not in done
+                item_id for item_id in claimed if item_id not in done_ids
             ]
             progress.progress_notes = notes
 
@@ -3276,7 +3351,7 @@ class TrainingProgramService:
 
         # Update verification
         if verified_by:
-            progress.verified_by = verified_by
+            progress.verified_by = str(verified_by)
             progress.verified_at = datetime.now(timezone.utc)
 
         progress.updated_at = datetime.now(timezone.utc)
@@ -3298,7 +3373,7 @@ class TrainingProgramService:
         self,
         progress: RequirementProgress,
         updates: RequirementProgressUpdate,
-        acting_user_id: Optional[UUID],
+        acting_user_id: UUID | str | None,
     ) -> Tuple[Optional[RequirementProgress], Optional[str]]:
         """``update_requirement_progress`` for a linked requirement's row."""
         enrollment = (
@@ -3333,7 +3408,7 @@ class TrainingProgramService:
         return progress, None
 
     async def _get_org_scoped_progress(
-        self, progress_id: Any, organization_id: UUID
+        self, progress_id: Any, organization_id: UUID | str
     ) -> Optional[RequirementProgress]:
         """Fetch a requirement-progress row, scoped to the org via its program."""
         result = await self.db.execute(
@@ -3345,21 +3420,24 @@ class TrainingProgramService:
                 TrainingProgram.organization_id == str(organization_id),
             )
         )
-        return result.scalar_one_or_none()
+        requirement_progress: Optional[RequirementProgress] = (
+            result.scalar_one_or_none()
+        )
+        return requirement_progress
 
     async def apply_requirement_credit(
         self,
         progress_id: Any,
-        organization_id: UUID,
+        organization_id: UUID | str,
         source_type: ProgressCreditSource,
         source_id: str,
         units: float,
-        verified_by: Optional[UUID] = None,
-        applied_by: Optional[UUID] = None,
+        verified_by: UUID | str | None = None,
+        applied_by: UUID | str | None = None,
         progress_notes: Optional[Dict] = None,
         mark_in_progress: bool = False,
         mark_completed: bool = False,
-        acting_user_id: Optional[UUID] = None,
+        acting_user_id: UUID | str | None = None,
         can_manage: bool = False,
         restate: bool = False,
     ) -> Tuple[Optional[RequirementProgress], Optional[str]]:
@@ -3534,10 +3612,10 @@ class TrainingProgramService:
     async def revoke_requirement_credit(
         self,
         progress_id: Any,
-        organization_id: UUID,
+        organization_id: UUID | str,
         source_type: ProgressCreditSource,
         source_id: str,
-        verified_by: Optional[UUID] = None,
+        verified_by: UUID | str | None = None,
     ) -> Tuple[Optional[RequirementProgress], Optional[str]]:
         """Reverse a single previously-applied credit: drop its ledger row and
         subtract its units back off the requirement (floored at 0), re-running
@@ -3621,11 +3699,11 @@ class TrainingProgramService:
 
     async def reverse_credits_for_source_except(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         source_id: str,
         keep_progress_ids: set,
         source_type: Optional[ProgressCreditSource] = None,
-        verified_by: Optional[UUID] = None,
+        verified_by: UUID | str | None = None,
     ) -> int:
         """Reverse this source's credits everywhere it no longer feeds.
 
@@ -3690,10 +3768,10 @@ class TrainingProgramService:
 
     async def reverse_credits_for_source(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         source_id: str,
         source_type: Optional[ProgressCreditSource] = None,
-        verified_by: Optional[UUID] = None,
+        verified_by: UUID | str | None = None,
         user_id: Optional[Any] = None,
     ) -> int:
         """Un-apply every pipeline credit that a given source record produced.
@@ -3860,7 +3938,7 @@ class TrainingProgramService:
     async def _resolve_apply_target(
         self,
         user_id: Any,
-        organization_id: UUID,
+        organization_id: UUID | str,
         program_id: Any,
         requirement_id: Any,
         completed_on: Optional[date] = None,
@@ -3930,7 +4008,7 @@ class TrainingProgramService:
     async def validate_apply_target(
         self,
         user_id: Any,
-        organization_id: UUID,
+        organization_id: UUID | str,
         program_id: Any,
         requirement_id: Any,
         completed_on: Optional[date] = None,
@@ -3947,11 +4025,11 @@ class TrainingProgramService:
     async def apply_training_to_requirement(
         self,
         user_id: Any,
-        organization_id: UUID,
+        organization_id: UUID | str,
         program_id: Any,
         requirement_id: Any,
         hours: float,
-        verified_by: Optional[UUID] = None,
+        verified_by: UUID | str | None = None,
         source_id: Optional[str] = None,
         completed_on: Optional[date] = None,
     ) -> Tuple[bool, Optional[str]]:
@@ -3977,7 +4055,8 @@ class TrainingProgramService:
         row, error = await self._resolve_apply_target(
             user_id, organization_id, program_id, requirement_id, completed_on
         )
-        if error:
+        # Every error return carries row=None, so this is the error branch.
+        if row is None:
             return False, error
 
         progress, requirement = row
@@ -4112,7 +4191,7 @@ class TrainingProgramService:
     async def reset_requirement_progress(
         self,
         progress_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Tuple[Optional[RequirementProgress], Optional[str]]:
         """
         Reset a single member's progress on one requirement to not-started
@@ -4150,7 +4229,8 @@ class TrainingProgramService:
                 TrainingProgram.id == str(enrollment.program_id)
             )
         )
-        return result.scalar_one_or_none()
+        training_program: Optional[TrainingProgram] = result.scalar_one_or_none()
+        return training_program
 
     async def _perform_enrollment_reset(
         self,
@@ -4204,7 +4284,7 @@ class TrainingProgramService:
     async def reset_enrollment_progress(
         self,
         enrollment_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Tuple[Optional[ProgramEnrollment], Optional[str]]:
         """
         Start a fresh cycle for a whole enrollment: reset every requirement's
@@ -4237,8 +4317,8 @@ class TrainingProgramService:
     async def withdraw_enrollment(
         self,
         enrollment_id: UUID,
-        organization_id: UUID,
-        acting_user_id: UUID,
+        organization_id: UUID | str,
+        acting_user_id: UUID | str,
         can_manage: bool,
         reason: Optional[str] = None,
     ) -> Tuple[Optional[ProgramEnrollment], Optional[str]]:
@@ -4302,7 +4382,7 @@ class TrainingProgramService:
                 .values(**values)
                 .execution_options(synchronize_session=False)
             )
-            if withdrawal.rowcount != 1:
+            if rows_affected(withdrawal) != 1:
                 return None, "Not authorized to withdraw a finalized enrollment"
 
             # Keep the already-loaded return object in sync without marking it
@@ -4428,7 +4508,7 @@ class TrainingProgramService:
     async def reopen_enrollment(
         self,
         enrollment_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         target_completion_date: Optional[date] = None,
     ) -> Tuple[Optional[ProgramEnrollment], Optional[str]]:
         """Put an expired enrollment back to ACTIVE, optionally on a new
@@ -4467,7 +4547,7 @@ class TrainingProgramService:
         return enrollment, None
 
     async def run_due_recert_resets(
-        self, organization_id: UUID
+        self, organization_id: UUID | str
     ) -> Tuple[int, Optional[str]]:
         """Auto-reset every enrollment in the organization whose recert deadline
         has passed. Intended for a scheduled sweep, but safe to call on demand.
@@ -4531,7 +4611,7 @@ class TrainingProgramService:
 
     async def _recalculate_enrollment_progress(
         self,
-        enrollment_id: UUID,
+        enrollment_id: UUID | str,
         completion_credit_id: Optional[str] = None,
     ) -> None:
         """
@@ -4758,7 +4838,7 @@ class TrainingProgramService:
 
     async def _is_phase_complete(
         self,
-        enrollment_id: UUID,
+        enrollment_id: UUID | str,
         phase_id: UUID,
     ) -> bool:
         """Whether every *required* requirement in a phase is satisfied for
@@ -4789,7 +4869,7 @@ class TrainingProgramService:
 
     async def _unmet_phase_prerequisites(
         self,
-        enrollment_id: UUID,
+        enrollment_id: UUID | str,
         phase: ProgramPhase,
         phases_by_id: Dict[str, ProgramPhase],
     ) -> List[str]:
@@ -4862,8 +4942,8 @@ class TrainingProgramService:
     async def advance_enrollment_phase(
         self,
         enrollment_id: UUID,
-        organization_id: UUID,
-        advanced_by: Optional[UUID] = None,
+        organization_id: UUID | str,
+        advanced_by: UUID | str | None = None,
         force: bool = False,
     ) -> Tuple[Optional[ProgramEnrollment], Optional[str]]:
         """
@@ -4930,7 +5010,7 @@ class TrainingProgramService:
 
     async def _maybe_auto_advance_phase(
         self,
-        enrollment_id: UUID,
+        enrollment_id: UUID | str,
     ) -> None:
         """Auto-advance an active enrollment through any consecutive phases
         whose required requirements are complete.
@@ -4999,8 +5079,8 @@ class TrainingProgramService:
         self,
         source_program_id: UUID,
         new_name: str,
-        organization_id: UUID,
-        created_by: UUID,
+        organization_id: UUID | str,
+        created_by: UUID | str,
         increment_version: bool = True,
     ) -> Tuple[Optional[TrainingProgram], Optional[str]]:
         """
@@ -5180,7 +5260,7 @@ class TrainingProgramService:
     # ==================== Export / Import ====================
 
     async def export_program_to_json(
-        self, program_id: UUID, organization_id: UUID
+        self, program_id: UUID, organization_id: UUID | str
     ) -> dict:
         """Export a training program as a portable JSON structure.
 
@@ -5370,8 +5450,8 @@ class TrainingProgramService:
     async def import_program_from_json(
         self,
         data: dict,
-        organization_id: UUID,
-        created_by: UUID,
+        organization_id: UUID | str,
+        created_by: UUID | str,
         *,
         dry_run: bool = False,
     ) -> ProgramImportResult:
@@ -5407,8 +5487,8 @@ class TrainingProgramService:
     async def _build_program_from_json(
         self,
         data: dict,
-        organization_id: UUID,
-        created_by: UUID,
+        organization_id: UUID | str,
+        created_by: UUID | str,
     ) -> Tuple[TrainingProgram, Dict[str, Any]]:
         """Stage an imported program in the session without committing.
 
@@ -5453,6 +5533,21 @@ class TrainingProgramService:
                 "in imported program"
             )
 
+        # A program exported from another department carries that department's
+        # position ids, which mean nothing here; keep only this org's own
+        # rather than refusing the whole import over a field nothing reads (XC-1).
+        imported_target_roles = None
+        raw_roles = normalize_id_list(prog_data.get("target_roles") or [])
+        if raw_roles:
+            own_roles = await self.db.execute(
+                select(Position.id).where(
+                    Position.id.in_(raw_roles),
+                    Position.organization_id == str(organization_id),
+                )
+            )
+            kept = {str(row[0]) for row in own_roles.all()}
+            imported_target_roles = [r for r in raw_roles if r in kept] or None
+
         program = TrainingProgram(
             organization_id=organization_id,
             name=prog_data.get("name", "Imported Program"),
@@ -5460,7 +5555,7 @@ class TrainingProgramService:
             code=prog_data.get("code"),
             version=prog_data.get("version", 1),
             target_position=prog_data.get("target_position"),
-            target_roles=prog_data.get("target_roles"),
+            target_roles=imported_target_roles,
             structure_type=structure_type,
             allows_concurrent_enrollment=prog_data.get(
                 "allows_concurrent_enrollment", True
@@ -5543,16 +5638,16 @@ class TrainingProgramService:
         # department. Numbers that aren't in the file are dropped rather than
         # imported as dangling references.
         for phase_data in data.get("phases", []):
-            phase = phases_by_number.get(phase_data.get("phase_number", 0))
-            if phase is None:
+            linked_phase = phases_by_number.get(phase_data.get("phase_number", 0))
+            if linked_phase is None:
                 continue
             linked = [
                 str(phases_by_number[number].id)
                 for number in phase_data.get("prerequisite_phase_numbers") or []
-                if number in phases_by_number and number != phase.phase_number
+                if number in phases_by_number and number != linked_phase.phase_number
             ]
             if linked:
-                phase.prerequisite_phase_ids = linked
+                linked_phase.prerequisite_phase_ids = linked
 
         # Program-level requirements
         program_requirement_count = 0
@@ -5611,8 +5706,8 @@ class TrainingProgramService:
     async def _resolve_or_create_requirement(
         self,
         req_data: dict,
-        organization_id: UUID,
-        created_by: UUID,
+        organization_id: UUID | str,
+        created_by: UUID | str,
     ) -> Tuple[Optional[str], bool]:
         """
         Find an existing requirement by name+source, or create it.
@@ -5720,9 +5815,9 @@ class TrainingProgramService:
         self,
         program_id: UUID,
         user_ids: List[UUID],
-        organization_id: UUID,
+        organization_id: UUID | str,
         target_completion_date: Optional[date] = None,
-        enrolled_by: Optional[UUID] = None,
+        enrolled_by: UUID | str | None = None,
     ) -> Tuple[List[ProgramEnrollment], List[str]]:
         """
         Enroll multiple members in a program at once
@@ -5825,7 +5920,7 @@ class TrainingProgramService:
     async def preview_registry_requirements(
         self,
         registry_file_path: str,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Tuple[Optional[List[dict]], Optional[str]]:
         """
         List a registry's requirements for the "pick and choose" import UI, each
@@ -5887,8 +5982,8 @@ class TrainingProgramService:
     async def import_registry_requirements(
         self,
         registry_file_path: str,
-        organization_id: UUID,
-        created_by: UUID,
+        organization_id: UUID | str,
+        created_by: UUID | str,
         skip_existing: bool = True,
         selected_codes: Optional[List[str]] = None,
     ) -> Tuple[int, int, List[str], Optional[str], Optional[str]]:

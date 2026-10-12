@@ -56,3 +56,15 @@ class TestBuildCloudflareAttachments:
         assert names == [
             "small.pdf"
         ], "The over-budget attachment must be skipped, not fail the send"
+
+
+class TestEncryptedStoredAttachments:
+    def test_a_stored_attachment_goes_out_decrypted(self, tmp_path):
+        from app.core import file_encryption
+
+        stored = tmp_path / "welcome.pdf"
+        stored.write_bytes(file_encryption.encrypt_bytes(b"%PDF-1.4 welcome"))
+
+        attachments = EmailService._build_cloudflare_attachments([str(stored)])
+
+        assert base64.b64decode(attachments[0]["content"]) == b"%PDF-1.4 welcome"

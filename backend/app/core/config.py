@@ -87,6 +87,24 @@ RETIRED_SETTINGS: dict[str, str] = {
         "nothing ever read it; a self-registered account is active at once, and "
         "REGISTRATION_ENABLED=false is how to keep registration closed"
     ),
+    # Retired 2026-10-08 (CI3-33-4): declared and documented, read by nothing.
+    "RATE_LIMIT_PER_MINUTE": (
+        "the per-scope limits are fixed in security_middleware.py; "
+        "RATE_LIMIT_DEFAULT is the tunable default"
+    ),
+    "DB_POOL_MIN": "only DB_POOL_MAX reaches the connection pool",
+    "STORAGE_TYPE": (
+        "uploads are always written to local disk under /app/uploads; there is "
+        "no S3, Azure or GCS backend"
+    ),
+    "UPLOAD_DIR": (
+        "every upload writer uses its own fixed path under /app/uploads; mount "
+        "the uploads volume there"
+    ),
+    "MAX_FILE_SIZE": (
+        "uploads are bounded by MAX_REQUEST_BODY_SIZE and by each feature's "
+        "own limit"
+    ),
 }
 
 
@@ -122,7 +140,6 @@ class Settings(BaseSettings):
     # Path to CA certificate for verifying MySQL server identity over TLS.
     # Required when DB_SSL=True for full MITM protection.
     DB_SSL_CA: str = ""
-    DB_POOL_MIN: int = 2
     DB_POOL_MAX: int = 10
     DB_ECHO: bool = False  # SQL logging
     DB_CHARSET: str = "utf8mb4"  # Use utf8mb4 for full Unicode support
@@ -402,7 +419,6 @@ class Settings(BaseSettings):
 
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
-    RATE_LIMIT_PER_MINUTE: int = 60
     # Per-form/day ceiling on unauthenticated public form submissions (bounds
     # DB flooding and integration/email abuse from a distributed spam flood).
     # 0 disables the cap.
@@ -1225,14 +1241,10 @@ class Settings(BaseSettings):
     # ============================================
     # File Storage
     # ============================================
-    STORAGE_TYPE: str = "local"  # local, s3, azure, gcs
-    UPLOAD_DIR: str = "./uploads"
-    MAX_FILE_SIZE: int = 52428800  # 50 MB
-
     # Hard ceiling on any request body, enforced at the ASGI edge before the
     # body is buffered into memory (memory-exhaustion DoS backstop, independent
-    # of nginx's client_max_body_size). Sized above MAX_FILE_SIZE to leave room
-    # for multipart-upload envelope overhead.
+    # of nginx's client_max_body_size). Sized above the largest per-feature
+    # upload limit to leave room for multipart-upload envelope overhead.
     MAX_REQUEST_BODY_SIZE: int = 62914560  # 60 MB
 
     # AWS S3

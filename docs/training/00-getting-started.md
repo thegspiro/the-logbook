@@ -166,8 +166,9 @@ was changed, and you have been signed out everywhere. Sign in with your new
 password."_ This is expected, not an error. Sign in again with your new
 password.
 
-> **Screenshot needed:**
-> _[Throwaway demo member (never a real member) at /login, immediately after changing the password on My Account → Password: the sign-in page showing the green notice "Your password was changed, and you have been signed out everywhere. Sign in with your new password." Leave the username and password fields empty.]_
+<!-- Screenshot needed:
+_[Throwaway demo member (never a real member) at /login, immediately after changing the password on My Account → Password: the sign-in page showing the green notice "Your password was changed, and you have been signed out everywhere. Sign in with your new password." Leave the username and password fields empty.]_
+-->
 
 **Your department may also require two-step sign-in.** If it does, The Logbook
 takes you to the **Security** tab after you change your password, so you can
@@ -189,8 +190,9 @@ Your department can choose to show the menu as a **bar across the top** of the
 screen instead. If the top bar runs out of room, the menu groups that don't
 fit move under **More** at its right-hand end.
 
-> **Screenshot needed:**
-> _[Administrator (all modules on) at /dashboard, 1280×900 viewport, with Navigation Layout set to Top bar: the More dropdown open at the right-hand end of the top bar, showing at least one overflowed group under its own label with separators between groups. The page must not scroll sideways.]_
+<!-- Screenshot needed:
+_[Administrator (all modules on) at /dashboard, 1280×900 viewport, with Navigation Layout set to Top bar: the More dropdown open at the right-hand end of the top bar, showing at least one overflowed group under its own label with separators between groups. The page must not scroll sideways.]_
+-->
 
 ### When the app asks "Are you sure?"
 
@@ -348,8 +350,9 @@ your department uses.
 
 ![Dashboard stats cards, notifications, upcoming events, and upcoming shifts](./images/00-07-dashboard-panels.png)
 
-> **Screenshot needed:**
-> _[Fire Chief (or another officer holding a role named on a Multi-Signer Approval stage, with an applicant waiting at that stage) at /dashboard: clip to the Needs you panel showing "<Name> is waiting on your sign-off" with the stage name beneath and the Review button. Use a demo applicant, not a real person.]_
+<!-- Screenshot needed:
+_[Fire Chief (or another officer holding a role named on a Multi-Signer Approval stage, with an applicant waiting at that stage) at /dashboard: clip to the Needs you panel showing "<Name> is waiting on your sign-off" with the stage name beneath and the Review button. Use a demo applicant, not a real person.]_
+-->
 
 > **Why does Training Compliance say 0%?** This card shows how many active
 > members have finished **every** active training requirement. It does not
@@ -393,8 +396,9 @@ that event is archived. Notifications about anything else stay.
 
 ![The same inbox after finalizing the event's attendance: the validation prompt gone, the unrelated shift-assignment notification still there](./images/19-32-notification-after-action.png)
 
-> **Screenshot needed:**
-> _[Admin at /notifications?tab=inbox, with everything unpinned first: at least two unread notifications of one category (for example two attendance-validation prompts from ended events) collapsed into a stack showing "N attendance validations", "Latest: …", the "N unread" badge and Mark all read, beside ordinary single cards. Then a second capture of the same stack expanded to its individual cards. Do not press Mark all read.]_
+<!-- Screenshot needed:
+_[Admin at /notifications?tab=inbox, with everything unpinned first: at least two unread notifications of one category (for example two attendance-validation prompts from ended events) collapsed into a stack showing "N attendance validations", "Latest: …", the "N unread" badge and Mark all read, beside ordinary single cards. Then a second capture of the same stack expanded to its individual cards. Do not press Mark all read.]_
+-->
 
 ---
 
@@ -433,8 +437,9 @@ your account safe even if someone learns your password. When you turn it on,
 you get a set of **recovery codes**. Each one works once, if you ever lose
 your phone. Save them somewhere safe and private.
 
-> **Screenshot needed:**
-> _[A throwaway demo member created for the capture (never a real member) at /account?tab=security, right after Verify & enable: the "Save your recovery codes" panel with the code grid, Copy codes and Done. The codes are secrets: use a disposable account and regenerate or blur them afterwards; do not capture the QR code or the manual key.]_
+<!-- Screenshot needed:
+_[A throwaway demo member created for the capture (never a real member) at /account?tab=security, right after Verify & enable: the "Save your recovery codes" panel with the code grid, Copy codes and Done. The codes are secrets: use a disposable account and regenerate or blur them afterwards; do not capture the QR code or the manual key.]_
+-->
 
 > **Your privacy choices.** Privacy choices and the data download are on the
 > **Security** tab. None of them is required to be a member. If you have never

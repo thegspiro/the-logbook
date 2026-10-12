@@ -77,6 +77,7 @@ from app.services.skills_testing_service import (
     lock_attempt_capacity,
     notify_candidate_result_available,
     notify_candidate_result_voided,
+    pending_validation_criteria,
     redact_test_for_view,
     resolve_disclosure_policy,
     resolve_elapsed_seconds,
@@ -271,13 +272,14 @@ async def _org_training_config(db: AsyncSession, organization_id) -> object | No
     """The organization's training config, or None when it has never been saved."""
     from app.models.training import TrainingModuleConfig
 
-    return (
+    config: TrainingModuleConfig | None = (
         await db.execute(
             select(TrainingModuleConfig).where(
                 TrainingModuleConfig.organization_id == str(organization_id)
             )
         )
     ).scalar_one_or_none()
+    return config
 
 
 async def _named_viewer_ids(db: AsyncSession, test_id: str) -> set[str]:
@@ -706,7 +708,7 @@ async def update_template(
     update_data = template_update.model_dump(exclude_unset=True)
 
     # Convert sections to JSON-serializable dicts if provided
-    if "sections" in update_data and update_data["sections"] is not None:
+    if "sections" in update_data and template_update.sections is not None:
         update_data["sections"] = [s.model_dump() for s in template_update.sections]
 
     # Validate/normalize the requirement link (UUID -> str for the FK column)
@@ -1078,11 +1080,7 @@ def _apply_test_filters(
     # The review queue is not expressible as a status — it is a status *and*
     # the absence of a validation.
     if pending_validation:
-        query = query.where(
-            SkillTest.is_practice.is_(False),
-            SkillTest.status == SkillTestStatus.COMPLETED.value,
-            SkillTest.validated_at.is_(None),
-        )
+        query = query.where(*pending_validation_criteria(organization_id))
 
     if status_filter:
         query = query.where(SkillTest.status == status_filter)
@@ -1870,7 +1868,7 @@ async def update_test(
         test.resume_count = (test.resume_count or 0) + 1
 
     # Convert section_results to JSON-serializable dicts if provided
-    if "section_results" in update_data and update_data["section_results"] is not None:
+    if "section_results" in update_data and test_update.section_results is not None:
         update_data["section_results"] = [
             sr.model_dump() for sr in test_update.section_results
         ]
@@ -1931,7 +1929,7 @@ def _ensure_utc(dt: datetime | None) -> datetime | None:
 
 
 async def _lock_test_for_transition(
-    db: AsyncSession, test_id: UUID, organization_id: UUID
+    db: AsyncSession, test_id: UUID, organization_id: UUID | str
 ) -> SkillTest | None:
     """Fetch a test with its row locked for the rest of the transaction.
 
@@ -1956,7 +1954,8 @@ async def _lock_test_for_transition(
         .where(SkillTest.organization_id == organization_id)
         .with_for_update()
     )
-    return result.scalar_one_or_none()
+    locked_test: SkillTest | None = result.scalar_one_or_none()
+    return locked_test
 
 
 @router.post("/tests/{test_id}/complete", response_model=SkillTestResponse)
@@ -4003,12 +4002,7 @@ async def get_testing_summary(
     pending_validation_count = 0
     if _can_manage_tests(current_user):
         pending_validation_result = await db.execute(
-            select(func.count(SkillTest.id)).where(
-                SkillTest.organization_id == org_id,
-                SkillTest.status == "completed",
-                SkillTest.validated_at.is_(None),
-                SkillTest.is_practice.is_(False),
-            )
+            select(func.count(SkillTest.id)).where(*pending_validation_criteria(org_id))
         )
         pending_validation_count = pending_validation_result.scalar() or 0
 

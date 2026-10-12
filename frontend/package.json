@@ -17,6 +17,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "typecheck": "node scripts/tsc-native.mjs --noEmit",
     "typecheck:watch": "node scripts/tsc-native.mjs --noEmit --watch",
+    "typecheck:tests": "node scripts/tsc-native.mjs -p tsconfig.test.json --noEmit",
     "validate": "npm run typecheck && npm run lint",
     "validate:onboarding": "npm run typecheck && eslint src/modules/onboarding",
     "precommit": "npm run validate",

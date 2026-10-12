@@ -74,6 +74,16 @@ safe, vault) of at minimum:
 Treat the key copy with the same care as the backups themselves — either one
 without the other is incomplete.
 
+**Since 2026-10-09 the uploads are encrypted too.** Every file under
+`uploads/` is encrypted with a key derived from `ENCRYPTION_KEY` and
+`ENCRYPTION_SALT`, so an `uploads.tar.gz` without them is noise, and an
+`uploads.tar.gz` stored with them is as readable as if it were plaintext.
+**Never keep the key copy in the same place as the backups.** Setup asks an
+administrator to confirm this, and an existing installation shows a notice
+until somebody does (`docs/FILE_STORAGE_HARDENING.md`, decision 25).
+Archives made before `scripts/encrypt_uploads.py` was run still hold the
+files in plaintext (see `docs/KNOWN_LIMITATIONS.md`).
+
 ## Audit-log archives
 
 The weekly audit job (`audit_log_archival`) enforces

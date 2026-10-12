@@ -6,7 +6,16 @@
  */
 import { describe, it, expect } from 'vitest';
 import type { BallotItem, Candidate } from '../../types/election';
-import { candidatesForItem, choiceLabel, choiceToVote, emptyChoice, itemForm, missingWriteIn } from './ballotChoices';
+import {
+  candidatesForItem,
+  choiceLabel,
+  choiceToVote,
+  emptyChoice,
+  isAnswered,
+  itemForm,
+  missingWriteIn,
+  unansweredItems,
+} from './ballotChoices';
 
 const item = (overrides: Partial<BallotItem> = {}): BallotItem => ({
   id: 'chief',
@@ -70,8 +79,26 @@ describe('ballotChoices', () => {
   it('labels a selection and finds an unnamed write-in', () => {
     const pool = [candidate('a', 'Chief', 'Alice')];
     expect(choiceLabel({ ...emptyChoice(), choice: 'a' }, pool)).toBe('Alice');
-    expect(choiceLabel(undefined, pool)).toBe('Abstain (No Vote)');
+    expect(choiceLabel(undefined, pool)).toBe('No selection');
+    expect(choiceLabel({ ...emptyChoice(), choice: 'abstain' }, pool)).toBe('Abstain (No Vote)');
     expect(missingWriteIn({ chief: { ...emptyChoice(), choice: 'write_in' } }, [item()])?.id).toBe('chief');
     expect(missingWriteIn({ chief: emptyChoice() }, [item()])).toBeUndefined();
+  });
+
+  // W50-25: no item starts on Abstain; Submit waits for a choice or an explicit Abstain.
+  it('starts every item unanswered and counts Abstain, a pick, a multi-select or a ranking as answered', () => {
+    expect(emptyChoice().choice).toBe('');
+    expect(isAnswered(emptyChoice())).toBe(false);
+    expect(isAnswered(undefined)).toBe(false);
+    expect(isAnswered({ ...emptyChoice(), choice: 'abstain' })).toBe(true);
+    expect(isAnswered({ ...emptyChoice(), choice: 'a' })).toBe(true);
+    expect(isAnswered({ ...emptyChoice(), candidate_ids: ['a'] })).toBe(true);
+    expect(isAnswered({ ...emptyChoice(), ranks: { a: 1 } })).toBe(true);
+
+    const items = [item(), item({ id: 'budget', title: 'Budget', position: undefined })];
+    expect(unansweredItems({ chief: emptyChoice() }, items).map((i) => i.id)).toEqual(['chief', 'budget']);
+    expect(
+      unansweredItems({ chief: { ...emptyChoice(), choice: 'abstain' }, budget: emptyChoice() }, items).map((i) => i.id)
+    ).toEqual(['budget']);
   });
 });

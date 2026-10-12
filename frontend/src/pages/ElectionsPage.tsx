@@ -493,7 +493,7 @@ export const ElectionsPage: React.FC = () => {
                                 {formatDate(election.start_date, tz)} - {formatDate(election.end_date, tz)}
                               </span>
                               <ElectionCloseStamp election={election} className="inline-flex items-center" />
-                              {election.total_votes !== undefined && election.total_votes > 0 && (
+                              {(election.total_votes ?? 0) > 0 && (
                                 <span className="inline-flex items-center gap-1.5">
                                   <svg
                                     className="h-4 w-4"

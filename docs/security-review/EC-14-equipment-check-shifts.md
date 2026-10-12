@@ -1677,3 +1677,16 @@ No code changes this pass, so the full gate was still run against current
 | `pytest tests/` (full backend suite)                                                 | ✅ 9179 passed, 22 skipped (pre-existing Docker/no-MySQL skips), 0 failed                                   |
 | `npx tsc --noEmit`                                                                   | ✅ 0 errors                                                                                                 |
 | `npx eslint .`                                                                       | ✅ 0 errors, 10 pre-existing warnings (same set as SEC-00 pass 2 / AP-13 pass 2, unrelated to this feature) |
+
+## EC-11 built (2026-10-11)
+
+Owner decision: an expected check is one per shift per applicable checklist —
+the fleet-readiness rule — with no cadence setting and no migration.
+`get_compliance_report` now fills `checks_expected` and the new
+`checks_missed` per apparatus, and `overdue_count`, from
+`EquipmentReadinessService.expected_checks_between`, which shares
+`_expected_pairs` / `_resolve_occasions` with the fleet board and check log.
+Guard tests: `tests/test_equipment_check_shift_attribution.py::TestComplianceReportCadence`
+(expected/missed over shifts x checklists, agreement with the check log, and a
+unit no checklist reaches expecting nothing). EC-7 re-read: the remaining bare
+`get_current_user` routes are self-scoped or router-gated, as listed above.

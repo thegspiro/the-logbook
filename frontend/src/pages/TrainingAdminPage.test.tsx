@@ -2,234 +2,254 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
+import type { AdminHubSummary } from '../types/adminHub';
 
 // Mock all lazy-loaded page imports before importing the component
-vi.mock('./TrainingOfficerDashboard', () => ({ default: () => <div data-testid="lazy-component">Dashboard</div> }));
-vi.mock('./ComplianceMatrixTab', () => ({ default: () => <div data-testid="lazy-component">Compliance</div> }));
-vi.mock('./ExpiringCertsTab', () => ({ default: () => <div data-testid="lazy-component">Expiring Certs</div> }));
-vi.mock('./TrainingWaiversTab', () => ({ default: () => <div data-testid="lazy-component">Waivers</div> }));
-vi.mock('./ReviewSubmissionsPage', () => ({ default: () => <div data-testid="lazy-component">Review</div> }));
-vi.mock('./CreateTrainingSessionPage', () => ({ default: () => <div data-testid="lazy-component">Session</div> }));
-vi.mock('./ShiftReportPage', () => ({ default: () => <div data-testid="lazy-component">Shift Report</div> }));
-vi.mock('./TrainingRequirementsPage', () => ({ default: () => <div data-testid="lazy-component">Requirements</div> }));
-vi.mock('./CreatePipelinePage', () => ({ default: () => <div data-testid="lazy-component">Pipeline</div> }));
-vi.mock('./ExternalTrainingPage', () => ({ default: () => <div data-testid="lazy-component">External</div> }));
-vi.mock('./HistoricalImportPage', () => ({ default: () => <div data-testid="lazy-component">Historical</div> }));
-vi.mock('./SkillsTestingTemplatesTab', () => ({ default: () => <div data-testid="lazy-component">Templates</div> }));
-vi.mock('./SkillsTestingTestRecordsTab', () => ({ default: () => <div data-testid="lazy-component">Records</div> }));
-vi.mock('./TrainingEnhancementsTab', () => ({ default: () => <div data-testid="lazy-component">Enhancements</div> }));
-vi.mock('./ComplianceOfficerDashboard', () => ({
-  default: () => <div data-testid="lazy-component">Compliance Officer</div>,
+// Hoisted because AdminMetricsSettings is imported eagerly, so its mock factory
+// runs before this module's own top-level statements.
+const { lazy } = vi.hoisted(() => ({
+  lazy: (text: string) => ({ default: () => <div data-testid="lazy-component">{text}</div> }),
 }));
+vi.mock('./TrainingOfficerDashboard', () => lazy('Dashboard'));
+vi.mock('./ComplianceMatrixTab', () => lazy('Compliance'));
+vi.mock('./ExpiringCertsTab', () => lazy('Expiring Certs'));
+vi.mock('./TrainingWaiversTab', () => lazy('Waivers'));
+vi.mock('./ReviewSubmissionsPage', () => lazy('Review'));
+vi.mock('./CreateTrainingSessionPage', () => lazy('Session'));
+vi.mock('./ShiftReportPage', () => lazy('Shift Report'));
+vi.mock('./training/CohortsPage', () => lazy('Cohorts'));
+vi.mock('./MemberTrainingStatusPage', () => lazy('Member Status'));
+vi.mock('./TrainingRequirementsPage', () => lazy('Requirements'));
+vi.mock('./CourseLibraryPage', () => lazy('Courses'));
+vi.mock('./CreatePipelinePage', () => lazy('Pipeline'));
+vi.mock('./training/SkillEvaluationsTab', () => lazy('Skill Evaluations'));
+vi.mock('./training/KnowledgeTestsTab', () => lazy('Knowledge Tests'));
+vi.mock('./training/ManualEntrySettingsPanel', () => lazy('Manual Entry'));
+vi.mock('./ExternalTrainingPage', () => lazy('External'));
+vi.mock('./HistoricalImportPage', () => lazy('Historical'));
+vi.mock('./SkillsTestingTemplatesTab', () => lazy('Templates'));
+vi.mock('./SkillsTestingTestRecordsTab', () => lazy('Test Records'));
+vi.mock('./TrainingEnhancementsTab', () => ({
+  default: ({ activeTab }: { activeTab: string }) => <div data-testid="lazy-component">Enhancements {activeTab}</div>,
+}));
+vi.mock('./ComplianceOfficerDashboard', () => ({
+  default: ({ activeTab }: { activeTab: string }) => (
+    <div data-testid="lazy-component">Compliance Officer {activeTab}</div>
+  ),
+}));
+
+vi.mock('../components/admin/AdminMetricsSettings', () => ({ AdminMetricsSettings: lazy('Metric Settings').default }));
 
 vi.mock('../components/HelpLink', () => ({
   HelpLink: () => null,
 }));
 
+const mockGetSummary = vi.fn();
+vi.mock('../services/adminHubService', () => ({
+  adminHubService: {
+    getSummary: (...args: unknown[]) => mockGetSummary(...args) as unknown,
+  },
+}));
+
 import TrainingAdminPage from './TrainingAdminPage';
+
+const summaryWithAttention: AdminHubSummary = {
+  moduleKey: 'training',
+  generatedAt: '2026-10-09T12:00:00Z',
+  timezone: 'UTC',
+  metrics: [],
+  attention: [
+    {
+      key: 'pending_submissions',
+      title: '3 training submissions awaiting approval',
+      detail: 'oldest waiting 4 days',
+      actionLabel: 'Review queue',
+      href: '/training/admin?page=records&tab=submissions',
+      severity: 'critical',
+      count: 3,
+      oldestAgeDays: 4,
+    },
+  ],
+};
+
+const areaTablist = () => screen.getByRole('tablist', { name: 'Training admin areas' });
+const areaTab = (name: string) => within(areaTablist()).getByRole('tab', { name });
 
 describe('TrainingAdminPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetSummary.mockReset();
+    mockGetSummary.mockResolvedValue({ ...summaryWithAttention, attention: [] });
     window.history.replaceState({}, '', '/training/admin');
   });
 
-  it('keeps Dashboard, Records, and Setup in the primary navigation', async () => {
+  it('shows every area at once, with what each holds', () => {
     renderWithRouter(<TrainingAdminPage />);
-    const navigation = screen.getByRole('tablist', { name: 'Training admin sections' });
 
-    expect(navigation).toHaveTextContent('Dashboard');
-    expect(navigation).toHaveTextContent('Records');
-    expect(navigation).toHaveTextContent('Setup');
-    expect(screen.getByRole('tab', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('button', { name: 'More' })).toHaveAttribute('aria-expanded', 'false');
+    const tabs = within(areaTablist()).getAllByRole('tab');
+    expect(tabs.map((tab) => tab.textContent)).toEqual([
+      expect.stringContaining('Overview'),
+      expect.stringContaining('Records'),
+      expect.stringContaining('Curriculum'),
+      expect.stringContaining('Evaluations'),
+      expect.stringContaining('Program Management'),
+      expect.stringContaining('Compliance Reporting'),
+      expect.stringContaining('Settings & Data'),
+    ]);
+    expect(areaTab('Curriculum')).toHaveTextContent('What members must complete, and the courses that count');
+    expect(screen.queryByRole('button', { name: 'More' })).not.toBeInTheDocument();
   });
 
-  it('exposes lower-frequency destinations in the More menu', async () => {
+  it('opens on the dashboard and names the open page and its purpose', async () => {
+    renderWithRouter(<TrainingAdminPage />);
+
+    expect(areaTab('Overview')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Dashboard' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Compliance, hours and what needs you')).toBeInTheDocument();
+    expect(await screen.findByTestId('lazy-component')).toHaveTextContent('Dashboard');
+  });
+
+  it('moves to an area’s first destination and writes it to the URL', async () => {
     const user = userEvent.setup();
     renderWithRouter(<TrainingAdminPage />);
 
-    await user.click(screen.getByRole('button', { name: 'More' }));
-    const menu = screen.getByRole('menu', { name: 'More training admin sections' });
-    expect(menu).toHaveTextContent('Skills Testing');
-    expect(menu).toHaveTextContent('Compliance');
-    expect(menu).toHaveTextContent('Program Management');
-    expect(menu).not.toHaveTextContent('Advanced');
+    await user.click(areaTab('Settings & Data'));
 
-    await user.click(screen.getByRole('menuitem', { name: /Program Management/ }));
-    expect(screen.getByRole('button', { name: 'More' })).toHaveClass('bg-red-800');
-    expect(window.location.search).toBe('?page=enhancements&tab=recertification');
+    expect(window.location.search).toBe('?page=settings&tab=manual-entry');
+    expect(screen.getByRole('tablist', { name: 'Settings & Data pages' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('lazy-component')).toHaveTextContent('Manual Entry'));
   });
 
-  it('presents the active primary section and destination', async () => {
-    window.history.replaceState({}, '', '/training/admin?page=records&tab=sessions');
+  // Links written against the retired sections are still all over the app.
+  it.each([
+    ['?page=setup&tab=requirements', 'Curriculum', 'Requirements', 'Requirements'],
+    ['?page=setup&tab=integrations', 'Settings & Data', 'Integrations', 'External'],
+    ['?page=skills-testing', 'Evaluations', 'Skill Evaluations', 'Skill Evaluations'],
+    ['?tab=tests', 'Evaluations', 'Skills Test Records', 'Test Records'],
+  ])('opens the older link %s in its new area', async (search, area, destination, content) => {
+    window.history.replaceState({}, '', `/training/admin${search}`);
     renderWithRouter(<TrainingAdminPage />);
 
-    expect(screen.getByRole('tab', { name: 'Records' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('tab', { name: 'Sessions' })).toHaveAttribute('aria-selected', 'true');
-    expect(await screen.findByText('Session')).toBeInTheDocument();
+    expect(areaTab(area)).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: destination })).toHaveAttribute('aria-selected', 'true');
+    await waitFor(() => expect(screen.getByTestId('lazy-component')).toHaveTextContent(content));
   });
 
-  it('provides labeled section and destination selects for narrow screens', async () => {
-    const user = userEvent.setup();
+  // Every destination renders its own child — one missing from TabContent's
+  // switch falls through to `return null` and shows an empty panel, which no
+  // single-page test would catch.
+  it.each([
+    ['dashboard', 'compliance', 'Compliance'],
+    ['dashboard', 'expiring-certs', 'Expiring Certs'],
+    ['dashboard', 'waivers', 'Waivers'],
+    ['records', 'submissions', 'Review'],
+    ['records', 'sessions', 'Session'],
+    ['records', 'cohorts', 'Cohorts'],
+    ['records', 'shift-reports', 'Shift Report'],
+    ['records', 'member-status', 'Member Status'],
+    ['curriculum', 'courses', 'Courses'],
+    ['curriculum', 'pipelines', 'Pipeline'],
+    ['evaluations', 'knowledge-tests', 'Knowledge Tests'],
+    ['evaluations', 'templates', 'Templates'],
+    ['enhancements', 'instructors', 'Enhancements instructors'],
+    ['compliance', 'forecast', 'Compliance Officer forecast'],
+    ['settings', 'import', 'Historical'],
+    ['settings', 'metrics', 'Metric Settings'],
+  ])('renders %s / %s', async (area, tab, content) => {
+    window.history.replaceState({}, '', `/training/admin?page=${area}&tab=${tab}`);
     renderWithRouter(<TrainingAdminPage />);
 
-    const sectionSelect = screen.getByRole('combobox', { name: 'Training admin section' });
-    expect(sectionSelect).toHaveClass('min-h-11');
-    expect(screen.getByRole('option', { name: 'Program Management' })).toBeInTheDocument();
-
-    await user.selectOptions(sectionSelect, 'skills-testing');
-    const destinationSelect = screen.getByRole('combobox', { name: 'Skills Testing destination' });
-    expect(destinationSelect).toHaveValue('templates');
-    expect(screen.getByRole('option', { name: 'Test Records' })).toBeInTheDocument();
-    expect(window.location.search).toBe('?page=skills-testing&tab=templates');
+    await waitFor(() => expect(screen.getByTestId('lazy-component')).toHaveTextContent(content));
   });
 
-  it('continues to resolve legacy flat tab parameters', async () => {
-    window.history.replaceState({}, '', '/training/admin?tab=tests');
+  it('wires both navigation levels to their panels', () => {
     renderWithRouter(<TrainingAdminPage />);
 
-    expect(screen.getByRole('combobox', { name: 'Training admin section' })).toHaveValue('skills-testing');
-    expect(screen.getByRole('combobox', { name: 'Skills Testing destination' })).toHaveValue('tests');
-    expect(await screen.findByTestId('lazy-component')).toHaveTextContent('Records');
-  });
+    const overview = areaTab('Overview');
+    expect(screen.getByRole('tabpanel', { name: 'Overview' })).toHaveAttribute(
+      'id',
+      overview.getAttribute('aria-controls')
+    );
 
-  // The keyboard and tab-panel behaviour below is live code with no other
-  // coverage: the roving focus, the arrow/Home/End handling and the
-  // aria-controls wiring all shipped with the accessibility work, and the
-  // merge that restored the component did not restore its tests.
-  it('wires both navigation levels to their tab panels', async () => {
-    renderWithRouter(<TrainingAdminPage />);
-    const sectionTablist = screen.getByRole('tablist', { name: 'Training admin sections' });
     const dashboardTab = screen.getByRole('tab', { name: 'Dashboard' });
-    const overviewTab = screen.getByRole('tab', { name: 'Overview' });
-
-    expect(within(sectionTablist).getAllByRole('tab')).toHaveLength(3);
-    expect(screen.getByRole('tablist', { name: 'Dashboard tabs' })).toBeInTheDocument();
-    expect(dashboardTab).toHaveAttribute('aria-selected', 'true');
-    expect(overviewTab).toHaveAttribute('aria-selected', 'true');
-
-    const contentPanel = screen.getByRole('tabpanel', { name: 'Overview' });
-    expect(overviewTab).toHaveAttribute('aria-controls', contentPanel.id);
-    expect(screen.getByRole('tabpanel', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(screen.getByRole('tabpanel', { name: 'Dashboard' })).toHaveAttribute(
+      'id',
+      dashboardTab.getAttribute('aria-controls')
+    );
+    // Inactive destinations keep a (hidden) panel so their aria-controls resolves.
+    const waivers = screen.getByRole('tab', { name: 'Training Waivers' });
+    const panelIds = screen.getAllByRole('tabpanel', { hidden: true }).map((panel) => panel.id);
+    expect(panelIds).toContain(waivers.getAttribute('aria-controls'));
   });
 
-  it('uses roving focus and arrow, Home, and End keys for inner tabs', async () => {
+  it('uses roving focus and arrow, Home and End keys between areas', async () => {
     const user = userEvent.setup();
     renderWithRouter(<TrainingAdminPage />);
-    const overviewTab = screen.getByRole('tab', { name: 'Overview' });
 
-    overviewTab.focus();
+    areaTab('Overview').focus();
     await user.keyboard('{ArrowRight}');
-    const complianceTab = screen.getByRole('tab', { name: 'Compliance Matrix' });
-    expect(complianceTab).toHaveFocus();
-    expect(complianceTab).toHaveAttribute('aria-selected', 'true');
-    expect(overviewTab).toHaveAttribute('tabindex', '-1');
+    expect(areaTab('Records')).toHaveFocus();
+    expect(areaTab('Records')).toHaveAttribute('aria-selected', 'true');
+    expect(areaTab('Overview')).toHaveAttribute('tabindex', '-1');
+    expect(window.location.search).toBe('?page=records&tab=submissions');
+
+    await user.keyboard('{End}');
+    expect(areaTab('Settings & Data')).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    expect(areaTab('Overview')).toHaveFocus();
+  });
+
+  it('uses roving focus and arrow, Home and End keys between destinations', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingAdminPage />);
+
+    screen.getByRole('tab', { name: 'Dashboard' }).focus();
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('tab', { name: 'Compliance Matrix' })).toHaveFocus();
     expect(window.location.search).toBe('?page=dashboard&tab=compliance');
 
     await user.keyboard('{End}');
     expect(screen.getByRole('tab', { name: 'Training Waivers' })).toHaveFocus();
     await user.keyboard('{Home}');
-    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveFocus();
+    expect(screen.getByRole('tab', { name: 'Dashboard' })).toHaveFocus();
   });
 
-  it('activates top-level tabs from the keyboard and restores URL state on browser back', async () => {
+  it('follows the URL on browser back', async () => {
     const user = userEvent.setup();
     renderWithRouter(<TrainingAdminPage />);
-    const dashboardTab = screen.getByRole('tab', { name: 'Dashboard' });
 
-    dashboardTab.focus();
-    await user.keyboard('{ArrowRight}');
-    const recordsTab = screen.getByRole('tab', { name: 'Records' });
-    expect(recordsTab).toHaveFocus();
-    expect(recordsTab).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tablist', { name: 'Records tabs' })).toBeInTheDocument();
-    expect(window.location.search).toBe('?page=records&tab=submissions');
+    await user.click(areaTab('Records'));
+    expect(areaTab('Records')).toHaveAttribute('aria-selected', 'true');
 
     window.history.back();
-    await waitFor(() => expect(dashboardTab).toHaveAttribute('aria-selected', 'true'));
-    expect(screen.getByRole('tablist', { name: 'Dashboard tabs' })).toBeInTheDocument();
+    await waitFor(() => expect(areaTab('Overview')).toHaveAttribute('aria-selected', 'true'));
   });
 
-  // Every section reachable, and every section's default destination actually
-  // renders its own child — a page whose entry is missing from TabContent's
-  // if-chain falls through to `return null` and shows an empty panel, which no
-  // single-page test would catch.
-  const sectionCases = [
-    ['dashboard', 'Dashboard', 'overview', 'Dashboard'],
-    ['records', 'Records', 'submissions', 'Review'],
-    ['setup', 'Setup', 'requirements', 'Requirements'],
-    ['skills-testing', 'Skills Testing', 'templates', 'Templates'],
-    ['enhancements', 'Program Management', 'recertification', 'Enhancements'],
-    ['compliance', 'Compliance', 'annual-report', 'Compliance Officer'],
-  ] as const;
-
-  it.each(sectionCases)(
-    'opens %s on its default destination and renders that child',
-    async (pageId, pageLabel, defaultTab, content) => {
-      const user = userEvent.setup();
-      renderWithRouter(<TrainingAdminPage />);
-
-      await user.selectOptions(screen.getByRole('combobox', { name: 'Training admin section' }), pageId);
-
-      // The previous destination's mock stays mounted while the next lazy chunk
-      // resolves, so findByTestId would match the stale node and pass against
-      // the old content. Wait for the swap itself.
-      await waitFor(() => expect(screen.getByTestId('lazy-component')).toHaveTextContent(content));
-      expect(window.location.search).toBe(`?page=${pageId}&tab=${defaultTab}`);
-      expect(screen.getByRole('combobox', { name: `${pageLabel} destination` })).toHaveValue(defaultTab);
-    }
-  );
-
-  // Switching destination within a section: the URL, the selected tab and the
-  // rendered child all have to move together.
-  const destinationCases = [
-    ['dashboard', 'Dashboard', 'Compliance Matrix', 'compliance', 'Compliance'],
-    ['records', 'Records', 'Shift Reports', 'shift-reports', 'Shift Report'],
-    ['setup', 'Setup', 'Integrations', 'integrations', 'External'],
-    ['skills-testing', 'Skills Testing', 'Test Records', 'tests', 'Records'],
-  ] as const;
-
-  it.each(destinationCases)('moves %s to its %s destination', async (pageId, pageLabel, tabLabel, tabId, content) => {
-    const user = userEvent.setup();
-    window.history.replaceState({}, '', `/training/admin?page=${pageId}`);
-    renderWithRouter(<TrainingAdminPage />);
-
-    await user.click(screen.getByRole('tab', { name: tabLabel }));
-
-    await waitFor(() => expect(screen.getByTestId('lazy-component')).toHaveTextContent(content));
-    expect(window.location.search).toBe(`?page=${pageId}&tab=${tabId}`);
-    expect(screen.getByRole('tab', { name: tabLabel })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('combobox', { name: `${pageLabel} destination` })).toHaveValue(tabId);
-  });
-
-  it('updates the section description and actions after navigation', async () => {
+  it('sends Create Session to the sessions destination', async () => {
     const user = userEvent.setup();
     renderWithRouter(<TrainingAdminPage />);
 
-    expect(screen.getByText('Training overview, compliance tracking, and certificate monitoring')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Review submissions' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Create Session' }));
 
-    await user.click(screen.getByRole('tab', { name: 'Records' }));
-
-    expect(screen.getByText('Review submissions, manage sessions, and generate shift reports')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Review submissions' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Create session' })).toBeInTheDocument();
-
-    await user.click(screen.getByRole('tab', { name: 'Setup' }));
-
-    expect(screen.getByText('Configure requirements, pipelines, integrations, and data imports')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Manage requirements' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Create session' })).not.toBeInTheDocument();
-  });
-
-  it('routes contextual actions to their existing tab destinations', async () => {
-    const user = userEvent.setup();
-    renderWithRouter(<TrainingAdminPage />);
-
-    await user.click(screen.getByRole('tab', { name: 'Records' }));
-    await user.click(screen.getByRole('button', { name: 'Create session' }));
-
+    expect(window.location.search).toBe('?page=records&tab=sessions');
     expect(screen.getByRole('tab', { name: 'Sessions' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('badges the area and destination the attention queue points at', async () => {
+    mockGetSummary.mockResolvedValue(summaryWithAttention);
+    window.history.replaceState({}, '', '/training/admin?page=records&tab=sessions');
+    renderWithRouter(<TrainingAdminPage />);
+
+    await waitFor(() => expect(areaTab('Records')).toHaveTextContent('3 need attention'));
+    expect(screen.getByRole('tab', { name: /Submissions to Review/ })).toHaveTextContent('3 need attention');
+    expect(areaTab('Overview')).not.toHaveTextContent('need attention');
+  });
+
+  it('shows no badges when the summary cannot be loaded', async () => {
+    mockGetSummary.mockRejectedValue(new Error('boom'));
+    renderWithRouter(<TrainingAdminPage />);
+
+    await screen.findByRole('button', { name: 'Try again' });
+    expect(areaTablist()).not.toHaveTextContent('need attention');
   });
 });

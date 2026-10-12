@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockGet = vi.fn();
+const mockPost = vi.fn();
 vi.mock('./apiClient', () => ({
   default: {
     get: (...args: unknown[]) => mockGet(...args) as unknown,
+    post: (...args: unknown[]) => mockPost(...args) as unknown,
   },
 }));
 
@@ -32,5 +34,31 @@ describe('systemNoticesService.list', () => {
     mockGet.mockResolvedValue({ data: {} });
 
     await expect(systemNoticesService.list()).resolves.toEqual([]);
+  });
+});
+
+describe('systemNoticesService key custody', () => {
+  beforeEach(() => {
+    mockGet.mockReset();
+    mockPost.mockReset();
+  });
+
+  it('reads the key status', async () => {
+    mockGet.mockResolvedValue({ data: { key_fingerprint: '0123456789abcdef', confirmed: false } });
+
+    await expect(systemNoticesService.getKeyCustody()).resolves.toEqual({
+      key_fingerprint: '0123456789abcdef',
+      confirmed: false,
+    });
+    expect(mockGet).toHaveBeenCalledWith('/system-notices/encryption-key-custody');
+  });
+
+  it('sends back the fingerprint that was shown', async () => {
+    mockPost.mockResolvedValue({ data: { key_fingerprint: '0123456789abcdef', confirmed: true } });
+
+    await systemNoticesService.confirmKeyCustody('0123456789abcdef');
+    expect(mockPost).toHaveBeenCalledWith('/system-notices/encryption-key-custody', {
+      key_fingerprint: '0123456789abcdef',
+    });
   });
 });

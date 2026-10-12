@@ -5,13 +5,15 @@
  * URL: /scheduling/checkin?shift=<id>
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router';
 import { LogIn, LogOut, Loader2, CheckCircle2, Clock, AlertCircle, ClipboardCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
-import type { ShiftRecord } from '../../modules/scheduling/services/api';
+import type { PreShiftEligibleShift, PreShiftWorkSession, ShiftRecord } from '../../modules/scheduling/services/api';
+import ActivePreShiftWorkCard from '../../modules/scheduling/components/ActivePreShiftWorkCard';
+import PreShiftWorkOffer from '../../modules/scheduling/components/PreShiftWorkOffer';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatCalendarDate, formatTime } from '../../utils/dateFormatting';
@@ -45,6 +47,25 @@ const ShiftCheckInPage: React.FC = () => {
    * the lookup fails: we only offer the step when we know it exists.
    */
   const [hasStartChecklist, setHasStartChecklist] = useState(false);
+  /**
+   * Pre-shift work: a running session (shown before anything else, since a
+   * second scan is how the member ends it) and the upcoming shifts the member
+   * could start one for. Both fail soft — a lookup error must never stand
+   * between a member and the ordinary check-in button.
+   */
+  const [preWork, setPreWork] = useState<PreShiftWorkSession | null>(null);
+  const [preWorkShifts, setPreWorkShifts] = useState<PreShiftEligibleShift[]>([]);
+
+  const loadPreWork = useCallback(async () => {
+    const [active, eligible] = await Promise.all([
+      schedulingService.getActivePreShiftWork().catch(() => null),
+      schedulingService
+        .getPreShiftEligibleShifts(paramApparatusId || undefined)
+        .catch(() => ({ enabled: false, shifts: [] })),
+    ]);
+    setPreWork(active);
+    setPreWorkShifts(eligible.enabled ? eligible.shifts : []);
+  }, [paramApparatusId]);
 
   useEffect(() => {
     if (!paramShiftId && !paramApparatusId) {
@@ -52,6 +73,7 @@ const ShiftCheckInPage: React.FC = () => {
       return;
     }
     const load = async () => {
+      await loadPreWork();
       try {
         let sid = paramShiftId;
         if (!sid && paramApparatusId) {
@@ -79,7 +101,7 @@ const ShiftCheckInPage: React.FC = () => {
       }
     };
     void load();
-  }, [paramShiftId, paramApparatusId]);
+  }, [paramShiftId, paramApparatusId, loadPreWork]);
 
   /**
    * Re-read the shift when the page comes back into view.
@@ -171,6 +193,34 @@ const ShiftCheckInPage: React.FC = () => {
     );
   }
 
+  const handlePreWorkEnded = () => {
+    setPreWork(null);
+    void loadPreWork();
+  };
+
+  const preWorkOffer = (
+    <PreShiftWorkOffer shifts={preWorkShifts} apparatusId={paramApparatusId || undefined} onStarted={setPreWork} />
+  );
+
+  // A running session comes first: scanning the vehicle again is how the
+  // member ends it, whatever shift the vehicle would otherwise resolve to.
+  if (preWork) {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <div className="card w-full max-w-sm space-y-5 p-6 shadow-lg">
+          <h1 className="text-theme-text-primary text-center text-xl font-bold">Pre-Shift Work</h1>
+          <ActivePreShiftWorkCard session={preWork} onEnded={handlePreWorkEnded} />
+          <button
+            onClick={() => void navigate('/scheduling')}
+            className="text-theme-text-muted hover:text-theme-text-primary w-full py-2 text-center text-sm transition-colors"
+          >
+            Go to Scheduling
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (noActiveShift) {
     return (
       <div className="flex min-h-screen items-center justify-center px-4">
@@ -181,6 +231,7 @@ const ShiftCheckInPage: React.FC = () => {
             This apparatus has no shift running or coming up right now. Try again closer to your shift&apos;s start
             time.
           </p>
+          {preWorkShifts.length > 0 && <div className="mb-4 text-left">{preWorkOffer}</div>}
           <button
             onClick={() => void navigate('/scheduling')}
             className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
@@ -268,6 +319,9 @@ const ShiftCheckInPage: React.FC = () => {
             {shift.checkin_closed_reason && !shift.is_finalized && (
               <p className="text-center text-xs text-amber-600 dark:text-amber-400">{shift.checkin_closed_reason}</p>
             )}
+            {/* Outside the check-in window, prep done ahead of an early shift
+                can still be timed — against whichever upcoming shift it is for. */}
+            {shift.checkin_open === false && !shift.is_finalized && preWorkOffer}
           </>
         ) : !attendance?.checked_out_at ? (
           <div className="space-y-3">

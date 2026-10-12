@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 import { CheckLogPage } from './CheckLogPage';
 import type { CheckLogEntry, CheckLogResponse } from '../../../modules/inventory/types/equipmentCheck';
+import { withoutKeys } from '../../../test/withoutKeys';
 
 const mockGetCheckLog = vi.fn();
 
@@ -146,15 +147,15 @@ describe('CheckLogPage', () => {
     mockGetCheckLog.mockResolvedValue(
       makeResponse({
         entries: [
-          makeEntry({
-            status: 'missed',
-            // The server sends no checkId for a check that never happened.
-            checkId: undefined,
-            checkedAt: undefined,
-            checkedByName: undefined,
-            totalItems: undefined,
-            completedItems: undefined,
-          }),
+          // The server sends no checkId for a check that never happened.
+          withoutKeys(
+            makeEntry({ status: 'missed' }),
+            'checkId',
+            'checkedAt',
+            'checkedByName',
+            'totalItems',
+            'completedItems'
+          ),
         ],
         summary: {
           expected: 1,
@@ -292,14 +293,12 @@ describe('CheckLogPage', () => {
           // The other source of `out_of_service`: the rig was unavailable and
           // nobody submitted anything, so the server reconstructed this row
           // and left checkId unset. The dashboard card never counted it.
-          makeEntry({
-            status: 'out_of_service',
-            unitLabel: 'R-5',
-            templateName: 'Rescue Daily Check',
-            checkId: undefined,
-            checkedAt: undefined,
-            checkedByName: undefined,
-          }),
+          withoutKeys(
+            makeEntry({ status: 'out_of_service', unitLabel: 'R-5', templateName: 'Rescue Daily Check' }),
+            'checkId',
+            'checkedAt',
+            'checkedByName'
+          ),
         ],
       });
 

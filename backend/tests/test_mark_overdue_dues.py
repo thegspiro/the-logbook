@@ -7,10 +7,10 @@ the PENDING -> OVERDUE transition, and the past-due / unpaid predicates) and
 the count it returns, without a real database.
 """
 
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 from sqlalchemy.dialects import mysql
+from sqlalchemy.engine import CursorResult
 
 from app.services.scheduled_tasks import run_mark_overdue_dues
 
@@ -20,7 +20,7 @@ async def test_marks_overdue_and_returns_count():
 
     async def cap(statement, *a, **k):
         captured.append(statement)
-        return SimpleNamespace(rowcount=3)
+        return MagicMock(spec=CursorResult, rowcount=3)
 
     db = MagicMock()
     db.execute = AsyncMock(side_effect=cap)
@@ -44,7 +44,7 @@ async def test_marks_overdue_and_returns_count():
 
 async def test_zero_when_nothing_overdue():
     db = MagicMock()
-    db.execute = AsyncMock(return_value=SimpleNamespace(rowcount=0))
+    db.execute = AsyncMock(return_value=MagicMock(spec=CursorResult, rowcount=0))
     db.commit = AsyncMock()
 
     out = await run_mark_overdue_dues(db)

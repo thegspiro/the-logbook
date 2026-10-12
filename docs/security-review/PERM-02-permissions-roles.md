@@ -1,9 +1,163 @@
 # Security Review — Permissions & Roles
 
-**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5), #2596 (pass 6), pass 7 TBD
+**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5), #2596 (pass 6), #2933 (pass 7 — the header's own "TBD" placeholder was never filled in after merge; corrected here), pass 8 (this PR)
 
 Passes are recorded in this one file rather than a new `PERM<n>-02-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 8 (2026-10-12, watchdog pickup) — 0 fixed by this pass, 0 new findings; PERM-5 closed by other work
+
+Watchdog pickup: no `claude/security-review-*` PR or branch existed anywhere
+in the repo, and `main`'s last security-review merge (Feature 01, pass 8,
+PR #3096) had no follow-up iteration since. Rotation row 02 was the next
+`⬜`.
+
+**Baseline:** `e9e83612` (PR #2933's merge, pass 7). **Head:** current
+`main`. 578 commits between them — not a zero-delta pass. Ten of the twelve
+scoped files carry real changes (`operational_ranks.py` and `officers.py`
+— the endpoint files, not their services — are byte-identical).
+
+### PERM-5, re-verified: closed by other work, not by this pass
+
+**PERM-5 (the only open item carried from pass 7) is now ✅ FIXED.** Pass 7
+recorded that an unmerged PR (#2918, a different track) already proposed
+option 2 ("protect the wildcard only") and recommended landing it rather
+than re-deriving the same choice. #2918 merged 2026-10-06. Re-verified
+directly in current code, not trusted from that PR's message:
+`admin_continuity_service.py`'s `assert_positions_retain_administrator`
+now refuses to take `*` from the organization's only active holder of it,
+with its own module section ("THE LAST WILDCARD HOLDER") documenting the
+exact PERM-5 shape and why only position changes are guarded this way (a
+deactivated/archived member keeps their positions and gets `*` back on
+restore). Wired at both call sites (`users.py:1237,1462`) and the parallel
+role-level guard `assert_role_change_retains_administrator`
+(`role_service.py:359,383,475`, for the case where editing a shared
+position's permission list strips `*` from every holder at once — the W11-8
+concurrency hardening pass 7 also flagged is implemented alongside it: the
+organization's `admin_continuity` lock is taken before a locking read on
+members+positions, closing the read-then-write race pass 7's CONCURRENCY
+section describes). Guard tests:
+`test_rejects_stripping_the_only_wildcard_holder`,
+`test_allows_it_once_another_member_holds_the_wildcard`,
+`test_allows_a_change_that_keeps_the_wildcard`,
+`test_an_inactive_wildcard_holder_does_not_count` (all in
+`tests/test_admin_continuity.py`, re-ran, pass). No `KNOWN_LIMITATIONS.md`
+entry remains for PERM-5.
+
+### The ten changed files, reviewed
+
+- **`dependencies.py` / `core/permissions.py`'s AUTH-15 gate and
+  `collect_user_permissions` export** — identical content already reviewed
+  in full under Feature 01 (`AUTH-01-auth-session.md`'s Pass 8); confirmed,
+  not re-derived.
+- **`core/permissions.py` — two new permissions, `finance.budget_review`
+  and `finance.request`.** `finance.budget_review` is seeded to no
+  position (grep-confirmed: appears only in its own `Permission(...)`
+  definition and the `ALL_PERMISSIONS` registry, never in
+  `DEFAULT_POSITIONS`/`OPERATIONAL_RANKS`), needing no backfill migration
+  per the same pattern pass 7 verified for `system.manage_link_domain`.
+  `finance.request` is seeded on the `member` position — every member — but
+  its own migration backs the seed (`7db20aa49329`, confirmed present), and
+  the grant is confined server-side: read directly in
+  `endpoints/finance.py`/`services/finance_service.py`, every list and
+  by-id lookup a `finance.request`-only caller reaches passes
+  `restrict_to_user=<their own id>` through to the query's `WHERE` clause
+  (`requested_by`/`submitted_by == restrict_to_user`), so another member's
+  request 404s exactly as the docstrings claim — not merely a permission
+  gate with the ownership check assumed. `get_all_permissions()` still
+  contains no wildcard (120 permissions now, up from 118 at pass 7).
+- **`operational_rank_service.py` — `resolve_rank_code` now honours the
+  built-in seed codes only while an organization has no rank rows at all
+  (ONBOARD-3), closing a real gap pass 7 did not flag:** previously a rank
+  an administrator had deleted from the ladder could still be written by a
+  direct call (member API, CSV import, prospect conversion), and
+  `get_rank_default_permissions` would then grant that deleted rank's
+  static defaults — e.g. Captain-level access under a rank the ladder no
+  longer lists. Once an organization has any rank row, only stored rows are
+  honored; the built-in fallback remains for a never-seeded organization
+  (the original #1833 EMT-bug shape pass 4 recorded), and
+  `find_members_with_unrecognized_rank`'s broader "what's on the books"
+  check is deliberately left using the older, wider rule since it reports
+  breakage rather than gating a write. Verified by direct read, not
+  asserted from the docstring.
+- **`role_service.py` / `roles.py` — a new `DuplicatePositionNameError` →
+  409 (W05-5), not a security change.** Race-safe: the organization row is
+  locked first, then a locking read on the `Role` name query, so two
+  concurrent creates of the same name serialize rather than both
+  succeeding (Pitfall #27 shape). `clone_role` delegates to `create_role`,
+  so it inherits the check rather than needing its own.
+- **`users.py` (+427 at pass 7, further real changes since):**
+  - **New `GET /users/directory` (USR-8), a narrower roster than
+    `GET /users`.** Read directly: org-scoped query
+    (`User.organization_id == str(organization_id)`, from the caller's own
+    record, never client-supplied), excludes archived/soft-deleted members,
+    and the response is built field-by-field (`MemberDirectoryEntry(id=...,
+first_name=..., ...)`) rather than `model_validate`-ing the full ORM
+    object, so no attribute beyond the ones listed (no username, hire date,
+    station, platoon, membership classification) can leak through.
+    `_visible_contact_fields(..., honor_member_choice=True)` means a member
+    who hid their own email/phone stays hidden here too — same rule
+    `_clear_hidden_contact_fields` already applies on the profile endpoint,
+    so the two cannot disagree.
+  - **New `POST /users/{id}/unlock` (W02-4), lifting a sign-in lockout
+    early.** `members.manage`; by-id query org-scoped
+    (`User.organization_id == str(current_user.organization_id)`) and
+    row-locked; calls the same `_enforce_account_reset_ceiling` privilege
+    check `admin_reset_password`/`admin_reset_mfa` already use (a
+    `members.manage` holder cannot act on an account whose effective
+    permissions exceed their own — re-read the helper directly, not assumed
+    from its docstring); audited; rate-limited via the existing
+    `_rate_limit_admin_reset` dependency.
+  - **`locked_until` is now hidden from non-admins and cleared once expired
+    for admins** (`_redact_contact_fields`) — tightens exposure, does not
+    weaken it.
+  - **`_refuse_base_position_removal` (W11-9)** refuses to strip the
+    baseline `member` position from a non-archived user on both the
+    single-removal and replace-all-roles paths. Already recorded ✅
+    Resolved in `KNOWN_LIMITATIONS.md`; re-confirmed present at both call
+    sites (`users.py:1210`, `:1453`).
+  - **Member-photo uploads now go through `reject_if_malicious` before
+    re-encoding.** Out of this feature's scope (upload/document security,
+    not permissions) — confirmed present, not reviewed in depth here.
+  - **`admin_reset_password` now also clears `password_expiry_notified_at`**
+    — the AUTH-15 companion fix, consistent with the same clear on the
+    member-initiated change/reset paths reviewed under Feature 01.
+- **`org_chart.py` / `officer_service.py` / `org_chart_service.py` /
+  `operational_rank_service.py`'s remaining diff** — mypy-driven type
+  annotations and a `# type: ignore` removal (`_office_slugs` replacing an
+  assumed-list cast with an actual `isinstance` check). No behavior change.
+- **Frontend: `apiCache.ts`'s two new `UNCACHEABLE_PREFIXES` entries**
+  (`/training/skill-evaluations`, `/mcp-oauth/`) already reviewed in full
+  under Feature 34 (`FE8-34-frontend-shared.md`); `ProtectedRoute.tsx`,
+  `authStore.ts`'s `checkPermission`, and `createApiClient.ts` are
+  byte-identical to pass 7.
+
+### Route inventory — re-enumerated, unchanged
+
+28 routes across the same four routers (13 `roles.py` + 7
+`operational_ranks.py` + 3 `officers.py` + 5 `org_chart.py`), same gates as
+pass 7's table. `/users/directory` and `/users/{id}/unlock` are new routes
+but belong to Feature 07 (Users & organizations), not this feature's four
+routers; `check_route_permissions.py --strict` (265 total application
+routes, 0 errors/0 warnings) covers them there.
+
+### Completion gate (pass 8)
+
+| Check                                                                                                                          | Result                                       |
+| ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
+| `python3 -m flake8 app/ tests/ alembic/` (7.4.1, CI's pin)                                                                     | ✅ 0 violations                              |
+| `python3 -m black --check app/ tests/ alembic/` (26.5.1, CI's pin)                                                             | ✅ 2176 files unchanged                      |
+| `python3 -m isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin)                                                         | ✅ clean                                     |
+| `python3 scripts/validate_migrations.py --strict`                                                                              | ✅ single head `e1a5bfe7a2ed`, 571 revisions |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                              | ✅ 265 routes, 0 errors, 0 warnings          |
+| standing guard suite (12 files) run directly                                                                                   | ✅ 224 passed                                |
+| scoped backend tests (`-k "permission or role or rank or officer or org_chart or org_scoping or scoping or admin_continuity"`) | ✅ 1567 passed, 1 skipped (environment-only) |
+| `cd frontend && npm run typecheck`                                                                                             | ✅ 0 errors                                  |
+| `cd frontend && npm run lint`                                                                                                  | ✅ 0 errors, 0 warnings                      |
+
+No source file was changed by this pass. Rotation row 02 moves to `✅`.
 
 ---
 

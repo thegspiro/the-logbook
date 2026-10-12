@@ -26,6 +26,7 @@ from app.models.event import (
     EventType,
     default_reminder_target,
 )
+from app.models.location import Location
 from app.models.training import (
     ApprovalStatus,
     EnrollmentStatus,
@@ -121,7 +122,7 @@ class TrainingSessionService:
     async def _validate_linkage_ids(
         self,
         session_data: "TrainingSessionCreate | TrainingSessionLinkageUpdate",
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Optional[str]:
         """Verify client-supplied linkage FKs belong to the caller's org (XC-1).
 
@@ -169,12 +170,20 @@ class TrainingSessionService:
         ):
             return "Invalid instructor"
 
+        # getattr: only the create schemas carry a location_id. It is stored on
+        # the generated event, whose location name is read back with it.
+        location_id = getattr(session_data, "location_id", None)
+        if location_id and not await is_in_org(
+            self.db, Location, location_id, organization_id
+        ):
+            return "Invalid location"
+
         return None
 
     async def get_session_by_event(
         self,
-        event_id: UUID,
-        organization_id: UUID,
+        event_id: UUID | str,
+        organization_id: UUID | str,
     ) -> Optional[TrainingSession]:
         """Fetch the training session attached to an event, org-scoped."""
         result = await self.db.execute(
@@ -182,13 +191,14 @@ class TrainingSessionService:
             .where(TrainingSession.event_id == str(event_id))
             .where(TrainingSession.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        training_session: Optional[TrainingSession] = result.scalar_one_or_none()
+        return training_session
 
     async def update_session_linkage(
         self,
         training_session_id: UUID,
         updates: TrainingSessionLinkageUpdate,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Tuple[Optional[TrainingSession], Optional[str]]:
         """Update a session's course, type and category/program/phase/requirement links.
 
@@ -269,7 +279,7 @@ class TrainingSessionService:
         return training_session, None
 
     async def _course_in_org(
-        self, course_id: UUID, organization_id: UUID
+        self, course_id: UUID, organization_id: UUID | str
     ) -> Optional[TrainingCourse]:
         # str(): the column is String(36) and the id arrives as a UUID.
         result = await self.db.execute(
@@ -277,10 +287,11 @@ class TrainingSessionService:
             .where(TrainingCourse.id == str(course_id))
             .where(TrainingCourse.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        training_course: Optional[TrainingCourse] = result.scalar_one_or_none()
+        return training_course
 
     async def resolve_attach_details(
-        self, details: TrainingSessionAttach, organization_id: UUID
+        self, details: TrainingSessionAttach, organization_id: UUID | str
     ) -> Tuple[Optional[TrainingCourse], Optional[str]]:
         """Validate picked training details against the caller's org (XC-1).
 
@@ -301,8 +312,8 @@ class TrainingSessionService:
         event: Event,
         details: TrainingSessionAttach,
         course: Optional[TrainingCourse],
-        organization_id: UUID,
-        created_by: Optional[UUID],
+        organization_id: UUID | str,
+        created_by: UUID | str | None,
     ) -> TrainingSession:
         """The session that files an Events-created Training event's credit.
 
@@ -355,8 +366,8 @@ class TrainingSessionService:
         self,
         event_id: UUID,
         details: TrainingSessionAttach,
-        organization_id: UUID,
-        created_by: UUID,
+        organization_id: UUID | str,
+        created_by: UUID | str,
     ) -> Tuple[Optional[TrainingSession], Optional[str]]:
         """Give an existing Training event its training details.
 
@@ -409,8 +420,8 @@ class TrainingSessionService:
     async def create_training_session(
         self,
         session_data: TrainingSessionCreate,
-        organization_id: UUID,
-        created_by: UUID,
+        organization_id: UUID | str,
+        created_by: UUID | str,
         commit: bool = True,
     ) -> Tuple[Optional[TrainingSession], Optional[str]]:
         """
@@ -574,8 +585,8 @@ class TrainingSessionService:
     async def create_recurring_training_session(
         self,
         session_data: RecurringTrainingSessionCreate,
-        organization_id: UUID,
-        created_by: UUID,
+        organization_id: UUID | str,
+        created_by: UUID | str,
     ) -> Tuple[list[TrainingSession], Optional[str]]:
         """
         Create a recurring training session series.
@@ -730,8 +741,8 @@ class TrainingSessionService:
     async def finalize_training_session(
         self,
         training_session_id: UUID,
-        organization_id: UUID,
-        finalized_by: UUID,
+        organization_id: UUID | str,
+        finalized_by: UUID | str,
         can_manage_training: bool = False,
     ) -> Tuple[Optional[TrainingApproval], Optional[str]]:
         """Finalize a training session by finalizing its event's attendance.
@@ -785,8 +796,8 @@ class TrainingSessionService:
         program_service,
         user_id: str,
         training_session: Any,
-        organization_id: UUID,
-        verified_by: Optional[UUID],
+        organization_id: UUID | str,
+        verified_by: UUID | str | None,
         source_type,
     ) -> None:
         """Reverse this session's credit on every requirement it fed for a member.
@@ -809,7 +820,7 @@ class TrainingSessionService:
     async def _resync_admin_hours(
         self,
         event_id: str,
-        organization_id: UUID,
+        organization_id: UUID | str,
         rsvps: List[EventRSVP],
     ) -> None:
         """Push officer-corrected durations into the admin hours ledger.
@@ -891,7 +902,7 @@ class TrainingSessionService:
     async def reopen_training_session(
         self,
         training_session_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Tuple[Optional[TrainingSession], Optional[str]]:
         """Reopen a finalized training session so it can be corrected.
 
@@ -957,7 +968,7 @@ class TrainingSessionService:
     # ------------------------------------------------------------------
 
     async def lock_for_event_finalize(
-        self, event: Event, organization_id: UUID
+        self, event: Event, organization_id: UUID | str
     ) -> Tuple[Optional[TrainingSession], List[TrainingApproval]]:
         """Lock the event's session and its pending approvals.
 
@@ -1008,8 +1019,8 @@ class TrainingSessionService:
         pending_approvals: List[TrainingApproval],
         attended: List[EventRSVP],
         effective_end: datetime,
-        actor: Optional[UUID],
-        organization_id: UUID,
+        actor: UUID | str | None,
+        organization_id: UUID | str,
     ) -> EventTrainingCredit:
         """Credit every checked-in attendee of a Training event.
 
@@ -1177,7 +1188,7 @@ class TrainingSessionService:
         event: Event,
         credited: Dict[str, int],
         event_date: date,
-        actor: Optional[UUID],
+        actor: UUID | str | None,
         organization_id: str,
         now: datetime,
     ) -> None:
@@ -1226,7 +1237,7 @@ class TrainingSessionService:
         event: Event,
         credited: Dict[str, int],
         event_dates: List[date],
-        actor: Optional[UUID],
+        actor: UUID | str | None,
         organization_id: str,
     ) -> None:
         """An in-progress record per attendee while the approval is pending.
@@ -1682,7 +1693,7 @@ class TrainingSessionService:
             )
 
     async def reopen_for_event(
-        self, event: Event, organization_id: UUID, now: datetime
+        self, event: Event, organization_id: UUID | str, now: datetime
     ) -> None:
         """Reopen the event's session alongside the event's attendance.
 
@@ -1706,8 +1717,8 @@ class TrainingSessionService:
     async def after_event_attendance_recorded(
         self,
         credit: EventTrainingCredit,
-        organization_id: UUID,
-        actor: Optional[UUID],
+        organization_id: UUID | str,
+        actor: UUID | str | None,
         can_manage_training: bool,
     ) -> None:
         """The steps that must wait for finalize's commit.
@@ -1763,7 +1774,7 @@ class TrainingSessionService:
     async def get_approval_summary_for_event(
         self,
         event_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         include_token: bool,
     ) -> Optional[Dict[str, Any]]:
         """Where this event's training approval stands, or None if it has none.
@@ -1925,7 +1936,7 @@ class TrainingSessionService:
     async def get_training_approval_by_token(
         self,
         token: str,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Tuple[Optional[dict], Optional[str]]:
         """
         Get training approval by token for approval page
@@ -2003,8 +2014,8 @@ class TrainingSessionService:
         token: str,
         attendees: list[AttendeeApprovalData],
         approval_notes: Optional[str],
-        approved_by: UUID,
-        organization_id: UUID,
+        approved_by: UUID | str,
+        organization_id: UUID | str,
         can_manage_training: bool = False,
     ) -> Tuple[bool, Optional[str]]:
         """
@@ -2218,7 +2229,7 @@ class TrainingSessionService:
         self,
         approval: TrainingApproval,
         attendees: list[AttendeeApprovalData],
-        approved_by: Optional[UUID],
+        approved_by: UUID | str | None,
         credited_minutes: Optional[Dict[str, int]] = None,
     ) -> List[Tuple[str, str, str, float, str]]:
         """
@@ -2525,8 +2536,8 @@ class TrainingSessionService:
     async def _apply_pipeline_updates(
         self,
         updates: List[Tuple[str, str, str, float, str]],
-        organization_id: UUID,
-        verified_by: UUID,
+        organization_id: UUID | str,
+        verified_by: UUID | str,
         can_manage_training: bool = False,
         session_id: Optional[str] = None,
     ) -> None:
@@ -2612,7 +2623,7 @@ class TrainingSessionService:
         user_id: str,
         program_id: str,
         session_id: str,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Optional[ProgramEnrollment]:
         """Pick the one enrollment this session's credit belongs to.
 
@@ -2654,7 +2665,7 @@ class TrainingSessionService:
             )
             .order_by(ProgramEnrollment.enrolled_at.desc())
         )
-        enrollments = list(result.scalars().all())
+        enrollments: List[ProgramEnrollment] = list(result.scalars().all())
         if not enrollments:
             return None
         if len(enrollments) == 1:
@@ -2695,8 +2706,8 @@ class TrainingSessionService:
         program_id: str,
         requirement_id: str,
         hours_completed: float,
-        organization_id: UUID,
-        verified_by: UUID,
+        organization_id: UUID | str,
+        verified_by: UUID | str,
         session_id: str,
         can_manage_training: bool = False,
     ) -> Tuple[Optional[str], bool]:

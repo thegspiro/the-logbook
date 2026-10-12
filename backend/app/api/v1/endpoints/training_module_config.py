@@ -24,7 +24,9 @@ from app.api.dependencies import (
 from app.core.constants import TRAINING_OFFICER_ROLE_SLUGS
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
+from app.models.apparatus import Apparatus
 from app.models.training import (
+    BasicApparatus,
     ProgramEnrollment,
     RequirementProgress,
     ShiftCompletionReport,
@@ -70,6 +72,32 @@ async def get_training_module_config(
     return config
 
 
+async def _assert_apparatus_ids_in_org(
+    db: AsyncSession, apparatus_ids: list[str] | None, organization_id: str
+) -> None:
+    """Refuse a manual-entry apparatus list naming another org's units (XC-1).
+
+    The list may hold ids from either the full Apparatus module or the
+    BasicApparatus fallback (whichever ``/scheduling/apparatus-options``
+    served the picker), so an id is accepted when it is in the caller's org
+    in either table. ``assert_all_in_org`` checks one model, which would
+    refuse a legitimate mix.
+    """
+    requested = {str(aid) for aid in (apparatus_ids or []) if aid}
+    if not requested:
+        return
+    found: set[str] = set()
+    for model in (Apparatus, BasicApparatus):
+        rows = await db.execute(
+            select(model.id)
+            .where(model.id.in_(requested))
+            .where(model.organization_id == str(organization_id))
+        )
+        found.update(str(row[0]) for row in rows.all())
+    if requested - found:
+        raise HTTPException(status_code=400, detail="Invalid apparatus")
+
+
 @router.put("/config", response_model=TrainingModuleConfigResponse)
 async def update_training_module_config(
     updates: TrainingModuleConfigUpdate,
@@ -100,6 +128,13 @@ async def update_training_module_config(
                 "training.manage is required to change these settings: "
                 + ", ".join(beyond_disclosure)
             ),
+        )
+
+    if "manual_entry_apparatus_ids" in requested:
+        await _assert_apparatus_ids_in_org(
+            db,
+            requested["manual_entry_apparatus_ids"],
+            str(current_user.organization_id),
         )
 
     service = TrainingModuleConfigService(db)
@@ -454,27 +489,39 @@ async def get_my_training_summary(
             program_names = {str(row[0]): row[1] for row in names.all()}
 
         enrollment_list: list[dict[str, Any]] = []
-        for e in enrollments:
+        for enrollment in enrollments:
             entry: dict[str, Any] = {
-                "id": str(e.id),
-                "program_id": str(e.program_id),
-                "program_name": program_names.get(str(e.program_id), ""),
+                "id": str(enrollment.id),
+                "program_id": str(enrollment.program_id),
+                "program_name": program_names.get(str(enrollment.program_id), ""),
                 "status": (
-                    e.status.value if hasattr(e.status, "value") else str(e.status)
+                    enrollment.status.value
+                    if hasattr(enrollment.status, "value")
+                    else str(enrollment.status)
                 ),
-                "progress_percentage": float(e.progress_percentage or 0),
-                "enrolled_at": e.enrolled_at.isoformat() if e.enrolled_at else None,
+                "progress_percentage": float(enrollment.progress_percentage or 0),
+                "enrolled_at": (
+                    enrollment.enrolled_at.isoformat()
+                    if enrollment.enrolled_at
+                    else None
+                ),
                 "target_completion_date": (
-                    str(e.target_completion_date) if e.target_completion_date else None
+                    str(enrollment.target_completion_date)
+                    if enrollment.target_completion_date
+                    else None
                 ),
-                "completed_at": e.completed_at.isoformat() if e.completed_at else None,
+                "completed_at": (
+                    enrollment.completed_at.isoformat()
+                    if enrollment.completed_at
+                    else None
+                ),
             }
 
             # Requirement details (if allowed)
             if is_officer or visibility.get("show_requirement_details", True):
                 rp_result = await db.execute(
                     select(RequirementProgress).where(
-                        RequirementProgress.enrollment_id == str(e.id)
+                        RequirementProgress.enrollment_id == str(enrollment.id)
                     )
                 )
                 rps = rp_result.scalars().all()
@@ -506,7 +553,7 @@ async def get_my_training_summary(
                             rp.completed_at.isoformat() if rp.completed_at else None
                         ),
                         "reads_compliance": str(rp.requirement_id)
-                        in linked_by_program.get(str(e.program_id), set()),
+                        in linked_by_program.get(str(enrollment.program_id), set()),
                     }
                     for rp in rps
                 ]
@@ -541,7 +588,7 @@ async def get_my_training_summary(
 
         sr_list = []
         for sr in shift_reports:
-            entry: dict[str, Any] = {
+            report_entry: dict[str, Any] = {
                 "id": str(sr.id),
                 "shift_date": str(sr.shift_date),
                 "hours_on_shift": float(sr.hours_on_shift),
@@ -552,19 +599,19 @@ async def get_my_training_summary(
             }
 
             if is_officer or visibility.get("show_performance_rating", True):
-                entry["performance_rating"] = sr.performance_rating
+                report_entry["performance_rating"] = sr.performance_rating
             if is_officer or visibility.get("show_areas_of_strength", True):
-                entry["areas_of_strength"] = sr.areas_of_strength
+                report_entry["areas_of_strength"] = sr.areas_of_strength
             if is_officer or visibility.get("show_areas_for_improvement", True):
-                entry["areas_for_improvement"] = sr.areas_for_improvement
+                report_entry["areas_for_improvement"] = sr.areas_for_improvement
             # Alone among these, the narrative's column default is False —
             # candid officer prose is opt-in, so the fallback has to match.
             if is_officer or visibility.get("show_officer_narrative", False):
-                entry["officer_narrative"] = sr.officer_narrative
+                report_entry["officer_narrative"] = sr.officer_narrative
             if is_officer or visibility.get("show_skills_observed", True):
-                entry["skills_observed"] = sr.skills_observed
+                report_entry["skills_observed"] = sr.skills_observed
 
-            sr_list.append(entry)
+            sr_list.append(report_entry)
 
         result["shift_reports"] = sr_list
 

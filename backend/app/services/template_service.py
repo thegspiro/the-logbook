@@ -32,7 +32,7 @@ class TemplateService:
         self.db = db
 
     async def initialize_defaults(
-        self, organization_id: UUID, created_by: UUID
+        self, organization_id: UUID | str, created_by: UUID | str
     ) -> List[MinutesTemplate]:
         """Create default templates for an organization if none exist"""
         existing = await self.db.execute(
@@ -183,7 +183,7 @@ class TemplateService:
         return created
 
     async def list_templates(
-        self, organization_id: UUID, meeting_type: Optional[str] = None
+        self, organization_id: UUID | str, meeting_type: Optional[str] = None
     ) -> List[MinutesTemplate]:
         """List all templates for an organization"""
         query = select(MinutesTemplate).where(
@@ -196,7 +196,7 @@ class TemplateService:
         return list(result.scalars().all())
 
     async def get_template(
-        self, template_id: str, organization_id: UUID
+        self, template_id: str, organization_id: UUID | str
     ) -> Optional[MinutesTemplate]:
         """Get a template by ID"""
         result = await self.db.execute(
@@ -204,10 +204,11 @@ class TemplateService:
             .where(MinutesTemplate.id == str(template_id))
             .where(MinutesTemplate.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        minutes_template: Optional[MinutesTemplate] = result.scalar_one_or_none()
+        return minutes_template
 
     async def create_template(
-        self, data: TemplateCreate, organization_id: UUID, created_by: UUID
+        self, data: TemplateCreate, organization_id: UUID | str, created_by: UUID | str
     ) -> MinutesTemplate:
         """Create a new template"""
         tpl_dict = data.model_dump()
@@ -244,7 +245,7 @@ class TemplateService:
         return tpl
 
     async def update_template(
-        self, template_id: str, organization_id: UUID, data: TemplateUpdate
+        self, template_id: str, organization_id: UUID | str, data: TemplateUpdate
     ) -> Optional[MinutesTemplate]:
         """Update a template"""
         tpl = await self.get_template(template_id, organization_id)
@@ -291,7 +292,9 @@ class TemplateService:
         await self.db.refresh(tpl)
         return tpl
 
-    async def delete_template(self, template_id: str, organization_id: UUID) -> bool:
+    async def delete_template(
+        self, template_id: str, organization_id: UUID | str
+    ) -> bool:
         """Delete a template"""
         tpl = await self.get_template(template_id, organization_id)
         if not tpl:
@@ -311,9 +314,10 @@ class TemplateService:
             .where(MinutesTemplate.meeting_type == meeting_type)
             .where(MinutesTemplate.is_default.is_(True))
         )
-        return result.scalar_one_or_none()
+        minutes_template: Optional[MinutesTemplate] = result.scalar_one_or_none()
+        return minutes_template
 
-    async def _clear_defaults(self, organization_id: UUID, meeting_type: str):
+    async def _clear_defaults(self, organization_id: UUID | str, meeting_type: str):
         """Clear the is_default flag for all templates of a given type"""
         result = await self.db.execute(
             select(MinutesTemplate)

@@ -1532,7 +1532,14 @@ prior note on this ("honored server-side but no admin queue in the UI") was
 itself factually wrong and has been corrected in the same change as this
 finding. Mirrored to `docs/KNOWN_LIMITATIONS.md`.
 
-### CI3-33-4 — LOW — Four more `config.py` settings have no reader anywhere in the backend — FLAGGED
+### CI3-33-4 — LOW — Four more `config.py` settings have no reader anywhere in the backend — FIXED 2026-10-08
+
+**Resolution (2026-10-08, owner decision: delete the dead settings):**
+`RATE_LIMIT_PER_MINUTE`, `MAX_FILE_SIZE`, `STORAGE_TYPE`, `UPLOAD_DIR` and
+`DB_POOL_MIN` are removed from `Settings` and added to `RETIRED_SETTINGS`, so a
+`.env` still naming one boots with a warning rather than failing validation.
+The Compose files, env templates and wiki no longer offer them. The original
+finding follows.
 
 **What:** an exhaustive per-field reference sweep of every `Settings` field
 in `config.py` (160 fields; grepped for `\.NAME\b` across `app/`, `main.py`,

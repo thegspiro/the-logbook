@@ -14,6 +14,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy.engine import CursorResult
 
 from app.models.apparatus import DriverExceptionStatus
 from app.services.driver_exception_service import (
@@ -43,7 +44,7 @@ def _one(obj):
 
 def _updated(rowcount=1):
     """Result of the conditional UPDATE that settles a review."""
-    return MagicMock(rowcount=rowcount)
+    return MagicMock(spec=CursorResult, rowcount=rowcount)
 
 
 def _db(side_effect):

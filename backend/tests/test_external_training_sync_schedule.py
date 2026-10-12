@@ -269,9 +269,12 @@ class TestScheduledRunChoosesItsSize:
         assert sync_type == REVIEW_SYNC_TYPE
 
     async def test_reviewed_since_the_last_slot_is_a_quick_pull(self):
-        sync_type, _ = await self._run(
-            _provider(), datetime.now(timezone.utc) - timedelta(minutes=5)
-        )
+        # Anchored to the slot rather than to the clock: "five minutes ago"
+        # falls before the slot during the five minutes after it each day.
+        since_slot = latest_review_slot(
+            DEFAULT_TS_REVIEW_TIME, NEW_YORK, datetime.now(timezone.utc)
+        ) + timedelta(seconds=1)
+        sync_type, _ = await self._run(_provider(), since_slot)
         assert sync_type == "incremental"
 
     async def test_last_review_before_the_last_slot_is_owed_again(self):

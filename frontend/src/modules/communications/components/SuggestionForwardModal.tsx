@@ -67,7 +67,7 @@ const SuggestionForwardModal: React.FC<SuggestionForwardModalProps> = ({ detail,
   return (
     <Modal isOpen onClose={onClose} title="Forward for review" size="lg">
       <form onSubmit={(e) => void handleSubmit(e)}>
-        <div className="modal-body space-y-4">
+        <div className="space-y-4">
           <div className="alert-info text-sm">
             <p className="text-theme-text-primary">
               The people you choose can read <strong>this suggestion only</strong>, including its screenshots and

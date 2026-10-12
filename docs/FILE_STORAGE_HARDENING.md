@@ -67,15 +67,40 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
     (`2026-10-08_Smith-John_EMT-Recert.pdf`).
 18. **Small hosts run ClamAV too.** Every profile requires it; an operator who
     cannot spare the memory turns it off afterwards, behind the warning.
+19. **A module's folder opens to that module's rights** (2026-10-09): Training
+    to `training.*`, Events to `events.*`, Apparatus to `apparatus.*`,
+    Facilities unchanged, a new Finance folder to `finance.view` /
+    `finance.manage` / `finance.approve`, Member Separations to
+    `members.manage`; the shared library stays on `documents.view` /
+    `documents.manage`.
+20. **A personal folder admits its member and full administrators only.**
+21. **"Leadership only" means the library managers** (`documents.manage`), and
+    only for the library's own folders.
+22. **A folder-access editor comes later**, in its own change; custom folders
+    keep the visibility levels they have.
+23. **The file key comes from `ENCRYPTION_KEY` and `ENCRYPTION_SALT`**
+    (2026-10-09), the secrets already protecting encrypted fields, so there is
+    no second secret to lose. Rotation reuses `ENCRYPTION_KEYS_LEGACY`, plus a
+    rewrap command for files.
+24. **Files stored before encryption are encrypted by an operator command**:
+    dry run, a verified round trip per file, a manifest, rollback until
+    finalized. Until it runs they stay readable, and administrators see a
+    notice.
+25. **Confirming the key is kept safe is required.** A new installation cannot
+    finish setup without it; an existing one shows `settings.manage` holders a
+    notice that only a confirmation clears. Who confirmed, and when, is
+    recorded and audited.
+26. **Encryption at rest is always on.** There is no switch.
 
 ## Phases
 
 | Phase | Scope                                                                                                                                           | Status       |
 | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
 | 1     | Close the access leaks                                                                                                                          | done (#3009) |
-| 2     | One storage service: org-first layout, descriptive names, size caps and malware scan everywhere (on by default)                                 | this change  |
-| 3     | A folder per module with module-specific rights; narrow `documents.view`; admin-only see-all; apparatus files and finance receipts as documents | planned      |
-| 4     | Encryption at rest, with the onboarding key-custody confirmation                                                                                | planned      |
+| 2     | One storage service: org-first layout, descriptive names, size caps and malware scan everywhere (on by default)                                 | done (#3011) |
+| 3     | A folder per module with module-specific rights; narrow `documents.view`; admin-only see-all; apparatus files and finance receipts as documents | done (#3031) |
+| 4     | Encryption at rest, with the onboarding key-custody confirmation                                                                                | done         |
+| 5     | Every document lives in a folder: no more organization-wide "unfiled" documents                                                                 | this change  |
 
 ### Phase 1 — what changed
 
@@ -130,13 +155,142 @@ was on are not rescanned; `UPLOADS_ROOT` is the fixed `/app/uploads` mount and
 the unread `UPLOAD_DIR` setting stays unread (`docs/KNOWN_LIMITATIONS.md`,
 CI3-33-4).
 
+### Phase 3 — what changed
+
+**The access rule** (`DocumentsService._folder_admits_user`): a full
+administrator (`*`) passes every folder and nothing else is an override. Each
+module root carries its rights in `required_permissions` (the lists live in
+`app/models/document.py`); children inherit through the ancestor walk. A
+write needs a non-view right from the list, as before. Every root is built
+from one definition, `system_folder_fields`, so a root a module creates lazily
+matches one the reconciler creates. Migration `b38df38d849b` stamps existing
+roots. `docs/UPGRADING.md` lists who gains and loses what.
+
+**Apparatus files** are uploaded at `POST /apparatus/{id}/photos/upload` and
+`/documents/upload`, scanned and filed in the vehicle's sub-folder (Photos;
+Registration & Insurance for a title, registration or insurance; Maintenance
+Records; Inspection & Compliance; Manuals & References). The apparatus row
+links the document (`document_id`, cascading). Downloads go through the
+apparatus endpoint and also check the document's current folder, so a file
+moved out of reach is not served through the module's door. Typed URLs are
+refused on the way in, and `fileUrl` passes an old one on only if it is
+HTTP(S).
+
+**Finance receipts** are uploaded at `POST /finance/purchase-requests/{id}/receipt`
+and `/expense-reports/{id}/items/{item}/receipt`, filed in Finance > Receipts,
+and linked by `receipt_document_id`. Here the record's read rule is the
+authority, not the folder's: a member opens the receipt on their own request
+without holding the rights that open the Finance folder. Replacing a receipt
+keeps the earlier file, since it may be what an approver saw.
+
+`app/services/module_documents.py` is the shared path for both: store as a
+document, serve back with a descriptive name, delete with the file.
+
+Not done here: a screen for setting a custom folder's rights (decision 22);
+facility files still upload through `/documents/upload`, which needs
+`documents.manage` on top of the facility grant.
+
+### Phase 4 — what changed
+
+**Every file written to disk is encrypted** (`app/core/file_encryption.py`).
+`FileStorageService.write_atomically` encrypts before it writes, so every
+upload path from Phase 2 is covered. The format:
+
+- a 94-byte header: magic `LBENC\x01`, the key id, and a per-file data key
+  wrapped with AES-256-GCM under the installation's file key;
+- the body in 64 KiB chunks, each sealed with AES-256-GCM. Each chunk's
+  associated data binds the header, the chunk's index and whether it is the
+  last, so reordering, truncation and trailing bytes are all refused.
+
+The file key is HKDF-SHA256 over the same PBKDF2 output the field cipher
+uses, with its own label, so it is never the field key itself. The key id
+is an HMAC of the file key, which identifies the key without revealing it.
+
+**Reads decrypt.** Every download goes through `stored_file_response`. It
+streams the plaintext with the right length and download name, and it
+unwraps the key before the response starts, so a wrong key is an error
+rather than a truncated download. A file written before this change is
+recognised by its missing magic bytes and served as it is. Email
+attachments are read the same way. `test_file_encryption.py` fails on any
+`FileResponse` outside the storage service.
+
+**`scripts/encrypt_uploads.py`** encrypts what is already on disk
+(`app/services/upload_encryption.py`):
+
+1. `--apply` writes the ciphertext beside each file and decrypts it back to
+   compare. Only then does it swap the ciphertext in, keep the original as
+   `.<name>.plaintext` and record both in a manifest under
+   `/app/uploads/.encryption/`.
+2. `--rollback` puts the originals back.
+3. `--finalize` re-verifies each file against its recorded checksum before
+   deleting its original.
+
+Modification times are kept, because anonymous suggestion screenshots rely
+on a coarse one. `--rewrap` moves files written under a key now only in
+`ENCRYPTION_KEYS_LEGACY` onto the current key without re-encrypting the
+body. Until no plaintext copy is left, administrators see a "not yet
+encrypted" notice.
+
+**Key custody.** Setup has a new required step after the system owner
+account, Encryption Key (`/onboarding/encryption-key`).
+`complete_onboarding` refuses to finish without it. On an installation that
+is already set up, `settings.manage` holders see a red notice with a confirm
+button.
+
+A confirmation is stored in `encryption_key_custody`, one row per key
+fingerprint, with who confirmed it and when. It is audited as
+`encryption_key.custody_confirmed`. A rotated key has a new fingerprint and
+is asked about again. The request carries the fingerprint the administrator
+was shown, so a key changed in the meantime is refused (409) rather than
+confirmed unseen.
+
+The installers now `chmod 600` the `.env` they write and tell the operator
+to copy the key somewhere else before setup.
+
+Not done here:
+
+- Images stored in the database (member photos, logos, storefront and
+  equipment-check photos) are not files on disk and are not covered.
+- Encrypted downloads do not support HTTP Range requests.
+- Backups taken before the encrypt run still hold plaintext copies.
+
+These are in `docs/KNOWN_LIMITATIONS.md`.
+
+### Phase 5 — every document lives in a folder (2026-10-11)
+
+A document with no folder was organization level: readable and downloadable
+by every `documents.view` holder, outside every folder's rights. Upload let
+the folder be left out, and a move could set it to null, so a document taken
+_out_ of a gated folder (Finance, Member Separations, a personal folder)
+became readable by the whole organization.
+
+| Finding                                                                                                    | Fix                                                                                                                                       |
+| ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /documents/upload` with no `folder_id` stored an unfiled document                                    | Files it into General Documents (created with the system roots if missing), behind the same write check as any folder                     |
+| `PATCH /documents/{id}` with `folder_id: null` moved a document out of its folder's rights, unchecked      | `null` means General Documents and goes through the destination write check                                                               |
+| Unfiled documents already stored                                                                           | Migration `dcb8a46ac50c` files them into their organization's General root; reversible, recorded in `document_unfiled_backfill`           |
+| Linking an unfiled document to an apparatus moved it behind apparatus rights with only read access checked | Re-filing it takes `documents.manage`                                                                                                     |
+| The facility Files tab relied on uploading unfiled and re-filing on link                                   | The link also files the caller's _own_ upload out of General into the facility folder; someone else's library document is never pulled in |
+
+Who can read a moved document is unchanged — General Documents is the shared
+library, open to `documents.view` — but its folder now decides it. The upload
+form's "No folder" choice reads "General Documents (default)".
+
+This revision also joins the two Alembic heads `3f3bd6f3c7e4` and
+`990e288940bc`, published with the same parent.
+
 ### Found in passing, not in this change
 
 - `GET /events?include_drafts=true` returns draft events to any member. The
   flag is honoured without a permission check. Belongs with the events
   module, not file storage.
-- Apparatus photo and document records hold a client-supplied URL rather than
-  an upload; finance receipts are URL fields with no upload at all. Phase 3.
+- Two found by the 2026-10-11 audit for Phase 5, recorded in
+  `docs/KNOWN_LIMITATIONS.md` ("File Storage — Folder Rights Phase 3 Left
+  Open"): files in the `documents` area were stored flat under
+  `<org>/documents/`, not per record (resolved the same day: new uploads go
+  to `<org>/documents/<document_id>/`, and `scripts/relocate_uploads.py`
+  moves the flat ones); and an event's attachment references are confined to
+  the organization, not to that event.
 
 ## Open questions for later phases
 

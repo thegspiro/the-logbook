@@ -135,7 +135,7 @@ def implicit_separation_date(member: Any, today: date, tz: tzinfo) -> date:
     changed = getattr(member, "status_changed_at", None)
     if changed is None:
         return today
-    changed_date = changed
+    changed_date: date = changed
     if isinstance(changed, datetime):
         aware = changed if changed.tzinfo else changed.replace(tzinfo=timezone.utc)
         changed_date = aware.astimezone(tz).date()
@@ -588,14 +588,12 @@ class MemberServiceHistoryService:
                 "have no end date."
             )
 
-        spans = sorted(
-            (
-                (p.start_date or hire_date, p.end_date or today)
-                for p in periods
-                if (p.start_date or hire_date) is not None
-            ),
-            key=lambda s: s[0],
-        )
+        spans: List[tuple[date, date]] = []
+        for p in periods:
+            span_start = p.start_date or hire_date
+            if span_start is not None:
+                spans.append((span_start, p.end_date or today))
+        spans.sort(key=lambda s: s[0])
         for (_a_start, a_end), (b_start, _b_end) in zip(spans, spans[1:]):
             if b_start <= a_end:
                 raise ValueError(

@@ -270,12 +270,16 @@ class StorefrontPreviewService:
             "screen. No member received it and no order exists."
             "</div>"
         )
+
         # Slipped in after <body> rather than composed into the message: the
         # notice may have come from an admin-edited template, whose markup is
         # theirs to arrange and not ours to splice into.
+        def _after_body(m: re.Match[str]) -> str:
+            return m.group(1) + banner
+
         html_body, substitutions = re.subn(
             r"(<body[^>]*>)",
-            lambda m: m.group(1) + banner,
+            _after_body,
             message["html_body"],
             count=1,
         )

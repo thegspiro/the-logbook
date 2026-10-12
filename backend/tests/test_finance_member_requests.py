@@ -38,10 +38,12 @@ from app.core.database import get_db
 from app.models.facilities import Facility, FacilityStatus, FacilityType
 from app.models.finance import Budget, BudgetCategory, FiscalYear, FiscalYearStatus
 from app.models.user import User
+from app.services import upload_scanning
 
 pytestmark = [pytest.mark.integration]
 
 REQUEST_ONLY = ["finance.request"]
+RECEIPT_PDF = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n"
 
 
 async def _org(db: AsyncSession, label: str) -> str:
@@ -256,7 +258,10 @@ class TestAMemberRaisesTheirOwnRequests:
             resp = await alice.get(f"/finance/purchase-requests/{pr['id']}")
             assert resp.status_code == 200, resp.text
 
-    async def test_expense_report_create_add_item_submit(self, db_session, dept):
+    async def test_expense_report_create_add_item_submit(
+        self, db_session, dept, monkeypatch
+    ):
+        monkeypatch.setattr(upload_scanning, "is_malware_scan_enabled", lambda: False)
         async with _client(db_session, dept["alice"]) as alice:
             er = await _new_er(alice, dept["fy_id"])
             assert er["submittedBy"] == dept["alice"].id
@@ -270,6 +275,14 @@ class TestAMemberRaisesTheirOwnRequests:
                 },
             )
             assert resp.status_code == 201, resp.text
+            item_ids = [line["id"] for line in er["lineItems"]] + [resp.json()["id"]]
+
+            for item_id in item_ids:
+                resp = await alice.post(
+                    f"/finance/expense-reports/{er['id']}/items/{item_id}/receipt",
+                    files={"file": ("receipt.pdf", RECEIPT_PDF, "application/pdf")},
+                )
+                assert resp.status_code == 200, resp.text
 
             resp = await alice.post(f"/finance/expense-reports/{er['id']}/submit")
             assert resp.status_code == 200, resp.text

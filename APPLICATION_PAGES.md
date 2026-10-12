@@ -69,6 +69,7 @@ Complete reference of all pages in the application, organized by module.
 | `/onboarding/module-selection`         | Module Selection (alias) | Renders the same page as `/onboarding/modules` — **not** a redirect, so the URL stays as typed |
 | `/onboarding/modules/:moduleId/config` | Module Config            | Configure individual module                                                                    |
 | `/onboarding/system-owner`             | System Owner Creation    | Create initial system owner account                                                            |
+| `/onboarding/encryption-key`           | Encryption Key           | Confirm the encryption key is stored apart from the server and its backups (required)          |
 | `/onboarding/security-check`           | Security Check           | Security verification                                                                          |
 | `/onboarding/stations`                 | Station Setup            | Create the department's stations                                                               |
 | `/onboarding/apparatus`                | Apparatus Setup          | Create the department's apparatus                                                              |
@@ -567,37 +568,38 @@ Compliance, Department Store, and Setup & Tools.
 
 ### Inventory Admin Pages
 
-| URL                               | Page                      | Permission                                                                    |
-| --------------------------------- | ------------------------- | ----------------------------------------------------------------------------- |
-| `/inventory/admin`                | Admin Dashboard           | `inventory.manage` **OR** `inventory.check_manage` **OR** `storefront.manage` |
-| `/inventory/admin/setup`          | Inventory Setup           | `inventory.manage`                                                            |
-| `/inventory/admin/items`          | Manage Items              | `inventory.manage`                                                            |
-| `/inventory/admin/pool`           | Pool Items                | `inventory.manage`                                                            |
-| `/inventory/admin/categories`     | Categories                | `inventory.manage`                                                            |
-| `/inventory/admin/maintenance`    | Maintenance Records       | `inventory.manage`                                                            |
-| `/inventory/admin/members`        | Members Inventory         | `inventory.manage`                                                            |
-| `/inventory/admin/charges`        | Charges & Fees            | `inventory.manage`                                                            |
-| `/inventory/admin/vendors`        | Vendors                   | `inventory.manage`                                                            |
-| `/inventory/admin/returns`        | Return Requests           | `inventory.manage`                                                            |
-| `/inventory/admin/requests`       | Equipment Requests        | `inventory.manage`                                                            |
-| `/inventory/admin/write-offs`     | Write-Off Requests        | `inventory.manage`                                                            |
-| `/inventory/admin/reorder`        | Reorder Requests          | `inventory.manage`                                                            |
-| `/inventory/admin/allowances`     | Issuance Allowances       | `inventory.manage`                                                            |
-| `/inventory/admin/impact-planner` | Impact Planner            | `inventory.manage`                                                            |
-| `/inventory/admin/kits`           | Equipment Kits Management | `inventory.manage`                                                            |
-| `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage`                                                            |
-| `/inventory/checkouts`            | Active Checkouts          | `inventory.manage`                                                            |
-| `/inventory/import`               | CSV Import                | `inventory.manage`                                                            |
-| `/inventory/admin/kits`           | Equipment Kits            | `inventory.manage`                                                            |
-| `/inventory/admin/variant-groups` | Variant Groups            | `inventory.manage`                                                            |
-| `/inventory/print-labels`         | Barcode Label Printing    | `inventory.manage`                                                            |
-| `/inventory/admin/nfc`            | NFC Tag Settings          | any of `settings.manage`, `organization.update_settings`                      |
-| `/inventory/tag/:code`            | NFC Tag Link (redirect)   | `inventory.view`                                                              |
-| `/inventory/put-away`             | Put Away by NFC           | `inventory.manage`                                                            |
-| `/inventory/shelf-audit`          | Shelf Audit by NFC        | `inventory.manage`                                                            |
-| `/inventory/admin/nfc/enroll`     | Tag Items in Bulk         | `inventory.manage`                                                            |
-| `/inventory/admin/not-seen`       | Items Not Seen            | `inventory.manage`                                                            |
-| `/inventory/kiosk`                | Self-Service Kiosk        | `inventory.kiosk`                                                             |
+| URL                                        | Page                      | Permission                                                                    |
+| ------------------------------------------ | ------------------------- | ----------------------------------------------------------------------------- |
+| `/inventory/admin`                         | Admin Dashboard           | `inventory.manage` **OR** `inventory.check_manage` **OR** `storefront.manage` |
+| `/inventory/admin/setup`                   | Inventory Setup           | `inventory.manage`                                                            |
+| `/inventory/admin/items`                   | Manage Items              | `inventory.manage`                                                            |
+| `/inventory/admin/pool`                    | Pool Items                | `inventory.manage`                                                            |
+| `/inventory/admin/categories`              | Categories                | `inventory.manage`                                                            |
+| `/inventory/admin/maintenance`             | Maintenance Records       | `inventory.manage`                                                            |
+| `/inventory/admin/members`                 | Members Inventory         | `inventory.manage`                                                            |
+| `/inventory/admin/charges`                 | Charges & Fees            | `inventory.manage`                                                            |
+| `/inventory/admin/vendors`                 | Vendors                   | `inventory.manage`                                                            |
+| `/inventory/admin/returns`                 | Return Requests           | `inventory.manage`                                                            |
+| `/inventory/admin/requests`                | Equipment Requests        | `inventory.manage`                                                            |
+| `/inventory/admin/write-offs`              | Write-Off Requests        | `inventory.manage`                                                            |
+| `/inventory/admin/clearances/:clearanceId` | Departure Clearance       | `inventory.manage`                                                            |
+| `/inventory/admin/reorder`                 | Reorder Requests          | `inventory.manage`                                                            |
+| `/inventory/admin/allowances`              | Issuance Allowances       | `inventory.manage`                                                            |
+| `/inventory/admin/impact-planner`          | Impact Planner            | `inventory.manage`                                                            |
+| `/inventory/admin/kits`                    | Equipment Kits Management | `inventory.manage`                                                            |
+| `/inventory/admin/variant-groups`          | Variant Groups Management | `inventory.manage`                                                            |
+| `/inventory/checkouts`                     | Active Checkouts          | `inventory.manage`                                                            |
+| `/inventory/import`                        | CSV Import                | `inventory.manage`                                                            |
+| `/inventory/admin/kits`                    | Equipment Kits            | `inventory.manage`                                                            |
+| `/inventory/admin/variant-groups`          | Variant Groups            | `inventory.manage`                                                            |
+| `/inventory/print-labels`                  | Barcode Label Printing    | `inventory.manage`                                                            |
+| `/inventory/admin/nfc`                     | NFC Tag Settings          | any of `settings.manage`, `organization.update_settings`                      |
+| `/inventory/tag/:code`                     | NFC Tag Link (redirect)   | `inventory.view`                                                              |
+| `/inventory/put-away`                      | Put Away by NFC           | `inventory.manage`                                                            |
+| `/inventory/shelf-audit`                   | Shelf Audit by NFC        | `inventory.manage`                                                            |
+| `/inventory/admin/nfc/enroll`              | Tag Items in Bulk         | `inventory.manage`                                                            |
+| `/inventory/admin/not-seen`                | Items Not Seen            | `inventory.manage`                                                            |
+| `/inventory/kiosk`                         | Self-Service Kiosk        | `inventory.kiosk`                                                             |
 
 > **NFC tags on items are opt-in** _(2026-09-24)_. `/inventory/admin/nfc` turns on `inventory.nfc_tracking_enabled` in the organization settings; until then every `/inventory/nfc*` and `/inventory/items/{id}/nfc-tags` endpoint answers 403. Once on, item detail shows an **NFC Tags** card to `inventory.manage` holders (link by writing a URL onto a blank tag, by reading the chip serial, or by typing the serial), and the distribute/return scanner gains **Tap NFC**. A written tag carries `/inventory/tag/<code>`: the code names the tag, not the item, so unlinking a tag stops its URL resolving, and any phone — an iPhone included — opens the item by tapping it. Only Chrome on Android can link tags or read them inside the app.
 >
@@ -703,6 +705,8 @@ section had no scheduling entry at all. That row is gone.
 | `/scheduling/admin/planning/templates`         | Shift Templates Management     | `scheduling.manage` |
 | `/scheduling/admin/planning/patterns`          | Shift Pattern Management       | `scheduling.manage` |
 | `/scheduling/admin/closeout`                   | Shift Close-Out — the queue    | `scheduling.manage` |
+| `/scheduling/admin/history-import`             | Shift History Import           | `scheduling.manage` |
+| `/scheduling/admin/history-import/:importId`   | Shift History Import — review  | `scheduling.manage` |
 | `/scheduling/admin/reports`                    | Scheduling Reports             | `scheduling.manage` |
 | `/scheduling/admin/platoons`                   | Platoon Management             | `scheduling.manage` |
 | `/scheduling/admin/positions`                  | Position Qualification Roster  | `scheduling.manage` |
@@ -1080,10 +1084,11 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Minutes
 
-| URL                   | Page           | Permission    |
-| --------------------- | -------------- | ------------- |
-| `/minutes`            | Minutes List   | Authenticated |
-| `/minutes/:minutesId` | Minutes Detail | Authenticated |
+| URL                   | Page                         | Permission        |
+| --------------------- | ---------------------------- | ----------------- |
+| `/minutes`            | Minutes List                 | Authenticated     |
+| `/minutes/attendance` | Meeting Attendance Dashboard | `meetings.manage` |
+| `/minutes/:minutesId` | Minutes Detail               | Authenticated     |
 
 ---
 
@@ -1195,30 +1200,30 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Finance _(documented 2026-08-10)_
 
-| URL                                   | Page                       | Permission                                            |
-| ------------------------------------- | -------------------------- | ----------------------------------------------------- |
-| `/finance`                            | Finance Dashboard          | `finance.view`                                        |
-| `/finance/budgets`                    | Budgets                    | `finance.view`                                        |
-| `/finance/budgets/:id`                | Budget Detail              | Authenticated                                         |
-| `/finance/my-budgets`                 | My Budgets                 | Authenticated                                         |
-| `/finance/budget-requests`            | Next Year's Budget         | Authenticated                                         |
-| `/finance/budget-requests/review`     | Budget Requests (review)   | `finance.manage` or `finance.budget_review`           |
-| `/finance/purchase-requests`          | Purchase Requests          | `finance.request`, `finance.view` or `finance.manage` |
-| `/finance/purchase-requests/new`      | New Purchase Request       | `finance.request` or `finance.manage`                 |
-| `/finance/purchase-requests/:id`      | Purchase Request Detail    | `finance.request`, `finance.view` or `finance.manage` |
-| `/finance/purchase-requests/:id/edit` | Edit Purchase Request      | `finance.request` or `finance.manage`                 |
-| `/finance/expenses`                   | Expense Reports            | `finance.request`, `finance.view` or `finance.manage` |
-| `/finance/expenses/new`               | New Expense Report         | `finance.request` or `finance.manage`                 |
-| `/finance/expenses/:id`               | Expense Report Detail      | `finance.request`, `finance.view` or `finance.manage` |
-| `/finance/check-requests`             | Check Requests             | `finance.request`, `finance.view` or `finance.manage` |
-| `/finance/check-requests/new`         | New Check Request          | `finance.request` or `finance.manage`                 |
-| `/finance/check-requests/:id`         | Check Request Detail       | `finance.request`, `finance.view` or `finance.manage` |
-| `/finance/dues`                       | Dues                       | `finance.view`                                        |
-| `/finance/approvals`                  | Approvals                  | `finance.approve`                                     |
-| `/finance/settings`                   | Finance Settings           | `finance.manage`                                      |
-| `/finance/settings/approval-chains`   | Approval Chains            | `finance.configure_approvals`                         |
-| `/finance/settings/quickbooks`        | QuickBooks Export          | `finance.manage`                                      |
-| `/finance/approvals/:token`           | Tokenized Approval Landing | Token-based                                           |
+| URL                                   | Page                       | Permission                                                               |
+| ------------------------------------- | -------------------------- | ------------------------------------------------------------------------ |
+| `/finance`                            | Finance Dashboard          | `finance.view`                                                           |
+| `/finance/budgets`                    | Budgets                    | `finance.view`                                                           |
+| `/finance/budgets/:id`                | Budget Detail              | Authenticated                                                            |
+| `/finance/my-budgets`                 | My Budgets                 | Authenticated                                                            |
+| `/finance/budget-requests`            | Next Year's Budget         | Authenticated                                                            |
+| `/finance/budget-requests/review`     | Budget Requests (review)   | `finance.manage` or `finance.budget_review`                              |
+| `/finance/purchase-requests`          | Purchase Requests          | `finance.request`, `finance.view` or `finance.manage`                    |
+| `/finance/purchase-requests/new`      | New Purchase Request       | `finance.request` or `finance.manage`                                    |
+| `/finance/purchase-requests/:id`      | Purchase Request Detail    | `finance.request`, `finance.view` or `finance.manage`                    |
+| `/finance/purchase-requests/:id/edit` | Edit Purchase Request      | `finance.request` or `finance.manage`                                    |
+| `/finance/expenses`                   | Expense Reports            | `finance.request`, `finance.view` or `finance.manage`                    |
+| `/finance/expenses/new`               | New Expense Report         | `finance.request` or `finance.manage`                                    |
+| `/finance/expenses/:id`               | Expense Report Detail      | `finance.request`, `finance.view`, `finance.manage` or `finance.approve` |
+| `/finance/check-requests`             | Check Requests             | `finance.request`, `finance.view` or `finance.manage`                    |
+| `/finance/check-requests/new`         | New Check Request          | `finance.request` or `finance.manage`                                    |
+| `/finance/check-requests/:id`         | Check Request Detail       | `finance.request`, `finance.view` or `finance.manage`                    |
+| `/finance/dues`                       | Dues                       | `finance.view`                                                           |
+| `/finance/approvals`                  | Approvals                  | `finance.approve`                                                        |
+| `/finance/settings`                   | Finance Settings           | `finance.manage`                                                         |
+| `/finance/settings/approval-chains`   | Approval Chains            | `finance.configure_approvals`                                            |
+| `/finance/settings/quickbooks`        | QuickBooks Export          | `finance.manage`                                                         |
+| `/finance/approvals/:token`           | Tokenized Approval Landing | Token-based                                                              |
 
 > **Next year's budget requests** _(2026-10-08)_. `/finance/budget-requests`
 > is a line owner's screen for proposing next year's amounts: it lists the
@@ -1283,6 +1288,7 @@ lot's number or expiration date require `inventory.check_manage` or
 | ------------------------------- | ------------------- | -------------------- |
 | `/grants`                       | Grants Dashboard    | `fundraising.view`   |
 | `/grants/opportunities`         | Grant Opportunities | `fundraising.view`   |
+| `/grants/opportunities/new`     | New Opportunity     | `fundraising.manage` |
 | `/grants/applications`          | Grant Applications  | `fundraising.view`   |
 | `/grants/applications/new`      | New Application     | `fundraising.manage` |
 | `/grants/applications/:id`      | Grant Detail        | `fundraising.view`   |
@@ -1290,6 +1296,9 @@ lot's number or expiration date require `inventory.check_manage` or
 | `/grants/campaigns`             | Campaigns           | `fundraising.view`   |
 | `/grants/donors`                | Donors              | `fundraising.view`   |
 | `/grants/donations`             | Donations           | `fundraising.view`   |
+| `/grants/donations/new`         | Record Donation     | `fundraising.manage` |
+| `/grants/pledges`               | Pledges             | `fundraising.view`   |
+| `/grants/events`                | Fundraising Events  | `fundraising.view`   |
 | `/grants/reports`               | Fundraising Reports | `fundraising.view`   |
 
 ---

@@ -264,3 +264,49 @@ describe('ElectionDetailPage rollback resend banner (W50-36)', () => {
     expect(screen.queryByText(BANNER)).not.toBeInTheDocument();
   });
 });
+
+describe('ElectionDetailPage ballot-change resend banner (W50-47)', () => {
+  const CHANGED = /Every ballot link already sent was invalidated because the ballot changed/;
+
+  beforeEach(() => {
+    getElection.mockReset();
+    window.history.replaceState({}, '', '/elections/e-1');
+  });
+
+  it('prompts a resend from the server flag on an open election', async () => {
+    getElection.mockResolvedValue({
+      ...closedElection,
+      status: 'open',
+      ballots_must_be_resent: true,
+      ballots_resend_reason: 'ballot_changed',
+    });
+    renderWithRouter(<ElectionDetailPage />);
+
+    const banner = await screen.findByTestId('rollback-resend-banner');
+    expect(within(banner).getByText(CHANGED)).toBeInTheDocument();
+    expect(within(banner).getByText(/Resend ballots so members get the current ballot/)).toBeInTheDocument();
+    expect(within(banner).getByRole('button', { name: 'Resend Ballot Emails' })).toBeInTheDocument();
+  });
+
+  it('explains the dead links on a draft without offering a send it would refuse', async () => {
+    getElection.mockResolvedValue({
+      ...closedElection,
+      status: 'draft',
+      ballots_must_be_resent: true,
+      ballots_resend_reason: 'ballot_changed',
+    });
+    renderWithRouter(<ElectionDetailPage />);
+
+    const banner = await screen.findByTestId('rollback-resend-banner');
+    expect(within(banner).getByText(/Send ballots again once voting is open/)).toBeInTheDocument();
+    expect(within(banner).queryByRole('button', { name: 'Resend Ballot Emails' })).not.toBeInTheDocument();
+  });
+
+  it('shows nothing when the server reports no dead links', async () => {
+    getElection.mockResolvedValue({ ...closedElection, status: 'open', ballots_must_be_resent: false });
+    renderWithRouter(<ElectionDetailPage />);
+
+    await screen.findByRole('heading', { name: 'Officer Election' });
+    expect(screen.queryByTestId('rollback-resend-banner')).not.toBeInTheDocument();
+  });
+});

@@ -69,7 +69,7 @@ class TrainingSubmissionService:
                 SelfReportConfig.organization_id == organization_id
             )
         )
-        config = result.scalar_one_or_none()
+        config: Optional[SelfReportConfig] = result.scalar_one_or_none()
 
         if not config:
             # Create default config
@@ -377,7 +377,8 @@ class TrainingSubmissionService:
                 TrainingSubmission.organization_id == organization_id,
             )
         )
-        return result.scalar_one_or_none()
+        training_submission: Optional[TrainingSubmission] = result.scalar_one_or_none()
+        return training_submission
 
     async def get_submissions(
         self,

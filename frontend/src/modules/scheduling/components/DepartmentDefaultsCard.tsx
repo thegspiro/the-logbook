@@ -29,7 +29,15 @@ export const DepartmentDefaultsCard: React.FC<DepartmentDefaultsCardProps> = ({ 
 
   return (
     <div className="card-secondary space-y-5 p-4 sm:p-5">
-      <h3 className="text-theme-text-primary text-base font-semibold">Department Defaults</h3>
+      <div>
+        <h3 className="text-theme-text-primary text-base font-semibold">Department Defaults</h3>
+        {/* Pitfall #19: these three values are stored and shown on the settings summary, but no shift, template
+            or overtime warning reads them yet. */}
+        <p className="text-theme-alert-warning-text mt-1 text-xs font-medium">
+          Not in effect yet — these are saved, but new shifts and templates don&apos;t use them and no overtime warning
+          reads the threshold.
+        </p>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>

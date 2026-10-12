@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockGetUsers = vi.fn();
 const mockGetTemplates = vi.fn();
 const mockGetBasicApparatus = vi.fn();
+const mockGetApparatusOptions = vi.fn();
 const mockGetSummary = vi.fn();
 const mockGetFeatureSettings = vi.fn();
 
@@ -11,6 +12,7 @@ vi.mock('../services/api', () => ({
   schedulingService: {
     getTemplates: (...args: unknown[]) => mockGetTemplates(...args) as unknown,
     getBasicApparatus: (...args: unknown[]) => mockGetBasicApparatus(...args) as unknown,
+    getApparatusOptions: (...args: unknown[]) => mockGetApparatusOptions(...args) as unknown,
     getSummary: (...args: unknown[]) => mockGetSummary(...args) as unknown,
     getFeatureSettings: (...args: unknown[]) => mockGetFeatureSettings(...args) as unknown,
   },
@@ -39,6 +41,8 @@ describe('schedulingStore', () => {
       templatesLoading: false,
       apparatus: [],
       apparatusLoaded: false,
+      shiftApparatus: [],
+      shiftApparatusLoaded: false,
       summary: null,
       summaryLoading: false,
       summaryError: null,
@@ -147,6 +151,48 @@ describe('schedulingStore', () => {
     });
   });
 
+  // Create Shift read loadApparatus's BasicApparatus list, so a department on
+  // the Apparatus module had no vehicle to choose and every shift was created
+  // off-rig, its equipment checks never coming due.
+  describe('loadShiftApparatus', () => {
+    beforeEach(() => {
+      mockGetApparatusOptions.mockReset();
+    });
+
+    it('loads full apparatus records from the unified options', async () => {
+      mockGetApparatusOptions.mockResolvedValue({
+        source: 'apparatus',
+        options: [{ id: 'full-1', name: 'Engine 1', unit_number: 'E1', apparatus_type: 'engine', source: 'apparatus' }],
+      });
+
+      await useSchedulingStore.getState().loadShiftApparatus();
+
+      expect(useSchedulingStore.getState().shiftApparatus.map((a) => a.id)).toEqual(['full-1']);
+      expect(useSchedulingStore.getState().shiftApparatusLoaded).toBe(true);
+      expect(mockGetBasicApparatus).not.toHaveBeenCalled();
+    });
+
+    it('drops type placeholders, which are not a vehicle a shift can sit on', async () => {
+      mockGetApparatusOptions.mockResolvedValue({
+        source: 'default',
+        options: [{ name: 'Engine', apparatus_type: 'engine', source: 'default' }],
+      });
+
+      await useSchedulingStore.getState().loadShiftApparatus();
+
+      expect(useSchedulingStore.getState().shiftApparatus).toEqual([]);
+    });
+
+    it('marks itself loaded on failure so it does not retry in a loop', async () => {
+      mockGetApparatusOptions.mockRejectedValue(new Error('network'));
+
+      await useSchedulingStore.getState().loadShiftApparatus();
+
+      expect(useSchedulingStore.getState().shiftApparatusLoaded).toBe(true);
+      expect(useSchedulingStore.getState().shiftApparatus).toEqual([]);
+    });
+  });
+
   describe('loadSummary', () => {
     it('should load scheduling summary', async () => {
       const summary = {
@@ -196,12 +242,15 @@ describe('schedulingStore', () => {
       mockGetUsers.mockResolvedValue([]);
       mockGetTemplates.mockResolvedValue([]);
       mockGetBasicApparatus.mockResolvedValue([]);
+      mockGetApparatusOptions.mockReset();
+      mockGetApparatusOptions.mockResolvedValue({ options: [], source: 'default' });
 
       await useSchedulingStore.getState().loadInitialData();
 
       expect(mockGetUsers).toHaveBeenCalledExactlyOnceWith();
       expect(mockGetTemplates).toHaveBeenCalledExactlyOnceWith({ active_only: true });
       expect(mockGetBasicApparatus).toHaveBeenCalledExactlyOnceWith();
+      expect(mockGetApparatusOptions).toHaveBeenCalledExactlyOnceWith();
     });
 
     it('should skip already-loaded data', async () => {
@@ -209,6 +258,7 @@ describe('schedulingStore', () => {
         membersLoaded: true,
         templatesLoaded: true,
         apparatusLoaded: true,
+        shiftApparatusLoaded: true,
       });
 
       await useSchedulingStore.getState().loadInitialData();
@@ -216,6 +266,7 @@ describe('schedulingStore', () => {
       expect(mockGetUsers).not.toHaveBeenCalled();
       expect(mockGetTemplates).not.toHaveBeenCalled();
       expect(mockGetBasicApparatus).not.toHaveBeenCalled();
+      expect(mockGetApparatusOptions).not.toHaveBeenCalled();
     });
   });
 
@@ -326,6 +377,18 @@ describe('schedulingStore', () => {
       await useSchedulingStore.getState().loadSettings();
 
       expect(useSchedulingStore.getState().callTypeLabels).toEqual({ brush: 'Brush' });
+    });
+
+    it("drops the previous department's shift apparatus too", () => {
+      useSchedulingStore.setState({
+        shiftApparatus: [{ id: 'full-1', name: 'Engine 1', apparatus_type: 'engine', source: 'apparatus' }],
+        shiftApparatusLoaded: true,
+      });
+
+      useSchedulingStore.getState().resetSettings();
+
+      expect(useSchedulingStore.getState().shiftApparatus).toEqual([]);
+      expect(useSchedulingStore.getState().shiftApparatusLoaded).toBe(false);
     });
   });
 

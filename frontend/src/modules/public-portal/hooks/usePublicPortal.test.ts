@@ -36,6 +36,7 @@ vi.mock('react-hot-toast', () => ({
 
 // Import the hooks AFTER the mocks are in place.
 import { usePortalConfig, useAPIKeys, useAccessLogs, useUsageStats, useDataWhitelist } from './usePublicPortal';
+import type { PublicPortalAPIKeyCreated } from '../types';
 
 describe('usePublicPortal hooks', () => {
   beforeEach(() => {
@@ -129,17 +130,33 @@ describe('usePublicPortal hooks', () => {
     // The create response carries the only copy of the plaintext key, so it has
     // to reach the caller — the refreshed list will never contain it again.
     it('returns the created key and refreshes the list', async () => {
-      mockCreateAPIKey.mockResolvedValue({ id: 'k-1', plaintextKey: 'pk_live_secret' });
+      const createdKey: PublicPortalAPIKeyCreated = {
+        id: 'k-1',
+        organization_id: 'org-1',
+        key_prefix: 'pk_live',
+        name: 'reporting',
+        rate_limit: null,
+        rate_limit_override: null,
+        effective_rate_limit: 1000,
+        expires_at: null,
+        last_used_at: null,
+        is_active: true,
+        created_by: null,
+        created_at: '2026-01-01T00:00:00Z',
+        is_expired: false,
+        api_key: 'pk_live_secret',
+      };
+      mockCreateAPIKey.mockResolvedValue(createdKey);
       const { result } = renderHook(() => useAPIKeys());
       await waitFor(() => expect(result.current.loading).toBe(false));
       mockListAPIKeys.mockClear();
 
-      let created: { plaintextKey?: string } = {};
+      let created: PublicPortalAPIKeyCreated | undefined;
       await act(async () => {
         created = await result.current.createKey({ name: 'reporting' });
       });
 
-      expect(created.plaintextKey).toBe('pk_live_secret');
+      expect(created?.api_key).toBe('pk_live_secret');
       expect(mockListAPIKeys).toHaveBeenCalledTimes(1);
     });
 

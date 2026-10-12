@@ -23,8 +23,28 @@ export interface ConditionalField {
   condition_value?: string | null | undefined;
 }
 
+/**
+ * Rules that compare answers as numbers. They mean nothing against free text,
+ * so the builders only offer them under a numeric question, and the server
+ * refuses them anywhere else.
+ */
+export const NUMERIC_CONDITION_OPERATORS: readonly string[] = ['at_least', 'at_most'];
+
 /** Operators whose rule compares against `condition_value`. */
-export const CONDITION_OPERATORS_WITH_VALUE: readonly string[] = ['equals', 'not_equals', 'contains'];
+export const CONDITION_OPERATORS_WITH_VALUE: readonly string[] = [
+  'equals',
+  'not_equals',
+  'contains',
+  ...NUMERIC_CONDITION_OPERATORS,
+];
+
+// A plain decimal, and nothing else: Number() and Python's float() disagree on
+// "1_000", "0x10" and "1e3", and FormsService must reach the same answer.
+const PLAIN_NUMBER = /^-?[0-9]+(\.[0-9]+)?$/;
+
+function asNumber(text: string): number | null {
+  return PLAIN_NUMBER.test(text) ? Number(text) : null;
+}
 
 const MULTI_VALUE_TYPES: readonly string[] = [FieldType.CHECKBOX, FieldType.MULTISELECT];
 
@@ -66,6 +86,16 @@ export function conditionMatches(
       return parentValue.length > 0;
     case 'is_empty':
       return parentValue.length === 0;
+    case 'at_least':
+    case 'at_most': {
+      // An unusable threshold fails closed, like an unknown operator; a blank
+      // or non-numeric answer meets no threshold, like "equals" against blank.
+      const threshold = asNumber(expected);
+      if (threshold === null) return true;
+      const answer = asNumber(parentValue);
+      if (answer === null) return false;
+      return field.condition_operator === 'at_least' ? answer >= threshold : answer <= threshold;
+    }
     default:
       return true;
   }

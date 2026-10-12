@@ -463,7 +463,7 @@ export const ApparatusListPage: React.FC = () => {
                               {status && <StatusBadge status={status} />}
                               {apparatus.hasDeficiency && (
                                 <span
-                                  className="inline-flex items-center gap-1 rounded border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-xs font-medium text-red-700 dark:text-red-400"
+                                  className="inline-flex items-center gap-1 rounded border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-xs font-medium text-red-900 dark:text-red-300"
                                   title="Equipment deficiency reported"
                                 >
                                   <AlertTriangle className="h-3 w-3" />

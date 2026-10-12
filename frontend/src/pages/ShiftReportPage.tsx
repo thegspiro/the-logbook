@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { organizationService } from '../services/userServices';
 import {
-  ArrowLeft,
   ClipboardList,
   Clock,
   Phone,
@@ -161,24 +160,10 @@ const ShiftReportPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div data-page-main className="mx-auto max-w-4xl py-8">
-        {/* Header */}
-        <div className="mb-6 flex items-center space-x-4">
-          <button
-            type="button"
-            onClick={() => void navigate('/training/officer')}
-            aria-label="Back to Training Dashboard"
-            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface btn-icon"
-          >
-            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-          </button>
-          <div className="flex-1">
-            <h1 className="text-theme-text-primary flex items-center space-x-2 text-2xl font-bold">
-              <ClipboardList className="h-7 w-7 text-red-500" />
-              <span>Shift Completion Reports</span>
-            </h1>
-            <p className="text-theme-text-muted text-sm">Document trainee performance and experiences during shifts</p>
-          </div>
-        </div>
+        {/* Rendered only inside Training Administration, whose section nav already
+          names this page; the title stays for heading navigation only, and the
+          old back link pointed at the hub the user is already on. */}
+        <h2 className="sr-only">Shift Completion Reports</h2>
 
         {/* Stats Bar */}
         {myStats && myStats.total_reports > 0 && (

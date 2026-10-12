@@ -150,29 +150,43 @@ The new fiscal year is created in **Draft** status.
 
 ![Fiscal year settings listing fiscal years with status badges](./images/11-02-fiscal-year-settings.png)
 
-### Adopting and Activating a Fiscal Year
+### Adopting and Starting a Fiscal Year
 
-A draft year's budget becomes spendable when the board adopts it, and recording that adoption is what activates the year _(2026-10-09)_:
+Adopting the budget and starting the year are separate steps _(2026-10-09)_. The board usually adopts next year's budget before the year begins; the year becomes spendable when you start it.
+
+**Record the board's adoption:**
 
 1. Move the draft year to **Board review** (see [Planning Next Year](#planning-next-year-treasurer), step 4).
 2. Once the board has voted, click **Record adoption** on the year's row.
 3. Enter the date the board adopted it (not in the future) and the motion or minutes reference, and optionally notes such as the vote count.
-4. Click **Adopt and activate**.
+4. Click **Record adoption**.
 
-The year becomes the current period for all financial operations, its row shows _"Adopted by the board {date} · {reference}"_, and each line owner is emailed the lines their position owns with the adopted amounts. Only one fiscal year can be active at a time -- activating a new one automatically closes the previously active one. A draft cannot be activated any other way.
+The year's badge reads **Adopted** and its row shows _"Adopted by the board {date} · {reference}"_. Its budget is final from here: the stage can no longer be moved back.
 
-### Locking a Fiscal Year
+**Start the year** on or after its start date:
 
-When a fiscal year is complete:
+1. Begin the current year's year-end close first (below) — only one year can be active, and starting a new one never closes the old one for you.
+2. Click **Start the year** on the adopted draft and confirm.
 
-1. Click **Lock** on the active fiscal year.
-2. Confirm the lock.
+The year becomes the current period for all financial operations, and each line owner is emailed the lines their position owns with the adopted amounts. Starting is refused before the year's start date, while another year is still active, or if the board's adoption has not been recorded.
 
-A draft year cannot be locked: it has never been adopted, so locking it would close it unused.
+### Closing and Locking a Fiscal Year
 
-Locking transitions the fiscal year to **Closed** status and sets the `isLocked` flag. A locked fiscal year cannot be modified or re-opened, and its budget amounts are final: a line's amount can no longer be changed or amended. A line's notes, station and owner can still be edited. This is typically done after year-end reconciliation.
+When the year ends, the Treasurer closes it in two steps _(2026-10-09)_. Once the end date has passed, a banner on **Finance > Settings** reminds you.
 
-> **Hint:** Create and set up your new fiscal year (including budgets) in Draft status before the current one ends. When the new period begins, activate it. This ensures a seamless transition with no gap in financial tracking.
+**1. Begin year-end close.** Click **Begin year-end close** on the active year and confirm. The year's badge reads **Closing**. From now on:
+
+- No new purchase requests, expense reports or check requests can be raised or submitted against it.
+- What was already submitted can still be approved, and what was approved can still be paid, issued, voided or cancelled.
+- Budget amendments are still allowed.
+
+If you began the close by mistake, **Reopen** makes it the active year again (as long as no other year has been started).
+
+**2. Lock it.** Once everything is settled, click **Lock**. The dialog lists anything still open — submitted requests awaiting a decision, approved purchases or reports not yet paid, approved checks not yet issued — each linked so you can finish it. The lock stays disabled until the list is empty. Then enter your **reconciliation notes** (for example, _"Reconciled to the June 30 bank statement; reviewed by the audit committee"_) and click **Lock the year**.
+
+A locked year's badge reads **Closed**, and its row shows _"Locked {date} · {notes}"_ with who locked it kept on record. A locked year cannot be reopened, nothing in it can be paid or changed, and its budget amounts are final. A line's notes, station and owner can still be edited. A draft year cannot be locked.
+
+> **Hint:** Create and set up your new fiscal year (including budgets) in Draft status before the current one ends, and have the board adopt it. When the new year begins, begin the old year's close, then start the new one — the two can overlap, so last year's bills can still be paid while this year's spending starts.
 
 ### Planning Next Year (Treasurer)
 
@@ -193,17 +207,17 @@ Each copy keeps the line's category, station, notes and its own owner position, 
 
 The year's row then reads _"Requests close {date}"_ with a **Requests open** or **Requests closed** badge. Requests stay open through the **end of that day in your department's time zone**. After it, owners can no longer make, change, submit or withdraw a request (they see _"The request deadline for {year} has passed."_); you can still enter or change them on their behalf. A deadline can only be set while the year is a draft.
 
-**3. Decide the requests.** Each request is approved as asked, adjusted to a different amount (a note saying why is required), or declined (a note is required). Approving or adjusting writes the amount into the draft year's line — or, for a proposed new line, creates it. You can change a decision while the year is still a draft; once you activate it, decisions are final and the budget changes through amendments. See [Reviewing Budget Requests](#reviewing-budget-requests-treasurer) below.
+**3. Decide the requests.** Each request is approved as asked, adjusted to a different amount (a note saying why is required), or declined (a note is required). Approving or adjusting writes the amount into the draft year's line — or, for a proposed new line, creates it. You can change a decision while the year is taking requests; once it moves on, and after it is adopted and started, decisions are final and the budget changes through amendments. See [Reviewing Budget Requests](#reviewing-budget-requests-treasurer) below.
 
 **4. Move it through review to the board.** A draft year shows its stage on its row: **Taking requests**, **Leadership review** or **Board review**. Move it one stage at a time with the buttons beside it; each move asks you to confirm, and each can be undone with the **Back to…** button.
 
 - **Start leadership review** closes the year to line owners whatever the deadline says, and to your own decisions. Senior leadership — the positions your department has granted **`finance.budget_review`**, typically the President and the Chief — opens **Finance > Budget requests** and uses **Change amount** on any request you approved or adjusted to set a different amount with a note. Their amount becomes the line's budget; your decision stays on record beside it. A leader cannot change a request for a line their own position owns, or one they submitted.
 - **Send to the board** freezes everything while the board considers the budget.
-- **Record adoption** (in board review) makes it the active year — see [Adopting and Activating a Fiscal Year](#adopting-and-activating-a-fiscal-year).
+- **Record adoption** (in board review) records the board's vote, and **Start the year** makes it active — see [Adopting and Starting a Fiscal Year](#adopting-and-starting-a-fiscal-year).
 
 Moving back to **Taking requests** reopens the year to owners until the deadline. Deciding a request again then replaces any leadership change to it.
 
-> **Hint:** A sensible order is: create the draft year, **Start from last year**, adjust the lines you already know, set the deadline, let owners request, decide, start leadership review, send it to the board, then record the board's adoption when it votes.
+> **Hint:** A sensible order is: create the draft year, **Start from last year**, adjust the lines you already know, set the deadline, let owners request, decide, start leadership review, send it to the board, then record the board's adoption when it votes and start the year when it begins.
 
 ### Requesting Next Year's Budget (Line Owners)
 
@@ -236,14 +250,14 @@ If the API refuses (for example, an amount below what the line has already spent
 
 ### Edge Cases
 
-| Scenario                                                | Behavior                                                                                                                                 |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Activating a fiscal year when another is already active | The previously active fiscal year is automatically set to Closed status                                                                  |
-| Submitting a request with no active fiscal year         | The request form will not allow submission -- the fiscal year dropdown will be empty                                                     |
-| Editing a locked fiscal year                            | Not permitted -- the system rejects modifications with "Fiscal year is locked and cannot be modified"                                    |
-| Setting a request deadline on an active or closed year  | Not permitted -- "The request deadline can only be set while the fiscal year is a draft."                                                |
-| Copying lines into an active year                       | Not permitted -- **Start from last year** only copies into a draft year that is not locked                                               |
-| Deleting a fiscal year with existing budgets            | Not permitted -- budgets cascade with the fiscal year, but the application blocks deletion of fiscal years that have associated requests |
+| Scenario                                               | Behavior                                                                                                                                 |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Starting a fiscal year when another is already active  | Not permitted -- begin the active year's year-end close first; starting a year never closes another                                      |
+| Submitting a request with no active fiscal year        | The request form will not allow submission -- the fiscal year dropdown will be empty                                                     |
+| Editing a locked fiscal year                           | Not permitted -- the system rejects modifications with "Fiscal year is locked and cannot be modified"                                    |
+| Setting a request deadline on an active or closed year | Not permitted -- "The request deadline can only be set while the fiscal year is a draft."                                                |
+| Copying lines into an active year                      | Not permitted -- **Start from last year** only copies into a draft year that is not locked                                               |
+| Deleting a fiscal year with existing budgets           | Not permitted -- budgets cascade with the fiscal year, but the application blocks deletion of fiscal years that have associated requests |
 
 ---
 
@@ -339,7 +353,9 @@ All monetary fields use `Numeric(12, 2)` precision (12 digits total, 2 decimal p
 5. Optionally select a **station** to scope the line to one facility. Leave it
    on **Department-wide** for a line that belongs to no station. The station's
    name is what members see when they pick the line on a request.
-6. Enter the **amount budgeted** (zero or greater).
+6. Enter the **amount budgeted** (zero or greater). Once the year's budget has
+   gone to the board — board review, adopted, active or closing — a new line
+   must start at **zero**; add it, then record an amendment for its amount.
 7. Optionally select an **owner position** — see
    [Budget Owners](#budget-owners). Left empty, the form says which owner the
    line takes from its category ("Uses the category's owner: Training
@@ -356,8 +372,13 @@ owner back to the category's clears the value. Lowering the amount below what
 is already spent and encumbered is refused with _Insufficient available
 budget_, and the dialog stays open with that message.
 
-In a **locked** fiscal year the amount is shown read-only with the hint _This
-fiscal year is locked._; the other fields still save.
+The amount can be edited directly only while next year's budget is still
+**taking requests** or in **leadership review**. Once the budget goes before
+the board, and in an active or closing year, the amount is shown read-only with
+the hint _This budget has gone before the board. Change the amount with an
+amendment, which another officer confirms._ — use **Add amendment** instead.
+In a **locked** fiscal year the hint reads _This fiscal year is locked._ The
+station, owner position and notes still save in every case.
 
 When leadership has approved **extra money** for a line, record an amendment
 instead of editing the amount (below) — the amendment keeps the record of who
@@ -366,8 +387,8 @@ approved it and why.
 ### Budget Amendments
 
 An amendment records extra money approved for a budget line — by a board vote,
-the Chief, the membership — and raises the line's budget by that amount.
-Requires `finance.manage`.
+the Chief, the membership — and, once a **second officer confirms it**, raises
+the line's budget by that amount. Entering one requires `finance.manage`.
 
 1. Open the budget line from **Finance > Budgets**.
 2. Click **Add amendment**.
@@ -379,51 +400,83 @@ Requires `finance.manage`.
      cannot be in the future).
 4. Click **Record amendment**.
 
-The line's budget goes up by the amount at once. Once a line has amendments its
-page shows the **Original budget**, the **Current budget** and **Amendments:
+The amendment is saved as **Pending confirmation** and the line's budget does
+not change yet; the page says how many amendments are awaiting confirmation and
+that the figures do not include them. See
+[Confirming an Amendment](#confirming-an-amendment) below. Once a line has
+confirmed amendments its page shows the **Original budget**, the **Current budget** and **Amendments:
 +$X (n)**, and the **Amendments** section lists each one with its approval
 date, amount, who approved it, the reason, and who entered it and when. The
 Budgets list marks the line _(amended)_.
 
 - Amendments can be added in **draft**, **active** and **closed** fiscal years,
-  but not in a **locked** one — the button is hidden there.
+  but not in a **locked** one — the button is hidden there. Pending amendments
+  hold a closing year open: the year cannot be locked until each one is
+  confirmed or rejected.
 - An amendment cannot be edited or removed afterwards; it is the record of what
   was approved. If one was entered by mistake, **reverse** it (below).
 - A purchase or check request that was refused for lack of funds is **not**
   re-run when the budget goes up, and nobody is emailed. The member submits it
   again.
 
+### Confirming an Amendment
+
+An amendment (or a reversal, below) moves money only once a second officer
+confirms it. Anyone holding `finance.budget_review` (the role given to whoever
+reviews the budget for leadership — the President, for example) or
+`finance.manage` may confirm, **except whoever entered it**.
+
+1. Open the budget line. Amendments awaiting confirmation are marked
+   **Pending confirmation**.
+2. Check the amount and approval against the minutes or the approval itself.
+3. Click **Confirm**, read the note — _This raises the line's budget by $X…_ —
+   and click **Confirm amendment**. The budget changes at once and the
+   amendment shows **Confirmed {date} by {name}**.
+4. If it does not match what was approved, click **Reject** instead and give
+   the reason. It stays on the list, struck through, with **Rejected {date} by
+   {name}: {reason}**, and the budget does not change.
+
+Whoever entered an amendment does not get **Confirm** on it, but gets
+**Withdraw** — the same as Reject, for taking back one's own mistake. Nothing is
+emailed when an amendment is waiting; tell the confirming officer, or they will
+see it on the line and in the year's open items at year-end.
+
 ### Correcting a Mistaken Amendment
 
-If an amendment was entered wrongly — $2,500 typed for $250, or the wrong line —
-reverse it, then record the correct amendment if one is needed. A reversal is a
+If a **confirmed** amendment was wrong — $2,500 typed for $250, or the wrong
+line — reverse it (one still pending is simply rejected or withdrawn instead), then record the correct amendment if one is needed. A reversal is a
 new entry with its own reason and approval; the original stays on the list.
 Requires `finance.manage`.
 
 1. Open the budget line from **Finance > Budgets**.
 2. In the **Amendments** section, click **Reverse** on the amendment.
-3. Read the note — _This lowers the current budget by $X. The original
-   amendment stays on record._ — and fill in:
+3. Read the note — _Once a second officer confirms it, this lowers the current
+   budget by $X. The original amendment stays on record._ — and fill in:
    - **Reason** — what went wrong, for example _Entered $2,500 instead of
      $250_.
    - **Approved by** — who approved the correction.
    - **Approval date** — defaults to today; it cannot be in the future.
 4. Click **Record reversal**.
 
-The current budget drops by the amendment's amount at once; the **Original
-budget** does not change. The list then shows the reversal as **−$X · Reverses
-the {date} amendment of +$Y**, and the original amendment struck through with
-**Reversed {date} by {name}**.
+The reversal is saved **pending**, like any amendment; until a second officer
+confirms it the original reads **Reversal entered {date} by {name}, awaiting
+confirmation** and the budget is unchanged. Once confirmed, the current budget
+drops by the amendment's amount; the **Original budget** does not change. The
+list then shows the reversal as **−$X · Reverses the {date} amendment of +$Y**,
+and the original amendment struck through with **Reversed {date} by {name}**.
+If the reversal is rejected instead, the original can be reversed again.
 
 - The whole amendment is reversed — there is no partial reversal. To lower it
   from $2,500 to $250, reverse it and record a new $250 amendment.
+- Only a confirmed amendment can be reversed.
 - An amendment can be reversed only once, and a reversal cannot itself be
   reversed. If the money turns out to be needed after all, record a new
   amendment.
 - Not available in a **locked** fiscal year (the button is hidden there); fine
   in draft, active and closed years.
 - Refused with _Insufficient available budget_ if the lower budget would no
-  longer cover what the line has already spent and committed.
+  longer cover what the line has already spent and committed — checked when it
+  is entered and again when it is confirmed.
 - Line owners see reversals on their line's page but cannot make one.
 
 ### Budget Owners
@@ -685,14 +738,17 @@ one when requests are in flight.
 > [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#finance--five-guide-sections-with-no-screen-2026-08-09)
 > no longer describe the screen.
 
-> **Screenshot needed:**
-> _[Finance → Settings → Approval Chains → expand a chain → **Add step**, with Step type **Approval**, Approver type **Email**, an approver email filled in, the **Allow self-approval by email** box and the **Auto-approve under ($)** field visible, and the help text under Approver type readable.]_
+<!-- Screenshot needed:
+_[Finance → Settings → Approval Chains → expand a chain → **Add step**, with Step type **Approval**, Approver type **Email**, an approver email filled in, the **Allow self-approval by email** box and the **Auto-approve under ($)** field visible, and the help text under Approver type readable.]_
+-->
 
-> **Screenshot needed:**
-> _[Treasurer or admin holding finance.configure_approvals and positions.view, /finance/settings/approval-chains. The Add step dialog over an expanded purchase-request chain: Step type Approval, Approver type Position, the position picker set to Treasurer, Auto-approve under ($) = 250. The finance.approve help text under Approver type must be visible.]_
+<!-- Screenshot needed:
+_[Treasurer or admin holding finance.configure_approvals and positions.view, /finance/settings/approval-chains. The Add step dialog over an expanded purchase-request chain: Step type Approval, Approver type Position, the position picker set to Treasurer, Auto-approve under ($) = 250. The finance.approve help text under Approver type must be visible.]_
+-->
 
-> **Screenshot needed:**
-> _[Treasurer or admin holding finance.configure_approvals, /finance/settings/approval-chains. The Delete step confirmation over a chain with three steps, showing the history-removal and waiting-request warnings and the Delete step / Keep it buttons. Never confirm.]_
+<!-- Screenshot needed:
+_[Treasurer or admin holding finance.configure_approvals, /finance/settings/approval-chains. The Delete step confirmation over a chain with three steps, showing the history-removal and waiting-request warnings and the Delete step / Keep it buttons. Never confirm.]_
+-->
 
 ### Steps nobody can act on _(2026-10-05)_
 
@@ -710,8 +766,9 @@ the meantime. Saving a step also checks its approver: a position must exist, a
 member must be active, a permission must be a real permission name, and an Email
 step takes exactly one address.
 
-> **Screenshot needed:**
-> _[Treasurer at /finance/settings/approval-chains with a demo chain whose step names a position nobody holds: the page banner and the amber "No active member can act on this step" chip with "N requests waiting" under that step.]_
+<!-- Screenshot needed:
+_[Treasurer at /finance/settings/approval-chains with a demo chain whose step names a position nobody holds: the page banner and the amber "No active member can act on this step" chip with "N requests waiting" under that step.]_
+-->
 
 ### Previewing Chain Resolution
 
@@ -808,14 +865,17 @@ waiting on you the page says _"Nothing is waiting on you."_ The dashboard's
 If you raised the request yourself, the approval is refused with the
 separation-of-duties message (see [Separation of Duties](#separation-of-duties-2026-08-01)).
 
-> **Screenshot needed:**
-> _[Finance → Approvals as an approvals administrator (finance.configure_approvals), with one request assigned to them and one assigned to someone else: the "Requests waiting on you." heading, the admin explanation line, the Waiting on column, the "Not assigned to you" badge and the "Approve as approvals admin" / "Deny as approvals admin" buttons on the second row. Demo data only.]_
+<!-- Screenshot needed:
+_[Finance → Approvals as an approvals administrator (finance.configure_approvals), with one request assigned to them and one assigned to someone else: the "Requests waiting on you." heading, the admin explanation line, the Waiting on column, the "Not assigned to you" badge and the "Approve as approvals admin" / "Deny as approvals admin" buttons on the second row. Demo data only.]_
+-->
 
-> **Screenshot needed:**
-> _[Finance → Approvals, a "Approve as approvals admin" dialog open on a step assigned to another member: the "This step is assigned to <name>…" text, Notes, and the Override reason box with its help text "Why you are acting on a step assigned to someone else. Recorded in the audit log." Do not submit.]_
+<!-- Screenshot needed:
+_[Finance → Approvals, a "Approve as approvals admin" dialog open on a step assigned to another member: the "This step is assigned to <name>…" text, Notes, and the Override reason box with its help text "Why you are acting on a step assigned to someone else. Recorded in the audit log." Do not submit.]_
+-->
 
-> **Screenshot needed (replace):**
-> _[Finance → Approvals as the Treasurer, with three or four waiting requests of mixed types (purchase request, expense report, check request) showing the Request, Type, Requested by, Amount, Step and Submitted columns and the Approve / Deny buttons on each row.]_
+<!-- Screenshot needed (replace):
+_[Finance → Approvals as the Treasurer, with three or four waiting requests of mixed types (purchase request, expense report, check request) showing the Request, Type, Requested by, Amount, Step and Submitted columns and the Approve / Deny buttons on each row.]_
+-->
 
 ### On the request's own page
 
@@ -849,12 +909,40 @@ chain applies to this request. Approve or deny it here."_
   deny it."_ and offers only **Deny**.
 
 Both decisions are written to the audit log
-(`finance.manual_approval_approved` / `finance.manual_approval_denied`). These
-requests do not appear on the Approvals screen, which lists step-based
-approvals only.
+(`finance.manual_approval_approved` / `finance.manual_approval_denied`). Since
+2026-10-11 the **Approvals** screen lists these requests below the steps
+waiting on you, under _Waiting for a decision on their own page_; open one to
+decide it.
 
-> **Screenshot needed:**
-> _[A purchase request detail page in Pending Approval with no approval chain configured, viewed by the Treasurer: the "No approval chain applies to this request. Approve or deny it here." panel with its Approve and Deny buttons, and the approval timeline reading "This request has no approval steps."]_
+### Large Requests Need Two Approvers _(2026-10-11)_
+
+A department can require a **second approver** for large requests. At or above
+the amount it sets, a purchase request, check request or expense report is
+approved only once two different people have approved it.
+
+- **Turning it on.** Open **Finance > Settings > Approval Chains**. The card
+  _Second approver for large requests_ shows the rule. A member with
+  `settings.manage` enters a whole-dollar amount — many departments use
+  $1,000 — and clicks **Save**, or clicks **Turn off**. Finance officers can
+  read the rule but not change it, because it applies to them.
+- **What happens.** The first approval — a chain step, or **Approve** on a
+  request no chain applies to — does not complete the request. It stays
+  **Pending Approval**, and its page shows _"This request needs a second
+  approval from someone who has not approved it yet."_ Another `finance.approve`
+  holder opens it and clicks **Approve**; that completes it. A chain approved
+  by two different people completes as before.
+- **Who can give the second approval.** Anyone with `finance.approve` except
+  the person who submitted the request and anyone who has already approved it
+  — they see only **Deny**. Approving the same request twice is refused.
+- **Finding them.** Held requests are listed on the **Approvals** screen under
+  _Waiting for a decision on their own page_, marked _A second approver_.
+  Nobody is emailed when a request is waiting for its second approval.
+- The budget is committed (encumbered) once, when the request is fully
+  approved.
+
+<!-- Screenshot needed:
+_[A purchase request detail page in Pending Approval with no approval chain configured, viewed by the Treasurer: the "No approval chain applies to this request. Approve or deny it here." panel with its Approve and Deny buttons, and the approval timeline reading "This request has no approval steps."]_
+-->
 
 ---
 
@@ -1026,9 +1114,10 @@ Expense report numbers are auto-generated in the format **ER-YYYY-0001**, where 
 | **Expense Type**  | Yes      | Category of expense (default: General; see table below)  |
 | **Budget**        | No       | Which budget to charge this line item against            |
 | **Merchant**      | No       | Where the purchase was made                              |
-| **Receipt URL**   | No       | Link to or upload of the receipt                         |
 
-5. Click **Create Report**. The report is saved as a **Draft**; open it and click **Submit for Approval** to send it into the approval chain. The total amount is automatically calculated as the sum of all line items.
+5. Click **Create Report**. The report is saved as a **Draft** and opens on its detail page. The total amount is automatically calculated as the sum of all line items.
+6. **Attach a receipt to every line** _(2026-10-09)_. In the **Receipt** column, click **Attach receipt** on each line and choose the file — a PDF or a photo. **Replace** attaches a different file; the earlier one stays on record. For a mileage line, attach your trip log (dates, destinations, purpose and miles).
+7. Click **Submit for Approval**. The button stays disabled, with _"Attach a receipt to … before submitting"_ beside it, until every line has a receipt.
 
 ![Create Expense Report form with header fields and the line items section](./images/11-10-create-expense-report.png)
 
@@ -1055,7 +1144,7 @@ Each line item on an expense report has an expense type that classifies the spen
 
 ### Submitting an Expense Report
 
-Only **Draft** reports can be submitted. The system validates that the `totalAmount` is greater than zero (i.e., at least one line item must exist with a positive amount). The approval chain is resolved based on the `expense_report` entity type, total amount, and budget category (derived from line items).
+Only **Draft** reports can be submitted. The system validates that the `totalAmount` is greater than zero (i.e., at least one line item must exist with a positive amount) and that **every line has a receipt attached** — otherwise it is refused, naming the lines that are missing one. A member can still replace a receipt while the report is only submitted; once it is in approval, only the finance office can, and a replaced receipt stays on record. The approval chain is resolved based on the `expense_report` entity type, total amount, and budget category (derived from line items).
 
 ### Tracking and Payment
 
@@ -1063,8 +1152,10 @@ Open an expense report to see its detail page at `/finance/expenses/:id`. The de
 
 - Report number, title, and total amount (sum of all line items)
 - Current status with approval chain progress
-- All line items with their individual details
+- All line items with their individual details, and each line's receipt (click **Receipt** to download it)
 - Payment status and method (once paid)
+
+The report — receipts included — can be read by the member who submitted it, a finance manager (`finance.manage`), and its **approvers**: whoever its approval chain names, anyone who has already acted on one of its steps, an approvals administrator, and, for a report no chain applies to, any `finance.approve` holder. Everyone else is told the report does not exist.
 
 ![Expense report detail with its line items and approval status](./images/11-14-expense-report-detail.png)
 
@@ -1083,7 +1174,7 @@ Once an expense report is approved:
 
 The paid amount is recorded against the associated budgets for each line item that has a `budgetId` set.
 
-> **Hint:** Encourage members to attach receipts to each line item via the receipt URL field. This speeds up the approval process and provides an audit trail for your department's financial records.
+> **Hint:** Receipts are required on every line, which is what an IRS accountable plan expects of a reimbursement. Reports submitted before receipts were required (2026-10-09) show _"No receipt"_ on their lines and are otherwise unaffected.
 
 ### Edge Cases
 
@@ -1205,35 +1296,32 @@ Navigate to **Finance > Dues** to manage member dues and assessments.
 
 Dues management handles the collection of recurring fees from members -- annual dues, quarterly assessments, equipment fees, or any other recurring financial obligation.
 
-> **⚠️ Current release: the Dues page is read-only.** It shows schedules, the
-> collection summary and each member's dues record, and nothing else — there
-> are no **Create Dues Schedule**, **Generate Dues**, **Record Payment**,
-> **Waive** or **Reverse Waiver** buttons on it yet. Every write action
-> described in this chapter exists as an API endpoint (`POST
-/finance/dues-schedules`, `POST /finance/dues-schedules/{id}/generate`, `PUT
-/finance/dues/{id}`, `POST /finance/dues/{id}/waive`, `POST
-/finance/dues/{id}/unwaive`, `GET /finance/dues/{id}/payments`) and behaves
-> exactly as described below, but until the management UI ships they have to be
-> driven through the API. The click-paths in this chapter describe the intended
-> UI; treat them as the specification, not as what is on screen today. Tracked
-> in [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md).
+> **Built 2026-10-11.** The Dues page now carries the administration
+> described below for a `finance.manage` holder: **New schedule**, **Edit
+> schedule**, **Generate dues**, **Record payment**, **Waive**, **Reverse
+> waiver** and each member's **Payment history**. Members are listed by name.
+> A `finance.view` holder without `finance.manage` sees the list (their own
+> dues only) and the payment history, and none of the buttons.
 
 ### Dues Schedules
 
 A dues schedule defines the terms of a recurring fee:
 
-| Field                           | Description                                                                                                                 |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| **Name**                        | Description of the dues (e.g., "Annual Membership Dues", "Q1 Assessment") (max 200 characters)                              |
-| **Amount**                      | The amount each member owes per period (must be greater than zero)                                                          |
-| **Frequency**                   | How often dues are collected (see table below)                                                                              |
-| **Due Date**                    | When the current period's payment is due                                                                                    |
-| **Grace Period Days**           | Number of days after the due date before the payment is considered overdue (default: 30)                                    |
-| **Late Fee Amount**             | Optional fee assessed when payment is overdue (after the grace period)                                                      |
-| **Fiscal Year**                 | Optionally tie the schedule to a specific fiscal year                                                                       |
-| **Applies to Membership Types** | Optionally restrict dues to specific membership tiers (stored as a JSON array, e.g., only Active members, not Life members) |
-| **Is Active**                   | Whether the schedule is currently collecting dues                                                                           |
-| **Notes**                       | Optional notes about the schedule                                                                                           |
+| Field         | Description                                                                                    |
+| ------------- | ---------------------------------------------------------------------------------------------- |
+| **Name**      | Description of the dues (e.g., "Annual Membership Dues", "Q1 Assessment") (max 200 characters) |
+| **Amount**    | The amount each member owes per period (must be greater than zero)                             |
+| **Frequency** | How often dues are collected (see table below). A label: generation does not repeat on its own |
+| **Due Date**  | When the period's payment is due                                                               |
+| **Active**    | Whether the schedule is in use. Shown on Edit only; an inactive schedule cannot generate dues  |
+| **Notes**     | Optional notes about the schedule                                                              |
+
+> **Not offered on the form.** The schedule record can also hold a grace
+> period, a late fee, a fiscal year and the membership types it applies to, but
+> nothing reads them — no late fee is ever charged, the daily overdue check
+> marks unpaid dues Overdue the day after the due date with no grace period, and
+> Generate Dues bills every active member regardless of membership type. The form leaves them out rather than offer settings that
+> do nothing.
 
 ### Frequencies
 
@@ -1249,29 +1337,21 @@ A dues schedule defines the terms of a recurring fee:
 **Required Permission:** `finance.manage`
 
 1. Navigate to **Finance > Dues**.
-2. Click **Create Dues Schedule**.
-3. Fill in the schedule details (name, amount, frequency, due date, etc.).
-4. Optionally set a **grace period** (default: 30 days) and **late fee amount**.
-5. Optionally restrict the schedule to specific **membership types** using the multi-select.
-6. Click **Save**.
+2. Click **New schedule**.
+3. Enter the name, the amount per member, the frequency and the due date, and optionally notes.
+4. Click **Create schedule**. The new schedule is selected; it has billed nobody yet.
 
-> **Corrected 2026-08-12.** Not built. See
-> [Finance — Five Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#finance--five-guide-sections-with-no-screen-2026-08-09),
-> which records what exists behind each of these: an API, a store
-> action, or types — but no page and no control that reaches them.
-> The steps above describe the intended design.
->
-> `financeStore.createDuesSchedule` exists; no component calls it.
+To change a schedule, select it and click **Edit schedule**. Changes affect dues generated afterwards only; dues already generated keep their amount and due date. Untick **Active** to retire a schedule — it stays in the list, marked inactive, and can be reactivated.
 
 ### Generating Member Dues
 
 After creating a schedule, you need to generate individual dues records for each member:
 
-1. On the **Finance > Dues** page, find the dues schedule.
-2. Click **Generate Dues**.
+1. On the **Finance > Dues** page, select the dues schedule.
+2. Click **Generate dues** and confirm.
 3. The system queries all active users in your organization, checks whether each member already has a dues record for this schedule (idempotency guard), and creates a new record for each member who does not already have one.
 4. Each generated record has a **Pending** status with the full `amountDue` from the schedule and the `dueDate` from the schedule.
-5. The system returns the count of newly generated records.
+5. A message reports how many members were billed — or that every active member already had dues for this schedule.
 
 > **Hint:** Run the **Generate Dues** action at the beginning of each dues period. For annual dues, generate at the start of the fiscal year. For quarterly dues, generate at the start of each quarter. The system is idempotent -- running it again will not create duplicates.
 
@@ -1282,7 +1362,7 @@ After creating a schedule, you need to generate individual dues records for each
 | **Pending** | Payment is expected but not yet received                                                                           |
 | **Paid**    | Full payment has been received (`amountPaid >= amountDue`)                                                         |
 | **Partial** | A partial payment has been received (`amountPaid > 0` but less than `amountDue`). The remaining balance is tracked |
-| **Overdue** | The due date plus grace period has passed without full payment                                                     |
+| **Overdue** | The due date has passed with nothing paid (a daily check moves Pending to Overdue; Partial stays Partial)          |
 | **Waived**  | The dues have been waived by an officer (e.g., financial hardship, service credit)                                 |
 | **Exempt**  | The member is exempt from this dues schedule (e.g., Life members exempt from annual dues)                          |
 
@@ -1290,10 +1370,10 @@ After creating a schedule, you need to generate individual dues records for each
 
 **Required Permission:** `finance.manage`
 
-1. On the **Finance > Dues** page, find the member's dues record.
-2. Click on the record to update it.
-3. Enter the **amount paid** (must be greater than zero), **payment method**, and optionally a **transaction reference** (check number, receipt number, etc.) and **notes**.
-4. Click **Save**.
+1. On the **Finance > Dues** page, find the member's dues record. **Record payment** is offered while the dues are Pending, Partial or Overdue.
+2. Click **Record payment**. The amount is prefilled with what is still owed.
+3. Adjust the **amount received** (must be greater than zero), and optionally choose a **method** and enter a **reference** (check number, receipt number) and **notes**.
+4. Click **Record payment**.
 
 Every payment is recorded as its own entry in the member's payment history. The
 amount paid shown on the dues record is the **sum of that history**, so if the
@@ -1319,9 +1399,10 @@ erases what the previous payment said.
 
 **Required Permission:** `finance.view`
 
-Each member's dues record keeps the full list of payments received against it --
-amount, method, reference, notes, when it was received, and which officer entered
-it. The dues record itself shows only the running total and the most recent
+Click the history icon on a member's row to open **Payment history**: the full
+list of payments received against those dues -- amount, method, reference, notes
+and when it was received. (The record also stores which officer entered each
+payment; the dialog does not show it yet.) The dues record itself shows only the running total and the most recent
 payment's detail, so the history is where you go to answer "what did they
 actually pay, and when?"
 
@@ -1335,12 +1416,12 @@ bounced.
 
 To waive a member's dues:
 
-1. Find the member's dues record.
+1. Find the member's dues record (it must still be owing).
 2. Click **Waive**.
 3. Enter a **reason** for the waiver (required).
-4. Confirm.
+4. Click **Waive dues**.
 
-The record is marked as **Waived** with the officer's ID, timestamp, and reason recorded for audit purposes.
+The record is marked as **Waived** with the officer's ID, timestamp, and reason recorded. You cannot waive your own dues; the request is refused and the message says so.
 
 Once dues are waived, **payments against them are refused.** They are no longer
 owing, so recording money against them would quietly cancel the waiver — which
@@ -1354,15 +1435,19 @@ figures with nothing recording that it had ever been waived.
 If dues were waived by mistake -- or waived and then paid anyway -- reverse the
 waiver before recording the payment:
 
-1. Find the member's dues record.
-2. Click **Reverse Waiver**.
+1. Find the member's dues record (it shows **Reverse waiver** only while Waived).
+2. Click **Reverse waiver**.
 3. Enter a **reason** for the reversal (required).
-4. Confirm.
+4. Click **Reverse waiver**.
 
 The record returns to whatever its payment history says: **Pending** if nothing
 was ever paid, **Partial** or **Paid** if something was. The original waiver
-reason is not silently discarded -- it is written into the audit log alongside
-your reason for reversing, so both halves of the decision survive.
+reason is erased from the record, and neither it nor your reason for reversing
+is copied into the audit log, which records only that the waiver was reversed
+and the status it returned to. Free-text reasons may carry personal information
+and must stay eligible for privacy scrubbing, which the immutable audit log is
+not. _(Corrected 2026-10-11: this paragraph used to say the reasons were kept
+in the audit log; they have not been since 2026-08-13.)_
 
 ### Dues Summary
 
@@ -1394,12 +1479,12 @@ The summary can be filtered by a specific dues schedule using the optional `sche
 | Two cash payments of the same amount, neither with a reference     | Both are recorded. Without a reference there is nothing to tell a duplicate from a genuine second payment, and dropping one would lose money              |
 | A later payment entered without a method or notes                  | Recorded as-is. Earlier payments keep their own detail; blank fields no longer overwrite them                                                             |
 | Payment recorded against waived or exempt dues                     | Refused with an explanatory error. Reverse the waiver first (see Reversing a Waiver)                                                                      |
-| Waiver reversed                                                    | Status returns to whatever the payment history says -- Pending, Partial or Paid. The original waive reason is written to the audit log, not discarded     |
+| Waiver reversed                                                    | Status returns to whatever the payment history says -- Pending, Partial or Paid. The original waive reason is erased and not copied to the audit log      |
 | Partial payment followed by waiver                                 | The waiver sets the status to Waived. The amount already paid is not refunded -- this is an administrative decision                                       |
-| Dues schedule with no membership type filter                       | Dues are generated for all active users in the organization                                                                                               |
+| Which members Generate Dues bills                                  | All active users in the organization. No membership-type filter is applied                                                                                |
 | Changing the dues amount on a schedule                             | Only affects newly generated records. Existing member dues records retain the original `amountDue`                                                        |
 | Member status changes to inactive                                  | Existing dues records are not automatically waived or cancelled. An officer should manually waive them if appropriate                                     |
-| Late fee application                                               | The `lateFeeApplied` field on the member dues record tracks the late fee amount. Late fee logic is managed by the officer updating the record             |
+| Late fee application                                               | Not automated, and not settable from the Dues page. The `lateFeeApplied` field exists on the record but nothing writes it                                 |
 | Dues summary with no records                                       | Returns zeroes for all metrics and 0% collection rate                                                                                                     |
 
 ---
@@ -1408,99 +1493,106 @@ The summary can be filtered by a specific dues schedule using the optional `sche
 
 **Required Permission:** `finance.manage`
 
-The QuickBooks export feature generates CSV files compatible with QuickBooks and other accounting software, allowing you to transfer financial data from The Logbook into your accounting system.
+The export produces a **QuickBooks Online journal-entry import file** (CSV). Each paid purchase request, issued check request and paid expense report becomes one balanced journal entry: a debit to the budget category's expense account and an equal credit to the account it was paid from.
 
 ### Account Mappings
 
-Before exporting, set up mappings between your Logbook budget categories and your QuickBooks chart of accounts:
+Open **Finance › QuickBooks Export** (`/finance/settings/quickbooks`). The **Budget categories** table shows, for every category, the account its spending posts to, the account it is paid from, and whether an export would accept it:
 
-1. Navigate to the export settings (accessible from the Finance module).
-2. For each internal category, configure:
-   - **Internal Category** -- The budget category name from The Logbook
-   - **QB Account Name** -- The corresponding QuickBooks account name
-   - **QB Account Number** -- Optional QuickBooks account number for additional precision
-   - **Mapping Type** -- The account type: Expense, Income, or Asset
+| Status                         | What to do                                                                                     |
+| ------------------------------ | ---------------------------------------------------------------------------------------------- |
+| **Ready**                      | Nothing — its spending exports                                                                 |
+| **No account**                 | Add a mapping, or enter a **QuickBooks account** on the category in Finance Settings           |
+| **No paid-from account**       | Add the account it is paid from to its mapping                                                 |
+| **More than one mapping**      | Delete all but one of its mappings                                                             |
+| **Payable/receivable account** | Change it: QuickBooks can't import journal lines to Accounts Payable or Receivable (see below) |
 
-3. Click **Save**.
+Click **Add mapping** (or **Edit mapping**) on a category and enter:
 
-> **Corrected 2026-08-12.** Not built. See
-> [Finance — Five Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#finance--five-guide-sections-with-no-screen-2026-08-09),
-> which records what exists behind each of these: an API, a store
-> action, or types — but no page and no control that reaches them.
-> The steps above describe the intended design.
->
-> `GET/POST/PUT /finance/export/mappings` and the `qbAccountName` types
-> exist; there is no page, no route and no consumer.
+- **QuickBooks account** — the expense account its spending posts to, spelled exactly as in your chart of accounts. Write a subaccount as `Parent:Child` (for example `Vehicle Expense:Fuel`); the subaccount name alone fails with "Line Account invalid".
+- **Paid from account** — the bank or credit card account the money comes out of (for example `Operating Checking`).
 
-> **Hint:** You can also set the QuickBooks account name directly on each budget category (the `qbAccountName` field in Budget Category settings). The export mapping page provides a separate, more granular mapping layer.
+A category's own **QuickBooks account** (set in its dialog on Finance Settings) takes precedence over its mapping's.
 
-### Generating an Export
+> **Accounts Payable and Accounts Receivable can't be used** _(2026-10-09)_. QuickBooks requires a vendor or customer on every journal line posting to those accounts, and the export carries none, so the import would fail. The mapping and category dialogs refuse them, and a mapping saved before that shows **Payable/receivable account**. The check recognizes QuickBooks' standard names ("Accounts Payable (A/P)", "Accounts Receivable (A/R)"); if you renamed those accounts, the check can't tell, so don't use them.
 
-1. Navigate to the export section.
-2. Select the **date range start** and **date range end** for the transactions to include.
-3. Select the **file format** (CSV is the default; IIF is also supported as a format type).
-4. Click **Generate Export**.
-5. A CSV file named `finance_export.csv` is downloaded to your computer.
+### The File
 
-The CSV includes these columns:
+| Column           | Contents                                                                                     |
+| ---------------- | -------------------------------------------------------------------------------------------- |
+| **Journal No**   | The request number (`PR-…`, `CR-…`, `ER-…`); every line of one entry shares it               |
+| **Journal Date** | The payment or check date, MM/DD/YYYY, on the department's calendar                          |
+| **Memo**         | The request's title, or the check's memo or purpose                                          |
+| **Account Name** | The expense account (debit line) or the paid-from account (credit line)                      |
+| **Debits**       | The amount, on the expense line                                                              |
+| **Credits**      | The same amount, on the paid-from line                                                       |
+| **Description**  | The vendor, payee (with check number), or merchant and description of an expense-report line |
 
-| Column      | Description                                                                                                       |
-| ----------- | ----------------------------------------------------------------------------------------------------------------- |
-| **Date**    | Transaction date in MM/DD/YYYY format, on the department's calendar (see below)                                   |
-| **Type**    | Transaction type: `Bill Pmt` (purchase request), `Check` (check request), or `Expense` (expense report line item) |
-| **Num**     | Reference number (request number, check number, or report number)                                                 |
-| **Name**    | Vendor, payee, or merchant name                                                                                   |
-| **Memo**    | Transaction description (title, memo, or line item description)                                                   |
-| **Account** | Reserved for account mapping (currently empty in export)                                                          |
-| **Debit**   | Transaction amount                                                                                                |
-| **Credit**  | Reserved (currently empty in export)                                                                              |
+An expense report is one entry with a debit and credit pair for each of its lines, each charged to that line's budget.
 
-The export includes:
+An export is **refused** — with a message naming what to fix, and no file — when any transaction in the period has no budget line, when a category it uses is not **Ready**, or when the file would reach **1,000 rows**, QuickBooks Online's import limit. Each transaction is two rows, so that is about 499 transactions; export a shorter period, then the rest.
 
-- **Purchase Requests** with Paid status, filtered by `paidAt` date
-- **Check Requests** with Issued status, filtered by `checkDate`
-- **Expense Reports** with Paid status (one row per line item), filtered by `paidAt` date
+Running an export (`POST /finance/export/transactions`) has no screen yet; see [Finance — QuickBooks Export Gaps](../KNOWN_LIMITATIONS.md#finance--quickbooks-export-gaps-2026-10-08).
+
+**Each payment is sent once** _(2026-10-11)_. QuickBooks does not stop you importing the same entry twice, so the export keeps track instead:
+
+- A payment a complete export has already carried is **left out** of later exports. Exporting September and then the whole quarter sends September's payments only once. The purchase request, expense report or check request page shows **Sent to QuickBooks** with the date.
+- To send a period again — for example after deleting its entries in QuickBooks — ask for **already-sent payments to be included** (`includeExported`). Do not import the file over entries that are still in QuickBooks, or they will be doubled.
+- If an export is interrupted before the whole file is produced, nothing is marked as sent; the next export carries those payments.
+- Only one export runs at a time. A second one started while the first is still being prepared is refused; wait for it to finish.
+
+**A voided check is reversed** _(2026-10-11)_. If a check was already sent to QuickBooks and is then voided, the next export covering the day it was voided carries a **reversing entry**: Journal No **`CR-…-V`**, dated the void day, putting the amount back into the account the check was drawn on and taking it out of the expense account the check was posted to. The check's page shows **Voided** and **Void sent to QuickBooks**. A check voided before it was ever sent appears in neither file.
+
+### Importing into QuickBooks Online
+
+Intuit's requirements for a journal-entry import _(checked 2026-10-09)_. They are also listed at the bottom of **Finance › QuickBooks Export**:
+
+1. **Create every account first.** Each account named in the file must already exist in your chart of accounts, spelled the same.
+2. **Turn account numbers off** while you import (**Settings › Account and settings › Advanced › Chart of accounts**). The file uses account names. You can turn them back on afterwards.
+3. **Turn off "Warn if duplicate journal number is used"** (**Settings › Account and settings › Advanced › Other preferences**). Each entry carries its request number, and with the warning on, an entry whose number already exists is not imported.
+4. In QuickBooks, go to **Settings › Import data › Journal entries**, choose the file, and map its columns to QuickBooks' fields. Choose the **MM/DD/YYYY** date format.
+5. Start the import, then compare the totals with the Finance dashboard.
+
+> **Hint:** Journal entries do not appear on a vendor's record in QuickBooks, and may not be counted on its 1099 report. If you pay contractors who need a 1099, check QuickBooks' 1099 report against your payments before filing, or record those payments in QuickBooks as checks or expenses.
 
 > **Dates are the department's day** _(2026-09-25)_. Payment and check dates are
 > stored as UTC timestamps, and the export used to print the UTC date — so a
 > payment recorded on a US evening was booked on the next day in QuickBooks.
-> The **Date** column now uses the timezone set under **Settings → Organization
+> The **Journal Date** column uses the timezone set under **Settings → Organization
 > → Profile → Timezone** (America/New_York when none is set). An export taken
 > before this date may disagree with a new one for evening payments.
 
-### Export Logs
+### Export History
 
-Every export is logged with:
+**Finance › QuickBooks Export** lists every export run under **Export history**, newest first, 25 at a time (**Show older exports** loads the next 25):
 
-| Field            | Description                                |
-| ---------------- | ------------------------------------------ |
-| **Export Type**  | The type of data exported                  |
-| **Date Range**   | Start and end dates of the exported period |
-| **Record Count** | Number of transactions included            |
-| **File Format**  | The output format (CSV or IIF)             |
-| **Exported By**  | The officer who generated the export       |
-| **Exported At**  | Timestamp of the export                    |
+| Column           | Contents                                                                     |
+| ---------------- | ---------------------------------------------------------------------------- |
+| **Exported**     | When the export was run                                                      |
+| **Period**       | The start and end dates of the exported period                               |
+| **Transactions** | How many transactions (an expense report counts once per line) were included |
+| **Status**       | Whether the file was delivered whole (see below)                             |
+| **By**           | The officer who ran it                                                       |
 
-> **Corrected 2026-08-12.** Not built. See
-> [Finance — Five Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#finance--five-guide-sections-with-no-screen-2026-08-09),
-> which records what exists behind each of these: an API, a store
-> action, or types — but no page and no control that reaches them.
-> The steps above describe the intended design.
->
-> `GET /finance/export/logs` and an `ExportLog` interface exist; there is no
-> page, no route and no consumer.
+| Status           | Meaning                                                                                                   |
+| ---------------- | --------------------------------------------------------------------------------------------------------- |
+| **Complete**     | The whole file was delivered                                                                              |
+| **Interrupted**  | Some transactions reached the browser before an error or a closed tab stopped it. Do not import that file |
+| **Failed**       | Nothing was delivered                                                                                     |
+| **Not finished** | The log was opened but the download never reported an end. Run the period again                           |
 
 > **Hint:** Export frequently (monthly or quarterly) rather than waiting for year-end. This makes reconciliation with QuickBooks easier and catches mapping issues early. Each export creates a log entry so you can track what has been exported and when.
 
 ### Edge Cases
 
-| Scenario                                                     | Behavior                                                                                                        |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| No transactions in the selected date range                   | An empty CSV file is generated (headers only, no data rows). An export log is still created with record count 0 |
-| Date range spanning multiple fiscal years                    | All matching transactions are included regardless of fiscal year boundaries                                     |
-| Expense report with multiple line items                      | Each line item becomes a separate row in the CSV, all sharing the same report number                            |
-| Purchase request with actual amount different from estimated | The export uses the actual amount if set, otherwise falls back to the estimated amount                          |
-| Check request without a check number                         | The export uses the request number (CK-YYYY-NNNN) as the Num column value                                       |
+| Scenario                                                     | Behavior                                                                                                                        |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| No transactions in the selected date range                   | A file with only the header row. An export log is still created with record count 0                                             |
+| Date range spanning multiple fiscal years                    | All matching transactions are included regardless of fiscal year boundaries                                                     |
+| Expense report with multiple line items                      | One journal entry under the report number, with a debit and credit pair per line item                                           |
+| Purchase request with actual amount different from estimated | The export uses the actual amount if set, otherwise falls back to the estimated amount                                          |
+| Check request                                                | The Journal No is the request number; the check number appears in the Description, since the request number is unique per entry |
+| A period with 500 or more transactions                       | Refused: the file would reach QuickBooks' 1,000-row limit. Export it in shorter periods                                         |
 
 ---
 
@@ -1543,13 +1635,14 @@ The Falls Church Fire Department operates on a July 1 -- June 30 fiscal year. In
 
 6. **Set up QuickBooks mappings:** Navigate to the export mappings and map each category to the corresponding QuickBooks account (e.g., "Fuel" to "6200 - Vehicle Fuel").
 
-### Phase 2: Activating the New Year (July 1)
+### Phase 2: Starting the New Year (July 1)
 
-On July 1, the Treasurer:
+At the June board meeting the board adopts FY 2027, and the Treasurer clicks **Record adoption** on FY 2027 in **Finance > Settings** with the meeting date and motion number. On July 1, the Treasurer:
 
-1. **Records the board's adoption of FY 2027:** Navigate to **Finance > Settings**, click **Record adoption** on FY 2027 (in board review since the June board meeting), and enter the meeting date and motion number. FY 2027 becomes active and the previously active FY 2026 is automatically closed.
-2. **Generates member dues:** Navigate to **Finance > Dues**, find the annual dues schedule, and click **Generate Dues**. Every active member receives a Pending dues record for $150 due August 1.
-3. **Checks the dashboard:** Navigate to **Finance** and verify the dashboard shows the new fiscal year's budgets with $0 spent and $0 encumbered.
+1. **Begins FY 2026's year-end close:** click **Begin year-end close** on FY 2026. Nothing new can be submitted against it, but its last bills can still be paid.
+2. **Starts FY 2027:** click **Start the year** on FY 2027. It becomes active and each line owner is emailed their adopted amounts.
+3. **Generates member dues:** Navigate to **Finance > Dues**, find the annual dues schedule, and click **Generate Dues**. Every active member receives a Pending dues record for $150 due August 1.
+4. **Checks the dashboard:** Navigate to **Finance** and verify the dashboard shows the new fiscal year's budgets with $0 spent and $0 encumbered.
 
 ### Phase 3: Day-to-Day Operations (July--June)
 
@@ -1602,17 +1695,14 @@ The Treasurer regularly:
 3. Monitors **dues collection** -- following up with members who are overdue after the grace period.
 4. Runs **QuickBooks exports** monthly -- selecting the previous month's date range, generating the CSV, and importing it into QuickBooks for reconciliation.
 
-### Phase 5: Year-End Reconciliation (June)
+### Phase 5: Year-End Reconciliation (June–July)
 
-Before closing the fiscal year:
-
-1. Ensure all pending purchase requests are either completed (paid) or cancelled.
-2. Ensure all expense reports are processed and paid.
-3. Ensure all check requests are issued or cancelled.
+1. Have the board adopt FY 2028 and record it (**Record adoption**).
+2. On July 1, click **Begin year-end close** on FY 2027, then **Start the year** on FY 2028.
+3. Finish FY 2027's open items: pay or cancel purchase requests, pay expense reports, and issue or cancel check requests. The **Lock** dialog lists whatever is still open.
 4. Run a final QuickBooks export for the last month.
 5. Review the budget summary on the dashboard for any discrepancies between The Logbook and QuickBooks.
-6. Lock FY 2027: navigate to **Finance > Settings** and click **Lock**. All FY 2027 data becomes read-only.
-7. Activate FY 2028 (already set up in Draft during the previous month).
+6. Lock FY 2027: click **Lock**, enter the reconciliation notes, and click **Lock the year**. All FY 2027 data becomes read-only.
 
 ---
 

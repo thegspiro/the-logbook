@@ -414,3 +414,113 @@ class TestTheRefusalIsRecorded:
 
         stats = await _stats(db_session, org_id)
         assert stats.rate_limit_hits_24h == 1
+
+
+class TestRevokedAndExpiredKeysAreRecordedToo:
+    """The other two attributable halves of PUB-8's 401 gap.
+
+    A revoked or expired key is resolved by the same `select` the 429 path
+    uses — `organization_id`/`config_id` are in hand before the 401 is
+    raised — so there is no reason these two stayed unlogged while the rate
+    limit's 401 sibling was fixed. Without this, revoking a compromised key
+    and watching it keep getting hammered left literally no row anywhere:
+    `detect_anomalies`'s per-IP 401 counter and the dashboard's
+    `status_4xx_24h` tile both read it as a quiet department.
+    """
+
+    async def test_a_revoked_key_writes_a_401_row(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, _ = setup_org_and_admin
+        config_id = await _make_config(db_session, org_id)
+
+        raw_key, prefix = generate_api_key()
+        api_key = PublicPortalAPIKey(
+            organization_id=org_id,
+            config_id=config_id,
+            key_hash=hash_api_key(raw_key),
+            key_prefix=prefix,
+            name="revoked",
+            is_active=False,
+        )
+        db_session.add(api_key)
+        await db_session.flush()
+
+        request = MagicMock()
+        request.client.host = "203.0.113.9"
+        request.url.path = "/organization/info"
+        request.method = "GET"
+        request.headers.get.return_value = None
+
+        with pytest.raises(HTTPException) as refused:
+            await authenticate_api_key(request, api_key=raw_key, db=db_session)
+        assert refused.value.status_code == 401
+
+        stats = await _stats(db_session, org_id)
+        assert stats.status_4xx_24h == 1
+
+    async def test_an_expired_key_writes_a_401_row(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, _ = setup_org_and_admin
+        config_id = await _make_config(db_session, org_id)
+
+        raw_key, prefix = generate_api_key()
+        api_key = PublicPortalAPIKey(
+            organization_id=org_id,
+            config_id=config_id,
+            key_hash=hash_api_key(raw_key),
+            key_prefix=prefix,
+            name="expired",
+            is_active=True,
+            expires_at=NOW - timedelta(days=1),
+        )
+        db_session.add(api_key)
+        await db_session.flush()
+
+        request = MagicMock()
+        request.client.host = "203.0.113.10"
+        request.url.path = "/organization/info"
+        request.method = "GET"
+        request.headers.get.return_value = None
+
+        with pytest.raises(HTTPException) as refused:
+            await authenticate_api_key(request, api_key=raw_key, db=db_session)
+        assert refused.value.status_code == 401
+
+        stats = await _stats(db_session, org_id)
+        assert stats.status_4xx_24h == 1
+
+    async def test_the_row_survives_the_rollback_the_raise_causes(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        """Same mechanism as the 429 sibling: `_log_refusal` commits, because
+        `get_db` rolls the request transaction back on the way out."""
+        org_id, _ = setup_org_and_admin
+        config_id = await _make_config(db_session, org_id)
+
+        raw_key, prefix = generate_api_key()
+        api_key = PublicPortalAPIKey(
+            organization_id=org_id,
+            config_id=config_id,
+            key_hash=hash_api_key(raw_key),
+            key_prefix=prefix,
+            name="revoked",
+            is_active=False,
+        )
+        db_session.add(api_key)
+        await db_session.commit()
+
+        request = MagicMock()
+        request.client.host = "203.0.113.11"
+        request.url.path = "/organization/info"
+        request.method = "GET"
+        request.headers.get.return_value = None
+
+        with pytest.raises(HTTPException):
+            await authenticate_api_key(request, api_key=raw_key, db=db_session)
+
+        await db_session.rollback()
+
+        stats = await _stats(db_session, org_id)
+        assert stats.status_4xx_24h == 1

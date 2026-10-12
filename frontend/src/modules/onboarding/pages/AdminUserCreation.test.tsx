@@ -106,8 +106,8 @@ describe('where the step says it is', () => {
   it('reports its place in the current flow and names the next step', () => {
     renderStep();
 
-    expect(screen.getByText(/step 2 of 11/i)).toBeInTheDocument();
-    expect(screen.getByText(/continue with modules/i)).toBeInTheDocument();
+    expect(screen.getByText(/step 2 of 12/i)).toBeInTheDocument();
+    expect(screen.getByText(/continue with encryption key/i)).toBeInTheDocument();
     expect(screen.queryByText(/step 7 of 10/i)).not.toBeInTheDocument();
   });
 });

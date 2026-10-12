@@ -9,6 +9,8 @@ coordinator's submitted_by attribution — against a recorded fake session.
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from sqlalchemy.engine import CursorResult
+
 from app.services.member_anonymization_service import MemberAnonymizationService
 
 
@@ -19,7 +21,7 @@ def _scalars(items):
 
 
 def _rowcount(n):
-    return MagicMock(rowcount=n)
+    return MagicMock(spec=CursorResult, rowcount=n)
 
 
 class RecordingSession:

@@ -205,7 +205,41 @@ describe('medicalScreeningStore', () => {
       await useMedicalScreeningStore.getState().fetchUserCompliance('user-1');
 
       expect(useMedicalScreeningStore.getState().compliance).toEqual(mockCompliance);
-      expect(useMedicalScreeningStore.getState().isLoading).toBe(false);
+      expect(useMedicalScreeningStore.getState().complianceLoading).toBe(false);
+    });
+
+    it('keeps the later pick when an earlier read lands last', async () => {
+      const summary = (id: string) => ({ subject_id: id, subject_type: 'user', items: [] });
+      let resolveFirst: (value: unknown) => void = () => undefined;
+      mockGetUserCompliance.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve;
+          })
+      );
+      mockGetUserCompliance.mockResolvedValueOnce(summary('user-2'));
+
+      const first = useMedicalScreeningStore.getState().fetchUserCompliance('user-1');
+      await useMedicalScreeningStore.getState().fetchUserCompliance('user-2');
+      resolveFirst(summary('user-1'));
+      await first;
+
+      expect(useMedicalScreeningStore.getState().compliance).toEqual(summary('user-2'));
+      expect(useMedicalScreeningStore.getState().complianceLoading).toBe(false);
+    });
+
+    // The page unmounts the compliance tab while the shared isLoading is up,
+    // which would take the per-member panel down with its own request.
+    it('does not raise the shared loading flag', async () => {
+      let observed: boolean | null = null;
+      mockGetUserCompliance.mockImplementation(() => {
+        observed = useMedicalScreeningStore.getState().isLoading;
+        return Promise.resolve(null);
+      });
+
+      await useMedicalScreeningStore.getState().fetchUserCompliance('user-1');
+
+      expect(observed).toBe(false);
     });
   });
 

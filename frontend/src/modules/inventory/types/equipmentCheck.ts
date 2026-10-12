@@ -709,7 +709,15 @@ export interface ApparatusComplianceRecord {
   lastCheckedBy?: string;
   lastStatus?: string;
   checksCompleted: number;
+  /** One per shift per applicable checklist in the range, owed ones only — the fleet board's rule. */
   checksExpected: number;
+  /**
+   * Of those expected checks, how many were done — counted over the same shift-dated set,
+   * unlike checksCompleted (dated by filing). Absent on an older backend.
+   */
+  checksExpectedCompleted?: number;
+  /** Expected checks on a past shift with nothing submitted. Absent on an older backend. */
+  checksMissed?: number;
   passCount: number;
   failCount: number;
   hasDeficiency: boolean;

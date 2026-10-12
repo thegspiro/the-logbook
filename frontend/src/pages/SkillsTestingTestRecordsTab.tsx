@@ -670,7 +670,7 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
           </div>
         }
       >
-        <div className="modal-body space-y-3">
+        <div className="space-y-3">
           <p className="text-theme-text-secondary text-sm">
             Voiding withdraws this result for{' '}
             <span className="text-theme-text-primary font-medium">{voidTarget?.candidate_name}</span> (
@@ -720,7 +720,7 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
           </div>
         }
       >
-        <div className="modal-body space-y-3">
+        <div className="space-y-3">
           <p className="text-theme-text-secondary text-sm">
             Closes out the unfinished test for{' '}
             <span className="text-theme-text-primary font-medium">{cancelTarget?.candidate_name}</span> (

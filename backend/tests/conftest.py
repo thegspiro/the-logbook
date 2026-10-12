@@ -42,6 +42,11 @@ os.environ.setdefault("DB_NAME", "intranet_test")
 # turn it on themselves and replace the scanner with a stub.
 os.environ.setdefault("CLAMAV_ENABLED", "false")
 
+# Stored files are always encrypted (file-storage Phase 4), and writing one
+# refuses to run without a key. Outside production Settings allows it unset,
+# so give the suite a deterministic one, as for SECRET_KEY above.
+os.environ.setdefault("ENCRYPTION_KEY", "test-encryption-key-" + "y" * 44)
+
 # Eagerly register EVERY model and resolve all mappers at import time, before any
 # test module is collected. String-based relationships (e.g.
 # Organization.relationship("PublicPortalConfig")) can only resolve once every

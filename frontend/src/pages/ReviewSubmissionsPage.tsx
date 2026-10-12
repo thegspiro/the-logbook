@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import {
-  ArrowLeft,
-  ClipboardCheck,
   Clock,
   CheckCircle2,
   XCircle,
@@ -1051,7 +1048,6 @@ const ConfigEditor: React.FC<{
 type ActiveView = 'pending' | 'all' | 'config';
 
 const ReviewSubmissionsPage: React.FC = () => {
-  const navigate = useNavigate();
   const [activeView, setActiveView] = useState<ActiveView>('pending');
   const [submissions, setSubmissions] = useState<TrainingSubmission[]>([]);
   const [config, setConfig] = useState<SelfReportConfig | null>(null);
@@ -1116,30 +1112,18 @@ const ReviewSubmissionsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div data-page-main className="mx-auto max-w-5xl py-8">
-        {/* Header */}
-        <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2">
-          <button
-            type="button"
-            onClick={() => void navigate('/training/officer')}
-            aria-label="Back to Training Dashboard"
-            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface btn-icon shrink-0"
-          >
-            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-          </button>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-theme-text-primary flex items-center space-x-2 text-2xl font-bold">
-              <ClipboardCheck className="h-7 w-7 shrink-0 text-red-500" />
-              <span>Review Submissions</span>
-            </h1>
-            <p className="text-theme-text-muted text-sm">Review and approve member self-reported training</p>
-          </div>
-          {pendingCount > 0 && (
+        {/* Rendered only inside Training Administration, whose section nav already
+          names this page; the title stays for heading navigation only, and the
+          old back link pointed at the hub the user is already on. */}
+        <h2 className="sr-only">Review Submissions</h2>
+        {pendingCount > 0 && (
+          <div className="mb-6 flex justify-end">
             <div className="flex shrink-0 items-center space-x-2 rounded-lg bg-yellow-500/20 px-3 py-1.5 whitespace-nowrap text-yellow-700 dark:text-yellow-400">
               <AlertCircle className="h-4 w-4" />
               <span className="text-sm font-medium">{pendingCount} pending</span>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Tab Navigation */}
         <div

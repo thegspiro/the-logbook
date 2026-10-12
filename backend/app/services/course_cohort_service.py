@@ -138,7 +138,7 @@ class CourseCohortService:
 
     # ── lookups (all org-scoped) ─────────────────────────────────────
 
-    async def _get_org_timezone(self, organization_id: UUID) -> str:
+    async def _get_org_timezone(self, organization_id: UUID | str) -> str:
         """The organization's IANA timezone, used to resolve wall-clock times."""
         result = await self.db.execute(
             select(Organization.timezone).where(Organization.id == str(organization_id))
@@ -146,7 +146,7 @@ class CourseCohortService:
         return result.scalar_one_or_none() or DEFAULT_TIMEZONE
 
     async def _get_course(
-        self, course_id: UUID, organization_id: UUID
+        self, course_id: UUID | str, organization_id: UUID | str
     ) -> Optional[TrainingCourse]:
         result = await self.db.execute(
             select(TrainingCourse).where(
@@ -158,7 +158,7 @@ class CourseCohortService:
         return training_course
 
     async def get_cohort(
-        self, cohort_id: UUID, organization_id: UUID
+        self, cohort_id: UUID, organization_id: UUID | str
     ) -> Optional[CourseCohort]:
         result = await self.db.execute(
             select(CourseCohort).where(
@@ -172,7 +172,7 @@ class CourseCohortService:
     async def _get_cohort_class(
         self,
         cohort_class_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         cohort_id: Optional[UUID] = None,
     ) -> Optional[CourseCohortClass]:
         conditions = [
@@ -186,7 +186,7 @@ class CourseCohortService:
         return course_cohort_class
 
     async def _syllabus(
-        self, course_id: UUID, organization_id: UUID
+        self, course_id: UUID, organization_id: UUID | str
     ) -> List[Tuple[CourseClass, Optional[TrainingCourse]]]:
         # Org predicate on the JOIN — see the matching note in
         # course_syllabus_service.list_classes. Keeps a foreign catalog course
@@ -233,7 +233,7 @@ class CourseCohortService:
         self,
         cohort_location_id: Optional[UUID],
         overrides: Sequence[CohortClassOverride],
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> None:
         if cohort_location_id:
             await assert_in_org(
@@ -249,7 +249,7 @@ class CourseCohortService:
                     label="location",
                 )
 
-    async def _location_names(self, organization_id: UUID) -> Dict[str, str]:
+    async def _location_names(self, organization_id: UUID | str) -> Dict[str, str]:
         result = await self.db.execute(
             select(Location.id, Location.name).where(
                 Location.organization_id == str(organization_id)
@@ -260,7 +260,7 @@ class CourseCohortService:
     # ── preview ──────────────────────────────────────────────────────
 
     async def preview_schedule(
-        self, request: CohortSchedulePreviewRequest, organization_id: UUID
+        self, request: CohortSchedulePreviewRequest, organization_id: UUID | str
     ) -> Dict[str, Any]:
         """Compute the dates a cohort would get, without creating anything.
 
@@ -387,8 +387,8 @@ class CourseCohortService:
     async def create_cohort(
         self,
         data: CourseCohortCreate,
-        organization_id: UUID,
-        created_by: UUID,
+        organization_id: UUID | str,
+        created_by: UUID | str,
     ) -> Tuple[CourseCohort, List[str]]:
         """Generate a cohort: dated classes, optional pipeline, and a roster.
 
@@ -577,8 +577,8 @@ class CourseCohortService:
         cohort: CourseCohort,
         cohort_class: CourseCohortClass,
         class_course: Optional[TrainingCourse],
-        organization_id: UUID,
-        created_by: UUID,
+        organization_id: UUID | str,
+        created_by: UUID | str,
     ) -> Tuple[Optional[TrainingSession], Optional[str]]:
         """Create the Event + TrainingSession backing one cohort class.
 
@@ -646,8 +646,8 @@ class CourseCohortService:
         course: TrainingCourse,
         cohort_name: str,
         syllabus: Sequence[Tuple[CourseClass, Optional[TrainingCourse]]],
-        organization_id: UUID,
-        created_by: UUID,
+        organization_id: UUID | str,
+        created_by: UUID | str,
     ) -> Tuple[Optional[str], Dict[str, str], Dict[str, str]]:
         """Build a pipeline whose phases mirror the syllabus's sections.
 
@@ -751,7 +751,7 @@ class CourseCohortService:
         return program.id, phase_by_section, requirement_by_class
 
     async def regenerate_missing(
-        self, cohort_id: UUID, organization_id: UUID, actor_id: UUID
+        self, cohort_id: UUID, organization_id: UUID | str, actor_id: UUID | str
     ) -> Tuple[int, List[str]]:
         """Create events only for classes that have none.
 
@@ -815,8 +815,8 @@ class CourseCohortService:
         self,
         cohort_class_id: UUID,
         data: CohortClassReschedule,
-        organization_id: UUID,
-        actor_id: UUID,
+        organization_id: UUID | str,
+        actor_id: UUID | str,
         cohort_id: Optional[UUID] = None,
     ) -> CourseCohortClass:
         """Move one class. The linked event moves with it; RSVPs are untouched."""
@@ -852,8 +852,8 @@ class CourseCohortService:
     async def _sync_event(
         self,
         cohort_class: CourseCohortClass,
-        organization_id: UUID,
-        actor_id: UUID,
+        organization_id: UUID | str,
+        actor_id: UUID | str,
         event_service: Optional[EventService] = None,
     ) -> None:
         """Push a cohort class's schedule onto its linked event.
@@ -886,8 +886,8 @@ class CourseCohortService:
         self,
         cohort_class_id: UUID,
         reason: str,
-        organization_id: UUID,
-        actor_id: UUID,
+        organization_id: UUID | str,
+        actor_id: UUID | str,
         cohort_id: Optional[UUID] = None,
     ) -> CourseCohortClass:
         """Cancel one class.
@@ -921,8 +921,8 @@ class CourseCohortService:
         self,
         cohort_id: UUID,
         data: CohortAdHocClassCreate,
-        organization_id: UUID,
-        actor_id: UUID,
+        organization_id: UUID | str,
+        actor_id: UUID | str,
     ) -> CourseCohortClass:
         """Add a class that was never on the syllabus (make-ups, add-ons)."""
         cohort = await self.get_cohort(cohort_id, organization_id)
@@ -940,8 +940,8 @@ class CourseCohortService:
         self,
         cohort: CourseCohort,
         data: CohortAdHocClassCreate,
-        organization_id: UUID,
-        actor_id: UUID,
+        organization_id: UUID | str,
+        actor_id: UUID | str,
         makeup_for_class_id: Optional[str] = None,
     ) -> CourseCohortClass:
         """Build an ad-hoc class with its event and session, without committing.
@@ -1053,8 +1053,8 @@ class CourseCohortService:
         self,
         cohort_id: UUID,
         data: CohortShiftRequest,
-        organization_id: UUID,
-        actor_id: UUID,
+        organization_id: UUID | str,
+        actor_id: UUID | str,
     ) -> int:
         """Shift classes by N days of local time — weather, instructor illness.
 
@@ -1124,7 +1124,7 @@ class CourseCohortService:
         return len(rows)
 
     async def _class_events(
-        self, rows: Sequence[CourseCohortClass], organization_id: UUID
+        self, rows: Sequence[CourseCohortClass], organization_id: UUID | str
     ) -> Dict[str, Event]:
         """The org-scoped events behind these classes, keyed by event id."""
         event_ids = [str(row.event_id) for row in rows if row.event_id]
@@ -1139,7 +1139,7 @@ class CourseCohortService:
         return {str(event.id): event for event in result.scalars().all()}
 
     async def _assert_shiftable(
-        self, rows: Sequence[CourseCohortClass], organization_id: UUID
+        self, rows: Sequence[CourseCohortClass], organization_id: UUID | str
     ) -> None:
         """Raise if any of these classes has an event whose attendance is closed.
 
@@ -1160,7 +1160,7 @@ class CourseCohortService:
             )
 
     async def update_cohort(
-        self, cohort_id: UUID, data: CourseCohortUpdate, organization_id: UUID
+        self, cohort_id: UUID, data: CourseCohortUpdate, organization_id: UUID | str
     ) -> CourseCohort:
         """Patch cohort metadata. Rescheduling goes through the class endpoints."""
         cohort = await self.get_cohort(cohort_id, organization_id)
@@ -1195,7 +1195,11 @@ class CourseCohortService:
         return cohort
 
     async def cancel_cohort(
-        self, cohort_id: UUID, reason: str, organization_id: UUID, actor_id: UUID
+        self,
+        cohort_id: UUID,
+        reason: str,
+        organization_id: UUID | str,
+        actor_id: UUID | str,
     ) -> CourseCohort:
         """Cancel a cohort and every one of its remaining classes.
 
@@ -1239,7 +1243,7 @@ class CourseCohortService:
                 # the state this asks for; cancel_event would refuse it.
                 if event is not None and not event.is_cancelled:
                     await event_service.cancel_event(
-                        event_id=cohort_class.event_id,
+                        event_id=str(event.id),
                         organization_id=organization_id,
                         reason=reason,
                         send_notifications=False,
@@ -1261,8 +1265,8 @@ class CourseCohortService:
         self,
         cohort_id: UUID,
         data: CohortMemberAdd,
-        organization_id: UUID,
-        actor_id: UUID,
+        organization_id: UUID | str,
+        actor_id: UUID | str,
     ) -> Tuple[int, List[str]]:
         """Add members to the roster, enrol them, and invite them to classes."""
         cohort = await self.get_cohort(cohort_id, organization_id)
@@ -1298,8 +1302,8 @@ class CourseCohortService:
         self,
         cohort: CourseCohort,
         user_ids: List[UUID],
-        organization_id: UUID,
-        actor_id: UUID,
+        organization_id: UUID | str,
+        actor_id: UUID | str,
         enroll_in_program: bool,
         invite_to_events: bool,
         future_only: bool,
@@ -1395,8 +1399,8 @@ class CourseCohortService:
         self,
         user_id: UUID,
         program_id: str,
-        organization_id: UUID,
-        actor_id: UUID,
+        organization_id: UUID | str,
+        actor_id: UUID | str,
     ) -> Tuple[Optional[str], Optional[str]]:
         """Enrol one member, reusing the existing enrollment rules.
 
@@ -1435,9 +1439,9 @@ class CourseCohortService:
 
     async def _invite_roster_to_class_events(
         self,
-        cohort_id: UUID,
-        organization_id: UUID,
-        actor_id: UUID,
+        cohort_id: UUID | str,
+        organization_id: UUID | str,
+        actor_id: UUID | str,
         cohort_classes: Sequence[CourseCohortClass],
     ) -> None:
         """RSVP the whole active roster to the given cohort classes."""
@@ -1459,7 +1463,7 @@ class CourseCohortService:
         self,
         user_ids: Sequence[str],
         cohort_classes: Sequence[CourseCohortClass],
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> None:
         """Create GOING RSVPs so classes appear on members' calendars.
 
@@ -1497,7 +1501,7 @@ class CourseCohortService:
         await self.db.flush()
 
     async def remove_member(
-        self, cohort_id: UUID, user_id: UUID, organization_id: UUID
+        self, cohort_id: UUID, user_id: UUID, organization_id: UUID | str
     ) -> None:
         """Withdraw a member from the roster and clear their upcoming classes.
 
@@ -1551,7 +1555,7 @@ class CourseCohortService:
     # ── late joiners (W27-3) ─────────────────────────────────────────
 
     async def _active_roster_member(
-        self, cohort_id: UUID, user_id: UUID, organization_id: UUID
+        self, cohort_id: UUID, user_id: UUID, organization_id: UUID | str
     ) -> CourseCohortMember:
         result = await self.db.execute(
             select(CourseCohortMember).where(
@@ -1567,7 +1571,7 @@ class CourseCohortService:
         return member
 
     async def _missed_class_rows(
-        self, member: CourseCohortMember, organization_id: UUID
+        self, member: CourseCohortMember, organization_id: UUID | str
     ) -> List[CourseCohortClass]:
         """Classes held before this member joined that they were not on.
 
@@ -1614,7 +1618,7 @@ class CourseCohortService:
         return {r.cohort_class_id: r for r in result.scalars().all()}
 
     async def list_missed_classes(
-        self, cohort_id: UUID, user_id: UUID, organization_id: UUID
+        self, cohort_id: UUID, user_id: UUID, organization_id: UUID | str
     ) -> List[Dict[str, Any]]:
         """Each class this member joined too late for, with the decision taken."""
         member = await self._active_roster_member(cohort_id, user_id, organization_id)
@@ -1667,7 +1671,7 @@ class CourseCohortService:
         cohort_id: UUID,
         user_id: UUID,
         cohort_class_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Tuple[CourseCohortMember, CourseCohortClass, Optional[CohortMissedClass]]:
         member = await self._active_roster_member(cohort_id, user_id, organization_id)
         rows = await self._missed_class_rows(member, organization_id)
@@ -1695,7 +1699,7 @@ class CourseCohortService:
         member: CourseCohortMember,
         cohort_class: CourseCohortClass,
         resolution: MissedClassResolution,
-        actor_id: UUID,
+        actor_id: UUID | str,
         *,
         training_record_id: Optional[str] = None,
         makeup_class_id: Optional[str] = None,
@@ -1720,8 +1724,8 @@ class CourseCohortService:
         cohort_id: UUID,
         user_id: UUID,
         cohort_class_id: UUID,
-        organization_id: UUID,
-        actor_id: UUID,
+        organization_id: UUID | str,
+        actor_id: UUID | str,
     ) -> Tuple[CohortMissedClass, TrainingRecord, List[str]]:
         """Credit a late joiner for a class held before they joined.
 
@@ -1840,8 +1844,8 @@ class CourseCohortService:
         user_id: UUID,
         cohort_class_id: UUID,
         data: CohortMakeupCreate,
-        organization_id: UUID,
-        actor_id: UUID,
+        organization_id: UUID | str,
+        actor_id: UUID | str,
     ) -> Tuple[CohortMissedClass, CourseCohortClass]:
         """Schedule a make-up session for one late joiner.
 
@@ -2004,7 +2008,7 @@ class CourseCohortService:
 
     async def list_cohorts(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         course_id: Optional[UUID] = None,
         status: Optional[str] = None,
         skip: int = 0,
@@ -2034,7 +2038,7 @@ class CourseCohortService:
     async def _cohort_counts(
         self,
         cohort_id: str,
-        organization_id: UUID,
+        organization_id: UUID | str,
         *,
         tz: ZoneInfo,
         include_member_count: bool = True,
@@ -2199,7 +2203,7 @@ class CourseCohortService:
         }
 
     async def list_member_cohorts(
-        self, user_id: UUID, organization_id: UUID
+        self, user_id: UUID | str, organization_id: UUID | str
     ) -> List[Dict[str, Any]]:
         """Cohorts a member is on the roster for — their 'my classes' view."""
         result = await self.db.execute(
@@ -2223,7 +2227,7 @@ class CourseCohortService:
         return cohorts
 
     async def is_roster_member(
-        self, cohort_id: UUID, user_id: UUID, organization_id: UUID
+        self, cohort_id: UUID, user_id: UUID | str, organization_id: UUID | str
     ) -> bool:
         """Whether a user is on this cohort's roster (gates member-facing reads)."""
         result = await self.db.execute(

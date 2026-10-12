@@ -54,6 +54,8 @@ describe('EventAttendancePetitionPrompt', () => {
 
     await user.click(await screen.findByRole('button', { name: /I was there/ }));
     await user.type(screen.getByLabelText('Why is there no check-in?'), '  Phone died  ');
+    // What the server reports once the request exists.
+    mockGetMine.mockResolvedValue({ petition: petition(), can_request: false, can_withdraw: true });
     await user.click(screen.getByRole('button', { name: 'Send request' }));
 
     expect(mockSubmit).toHaveBeenCalledWith('evt-1', {
@@ -101,8 +103,16 @@ describe('EventAttendancePetitionPrompt', () => {
 
   describe('withdrawing a pending request', () => {
     beforeEach(() => {
-      mockGetMine.mockResolvedValue({ petition: petition(), can_request: false });
+      mockGetMine.mockResolvedValue({ petition: petition(), can_request: false, can_withdraw: true });
       mockWithdraw.mockResolvedValue(undefined);
+    });
+
+    it('is no longer offered once the request has been withdrawn as often as allowed', async () => {
+      mockGetMine.mockResolvedValue({ petition: petition(), can_request: false, can_withdraw: false });
+      render();
+
+      expect(await screen.findByText(/withdrawn this request as many times as allowed/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Withdraw request' })).not.toBeInTheDocument();
     });
 
     it('withdraws once confirmed and offers the request again', async () => {

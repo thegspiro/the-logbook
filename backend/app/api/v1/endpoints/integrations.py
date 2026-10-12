@@ -7,7 +7,7 @@ Endpoints for managing external integration configurations.
 import re
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, NotRequired, TypedDict
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from pydantic import ValidationError
@@ -58,8 +58,18 @@ _SECRET_KEY_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+
+class _CatalogEntry(TypedDict):
+    integration_type: str
+    name: str
+    description: str
+    category: str
+    status: str
+    contains_phi: NotRequired[bool]
+
+
 # Default integration catalog - seeded for new orgs
-INTEGRATION_CATALOG = [
+INTEGRATION_CATALOG: list[_CatalogEntry] = [
     {
         "integration_type": "google-calendar",
         "name": "Google Calendar",
@@ -374,7 +384,8 @@ def _validate_config(integration_type: str, config: dict[str, Any]) -> dict[str,
             # omitted keys keep their stored value via the handler's merge, and
             # every service reads config with .get(key, default) so a partial
             # stored config stays usable.
-            return validated.model_dump(exclude_unset=True)
+            supplied: dict[str, Any] = validated.model_dump(exclude_unset=True)
+            return supplied
         except ValidationError as e:
             # SEC4-2: only Pydantic's own verdict is echoed. A bare
             # ``except Exception`` here reported any internal failure — an
@@ -939,7 +950,7 @@ async def _get_org_integration(
     )
     if lock:
         query = query.with_for_update()
-    integration = (await db.execute(query)).scalar_one_or_none()
+    integration: Integration | None = (await db.execute(query)).scalar_one_or_none()
     if not integration:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found"

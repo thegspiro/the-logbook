@@ -98,10 +98,10 @@ export const ElectionDetailPage: React.FC = () => {
   // A CLOSED -> OPEN rollback with no recorded votes regenerates the anonymity
   // salt and expires every issued ballot token, so the "Ballots sent" stamp
   // beside Resend is true and useless at once: the links in those emails are
-  // dead. Neither the rollback response nor GET /elections/{id} carries
-  // `ballots_must_be_resent` (it lives in rollback_history, exposed only via
-  // forensics), so the page derives it from the same facts the backend
-  // decides on and holds it until ballots go out again or the page reloads.
+  // dead. GET /elections/{id} now reports `ballots_must_be_resent` (W50-47),
+  // but the rollback response is the election before that fetch, so the
+  // page also derives it from the same facts the backend decides on and
+  // holds it until ballots go out again.
   const [ballotsMustBeResent, setBallotsMustBeResent] = useState(false);
   const [showSendEmailModal, setShowSendEmailModal] = useState(false);
   const [isSendingEmails, setIsSendingEmails] = useState(false);
@@ -475,7 +475,7 @@ export const ElectionDetailPage: React.FC = () => {
     try {
       const updated = await electionService.closeNominations(electionId);
       setElection(updated);
-      toast.success('Nominations closed — finalize the ballot, then open voting');
+      toast.success('Nominations closed — the slate is final. Order the ballot, then open voting');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to close nominations'));
     }
@@ -1222,26 +1222,51 @@ export const ElectionDetailPage: React.FC = () => {
           </div>
         )}
 
-        {/* Dead ballot links after a rollback — persists until ballots are resent */}
-        {canManage && ballotsMustBeResent && election.status === ElectionStatus.OPEN && (
-          <div className="alert-warning mb-6" role="alert" data-testid="rollback-resend-banner">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex-1">
-                <h3 className="text-sm font-bold text-amber-700 dark:text-amber-300">
-                  Every ballot link already sent was invalidated by the rollback
-                </h3>
-                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                  Reopening regenerated the anonymity salt, so the links in the ballot emails sent{' '}
-                  {election.email_sent_at ? formatDateTime(election.email_sent_at, tz) : 'earlier'} no longer work.
-                  Resend ballots so members can vote.
-                </p>
+        {/* Dead ballot links — persists until ballots are resent. The server
+            reports it (ballots_must_be_resent) for a reopen (W50-36) or a
+            ballot change (W50-47); the local flag covers the moment between
+            the rollback response and the next fetch. */}
+        {canManage &&
+          (ballotsMustBeResent || election.ballots_must_be_resent) &&
+          (election.status === ElectionStatus.OPEN || election.status === ElectionStatus.DRAFT) && (
+            <div className="alert-warning mb-6" role="alert" data-testid="rollback-resend-banner">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex-1">
+                  {!ballotsMustBeResent && election.ballots_resend_reason === 'ballot_changed' ? (
+                    <>
+                      <h3 className="text-sm font-bold text-amber-700 dark:text-amber-300">
+                        Every ballot link already sent was invalidated because the ballot changed
+                      </h3>
+                      <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                        The links in the ballot emails sent{' '}
+                        {election.email_sent_at ? formatDateTime(election.email_sent_at, tz) : 'earlier'} showed the old
+                        ballot, so they no longer work.{' '}
+                        {election.status === ElectionStatus.OPEN
+                          ? 'Resend ballots so members get the current ballot.'
+                          : 'Send ballots again once voting is open.'}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <h3 className="text-sm font-bold text-amber-700 dark:text-amber-300">
+                        Every ballot link already sent was invalidated by the rollback
+                      </h3>
+                      <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                        Reopening regenerated the anonymity salt, so the links in the ballot emails sent{' '}
+                        {election.email_sent_at ? formatDateTime(election.email_sent_at, tz) : 'earlier'} no longer
+                        work. Resend ballots so members can vote.
+                      </p>
+                    </>
+                  )}
+                </div>
+                {election.status === ElectionStatus.OPEN && (
+                  <button type="button" onClick={() => setShowSendEmailModal(true)} className="btn-primary text-sm">
+                    Resend Ballot Emails
+                  </button>
+                )}
               </div>
-              <button type="button" onClick={() => setShowSendEmailModal(true)} className="btn-primary text-sm">
-                Resend Ballot Emails
-              </button>
             </div>
-          </div>
-        )}
+          )}
 
         {/* Skipped Voters Banner — persists until dismissed */}
         {canManage && lastSkippedDetails.length > 0 && (
@@ -2050,6 +2075,19 @@ export const ElectionDetailPage: React.FC = () => {
                           </span>
                         )}
                       </div>
+                      {/* A sanctioned void stays in the chain and is verified
+                          with it, so it is listed here rather than reading as
+                          a broken chain (W50-31). */}
+                      {(integrityResult.voids ?? []).length > 0 && (
+                        <ul className="text-theme-text-secondary mt-3 space-y-1 text-sm" data-testid="integrity-voids">
+                          {(integrityResult.voids ?? []).map((v) => (
+                            <li key={`${v.voided_by ?? ''}-${v.reason}-${v.voided_at ?? ''}`}>
+                              {v.count} vote(s) voided by {v.voided_by_name || 'an officer'}:{' '}
+                              {v.reason || 'no reason recorded'}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                       {integrityResult.tampered_vote_ids.length > 0 && (
                         <div className="mt-3 rounded-sm bg-red-500/20 p-3">
                           <p className="mb-1 text-sm font-semibold text-red-700 dark:text-red-300">

@@ -99,6 +99,35 @@ Second, the sweep needs a database to verify: these paths are only exercised by
 DB-backed tests, so a migration done without MySQL available cannot be confirmed
 end-to-end and should not be batched blind.
 
+**✅ UPDATE (2026-10-11): the tail is closed.** Owner decision (docket XC-1):
+roll the helper out per module. Every create/update path in the 134 services
+and their endpoints was reviewed in five module groups, with a read-only
+second pass over the groups whose reviews were interrupted and over code that
+landed on `main` during the sweep. The paths still storing a client FK
+unchecked now call `assert_in_org` / `assert_all_in_org` before any write:
+
+- **members** — `DepartureClearanceService.initiate_clearance` `user_id`;
+- **elections** — `eligible_voters` on create/update;
+- **minutes** — `attendees[].user_id` on create/update;
+- **forms** — `condition_field_id` on a field created inline with its form;
+- **training** — course `category_ids`/`prerequisites`, category
+  `parent_category_id`, requirement `category_ids` and `required_skills`,
+  bulk-record `category_id`, session `location_id`, competency-matrix
+  `role_id` and `skill_evaluation_id`s, module-config apparatus ids, and
+  program `target_roles` (position ids; the JSON import keeps only this
+  department's own instead of refusing the file);
+- **scheduling** — shift-pattern `template_id`, member and day/night template
+  ids; shift-report `equipment_check_id`s;
+- **events** — `request_pipeline.default_assignee_id`;
+- **inventory** — request and allowance `category_id`, allowance `role_id`,
+  exposure `user_id`;
+- **apparatus** — equipment `inventory_item_id`; report-config apparatus,
+  type and status id lists.
+
+Everything else was already validated. Tests: `backend/tests/test_xc1_*.py`
+(integration). There is still no repo-wide machine check for a new
+unvalidated FK — pitfall #14c remains review discipline.
+
 ## XC-2 — Sensitive reads gated by a permission broader than intended
 
 **Seen in:** membership-pipeline (MP-1 — applicant PII / background-check

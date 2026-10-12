@@ -169,7 +169,7 @@ class SchedulingWidgetService:
         }
 
     @staticmethod
-    def _empty(timezone_name, window_start, window_end, enabled):
+    def _empty(timezone_name, window_start, window_end, enabled) -> dict:
         return {
             "timezone": timezone_name,
             "window_start": window_start,

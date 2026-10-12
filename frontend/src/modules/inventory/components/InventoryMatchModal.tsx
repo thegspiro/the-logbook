@@ -135,7 +135,7 @@ const InventoryMatchModal: React.FC<InventoryMatchModalProps> = ({ templateId, i
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Link items to inventory" size="lg" footer={footer}>
-      <div className="modal-body space-y-4">
+      <div className="space-y-4">
         {loading ? (
           <div className="text-theme-text-muted flex items-center justify-center gap-2 py-10 text-sm">
             <Loader2 className="h-4 w-4 animate-spin" />

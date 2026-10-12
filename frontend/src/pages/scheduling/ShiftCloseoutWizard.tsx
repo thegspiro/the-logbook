@@ -29,6 +29,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
+import ShiftPreShiftWorkSection from '../../modules/scheduling/components/ShiftPreShiftWorkSection';
 import type { CloseoutState, CloseoutAttendanceEntry, MemberCallCredit } from '../../modules/scheduling/types';
 import { formatCalendarDate, formatForDateTimeInput, localToUTC } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
@@ -254,6 +255,21 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
     [totalOrZero]
   );
   const highestCredit = useMemo(() => members.reduce((hi, m) => Math.max(hi, creditOf(m)), 0), [members, creditOf]);
+  const anyoneShort = totalOrZero > 0 && members.some((m) => creditOf(m) < totalOrZero);
+
+  /**
+   * Give the whole crew the apparatus count in one tap.
+   *
+   * A reopened shift seeds each member from the credit saved when it was
+   * last closed out, deliberately — an officer's earlier reduction for a
+   * member who left mid-shift must survive a reopen. So a total revised
+   * upward leaves everyone at the old figure, and without this the officer
+   * retypes every row. Marked as touched so stepping back and saving again
+   * keeps it, the same as a typed credit.
+   */
+  const creditEveryoneFully = () => {
+    setMembers((prev) => prev.map((m) => ({ ...m, credit: String(totalOrZero), creditTouched: true })));
+  };
 
   const setMemberField = (userId: string, field: 'inLocal' | 'outLocal' | 'credit', value: string) => {
     setMembers((prev) =>
@@ -545,6 +561,11 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
               {formatHours(combinedHours)} combined hours
             </strong>
           </div>
+          {/* Reviewed here because this is where the officer is already
+              settling everyone's hours. Approval is saved on its own and is not
+              part of the attendance save, so it can also wait until after
+              finalizing. */}
+          <ShiftPreShiftWorkSection shiftId={shiftId} className="border-theme-surface-border border-t pt-3" />
         </div>
       )}
 
@@ -635,9 +656,24 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
               <p className="text-theme-text-muted text-[10px] tracking-wider uppercase">Calls</p>
             </div>
           </div>
-          <p className="text-theme-text-muted text-xs">
-            Everyone starts with the apparatus’s call count. Lower it for anyone who wasn’t on every call.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-theme-text-muted min-w-0 flex-1 text-xs">
+              {/* A member's call_count is only stored at finalize, so a non-null
+                  one means this is a reopened shift showing its saved credit. */}
+              {state.members.some((m) => m.call_count != null)
+                ? 'Each member keeps the calls credited when this shift was last closed out. Change anyone whose number is wrong.'
+                : 'Everyone starts with the apparatus’s call count. Lower it for anyone who wasn’t on every call.'}
+            </p>
+            {anyoneShort && (
+              <button
+                type="button"
+                onClick={creditEveryoneFully}
+                className="touch:min-h-11 text-xs font-medium text-violet-700 hover:underline dark:text-violet-300"
+              >
+                Give everyone all {totalOrZero} call{totalOrZero === 1 ? '' : 's'}
+              </button>
+            )}
+          </div>
           <div className="divide-theme-surface-border divide-y">
             {members.map((m) => (
               <div key={m.userId} className="flex items-center gap-2 py-2">

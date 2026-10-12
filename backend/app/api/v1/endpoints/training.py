@@ -8,6 +8,7 @@ import calendar
 import csv
 import io
 from datetime import date, datetime, timedelta, timezone
+from typing import Any, TypedDict
 from uuid import UUID
 
 from fastapi import (
@@ -41,6 +42,7 @@ from app.models.event import Event, EventRSVP
 from app.models.training import (
     DueDateType,
     RequirementType,
+    SkillEvaluation,
     SubmissionStatus,
     TrainingCategory,
     TrainingCourse,
@@ -109,7 +111,7 @@ from app.services.training_record_notices import (
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import fetch_org_waivers, fetch_user_waivers
 from app.services.upload_scanning import reject_if_malicious
-from app.utils.org_scoping import assert_all_in_org
+from app.utils.org_scoping import assert_all_in_org, assert_in_org
 from app.utils.org_timezone import resolve_org_today
 from app.utils.upload_limits import read_upload_limited
 
@@ -478,14 +480,17 @@ def _member_requirement_response(requirement) -> TrainingRequirementResponse:
     ``member_visible: false`` (background checks, reference calls, …) must not
     reach members through this route either.
     """
-    response = TrainingRequirementResponse.model_validate(requirement)
-    return response.model_copy(
+    response: TrainingRequirementResponse = TrainingRequirementResponse.model_validate(
+        requirement
+    )
+    member_view: TrainingRequirementResponse = response.model_copy(
         update={
             "checklist_items": [
                 item for item in (response.checklist_items or []) if item.member_visible
             ]
         }
     )
+    return member_view
 
 
 # Training Courses
@@ -515,6 +520,37 @@ async def list_courses(
     return result.scalars().all()
 
 
+async def _validate_course_references(
+    db: AsyncSession, data: dict, organization_id
+) -> None:
+    """Refuse course-library references that are not in the caller's org (XC-1).
+
+    ``category_ids`` and ``prerequisites`` are JSON arrays of client-supplied
+    ids; nothing about the write constrains them to the caller's tenant. Only
+    keys present in ``data`` are checked, so an update that leaves them alone
+    does not re-validate what is already stored.
+    """
+    try:
+        await assert_all_in_org(
+            db,
+            TrainingCategory,
+            data.get("category_ids"),
+            organization_id,
+            label="training category",
+        )
+        await assert_all_in_org(
+            db,
+            TrainingCourse,
+            data.get("prerequisites"),
+            organization_id,
+            label="prerequisite course",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+
+
 @router.post(
     "/courses",
     response_model=TrainingCourseResponse,
@@ -533,10 +569,13 @@ async def create_course(
     **Authentication required**
     **Requires permission: training.manage**
     """
+    course_data = course.model_dump()
+    await _validate_course_references(db, course_data, current_user.organization_id)
+
     new_course = TrainingCourse(
         organization_id=current_user.organization_id,
         created_by=current_user.id,
-        **course.model_dump(),
+        **course_data,
     )
 
     db.add(new_course)
@@ -599,8 +638,11 @@ async def update_course(
             status_code=status.HTTP_404_NOT_FOUND, detail="Course not found"
         )
 
+    updates = course_update.model_dump(exclude_unset=True)
+    await _validate_course_references(db, updates, current_user.organization_id)
+
     # Update fields
-    for field, value in course_update.model_dump(exclude_unset=True).items():
+    for field, value in updates.items():
         setattr(course, field, value)
 
     await db.commit()
@@ -924,6 +966,20 @@ async def create_records_bulk(
     )
     members_by_id = {str(m.id): m for m in members_result.scalars().all()}
 
+    # XC-1: a row's category_id is client-supplied too. Resolve the in-org
+    # set once, so a foreign category fails its row rather than being stored.
+    requested_category_ids = {
+        str(r.category_id) for r in payload.records if r.category_id
+    }
+    valid_category_ids: set[str] = set()
+    if requested_category_ids:
+        category_result = await db.execute(
+            select(TrainingCategory.id)
+            .where(TrainingCategory.id.in_(requested_category_ids))
+            .where(TrainingCategory.organization_id == org_id)
+        )
+        valid_category_ids = {str(cid) for (cid,) in category_result.all()}
+
     for idx, entry in enumerate(payload.records):
         user_id_str = str(entry.user_id)
 
@@ -958,6 +1014,11 @@ async def create_records_bulk(
         member = members_by_id.get(user_id_str)
         if member is None:
             errors.append(f"Row {idx + 1}: user is not a member of this organization")
+            failed += 1
+            continue
+
+        if entry.category_id and str(entry.category_id) not in valid_category_ids:
+            errors.append(f"Row {idx + 1}: training category not found")
             failed += 1
             continue
 
@@ -1153,7 +1214,7 @@ async def update_record(
 
     await _sync_qualifications(db, [record])
 
-    event_data = {
+    event_data: dict[str, Any] = {
         "record_id": str(record_id),
         "fields_updated": list(update_fields.keys()),
     }
@@ -1336,10 +1397,27 @@ async def create_category(
     **Authentication required**
     **Requires permission: training.manage**
     """
+    category_data = category.model_dump()
+    # XC-1: the parent is a client-supplied FK; a foreign one would nest this
+    # category under another org's tree.
+    try:
+        await assert_in_org(
+            db,
+            TrainingCategory,
+            category_data.get("parent_category_id"),
+            current_user.organization_id,
+            allow_none=True,
+            label="parent category",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+
     new_category = TrainingCategory(
         organization_id=current_user.organization_id,
         created_by=current_user.id,
-        **category.model_dump(),
+        **category_data,
     )
 
     db.add(new_category)
@@ -1402,8 +1480,24 @@ async def update_category(
             status_code=status.HTTP_404_NOT_FOUND, detail="Category not found"
         )
 
+    updates = category_update.model_dump(exclude_unset=True)
+    # XC-1: validate a re-parent before storing it; null clears the parent.
+    try:
+        await assert_in_org(
+            db,
+            TrainingCategory,
+            updates.get("parent_category_id"),
+            current_user.organization_id,
+            allow_none=True,
+            label="parent category",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+
     # Update fields
-    for field, value in category_update.model_dump(exclude_unset=True).items():
+    for field, value in updates.items():
         setattr(category, field, value)
 
     await db.commit()
@@ -1505,6 +1599,25 @@ async def create_requirement(
             requirement.required_courses,
             current_user.organization_id,
             label="linked course",
+        )
+        # category_ids is the same shape: training in these categories credits
+        # the requirement, so a foreign id would grade against another org's
+        # catalog.
+        await assert_all_in_org(
+            db,
+            TrainingCategory,
+            requirement.category_ids,
+            current_user.organization_id,
+            label="training category",
+        )
+        # required_skills holds skill-evaluation ids a SKILLS_EVALUATION
+        # requirement is graded against; a foreign one can never be met.
+        await assert_all_in_org(
+            db,
+            SkillEvaluation,
+            requirement.required_skills,
+            current_user.organization_id,
+            label="required skill",
         )
     except ValueError as e:
         raise HTTPException(
@@ -1637,14 +1750,32 @@ async def update_requirement(
             status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found"
         )
 
-    if "required_courses" in updates:
+    if (
+        "required_courses" in updates
+        or "category_ids" in updates
+        or "required_skills" in updates
+    ):
         try:
             await assert_all_in_org(
                 db,
                 TrainingCourse,
-                updates["required_courses"],
+                updates.get("required_courses"),
                 current_user.organization_id,
                 label="linked course",
+            )
+            await assert_all_in_org(
+                db,
+                TrainingCategory,
+                updates.get("category_ids"),
+                current_user.organization_id,
+                label="training category",
+            )
+            await assert_all_in_org(
+                db,
+                SkillEvaluation,
+                updates.get("required_skills"),
+                current_user.organization_id,
+                label="required skill",
             )
         except ValueError as e:
             raise HTTPException(
@@ -2192,6 +2323,12 @@ async def enroll_member_in_program(
 # ============================================
 
 
+class _UnmatchedCourseTally(TypedDict):
+    name: str
+    code: str | None
+    count: int
+
+
 @router.post("/import/parse")
 async def parse_historical_import(
     file: UploadFile = File(...),
@@ -2359,7 +2496,7 @@ async def parse_historical_import(
     # Parse rows
     rows = []
     parse_errors = []
-    unmatched_course_counts = {}
+    unmatched_course_counts: dict[str, _UnmatchedCourseTally] = {}
     members_matched_set = set()
     members_unmatched_set = set()
     row_num = 0
@@ -2672,22 +2809,22 @@ async def confirm_historical_import(
         training_type = row.training_type or request.default_training_type
 
         if not row.course_matched:
-            mapping = course_map.get(row.course_name.lower())
+            row_mapping = course_map.get(row.course_name.lower())
             mapping_error = invalid_mappings.get(row.course_name.lower())
             if mapping_error:
                 failed += 1
                 errors.append(f"Row {row.row_number}: {mapping_error}")
                 continue
-            if mapping:
-                if mapping.action == "skip":
+            if row_mapping:
+                if row_mapping.action == "skip":
                     skipped += 1
                     continue
-                elif mapping.action == "map_existing":
-                    course_id = mapping.existing_course_id
-                elif mapping.action == "create_new":
+                elif row_mapping.action == "map_existing":
+                    course_id = row_mapping.existing_course_id
+                elif row_mapping.action == "create_new":
                     course_id = created_courses.get(row.course_name.lower())
-                    if mapping.new_training_type:
-                        training_type = mapping.new_training_type
+                    if row_mapping.new_training_type:
+                        training_type = row_mapping.new_training_type
             # If no mapping provided, still import with course_name only (no course_id)
 
         # Reject rows whose resolved course_id is outside this org.

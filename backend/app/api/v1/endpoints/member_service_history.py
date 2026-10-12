@@ -47,7 +47,8 @@ async def _load_member(db: AsyncSession, user_id: str, organization_id: str) -> 
             User.deleted_at.is_(None),
         )
     )
-    return ensure_found(result.scalar_one_or_none(), "Member")
+    member: User | None = result.scalar_one_or_none()
+    return ensure_found(member, "Member")
 
 
 async def _history_response(

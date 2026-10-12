@@ -7,6 +7,7 @@ import type { PendingApproval } from '../types';
 const mockGetPending = vi.fn();
 const mockApprove = vi.fn();
 const mockDeny = vi.fn();
+const mockGetUnrouted = vi.fn();
 
 vi.mock('../services/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/api')>()),
@@ -14,6 +15,7 @@ vi.mock('../services/api', async (importOriginal) => ({
     getPending: (...args: unknown[]) => mockGetPending(...args) as unknown,
     approve: (...args: unknown[]) => mockApprove(...args) as unknown,
     deny: (...args: unknown[]) => mockDeny(...args) as unknown,
+    getUnrouted: (...args: unknown[]) => mockGetUnrouted(...args) as unknown,
   },
 }));
 
@@ -109,6 +111,8 @@ describe('ApprovalsPage', () => {
     mockGetPending.mockReset();
     mockApprove.mockReset();
     mockDeny.mockReset();
+    mockGetUnrouted.mockReset();
+    mockGetUnrouted.mockResolvedValue([]);
     mockCheckPermission.mockReset();
     mockCheckPermission.mockImplementation((p: string) => p === 'finance.approve');
     mockGetPending.mockResolvedValue([hosePurchase, mileageClaim]);
@@ -328,5 +332,61 @@ describe('ApprovalsPage', () => {
 
     await waitFor(() => expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining(detail)));
     expect(dialog()).toBeInTheDocument();
+  });
+});
+
+describe('ApprovalsPage requests decided on their own page', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetPending.mockReset();
+    mockGetPending.mockResolvedValue([]);
+    mockGetUnrouted.mockReset();
+    mockGetUnrouted.mockResolvedValue([
+      {
+        entityType: 'check_request',
+        entityId: 'cr-9',
+        entityTitle: 'Check to Hose Supply Co',
+        entityAmount: '1500.00',
+        requesterName: 'Alice Member',
+        submittedAt: '2026-10-01T15:00:00Z',
+        awaitingSecondApproval: true,
+        firstApprovedBy: 'u-chief',
+      },
+      {
+        entityType: 'purchase_request',
+        entityId: 'pr-9',
+        entityTitle: 'Radio batteries',
+        entityAmount: '80.00',
+        requesterName: 'Bob Member',
+        submittedAt: '2026-10-02T15:00:00Z',
+        awaitingSecondApproval: false,
+        firstApprovedBy: null,
+      },
+    ]);
+    mockCheckPermission.mockReset();
+    mockCheckPermission.mockImplementation((p: string) => p === 'finance.approve');
+    useFinanceStore.setState({ pendingApprovals: [], error: null, isLoading: false });
+  });
+
+  it('lists them with what each needs, linked to its page', async () => {
+    renderPage();
+
+    const section = await screen.findByRole('region', { name: 'Waiting for a decision on their own page' });
+    expect(within(section).getByRole('link', { name: 'Check to Hose Supply Co' })).toHaveAttribute(
+      'href',
+      '/finance/check-requests/cr-9'
+    );
+    expect(within(section).getByText('A second approver')).toBeInTheDocument();
+    expect(within(section).getByText('An approver (no chain applies)')).toBeInTheDocument();
+    expect(mockGetUnrouted).toHaveBeenCalled();
+  });
+
+  it('is not shown to someone without finance.approve', async () => {
+    mockCheckPermission.mockImplementation(() => false);
+    renderPage();
+
+    await screen.findByText('Nothing is waiting on you.');
+    expect(screen.queryByRole('region', { name: 'Waiting for a decision on their own page' })).not.toBeInTheDocument();
+    expect(mockGetUnrouted).not.toHaveBeenCalled();
   });
 });

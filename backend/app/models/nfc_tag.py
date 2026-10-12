@@ -10,16 +10,21 @@ member's phone to a check-in page. A tag here is an *identity* credential that
 a station reads to decide who just arrived.
 """
 
+from datetime import datetime
 from enum import Enum
+from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Column, DateTime
+from sqlalchemy import DateTime
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Index, String, Text, UniqueConstraint
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class NfcCredentialType(str, Enum):
@@ -65,14 +70,14 @@ class NfcTag(Base):
 
     __tablename__ = "nfc_tags"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
@@ -80,11 +85,11 @@ class NfcTag(Base):
     )
 
     # SHA-256 of the peppered, normalized UID. See services/nfc_tag_service.py.
-    uid_hash = Column(String(64), nullable=False)
+    uid_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     # Last few characters of the UID, for on-screen identification only.
-    uid_preview = Column(String(8), nullable=False)
+    uid_preview: Mapped[str] = mapped_column(String(8), nullable=False)
 
-    credential_type = Column(
+    credential_type: Mapped[NfcCredentialType] = mapped_column(
         SQLEnum(NfcCredentialType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=NfcCredentialType.SERIAL,
@@ -93,9 +98,9 @@ class NfcTag(Base):
 
     # Free-text so a department can write what is actually printed on the card
     # ("Blue ID card", "Locker fob #12") rather than pick from a list we guessed.
-    label = Column(String(100), nullable=True)
+    label: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
-    status = Column(
+    status: Mapped[NfcTagStatus] = mapped_column(
         SQLEnum(NfcTagStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=NfcTagStatus.ACTIVE,
@@ -103,30 +108,34 @@ class NfcTag(Base):
         index=True,
     )
 
-    issued_at = Column(
+    issued_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     # Stamped on every successful identification, so a card nobody has tapped
     # in a year can be found and retired.
-    last_used_at = Column(DateTime(timezone=True), nullable=True)
-    revoked_at = Column(DateTime(timezone=True), nullable=True)
-    revoked_reason = Column(Text, nullable=True)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    revoked_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    issued_by = Column(
+    issued_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
     )
 
-    user = relationship("User", foreign_keys=[user_id])
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
 
     __table_args__ = (
         # Per organization, not global: two departments running this platform

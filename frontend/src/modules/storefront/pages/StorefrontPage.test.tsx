@@ -62,6 +62,7 @@ const storefront = (overrides: Partial<Storefront> = {}): Storefront => ({
     { method: 'cash', label: 'Cash', handle: null, instructions: 'To the quartermaster at Station 1' },
   ],
   paymentPolicy: 'none',
+  sendsOrderConfirmation: true,
   otherOpenWindows: [],
   window: {
     id: 'w1',

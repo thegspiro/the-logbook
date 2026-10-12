@@ -10,5 +10,7 @@ export const GRANTS_NAV_ITEMS: ReadonlyArray<{ label: string; path: string }> = 
   { label: 'Campaigns', path: '/grants/campaigns' },
   { label: 'Donors', path: '/grants/donors' },
   { label: 'Donations', path: '/grants/donations' },
+  { label: 'Pledges', path: '/grants/pledges' },
+  { label: 'Events', path: '/grants/events' },
   { label: 'Reports', path: '/grants/reports' },
 ];

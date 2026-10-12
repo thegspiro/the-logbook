@@ -100,7 +100,7 @@ async def _get_test(
     )
     if for_update:
         query = query.with_for_update()
-    test = (await db.execute(query)).scalar_one_or_none()
+    test: KnowledgeTest | None = (await db.execute(query)).scalar_one_or_none()
     if test is None or (
         not _is_officer(user) and test.status != KnowledgeTestStatus.PUBLISHED.value
     ):
@@ -115,13 +115,14 @@ async def _requirement(
 ) -> TrainingRequirement | None:
     if not requirement_id:
         return None
-    return (
+    requirement: TrainingRequirement | None = (
         await db.execute(
             select(TrainingRequirement)
             .where(TrainingRequirement.id == str(requirement_id))
             .where(TrainingRequirement.organization_id == str(org_id))
         )
     ).scalar_one_or_none()
+    return requirement
 
 
 async def _validate_requirement(
@@ -889,7 +890,7 @@ def _question_fields(data: QuestionWrite) -> dict:
 async def _get_question(
     db: AsyncSession, test: KnowledgeTest, question_id: UUID
 ) -> KnowledgeTestQuestion:
-    question = (
+    question: KnowledgeTestQuestion | None = (
         await db.execute(
             select(KnowledgeTestQuestion)
             .where(KnowledgeTestQuestion.id == str(question_id))

@@ -17,9 +17,25 @@ layer + endpoint auth coverage).
   (types/statuses/maintenance-types) additionally allow `organization_id IS NULL`
   system rows — intentional and correct. `delete_room`'s linked-`Location`
   delete is scoped by both `facility_room_id` and `organization_id`.
-- **No SQL injection:** no `text()`/f-string/`.format()` SQL. The one search
-  (`list_facilities`) escapes `\`, `%`, `_` before building the `ilike` term —
-  this is the correct pattern (contrast INV-5).
+- **No SQL injection:** no `text()`/f-string/`.format()` SQL.
+
+  **Correction (2026-10-11, app-review B4 pass 5) — this bullet used to describe
+  the wrong pattern as the right one.** It read: the one search
+  (`list_facilities`) "escapes `\`, `%`, `_` before building the `ilike` term —
+  this is the correct pattern (contrast INV-5)". Pitfall #25, established
+  2026-08-25 (after this audit), is that hand-escaping **without** passing
+  `escape=` to the `like`/`ilike` call is **inert** under MySQL's
+  `NO_BACKSLASH_ESCAPES` — and that it "looks entirely correct in review", which
+  is precisely how it read here.
+
+  The code itself has since been fixed properly: `list_facilities` now builds its
+  term with `like_pattern()` and passes `escape=LIKE_ESCAPE_CHAR` on all three
+  columns (`name`, `facility_number`, `city`), with the manual `.replace()` calls
+  gone and `tests/test_like_escaping.py` enforcing both halves repo-wide. So the
+  conclusion ("no injection, escaping correct") is still true — but it was stated
+  for a reason that no longer holds, and a reader copying the described pattern
+  into a new module would ship the inert version.
+
 - **No PK-bypass** (`db.get`/`filter_by(id=)`).
 - **Lint:** flake8 clean; no TODO/FIXME markers.
 
@@ -68,8 +84,19 @@ Client-supplied FK ids stored without an in-org check:
   unverified; `update_access_key` sets `assigned_to_user_id` unverified.
 
 Writes are org-stamped, so a bad FK is a dangling/mis-attributed reference, not
-a cross-tenant read. **Status:** flagged (XC-1) — best closed by the shared
-`assert_in_org` helper rather than per-method patches.
+a cross-tenant read.
+
+**Status: closed.** This body previously ended "flagged (XC-1) — best closed by
+the shared `assert_in_org` helper", contradicting its own heading, and the
+contradiction survived four app-review passes. The heading is the accurate one:
+app-review B4 pass 1 closed the create paths and pass 2 closed the update paths,
+and that is exactly how it was closed — through the shared helper, not
+per-method patches. Re-verified in code on 2026-10-11 (app-review B4 pass 5):
+`assert_in_org` is imported and used in `facilities_service.py`, with
+`_assert_facility_in_org` covering the sub-entity update paths. Org-or-system
+lookup FKs (`facility_type_id`, `status_id`, `maintenance_type_id`) correctly use
+the module's own getters instead, because `assert_in_org` would reject the
+`organization_id IS NULL` system rows.
 
 ### FAC-4 — LOW (unused capability) — `list_facilities` search not exposed
 
@@ -273,7 +300,18 @@ does not gain read access implicitly.
 **Follow-up:** expose the additive-view requirement in role-editor help text so
 custom-role authors cannot mistake an action grant for module visibility.
 
-### FAC-P10 — MEDIUM completeness — Photos and documents are API-only
+### FAC-P10 — MEDIUM completeness — Photos and documents are API-only — ✅ CLOSED (verified 2026-10-11)
+
+**Closed.** `components/FilesSection.tsx` is a registered facility-detail section
+(`facilityDetailSections.ts`, id `files`) and is a working workflow, not a stub:
+it lists photos and documents side by side, uploads (routing an `image/*` file to
+`createPhoto` and anything else to `createFacilityDocument`), renames a caption or
+description through `blankToNull`, and deletes. Document reads are gated on
+`canViewSensitive`, so a view-only holder sees photos without the document family.
+Covered by `FilesSection.test.tsx`.
+
+The description below is the state as audited on 2026-08-20 and is kept for the
+record; the recommended iteration it proposes is what was built.
 
 Facility photos and documents have list/create/update/delete endpoints and typed
 client methods, but neither appears in the advertised 13-section detail page.
@@ -287,7 +325,12 @@ Define sensitivity, retention, download authorization, and folder ownership
 before exposing it. Link documents to the relevant maintenance, inspection,
 system, project, policy, or compliance record where useful.
 
-### FAC-P11 — MEDIUM product depth — Extended sections are ledgers, not management workflows
+### FAC-P13 — MEDIUM product depth — Extended sections are ledgers, not management workflows
+
+_(Renumbered from FAC-P11 on 2026-10-11, app-review B4 pass 5: this file carried
+two different findings both numbered FAC-P11 — the HIGH access-boundary item
+fixed 2026-08-26, above, and this product-depth item. FAC-P12 was already taken,
+so this became FAC-P13.)_
 
 The delivered sections are useful CRUD surfaces, but the product claims suggest
 more operational support than record storage alone:
@@ -331,9 +374,18 @@ values are inherited versus organization-owned.
 
 1. ~~Deliver server-side dashboard previews and paginate facility search/grid~~
    — completed; URL-state filters remain a follow-up (FAC-P2).
-2. Add an integrated Files section with explicit authorization and retention
-   behavior (FAC-P10).
-3. Add Facilities lookup administration (FAC-P12).
+2. ~~Add an integrated Files section with explicit authorization and retention
+   behavior~~ — completed (FAC-P10); `FilesSection` gates document reads on
+   `canViewSensitive`. Retention is still unstated.
+3. Add Facilities lookup administration (FAC-P12). **Partly delivered** —
+   `FacilitiesSettingsPage.tsx` exists; the safe-delete rules, usage counts and
+   inherited-vs-owned preview that FAC-P12 asks for were not re-verified against
+   it in pass 5.
+4. Give the two cross-facility list endpoints (`GET /facilities/maintenance`,
+   `GET /facilities/inspections`) a `search` parameter, real pagination, and a
+   tri-state inspection `result` filter — the owner decision recorded as FAC2-5
+   in `docs/app-review/facilities.md`. Without the tri-state filter the
+   inspections "pending" tab cannot be resolved server-side at all.
 
 ### Later — turn records into operations
 

@@ -33,6 +33,10 @@ vi.mock('../services/api', () => ({
   budgetCategoryService: {
     list: (...args: unknown[]) => mockCategoryList(...args) as unknown,
   },
+  // The dual-approval card on this page; its behaviour has its own tests.
+  financeSettingsService: {
+    get: () => Promise.resolve({ dualApprovalThreshold: null }),
+  },
 }));
 
 vi.mock('../../../services/api', () => ({

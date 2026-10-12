@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router';
 import {
   ClipboardCheck,
   AlertTriangle,
@@ -46,6 +47,10 @@ const PAGE_SIZE = 25;
 
 // ─── Helper: default date range (last 30 days) ─────────────────────────────
 
+function isReportTab(value: string | null): value is ReportTab {
+  return TABS.some((tab) => tab.id === value);
+}
+
 function defaultDateRange(tz: string): { start: string; end: string } {
   const now = new Date();
   const thirtyDaysAgo = new Date(now);
@@ -60,9 +65,19 @@ function defaultDateRange(tz: string): { start: string; end: string } {
 
 const EquipmentCheckReportsPage: React.FC = () => {
   const tz = useTimezone();
-  const [activeTab, setActiveTab] = useState<ReportTab>('compliance');
+  // ?tab= and ?from= let another screen link to one report. The apparatus
+  // page's Deficiency badge sends a chief to the failure that set it, which
+  // can predate the default 30-day window.
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const requestedFrom = searchParams.get('from');
+  const [activeTab, setActiveTab] = useState<ReportTab>(isReportTab(requestedTab) ? requestedTab : 'compliance');
   const defaults = defaultDateRange(tz);
-  const [startDate, setStartDate] = useState(defaults.start);
+  const [startDate, setStartDate] = useState(
+    requestedFrom && /^\d{4}-\d{2}-\d{2}$/.test(requestedFrom) && requestedFrom < defaults.start
+      ? requestedFrom
+      : defaults.start
+  );
   const [endDate, setEndDate] = useState(defaults.end);
 
   return (
@@ -180,7 +195,11 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
           value={`${data.passRate}%`}
           color={data.passRate >= 90 ? 'green' : data.passRate >= 70 ? 'amber' : 'red'}
         />
-        <StatCard label="Overdue" value={String(data.overdueCount)} color={data.overdueCount > 0 ? 'red' : undefined} />
+        <StatCard
+          label="Missed checks"
+          value={String(data.overdueCount)}
+          color={data.overdueCount > 0 ? 'red' : undefined}
+        />
         <StatCard label="Avg Items / Check" value={String(data.avgItemsPerCheck)} />
       </div>
 
@@ -226,7 +245,20 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
                 </div>
                 <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
                   <span className="text-theme-text-muted">Checks:</span>
-                  <span className="text-theme-text-secondary">{a.checksCompleted}</span>
+                  <span className="text-theme-text-secondary">
+                    {/* Expected counts from the fleet board's rule (one per shift
+                        per checklist), so the two screens agree; the done count
+                        comes from that same shift-dated set so the pair reconciles. */}
+                    {a.checksExpected > 0
+                      ? `${a.checksExpectedCompleted ?? a.checksCompleted} of ${a.checksExpected} expected`
+                      : a.checksCompleted}
+                  </span>
+                  {(a.checksMissed ?? 0) > 0 && (
+                    <>
+                      <span className="text-theme-text-muted">Missed:</span>
+                      <span className="text-red-700 dark:text-red-400">{a.checksMissed}</span>
+                    </>
+                  )}
                   <span className="text-theme-text-muted">Pass / Fail:</span>
                   <span className="text-theme-text-secondary">
                     <span className="text-green-600">{a.passCount}</span>

@@ -103,7 +103,8 @@ def _detect_image_mime(contents: bytes) -> str:
     try:
         import magic
 
-        return magic.from_buffer(contents, mime=True)
+        detected: str = magic.from_buffer(contents, mime=True)
+        return detected
     except Exception:
         # libmagic is optional in some deployments; fall back to signatures.
         if contents[:8] == b"\x89PNG\r\n\x1a\n":

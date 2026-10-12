@@ -131,6 +131,7 @@ from app.models.finance import (
     ApproverType,
     Budget,
     BudgetAmendment,
+    BudgetAmendmentStatus,
     BudgetCategory,
     BudgetRequest,
     BudgetRequestStatus,
@@ -321,7 +322,7 @@ from app.models.notification import (
     NotificationTrigger,
     PushSubscription,
 )
-from app.models.onboarding import OnboardingStatus
+from app.models.onboarding import EncryptionKeyCustody, OnboardingStatus
 from app.models.operational_rank import OperationalRank
 from app.models.org_chart import OrgChartNode, OrgChartNodeHolder
 from app.models.organization_lock import OrganizationLock
@@ -335,6 +336,13 @@ from app.models.public_portal import (
 from app.models.qualification import MemberQualification
 from app.models.scheduling_module_config import SchedulingModuleConfig
 from app.models.security_alert import AlertType, SecurityAlertRecord, ThreatLevel
+from app.models.shift_history_import import (
+    ShiftHistoryImport,
+    ShiftHistoryImportMapping,
+    ShiftHistoryImportMappingKind,
+    ShiftHistoryImportRow,
+    ShiftHistoryImportStatus,
+)
 from app.models.skills_testing import SkillTemplate, SkillTest
 from app.models.storefront import (
     StoreFulfillmentMethod,
@@ -383,6 +391,7 @@ from app.models.training import (
     ExternalTrainingProvider,
     ExternalTrainingSyncLog,
     ExternalUserMapping,
+    PreWorkStatus,
     ProgramEnrollment,
     ProgramMilestone,
     ProgramPhase,
@@ -394,6 +403,7 @@ from app.models.training import (
     ShiftEquipmentCheck,
     ShiftEquipmentCheckItem,
     ShiftEquipmentCheckSeal,
+    ShiftPreWorkSession,
     SkillCheckoff,
     SkillEvaluation,
     TrainingApproval,
@@ -445,6 +455,7 @@ __all__ = [
     "OrgCallResponse",
     # Onboarding models
     "OnboardingStatus",
+    "EncryptionKeyCustody",
     # Email template models
     "EmailTemplate",
     "EmailTemplateBackup",
@@ -596,6 +607,14 @@ __all__ = [
     "Shift",
     "ShiftAttendance",
     "ShiftCall",
+    "ShiftPreWorkSession",
+    "PreWorkStatus",
+    # Shift history import
+    "ShiftHistoryImport",
+    "ShiftHistoryImportMapping",
+    "ShiftHistoryImportMappingKind",
+    "ShiftHistoryImportRow",
+    "ShiftHistoryImportStatus",
     # Shift equipment check models
     "ShiftEquipmentCheck",
     "ShiftEquipmentCheckItem",
@@ -715,6 +734,7 @@ __all__ = [
     "BudgetCategory",
     "Budget",
     "BudgetAmendment",
+    "BudgetAmendmentStatus",
     "BudgetRequest",
     "BudgetRequestStatus",
     "ApprovalChain",

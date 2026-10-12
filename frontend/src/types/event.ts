@@ -148,6 +148,8 @@ export interface MyAttendancePetition {
   petition: AttendancePetition | null;
   can_request: boolean;
   unavailable_reason?: string | null;
+  /** False once the request has been withdrawn the maximum number of times. */
+  can_withdraw?: boolean;
 }
 
 export interface AttendancePetitionCreate {
@@ -185,6 +187,25 @@ export interface EventAttendee {
   user_id: string;
   user_name?: string | null;
   status: RSVPStatus;
+}
+
+/** A guest — someone who is not a member — signed in at an event
+ * (`GET /events/{id}/external-attendees`, events.manage). Snake_case, as the
+ * events endpoints serve it. Guests are not RSVPs and are not counted in
+ * member attendance. */
+export interface ExternalAttendee {
+  id: string;
+  event_id: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  organization_name?: string | null;
+  checked_in: boolean;
+  checked_in_at?: string | null;
+  source?: string | null;
+  notes?: string | null;
+  prospect_id?: string | null;
+  created_at: string;
 }
 
 export interface EventListItem {

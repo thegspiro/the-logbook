@@ -267,3 +267,36 @@ describe('SuggestionReviewPanel idea board', () => {
     expect(screen.queryByRole('button', { name: 'Publish to the board' })).not.toBeInTheDocument();
   });
 });
+
+describe('SuggestionReviewPanel intake answers', () => {
+  beforeEach(() => {
+    mockList.mockReset();
+    mockGet.mockReset();
+    mockList.mockResolvedValue({ items: [summary()], total: 1 });
+  });
+
+  it('shows the answers and where the submission was routed from', async () => {
+    mockGet.mockResolvedValue(
+      detail({
+        routedFromBoxName: 'General',
+        intakeAnswers: [
+          { questionId: 'q1', label: 'Is this a safety concern?', value: 'yes', display: 'Yes' },
+          { questionId: 'q2', label: 'Where did it happen?', value: 'Engine 2', display: 'Engine 2' },
+        ],
+      })
+    );
+    renderWithRouter(<SuggestionReviewPanel boxes={[]} selectedId="s1" onSelect={vi.fn()} />);
+
+    expect(await screen.findByText(/Sent here from General/)).toBeInTheDocument();
+    expect(screen.getByText('Is this a safety concern?')).toBeInTheDocument();
+    expect(screen.getByText('Engine 2')).toBeInTheDocument();
+  });
+
+  it('shows nothing extra for a submission without answers', async () => {
+    mockGet.mockResolvedValue(detail());
+    renderWithRouter(<SuggestionReviewPanel boxes={[]} selectedId="s1" onSelect={vi.fn()} />);
+
+    expect(await screen.findByRole('heading', { name: 'Engine 2 bay door' })).toBeInTheDocument();
+    expect(screen.queryByText(/Sent here from/)).not.toBeInTheDocument();
+  });
+});

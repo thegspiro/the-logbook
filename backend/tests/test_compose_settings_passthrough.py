@@ -102,7 +102,6 @@ DEPLOYMENT_VALUES = {
         "SECURITY_REQUIRE_TLS": "bundled plaintext db/redis, accepted risk",
         "ALLOWED_ORIGINS": "example LAN origins for the Unraid web UI port",
         "ACCESS_TOKEN_EXPIRE_MINUTES": "existing Unraid session length",
-        "UPLOAD_DIR": "absolute container path of the uploads mount",
         "SMTP_HOST": "existing placeholder; inert while EMAIL_ENABLED=false",
     },
     "unraid/docker-compose-build-from-source.yml": {

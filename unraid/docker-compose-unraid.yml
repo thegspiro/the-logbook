@@ -188,11 +188,6 @@ services:
       DB_SSL: ${DB_SSL:-false}
       REDIS_SSL: ${REDIS_SSL:-false}
 
-      # File Storage
-      STORAGE_TYPE: ${STORAGE_TYPE:-local}
-      UPLOAD_DIR: /app/uploads
-      MAX_FILE_SIZE: 52428800
-
       # Email (Optional)
       EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
       SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
@@ -227,7 +222,6 @@ services:
       LOG_FORMAT: ${LOG_FORMAT:-text}
 
       # Database pool and connection retries
-      DB_POOL_MIN: ${DB_POOL_MIN:-2}
       DB_POOL_MAX: ${DB_POOL_MAX:-10}
       DB_ECHO: ${DB_ECHO:-false}
       DB_CHARSET: ${DB_CHARSET:-utf8mb4}
@@ -295,7 +289,6 @@ services:
 
       # Rate limits
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
-      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-60}
       RATE_LIMIT_DEFAULT: ${RATE_LIMIT_DEFAULT:-100/minute}
       PUBLIC_FORM_DAILY_LIMIT: ${PUBLIC_FORM_DAILY_LIMIT:-500}
       GUEST_CHECK_IN_DAILY_LIMIT: ${GUEST_CHECK_IN_DAILY_LIMIT:-300}

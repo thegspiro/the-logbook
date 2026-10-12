@@ -60,13 +60,14 @@ class MemberBadgeService:
         return org
 
     async def get_member(self, organization_id, user_id) -> Optional[User]:
-        return await self.db.scalar(
+        user: Optional[User] = await self.db.scalar(
             select(User).where(
                 User.id == str(user_id),
                 User.organization_id == str(organization_id),
                 User.deleted_at.is_(None),
             )
         )
+        return user
 
     async def ensure_codes(self, users: Iterable[User]) -> None:
         """Give any member without a code one.
@@ -85,7 +86,7 @@ class MemberBadgeService:
 
     async def reissue(self, organization_id, user_id) -> Optional[User]:
         """Replace a member's code, so the badge they lost stops scanning."""
-        user = await self.db.scalar(
+        user: Optional[User] = await self.db.scalar(
             select(User)
             .where(
                 User.id == str(user_id),

@@ -21,12 +21,14 @@ _RECOVERY_CODE_BYTES = 10
 
 def generate_secret() -> str:
     """Generate a new base32 TOTP secret."""
-    return pyotp.random_base32()
+    return str(pyotp.random_base32())
 
 
 def provisioning_uri(secret: str, account_name: str, issuer: str) -> str:
     """Build the otpauth:// URI an authenticator app encodes as a QR code."""
-    return pyotp.TOTP(secret).provisioning_uri(name=account_name, issuer_name=issuer)
+    return str(
+        pyotp.TOTP(secret).provisioning_uri(name=account_name, issuer_name=issuer)
+    )
 
 
 def verify_totp(secret: str, code: str) -> bool:
@@ -48,7 +50,7 @@ def verify_totp(secret: str, code: str) -> bool:
     code = code.strip().replace(" ", "")
     if not code.isdigit():
         return False
-    return pyotp.TOTP(secret).verify(code, valid_window=1)
+    return bool(pyotp.TOTP(secret).verify(code, valid_window=1))
 
 
 def verify_totp_get_timestep(

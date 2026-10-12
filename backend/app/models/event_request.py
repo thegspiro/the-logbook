@@ -13,11 +13,12 @@ requesters express preferences rather than committing to exact dates.
 
 import enum
 import secrets
+from datetime import datetime
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import (
     JSON,
     Boolean,
-    Column,
     DateTime,
     Enum,
     ForeignKey,
@@ -26,11 +27,15 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
+
+if TYPE_CHECKING:
+    from app.models.event import Event
+    from app.models.user import User
 
 
 def generate_status_token() -> str:
@@ -66,75 +71,89 @@ class EventRequest(Base):
 
     __tablename__ = "event_requests"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Requester contact info
-    contact_name = Column(String(255), nullable=False)
-    contact_email = Column(String(255), nullable=False)
-    contact_phone = Column(String(50), nullable=True)
-    organization_name = Column(String(255), nullable=True)
+    contact_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    contact_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    contact_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    organization_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Event details (outreach_type is a plain string — types are configurable per department)
-    outreach_type = Column(
+    outreach_type: Mapped[str] = mapped_column(
         String(100),
         nullable=False,
         default="other",
     )
-    description = Column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Flexible date preferences — requesters express preferences, not commitments.
     # date_flexibility: "specific_dates" (they have exact dates), "general_timeframe"
     # (e.g., "a Saturday in March"), or "flexible" (department picks).
-    date_flexibility = Column(String(30), nullable=False, default="flexible")
-    preferred_date_start = Column(DateTime(timezone=True), nullable=True)
-    preferred_date_end = Column(DateTime(timezone=True), nullable=True)
+    date_flexibility: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="flexible"
+    )
+    preferred_date_start: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    preferred_date_end: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # Free-text for fuzzy preferences like "Saturday morning next month"
-    preferred_timeframe = Column(String(500), nullable=True)
+    preferred_timeframe: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True
+    )
     # General time-of-day preference
-    preferred_time_of_day = Column(
+    preferred_time_of_day: Mapped[Optional[str]] = mapped_column(
         String(20), nullable=True, default="flexible"
     )  # "morning", "afternoon", "evening", "flexible"
 
-    audience_size = Column(Integer, nullable=True)
-    age_group = Column(String(100), nullable=True)
-    venue_preference = Column(
+    audience_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    age_group: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    venue_preference: Mapped[str] = mapped_column(
         String(20), nullable=False, default="their_location"
     )  # "their_location", "our_station", "either"
-    venue_address = Column(Text, nullable=True)
-    special_requests = Column(Text, nullable=True)
+    venue_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    special_requests: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Pipeline tracking — broad status plus flexible per-task completions
-    status = Column(
+    status: Mapped[EventRequestStatus] = mapped_column(
         Enum(EventRequestStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=EventRequestStatus.SUBMITTED,
         index=True,
     )
-    assigned_to = Column(
+    assigned_to: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    reviewer_notes = Column(Text, nullable=True)
-    decline_reason = Column(Text, nullable=True)
+    reviewer_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    decline_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Confirmed event date (set by coordinator when scheduling)
-    event_date = Column(DateTime(timezone=True), nullable=True)
-    event_end_date = Column(DateTime(timezone=True), nullable=True)
-    event_location_id = Column(
+    event_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    event_end_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    event_location_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
     )
 
     # Configurable pipeline task completions (JSON)
     # Schema: { "task_id": { "completed": true, "completed_by": "user-uuid",
     #           "completed_at": "iso-datetime", "notes": "..." } }
-    task_completions = Column(JSON, nullable=True, default=dict)
+    task_completions: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True, default=dict
+    )
 
     # Link to created Event (when SCHEDULED)
-    event_id = Column(
+    event_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("events.id", ondelete="SET NULL"), nullable=True
     )
 
@@ -143,7 +162,7 @@ class EventRequest(Base):
     # flow, so "who is covering this demo" lives with every other seat the
     # department fills rather than in a side list only the pipeline knows
     # about. NULL means no signup sheet has been opened yet.
-    staffing_shift_id = Column(
+    staffing_shift_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("shifts.id", ondelete="SET NULL"), nullable=True
     )
     # What the department needs on the day, by role rather than by crew seat:
@@ -153,35 +172,43 @@ class EventRequest(Base):
     # The linked shift still carries one plain `volunteer` seat per person, so
     # coverage, capacity and eligibility read it as the ordinary open shift it
     # is — this column is what says which of those seats is which job.
-    staffing_roles = Column(JSON, nullable=True)
+    staffing_roles: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, nullable=True
+    )
     # When the department last emailed the membership asking for help. Recorded
     # so a second coordinator can see the call already went out rather than
     # sending the roster a duplicate.
-    volunteer_call_sent_at = Column(DateTime(timezone=True), nullable=True)
+    volunteer_call_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Public status tracking
-    status_token = Column(
+    status_token: Mapped[Optional[str]] = mapped_column(
         String(64), unique=True, index=True, default=generate_status_token
     )
 
     # Source tracking (from form submission)
-    form_submission_id = Column(
+    form_submission_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("form_submissions.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Metadata
-    ip_address = Column(String(45), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    event = relationship("Event", foreign_keys=[event_id])
-    assignee = relationship("User", foreign_keys=[assigned_to])
-    activity_log = relationship(
+    event: Mapped[Optional["Event"]] = relationship("Event", foreign_keys=[event_id])
+    assignee: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[assigned_to]
+    )
+    activity_log: Mapped[list["EventRequestActivity"]] = relationship(
         "EventRequestActivity",
         back_populates="request",
         cascade="all, delete-orphan",
@@ -206,27 +233,33 @@ class EventRequestActivity(Base):
 
     __tablename__ = "event_request_activity"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    request_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    request_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("event_requests.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    action = Column(String(100), nullable=False)
-    old_status = Column(String(50), nullable=True)
-    new_status = Column(String(50), nullable=True)
-    notes = Column(Text, nullable=True)
-    details = Column(JSON, nullable=True)
+    action: Mapped[str] = mapped_column(String(100), nullable=False)
+    old_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    new_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
 
-    performed_by = Column(
+    performed_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     # Relationships
-    request = relationship("EventRequest", back_populates="activity_log")
-    performer = relationship("User", foreign_keys=[performed_by])
+    request: Mapped["EventRequest"] = relationship(
+        "EventRequest", back_populates="activity_log"
+    )
+    performer: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[performed_by]
+    )
 
     __table_args__ = (Index("idx_event_req_activity_request", "request_id"),)
 
@@ -247,30 +280,32 @@ class EventRequestEmailTemplate(Base):
 
     __tablename__ = "event_request_email_templates"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    name = Column(String(200), nullable=False)
-    subject = Column(String(500), nullable=False)
-    body_html = Column(Text, nullable=False)
-    body_text = Column(Text, nullable=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    subject: Mapped[str] = mapped_column(String(500), nullable=False)
+    body_html: Mapped[str] = mapped_column(Text, nullable=False)
+    body_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # When to auto-send: trigger key (e.g., "on_scheduled", "days_before_event")
     # NULL means manual-only
-    trigger = Column(String(100), nullable=True)
+    trigger: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     # For "days_before_event" trigger: how many days before
-    trigger_days_before = Column(Integer, nullable=True)
+    trigger_days_before: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
-    is_active = Column(Boolean, nullable=False, default=True)
-    created_by = Column(
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 

@@ -30,6 +30,7 @@ from app.schemas.event import (
 from app.services.event_attendance_petition_service import (
     EventAttendancePetitionService,
     PetitionNotFound,
+    can_withdraw,
     reviewer_ids,
 )
 from app.services.event_service import attendance_is_finalized
@@ -198,6 +199,7 @@ async def get_my_attendance_petition(
         ),
         can_request=unavailable_reason is None,
         unavailable_reason=unavailable_reason,
+        can_withdraw=petition is not None and can_withdraw(petition),
     )
 
 
@@ -213,8 +215,9 @@ async def withdraw_my_attendance_petition(
     """
     Withdraw your own attendance request while it is still pending.
 
-    The request is removed, so you may ask again (within the same rules). A
-    request already approved or declined cannot be withdrawn (400).
+    You may then ask again (within the same rules), up to two withdrawals per
+    event; after that the pending request is final (400). A request already
+    approved or declined cannot be withdrawn (400).
 
     **Authentication required**
     """

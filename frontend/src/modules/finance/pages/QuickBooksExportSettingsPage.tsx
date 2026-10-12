@@ -9,6 +9,10 @@
  * computed by the same classifier the export runs, so a category shown ready
  * is one the export accepts. This page does not decide readiness, which
  * account wins, or which mappings match a category (CLAUDE.md pitfall #29).
+ *
+ * Below the mappings, the export history (`GET /finance/export/logs`) lists
+ * every export run, so a Treasurer can see what was exported and whether it
+ * finished beside the settings that shaped it.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -22,6 +26,7 @@ import { EmptyState } from '@/components/ux/EmptyState';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { exportMappingService } from '../services/api';
 import { ExportMappingDialog } from '../components/ExportMappingDialog';
+import { ExportHistorySection } from '../components/ExportHistorySection';
 import { ExportReadinessStatus } from '../types';
 import type { ExportMapping, ExportReadiness, ExportReadinessCategory } from '../types';
 
@@ -33,6 +38,7 @@ const STATUS_LABELS: Record<ExportReadinessStatus, string> = {
   [ExportReadinessStatus.NO_ACCOUNT]: 'No account',
   [ExportReadinessStatus.NO_OFFSET]: 'No paid-from account',
   [ExportReadinessStatus.DUPLICATE_MAPPINGS]: 'More than one mapping',
+  [ExportReadinessStatus.PAYABLE_RECEIVABLE]: 'Payable/receivable account',
 };
 
 const STATUS_COLORS: Record<ExportReadinessStatus, string> = {
@@ -40,6 +46,7 @@ const STATUS_COLORS: Record<ExportReadinessStatus, string> = {
   [ExportReadinessStatus.NO_ACCOUNT]: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
   [ExportReadinessStatus.NO_OFFSET]: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
   [ExportReadinessStatus.DUPLICATE_MAPPINGS]: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  [ExportReadinessStatus.PAYABLE_RECEIVABLE]: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
 };
 
 /** What the Treasurer does about a category in each state. */
@@ -48,6 +55,8 @@ const STATUS_HINTS: Record<ExportReadinessStatus, string> = {
   [ExportReadinessStatus.NO_ACCOUNT]: 'Add a mapping, or name an account on the category.',
   [ExportReadinessStatus.NO_OFFSET]: 'Add the account it is paid from to its mapping.',
   [ExportReadinessStatus.DUPLICATE_MAPPINGS]: 'Delete all but one of its mappings below.',
+  [ExportReadinessStatus.PAYABLE_RECEIVABLE]:
+    "QuickBooks can't import journal lines to Accounts Payable or Receivable without a vendor or customer. Use the bank or card account it is paid from, and an expense account.",
 };
 
 /** The account a category posts to, and whether it or its mapping supplies it. */
@@ -179,8 +188,8 @@ const QuickBooksExportSettingsPage: React.FC = () => {
             {blocking.length === 0
               ? 'Every budget category has both accounts. Exports can post all of them.'
               : blocking.length === 1
-                ? '1 budget category is missing an account. An export that includes its spending is refused until it is fixed.'
-                : `${String(blocking.length)} budget categories are missing an account. An export that includes their spending is refused until they are fixed.`}
+                ? '1 budget category needs its accounts fixed. An export that includes its spending is refused until it is.'
+                : `${String(blocking.length)} budget categories need their accounts fixed. An export that includes their spending is refused until they are.`}
           </p>
         </div>
       )}
@@ -361,6 +370,35 @@ const QuickBooksExportSettingsPage: React.FC = () => {
             </div>
           </div>
         )}
+      </section>
+
+      <ExportHistorySection />
+
+      {/* What QuickBooks itself needs before an import (Intuit, "Import journal entries") */}
+      <section aria-labelledby="import-checklist-heading" className="card space-y-2 p-6">
+        <h2 id="import-checklist-heading" className="text-theme-text-primary text-lg font-semibold">
+          Before you import into QuickBooks Online
+        </h2>
+        <p className="text-theme-text-secondary text-sm">
+          The export is a QuickBooks Online journal-entry file. Import it under Settings › Import data › Journal
+          entries, after setting up QuickBooks as follows:
+        </p>
+        <ul className="text-theme-text-primary list-disc space-y-1 pl-5 text-sm">
+          <li>Every account named here exists in your chart of accounts, spelled the same.</li>
+          <li>
+            Account numbers are turned off while you import (Settings › Account and settings › Advanced › Chart of
+            accounts).
+          </li>
+          <li>
+            &ldquo;Warn if duplicate journal number is used&rdquo; is turned off, since each entry carries its request
+            number.
+          </li>
+          <li>When mapping the file, choose the MM/DD/YYYY date format.</li>
+          <li>
+            Each file holds fewer than 1,000 rows, QuickBooks&apos; limit; a longer period is refused here, so export it
+            in parts.
+          </li>
+        </ul>
       </section>
 
       {dialog && (

@@ -23,7 +23,6 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse
 from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import String, cast, func, or_, select
@@ -111,6 +110,7 @@ from app.services.file_storage_service import (
     FileRules,
     FileStorageService,
     StorageArea,
+    stored_file_response,
 )
 from app.services.guest_check_in_service import GuestCheckInService
 from app.services.integration_services.notification_dispatch import (
@@ -122,6 +122,7 @@ from app.services.upload_scanning import reject_if_malicious
 from app.utils import download_names
 from app.utils.contact_visibility import load_contact_policy
 from app.utils.event_attachments import is_path_in_org
+from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import resolve_scheduling_timezone
 
 router = APIRouter()
@@ -274,7 +275,7 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
     )
 
 
-def _display_name(user) -> Optional[str]:
+def _display_name(user: Optional[User]) -> Optional[str]:
     """Human-readable name for a roster row, falling back to the username.
 
     A member whose first/last names are both blank would otherwise appear as an
@@ -944,6 +945,23 @@ async def update_event_settings(
         )
         if fallback_ids - {str(f) for f in found}:
             raise HTTPException(status_code=400, detail="Position not found")
+
+    # XC-1: the default coordinator is a client-supplied user id that every new
+    # request is then assigned to. apply_default_assignee re-checks it at read
+    # time and skips a foreign one, but it should not be stored to begin with.
+    pipeline_update = updates_dict.get("request_pipeline") or {}
+    if "default_assignee_id" in pipeline_update:
+        try:
+            await assert_in_org(
+                db,
+                User,
+                pipeline_update["default_assignee_id"],
+                current_user.organization_id,
+                allow_none=True,
+                label="default coordinator",
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=safe_error_detail(e))
     for key, value in updates_dict.items():
         if key in EVENT_SETTINGS_DEFAULTS:
             if isinstance(value, dict) and isinstance(current_events.get(key), dict):
@@ -1288,8 +1306,11 @@ async def update_event(
                 event_id=event_id,
                 organization_id=current_user.organization_id,
             )
-            if result:
-                old_event_obj = result[0]
+            # get_event answers a missing event with (None, None), which is a
+            # truthy tuple: test the event itself, and let the update below
+            # report the 404.
+            old_event_obj = result[0] if result else None
+            if old_event_obj is not None:
                 for field in changed_significant:
                     old_values[field] = getattr(old_event_obj, field, None)
                 rsvps_to_notify = [
@@ -2084,8 +2105,8 @@ async def check_in_attendee(
         organization_id=current_user.organization_id,
     )
 
-    if error:
-        raise _event_error(error)
+    if error or rsvp is None:
+        raise _event_error(error or "An unexpected error occurred")
 
     # Get user details
     user_result = await db.execute(select(User).where(User.id == rsvp.user_id))
@@ -2134,8 +2155,8 @@ async def manager_add_attendee(
         notes=attendee_data.notes,
     )
 
-    if error:
-        raise _event_error(error)
+    if error or rsvp is None:
+        raise _event_error(error or "An unexpected error occurred")
 
     # Get user details
     user_result = await db.execute(select(User).where(User.id == rsvp.user_id))
@@ -2274,8 +2295,8 @@ async def override_rsvp_attendance(
         override_data=override_data,
     )
 
-    if error:
-        raise _event_error(error)
+    if error or rsvp is None:
+        raise _event_error(error or "An unexpected error occurred")
 
     # Get user details
     user_result = await db.execute(select(User).where(User.id == rsvp.user_id))
@@ -2442,8 +2463,8 @@ async def record_actual_times(
         ),
     )
 
-    if error:
-        raise _event_error(error)
+    if error or event is None:
+        raise _event_error(error or "An unexpected error occurred")
 
     return _build_event_response(event)
 
@@ -2516,10 +2537,13 @@ async def reopen_attendance(
         organization_id=current_user.organization_id,
     )
 
-    if error:
+    if error or event is None:
         if error == "Event not found":
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
-        raise _event_error(error)
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=error or "An unexpected error occurred",
+            )
+        raise _event_error(error or "An unexpected error occurred")
 
     await log_audit_event(
         db=db,
@@ -2611,8 +2635,8 @@ async def get_qr_check_in_data(
         organization_id=current_user.organization_id,
     )
 
-    if error:
-        raise _event_error(error)
+    if error or data is None:
+        raise _event_error(error or "An unexpected error occurred")
 
     return QRCheckInData(**data)
 
@@ -3009,7 +3033,7 @@ async def _load_event_for_attachment_read(
         .where(Event.id == str(event_id))
         .where(Event.organization_id == str(current_user.organization_id))
     )
-    event = result.scalar_one_or_none()
+    event: Optional[Event] = result.scalar_one_or_none()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
     if event.is_draft and not user_has_permission(current_user, "events.manage"):
@@ -3084,7 +3108,7 @@ async def download_event_attachment(
     )
     extension = download_names.stored_extension(resolved_path)
     tz = await resolve_scheduling_timezone(db, current_user.organization_id)
-    return FileResponse(
+    return stored_file_response(
         path=resolved_path,
         filename=download_names.descriptive_filename(
             download_names.local_day(event.start_datetime, tz),

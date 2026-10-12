@@ -53,7 +53,9 @@ describe('DashboardOrientation', () => {
 
     renderPrompt();
 
-    expect(screen.getByText('Orientation: 1 of 19 tasks done')).toBeInTheDocument();
+    // The total is read from the lesson data so a new lesson step does not break this test.
+    const total = learningPaths.reduce((sum, path) => sum + path.steps.length, 0);
+    expect(screen.getByText(`Orientation: 1 of ${total} tasks done`)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Continue' })).toHaveAttribute('href', '/learning');
   });
 

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
+import type { SkillTest } from '../types/skillsTesting';
 
 // Officer-only controls are gated on training.manage. Selector-aware, because
 // useTimezone also reads this store with a selector.
@@ -208,19 +209,10 @@ const mockFullyScoredTest = {
   ],
 };
 
-let currentMockTest:
-  | typeof mockCompletedTest
-  | typeof mockInProgressTest
-  | typeof mockInProgressPracticeTest
-  | typeof mockTestWithSections
-  | typeof mockTimedTest
-  | typeof mockChecklistTest
-  | typeof mockScoredStepTest
-  | typeof mockFullyScoredTest
-  | typeof mockVoidedTest
-  | typeof mockCancelledTest
-  | typeof mockUnverifiedTimingTest
-  | null = null;
+// `template_sections` stays loosely typed: the fixtures above give their
+// sections only the fields the page reads, not the ids a saved template has.
+let currentMockTest: (Omit<SkillTest, 'template_sections'> & { template_sections?: Record<string, unknown>[] }) | null =
+  null;
 // The page reads the running flag through getState() as well as through the
 // hook, so the mock has to hold it like the real store does.
 let mockTimerRunning = false;

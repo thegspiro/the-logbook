@@ -34,13 +34,12 @@ class TestMeetingTypeValidation:
                 title="T", meeting_type="bogus", meeting_date=date(2026, 8, 9)
             )
 
-    def test_meeting_rejects_minutes_only_type(self):
-        # 'trustee'/'executive' are MinutesMeetingType values, NOT MeetingType —
-        # a Meeting must reject them (they'd 500 at the Meeting ENUM column).
-        with pytest.raises(ValidationError):
-            MeetingCreate(
-                title="T", meeting_type="trustee", meeting_date=date(2026, 8, 9)
-            )
+    def test_meeting_accepts_every_minutes_type(self):
+        # W51-4: meetings.meeting_type was widened to the minutes' eight
+        # types, so a closed executive session can be recorded as a meeting.
+        for t in ("trustee", "executive", "annual"):
+            m = MeetingCreate(title="T", meeting_type=t, meeting_date=date(2026, 8, 9))
+            assert m.meeting_type == t
 
     def test_meeting_update_rejects_unknown(self):
         with pytest.raises(ValidationError):

@@ -74,22 +74,22 @@ Documents**.
 
 Documents are organized into folders. The system provides default folders, and administrators can create additional ones.
 
-**System Folders** (created automatically):
+**System Folders** (created automatically). A module's folder opens to that
+module's rights, not to document managers; only a full administrator sees every
+folder:
 
-- Meeting Minutes
-- SOPs & Procedures
-- Policies
-- Forms & Templates
-- Reports
-- Training Materials
-- General Documents
-- Member Files
-- Apparatus Files
-- Facility Files
-- Event Attachments
-- **Member Separations** — leadership only. Property-return reports are filed
-  here, because each names a departed member, the reason for the separation and
-  their home address.
+| Folder                                                                                      | Who can open it                                                                                                                                      |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Meeting Minutes, SOPs & Procedures, Policies, Forms & Templates, Reports, General Documents | anyone with `documents.view`                                                                                                                         |
+| Training Materials                                                                          | `training.view` or `training.manage`                                                                                                                 |
+| Event Attachments                                                                           | `events.view`, `events.edit` or `events.manage`                                                                                                      |
+| Apparatus Files                                                                             | `apparatus.view`, `apparatus.edit` or `apparatus.manage`; photos and documents are uploaded on the vehicle's page                                    |
+| Facility Files                                                                              | `facilities.view_sensitive`, `facilities.edit` or `facilities.manage`                                                                                |
+| Finance (and Receipts)                                                                      | `finance.view`, `finance.manage` or `finance.approve`; a member opens their own receipt on the request itself                                        |
+| Member Separations                                                                          | `members.manage`. Property-return reports are filed here, because each names a departed member, the reason for the separation and their home address |
+| Member Files                                                                                | each member sees their own folder only                                                                                                               |
+
+A folder marked **Document managers only** opens to `documents.manage`.
 
 ### Creating Folders
 
@@ -106,6 +106,32 @@ Documents are organized into folders. The system provides default folders, and a
 > **Corrected 2026-10-04.** Step 3 used to offer a parent-folder selector. There
 > is none: a folder is created inside the folder you have open, which the
 > dialog names as its **Location**.
+
+### Managing a Folder _(2026-10-11)_
+
+**Required Permission:** `documents.manage`
+
+Each folder card carries a **Manage folder** (gear) button. It opens the
+folder's settings:
+
+- **Name** and **Description**.
+- **Who can open it** — **Organization** (every member who can open
+  Documents), **Leadership** (officers who manage the department's documents),
+  or **Specific roles** (tick one or more positions; **Save** waits until at
+  least one is ticked). The card then reads **Leadership only** or **Specific
+  roles only**. A personal folder under Member Files keeps its owner-only
+  access and is not offered these choices.
+- **Move** — browse to the folder it should sit in (or stay at **Top level**),
+  click **Move here**, then **Save**. The folder itself is not offered as a
+  destination, so it cannot be moved inside itself.
+- **Delete folder…** — asks first, naming what goes with it: the documents
+  directly in it and how many subfolders, with everything inside them. The files
+  are deleted too and it cannot be undone. **Keep it** backs out.
+
+**System folders** (the list above) keep their name and place and cannot be
+deleted: the module that made each one files into it. Their description and who
+can open them can still be changed. The server refuses a rename, move or delete
+of a system folder even from the API.
 
 ---
 
@@ -286,11 +312,12 @@ Select a template to start with a pre-configured form that you can customize.
 
 ---
 
-> **Screenshot needed:**
-> _[Forms manager (`forms.manage`) at `/forms`, **Starter Templates** tab: the
-> template grid showing the **Public** badge and the orange "Sends responses to
-> Membership" / "Sends responses to Events" hints on the two public templates.
-> Do not press **Use Template**, which creates a form.]_
+<!-- Screenshot needed:
+_[Forms manager (`forms.manage`) at `/forms`, **Starter Templates** tab: the
+template grid showing the **Public** badge and the orange "Sends responses to
+Membership" / "Sends responses to Events" hints on the two public templates.
+Do not press **Use Template**, which creates a form.]_
+-->
 
 ## Publishing and Sharing Forms
 
@@ -320,6 +347,13 @@ member until you change it**:
 5. Share the URL or QR code. Responses sent through the public link show a
    **globe icon** in your submissions list.
 
+> **Publish warning _(2026-10-11)_.** If a public form files event requests but
+> the department has turned off **accept public requests** in Events settings,
+> publishing would file nothing. **Publish** now says so first, in a "Publish
+> this form?" dialog with **Publish anyway** and **Not yet**. A form with no
+> such problem publishes straight away. A forms manager sees the warning even
+> without Events settings access, because the server checks it.
+
 > **"No login required" was not true until 2026-09-29.** The Share dialog
 > promised it, but every form is created requiring a sign-in and no screen could
 > change that, so a signed-out visitor who filled in a public form was refused
@@ -333,22 +367,23 @@ member until you change it**:
 > that returns them to the form afterwards. The same notice appears if a
 > submission is refused for want of a sign-in.
 
-> **Screenshot needed:**
-> _[A public form at `/f/<slug>` opened in a signed-out browser, for a form
-> whose **Allow submissions without signing in** is off: the **Sign in to
-> submit this form** notice above the first question, naming the department,
-> with its **Sign in** button.]_
+<!-- Screenshot needed:
+_[A public form at `/f/<slug>` opened in a signed-out browser, for a form
+whose **Allow submissions without signing in** is off: the **Sign in to
+submit this form** notice above the first question, naming the department,
+with its **Sign in** button.]_
+-->
 
-> **There is no "one submission per person" setting to switch on.** The form
-> builder has no control for it, and every form a department creates allows
-> multiple submissions — so a public form will offer _Submit Another Response_
-> after each one. A form that was set to one submission per person through the
-> API is held to it on the public link, even when two submissions arrive at the
-> same moment; the limit does not apply to submissions made from inside the
-> app. Such a form always needs a signed-in member, because that is the only way
-> to tell whether someone has already answered, so its **Allow submissions
-> without signing in** box is greyed out with the reason under it. See
-> [Known Limitations](../KNOWN_LIMITATIONS.md).
+> **One submission per person** _(2026-10-11)_. Tick **One submission per
+> person** when creating a form, or at the top of the form editor's **Builder**
+> tab, to let each member answer once. The limit holds everywhere a member can
+> submit — inside the app and through the public link — and a member who
+> answered one way is refused the other with _"You have already submitted this
+> form"_, even when two submissions arrive at the same moment. Leave it unticked
+> for anything members fill in repeatedly (a shift report, a recurring
+> acknowledgment). Such a form always needs a signed-in member, because that is
+> the only way to tell whether someone has already answered, so its **Allow
+> submissions without signing in** box is greyed out with the reason under it.
 
 **Each public form takes a limited number of submissions a day.** The ceiling
 is a server setting (`PUBLIC_FORM_DAILY_LIMIT`, 500 per form per day unless the
@@ -427,11 +462,12 @@ all read** on the row clears the whole category, including any not yet loaded.
 A pinned notification never stacks. On the dashboard's **My Updates** card a
 stack is one row that opens this inbox.
 
-> **Screenshot needed:**
-> _[Notifications → **My Notifications** with a collapsed stack (for example
-> "3 attendance validations", **Latest:** line, **3 unread** badge and **Mark
-> all read**) above single notifications, then the same stack expanded showing
-> its individual rows.]_
+<!-- Screenshot needed:
+_[Notifications → **My Notifications** with a collapsed stack (for example
+"3 attendance validations", **Latest:** line, **3 unread** badge and **Mark
+all read**) above single notifications, then the same stack expanded showing
+its individual rows.]_
+-->
 
 ![Notification rules and logs page with summary cards and the rules list](./images/07-08-notification-rules.png)
 
@@ -474,11 +510,12 @@ Rules can be enabled/disabled individually with toggle switches. The summary car
 
 ![Create notification rule modal with its trigger and channel fields](./images/07-10-create-rule-modal.png)
 
-> **Screenshot needed:**
-> _[Administrator with `notifications.manage` at `/notifications?tab=rules`:
-> press **Add Rule**, name it "Gear request notices" and choose the trigger
-> **Equipment Request Update**, so its note is visible at the bottom of the dialog. Do
-> not press **Create Rule**.]_
+<!-- Screenshot needed:
+_[Administrator with `notifications.manage` at `/notifications?tab=rules`:
+press **Add Rule**, name it "Gear request notices" and choose the trigger
+**Equipment Request Update**, so its note is visible at the bottom of the dialog. Do
+not press **Create Rule**.]_
+-->
 
 **[SCREENSHOT — REPLACE `07-10-create-rule-modal.png`.** The trigger dropdown now also offers **Equipment Request Update** _(#2767)_, and the note under it reads "To stop it for the whole department, switch off **every** rule for this trigger — any one left on keeps it running. Members set their own email and text preferences separately." _(#2791)_. Re-take Create Notification Rule with **Event Reminder** chosen and that note in frame; never save**]**
 
@@ -584,14 +621,20 @@ member's email preference or by consent (a member can never opt out of being
 informed of a department notice); important/urgent messages carry an
 `[IMPORTANT]`/`[URGENT]` subject prefix.
 
-**Email is attempted, not guaranteed.** Three conditions can stop it, none of
-which is reported back to the author:
+**Email is attempted, and retried when it does not go out** _(2026-10-11)_:
 
 - **No address on file.** Members without an email address are skipped.
-- **Hourly cap.** A department sends at most 30 message emails per hour; once
-  that cap is reached, later messages in the same hour are posted in-app but
-  their email goes out to nobody.
-- **Delivery failures.** Provider errors are logged, not surfaced in the UI.
+- **Hourly cap.** A department sends at most 30 message emails per hour. A
+  message held back by the cap is queued for each member and sent on a retry
+  once the hour has room.
+- **Delivery failures.** A send the provider refuses, or cannot be reached
+  for, is retried five times — 5, 10, 20, 40 and 80 minutes apart. After that
+  it is marked failed.
+
+The **acknowledgment report** shows each member's email (and text) when it has
+not simply gone out: _"Email not sent yet, trying again …"_ while a retry is
+pending, and _"Email failed — …"_ in red once the retries are spent. A failed
+email is the one to follow up by hand.
 
 Treat the in-app inbox and the acknowledgment report — not the email — as the
 record that a member was notified. For anything time-critical, use **Require
@@ -727,24 +770,27 @@ Holders of `settings.manage` or `organization.update_settings` can turn on
 own switches say. It works in one direction only: an email the system itself
 requires cannot be made optional. Each change is written to the audit log.
 
-> **Screenshot needed:**
-> _[Communications → **Member Emails & Texts** as an administrator: the **Always
-> sent** cards, then **Members can turn off** with one card's **Require for every
-> member** switch on and badged **Required by your department**, and the top of
-> the **Text messages** section.]_
+<!-- Screenshot needed:
+_[Communications → **Member Emails & Texts** as an administrator: the **Always
+sent** cards, then **Members can turn off** with one card's **Require for every
+member** switch on and badged **Required by your department**, and the top of
+the **Text messages** section.]_
+-->
 
-> **Screenshot needed:**
-> _[Settings → **Notifications** as a member: **Email Notifications** on, the
-> **Emails you can turn off** list with **Event reminders** switched off, and
-> **Always emailed to you** below it.]_
+<!-- Screenshot needed:
+_[Settings → **Notifications** as a member: **Email Notifications** on, the
+**Emails you can turn off** list with **Event reminders** switched off, and
+**Always emailed to you** below it.]_
+-->
 
-> **Screenshot needed:**
-> _[Administrator with `settings.manage` at `/communications/member-emails`:
-> the full page with **Always sent**, **Members can turn off** and **Text
-> messages** all visible. Before capturing, switch on **Require for every
-> member** for one optional email (e.g. **Quartermaster duties**) so its card
-> shows **Required by your department** beside cards reading **On unless turned
-> off**; switch it back off afterwards.]_
+<!-- Screenshot needed:
+_[Administrator with `settings.manage` at `/communications/member-emails`:
+the full page with **Always sent**, **Members can turn off** and **Text
+messages** all visible. Before capturing, switch on **Require for every
+member** for one optional email (e.g. **Quartermaster duties**) so its card
+shows **Required by your department** beside cards reading **On unless turned
+off**; switch it back off afterwards.]_
+-->
 
 ### Edge Cases
 
@@ -825,13 +871,14 @@ created closed, because an open box needs a reviewer.
 To close a box, untick **Accepting submissions**. Its existing submissions stay
 readable by its reviewers.
 
-> **Screenshot needed:**
-> _[Holder of `suggestions.manage` (e.g. the demo chief) at
-> `/communications/suggestion-boxes` after a fresh demo seed: the **Suggestion
-> boxes** list showing the default **Compliance** box (submitter chooses,
-> follow-up allowed, its submission count, "Reviewers: Compliance Officer"),
-> **Training ideas** with its reviewers and any "Also notified:" line, and the
-> **Edit** and **Delete** buttons on each row. Nothing saved or deleted.]_
+<!-- Screenshot needed:
+_[Holder of `suggestions.manage` (e.g. the demo chief) at
+`/communications/suggestion-boxes` after a fresh demo seed: the **Suggestion
+boxes** list showing the default **Compliance** box (submitter chooses,
+follow-up allowed, its submission count, "Reviewers: Compliance Officer"),
+**Training ideas** with its reviewers and any "Also notified:" line, and the
+**Edit** and **Delete** buttons on each row. Nothing saved or deleted.]_
+-->
 
 To remove a box you no longer need, press **Delete** on it:
 
@@ -842,6 +889,50 @@ To remove a box you no longer need, press **Delete** on it:
   asks you to type the box's name first.
 
 ![The Delete "Training ideas"? dialog: the warning giving how many submissions the box holds and that deleting removes them all, the Archive instead button, and the field for typing the box's name, with Delete permanently still disabled](./images/07-23-suggestion-box-delete-dialog.png)
+
+### Asking questions first, and sending answers to another box _(2026-10-11)_
+
+A box can ask its own **Questions** before the title and details. In the box's
+edit dialog (**Administration → Forms & Comms → Suggestion Boxes**), the
+**Questions** section adds one question at a time: its wording, an **Answer
+type**, optional help text, and whether it is required. Reorder with the arrows.
+
+- **Show only after this question.** A follow-up can appear only when an earlier
+  answer matches a rule (**is**, **is not**, **includes**, **is answered**,
+  **is not answered**). Removing a question warns you how many follow-ups hang
+  off it.
+- **Where an option sends the submission.** On a dropdown or single-choice
+  question, each option can send the submission to another box (the default is
+  **Keep in this box**). Only the destination's reviewers and watchers are told,
+  and only they can read it. Reviewers there see the answers with their question
+  wording.
+
+**Answer types _(2026-10-11)_.** Besides text and choices, a question can be a
+**Rating** (1 to 5, shown to reviewers as "4 / 5"), a **Time** (24-hour
+HH:MM, kept as entered), **Pick a member** or **Pick a vehicle**. The member and
+vehicle lists come from your own department; the name is saved with the answer,
+so a reviewer can still read it after the member leaves or the vehicle is
+retired. A department with no vehicles on file skips vehicle questions instead of
+blocking the form. A follow-up can also appear when a rating or number is **at
+least** or **at most** a value (forms with number fields get the same two rules).
+
+Rules that protect the submitter: a route must stay inside your department and
+cannot point at the box itself; a box that **requires anonymity** cannot route to
+a box that refuses it, and anonymity holds wherever an answer sends the
+submission; a route to a **closed** box is ignored and the submission stays where
+it was sent; deleting a box removes routes that point at it.
+
+**The Compliance box now asks two questions.** Every department's seeded
+Compliance box asks a required **What kind of concern is this?** (policy or
+procedure, safety, training record, regulatory or legal, other). Choosing safety
+adds **Is anyone at immediate risk?**, whose help text says the box is not
+watched around the clock. Neither answer routes anywhere. An existing Compliance
+box gets the question only if nobody has edited it; a box you changed is left
+alone.
+
+> **Screenshot needed:** the box dialog's **Questions** section with one routed
+> dropdown; the member's submit form showing a follow-up question; a reviewer's
+> view of a submission with its intake answers.
 
 ### Submitting a suggestion (every member)
 
@@ -998,10 +1089,11 @@ list. The tab strip scrolls the tab you are on into view, and two tabs take
 shorter names — **Mine** for My submissions and **Follow up** for Follow up with
 a key — so all of them usually fit.
 
-> **Screenshot needed:**
-> _[Suggestions → **Review** on a phone, a submission open: its title and
-> details at the top of the screen, then the **Disposition** and **Internal
-> note**, with the mobile bottom navigation below.]_
+<!-- Screenshot needed:
+_[Suggestions → **Review** on a phone, a submission open: its title and
+details at the top of the screen, then the **Disposition** and **Internal
+note**, with the mobile bottom navigation below.]_
+-->
 
 ### Edge cases
 
@@ -1016,11 +1108,12 @@ a key — so all of them usually fit.
 
 ---
 
-> **Screenshot needed:**
-> _[Ordinary member at `/suggestions`, **Submit** tab, with the **Compliance**
-> box chosen: its description ("Report a compliance concern … Reviewed by the
-> Compliance Officer."), the anonymity hint and the follow-up hint visible.
-> Nothing typed or submitted.]_
+<!-- Screenshot needed:
+_[Ordinary member at `/suggestions`, **Submit** tab, with the **Compliance**
+box chosen: its description ("Report a compliance concern … Reviewed by the
+Compliance Officer."), the anonymity hint and the follow-up hint visible.
+Nothing typed or submitted.]_
+-->
 
 ## External Integrations
 

@@ -6,6 +6,10 @@ let readers: FakeNDEFReader[] = [];
 let scanBehavior: 'resolve' | 'reject' = 'resolve';
 let scanRejection: Error | null = null;
 
+/** A reading event as the browser delivers it: a real Event carrying the tag. */
+const readingEvent = (serialNumber: string, records: NDEFRecord[]): NDEFReadingEvent =>
+  Object.assign(new Event('reading'), { serialNumber, message: { records } });
+
 class FakeNDEFReader {
   onreading: ((event: NDEFReadingEvent) => void) | null = null;
   onreadingerror: ((event: Event) => void) | null = null;
@@ -36,12 +40,7 @@ class FakeNDEFReader {
   /** Simulates a tag being tapped, carrying a single url record. */
   emitUrl(value: string) {
     const bytes = new TextEncoder().encode(value);
-    this.onreading?.({
-      serialNumber: '00:11:22',
-      message: {
-        records: [{ recordType: 'url', data: new DataView(bytes.buffer) }],
-      },
-    } as NDEFReadingEvent);
+    this.onreading?.(readingEvent('00:11:22', [{ recordType: 'url', data: new DataView(bytes.buffer) }]));
   }
 }
 
@@ -102,10 +101,7 @@ describe('useNfcScanner', () => {
     });
 
     act(() => {
-      readers[0]?.onreading?.({
-        serialNumber: '1',
-        message: { records: [{ recordType: 'mime' }] },
-      } as NDEFReadingEvent);
+      readers[0]?.onreading?.(readingEvent('1', [{ recordType: 'mime' }]));
     });
 
     expect(onRead).not.toHaveBeenCalled();
@@ -125,10 +121,7 @@ describe('useNfcScanner', () => {
     });
 
     act(() => {
-      readers[0]?.onreading?.({
-        serialNumber: '04:a2:24:5b',
-        message: { records: [] },
-      } as unknown as NDEFReadingEvent);
+      readers[0]?.onreading?.(readingEvent('04:a2:24:5b', []));
     });
 
     expect(onTag).toHaveBeenCalledWith({ serialNumber: '04:a2:24:5b', payload: null });

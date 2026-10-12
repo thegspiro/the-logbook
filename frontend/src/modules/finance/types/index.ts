@@ -15,6 +15,13 @@ export const FiscalYearStatus = {
 } as const;
 export type FiscalYearStatus = (typeof FiscalYearStatus)[keyof typeof FiscalYearStatus];
 
+export const BudgetAmendmentStatus = {
+  PENDING: 'pending',
+  CONFIRMED: 'confirmed',
+  REJECTED: 'rejected',
+} as const;
+export type BudgetAmendmentStatus = (typeof BudgetAmendmentStatus)[keyof typeof BudgetAmendmentStatus];
+
 export const PurchaseRequestStatus = {
   DRAFT: 'draft',
   SUBMITTED: 'submitted',
@@ -219,12 +226,20 @@ export interface FiscalYear {
   requestsOpen?: boolean;
   /** Where a draft year's budget is on its way to adoption; null unless a draft. */
   planningStage?: BudgetPlanningStage | null;
-  /** The board's adoption, recorded when the draft was activated (`YYYY-MM-DD`). */
+  /** The board's adoption, recorded from board review (`YYYY-MM-DD`). */
   adoptedOn?: string | null;
   adoptionReference?: string | null;
   adoptionNotes?: string | null;
   adoptionRecordedBy?: string | null;
   adoptionRecordedAt?: string | null;
+  /** When the year-end close began; a closed year that is not locked is closing. */
+  closingStartedAt?: string | null;
+  /** The active year's end date has passed and its close has not begun — backend-decided. */
+  closeDue?: boolean;
+  /** The Treasurer's reconciliation sign-off that locked the year. */
+  lockedBy?: string | null;
+  lockedAt?: string | null;
+  lockNotes?: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -233,20 +248,38 @@ export interface FiscalYear {
 /**
  * A draft year's planning stage. Owners request amounts, then the Treasurer
  * closes the draft for senior leadership's review, then it goes before the
- * board; adoption is activation.
+ * board. Recording the board's vote makes it `adopted`, where it waits for
+ * the Treasurer to start the year.
  */
 export const BudgetPlanningStage = {
   REQUESTS: 'requests',
   LEADERSHIP_REVIEW: 'leadership_review',
   BOARD_REVIEW: 'board_review',
+  ADOPTED: 'adopted',
 } as const;
 export type BudgetPlanningStage = (typeof BudgetPlanningStage)[keyof typeof BudgetPlanningStage];
 
-/** `POST /finance/fiscal-years/{id}/activate` for a draft: the board's vote. */
+/** `POST /finance/fiscal-years/{id}/adopt`: the board's vote. */
 export interface FiscalYearAdoptionPayload {
   adoptedOn: string;
   adoptionReference: string;
   adoptionNotes?: string | undefined;
+}
+
+/** `POST /finance/fiscal-years/{id}/lock`: the Treasurer's reconciliation sign-off. */
+export interface FiscalYearLockPayload {
+  notes: string;
+}
+
+/** A request still in flight that stops a closing year from locking. */
+export interface FiscalYearOpenItem {
+  /** For `budget_amendment`, `entityId` is the budget line, not the amendment. */
+  kind: 'purchase_request' | 'expense_report' | 'check_request' | 'budget_amendment';
+  entityId: string;
+  number: string;
+  description: string;
+  status: string;
+  amount?: number | string | null;
 }
 
 export interface BudgetCategory {
@@ -297,9 +330,18 @@ export interface Budget {
    * Derived by the backend, never stored; `amountBudgeted` is the current budget.
    */
   originalAmount?: MonetaryAmount;
-  /** The sum of the line's amendments. */
+  /** The sum of the line's confirmed amendments. */
   amendmentsTotal?: MonetaryAmount;
+  /** Confirmed amendments only. */
   amendmentCount?: number;
+  /** Amendments entered and awaiting a second officer's confirmation. */
+  pendingAmendmentCount?: number;
+  /**
+   * Whether `amountBudgeted` may be edited directly. False from board review
+   * on, and in an active, closing or locked year: from then the amount moves
+   * only through a confirmed amendment.
+   */
+  amountEditable?: boolean;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -360,6 +402,10 @@ export interface BudgetTransactionPage {
 /**
  * Extra money leadership approved for a budget line — an audit record.
  *
+ * Entered `pending`; it moves the line's budget only once a second officer
+ * (`finance.budget_review` or `finance.manage`, never whoever entered it)
+ * confirms it. A rejected one is kept, with the reason, and moves nothing.
+ *
  * A mistaken amendment is corrected by a reversing entry, never edited: a
  * row with a negative `amount` (`isReversal`) naming the amendment it
  * cancels in `reversesAmendmentId`. The reversed amendment carries the
@@ -384,6 +430,19 @@ export interface BudgetAmendment {
   reversedByAmendmentId?: string | null;
   reversedAt?: string | null;
   reversedByName?: string | null;
+  /** On a reversed amendment: whether its reversal is pending or confirmed. */
+  reversalStatus?: BudgetAmendmentStatus | null;
+  status?: BudgetAmendmentStatus;
+  /** Who confirmed or rejected it, when, and (on a rejection) why. */
+  decidedBy?: string | null;
+  decidedByName?: string | null;
+  decidedAt?: string | null;
+  decisionNote?: string | null;
+}
+
+/** `POST /finance/budgets/:id/amendments/:amendmentId/reject`. */
+export interface BudgetAmendmentRejectPayload {
+  note: string;
 }
 
 /** `POST /finance/budgets/:id/amendments`. Every field is required. */
@@ -761,6 +820,18 @@ export interface UnroutedApproval {
   entityAmount: MonetaryAmount;
   requesterName: string;
   submittedAt: string;
+  /** Held for a second, different approver by the dual-approval threshold. */
+  awaitingSecondApproval?: boolean;
+  firstApprovedBy?: string | null;
+}
+
+/** `GET /finance/settings`: the finance rules the server applies. */
+export interface FinanceSettings {
+  /**
+   * Requests of this amount or more need two different approvers; null is off.
+   * Changed through organization settings (`settings.manage`), not here.
+   */
+  dualApprovalThreshold: MonetaryAmount | null;
 }
 
 export interface PurchaseRequest {
@@ -779,12 +850,26 @@ export interface PurchaseRequest {
   priority: PurchaseRequestPriority;
   approvedBy?: string;
   approvedAt?: string;
+  /**
+   * A first approval held for a second, different approver by the
+   * department's dual-approval threshold, and whether the request is waiting
+   * on that second approval (detail responses only).
+   */
+  firstApprovedBy?: string | null;
+  firstApprovedAt?: string | null;
+  awaitingSecondApproval?: boolean;
   denialReason?: string;
   orderedAt?: string;
   receivedAt?: string;
   paidAt?: string;
+  /** When a complete QuickBooks export last carried this payment. */
+  qbExportedAt?: string | null;
   notes?: string;
-  receiptUrl?: string;
+  /** A typed link; the server passes it on only if it is HTTP(S). */
+  receiptUrl?: string | null;
+  /** The uploaded receipt, opened through `receiptFileUrl`. */
+  receiptDocumentId?: string | null;
+  receiptFileUrl?: string | null;
   apparatusId?: string;
   facilityId?: string;
   createdAt: string;
@@ -800,7 +885,9 @@ export interface ExpenseLineItem {
   amount: MonetaryAmount;
   dateIncurred: string;
   expenseType: ExpenseType;
-  receiptUrl?: string;
+  receiptUrl?: string | null;
+  receiptDocumentId?: string | null;
+  receiptFileUrl?: string | null;
   merchant?: string;
   createdAt: string;
 }
@@ -817,9 +904,19 @@ export interface ExpenseReport {
   status: ExpenseReportStatus;
   approvedBy?: string;
   approvedAt?: string;
+  /**
+   * A first approval held for a second, different approver by the
+   * department's dual-approval threshold, and whether the request is waiting
+   * on that second approval (detail responses only).
+   */
+  firstApprovedBy?: string | null;
+  firstApprovedAt?: string | null;
+  awaitingSecondApproval?: boolean;
   denialReason?: string;
   paidAt?: string;
   paymentMethod?: string;
+  /** When a complete QuickBooks export last carried this payment. */
+  qbExportedAt?: string | null;
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -842,9 +939,22 @@ export interface CheckRequest {
   status: CheckRequestStatus;
   approvedBy?: string;
   approvedAt?: string;
+  /**
+   * A first approval held for a second, different approver by the
+   * department's dual-approval threshold, and whether the request is waiting
+   * on that second approval (detail responses only).
+   */
+  firstApprovedBy?: string | null;
+  firstApprovedAt?: string | null;
+  awaitingSecondApproval?: boolean;
   denialReason?: string;
   checkNumber?: string;
   checkDate?: string;
+  voidedAt?: string | null;
+  /** When a complete QuickBooks export last carried this payment. */
+  qbExportedAt?: string | null;
+  /** When the reversing entry for a void went to QuickBooks. */
+  qbVoidExportedAt?: string | null;
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -886,6 +996,51 @@ export interface MemberDues {
   waivedAt?: string;
   waiveReason?: string;
   notes?: string;
+  /** The member's display name. Sent by the list endpoint only. */
+  memberName?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** `POST /finance/dues-schedules`. Blank optional fields are omitted. */
+export interface DuesScheduleCreatePayload {
+  name: string;
+  amount: string;
+  frequency: DuesFrequency;
+  /** UTC instant of the due date. */
+  dueDate: string;
+  notes?: string | undefined;
+}
+
+/** `PUT /finance/dues-schedules/:id`. Omitted leaves a field alone; `null` clears it. */
+export interface DuesScheduleUpdatePayload {
+  name?: string;
+  amount?: string;
+  frequency?: DuesFrequency;
+  dueDate?: string;
+  isActive?: boolean;
+  notes?: string | null;
+}
+
+/** `PUT /finance/dues/:id` — appends one payment to the member's ledger. */
+export interface DuesPaymentPayload {
+  amountPaid: string;
+  paymentMethod?: string | undefined;
+  transactionReference?: string | undefined;
+  notes?: string | undefined;
+}
+
+/** One payment in a member's dues ledger (`GET /finance/dues/:id/payments`). */
+export interface DuesPayment {
+  id: string;
+  organizationId: string;
+  memberDuesId: string;
+  amount: MonetaryAmount;
+  paymentMethod?: string | null;
+  transactionReference?: string | null;
+  notes?: string | null;
+  receivedAt: string;
+  recordedBy?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -944,6 +1099,8 @@ export const ExportReadinessStatus = {
   NO_ACCOUNT: 'no_account',
   NO_OFFSET: 'no_offset',
   DUPLICATE_MAPPINGS: 'duplicate_mappings',
+  /** Posts to Accounts Payable or Receivable, which QuickBooks' import needs a Name for. */
+  PAYABLE_RECEIVABLE: 'payable_receivable',
 } as const;
 export type ExportReadinessStatus = (typeof ExportReadinessStatus)[keyof typeof ExportReadinessStatus];
 
@@ -974,7 +1131,12 @@ export interface ExportLog {
   recordCount: number;
   fileFormat: string;
   exportedBy: string;
+  exportedByName?: string | null;
   exportedAt: string;
+  /** `pending`, `successful`, `partial` (some rows delivered) or `failed`. */
+  status: string;
+  errorMessage?: string | null;
+  completedAt?: string | null;
 }
 
 export interface FinanceDashboard {

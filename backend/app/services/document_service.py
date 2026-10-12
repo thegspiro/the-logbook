@@ -14,7 +14,13 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.document import SYSTEM_FOLDERS, Document, DocumentFolder, DocumentType
+from app.models.document import (
+    SYSTEM_FOLDERS,
+    Document,
+    DocumentFolder,
+    DocumentType,
+    system_folder_fields,
+)
 from app.models.minute import MeetingMinutes, MinutesMeetingType, MinutesStatus
 from app.models.user import Organization
 
@@ -30,7 +36,7 @@ class DocumentService:
     # ============================================
 
     async def initialize_system_folders(
-        self, organization_id: UUID, created_by: UUID
+        self, organization_id: UUID | str, created_by: UUID | str
     ) -> List[DocumentFolder]:
         """Create any system folders for an organization that don't exist yet"""
         # Locked before the existence check so this can't race
@@ -87,8 +93,7 @@ class DocumentService:
                 folder = DocumentFolder(
                     organization_id=str(organization_id),
                     created_by=str(created_by),
-                    is_system=True,
-                    **folder_def,
+                    **system_folder_fields(folder_def["slug"]),
                 )
                 self.db.add(folder)
             await self.db.commit()
@@ -96,7 +101,7 @@ class DocumentService:
         return await self.list_folders(organization_id)
 
     async def list_folders(
-        self, organization_id: UUID, parent_id: Optional[str] = None
+        self, organization_id: UUID | str, parent_id: Optional[str] = None
     ) -> List[DocumentFolder]:
         """List folders for an organization"""
         query = select(DocumentFolder).where(
@@ -112,7 +117,7 @@ class DocumentService:
         return list(result.scalars().all())
 
     async def get_folder_by_slug(
-        self, slug: str, organization_id: UUID
+        self, slug: str, organization_id: UUID | str
     ) -> Optional[DocumentFolder]:
         """Get a folder by slug"""
         result = await self.db.execute(
@@ -128,7 +133,7 @@ class DocumentService:
     # ============================================
 
     async def get_document(
-        self, document_id: str, organization_id: UUID
+        self, document_id: str, organization_id: UUID | str
     ) -> Optional[Document]:
         """Get a document by ID"""
         result = await self.db.execute(
@@ -144,7 +149,10 @@ class DocumentService:
     # ============================================
 
     async def publish_minutes(
-        self, minutes: MeetingMinutes, organization_id: UUID, published_by: UUID
+        self,
+        minutes: MeetingMinutes,
+        organization_id: UUID | str,
+        published_by: UUID | str,
     ) -> Document:
         """
         Publish approved meeting minutes as a formatted HTML document

@@ -23,6 +23,7 @@ from app.models.finance import (
     PurchaseRequestPriority,
 )
 from app.schemas.base import UTCResponseBase
+from app.utils.external_url import safe_external_url, validate_external_http_url
 
 # applies_to / step_type / approver_type / frequency / expense_type / mapping_type /
 # priority map to strict MySQL ENUM columns, but were typed as free str and stored
@@ -117,14 +118,25 @@ class FiscalYearResponse(UTCResponseBase):
     # A draft year in the requests stage whose deadline (if any) has not
     # passed in the org's timezone — requests_open decides it.
     requests_open: bool = False
-    # requests, leadership_review or board_review; null unless a draft.
+    # requests, leadership_review, board_review or adopted; null unless a
+    # draft.
     planning_stage: Optional[str] = None
-    # The board's adoption, recorded when the draft was activated.
+    # The board's adoption, recorded from board review.
     adopted_on: Optional[date] = None
     adoption_reference: Optional[str] = None
     adoption_notes: Optional[str] = None
     adoption_recorded_by: Optional[str] = None
     adoption_recorded_at: Optional[datetime] = None
+    # Set when the year-end close began; a closed year without the lock is in
+    # its closing period.
+    closing_started_at: Optional[datetime] = None
+    # The active year's end date has passed on the department's calendar and
+    # its close has not been begun.
+    close_due: bool = False
+    # The Treasurer's reconciliation sign-off that locked the year.
+    locked_by: Optional[str] = None
+    locked_at: Optional[datetime] = None
+    lock_notes: Optional[str] = None
     created_by: str
     created_at: datetime
     updated_at: datetime
@@ -138,27 +150,61 @@ class FiscalYearStageChange(BaseModel):
     stage: str
 
     _check_stage = field_validator("stage")(
-        _enum_check(("requests", "leadership_review", "board_review"), "stage")
+        _enum_check({"requests", "leadership_review", "board_review"}, "stage")
     )
 
 
-class FiscalYearActivate(BaseModel):
-    """The board's adoption, required to activate a draft year.
-
-    Optional so re-activating a year that is not a draft needs no body; the
-    service refuses a draft without the date and reference.
-    """
+class FiscalYearAdoption(BaseModel):
+    """The board's adoption of a draft year's budget."""
 
     model_config = _REQUEST_CONFIG
 
-    adopted_on: Optional[date] = None
-    adoption_reference: Optional[str] = Field(None, max_length=500)
+    adopted_on: date
+    adoption_reference: str = Field(..., max_length=500)
     adoption_notes: Optional[str] = Field(None, max_length=4000)
 
-    @field_validator("adoption_reference", "adoption_notes")
+    @field_validator("adoption_reference")
+    @classmethod
+    def _reference_required(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Enter the motion or minutes reference.")
+        return value
+
+    @field_validator("adoption_notes")
     @classmethod
     def _blank_is_none(cls, value: Optional[str]) -> Optional[str]:
         return _strip_or_none(value)
+
+
+class FiscalYearLock(BaseModel):
+    """The Treasurer's reconciliation sign-off that locks a closing year."""
+
+    model_config = _REQUEST_CONFIG
+
+    notes: str = Field(..., max_length=4000)
+
+    @field_validator("notes")
+    @classmethod
+    def _notes_required(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Add the reconciliation notes for the sign-off.")
+        return value
+
+
+class FiscalYearOpenItemResponse(UTCResponseBase):
+    """A request still in flight that stops a closing year from locking."""
+
+    model_config = _RESPONSE_CONFIG
+
+    # purchase_request, expense_report or check_request
+    kind: str
+    entity_id: str
+    number: str
+    description: str
+    status: str
+    amount: Optional[Decimal] = None
 
 
 class StartFromLastYearResponse(BaseModel):
@@ -286,8 +332,13 @@ class BudgetResponse(UTCResponseBase):
     # amount_budgeted is the current budget, amendments included; the
     # original is derived from it (FinanceService._budget_row), never stored.
     original_amount: Decimal
+    # Confirmed amendments only; pending ones have moved nothing yet.
     amendments_total: Decimal = Decimal("0")
     amendment_count: int = 0
+    pending_amendment_count: int = 0
+    # False once the budget is before the board, adopted, active, closing or
+    # locked: the amount then changes only through a confirmed amendment.
+    amount_editable: bool = True
     created_by: str
     created_at: datetime
     updated_at: datetime
@@ -400,14 +451,33 @@ class BudgetAmendmentReverse(BaseModel):
         return value
 
 
+class BudgetAmendmentReject(BaseModel):
+    """Reject a pending amendment (or withdraw one's own), saying why."""
+
+    model_config = _REQUEST_CONFIG
+
+    note: str = Field(..., max_length=2000)
+
+    @field_validator("note")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+
 class BudgetAmendmentResponse(UTCResponseBase):
     """One recorded amendment to a budget line.
 
     A reversing entry has a negative ``amount`` and names the amendment it
     cancels in ``reverses_amendment_id``; ``is_reversal`` says which kind a
     row is. On a reversed amendment, ``reversed_by_amendment_id``,
-    ``reversed_at`` (when the reversal was entered) and ``reversed_by_name``
-    (who entered it) are filled from that reversal.
+    ``reversed_at`` (when the reversal was entered), ``reversed_by_name`` (who
+    entered it) and ``reversal_status`` are filled from that reversal.
+    ``status`` is ``pending`` until a second officer confirms it (applied) or
+    rejects it; ``decided_by_name``, ``decided_at`` and ``decision_note``
+    record that decision.
     """
 
     model_config = _RESPONSE_CONFIG
@@ -427,10 +497,16 @@ class BudgetAmendmentResponse(UTCResponseBase):
     reversed_by_amendment_id: Optional[str] = None
     reversed_at: Optional[datetime] = None
     reversed_by_name: Optional[str] = None
+    reversal_status: Optional[str] = None
+    status: str = "confirmed"
+    decided_by: Optional[str] = None
+    decided_by_name: Optional[str] = None
+    decided_at: Optional[datetime] = None
+    decision_note: Optional[str] = None
 
 
 class BudgetAmendmentCreatedResponse(BaseModel):
-    """The new amendment (or reversal) and the line as it now stands."""
+    """The amendment (or reversal) and the line as it now stands."""
 
     model_config = _RESPONSE_CONFIG
 
@@ -931,6 +1007,19 @@ class UnroutedApprovalResponse(UTCResponseBase):
     entity_amount: Decimal
     requester_name: str
     submitted_at: datetime
+    # Held for a second, different approver by the dual-approval threshold.
+    awaiting_second_approval: bool = False
+    first_approved_by: Optional[str] = None
+
+
+class FinanceSettingsResponse(BaseModel):
+    """The finance rules the server applies (app/utils/finance_settings.py)."""
+
+    model_config = _RESPONSE_CONFIG
+
+    # None: off. Otherwise requests of this amount or more need two different
+    # approvers.
+    dual_approval_threshold: Optional[Decimal] = None
 
 
 class ManualDenyRequest(BaseModel):
@@ -992,6 +1081,11 @@ class PurchaseRequestUpdate(BaseModel):
     apparatus_id: Optional[str] = None
     facility_id: Optional[str] = None
 
+    # The link is rendered as an anchor; only an HTTP(S) one may be stored.
+    _check_receipt_url = field_validator("receipt_url", mode="before")(
+        validate_external_http_url
+    )
+
 
 class PurchaseRequestResponse(UTCResponseBase):
     """Purchase request response"""
@@ -1013,17 +1107,38 @@ class PurchaseRequestResponse(UTCResponseBase):
     priority: str
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
+    # A first approval held for a second approver by the dual-approval
+    # threshold, and whether the request is waiting on that second approval
+    # (set on detail responses, from FinanceService.is_awaiting_second_approval).
+    first_approved_by: Optional[str] = None
+    first_approved_at: Optional[datetime] = None
+    awaiting_second_approval: bool = False
     denial_reason: Optional[str] = None
     ordered_at: Optional[datetime] = None
     received_at: Optional[datetime] = None
     paid_at: Optional[datetime] = None
+    qb_exported_at: Optional[datetime] = None
     notes: Optional[str] = None
     receipt_url: Optional[str] = None
+    receipt_document_id: Optional[str] = None
+    receipt_file_url: Optional[str] = None
     apparatus_id: Optional[str] = None
     facility_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     approval_steps: list[ApprovalStepRecordResponse] = []
+
+    # A link stored before input validation existed is withheld unless it is
+    # HTTP(S), rather than handed to an href.
+    _safe_receipt_url = field_validator("receipt_url", mode="before")(safe_external_url)
+
+    @model_validator(mode="after")
+    def _set_receipt_file_url(self):
+        if self.receipt_document_id:
+            self.receipt_file_url = (
+                f"/api/v1/finance/purchase-requests/{self.id}/receipt"
+            )
+        return self
 
 
 # ============================================
@@ -1056,6 +1171,10 @@ class ExpenseLineItemCreate(BaseModel):
     receipt_url: Optional[str] = None
     merchant: Optional[str] = None
 
+    _check_receipt_url = field_validator("receipt_url", mode="before")(
+        validate_external_http_url
+    )
+
 
 class ExpenseLineItemResponse(UTCResponseBase):
     """Expense line item response"""
@@ -1070,8 +1189,21 @@ class ExpenseLineItemResponse(UTCResponseBase):
     date_incurred: datetime
     expense_type: str
     receipt_url: Optional[str] = None
+    receipt_document_id: Optional[str] = None
+    receipt_file_url: Optional[str] = None
     merchant: Optional[str] = None
     created_at: datetime
+
+    _safe_receipt_url = field_validator("receipt_url", mode="before")(safe_external_url)
+
+    @model_validator(mode="after")
+    def _set_receipt_file_url(self):
+        if self.receipt_document_id:
+            self.receipt_file_url = (
+                f"/api/v1/finance/expense-reports/{self.expense_report_id}"
+                f"/items/{self.id}/receipt"
+            )
+        return self
 
 
 class ExpenseReportCreate(BaseModel):
@@ -1112,9 +1244,16 @@ class ExpenseReportResponse(UTCResponseBase):
     status: str
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
+    # A first approval held for a second approver by the dual-approval
+    # threshold, and whether the request is waiting on that second approval
+    # (set on detail responses, from FinanceService.is_awaiting_second_approval).
+    first_approved_by: Optional[str] = None
+    first_approved_at: Optional[datetime] = None
+    awaiting_second_approval: bool = False
     denial_reason: Optional[str] = None
     paid_at: Optional[datetime] = None
     payment_method: Optional[str] = None
+    qb_exported_at: Optional[datetime] = None
     notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -1177,9 +1316,19 @@ class CheckRequestResponse(UTCResponseBase):
     status: str
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
+    # A first approval held for a second approver by the dual-approval
+    # threshold, and whether the request is waiting on that second approval
+    # (set on detail responses, from FinanceService.is_awaiting_second_approval).
+    first_approved_by: Optional[str] = None
+    first_approved_at: Optional[datetime] = None
+    awaiting_second_approval: bool = False
     denial_reason: Optional[str] = None
     check_number: Optional[str] = None
     check_date: Optional[datetime] = None
+    voided_at: Optional[datetime] = None
+    qb_exported_at: Optional[datetime] = None
+    # When the reversing entry for a void went to QuickBooks.
+    qb_void_exported_at: Optional[datetime] = None
     notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -1275,6 +1424,8 @@ class MemberDuesResponse(UTCResponseBase):
     waived_at: Optional[datetime] = None
     waive_reason: Optional[str] = None
     notes: Optional[str] = None
+    # Set by the list endpoint only; a single-record write response omits it.
+    member_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -1403,7 +1554,7 @@ class ExportReadinessCategoryResponse(UTCResponseBase):
     category_id: str
     category_name: str
     is_active: bool
-    # ready, no_account, no_offset or duplicate_mappings
+    # ready, no_account, no_offset, duplicate_mappings or payable_receivable
     status: str
     account_name: Optional[str] = None
     # category (its own qb_account_name) or mapping
@@ -1433,6 +1584,9 @@ class ExportRequest(BaseModel):
     date_range_start: datetime
     date_range_end: datetime
     file_format: str = "csv"
+    # Send again payments an earlier export already carried. Off, the export
+    # leaves them out so overlapping periods do not import twice.
+    include_exported: bool = False
 
     @field_validator("date_range_start", "date_range_end")
     @classmethod
@@ -1477,6 +1631,7 @@ class ExportLogResponse(UTCResponseBase):
     file_format: str
     exported_by: str
     exported_at: datetime
+    exported_by_name: Optional[str] = None
     status: str
     error_message: Optional[str] = None
     completed_at: Optional[datetime] = None

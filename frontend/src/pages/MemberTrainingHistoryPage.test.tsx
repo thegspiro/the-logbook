@@ -48,6 +48,7 @@ import MemberTrainingHistoryPage from './MemberTrainingHistoryPage';
 
 const record = (overrides: Partial<TrainingRecord> = {}): TrainingRecord => ({
   id: 'rec-1',
+  organization_id: 'org-1',
   user_id: 'member-1',
   course_name: 'HIPAA Awareness',
   training_type: 'continuing_education',

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**298 tables · 4908 columns · 984 foreign keys**
+**303 tables · 5004 columns · 1011 foreign keys**
 
 ---
 
@@ -80,7 +80,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`apparatus_component_notes`](#apparatus_component_notes) | `ApparatusComponentNote` | 21 | Notes, observations, issues, and repair records tied to a specific |
 | [`apparatus_components`](#apparatus_components) | `ApparatusComponent` | 23 | Segments an apparatus into logical components (engine, pump, aerial, etc.) |
 | [`apparatus_custom_fields`](#apparatus_custom_fields) | `ApparatusCustomField` | 23 | Custom field definitions for apparatus |
-| [`apparatus_documents`](#apparatus_documents) | `ApparatusDocument` | 14 | Documents associated with apparatus |
+| [`apparatus_documents`](#apparatus_documents) | `ApparatusDocument` | 15 | Documents associated with apparatus |
 | [`apparatus_equipment`](#apparatus_equipment) | `ApparatusEquipment` | 17 | Equipment assigned to apparatus |
 | [`apparatus_fuel_logs`](#apparatus_fuel_logs) | `ApparatusFuelLog` | 16 | Fuel purchase and usage log for apparatus |
 | [`apparatus_location_history`](#apparatus_location_history) | `ApparatusLocationHistory` | 9 | History of station/location assignments for apparatus |
@@ -88,7 +88,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`apparatus_maintenance_types`](#apparatus_maintenance_types) | `ApparatusMaintenanceType` | 18 | Maintenance type definitions |
 | [`apparatus_nfpa_compliance`](#apparatus_nfpa_compliance) | `ApparatusNFPACompliance` | 15 | NFPA compliance tracking for apparatus |
 | [`apparatus_operators`](#apparatus_operators) | `ApparatusOperator` | 21 | Tracks which personnel are certified/qualified to operate apparatus |
-| [`apparatus_photos`](#apparatus_photos) | `ApparatusPhoto` | 14 | Photos associated with apparatus |
+| [`apparatus_photos`](#apparatus_photos) | `ApparatusPhoto` | 15 | Photos associated with apparatus |
 | [`apparatus_report_configs`](#apparatus_report_configs) | `ApparatusReportConfig` | 26 | Configuration for scheduled and custom apparatus reports |
 | [`apparatus_service_providers`](#apparatus_service_providers) | `ApparatusServiceProvider` | 28 | Service providers (companies or individuals) who perform maintenance, |
 | [`apparatus_status_history`](#apparatus_status_history) | `ApparatusStatusHistory` | 9 | History of status changes for apparatus |
@@ -156,13 +156,13 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`candidates`](#candidates) | `Candidate` | 15 | Candidate model for election candidates |
-| [`elections`](#elections) | `Election` | 54 | Election model for managing elections within an organization |
+| [`candidates`](#candidates) | `Candidate` | 17 | Candidate model for election candidates |
+| [`elections`](#elections) | `Election` | 55 | Election model for managing elections within an organization |
 | [`manual_ballot_attestations`](#manual_ballot_attestations) | `ManualBallotAttestation` | 5 | One officer's confirmation that a paper-tally batch matches the |
 | [`manual_ballot_batches`](#manual_ballot_batches) | `ManualBallotBatch` | 14 | One paper-tally entry — the set of manual votes sharing a batch id. |
 | [`saved_ballot_templates`](#saved_ballot_templates) | `SavedBallotTemplate` | 11 | Organization-scoped, reusable snapshot of a structured ballot. |
 | [`votes`](#votes) | `Vote` | 26 | Vote model for recording votes |
-| [`voting_tokens`](#voting_tokens) | `VotingToken` | 16 | Voting token model for secure anonymous ballot access |
+| [`voting_tokens`](#voting_tokens) | `VotingToken` | 17 | Voting token model for secure anonymous ballot access |
 
 ### Email Templates
 
@@ -200,7 +200,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`event_attendance_petitions`](#event_attendance_petitions) | `EventAttendancePetition` | 13 | A member's request to be recorded as present at an event that is over. |
+| [`event_attendance_petitions`](#event_attendance_petitions) | `EventAttendancePetition` | 14 | A member's request to be recorded as present at an event that is over. |
 | [`event_external_attendees`](#event_external_attendees) | `EventExternalAttendee` | 17 | External (non-member) attendee at an event. |
 | [`event_rsvps`](#event_rsvps) | `EventRSVP` | 21 | Event RSVP model for tracking attendance |
 | [`event_templates`](#event_templates) | `EventTemplate` | 29 | Event Template model for reusable event configurations |
@@ -253,20 +253,20 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`approval_chain_steps`](#approval_chain_steps) | `ApprovalChainStep` | 13 | A single step in an approval chain |
 | [`approval_chains`](#approval_chains) | `ApprovalChain` | 13 | Configurable approval chain template |
 | [`approval_step_records`](#approval_step_records) | `ApprovalStepRecord` | 13 | Tracks actual approval step progression for a specific entity |
-| [`budget_amendments`](#budget_amendments) | `BudgetAmendment` | 10 | Extra money leadership approved for a budget line, as recorded. |
+| [`budget_amendments`](#budget_amendments) | `BudgetAmendment` | 14 | Extra money leadership approved for a budget line, as recorded. |
 | [`budget_categories`](#budget_categories) | `BudgetCategory` | 11 | Budget category (hierarchical) |
 | [`budget_requests`](#budget_requests) | `BudgetRequest` | 22 | A line owner's proposed amount for a budget line in a draft year. |
 | [`budgets`](#budgets) | `Budget` | 13 | Budget line for a category within a fiscal year |
-| [`check_requests`](#check_requests) | `CheckRequest` | 20 | Request to cut a check for payment |
+| [`check_requests`](#check_requests) | `CheckRequest` | 29 | Request to cut a check for payment |
 | [`dues_payments`](#dues_payments) | `DuesPayment` | 11 | A single payment received against a member's dues (FIN-6). |
 | [`dues_schedules`](#dues_schedules) | `DuesSchedule` | 15 | Schedule for dues collection |
-| [`expense_line_items`](#expense_line_items) | `ExpenseLineItem` | 10 | Individual line item within an expense report |
-| [`expense_reports`](#expense_reports) | `ExpenseReport` | 17 | Expense report submitted by a member for reimbursement |
+| [`expense_line_items`](#expense_line_items) | `ExpenseLineItem` | 11 | Individual line item within an expense report |
+| [`expense_reports`](#expense_reports) | `ExpenseReport` | 21 | Expense report submitted by a member for reimbursement |
 | [`finance_export_logs`](#finance_export_logs) | `ExportLog` | 12 | Log of an export attempt, including interrupted streams. |
 | [`finance_export_mappings`](#finance_export_mappings) | `ExportMapping` | 9 | Mapping between internal budget categories and QuickBooks accounts |
-| [`fiscal_years`](#fiscal_years) | `FiscalYear` | 17 | Fiscal year definition for the organization |
+| [`fiscal_years`](#fiscal_years) | `FiscalYear` | 21 | Fiscal year definition for the organization |
 | [`member_dues`](#member_dues) | `MemberDues` | 18 | Individual member dues payment record |
-| [`purchase_requests`](#purchase_requests) | `PurchaseRequest` | 25 | Purchase request submitted by a member |
+| [`purchase_requests`](#purchase_requests) | `PurchaseRequest` | 30 | Purchase request submitted by a member |
 
 ### Forms
 
@@ -455,7 +455,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`prospect_event_links`](#prospect_event_links) | `ProspectEventLink` | 6 | Links a prospective member to an upcoming event. |
 | [`prospect_interviews`](#prospect_interviews) | `ProspectInterview` | 12 | Interview record for a prospective member. |
 | [`prospect_step_progress`](#prospect_step_progress) | `ProspectStepProgress` | 10 | Tracks a prospect's progress on each pipeline step. |
-| [`prospective_members`](#prospective_members) | `ProspectiveMember` | 36 | Prospective member record, kept separate from the users table. |
+| [`prospective_members`](#prospective_members) | `ProspectiveMember` | 37 | Prospective member record, kept separate from the users table. |
 
 ### Nfc_Tag
 
@@ -471,7 +471,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`department_message_deliveries`](#department_message_deliveries) | `DepartmentMessageDelivery` | 9 | Durable, per-recipient claim and result for an external delivery. |
+| [`department_message_deliveries`](#department_message_deliveries) | `DepartmentMessageDelivery` | 11 | Durable, per-recipient claim and result for an external delivery. |
 | [`department_message_reads`](#department_message_reads) | `DepartmentMessageRead` | 5 | Tracks which users have read/acknowledged a department message. |
 | [`department_message_recipients`](#department_message_recipients) | `DepartmentMessageRecipient` | 8 | Durable, queryable delivery and resolution state for one recipient. |
 | [`department_messages`](#department_messages) | `DepartmentMessage` | 19 | Department Message model |
@@ -485,6 +485,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
+| [`encryption_key_custody`](#encryption_key_custody) | `EncryptionKeyCustody` | 5 | An administrator's confirmation that the installation's encryption key is |
 | [`onboarding_sessions`](#onboarding_sessions) | `OnboardingSessionModel` | 8 | Server-side onboarding session storage |
 | [`onboarding_status`](#onboarding_status) | `OnboardingStatus` | 21 | System-wide onboarding status |
 
@@ -556,6 +557,16 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`security_alerts`](#security_alerts) | `SecurityAlertRecord` | 17 | Persistent security alert records |
 
+### Shift_History_Import
+
+<sub>`app/models/shift_history_import.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`shift_history_import_mappings`](#shift_history_import_mappings) | `ShiftHistoryImportMapping` | 8 | A review decision the department has committed, remembered for later |
+| [`shift_history_import_rows`](#shift_history_import_rows) | `ShiftHistoryImportRow` | 10 | One data row of the file, kept as read plus the reviewer's edits. |
+| [`shift_history_imports`](#shift_history_imports) | `ShiftHistoryImport` | 18 | One uploaded file and the review state around it. |
+
 ### Skills Testing
 
 <sub>`app/models/skills_testing.py`</sub>
@@ -592,12 +603,12 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`suggestion_attachments`](#suggestion_attachments) | `SuggestionAttachment` | 9 | A screenshot, re-encoded to WebP on upload. The display name is |
 | [`suggestion_box_reviewers`](#suggestion_box_reviewers) | `SuggestionBoxReviewer` | 6 | One reviewer grant on a box: either a position or a single member. |
 | [`suggestion_box_watchers`](#suggestion_box_watchers) | `SuggestionBoxWatcher` | 6 | Someone told that a box received a submission, without being able to |
-| [`suggestion_boxes`](#suggestion_boxes) | `SuggestionBox` | 11 | A configurable intake box. |
+| [`suggestion_boxes`](#suggestion_boxes) | `SuggestionBox` | 12 | A configurable intake box. |
 | [`suggestion_forwards`](#suggestion_forwards) | `SuggestionForward` | 7 | One suggestion forwarded to a member or a position. |
 | [`suggestion_messages`](#suggestion_messages) | `SuggestionMessage` | 8 | One entry in a follow-up thread. |
 | [`suggestion_status_events`](#suggestion_status_events) | `SuggestionStatusEvent` | 7 | One step a reviewer took that the submitter can see: a disposition |
 | [`suggestion_votes`](#suggestion_votes) | `SuggestionVote` | 5 | One member's support for a published suggestion. |
-| [`suggestions`](#suggestions) | `Suggestion` | 18 |  |
+| [`suggestions`](#suggestions) | `Suggestion` | 20 |  |
 
 ### Testing_Checklist
 
@@ -647,6 +658,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`shift_equipment_check_seals`](#shift_equipment_check_seals) | `ShiftEquipmentCheckSeal` | 9 | The tamper seal a crew read on one sealed container during a check. |
 | [`shift_equipment_checks`](#shift_equipment_checks) | `ShiftEquipmentCheck` | 18 | A completed equipment checklist submission for a shift. |
 | [`shift_patterns`](#shift_patterns) | `ShiftPattern` | 17 | Recurring shift pattern for automatic schedule generation. |
+| [`shift_pre_work_sessions`](#shift_pre_work_sessions) | `ShiftPreWorkSession` | 15 | Time a member spent preparing for a shift before its check-in opened. |
 | [`shift_swap_requests`](#shift_swap_requests) | `ShiftSwapRequest` | 13 | Request to swap shifts between two members. |
 | [`shift_template_equipment_checks`](#shift_template_equipment_checks) | `ShiftTemplateEquipmentCheck` | 7 | One equipment checklist a shift template puts on the shifts it creates. |
 | [`shift_templates`](#shift_templates) | `ShiftTemplate` | 19 | Reusable shift template for quick shift creation. |
@@ -1087,6 +1099,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `apparatus_id` | VARCHAR(36) | no | FK, IDX |  | → `apparatus.id` ON DELETE CASCADE |
+| `document_id` | VARCHAR(36) | yes | FK, IDX |  | → `documents.id` ON DELETE CASCADE |
 | `file_path` | TEXT | no |  |  |  |
 | `file_name` | VARCHAR(255) | no |  |  |  |
 | `file_size` | INTEGER | yes |  |  |  |
@@ -1103,6 +1116,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_apparatus_documents_expiration` (`expiration_date`)
 - `idx_apparatus_documents_type` (`apparatus_id`, `document_type`)
+- `ix_apparatus_documents_document_id` (`document_id`)
 - `ix_apparatus_documents_organization_id` (`organization_id`)
 
 ### `apparatus_equipment`
@@ -1362,6 +1376,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `apparatus_id` | VARCHAR(36) | no | FK, IDX |  | → `apparatus.id` ON DELETE CASCADE |
+| `document_id` | VARCHAR(36) | yes | FK, IDX |  | → `documents.id` ON DELETE CASCADE |
 | `file_path` | TEXT | no |  |  |  |
 | `file_name` | VARCHAR(255) | no |  |  |  |
 | `file_size` | INTEGER | yes |  |  |  |
@@ -1377,6 +1392,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_apparatus_photos_is_primary` (`apparatus_id`, `is_primary`)
+- `ix_apparatus_photos_document_id` (`document_id`)
 - `ix_apparatus_photos_organization_id` (`organization_id`)
 
 ### `apparatus_report_configs`
@@ -2138,6 +2154,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `nomination_date` | DATETIME | no |  | `now()` |  |
 | `nominated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `accepted` | BOOL | no |  | `True` |  |
+| `accepted_on_behalf_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `accepted_on_behalf_at` | DATETIME | yes |  |  |  |
 | `is_write_in` | BOOL | no |  | `False` |  |
 | `merged_into_candidate_id` | VARCHAR(36) | yes |  |  |  |
 | `display_order` | INTEGER | no |  | `0` |  |
@@ -2179,6 +2197,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `reminder_hours_before_close` | INTEGER | yes |  |  |  |
 | `reminder_sent_at` | DATETIME | yes |  |  |  |
 | `nomination_deadline` | DATETIME | yes |  |  |  |
+| `nominations_closed_at` | DATETIME | yes |  |  |  |
 | `closed_at` | DATETIME | yes |  |  |  |
 | `closed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `status` | ENUM(`draft`, `nominations`, `open`, `closed`, `cancelled`) | no | IDX | `'draft'` |  |
@@ -2359,6 +2378,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `election_id` | VARCHAR(36) | no | FK, IDX |  | → `elections.id` ON DELETE CASCADE |
 | `token` | VARCHAR(128) | no | UQ |  |  |
 | `voter_hash` | VARCHAR(64) | no | IDX |  |  |
+| `user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `expires_at` | DATETIME | no |  |  |  |
 | `used` | BOOL | no |  | `0` |  |
@@ -2663,8 +2683,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `event_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `events.id` ON DELETE CASCADE |
 | `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
-| `status` | ENUM(`pending`, `approved`, `rejected`) | no |  | `pending` |  |
+| `status` | ENUM(`pending`, `approved`, `rejected`, `withdrawn`) | no |  | `pending` |  |
 | `reason` | TEXT | no |  |  |  |
+| `withdrawal_count` | INTEGER | no |  | `0` |  |
 | `requested_check_in_at` | DATETIME | yes |  |  |  |
 | `requested_check_out_at` | DATETIME | yes |  |  |  |
 | `reviewed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -3719,7 +3740,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **BudgetAmendment** · `app/models/finance.py`
 
-> Extra money leadership approved for a budget line, as recorded. Each row is an audit record of one increase: how much, why, who approved it and when, and which member entered it. Adding one raises the line's ``amount_budgeted`` by ``amount`` in the same transaction, so ``amount_budgeted`` stays the single live ceiling the spend checks read. The line's *original* budget is not stored anywhere; it is ``amount_budgeted`` minus the sum of these rows (``FinanceService._budget_row``). There is no edit or delete path: an amendment is what the department approved. A mistaken one is corrected by a **reversing entry** (owner decision, 2026-10-09): a new row whose ``amount`` is the original's, negated, and whose ``reverses_amendment_id`` names it. The original stays on record, ``amount_budgeted`` drops by the amount, and the original budget -- current less the sum of every row, reversals included -- is unchanged. ``FinanceService.reverse_budget_amendment`` holds the rules.
+> Extra money leadership approved for a budget line, as recorded. Each row is an audit record of one increase: how much, why, who approved it and when, and which member entered it. An amendment is entered ``pending`` and moves nothing; a second officer -- a ``finance.budget_review`` or ``finance.manage`` holder other than the member who entered it -- confirms it, which raises the line's ``amount_budgeted`` by ``amount`` in the same transaction, or rejects it. ``amount_budgeted`` stays the single live ceiling the spend checks read. The line's *original* budget is not stored anywhere; it is ``amount_budgeted`` minus the sum of the *confirmed* rows (``FinanceService._budget_row``). There is no edit or delete path: an amendment is what the department approved. A mistaken one is corrected by a **reversing entry** (owner decision, 2026-10-09): a new row whose ``amount`` is the original's, negated, and whose ``reverses_amendment_id`` names it. The original stays on record, ``amount_budgeted`` drops by the amount, and the original budget -- current less the sum of every row, reversals included -- is unchanged. ``FinanceService.reverse_budget_amendment`` holds the rules.
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
@@ -3733,6 +3754,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `reverses_amendment_id` | VARCHAR(36) | yes | FK, UQ |  | → `budget_amendments.id` ON DELETE SET NULL |
+| `status` | ENUM(`pending`, `confirmed`, `rejected`) | no |  | `'pending'` |  |
+| `decided_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `decided_at` | DATETIME | yes |  |  |  |
+| `decision_note` | TEXT | yes |  |  |  |
 
 **Indexes**
 
@@ -3855,9 +3880,18 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `status` | ENUM(`draft`, `submitted`, `pending_approval`, `approved`, `denied`, `issued`, `voided`, `cancelled`) | no |  | `'draft'` |  |
 | `approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `approved_at` | DATETIME | yes |  |  |  |
+| `first_approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `first_approved_at` | DATETIME | yes |  |  |  |
 | `denial_reason` | TEXT | yes |  |  |  |
 | `check_number` | VARCHAR(50) | yes |  |  |  |
 | `check_date` | DATETIME | yes |  |  |  |
+| `voided_at` | DATETIME | yes |  |  |  |
+| `qb_exported_at` | DATETIME | yes |  |  |  |
+| `qb_export_log_id` | VARCHAR(36) | yes | FK |  | → `finance_export_logs.id` ON DELETE SET NULL |
+| `qb_export_account` | VARCHAR(200) | yes |  |  |  |
+| `qb_export_offset_account` | VARCHAR(200) | yes |  |  |  |
+| `qb_void_exported_at` | DATETIME | yes |  |  |  |
+| `qb_void_export_log_id` | VARCHAR(36) | yes | FK |  | → `finance_export_logs.id` ON DELETE SET NULL |
 | `notes` | TEXT | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
@@ -3943,6 +3977,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `date_incurred` | DATETIME | no |  |  |  |
 | `expense_type` | ENUM(`general`, `uniform_reimbursement`, `ppe_replacement`, `boot_allowance`, `training_reimbursement`, `certification_fee`, `conference`, `travel`, `meals`, `mileage`, `equipment_purchase`, `other`) | no |  | `'general'` |  |
 | `receipt_url` | VARCHAR(500) | yes |  |  |  |
+| `receipt_document_id` | VARCHAR(36) | yes | FK |  | → `documents.id` ON DELETE SET NULL |
 | `merchant` | VARCHAR(300) | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 
@@ -3969,8 +4004,12 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `status` | ENUM(`draft`, `submitted`, `pending_approval`, `approved`, `denied`, `paid`, `cancelled`) | no |  | `'draft'` |  |
 | `approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `approved_at` | DATETIME | yes |  |  |  |
+| `first_approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `first_approved_at` | DATETIME | yes |  |  |  |
 | `denial_reason` | TEXT | yes |  |  |  |
 | `paid_at` | DATETIME | yes |  |  |  |
+| `qb_exported_at` | DATETIME | yes |  |  |  |
+| `qb_export_log_id` | VARCHAR(36) | yes | FK |  | → `finance_export_logs.id` ON DELETE SET NULL |
 | `payment_method` | VARCHAR(50) | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
@@ -4047,12 +4086,16 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `status` | ENUM(`draft`, `active`, `closed`) | no |  | `'draft'` |  |
 | `is_locked` | BOOL | no |  | `False` |  |
 | `request_deadline` | DATE | yes |  |  |  |
-| `planning_stage` | ENUM(`requests`, `leadership_review`, `board_review`) | yes |  |  |  |
+| `planning_stage` | ENUM(`requests`, `leadership_review`, `board_review`, `adopted`) | yes |  |  |  |
 | `adopted_on` | DATE | yes |  |  |  |
 | `adoption_reference` | VARCHAR(500) | yes |  |  |  |
 | `adoption_notes` | TEXT | yes |  |  |  |
 | `adoption_recorded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `adoption_recorded_at` | DATETIME | yes |  |  |  |
+| `closing_started_at` | DATETIME | yes |  |  |  |
+| `locked_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `locked_at` | DATETIME | yes |  |  |  |
+| `lock_notes` | TEXT | yes |  |  |  |
 | `created_by` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
@@ -4117,12 +4160,17 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `priority` | ENUM(`low`, `medium`, `high`, `urgent`) | no |  | `'medium'` |  |
 | `approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `approved_at` | DATETIME | yes |  |  |  |
+| `first_approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `first_approved_at` | DATETIME | yes |  |  |  |
 | `denial_reason` | TEXT | yes |  |  |  |
 | `ordered_at` | DATETIME | yes |  |  |  |
 | `received_at` | DATETIME | yes |  |  |  |
 | `paid_at` | DATETIME | yes |  |  |  |
+| `qb_exported_at` | DATETIME | yes |  |  |  |
+| `qb_export_log_id` | VARCHAR(36) | yes | FK |  | → `finance_export_logs.id` ON DELETE SET NULL |
 | `notes` | TEXT | yes |  |  |  |
 | `receipt_url` | VARCHAR(500) | yes |  |  |  |
+| `receipt_document_id` | VARCHAR(36) | yes | FK |  | → `documents.id` ON DELETE SET NULL |
 | `apparatus_id` | VARCHAR(36) | yes | FK |  | → `apparatus.id` ON DELETE SET NULL |
 | `facility_id` | VARCHAR(36) | yes | FK |  | → `facilities.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
@@ -6548,7 +6596,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `title` | VARCHAR(255) | no |  |  |  |
-| `meeting_type` | ENUM(`business`, `special`, `committee`, `board`, `other`) | no |  | `business` |  |
+| `meeting_type` | ENUM(`business`, `special`, `committee`, `board`, `trustee`, `executive`, `annual`, `other`) | no |  | `business` |  |
 | `meeting_date` | DATE | no | IDX |  |  |
 | `start_time` | TIME | yes |  |  |  |
 | `end_time` | TIME | yes |  |  |  |
@@ -6820,6 +6868,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `reactivated_at` | DATETIME | yes |  |  |  |
 | `withdrawn_at` | DATETIME | yes |  |  |  |
 | `withdrawal_reason` | TEXT | yes |  |  |  |
+| `inactive_since` | DATETIME | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
 | `active_email` | VARCHAR(255) | yes |  | server default |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
@@ -6886,14 +6935,17 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `message_id` | VARCHAR(36) | no | FK, IDX |  | → `department_messages.id` ON DELETE CASCADE |
 | `recipient_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
 | `channel` | VARCHAR(16) | no |  |  |  |
-| `status` | VARCHAR(16) | no |  | `pending` |  |
+| `status` | VARCHAR(16) | no | IDX | `pending` |  |
 | `idempotency_key` | VARCHAR(255) | no | UQ |  |  |
 | `attempted_at` | DATETIME | yes |  | `now()` |  |
 | `delivered_at` | DATETIME | yes |  |  |  |
 | `error` | TEXT | yes |  |  |  |
+| `attempt_count` | INTEGER | no |  | `1` |  |
+| `next_attempt_at` | DATETIME | yes |  |  |  |
 
 **Indexes**
 
+- `idx_dept_msg_delivery_due` (`status`, `next_attempt_at`)
 - `idx_dept_msg_delivery_message` (`message_id`)
 
 **Constraints**
@@ -7082,6 +7134,24 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - UNIQUE `uq_push_sub_endpoint` (`endpoint_hash`)
 
 ## Onboarding
+
+### `encryption_key_custody`
+
+**EncryptionKeyCustody** · `app/models/onboarding.py`
+
+> An administrator's confirmation that the installation's encryption key is stored somewhere other than the server and its backups. One row per key, identified by its fingerprint (``file_encryption.current_key_fingerprint()``), never by the key itself. A rotated key has a new fingerprint and so needs confirming again: the old confirmation was about a key that no longer protects new files. Installation-wide, like the key it describes, so it carries no organization_id.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `key_fingerprint` | VARCHAR(16) | no |  |  |  |
+| `confirmed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `confirmed_via` | VARCHAR(20) | no |  |  |  |
+| `confirmed_at` | DATETIME | no |  | `now()` |  |
+
+**Constraints**
+
+- UNIQUE `uq_encryption_key_custody_key` (`key_fingerprint`)
 
 ### `onboarding_sessions`
 
@@ -7452,6 +7522,92 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_security_alert_type_level` (`alert_type`, `threat_level`)
 - `ix_security_alerts_threat_level` (`threat_level`)
 - `ix_security_alerts_user_id` (`user_id`)
+
+## Shift_History_Import
+
+### `shift_history_import_mappings`
+
+**ShiftHistoryImportMapping** · `app/models/shift_history_import.py`
+
+> A review decision the department has committed, remembered for later files. A department brings its history in over several files, usually exported from the same system, so the same names, vehicles and positions recur. A decision is remembered only once an import using it is committed — a discarded draft teaches nothing — and a draft's own decision always wins over a remembered one. A member or outside unit the commit *created* is remembered as a mapping to the record it created, never as "create", so the next file cannot create the same person or unit a second time.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `kind` | VARCHAR(20) | no |  |  |  |
+| `source_key` | VARCHAR(600) | no |  |  |  |
+| `mapping` | JSON | no |  |  |  |
+| `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Constraints**
+
+- CHECK `ck_shift_history_import_mappings_ck_shift_history_import_mappings_kind`: `kind IN ('member', 'unit', 'position')`
+- UNIQUE `uq_shift_history_import_mappings_org_kind_key` (`organization_id`, `kind`, `source_key`)
+
+### `shift_history_import_rows`
+
+**ShiftHistoryImportRow** · `app/models/shift_history_import.py`
+
+> One data row of the file, kept as read plus the reviewer's edits. Tenant-scoped only through its import: it has no tenant column of its own, so every lookup by id must constrain ``import_id`` to an import already resolved in the caller's organization (pitfall #14, the parent-resolution shape).
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `import_id` | VARCHAR(36) | no | FK, IDX |  | → `shift_history_imports.id` ON DELETE CASCADE |
+| `line_number` | INTEGER | no |  |  |  |
+| `raw` | JSON | no |  |  |  |
+| `edits` | JSON | yes |  |  |  |
+| `excluded` | BOOL | no |  | `0` |  |
+| `match_decision` | VARCHAR(20) | yes |  |  |  |
+| `keep_separate` | BOOL | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_shift_history_import_rows_import_line` (`import_id`, `line_number`)
+
+**Constraints**
+
+- CHECK `ck_shift_history_import_rows_ck_shift_history_import_rows_match_decision`: `match_decision IS NULL OR match_decision IN ('accept', 'separate')`
+
+### `shift_history_imports`
+
+**ShiftHistoryImport** · `app/models/shift_history_import.py`
+
+> One uploaded file and the review state around it.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `status` | VARCHAR(20) | no |  | `draft` |  |
+| `source_filename` | VARCHAR(255) | no |  |  |  |
+| `timezone` | VARCHAR(64) | no |  |  |  |
+| `headers` | JSON | no |  |  |  |
+| `column_mapping` | JSON | no |  |  |  |
+| `member_mappings` | JSON | yes |  |  |  |
+| `unit_mappings` | JSON | yes |  |  |  |
+| `position_mappings` | JSON | yes |  |  |  |
+| `existing_shift_decisions` | JSON | yes |  |  |  |
+| `row_count` | INTEGER | no |  | `0` |  |
+| `summary` | JSON | yes |  |  |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `committed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `committed_at` | DATETIME | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_shift_history_imports_org_status` (`organization_id`, `status`)
+
+**Constraints**
+
+- CHECK `ck_shift_history_imports_ck_shift_history_imports_status`: `status IN ('draft', 'committed')`
 
 ## Skills Testing
 
@@ -8023,6 +8179,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `follow_up_enabled` | BOOL | no |  | `0` |  |
 | `is_active` | BOOL | no |  | `1` |  |
 | `public_board_enabled` | BOOL | no |  | `0` |  |
+| `intake_questions` | JSON | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
@@ -8145,6 +8302,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `follow_up_key_hash` | VARCHAR(64) | yes | UQ |  |  |
 | `title` | VARCHAR(200) | no |  |  |  |
 | `details` | TEXT | no |  |  |  |
+| `intake_answers` | JSON | yes |  |  |  |
+| `routed_from_box_id` | VARCHAR(36) | yes | FK |  | → `suggestion_boxes.id` ON DELETE SET NULL |
 | `disposition` | VARCHAR(32) | no |  | `new` |  |
 | `internal_note` | TEXT | yes |  |  |  |
 | `disposition_updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -9288,6 +9447,36 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_shift_pattern_org` (`organization_id`)
 
+### `shift_pre_work_sessions`
+
+**ShiftPreWorkSession** · `app/models/training.py`
+
+> Time a member spent preparing for a shift before its check-in opened. Kept apart from ``ShiftAttendance`` on purpose. Attendance is read as one row per member per shift in many places (check-in, check-out, close-out, shift counts for compliance), so a second row for the prep hour would either raise ``MultipleResultsFound`` or count the member's shift twice. A session here adds approved *hours* to the shift and never a shift.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `shift_id` | VARCHAR(36) | no | FK, IDX |  | → `shifts.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `apparatus_id` | VARCHAR(36) | yes |  |  |  |
+| `started_at` | DATETIME | no |  |  |  |
+| `ended_at` | DATETIME | yes |  |  |  |
+| `duration_minutes` | INTEGER | yes |  |  |  |
+| `note` | TEXT | yes |  |  |  |
+| `status` | ENUM(`active`, `pending`, `approved`, `rejected`) | no |  | `active` |  |
+| `approved_minutes` | INTEGER | yes |  |  |  |
+| `reviewed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `reviewed_at` | DATETIME | yes |  |  |  |
+| `review_note` | TEXT | yes |  |  |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `idx_pre_work_org_status` (`organization_id`, `status`)
+- `idx_pre_work_shift` (`shift_id`)
+- `idx_pre_work_user_status` (`user_id`, `status`)
+
 ### `shift_swap_requests`
 
 **ShiftSwapRequest** · `app/models/training.py`
@@ -10372,7 +10561,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (360 references)
+### → `users` (373 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10410,14 +10599,17 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `approval_step_records` | `assigned_to` | SET NULL | yes |
 | `blocked_access_attempts` | `user_id` | RESTRICT | yes |
 | `budget_amendments` | `created_by` | SET NULL | yes |
+| `budget_amendments` | `decided_by` | SET NULL | yes |
 | `budget_requests` | `decided_by` | SET NULL | yes |
 | `budget_requests` | `reviewed_by` | SET NULL | yes |
 | `budget_requests` | `submitted_by` | SET NULL | yes |
 | `budgets` | `created_by` | RESTRICT | no |
+| `candidates` | `accepted_on_behalf_by` | SET NULL | yes |
 | `candidates` | `nominated_by` | SET NULL | yes |
 | `candidates` | `user_id` | SET NULL | yes |
 | `check_item_deployed_lots` | `deployed_by` | SET NULL | yes |
 | `check_requests` | `approved_by` | SET NULL | yes |
+| `check_requests` | `first_approved_by` | SET NULL | yes |
 | `check_requests` | `requested_by` | RESTRICT | no |
 | `check_template_items` | `restock_reported_by` | SET NULL | yes |
 | `checkout_records` | `checked_in_by` | RESTRICT | yes |
@@ -10459,6 +10651,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `email_attachments` | `uploaded_by` | SET NULL | yes |
 | `email_templates` | `created_by` | SET NULL | yes |
 | `email_templates` | `updated_by` | SET NULL | yes |
+| `encryption_key_custody` | `confirmed_by` | SET NULL | yes |
 | `equipment_check_templates` | `created_by` | SET NULL | yes |
 | `equipment_kits` | `created_by` | RESTRICT | yes |
 | `equipment_requests` | `fulfilled_by` | SET NULL | yes |
@@ -10482,6 +10675,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `events` | `organizer_id` | SET NULL | yes |
 | `events` | `updated_by` | RESTRICT | yes |
 | `expense_reports` | `approved_by` | SET NULL | yes |
+| `expense_reports` | `first_approved_by` | SET NULL | yes |
 | `expense_reports` | `submitted_by` | RESTRICT | no |
 | `external_category_mappings` | `mapped_by` | SET NULL | yes |
 | `external_course_mappings` | `mapped_by` | SET NULL | yes |
@@ -10517,6 +10711,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `finance_export_logs` | `exported_by` | RESTRICT | no |
 | `fiscal_years` | `adoption_recorded_by` | SET NULL | yes |
 | `fiscal_years` | `created_by` | RESTRICT | no |
+| `fiscal_years` | `locked_by` | SET NULL | yes |
 | `form_submissions` | `submitted_by` | SET NULL | yes |
 | `forms` | `created_by` | RESTRICT | yes |
 | `fundraising_campaigns` | `created_by` | RESTRICT | yes |
@@ -10633,6 +10828,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `prospective_members` | `transferred_user_id` | SET NULL | yes |
 | `public_portal_api_keys` | `created_by` | SET NULL | yes |
 | `purchase_requests` | `approved_by` | SET NULL | yes |
+| `purchase_requests` | `first_approved_by` | SET NULL | yes |
 | `purchase_requests` | `requested_by` | RESTRICT | no |
 | `push_subscriptions` | `user_id` | CASCADE | no |
 | `recertification_pathways` | `created_by` | SET NULL | yes |
@@ -10662,7 +10858,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_completion_reports` | `reviewed_by` | SET NULL | yes |
 | `shift_completion_reports` | `trainee_id` | CASCADE | no |
 | `shift_equipment_checks` | `checked_by` | SET NULL | yes |
+| `shift_history_import_mappings` | `updated_by` | SET NULL | yes |
+| `shift_history_imports` | `committed_by` | SET NULL | yes |
+| `shift_history_imports` | `created_by` | SET NULL | yes |
 | `shift_patterns` | `created_by` | SET NULL | yes |
+| `shift_pre_work_sessions` | `reviewed_by` | SET NULL | yes |
+| `shift_pre_work_sessions` | `user_id` | CASCADE | no |
 | `shift_swap_requests` | `requesting_user_id` | CASCADE | no |
 | `shift_swap_requests` | `reviewed_by` | SET NULL | yes |
 | `shift_swap_requests` | `target_user_id` | SET NULL | yes |
@@ -10735,9 +10936,10 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `proxy_voter_id` | SET NULL | yes |
 | `votes` | `recorded_by` | SET NULL | yes |
 | `votes` | `voter_id` | SET NULL | yes |
+| `voting_tokens` | `user_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (244 references)
+### → `organizations` (247 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10936,7 +11138,10 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_calls` | `organization_id` | CASCADE | no |
 | `shift_completion_reports` | `organization_id` | CASCADE | no |
 | `shift_equipment_checks` | `organization_id` | CASCADE | no |
+| `shift_history_import_mappings` | `organization_id` | CASCADE | no |
+| `shift_history_imports` | `organization_id` | CASCADE | no |
 | `shift_patterns` | `organization_id` | CASCADE | no |
+| `shift_pre_work_sessions` | `organization_id` | CASCADE | no |
 | `shift_swap_requests` | `organization_id` | CASCADE | no |
 | `shift_template_equipment_checks` | `organization_id` | CASCADE | no |
 | `shift_templates` | `organization_id` | CASCADE | no |
@@ -11111,6 +11316,21 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `suggestion_forwards` | `position_id` | CASCADE | yes |
 | `user_positions` | `position_id` | CASCADE | no |
 
+### → `shifts` (10 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `event_requests` | `staffing_shift_id` | SET NULL | yes |
+| `org_call_responses` | `shift_id` | SET NULL | yes |
+| `shift_assignments` | `shift_id` | CASCADE | no |
+| `shift_attendance` | `shift_id` | CASCADE | no |
+| `shift_calls` | `shift_id` | CASCADE | no |
+| `shift_completion_reports` | `shift_id` | SET NULL | yes |
+| `shift_equipment_checks` | `shift_id` | SET NULL | yes |
+| `shift_pre_work_sessions` | `shift_id` | CASCADE | no |
+| `shift_swap_requests` | `offering_shift_id` | CASCADE | no |
+| `shift_swap_requests` | `requesting_shift_id` | SET NULL | yes |
+
 ### → `training_courses` (10 references)
 
 | From table | Column | On delete | Nullable |
@@ -11140,20 +11360,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `skill_templates` | `requirement_id` | SET NULL | yes |
 | `skill_tests` | `requirement_id` | SET NULL | yes |
 | `training_sessions` | `requirement_id` | SET NULL | yes |
-
-### → `shifts` (9 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `event_requests` | `staffing_shift_id` | SET NULL | yes |
-| `org_call_responses` | `shift_id` | SET NULL | yes |
-| `shift_assignments` | `shift_id` | CASCADE | no |
-| `shift_attendance` | `shift_id` | CASCADE | no |
-| `shift_calls` | `shift_id` | CASCADE | no |
-| `shift_completion_reports` | `shift_id` | SET NULL | yes |
-| `shift_equipment_checks` | `shift_id` | SET NULL | yes |
-| `shift_swap_requests` | `offering_shift_id` | CASCADE | no |
-| `shift_swap_requests` | `requesting_shift_id` | SET NULL | yes |
 
 ### → `training_categories` (9 references)
 
@@ -11357,6 +11563,15 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `department_message_recipients` | `message_id` | CASCADE | no |
 | `notification_logs` | `department_message_id` | CASCADE | yes |
 
+### → `documents` (4 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `apparatus_documents` | `document_id` | CASCADE | yes |
+| `apparatus_photos` | `document_id` | CASCADE | yes |
+| `expense_line_items` | `receipt_document_id` | SET NULL | yes |
+| `purchase_requests` | `receipt_document_id` | SET NULL | yes |
+
 ### → `equipment_check_templates` (4 references)
 
 | From table | Column | On delete | Nullable |
@@ -11365,6 +11580,15 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_equipment_checks` | `template_id` | SET NULL | yes |
 | `shift_template_equipment_checks` | `equipment_check_template_id` | CASCADE | no |
 | `template_change_logs` | `template_id` | CASCADE | no |
+
+### → `finance_export_logs` (4 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `check_requests` | `qb_export_log_id` | SET NULL | yes |
+| `check_requests` | `qb_void_export_log_id` | SET NULL | yes |
+| `expense_reports` | `qb_export_log_id` | SET NULL | yes |
+| `purchase_requests` | `qb_export_log_id` | SET NULL | yes |
 
 ### → `fundraising_campaigns` (4 references)
 
@@ -11410,6 +11634,15 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `store_product_images` | `product_id` | CASCADE | no |
 | `store_product_variants` | `product_id` | CASCADE | no |
 | `store_window_products` | `product_id` | CASCADE | no |
+
+### → `suggestion_boxes` (4 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `suggestion_box_reviewers` | `box_id` | CASCADE | no |
+| `suggestion_box_watchers` | `box_id` | CASCADE | no |
+| `suggestions` | `box_id` | CASCADE | no |
+| `suggestions` | `routed_from_box_id` | SET NULL | yes |
 
 ### → `course_cohort_classes` (3 references)
 
@@ -11482,14 +11715,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `store_order_events` | `order_id` | CASCADE | no |
 | `store_order_items` | `order_id` | CASCADE | no |
 | `store_payment_events` | `matched_order_id` | SET NULL | yes |
-
-### → `suggestion_boxes` (3 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `suggestion_box_reviewers` | `box_id` | CASCADE | no |
-| `suggestion_box_watchers` | `box_id` | CASCADE | no |
-| `suggestions` | `box_id` | CASCADE | no |
 
 ### → `admin_hours_categories` (2 references)
 
@@ -11907,6 +12132,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `screening_records` | `requirement_id` | SET NULL | yes |
 
+### → `shift_history_imports` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `shift_history_import_rows` | `import_id` | CASCADE | no |
+
 ### → `skill_templates` (1 references)
 
 | From table | Column | On delete | Nullable |
@@ -11952,9 +12183,10 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `department_message_deliveries` | `department_messages`, `users` |
 | `department_message_reads` | `department_messages`, `users` |
 | `email_attachments` | `email_templates`, `users` |
+| `encryption_key_custody` | `users` |
 | `equipment_kit_items` | `equipment_kits`, `inventory_categories`, `inventory_items` |
 | `event_request_activity` | `event_requests`, `users` |
-| `expense_line_items` | `budgets`, `expense_reports` |
+| `expense_line_items` | `budgets`, `documents`, `expense_reports` |
 | `form_fields` | `forms` |
 | `grant_budget_items` | `grant_applications` |
 | `grant_compliance_tasks` | `grant_applications`, `users` |
@@ -11985,6 +12217,7 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `shift_attendance` | `shifts`, `users` |
 | `shift_equipment_check_items` | `check_template_items`, `shift_equipment_checks` |
 | `shift_equipment_check_seals` | `check_template_compartments`, `shift_equipment_checks` |
+| `shift_history_import_rows` | `shift_history_imports` |
 | `skill_test_viewers` | `skill_tests`, `users` |
 | `user_positions` | `positions`, `users` |
 | `votes` | `candidates`, `elections`, `users` |

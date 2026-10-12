@@ -531,6 +531,10 @@ def reset_encryption_ciphers() -> None:
     _aesgcms_by_iterations.clear()
     _legacy_aesgcms.clear()
     _legacy_fernets.clear()
+    # The file-encryption keys derive from the same settings.
+    from app.core.file_encryption import reset_file_keys
+
+    reset_file_keys()
 
 
 def encrypt_data(data: str) -> str:

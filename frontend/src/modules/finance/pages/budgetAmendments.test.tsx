@@ -11,6 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
+import { ConfirmProvider } from '@/contexts/ConfirmContext';
 import type { Budget, BudgetAmendment, BudgetCategory, FiscalYear } from '../types';
 
 let storeState: Record<string, unknown> = {};
@@ -142,9 +143,11 @@ const fetchBudgets = vi.fn();
 const openLine = async (id: string) => {
   render(
     <MemoryRouter initialEntries={[`/finance/budgets/${id}`]}>
-      <Routes>
-        <Route path="/finance/budgets/:id" element={<BudgetDetailPage />} />
-      </Routes>
+      <ConfirmProvider>
+        <Routes>
+          <Route path="/finance/budgets/:id" element={<BudgetDetailPage />} />
+        </Routes>
+      </ConfirmProvider>
     </MemoryRouter>
   );
   await screen.findByRole('heading', { name: 'Gear' });
@@ -252,7 +255,7 @@ describe('Budget detail — Add amendment', () => {
         approvedOn: '2026-10-07',
       })
     );
-    expect(toastSuccess).toHaveBeenCalledWith('Amendment recorded');
+    expect(toastSuccess).toHaveBeenCalledWith('Amendment recorded — awaiting confirmation by a second officer');
     await waitFor(() => expect(getBudget).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(listAmendments).toHaveBeenCalledTimes(2));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -365,9 +368,11 @@ describe('Budgets list', () => {
   it('marks an amended line beside its budgeted amount', () => {
     render(
       <MemoryRouter initialEntries={['/finance/budgets']}>
-        <Routes>
-          <Route path="/finance/budgets" element={<BudgetsPage />} />
-        </Routes>
+        <ConfirmProvider>
+          <Routes>
+            <Route path="/finance/budgets" element={<BudgetsPage />} />
+          </Routes>
+        </ConfirmProvider>
       </MemoryRouter>
     );
     expect(screen.getAllByText('(amended)')).toHaveLength(1);

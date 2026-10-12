@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import SkillsTestingTestRecordsTab from './SkillsTestingTestRecordsTab';
 import { calendarDaysBetween } from '../utils/dateFormatting';
-import type { SkillTestListParams } from '../types/skillsTesting';
+import type { SkillTestListItem, SkillTestListParams } from '../types/skillsTesting';
 
 const mockLoadTests = vi.fn<(params?: SkillTestListParams) => void>();
 const mockLoadTemplates = vi.fn();
@@ -65,7 +65,7 @@ const pendingTest = {
   pending_validation: true,
 };
 
-let mockTests: (typeof completedTest | typeof unfinishedTest)[] = [];
+let mockTests: SkillTestListItem[] = [];
 let mockTestsTotal = 0;
 
 vi.mock('../stores/skillsTestingStore', () => ({

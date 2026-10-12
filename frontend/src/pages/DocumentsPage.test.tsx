@@ -19,6 +19,8 @@ vi.mock('../services/api', () => ({
     uploadDocument: vi.fn(),
     deleteDocument: vi.fn(),
     createFolder: (...args: unknown[]) => mockCreateFolder(...args) as unknown,
+    // Read by the folder settings dialog when it opens.
+    getFolderRoleOptions: () => Promise.resolve([]),
   },
 }));
 
@@ -518,5 +520,26 @@ describe('DocumentsPage', () => {
 
     await waitFor(() => expect(screen.queryByText('Stale child')).not.toBeInTheDocument());
     expect(screen.getByRole('button', { name: /sops/i })).toBeInTheDocument();
+  });
+});
+
+describe('DocumentsPage folder management (W53-4)', () => {
+  it('offers Manage folder on each card to a documents manager, opening its settings', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<DocumentsPage />);
+
+    const manage = await screen.findByRole('button', { name: 'Manage folder' });
+    expect(manage).toHaveAccessibleDescription('SOPs');
+    await user.click(manage);
+
+    expect(await screen.findByRole('dialog', { name: 'Manage “SOPs”' })).toBeInTheDocument();
+  });
+
+  it('offers no folder management without documents.manage', async () => {
+    mockAuthState.checkPermission = vi.fn().mockReturnValue(false);
+    renderWithRouter(<DocumentsPage />);
+
+    await screen.findByRole('button', { name: /sops/i });
+    expect(screen.queryByRole('button', { name: 'Manage folder' })).not.toBeInTheDocument();
   });
 });

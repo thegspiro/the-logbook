@@ -2,8 +2,8 @@
 
 How to rotate `ENCRYPTION_KEY` — the key protecting at-rest encrypted fields
 (MFA secrets and backup codes, integration credentials, shift-evaluation
-narratives, `enc:`-prefixed secrets in organization settings) — without any
-downtime or data loss.
+narratives, `enc:`-prefixed secrets in organization settings) and, since
+2026-10-09, every stored file — without any downtime or data loss.
 
 Rotate when: the key may have been exposed (leaked backup of `.env`, offboarded
 administrator who held it, secret accidentally committed), or on your
@@ -72,12 +72,23 @@ current recommendation, which auditors do check.
    # Apply:
    docker exec -it intranet-backend python scripts/rotate_encryption_key.py --commit
    ```
-6. When the script reports zero rotated and zero unreadable values on a
-   `--commit` run, remove the drained key from `ENCRYPTION_KEYS_LEGACY` and
-   restart.
-7. Update the offline copies of your secrets (see BACKUP.md) — an old backup
+6. Move stored files to the new key too. This rewraps each file's own key,
+   not its body, so it is quick:
+   ```bash
+   # Report only:
+   docker exec -it intranet-backend python scripts/encrypt_uploads.py --rewrap
+   # Apply:
+   docker exec -it intranet-backend python scripts/encrypt_uploads.py --rewrap --apply
+   ```
+   Then confirm the new key's safekeeping from the notice administrators see.
+   It has a new fingerprint, so the old confirmation no longer counts.
+7. When the field script reports zero rotated and zero unreadable values on a
+   `--commit` run, and the file rewrap reports nothing left under a retired
+   key, remove the drained key from `ENCRYPTION_KEYS_LEGACY` and restart.
+8. Update the offline copies of your secrets (see BACKUP.md) — an old backup
    restored later will need whichever key encrypted it, so keep retired keys
-   with the backups from their era, clearly labeled.
+   where you keep the current one, labeled with the dates of the backups they
+   open. Never keep them in the same place as the backups themselves.
 
 ## Troubleshooting
 

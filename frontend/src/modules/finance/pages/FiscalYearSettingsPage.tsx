@@ -1,8 +1,14 @@
 /**
  * Fiscal Year Settings Page
  *
- * Settings page for managing fiscal years (create, activate, lock)
- * and budget categories (CRUD, including each category's owner position).
+ * Settings page for managing fiscal years and budget categories (CRUD,
+ * including each category's owner position).
+ *
+ * A fiscal year's life: drafted, taken through the planning stages, adopted
+ * by the board, started on or after its start date, put into its year-end
+ * close, and locked with the Treasurer's reconciliation sign-off once nothing
+ * is open. Each step is the backend's to allow; this screen offers the next
+ * one and shows the refusal in the API's own words.
  *
  * A draft year also carries next-year planning: "Start from last year" (copy
  * another year's lines in as a starting point) and the request deadline line
@@ -24,6 +30,9 @@ import {
   Copy,
   ArrowLeft,
   ArrowRight,
+  Play,
+  RotateCcw,
+  Archive,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
@@ -31,6 +40,7 @@ import { budgetCategoryService, fiscalYearService } from '../services/api';
 import { useBudgetFormOptions, withCurrent } from '../hooks/useBudgetFormOptions';
 import type { BudgetCategory, BudgetPlanningStage, FiscalYear } from '../types';
 import { BudgetAdoptionDialog } from '../components/BudgetAdoptionDialog';
+import { FiscalYearLockDialog } from '../components/FiscalYearLockDialog';
 import { PLANNING_STAGE_LABELS } from '../utils/budgetRequests';
 import { blankToNull } from '@/utils/formValues';
 import { getErrorMessage } from '@/utils/errorHandling';
@@ -47,17 +57,23 @@ import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 // Status Badge
 // =============================================================================
 
+// A closed year that is not locked is in its year-end close: it is "Closing"
+// here, and only a locked year is "Closed".
 const STATUS_COLORS: Record<string, string> = {
   draft: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
   active: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+  closing: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
   closed: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
 };
 
 const STATUS_LABELS: Record<string, string> = {
   draft: 'Draft',
   active: 'Active',
+  closing: 'Closing',
   closed: 'Closed',
 };
+
+const displayStatus = (fy: FiscalYear): string => (fy.status === 'closed' && !fy.isLocked ? 'closing' : fy.status);
 
 // =============================================================================
 // Shared Styles
@@ -509,8 +525,11 @@ const RequestWindow: React.FC<{ fy: FiscalYear }> = ({ fy }) => (
 const STAGE_BUTTON =
   'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50';
 
+/** The stages a planning move reaches; `adopted` is reached only by recording the vote. */
+type MovableStage = Exclude<BudgetPlanningStage, 'adopted'>;
+
 /** What each move does, worded for the confirmation. */
-const STAGE_MOVES: Record<BudgetPlanningStage, { label: string; message: (name: string) => string }> = {
+const STAGE_MOVES: Record<MovableStage, { label: string; message: (name: string) => string }> = {
   requests: {
     label: 'Back to requests',
     message: (name) =>
@@ -524,16 +543,20 @@ const STAGE_MOVES: Record<BudgetPlanningStage, { label: string; message: (name: 
   board_review: {
     label: 'Send to the board',
     message: (name) =>
-      `Send ${name} to the board? Nothing in it can change while it is before the board. Once the board adopts it, record the adoption here to make it the active year. You can move it back.`,
+      `Send ${name} to the board? Nothing in it can change while it is before the board. Once the board adopts it, record the adoption here, then start the year on or after its start date. You can move it back.`,
   },
 };
 
 /** The stages a draft year can move to from where it is. */
-const NEXT_STAGES: Record<BudgetPlanningStage, { back?: BudgetPlanningStage; forward?: BudgetPlanningStage }> = {
+const NEXT_STAGES: Record<BudgetPlanningStage, { back?: MovableStage; forward?: MovableStage }> = {
   requests: { forward: 'leadership_review' },
   leadership_review: { back: 'requests', forward: 'board_review' },
   board_review: { back: 'leadership_review' },
+  adopted: {},
 };
+
+const START_BUTTON =
+  'inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800 hover:bg-green-100 disabled:opacity-50 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-300 dark:hover:bg-green-500/20';
 
 interface PlanningStageControlsProps {
   fy: FiscalYear;
@@ -550,7 +573,29 @@ const PlanningStageControls: React.FC<PlanningStageControlsProps> = ({ fy, onCha
   if (!stage) return null;
   const { back, forward } = NEXT_STAGES[stage];
 
-  const move = async (to: BudgetPlanningStage) => {
+  const start = async () => {
+    const confirmed = await confirm({
+      title: `Start ${fy.name}`,
+      message: `Make ${fy.name} the active fiscal year? Its budget lines can be spent against from now on, and each line owner is emailed their adopted amounts.`,
+      confirmLabel: 'Start the year',
+      cancelLabel: 'Not now',
+      variant: 'info',
+    });
+    if (!confirmed) return;
+    setMoving(true);
+    try {
+      await fiscalYearService.activate(fy.id);
+      toast.success(`${fy.name} started`);
+      onChanged();
+    } catch (err: unknown) {
+      // The API's own words: before the start date, another year still active.
+      toast.error(getErrorMessage(err, 'Could not start the year'));
+    } finally {
+      setMoving(false);
+    }
+  };
+
+  const move = async (to: MovableStage) => {
     const confirmed = await confirm({
       title: STAGE_MOVES[to].label,
       message: STAGE_MOVES[to].message(fy.name),
@@ -586,13 +631,15 @@ const PlanningStageControls: React.FC<PlanningStageControlsProps> = ({ fy, onCha
         </button>
       )}
       {stage === 'board_review' && (
-        <button
-          type="button"
-          onClick={() => setAdopting(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800 hover:bg-green-100 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-300 dark:hover:bg-green-500/20"
-        >
+        <button type="button" onClick={() => setAdopting(true)} className={START_BUTTON}>
           <CheckCircle className="h-3.5 w-3.5" />
           Record adoption
+        </button>
+      )}
+      {stage === 'adopted' && (
+        <button type="button" onClick={() => void start()} disabled={moving} className={START_BUTTON}>
+          <Play className="h-3.5 w-3.5" />
+          Start the year
         </button>
       )}
       {adopting && (
@@ -618,6 +665,125 @@ const AdoptionRecord: React.FC<{ fy: FiscalYear }> = ({ fy }) =>
     </p>
   ) : null;
 
+/** When the close began, and the sign-off that locked the year. */
+const CloseRecord: React.FC<{ fy: FiscalYear }> = ({ fy }) => {
+  const tz = useTimezone();
+  if (fy.isLocked && fy.lockedAt) {
+    return (
+      <p className="text-theme-text-secondary mt-0.5 text-xs break-words">
+        Locked {formatDate(fy.lockedAt, tz)}
+        {fy.lockNotes ? ` · ${fy.lockNotes}` : ''}
+      </p>
+    );
+  }
+  if (fy.status === 'closed' && !fy.isLocked) {
+    return (
+      <p className="text-theme-text-secondary mt-0.5 text-xs">
+        {fy.closingStartedAt ? `Year-end close began ${formatDate(fy.closingStartedAt, tz)}. ` : ''}
+        No new requests; what was submitted can still be approved and paid.
+      </p>
+    );
+  }
+  return null;
+};
+
+interface YearCloseControlsProps {
+  fy: FiscalYear;
+  onChanged: () => void;
+}
+
+/** Begin the active year's close; reopen or lock a closing year. */
+const YearCloseControls: React.FC<YearCloseControlsProps> = ({ fy, onChanged }) => {
+  const { confirm } = useConfirm();
+  const [working, setWorking] = useState(false);
+  const [locking, setLocking] = useState(false);
+
+  const run = async (
+    action: () => Promise<unknown>,
+    prompt: { title: string; message: string; confirmLabel: string },
+    done: string,
+    fallback: string
+  ) => {
+    const confirmed = await confirm({ ...prompt, cancelLabel: 'Not now', variant: 'warning' });
+    if (!confirmed) return;
+    setWorking(true);
+    try {
+      await action();
+      toast.success(done);
+      onChanged();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, fallback));
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  if (fy.isLocked) return null;
+  if (fy.status === 'active') {
+    return (
+      <button
+        type="button"
+        disabled={working}
+        onClick={() =>
+          void run(
+            () => fiscalYearService.beginClose(fy.id),
+            {
+              title: 'Begin year-end close',
+              message: `Begin ${fy.name}'s year-end close? No new purchase requests, expense reports or check requests can be raised or submitted against it. What was already submitted can still be approved, paid, issued or cancelled, and budget amendments are still allowed. You can lock it once nothing is open.`,
+              confirmLabel: 'Begin close',
+            },
+            `${fy.name} is closing`,
+            'Could not begin the year-end close'
+          )
+        }
+        className={STAGE_BUTTON}
+      >
+        <Archive className="h-3.5 w-3.5" />
+        Begin year-end close
+      </button>
+    );
+  }
+  if (fy.status !== 'closed') return null;
+  return (
+    <>
+      <button
+        type="button"
+        disabled={working}
+        onClick={() =>
+          void run(
+            () => fiscalYearService.activate(fy.id),
+            {
+              title: `Reopen ${fy.name}`,
+              message: `Make ${fy.name} the active fiscal year again? New requests can be raised against it. Another year cannot be active at the same time.`,
+              confirmLabel: 'Reopen',
+            },
+            `${fy.name} reopened`,
+            'Could not reopen the year'
+          )
+        }
+        className={STAGE_BUTTON}
+      >
+        <RotateCcw className="h-3.5 w-3.5" />
+        Reopen
+      </button>
+      <button type="button" onClick={() => setLocking(true)} className={STAGE_BUTTON}>
+        <Lock className="h-3.5 w-3.5" />
+        Lock
+      </button>
+      {locking && (
+        <FiscalYearLockDialog
+          fiscalYear={fy}
+          onClose={() => setLocking(false)}
+          onLocked={() => {
+            setLocking(false);
+            onChanged();
+          }}
+        />
+      )}
+    </>
+  );
+};
+
 // =============================================================================
 // Main Page Component
 // =============================================================================
@@ -630,25 +796,12 @@ const FiscalYearSettingsPage: React.FC = () => {
   const [showCreateFY, setShowCreateFY] = useState(false);
   const [showCreateCategory, setShowCreateCategory] = useState(false);
   const [editingCategory, setEditingCategory] = useState<BudgetCategory | null>(null);
-  const [lockingId, setLockingId] = useState<string | null>(null);
   const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
 
   useEffect(() => {
     void fetchFiscalYears();
     void fetchBudgetCategories();
   }, [fetchFiscalYears, fetchBudgetCategories]);
-
-  const handleLock = async (id: string) => {
-    try {
-      await fiscalYearService.lock(id);
-      toast.success('Fiscal year locked');
-      void fetchFiscalYears();
-    } catch {
-      toast.error('Failed to lock fiscal year');
-    } finally {
-      setLockingId(null);
-    }
-  };
 
   const handleDeleteCategory = async (id: string) => {
     try {
@@ -712,6 +865,18 @@ const FiscalYearSettingsPage: React.FC = () => {
           </button>
         </div>
 
+        {fiscalYears
+          .filter((fy) => fy.closeDue)
+          .map((fy) => (
+            <div key={`close-due-${fy.id}`} role="status" className="alert-warning mb-4 flex items-start gap-3 text-sm">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>
+                {fy.name} ended {formatDate(fy.endDate, tz)}. Begin its year-end close to stop new requests and start
+                reconciling.
+              </p>
+            </div>
+          ))}
+
         {fiscalYears.length === 0 ? (
           <EmptyState
             headingLevel={3}
@@ -735,9 +900,9 @@ const FiscalYearSettingsPage: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <span className="text-theme-text-primary text-sm font-medium">{fy.name}</span>
                       <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[fy.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
+                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[displayStatus(fy)] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
                       >
-                        {STATUS_LABELS[fy.status] ?? fy.status}
+                        {STATUS_LABELS[displayStatus(fy)] ?? fy.status}
                       </span>
                       {fy.isLocked && <Lock className="text-theme-text-secondary h-3.5 w-3.5" />}
                     </div>
@@ -746,21 +911,13 @@ const FiscalYearSettingsPage: React.FC = () => {
                     </p>
                     {fy.status === 'draft' && <RequestWindow fy={fy} />}
                     <AdoptionRecord fy={fy} />
+                    <CloseRecord fy={fy} />
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {fy.status === 'draft' && (
                       <PlanningStageControls fy={fy} onChanged={() => void fetchFiscalYears()} />
                     )}
-                    {!fy.isLocked && fy.status !== 'draft' && (
-                      <button
-                        type="button"
-                        onClick={() => setLockingId(fy.id)}
-                        className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium"
-                      >
-                        <Lock className="h-3.5 w-3.5" />
-                        Lock
-                      </button>
-                    )}
+                    {fy.status !== 'draft' && <YearCloseControls fy={fy} onChanged={() => void fetchFiscalYears()} />}
                   </div>
                 </div>
                 {fy.status === 'draft' && !fy.isLocked && fy.planningStage === 'requests' && (
@@ -859,19 +1016,6 @@ const FiscalYearSettingsPage: React.FC = () => {
           onSaved={() => void fetchBudgetCategories()}
         />
       )}
-
-      {/* Lock Confirm */}
-      <ConfirmDialog
-        isOpen={!!lockingId}
-        onClose={() => setLockingId(null)}
-        onConfirm={() => {
-          if (lockingId) void handleLock(lockingId);
-        }}
-        title="Lock Fiscal Year"
-        message="Locking closes this fiscal year and stops its name and dates from being edited. You can't unlock it."
-        confirmLabel="Lock"
-        variant="danger"
-      />
 
       {/* Delete Category Confirm */}
       <ConfirmDialog

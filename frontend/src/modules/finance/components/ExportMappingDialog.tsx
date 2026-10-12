@@ -219,8 +219,9 @@ export const ExportMappingDialog: React.FC<ExportMappingDialogProps> = ({
             aria-describedby={describedBy('offset', 'mapping-offset-hint')}
           />
           <p id="mapping-offset-hint" className="text-theme-text-secondary mt-1 text-xs">
-            The bank or clearing account payments in this category come out of. Each exported transaction is credited
-            here, which balances the entry QuickBooks requires.
+            The bank or credit card account payments in this category come out of. Each exported transaction is credited
+            here, which balances the entry QuickBooks requires. Accounts Payable and Receivable can&apos;t be used:
+            QuickBooks needs a vendor or customer on those lines.
           </p>
           {errorText('offset')}
         </div>

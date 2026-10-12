@@ -24,11 +24,15 @@ const GrantApplicationFormPage = lazyWithRetry(() => import('./pages/GrantApplic
 
 // Grant Opportunities
 const GrantOpportunitiesPage = lazyWithRetry(() => import('./pages/GrantOpportunitiesPage'));
+const GrantOpportunityFormPage = lazyWithRetry(() => import('./pages/GrantOpportunityFormPage'));
 
 // Fundraising
 const CampaignsPage = lazyWithRetry(() => import('./pages/CampaignsPage'));
 const DonorsPage = lazyWithRetry(() => import('./pages/DonorsPage'));
 const DonationsPage = lazyWithRetry(() => import('./pages/DonationsPage'));
+const DonationFormPage = lazyWithRetry(() => import('./pages/DonationFormPage'));
+const PledgesPage = lazyWithRetry(() => import('./pages/PledgesPage'));
+const FundraisingEventsPage = lazyWithRetry(() => import('./pages/FundraisingEventsPage'));
 
 // Reports
 const GrantsReportsPage = lazyWithRetry(() => import('./pages/GrantsReportsPage'));
@@ -60,6 +64,18 @@ export const getGrantsFundraisingRoutes = () => {
             requiredPermission="fundraising.view"
           >
             <GrantOpportunitiesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/grants/opportunities/new"
+        element={
+          <ProtectedRoute
+            requiredModule="grants"
+            moduleLabel="Grants & Fundraising"
+            requiredPermission="fundraising.manage"
+          >
+            <GrantOpportunityFormPage />
           </ProtectedRoute>
         }
       />
@@ -152,6 +168,45 @@ export const getGrantsFundraisingRoutes = () => {
             requiredPermission="fundraising.view"
           >
             <DonationsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/grants/donations/new"
+        element={
+          <ProtectedRoute
+            requiredModule="grants"
+            moduleLabel="Grants & Fundraising"
+            requiredPermission="fundraising.manage"
+          >
+            <DonationFormPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Pledges and fundraising events: everyone with fundraising.view reads;
+          the pages offer create/edit only to fundraising.manage. */}
+      <Route
+        path="/grants/pledges"
+        element={
+          <ProtectedRoute
+            requiredModule="grants"
+            moduleLabel="Grants & Fundraising"
+            requiredPermission="fundraising.view"
+          >
+            <PledgesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/grants/events"
+        element={
+          <ProtectedRoute
+            requiredModule="grants"
+            moduleLabel="Grants & Fundraising"
+            requiredPermission="fundraising.view"
+          >
+            <FundraisingEventsPage />
           </ProtectedRoute>
         }
       />

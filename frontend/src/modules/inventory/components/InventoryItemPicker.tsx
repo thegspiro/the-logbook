@@ -23,13 +23,41 @@
  * never become a department-wide floor. Those numbers live on
  * `check_template_items`; `reorder_point` on the catalog row is the
  * quartermaster's call and stays unset here.
+ *
+ * With `searchScope.medical` on, medical supplies are searched too and listed
+ * first, and `canCreateMedical` offers creating the item in Medical Supplies
+ * under a medical category the viewer picks.
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, X, Loader2, Package, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { inventoryService } from '@/services/inventoryService';
+import { medicalSuppliesService } from '@/services/medicalSuppliesService';
+import type { InventoryItem } from '@/services/eventServices';
 import { getErrorMessage } from '@/utils/errorHandling';
+import MedicalCreatePanel from './MedicalCreatePanel';
+import { searchChecklistCatalog, type CatalogDomain, type CatalogSearchScope } from '../utils/checklistCatalogSearch';
+
+const GEAR_ONLY: CatalogSearchScope = { gear: true, medical: false };
+
+/**
+ * Resolve a linked item's name through whichever endpoint the viewer can read.
+ *
+ * The gear endpoint needs `inventory.view`; a medical-only supply officer
+ * holds only `inventory.view_medical`, and used to see every link they made
+ * read back as "Linked item".
+ */
+async function resolveItemName(itemId: string, scope: CatalogSearchScope): Promise<string> {
+  if (scope.gear) {
+    try {
+      return (await inventoryService.getItem(itemId)).name;
+    } catch (err: unknown) {
+      if (!scope.medical) throw err;
+    }
+  }
+  return (await medicalSuppliesService.getItem(itemId)).name;
+}
 
 interface InventoryItemPickerProps {
   value?: string | undefined;
@@ -49,6 +77,13 @@ interface InventoryItemPickerProps {
    * thermal imager unable to use any of them until somebody reclassified it.
    */
   createTrackingType?: 'pool' | 'individual';
+  /** Which halves of the catalog the viewer can read. Gear only by default. */
+  searchScope?: CatalogSearchScope;
+  /**
+   * Whether the viewer may create medical supplies (inventory.manage_medical
+   * or inventory.manage). Only meaningful with `searchScope.medical` on.
+   */
+  canCreateMedical?: boolean;
 }
 
 const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
@@ -57,9 +92,13 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
   placeholder = 'Search inventory to link…',
   canCreateInventory = false,
   createTrackingType = 'pool',
+  searchScope = GEAR_ONLY,
+  canCreateMedical = false,
 }) => {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<{ id: string; name: string; sub?: string }[]>([]);
+  const [results, setResults] = useState<{ id: string; name: string; sub?: string; domain: CatalogDomain }[]>([]);
+  const [medicalDraft, setMedicalDraft] = useState<string | null>(null);
+  const { gear: searchGear, medical: searchMedical } = searchScope;
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -98,10 +137,9 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
       return;
     }
     let cancelled = false;
-    void inventoryService
-      .getItem(value)
-      .then((item) => {
-        if (!cancelled) setSelectedName(item.name);
+    void resolveItemName(value, { gear: searchGear, medical: searchMedical })
+      .then((name) => {
+        if (!cancelled) setSelectedName(name);
       })
       .catch(() => {
         if (!cancelled) setSelectedName(null);
@@ -109,41 +147,39 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [value]);
+  }, [value, searchGear, searchMedical]);
 
-  const runSearch = useCallback((q: string, request: number) => {
-    if (!q.trim()) {
-      setResults([]);
-      setLoading(false);
-      return;
-    }
-    void inventoryService
-      .getItems({ search: q.trim(), limit: 10, active_only: true })
-      .then((res) => {
-        if (request !== requestRef.current) return;
-        setSearchFailed(false);
-        setResults(
-          res.items.map((i) => {
-            const sub = [i.manufacturer, i.model_number || i.serial_number].filter(Boolean).join(' · ');
-            return { id: i.id, name: i.name, ...(sub ? { sub } : {}) };
-          })
-        );
-      })
-      .catch(() => {
-        // A failed search establishes nothing. Reporting it as an empty
-        // catalog would let the create row offer to add an item that may
-        // already be on file, splitting its checklist links and lots across
-        // two rows — so absence has to be proven, not assumed.
-        if (request !== requestRef.current) return;
+  const runSearch = useCallback(
+    (q: string, request: number) => {
+      if (!q.trim()) {
         setResults([]);
-        setSearchFailed(true);
-      })
-      .finally(() => {
-        if (request === requestRef.current) setLoading(false);
-      });
-  }, []);
+        setLoading(false);
+        return;
+      }
+      void searchChecklistCatalog(q.trim(), { gear: searchGear, medical: searchMedical }, 10)
+        .then(({ hits, incomplete }) => {
+          if (request !== requestRef.current) return;
+          // A failed search establishes nothing. Reporting it as an empty
+          // catalog would let the create row offer to add an item that may
+          // already be on file, splitting its checklist links and lots across
+          // two rows — so absence has to be proven, not assumed.
+          setSearchFailed(incomplete);
+          setResults(
+            hits.map(({ item: i, domain }) => {
+              const sub = [i.manufacturer, i.model_number || i.serial_number].filter(Boolean).join(' · ');
+              return { id: i.id, name: i.name, domain, ...(sub ? { sub } : {}) };
+            })
+          );
+        })
+        .finally(() => {
+          if (request === requestRef.current) setLoading(false);
+        });
+    },
+    [searchGear, searchMedical]
+  );
 
   const handleQueryChange = (q: string) => {
+    setMedicalDraft(null);
     setQuery(q);
     setOpen(true);
     setResults([]);
@@ -159,7 +195,20 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
 
   const typed = query.trim();
   const hasExactMatch = results.some((r) => r.name.trim().toLowerCase() === typed.toLowerCase());
-  const showCreate = canCreateInventory && typed.length > 0 && !loading && !searchFailed && !hasExactMatch;
+  const canOfferCreate = typed.length > 0 && !loading && !searchFailed && !hasExactMatch;
+  const showCreate = canCreateInventory && canOfferCreate;
+  const showCreateMedical = canCreateMedical && searchMedical && canOfferCreate;
+  const gearCreateLabel = showCreateMedical
+    ? `Create “${typed}” as equipment or gear`
+    : `Create “${typed}” in inventory`;
+
+  const finishMedicalCreate = (item: InventoryItem) => {
+    onChange(item.id, item.name);
+    setSelectedName(item.name);
+    setMedicalDraft(null);
+    setQuery('');
+    setResults([]);
+  };
 
   /**
    * Add the typed name to the catalog and link it in one step.
@@ -263,8 +312,33 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
             >
               <span className="text-theme-text-primary block text-sm">{r.name}</span>
               {r.sub && <span className="text-theme-text-muted block text-xs">{r.sub}</span>}
+              {r.domain === 'medical' && (
+                <span className="badge mt-1 bg-blue-500/10 text-[10px] text-blue-800 dark:text-blue-300">Medical</span>
+              )}
             </button>
           ))}
+
+          {showCreateMedical && (
+            <button
+              type="button"
+              onClick={() => {
+                setMedicalDraft(typed);
+                setOpen(false);
+              }}
+              disabled={creating}
+              className="hover:bg-theme-surface-secondary border-theme-surface-border flex w-full items-center gap-2 border-t px-3 py-2 text-left first:border-t-0 disabled:opacity-50"
+            >
+              <Plus className="text-theme-text-muted h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1">
+                <span className="text-theme-text-primary block truncate text-sm">
+                  Create “{typed}” in Medical Supplies
+                </span>
+                <span className="text-theme-text-muted block text-xs">
+                  Choose a medical category, then it&rsquo;s added and linked
+                </span>
+              </span>
+            </button>
+          )}
 
           {showCreate && (
             <button
@@ -279,7 +353,7 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
                 <Plus className="text-theme-text-muted h-4 w-4 shrink-0" />
               )}
               <span className="min-w-0 flex-1">
-                <span className="text-theme-text-primary block truncate text-sm">Create “{typed}” in inventory</span>
+                <span className="text-theme-text-primary block truncate text-sm">{gearCreateLabel}</span>
                 <span className="text-theme-text-muted block text-xs">Adds it to the catalog and links this item</span>
               </span>
             </button>
@@ -287,14 +361,26 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
 
           {searchFailed ? (
             <p role="status" className="text-theme-text-muted px-3 py-2 text-xs">
-              Couldn&rsquo;t search the catalog. Check your connection and try again.
+              {results.length > 0
+                ? 'Part of the catalog couldn’t be searched, so creating a new item is off for now.'
+                : 'Couldn’t search the catalog. Check your connection and try again.'}
             </p>
           ) : (
             results.length === 0 &&
             !loading &&
-            !showCreate && <p className="text-theme-text-muted px-3 py-2 text-xs">No matching items.</p>
+            !showCreate &&
+            !showCreateMedical && <p className="text-theme-text-muted px-3 py-2 text-xs">No matching items.</p>
           )}
         </div>
+      )}
+
+      {medicalDraft !== null && (
+        <MedicalCreatePanel
+          name={medicalDraft}
+          trackingType={createTrackingType}
+          onCreated={finishMedicalCreate}
+          onCancel={() => setMedicalDraft(null)}
+        />
       )}
     </div>
   );

@@ -117,12 +117,15 @@ class OrganizationService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_organization(self, organization_id: UUID) -> Optional[Organization]:
+    async def get_organization(
+        self, organization_id: UUID | str
+    ) -> Optional[Organization]:
         """Get an organization by ID"""
         result = await self.db.execute(
             select(Organization).where(Organization.id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        organization: Optional[Organization] = result.scalar_one_or_none()
+        return organization
 
     # Mapping from onboarding module IDs (hyphenated) to ModuleSettings
     # field names (snake_case).  Entries where the ID already matches the
@@ -261,7 +264,7 @@ class OrganizationService:
         return ModuleSettings()
 
     async def get_organization_settings(
-        self, organization_id: UUID
+        self, organization_id: UUID | str
     ) -> OrganizationSettings:
         """
         Get organization settings
@@ -413,7 +416,7 @@ class OrganizationService:
         )
 
     async def update_organization_settings(
-        self, organization_id: UUID, settings_update: Dict[str, Any]
+        self, organization_id: UUID | str, settings_update: Dict[str, Any]
     ) -> OrganizationSettings:
         """
         Update organization settings
@@ -534,7 +537,7 @@ class OrganizationService:
         return await self.get_organization_settings(organization_id)
 
     async def get_enabled_modules(
-        self, organization_id: UUID
+        self, organization_id: UUID | str
     ) -> EnabledModulesResponse:
         """
         Get enabled modules for an organization
@@ -579,7 +582,7 @@ class OrganizationService:
         )
 
     async def update_module_settings(
-        self, organization_id: UUID, module_updates: Dict[str, bool]
+        self, organization_id: UUID | str, module_updates: Dict[str, bool]
     ) -> EnabledModulesResponse:
         """
         Update module settings for an organization
@@ -628,7 +631,7 @@ class OrganizationService:
         return await self.get_enabled_modules(organization_id)
 
     async def get_membership_id_settings(
-        self, organization_id: UUID
+        self, organization_id: UUID | str
     ) -> MembershipIdSettings:
         """Get membership ID settings for an organization."""
         org_settings = await self.get_organization_settings(organization_id)
@@ -783,7 +786,9 @@ class OrganizationService:
             return settings.start_number
         return max(settings.next_number, settings.start_number)
 
-    async def preview_next_membership_id(self, organization_id: UUID) -> Optional[str]:
+    async def preview_next_membership_id(
+        self, organization_id: UUID | str
+    ) -> Optional[str]:
         """The ID the next auto-generated member would receive, or None.
 
         None when numbering or auto-generation is off: nothing will be assigned
@@ -806,7 +811,9 @@ class OrganizationService:
         )
         return membership_id
 
-    async def generate_next_membership_id(self, organization_id: UUID) -> Optional[str]:
+    async def generate_next_membership_id(
+        self, organization_id: UUID | str
+    ) -> Optional[str]:
         """
         Generate the next membership ID for a new member.
 

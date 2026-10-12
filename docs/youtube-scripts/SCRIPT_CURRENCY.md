@@ -1,5 +1,41 @@
 # Script currency
 
+## Flagged by the 2026-10-11 → 10-12 changes
+
+Source: [CHANGE_AUDIT_2026-10-11_TO_10-12](../CHANGE_AUDIT_2026-10-11_TO_10-12.md).
+Rows are **Open**; nothing was re-recorded. Grep a label before it goes in a script.
+
+| Script                            | Beat                    | Was                                                                        | Now                                                                                                       |
+| --------------------------------- | ----------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **03 / 04** (leadership, finance) | Dues, grants (if shown) | Dues read-only; **Add Opportunity** bounced home; no pledge or event pages | Dues schedules and payments in-app; Add Opportunity, Record Donation, Pledges, Fundraising Events screens |
+| **03 / 07**                       | Documents               | Documents could be left unfiled                                            | Always in a folder (General Documents by default); **Manage folder** on each card                         |
+| **05 / 07**                       | Forms                   | Publish silently                                                           | Warning when a public form would file nothing; one submission per person control                          |
+| **12** (elections)                | Ballot and results      | Abstain pre-selected; pooled results                                       | No default Abstain; per-item results; proxy on anonymous elections; resend prompt                         |
+| **03**                            | Inventory (if shown)    | Assign was always permanent                                                | **Permanent / Temporary** with return date; departure clearance screen                                    |
+| **07 / 06**                       | Meetings                | Typed assignee name                                                        | Assignee picker; Attendance dashboard; executive meetings                                                 |
+| **06** (member guide)             | Shift close-out         | Retype each member's calls                                                 | **Give everyone all N calls**                                                                             |
+
+## Flagged by the 2026-10-08 → 10-11 changes
+
+Source: [CHANGE_AUDIT_2026-10-08_TO_10-11](../CHANGE_AUDIT_2026-10-08_TO_10-11.md).
+Labels come from the merged commits and the frontend source; grep a label before
+it goes into a script. Rows are **Open**. Nothing was re-recorded.
+
+**Re-record or shoot new footage:** 03 and 04 (hub layout), 07 (suggestion boxes),
+06 (pre-shift work, if the member guide covers vehicle check-in).
+
+| Script                                                          | Beat                        | Was                                                      | Now                                                                                                                                                                                                            |
+| --------------------------------------------------------------- | --------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **03**, **04**, **05**, **07** (anywhere an admin hub is shown) | Hub navigation              | Underline tab bar or "More" menu                         | Cards that say what each section holds, with red counts matching **Needs attention**; on a phone a scrolling chip row. Training has seven areas. Type in the search palette to jump to a hub section           |
+| **05**                                                          | Training hub                | Skills tests and shift reports not in the queue          | **Needs attention** now lists skills tests awaiting validation and shift reports awaiting review                                                                                                               |
+| **03 / 04**                                                     | Events hub                  | Attendance requests only inside each event               | Department-wide list under **All events** from the queue; members can withdraw a request (two per event)                                                                                                       |
+| **07**                                                          | Suggestion boxes (new beat) | Title and details only                                   | Boxes can ask branching **Questions**; an answer can route a submission to another box whose reviewers alone read it. The Compliance box asks "What kind of concern is this?"                                  |
+| **06** (member guide)                                           | Vehicle scan (new beat)     | Check-in only within two hours of the shift              | Before that, **Doing pre-shift work?** times prep; an officer must approve it; it adds hours, not shifts                                                                                                       |
+| **03 / 07**                                                     | Scheduling setup (new beat) | Start with an empty history                              | **Shift History Import**: upload CSV, review members, units, positions and shifts, commit (cannot be undone). Earlier decisions are remembered                                                                 |
+| **03 / 08**                                                     | Finance (if shown)          | Amendments take effect at once; Activate starts the year | An amendment waits for a second officer's confirmation; next year goes request → leadership review → board review → adopted → started; year-end close and lock are Treasurer steps; members see **My Budgets** |
+| **03**                                                          | Apparatus (if shown)        | Out of Service with no reason                            | **Reason** is required; Deficiency explains itself and links to Failures                                                                                                                                       |
+| **All**                                                         | Admin hours (if shown)      | "Nfc Station", "Qr Scan"                                 | **ID Card Station**, **QR Scan**                                                                                                                                                                               |
+
 ## Flagged by the 2026-10-07 → 10-08 changes (PRs #2985–#2996)
 
 Source: [CHANGE_AUDIT_2026-10-07_TO_10-08](../CHANGE_AUDIT_2026-10-07_TO_10-08.md).
@@ -396,7 +432,7 @@ title — the series title, "As Fire Chief or President" — were left alone.
 | **05** | Finalizing a training session                 | "finalizing immediately completes … confirms it from the emailed notification"                        | **Finalize Attendance** on the ended event writes the records; with confirmation on, a `training.manage` holder approves from the email or **Review and approve**, minutes per member             | **Stale**      |
 | **05** | Member self-submission                        | "pending submissions in your dashboard … approve or reject with notes"                                | Training Officer position notified; **Review Submissions**: **Approve**, **Request Revision**, **Reject**                                                                                         | **Incomplete** |
 | **06** | My Updates                                    | One feed, five rows                                                                                   | Same-category notifications fold into one row                                                                                                                                                     | **Addition**   |
-| **06** | QR code check-in                              | "scan the QR code, and you're checked in"                                                             | **Check In to This Event** → **You're Checked In**; **I was there** (30 days); room tags ask **Which event are you here for?**                                                                    | **Incomplete** |
+| **06** | QR code check-in                              | "scan the QR code, and you're checked in"                                                             | **Check In to This Event** → **You're Checked In**; **I was there** (30 days; **Withdraw request** and resend, twice); room tags ask **Which event are you here for?**                            | **Incomplete** |
 | **06** | ID cards, lost card                           | "a revoked card is dead for good"                                                                     | The revoked registration stays revoked; the card can be registered again                                                                                                                          | **Stale**      |
 | **06** | My Training page                              | —                                                                                                     | **Required Training** card (**None assigned**); empty-record explanation                                                                                                                          | **Addition**   |
 | **06** | Submitting external training                  | "You'll get a notification when it's approved"                                                        | A plain approval sends nothing; a notice comes on reject, changed values, revision request, or reversal                                                                                           | **Wrong**      |
@@ -752,7 +788,7 @@ unchanged. Nothing to re-record.
 never walked in the member guide — the only mention is the dashboard tile, which
 is where the edit above went. A department that wants the full board explained
 to members is better served by
-[`training/03-scheduling.md`](../training/03-scheduling.md#what-the-board-lists-and-what-it-leaves-out-2026-09-13),
+[`training/03-scheduling.md`](../training/03-scheduling.md#what-the-board-lists-and-what-it-leaves-out),
 which now carries it. **Do not add a chapter for it** without deciding that the
 member guide's scope is changing; it is currently a dashboard-and-mobile script
 by design.

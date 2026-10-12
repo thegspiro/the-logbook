@@ -270,6 +270,24 @@ const CheckRequestDetailPage: React.FC = () => {
               <p className="text-theme-text-primary text-sm">{formatDateTime(cr.checkDate, tz)}</p>
             </div>
           )}
+          {cr.qbExportedAt && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Sent to QuickBooks</p>
+              <p className="text-theme-text-primary text-sm">{formatDateTime(cr.qbExportedAt, tz)}</p>
+            </div>
+          )}
+          {cr.voidedAt && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Voided</p>
+              <p className="text-theme-text-primary text-sm">{formatDateTime(cr.voidedAt, tz)}</p>
+            </div>
+          )}
+          {cr.qbVoidExportedAt && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Void sent to QuickBooks</p>
+              <p className="text-theme-text-primary text-sm">{formatDateTime(cr.qbVoidExportedAt, tz)}</p>
+            </div>
+          )}
         </div>
 
         {cr.payeeAddress && (
@@ -306,6 +324,8 @@ const CheckRequestDetailPage: React.FC = () => {
         entityId={cr.id}
         status={cr.status}
         approvalStepCount={cr.approvalSteps.length}
+        awaitingSecondApproval={cr.awaitingSecondApproval}
+        firstApprovedBy={cr.firstApprovedBy}
         requesterId={cr.requestedBy}
         onDecided={() => void fetchCheckRequest(cr.id)}
       />

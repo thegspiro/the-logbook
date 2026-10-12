@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FloatingActionButton } from './FloatingActionButton';
-import React from 'react';
 
 const PlusIcon = () => <span data-testid="plus-icon">+</span>;
 const StarIcon = () => <span data-testid="star-icon">*</span>;

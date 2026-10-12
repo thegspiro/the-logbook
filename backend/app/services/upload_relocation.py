@@ -122,6 +122,17 @@ def _is_current_layout(path: str, organization_id: str, area: StorageArea) -> bo
     return _real(path).startswith(current + os.sep)
 
 
+def _is_flat_in_area(real: str, ref: Reference) -> bool:
+    """Whether *real* sits directly in its area's root although its row names
+    a record, so it belongs one level down in that record's directory."""
+    if not ref.record_id:
+        return False
+    area_root = os.path.realpath(
+        os.path.join(file_storage.UPLOADS_ROOT, ref.organization_id, ref.area.value)
+    )
+    return os.path.dirname(real) == area_root
+
+
 def _legacy_area_for(
     path: str, organization_id: str, areas: Iterable[StorageArea]
 ) -> Optional[StorageArea]:
@@ -258,7 +269,7 @@ async def _collect(db: AsyncSession, organization_id: Optional[str]) -> list[Ref
                 str(row.id),
                 str(row.organization_id),
                 StorageArea.DOCUMENTS,
-                None,
+                str(row.id),
                 row.file_path,
             )
         )
@@ -361,8 +372,14 @@ def plan(refs: list[Reference]) -> RelocationReport:
             continue
         area = _legacy_area_for(ref.path, ref.organization_id, _candidate_areas(ref))
         if area is None:
-            report.already_current += 1
-            continue
+            if not _is_flat_in_area(real, ref):
+                report.already_current += 1
+                continue
+            # Already in the org-first layout but stored flat in the area root
+            # with no record directory: library and module documents were
+            # written that way before 2026-10-11. Moved into the record's
+            # directory like a legacy file, through the same verified copy.
+            area = ref.area
         if not os.path.isfile(real):
             report.missing.append(real)
             continue
@@ -505,7 +522,7 @@ async def apply(
 
 def _load_manifest(path: str) -> dict[str, Any]:
     with open(path, encoding="utf-8") as handle:
-        data = json.load(handle)
+        data: dict[str, Any] = json.load(handle)
     if data.get("version") != MANIFEST_VERSION:
         raise ValueError(f"Unsupported manifest version in {path}")
     return data

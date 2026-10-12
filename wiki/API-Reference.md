@@ -1210,11 +1210,15 @@ exactly when `can_request` is true, so the rules below live only on the server:
 - the caller has no request on file — one request per member per event,
   enforced by a unique index, so a decided request is final.
 
-**Withdrawing** (`DELETE .../mine`) removes the caller's own request while it
-is still pending, so they may ask again under the same rules; the reviewers'
+**Withdrawing** (`DELETE .../mine`) takes back the caller's own request while
+it is still pending, so they may ask again under the same rules; the reviewers'
 in-app prompts are archived and the audit log records it
-(`event_attendance_petition_withdrawn`). An approved or declined request cannot
-be withdrawn (400), and with no request on file the answer is 404. The row lock
+(`event_attendance_petition_withdrawn`). The request is kept with status
+`withdrawn` and asking again reuses it, so its withdrawal count carries over:
+after **two** withdrawals the pending request is final, `GET .../mine` reports
+`can_withdraw: false` and a further withdrawal answers 400. An approved or
+declined request cannot be withdrawn (400), and with no request on file the
+answer is 404. The row lock
 it shares with approve and reject means a withdrawal and a decision arriving
 together resolve to one or the other.
 

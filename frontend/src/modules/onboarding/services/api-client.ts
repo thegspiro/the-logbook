@@ -42,6 +42,14 @@ export interface OnboardingApparatus {
   positions: string[];
 }
 
+/** GET /onboarding/session/key-custody — snake_case like its backend schema. */
+export interface OnboardingKeyCustody {
+  key_fingerprint: string;
+  confirmed: boolean;
+  confirmed_at?: string | null | undefined;
+  confirmed_via?: string | null | undefined;
+}
+
 interface HealthStatus {
   status: 'healthy' | 'degraded' | 'unhealthy';
   ready?: boolean | undefined;
@@ -453,6 +461,23 @@ class SecureApiClient {
    */
   async saveApparatus(apparatus: OnboardingApparatus[]): Promise<ApiResponse<Record<string, unknown>>> {
     return this.request('POST', '/onboarding/session/apparatus', { apparatus }, true);
+  }
+
+  /**
+   * The encryption key's fingerprint (an HMAC of it, never the key) and
+   * whether it has already been confirmed as stored separately.
+   */
+  async getKeyCustody(): Promise<ApiResponse<OnboardingKeyCustody>> {
+    return this.request('GET', '/onboarding/session/key-custody');
+  }
+
+  /**
+   * Confirm the encryption key is stored apart from the server and its
+   * backups. Required before setup can finish. The fingerprint is the one
+   * shown, so a key changed in the meantime is refused (409), not confirmed.
+   */
+  async confirmKeyCustody(keyFingerprint: string): Promise<ApiResponse<Record<string, unknown>>> {
+    return this.request('POST', '/onboarding/session/key-custody', { key_fingerprint: keyFingerprint }, true);
   }
 
   /**

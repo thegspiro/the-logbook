@@ -178,9 +178,12 @@ app/services/push_service.py::_subscribe_once::User::uid
 #     app_type_id is read from the Apparatus row resolved on the line above
 #   - run_recover_stranded_message_deliveries::DepartmentMessage::message_id
 #     scheduled task invoked from TASK_RUNNERS with no caller org; sweeps system-wide by design
+#   - run_retry_message_deliveries::DepartmentMessage::message_id (2026-10-11, MSG-12)
+#     same shape: system-wide scheduled retry; message_id is read off a delivery row the task's own scan joined to its message
 app/services/scheduled_tasks.py::resolve_check_templates::Apparatus::apparatus_id
 app/services/scheduled_tasks.py::resolve_check_templates::ApparatusType::app_type_id
 app/services/scheduled_tasks.py::run_recover_stranded_message_deliveries::DepartmentMessage::message_id
+app/services/scheduled_tasks.py::run_retry_message_deliveries::DepartmentMessage::message_id
 
 # Reviewed 2026-09-06: safe unless noted.
 #   - _email_swap_expiry::User::recipient_id

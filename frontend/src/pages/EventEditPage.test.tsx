@@ -78,6 +78,8 @@ function visibleTypesWith(categories: EventCategoryConfig[] = []) {
     visible_event_types: [],
     custom_event_categories: categories,
     visible_custom_categories: categories.map((c) => c.value),
+    // Empty: the form keeps its built-in fallback list, as when none is served.
+    membership_types: [],
   };
 }
 

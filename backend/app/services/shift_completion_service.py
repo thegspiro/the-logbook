@@ -53,6 +53,7 @@ from app.services.shift_eligibility_service import (
 from app.services.training_program_service import TrainingProgramService
 from app.utils.call_type_matching import matching_call_types
 from app.utils.member_names import format_display_name
+from app.utils.org_scoping import assert_all_in_org
 from app.utils.org_timezone import resolve_org_today
 
 #: ``settings["shift_reports"]["authorship"]`` value under which a shift's
@@ -149,7 +150,7 @@ class ShiftCompletionService:
     async def validate_shift_ownership(
         self,
         shift_id: str,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> bool:
         """Check that a shift exists and belongs to the organization."""
         result = (
@@ -256,7 +257,10 @@ class ShiftCompletionService:
         org = await eligibility._get_org(str(organization_id))
         if org is None:
             return []
-        return eligibility.get_call_tracking_settings(org).get("call_types", [])
+        call_types: list = eligibility.get_call_tracking_settings(org).get(
+            "call_types", []
+        )
+        return call_types
 
     async def _shift_has_incident_rows(self, shift_id: str) -> bool:
         """Whether this shift logged per-incident calls.
@@ -342,15 +346,40 @@ class ShiftCompletionService:
                 ShiftAttendance.user_id == trainee_id,
             )
         )
-        duration = result.scalar_one_or_none()
+        duration: Optional[int] = result.scalar_one_or_none()
         if duration and duration > 0:
             return round(duration / 60.0, 2)
         return None
 
+    async def _assert_task_checks_in_org(
+        self, tasks_performed: Optional[list], organization_id: UUID | str
+    ) -> None:
+        """Refuse a task citing another organization's equipment check (XC-1).
+
+        ``equipment_check_id`` is provenance — the check a task was drawn
+        from — and the report form sends it back on every save, so it is a
+        client-supplied reference into ``shift_equipment_checks`` like any
+        other.
+        """
+        if not tasks_performed:
+            return
+        check_ids = []
+        for task in tasks_performed:
+            raw = task.model_dump() if hasattr(task, "model_dump") else task
+            if isinstance(raw, dict):
+                check_ids.append(raw.get("equipment_check_id"))
+        await assert_all_in_org(
+            self.db,
+            ShiftEquipmentCheck,
+            check_ids,
+            organization_id,
+            label="equipment check",
+        )
+
     async def create_report(
         self,
-        organization_id: UUID,
-        officer_id: UUID,
+        organization_id: UUID | str,
+        officer_id: UUID | str,
         trainee_id: str,
         shift_date: date,
         hours_on_shift: float,
@@ -376,6 +405,10 @@ class ShiftCompletionService:
         # creates — comes through this method.
         if str(trainee_id) == str(officer_id):
             raise ValueError("You can't write a shift report about yourself")
+
+        # Before anything below adds a row: a batch runs this with
+        # commit=False and carries on past a refused member.
+        await self._assert_task_checks_in_org(tasks_performed, organization_id)
 
         # Validate shift linkage when provided
         data_sources: dict = {}
@@ -657,7 +690,7 @@ class ShiftCompletionService:
 
     async def get_shift_crew_status(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         shift_id: str,
     ) -> List[Dict]:
         """Get crew members for a shift with enrollment and report status.
@@ -786,8 +819,8 @@ class ShiftCompletionService:
 
     async def batch_create_reports(
         self,
-        organization_id: UUID,
-        officer_id: UUID,
+        organization_id: UUID | str,
+        officer_id: UUID | str,
         shift_id: Optional[str],
         shift_date: date,
         hours_on_shift: float,
@@ -899,7 +932,7 @@ class ShiftCompletionService:
 
     async def _send_notification(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         recipient_id: str,
         subject: str,
         message: str,
@@ -925,7 +958,7 @@ class ShiftCompletionService:
 
     async def _maybe_alert_training_officers(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         report: ShiftCompletionReport,
     ) -> None:
         """Alert training officers when a report flags trainee follow-up.
@@ -978,7 +1011,7 @@ class ShiftCompletionService:
                 .join(user_roles, User.id == user_roles.c.user_id)
                 .where(user_roles.c.position_id == t_role.id)
                 .where(User.organization_id == str(organization_id))
-                .where(User.is_active.is_(True))
+                .where(User.is_active)
             )
             officers = list(officers_result.scalars().all())
             if not officers:
@@ -1037,7 +1070,7 @@ class ShiftCompletionService:
 
     async def _resolve_skill_evaluations(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         skill_names: List[str],
     ) -> Dict[str, str]:
         """Match skill names to SkillEvaluation IDs.
@@ -1066,9 +1099,9 @@ class ShiftCompletionService:
 
     async def _create_skill_checkoffs(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         trainee_id: str,
-        officer_id: UUID,
+        officer_id: UUID | str,
         skills_observed: Optional[list],
         shift_id: Optional[str] = None,
     ) -> List[str]:
@@ -1153,7 +1186,7 @@ class ShiftCompletionService:
 
     async def _update_member_competency(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         user_id: str,
         skill_evaluation_id: str,
         evaluator_id: str,
@@ -1219,13 +1252,13 @@ class ShiftCompletionService:
 
     async def _update_requirement_progress(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         trainee_id: str,
         hours_on_shift: float,
         calls_responded: int,
         call_types: Optional[list],
         enrollment_id: Optional[str],
-        officer_id: UUID,
+        officer_id: UUID | str,
         matched_skill_ids: Optional[List[str]] = None,
         source_id: Optional[str] = None,
     ) -> list:
@@ -1407,7 +1440,7 @@ class ShiftCompletionService:
     async def get_report(
         self,
         report_id: str,
-        organization_id: Optional[UUID] = None,
+        organization_id: UUID | str | None = None,
     ) -> Optional[ShiftCompletionReport]:
         """Get a single shift completion report.
 
@@ -1423,7 +1456,7 @@ class ShiftCompletionService:
                 ShiftCompletionReport.organization_id == str(organization_id)
             )
         result = await self.db.execute(query)
-        report = result.scalar_one_or_none()
+        report: Optional[ShiftCompletionReport] = result.scalar_one_or_none()
         if report is not None:
             if organization_id is not None:
                 await self._attach_shift_labels([report], organization_id)
@@ -1438,7 +1471,7 @@ class ShiftCompletionService:
     async def update_report(
         self,
         report_id: str,
-        organization_id: UUID,
+        organization_id: UUID | str,
         officer_id: str,
         updates: dict,
     ) -> Optional[ShiftCompletionReport]:
@@ -1501,6 +1534,11 @@ class ShiftCompletionService:
         # order, and a concurrent ordinary report edit and call-type
         # deletion could deadlock each other (Codex review — a real
         # deadlock, not merely a race).
+        if "tasks_performed" in updates:
+            await self._assert_task_checks_in_org(
+                updates["tasks_performed"], organization_id
+            )
+
         preserves_org_slugs = (
             await self._edit_preserves_org_slugs(report, updates["call_types"])
             if call_types_changing
@@ -1576,7 +1614,7 @@ class ShiftCompletionService:
     async def _attach_shift_labels(
         self,
         reports: List[ShiftCompletionReport],
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> List[ShiftCompletionReport]:
         """Say which shift each report covers.
 
@@ -1670,7 +1708,7 @@ class ShiftCompletionService:
 
     async def get_reports_for_trainee(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         trainee_id: str,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
@@ -1701,7 +1739,7 @@ class ShiftCompletionService:
 
     async def get_reports_by_officer(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         officer_id: str,
         limit: int = 50,
     ) -> List[ShiftCompletionReport]:
@@ -1721,7 +1759,7 @@ class ShiftCompletionService:
 
     async def get_all_reports(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         trainee_id: Optional[str] = None,
         officer_id: Optional[str] = None,
         start_date: Optional[date] = None,
@@ -1755,7 +1793,7 @@ class ShiftCompletionService:
         self,
         report_id: str,
         trainee_id: str,
-        organization_id: UUID,
+        organization_id: UUID | str,
         trainee_comments: Optional[str] = None,
     ) -> Optional[ShiftCompletionReport]:
         """Trainee acknowledges a shift completion report."""
@@ -1779,7 +1817,7 @@ class ShiftCompletionService:
 
     async def get_reports_by_status(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         review_status: str,
     ) -> List[ShiftCompletionReport]:
         """Get reports filtered by review status."""
@@ -1798,7 +1836,7 @@ class ShiftCompletionService:
     async def review_report(
         self,
         report_id: str,
-        organization_id: UUID,
+        organization_id: UUID | str,
         reviewer_id: str,
         review_status: str,
         reviewer_notes: Optional[str] = None,
@@ -1890,7 +1928,7 @@ class ShiftCompletionService:
 
     async def get_trainee_stats(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         trainee_id: str,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
@@ -1956,7 +1994,7 @@ class ShiftCompletionService:
 
     async def get_officer_analytics(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         officer_id: Optional[str] = None,
     ) -> dict:
         """Shift report analytics: aggregate totals, per-trainee summary,

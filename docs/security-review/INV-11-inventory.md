@@ -2299,3 +2299,16 @@ migration needed for this pass's own fixes (all logic-only).
 | `tsc --noEmit`                                                        | ✅ clean                                                            |
 | `eslint .`                                                            | ✅ 0 errors, 10 pre-existing warnings (none in touched files)       |
 | Frontend component tests (`InventoryScanModal`, `ReturnRequestsPage`) | ✅ 4 passed                                                         |
+
+## INV-8 / INV-9 resolved (2026-10-11)
+
+Owner decision: self or `inventory.manage`, matching
+`GET /inventory/users/{user_id}/clearance`. `check_member_allowance` and
+`get_member_size_preferences` now depend on `get_current_user` and call
+`_require_self_or_quartermaster(user_id, current_user)` before touching the
+service. Guard tests: `tests/test_inventory_member_reads_self_or_manage.py`
+(no baseline permission dependency on either route; 403 for a baseline member
+reading a colleague, with the service never awaited; self and quartermaster
+reach the lookup). `tests/test_my_size_preferences_permissions.py` updated: the
+GET for another member no longer carries an `inventory.view` dependency, and the
+PUT stays `inventory.manage`.

@@ -1,13 +1,252 @@
 # Application Review — Facilities (Tier B)
 
 **Prefix:** `FAC2` · **Iteration:** B4 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-10-11 (pass 5)
 
 **Correction (security-review 12, 2026-08-26):** FAC-4 ("search wired but
 not exposed"), flagged as still-open in every pass below, is closed as of
 this correction: `GET /facilities` and `GET /facilities/page` both accept
 and forward a `search` query parameter, and `FacilitiesDashboard.tsx` calls
 it. See `docs/security-review/FAC-12-facilities.md`.
+
+---
+
+## Pass 5 (2026-10-11) — the frontend, reviewed for the first time: 2 fixed, 2 flagged
+
+### Scope, stated plainly
+
+Passes 1–4 all recorded `tsc --noEmit` as "n/a — no frontend change", and none
+of them read `modules/facilities`. That is **10,108 lines across 43 files**, or
+roughly half the module, and it had never been reviewed by this rotation. Pass 5
+went there deliberately.
+
+The backend was **not** re-derived, and that is a considered choice rather than
+a gap: `docs/security-review/FAC-12-facilities.md` is a seven-pass review of
+these same files whose most recent pass (7, 2026-10-06) found 0 new findings and
+re-confirmed FAC-13 and FAC-30 as the two standing owner decisions. Re-running
+that lens would have spent the iteration re-reading what a fresher, deeper pass
+had just cleared. What pass 5 did do on the backend is **re-verify the claims
+this file makes**, because they were two months old and the module had grown
+underneath them (95 → 98 routes, service 2,766 → 3,453 L):
+
+| Pass-4 claim                              | Re-checked 2026-10-11                                                                                           |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| "95/95 endpoints permission-gated"        | **98/98**, enumerated mechanically by parsing every `@router` decorator and its signature — 0 ungated           |
+| LIKE escaping is "the correct pattern"    | **Now genuinely correct, but not for the reason the audit gave** — see the doc correction below                 |
+| `_assert_facility_in_org` wired on update | intact; `assert_in_org` still wired at the sub-entity update paths                                              |
+| FK validation on create (FAC-3)           | intact — `update_maintenance_record` re-validates the lookup via the getter and `system_id` via `assert_in_org` |
+
+The first count is the one worth noting: a route parser that looked right
+returned **48 of 98** because its block-collection loop consumed routes it had
+already passed. The corrected parser found 98. A spot-check would not have
+caught that; neither would trusting the first number.
+
+### FAC2-3 — MED correctness — the maintenance and inspection edit forms silently discard a cleared field — ✅ FIXED
+
+`useMaintenanceForm.formToPayload` and `useInspectionForm.formToPayload` each
+built **one** payload with `if (formData.x) payload.x = …` and handed it to both
+`create…` and `update…`. On update that is pitfall #1's documented bug, verbatim:
+the backend dumps update payloads with `exclude_unset=True` (confirmed in
+`facilities_service.py`'s `update_maintenance_record` and `update_inspection`,
+both of which then call `apply_updates`), so an **omitted key means "leave this
+alone"**.
+
+The user empties the box, the key never leaves the browser, the old value
+survives, and the toast says "Record updated".
+
+Sixteen fields were affected across the two forms — on maintenance:
+`scheduled_date`, `due_date`, `performed_by`, `cost`, `vendor`,
+`work_order_number`, `notes`; on inspections: `description`,
+`next_inspection_date`, `inspector_name`, `inspector_organization`, `findings`,
+`corrective_actions`, `corrective_action_deadline`, `notes`. A cost typed in
+error could not be removed, and a vendor who did not do the work stayed
+attributed to it.
+
+**The backend was already correct** — `apply_updates` clears on an explicit
+null — so this was frontend-only.
+
+**Fix:** both hooks now use `formCoercions(isEdit)` from `utils/formValues`, the
+house helper written for exactly this shape after the inventory item form hit it
+("two fields fixed and sixteen still dropping the user's clear"). Create keeps
+omitting blanks; edit sends an explicit null.
+
+**The nullability was checked per column, not assumed.** `maintenance_type_id`
+is `NOT NULL`, so a blank one is still _omitted_ rather than nulled — nulling it
+would be a 400 from `apply_updates`, not a clear. The payload interfaces encode
+that distinction in the type system: nullable-backed fields are
+`?: T | null | undefined`, while `maintenance_type_id`, `is_completed`,
+`is_historic` and the inspection NOT NULLs stay narrow, so a future edit cannot
+null an un-clearable column without a type error. Two of my own regex-derived
+nullability readings were **wrong** (`performed_by` read as NOT NULL,
+`attachments` likewise) and were corrected against live SQLAlchemy introspection
+before any code changed.
+
+**Tests:** `useMaintenanceForm.test.ts` and `useInspectionForm.test.ts` (new,
+7 tests) assert the explicit nulls on edit, the omission on create, and that the
+NOT NULL columns keep values. Both mutation-tested: forcing `isEdit` false fails
+the null assertion in each file and leaves the create and NOT NULL tests green —
+the correct discriminating behaviour.
+
+### FAC2-4 — MED correctness — the overdue dashboard card deep-linked to a list that systematically hid overdue work — ✅ FIXED
+
+The dashboard's "Overdue maintenance" card is a true org-wide SQL count and
+navigates to `/facilities/maintenance?status=overdue`. That page called
+`getMaintenanceRecords({ facility_id })` with **no status filter** and then
+filtered `isOverdue` in the browser.
+
+`list_maintenance_records` is `order_by(desc(created_at))` with `limit=100`. So
+the page received the 100 **most recently created** records — and an overdue
+record is by nature an old one. The truncation therefore did not merely lose rows
+at random, it preferentially discarded exactly the set the filter was looking
+for.
+
+**Failure scenario:** an organization with 250 maintenance records, 12 of them
+overdue and all created months ago. The card reads "12 — Action required"; the
+page it links to loads the 100 newest records, none of which are overdue, and
+renders "No maintenance records found". This is the FAC-P2 class, which was
+closed for the facility grid and dashboard previews and left open on the two
+cross-facility list pages.
+
+**Fix needed no API change** — `is_overdue` and `is_completed` already exist as
+query parameters on `GET /facilities/maintenance` and were simply not being
+forwarded. The hook now asks the server for the filtered set (pitfall #29: a
+screen reports what the backend decided). The client-side pass is deliberately
+kept so a filter change shows no stale rows while the fetch is in flight, and
+`statusFilter` is in the `useCallback` deps — a primitive, so it cannot
+re-trigger the fetch loop the module's own comment warns about.
+
+**Remaining, stated rather than papered over:** the 100-row cap still applies to
+the filtered set, so an organization with more than 100 overdue records still
+sees a truncated list; and text search stays client-side because the endpoint
+has no search parameter, so it matches within the returned page. Both are
+recorded in the flag below.
+
+**Tests:** 4 cases assert the server-side parameter for each tab; mutation-tested
+(removing the forwarding fails 3 of 4, `all` correctly still passing).
+
+### FAC2-5 — LOW/MED — the inspections list cannot express "awaiting result" server-side — 🚩 FLAGGED
+
+`InspectionsListPage`'s four tabs are all / passed / failed / pending, filtered
+client-side over a `limit=100` page. `GET /facilities/inspections` accepts
+`passed: bool | None`, where `None` means **no filter** — so "passed" and
+"failed" could be forwarded, but **"pending" (`passed IS NULL`) cannot be
+expressed at all**. Fixing two tabs server-side and leaving the third on a
+loaded page would make the page's correctness vary by tab, which is harder to
+reason about than the current uniform behaviour.
+
+Unlike FAC2-4 this is **not** actively hiding its target: inspections are
+ordered `desc(inspection_date)`, and an inspection awaiting a result is
+typically a recent one, so the truncation is far less likely to empty the
+filtered set. That is why it is flagged rather than fixed, and rated below
+FAC2-4.
+
+**The fix is an API change and therefore the owner's call:** either a tri-state
+`result` enum parameter (`passed` / `failed` / `pending`), or a documented
+sentinel for "is null". The same change should add `search` and real pagination
+to both cross-facility list endpoints, which would also close FAC2-4's two
+residuals. Recorded in `KNOWN_LIMITATIONS.md`.
+
+### FAC2-6 — MED, cross-module — apparatus has the identical payload bug, and pass B2-5 missed it — 🚩 FLAGGED
+
+Chasing FAC2-3 across the other maintenance surfaces found the same defect in
+**apparatus**, which this rotation reviewed three iterations ago and passed:
+
+`modules/apparatus/components/MaintenanceRecordModal.tsx` builds one payload with
+conditional spreads — `...(f.vendor ? { vendor: f.vendor } : {})`, sixteen of
+them — and sends it to `updateMaintenanceRecord` on edit and
+`createMaintenanceRecord` otherwise. Every cleared field is omitted, so the clear
+is lost behind "Maintenance record updated". The columns involved (`vendor`,
+`cost`, `notes`, `performed_by`, `findings`, `work_performed`,
+`mileage_at_service`, `hours_at_service`, the three `next_due_*`) are all
+nullable, so nulls are what the schema wants.
+
+**A second, separate defect sits behind it:**
+`apparatus_service.update_maintenance_record` applies its updates with a raw
+`for field, value in update_data.items(): setattr(...)` loop rather than
+`apply_updates`. A raw loop does write an explicit null through, so the frontend
+fix alone would work — but it has none of `apply_updates`' protections: a null
+against a NOT NULL column fails at flush as an `IntegrityError` → 500 instead of
+a clean 400, and an unknown field is set silently. Any fix should do both halves.
+
+**Not fixed here, deliberately:** it is another module and another iteration of
+this rotation, and the skill's rule is one feature per run. Fixing it blind
+would also widen a facilities PR into apparatus. `docs/app-review/apparatus.md`
+has been corrected to say pass 5 missed it.
+
+**Checked and clean, so not re-reported:** inventory's own
+`MaintenanceRecordCreate` payload (`InventoryMaintenancePage.tsx`) has the same
+conditional-omission shape but is only ever passed to `createMaintenanceRecord` —
+there is no update path through it, so omission is correct there.
+`inventoryService.updateMaintenanceRecord` has no UI caller at all (only its own
+service test). My B3 inventory claim of "no new code defects" therefore stands.
+
+### Verified good ✅ (frontend, first look)
+
+Checked specifically for the invariants that have **no machine check** behind
+them, since the ones that do are already green:
+
+- **Pitfall #1 discipline is otherwise excellent.** All 18 update call sites in
+  the module were examined. The six `ExtendedFacilitySections` resource sections
+  pair `|| undefined` on create with `blankToNull` on update correctly, and the
+  one apparent exception — `updateCapitalProject` sending
+  `project_status: v.status || undefined` — is **correct and self-documenting**:
+  the column is a NOT NULL enum, and the code says so in a comment. Only the two
+  hooks were wrong.
+- **No re-derivation (pitfall #29).** `isOverdue` is a backend-computed field the
+  frontend reads rather than recomputes; the dashboard consumes server counts and
+  server-ordered preview rows. No client-side threshold, percentage or expiry
+  math was found — the one place the frontend did act on its own was FAC2-4's
+  filter, now fixed.
+- **No banned date API** (`toLocaleDateString`/`toLocaleTimeString`/
+  `toLocaleString`/`date-fns`): 0 occurrences; `useTimezone()` + the
+  `dateFormatting` wrappers throughout.
+- **No `window.confirm`/`alert`/`prompt`:** 0. Deletes go through `useConfirm()`
+  with named decision buttons and a consequence sentence.
+- **FAC-P10 is closed** — the module-audit still listed "photos and documents are
+  API-only" as an active gap, but `FilesSection.tsx` is a registered detail
+  section that lists photos and documents, uploads, renames via `blankToNull`
+  and deletes. Corrected in the audit file.
+
+### Doc corrections
+
+1. **`module-audit/facilities.md` FAC-3** — the heading said
+   "✅ FIXED (app-review B4, 2026-08-06)" while its own body still ended
+   "**Status:** flagged (XC-1)". Verified fixed in code; body corrected. (Same
+   defect shape as AP-1, corrected in pass B2-5.)
+2. **`module-audit/facilities.md` had two different findings both numbered
+   FAC-P11** — a HIGH access-boundary item (fixed 2026-08-26) and a MEDIUM
+   product-depth item. The second is renumbered FAC-P13.
+3. **`module-audit/facilities.md`'s LIKE-escaping claim was stale and
+   actively misleading.** It praised `list_facilities` for escaping `\`, `%` and
+   `_` "before building the `ilike` term — this is the correct pattern". Pitfall
+   #25 (2026-08-25, after that audit) establishes that manual escaping _without_
+   the `escape=` kwarg is **inert** under MySQL's `NO_BACKSLASH_ESCAPES` and
+   "looks entirely correct in review". The code has since been fixed properly —
+   `like_pattern()` + `escape=LIKE_ESCAPE_CHAR` on all three columns — so the
+   claim's conclusion is now true for a reason it does not give, which is worse
+   than being wrong: a reader would copy the described pattern into a new module.
+4. **`module-audit/facilities.md` FAC-P10** — marked closed, with the file that
+   closes it.
+5. **`app-review/apparatus.md`** — pass 5's claim corrected to record the
+   `MaintenanceRecordModal` payload bug it missed (FAC2-6).
+
+### Completion gate (pass 5)
+
+| Check                          | Result                                                  |
+| ------------------------------ | ------------------------------------------------------- |
+| `npm run typecheck`            | ✅ 0 errors, repo-wide                                  |
+| `npm run lint`                 | ✅ clean                                                |
+| `flake8 app/ tests/`           | ✅ 0 violations                                         |
+| `black --check app/ tests/`    | ✅ clean                                                |
+| facilities frontend suite      | ✅ **124 passed** (18 files), including the 7 new tests |
+| consumers of the widened types | ✅ `ItemDetailPage`, `ranksService` — 26 passed         |
+| backend suite                  | n/a — no Python changed this pass                       |
+
+The first typecheck run **failed** on `exactOptionalPropertyTypes`: assigning
+`undefined` to `maintenance_type_id?: string` is illegal unless the type says
+`| undefined`. Fixed by widening the target type, per CLAUDE.md's instruction on
+that gotcha, rather than casting.
 
 ---
 

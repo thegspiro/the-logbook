@@ -141,7 +141,9 @@ async def send_test_email(
     template_type = None
     attachment_paths: list[tuple[str, str]] = []
     html_body = _build_test_html(organization)
-    text_body = "This is a test email from The Logbook. If you received this, your email configuration is working correctly."
+    text_body: str | None = (
+        "This is a test email from The Logbook. If you received this, your email configuration is working correctly."
+    )
 
     # If a template_id was provided, render that template instead
     if body.template_id:

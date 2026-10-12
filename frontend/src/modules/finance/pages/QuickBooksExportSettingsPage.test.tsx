@@ -12,7 +12,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { ConfirmProvider } from '@/contexts/ConfirmContext';
-import type { ExportMapping, ExportReadiness } from '../types';
+import type { ExportLog, ExportMapping, ExportReadiness } from '../types';
 
 const toastError = vi.fn();
 const toastSuccess = vi.fn();
@@ -28,6 +28,8 @@ const readiness = vi.fn();
 const createMapping = vi.fn();
 const updateMapping = vi.fn();
 const deleteMapping = vi.fn();
+const listLogs = vi.fn();
+vi.mock('@/hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 vi.mock('../services/api', () => ({
   exportMappingService: {
     list: (...args: unknown[]) => listMappings(...args) as unknown,
@@ -35,6 +37,7 @@ vi.mock('../services/api', () => ({
     create: (...args: unknown[]) => createMapping(...args) as unknown,
     update: (...args: unknown[]) => updateMapping(...args) as unknown,
     delete: (...args: unknown[]) => deleteMapping(...args) as unknown,
+    logs: (...args: unknown[]) => listLogs(...args) as unknown,
   },
 }));
 
@@ -112,7 +115,7 @@ const rowFor = async (category: string) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  for (const mock of [listMappings, readiness, createMapping, updateMapping, deleteMapping]) {
+  for (const mock of [listMappings, readiness, createMapping, updateMapping, deleteMapping, listLogs]) {
     mock.mockReset();
   }
   listMappings.mockResolvedValue([fuelMapping, strayMapping]);
@@ -120,6 +123,7 @@ beforeEach(() => {
   createMapping.mockResolvedValue(fuelMapping);
   updateMapping.mockResolvedValue(fuelMapping);
   deleteMapping.mockResolvedValue(undefined);
+  listLogs.mockResolvedValue([]);
 });
 
 describe('QuickBooksExportSettingsPage readiness', () => {
@@ -136,7 +140,32 @@ describe('QuickBooksExportSettingsPage readiness', () => {
     const gear = await rowFor('Gear');
     expect(within(gear).getByText('No account')).toBeInTheDocument();
     expect(within(gear).getByText('Inactive')).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('1 budget category is missing an account');
+    expect(screen.getByRole('status')).toHaveTextContent('1 budget category needs its accounts fixed');
+  });
+
+  it('flags a category posting to Accounts Payable or Receivable, with what to do', async () => {
+    readiness.mockResolvedValue({
+      ...report,
+      categories: report.categories.map((c) =>
+        c.categoryName === 'Fuel'
+          ? { ...c, status: 'payable_receivable', offsetAccountName: 'Accounts Payable (A/P)' }
+          : c
+      ),
+    });
+    renderPage();
+
+    const fuel = await rowFor('Fuel');
+    expect(within(fuel).getByText('Payable/receivable account')).toBeInTheDocument();
+    expect(fuel).toHaveTextContent('Use the bank or card account it is paid from');
+  });
+
+  it("lists QuickBooks' own import requirements", async () => {
+    renderPage();
+
+    const checklist = await screen.findByRole('region', { name: 'Before you import into QuickBooks Online' });
+    expect(checklist).toHaveTextContent('Account numbers are turned off');
+    expect(checklist).toHaveTextContent('MM/DD/YYYY');
+    expect(checklist).toHaveTextContent('fewer than 1,000 rows');
   });
 
   it('says every category is ready when the backend does', async () => {
@@ -255,5 +284,74 @@ describe('QuickBooksExportSettingsPage mappings', () => {
     await user.click(await screen.findByRole('button', { name: 'Keep it' }));
 
     expect(deleteMapping).not.toHaveBeenCalled();
+  });
+});
+
+const exportLog = (overrides: Partial<ExportLog>): ExportLog => ({
+  id: 'log-1',
+  organizationId: 'org',
+  exportType: 'transactions',
+  dateRangeStart: '2026-09-01T00:00:00Z',
+  dateRangeEnd: '2026-09-30T00:00:00Z',
+  recordCount: 42,
+  fileFormat: 'csv',
+  exportedBy: 'u-t',
+  exportedByName: 'Ann Lee',
+  exportedAt: '2026-10-01T14:00:00Z',
+  status: 'successful',
+  ...overrides,
+});
+
+describe('QuickBooksExportSettingsPage export history', () => {
+  it('lists each export with its period, rows, outcome and who ran it', async () => {
+    listLogs.mockResolvedValue([
+      exportLog({}),
+      exportLog({
+        id: 'log-2',
+        status: 'partial',
+        recordCount: 7,
+        errorMessage: 'Export stream interrupted before completion',
+      }),
+    ]);
+    renderPage();
+
+    const history = await screen.findByRole('region', { name: 'Export history' });
+    await within(history).findByText('Complete');
+    expect(listLogs).toHaveBeenCalledWith({ skip: 0, limit: 25 });
+    expect(within(history).getAllByText('Ann Lee')).toHaveLength(2);
+    expect(within(history).getByText('42')).toBeInTheDocument();
+    expect(within(history).getByText('Interrupted')).toBeInTheDocument();
+    expect(within(history).getByText('Export stream interrupted before completion')).toBeInTheDocument();
+    expect(within(history).queryByRole('button', { name: 'Show older exports' })).not.toBeInTheDocument();
+  });
+
+  it('says when nothing has been exported', async () => {
+    renderPage();
+
+    const history = await screen.findByRole('region', { name: 'Export history' });
+    expect(await within(history).findByText('No exports yet')).toBeInTheDocument();
+  });
+
+  it('pages back through older exports', async () => {
+    const firstPage = Array.from({ length: 25 }, (_, i) => exportLog({ id: `log-${String(i)}` }));
+    listLogs.mockResolvedValueOnce(firstPage).mockResolvedValueOnce([exportLog({ id: 'log-old', recordCount: 3 })]);
+    const user = userEvent.setup();
+    renderPage();
+
+    const history = await screen.findByRole('region', { name: 'Export history' });
+    await user.click(await within(history).findByRole('button', { name: 'Show older exports' }));
+
+    await waitFor(() => expect(listLogs).toHaveBeenLastCalledWith({ skip: 25, limit: 25 }));
+    expect(await within(history).findByText('3')).toBeInTheDocument();
+    expect(within(history).queryByRole('button', { name: 'Show older exports' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the mappings on screen when the history fails to load', async () => {
+    listLogs.mockRejectedValue(new Error('History unavailable'));
+    renderPage();
+
+    const history = await screen.findByRole('region', { name: 'Export history' });
+    expect(await within(history).findByText('History unavailable')).toBeInTheDocument();
+    expect(await rowFor('Fuel')).toBeInTheDocument();
   });
 });

@@ -218,7 +218,7 @@ export const ExternalShiftFormModal: React.FC<ExternalShiftFormModalProps> = ({ 
       title={isEdit ? 'Edit outside shift' : 'Log a shift with another department'}
     >
       <form onSubmit={(e) => void handleSubmit(e)}>
-        <div className="modal-body space-y-4">
+        <div className="space-y-4">
           <p className="text-theme-text-secondary text-sm">
             For time on another jurisdiction&apos;s apparatus that isn&apos;t on our schedule. It counts toward your
             shift hours and shift requirements as soon as you save it. Your officers can see it and can remove it from

@@ -11,7 +11,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { Hand } from 'lucide-react';
 import { eventService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
@@ -32,7 +32,11 @@ export const AttendanceRequestsPage: React.FC = () => {
   const canSeeAll = checkPermission('events.manage');
   const tz = useTimezone();
 
-  const [scope, setScope] = useState<Scope>('mine');
+  // The events hub's attention row counts the whole department and links here
+  // with ?scope=all, so the list it opens is the one it counted. Honoured only
+  // for a member who may see it; anyone else gets their own events.
+  const [searchParams] = useSearchParams();
+  const [scope, setScope] = useState<Scope>(canSeeAll && searchParams.get('scope') === 'all' ? 'all' : 'mine');
   const [requests, setRequests] = useState<PendingAttendancePetition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

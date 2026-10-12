@@ -22,3 +22,16 @@ def validate_external_http_url(value: Any) -> Any:
     if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
         raise ValueError("URL must be an absolute HTTP or HTTPS URL")
     return cleaned
+
+
+def safe_external_url(value: Any) -> Any:
+    """*value* if it is an absolute HTTP(S) URL with a hostname, else None.
+
+    For reading stored values that were never validated on the way in: an
+    unsafe one is withheld from the response rather than raised on, so one
+    bad legacy row does not fail the whole listing.
+    """
+    try:
+        return validate_external_http_url(value) if isinstance(value, str) else None
+    except ValueError:
+        return None

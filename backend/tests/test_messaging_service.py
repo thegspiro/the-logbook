@@ -12,6 +12,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy.engine import CursorResult
 
 from app.api.v1.endpoints import messages as messages_endpoint
 from app.models.user import ACTIVE_ACCOUNT_STATUSES
@@ -286,7 +287,7 @@ class TestReadAckVisibilityGate:
                         return_value=SimpleNamespace(read_at=None)
                     )
                 ),
-                SimpleNamespace(rowcount=1),
+                MagicMock(spec=CursorResult, rowcount=1),
             ]
         )
         db.add = MagicMock()
@@ -339,8 +340,8 @@ class TestReadAckVisibilityGate:
         db.execute = AsyncMock(
             side_effect=[
                 MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
-                SimpleNamespace(rowcount=0),
-                SimpleNamespace(rowcount=1),
+                MagicMock(spec=CursorResult, rowcount=0),
+                MagicMock(spec=CursorResult, rowcount=1),
             ]
         )
         db.commit = AsyncMock()
@@ -444,7 +445,30 @@ class TestAcknowledgmentReport:
         recipients_res = MagicMock(
             all=MagicMock(return_value=[(users[0], read_u1), (users[1], pending)])
         )
-        db.execute = AsyncMock(side_effect=[msg_res, recipients_res])
+        # MSG-12: u2's email ran out of retries; u1's went out.
+        deliveries = [
+            SimpleNamespace(
+                recipient_id="u1",
+                channel="email",
+                status="delivered",
+                attempt_count=1,
+                next_attempt_at=None,
+                delivered_at=now,
+                error=None,
+            ),
+            SimpleNamespace(
+                recipient_id="u2",
+                channel="email",
+                status="failed",
+                attempt_count=6,
+                next_attempt_at=None,
+                delivered_at=None,
+                error="SMTP 554 relay.internal.example rejected",
+            ),
+        ]
+        deliveries_res = MagicMock()
+        deliveries_res.scalars.return_value.all.return_value = deliveries
+        db.execute = AsyncMock(side_effect=[msg_res, recipients_res, deliveries_res])
 
         report = await MessagingService(db).get_acknowledgment_report("m1", "org-1")
 
@@ -456,6 +480,46 @@ class TestAcknowledgmentReport:
         assert [r["user_id"] for r in report["recipients"]] == ["u2", "u1"]
         assert report["recipients"][0]["is_acknowledged"] is False
         assert report["recipients"][1]["is_acknowledged"] is True
+        failed = report["recipients"][0]["email_delivery"]
+        assert failed["status"] == "failed"
+        assert failed["attempts"] == 6
+        # A provider's own text can name internal hosts; it is not echoed.
+        assert "relay.internal" not in failed["error"]
+        assert report["recipients"][1]["email_delivery"]["status"] == "delivered"
+        assert report["recipients"][0]["sms_delivery"] is None
+
+    async def test_a_held_back_send_says_why_and_when(self):
+        message = _msg("m1", "all")
+        user = self._user("u1", "Ann")
+        due = datetime(2026, 10, 11, 12, 5)  # naive, as MySQL returns it
+        record = SimpleNamespace(read_at=None, acknowledged_at=None, revoked_at=None)
+        db = MagicMock()
+        deliveries_res = MagicMock()
+        deliveries_res.scalars.return_value.all.return_value = [
+            SimpleNamespace(
+                recipient_id="u1",
+                channel="email",
+                status="retrying",
+                attempt_count=1,
+                next_attempt_at=due,
+                delivered_at=None,
+                error="Held back by the department's hourly sending limit",
+            )
+        ]
+        db.execute = AsyncMock(
+            side_effect=[
+                MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
+                MagicMock(all=MagicMock(return_value=[(user, record)])),
+                deliveries_res,
+            ]
+        )
+
+        report = await MessagingService(db).get_acknowledgment_report("m1", "org-1")
+
+        state = report["recipients"][0]["email_delivery"]
+        assert state["status"] == "retrying"
+        assert state["error"] == "Held back by the department's hourly sending limit"
+        assert state["next_attempt_at"] == "2026-10-11T12:05:00+00:00"
 
     async def test_missing_message_returns_none(self):
         db = MagicMock()

@@ -494,6 +494,66 @@ const routes = ({
   ['**/api/v1/medical-supplies/categories**', () => []],
   ['**/api/v1/medical-supplies/items**', () => ({ items: [], total: 0, skip: 0, limit: 200 })],
 
+  // The department store's admin page. Unmocked, the catch-all's `{}` reached
+  // StoreSettingsTab as a settings object with no `notifyEmails`, which the
+  // API never sends (the schema turns a stored null into `[]`), and the tab
+  // threw on `.join` — so every Store route in the mobile sweeps was measuring
+  // a page of error toasts. Shapes, not stubs: a store set up but quiet.
+  [
+    '**/api/v1/store/settings',
+    () => ({
+      id: 'store-settings-1',
+      organizationId: 'e2e-org',
+      isEnabled: true,
+      storeName: 'Department Store',
+      tagline: null,
+      description: null,
+      currency: 'USD',
+      showOpenOrderBanner: true,
+      acceptedPaymentMethods: ['cash', 'check'],
+      paymentPolicy: 'before_pickup',
+      checkPayableTo: 'Oakville Fire Department',
+      cashInstructions: 'Pay at the station office.',
+      taxRate: '0.0600',
+      shippingFlatRate: null,
+      allowPickup: true,
+      allowShipping: false,
+      pickupLocation: 'Station 1',
+      notifyEmails: ['quartermaster@example.com'],
+      notifyAdminsOnOrder: true,
+      sendOrderConfirmation: true,
+      sendStatusUpdates: true,
+      sendPaymentReminders: true,
+      sendPaymentReceipts: true,
+      sendWindowOpened: true,
+      sendWindowClosingReminder: true,
+      sendWindowClosed: true,
+      sendVendorOrderUpdates: false,
+      paymentReminderDays: 3,
+      windowReminderHours: 24,
+      termsText: null,
+      receiptFooter: null,
+    }),
+  ],
+  [
+    '**/api/v1/store/dashboard',
+    () => ({
+      isEnabled: true,
+      activeWindow: null,
+      newOrderCount: 0,
+      openOrderCount: 0,
+      awaitingPaymentCount: 0,
+      pendingVerificationCount: 0,
+      readyForPickupCount: 0,
+      outstandingBalance: '0.00',
+      collectedThisWindow: '0.00',
+      activeProductCount: 0,
+      statusCounts: {},
+      recentActivity: [],
+      recentOrders: [],
+    }),
+  ],
+
   // Every Administration hub reads this. Unmocked, the catch-all answered `{}`
   // — truthy, so `AdminHubFrame` rendered the attention queue, but with no
   // `attention` array, and the page died on `items.length`. No hub route had

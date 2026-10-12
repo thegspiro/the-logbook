@@ -13,8 +13,10 @@ callers must treat that as "no consent", never as a default grant.
 """
 
 import enum
+from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Index, String
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, String
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import false, func
 
 from app.core.database import Base
@@ -37,30 +39,32 @@ class ConsentType(str, enum.Enum):
 class UserConsent(Base):
     __tablename__ = "user_consents"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    consent_type = Column(
+    consent_type: Mapped[ConsentType] = mapped_column(
         Enum(ConsentType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
     # Defaults to not granted: consent is never presumed (see module docstring),
     # and SMS consent is a TCPA requirement.
-    granted = Column(Boolean, nullable=False, default=False, server_default=false())
+    granted: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
 
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),

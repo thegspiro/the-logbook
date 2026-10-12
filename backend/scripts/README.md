@@ -267,6 +267,31 @@ a partial fix is still a fix, and the leftover is reported.
 - Database must be running
 - SQLAlchemy models must be importable
 
+### `backfill_minutes_meeting_dates.py`
+
+Re-dates minutes created from a meeting before 3 October 2026 (W51-8), when the
+meeting's local date and start time were stored as if they were UTC — a meeting
+with no start time showed the evening before, a 7:00 PM meeting 2:00 PM. Dry run
+by default; `--apply` writes.
+
+**A row changes only while its date still equals the old UTC-read value** of
+its linked meeting (same organization). A date corrected by hand, or minutes
+whose meeting has since been rescheduled, are left alone; a department on UTC
+has nothing to correct. Each change is audit-logged
+(`minutes_meeting_date_backfilled`) with its old and new value, and a second
+run finds nothing.
+
+```bash
+# Dry run — writes nothing:
+docker exec -it intranet-backend python scripts/backfill_minutes_meeting_dates.py
+
+# One organization:
+docker exec -it intranet-backend python scripts/backfill_minutes_meeting_dates.py --org "Falls Church"
+
+# Apply:
+docker exec -it intranet-backend python scripts/backfill_minutes_meeting_dates.py --apply
+```
+
 ### `clear_hidden_form_answers.py`
 
 Removes stale answers to conditional form questions from stored submissions.
@@ -356,25 +381,31 @@ keeps whatever mapped fields it copied at the time.
 
 ### `json_column_ast_sweep.py`
 
-Enumerates every model attribute declared as `Column(JSON, ...)`,
-`Column(MutableDict.as_mutable(JSON), ...)`, or `Column(EncryptedJSON, ...)`
-across `app/models/*.py`, by parsing each file with the `ast` module rather
-than scanning source lines. Matched type names live in the script's
-`JSON_LIKE_TYPE_NAMES` — `EncryptedJSON` (`app/core/encrypted_types.py`) is
-a `TypeDecorator` around `Text` that transparently encrypts a `json.dumps`'d
-value; it is not `MutableDict`-wrapped, so it carries the same
-shallow-copy-then-reassign risk (pitfall #12) as bare `Column(JSON)`.
+Enumerates every model attribute declared as `Column(JSON, ...)` /
+`mapped_column(JSON, ...)`, `Column(MutableDict.as_mutable(JSON), ...)` /
+`mapped_column(MutableDict.as_mutable(JSON), ...)`, or the `EncryptedJSON`
+equivalent of either, across `app/models/*.py`, by parsing each file with
+the `ast` module rather than scanning source lines. Matched call names live
+in `COLUMN_CALL_NAMES` (`Column`, `mapped_column`); matched type names live
+in `JSON_LIKE_TYPE_NAMES` — `EncryptedJSON` (`app/core/encrypted_types.py`)
+is a `TypeDecorator` around `Text` that transparently encrypts a
+`json.dumps`'d value; it is not `MutableDict`-wrapped, so it carries the
+same shallow-copy-then-reassign risk (pitfall #12) as bare `Column(JSON)`.
 
 **Purpose**: a line-anchored regex (`^\s*(\w+)\s*=\s*Column\(.*JSON`) cannot
 see a multiline declaration such as `report_email_recipients = Column(\n
 JSON, ...\n)` — the assignment target and the `JSON` reference land on
-different source lines. Four rounds of `docs/security-review/SEC-00-cross-
+different source lines. Five rounds of `docs/security-review/SEC-00-cross-
 cutting-baseline.md`'s sweep 9 were corrected because the JSON-column count
-behind it was produced by hand-derived, ad hoc methods, or — round 8 — because
-the script matched only the literal `JSON` identifier and missed a
+behind it was produced by hand-derived, ad hoc methods, or — round 8 —
+because the script matched only the literal `JSON` identifier and missed a
 custom-named type wrapping it (`EncryptedJSON`, on the medical-screening PHI
-column). This script is the authoritative, structural method, checked into
-the repo so it can be re-run rather than re-derived.
+column), or — security-review Feature 00, pass 8 — because the script
+matched only `Column(...)` calls after every model in the tree had already
+moved to SQLAlchemy 2.0's `mapped_column(...)` declarative style, which
+silently zeroed out the count (0 names, 0 declarations) rather than erroring.
+This script is the authoritative, structural method, checked into the repo
+so it can be re-run rather than re-derived.
 
 **Usage:**
 
@@ -388,8 +419,8 @@ python3 scripts/json_column_ast_sweep.py --by-file   # every declaration grouped
 **Expected Output:**
 
 ```
-180 distinct attribute names, 231 Column(...) declarations referencing JSON,
-across 43 files in .../backend/app/models.
+202 distinct attribute names, 256 Column(...)/mapped_column(...) declarations
+referencing JSON, across 50 files in .../backend/app/models.
 ```
 
 **Exit Codes:**

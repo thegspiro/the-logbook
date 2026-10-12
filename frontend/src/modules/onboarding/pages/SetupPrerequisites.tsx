@@ -126,6 +126,11 @@ const REQUIRED_ITEMS: Array<{ title: string; description: string }> = [
     title: 'A name, email address and password for the administrator account',
     description: 'This is your own account. It is created early so you can sign back in and finish setup later.',
   },
+  {
+    title: 'A safe place for the server’s encryption key',
+    description:
+      'Whoever runs the server copies ENCRYPTION_KEY and ENCRYPTION_SALT from its .env file to a password manager or sealed record, away from the backups. Setup asks you to confirm this.',
+  },
 ];
 
 const OPTIONAL_ITEMS: Array<{ title: string; description: string }> = [

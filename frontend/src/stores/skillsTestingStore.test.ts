@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useSkillsTestingStore } from './skillsTestingStore';
 import * as apiModule from '../services/api';
+import type { SkillTest } from '../types/skillsTesting';
 
 // Mock the API service
 vi.mock('../services/api', () => ({
@@ -77,7 +78,7 @@ const mockTemplateListItem = {
   updated_at: '2026-01-01T00:00:00Z',
 };
 
-const mockTest = {
+const mockTest: SkillTest = {
   id: 'test-1',
   organization_id: 'org-1',
   template_id: 'tpl-1',
@@ -86,9 +87,10 @@ const mockTest = {
   candidate_name: 'John Smith',
   examiner_id: 'user-2',
   examiner_name: 'Captain Jones',
-  status: 'in_progress' as const,
-  result: 'incomplete' as const,
+  status: 'in_progress',
+  result: 'incomplete',
   is_practice: false,
+  version: 1,
   section_results: [],
   started_at: '2026-01-01T00:00:00Z',
   created_at: '2026-01-01T00:00:00Z',
@@ -364,8 +366,11 @@ describe('skillsTestingStore', () => {
         tests: [
           {
             id: 'test-1',
+            template_id: 'tpl-1',
             template_name: 'T',
+            candidate_id: 'user-1',
             candidate_name: 'C',
+            examiner_id: 'user-2',
             examiner_name: 'E',
             status: 'completed',
             result: 'pass',
@@ -392,8 +397,11 @@ describe('skillsTestingStore', () => {
         tests: [
           {
             id: 'test-1',
+            template_id: 'tpl-1',
             template_name: 'T',
+            candidate_id: 'user-1',
             candidate_name: 'C',
+            examiner_id: 'user-2',
             examiner_name: 'E',
             status: 'in_progress',
             result: 'incomplete',

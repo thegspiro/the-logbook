@@ -597,6 +597,20 @@ export const organizationService = {
   },
 
   /**
+   * Update the department-email settings. Goes through the general settings
+   * PATCH, which replaces only the keys it is sent.
+   */
+  async updateDepartmentEmailSettings(
+    settings: import('../types/user').DepartmentEmailSettings
+  ): Promise<import('../types/user').DepartmentEmailSettings> {
+    const response = await api.patch<{ department_email: import('../types/user').DepartmentEmailSettings }>(
+      '/organization/settings',
+      { department_email: settings }
+    );
+    return response.data.department_email;
+  },
+
+  /**
    * Get enabled modules for the organization.
    *
    * De-duplicated: every navigation surface asks for this on mount, and the

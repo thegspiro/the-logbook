@@ -25,7 +25,7 @@ const emptyPurge = { drafts: 0, queuedChecks: 0, queuedReports: 0, queuedGeneric
 const mockPurgeLocalMemberData = vi.fn(() => Promise.resolve({ ...emptyPurge }));
 
 vi.mock('../utils/purgeLocalMemberData', () => ({
-  purgeLocalMemberData: (...args: unknown[]) => mockPurgeLocalMemberData(...args) as unknown,
+  purgeLocalMemberData: () => mockPurgeLocalMemberData(),
 }));
 
 vi.mock('../services/apiClient', () => ({

@@ -5,11 +5,12 @@ SQLAlchemy models for skills testing management including templates and test ses
 """
 
 import enum
+from datetime import datetime
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import (
     JSON,
     Boolean,
-    Column,
     DateTime,
     Float,
     ForeignKey,
@@ -19,11 +20,14 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class SkillTemplateStatus(str, enum.Enum):
@@ -108,31 +112,31 @@ class SkillTemplate(Base):
 
     __tablename__ = "skill_templates"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Template Details
-    name = Column(String(255), nullable=False)
-    description = Column(Text, nullable=True)
-    category = Column(String(100), nullable=True)
-    version = Column(Integer, default=1)
-    status = Column(String(20), default="draft")
-    visibility = Column(String(20), default="all_members")
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    version: Mapped[Optional[int]] = mapped_column(Integer, default=1)
+    status: Mapped[Optional[str]] = mapped_column(String(20), default="draft")
+    visibility: Mapped[Optional[str]] = mapped_column(String(20), default="all_members")
 
     # Template Structure — JSON array of SkillTemplateSection[]
     # Each section contains: name, description, sort_order, criteria[]
     # Each criterion contains: label, description, type, required, sort_order,
     #   passing_score, max_score, time_limit_seconds, checklist_items
-    sections = Column(JSON, nullable=False)
+    sections: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
 
     # Scoring & Rules
-    time_limit_seconds = Column(Integer, nullable=True)
-    passing_percentage = Column(Float, nullable=True)
-    require_all_critical = Column(Boolean, default=True)
+    time_limit_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    passing_percentage: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    require_all_critical: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
 
     # Whether pass/fail steps contribute points to the overall percentage.
     # Off by default, and deliberately so: the percentage has always been
@@ -140,7 +144,7 @@ class SkillTemplate(Base):
     # existing templates would change what every historical result means. A
     # department whose knowledge questions are written as pass/fail steps turns
     # it on so a wrong answer costs points instead of nothing.
-    score_pass_fail_criteria = Column(
+    score_pass_fail_criteria: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="0"
     )
 
@@ -148,7 +152,7 @@ class SkillTemplate(Base):
     # satisfy. Tests inherit it at creation (overridable per test), and a passing
     # test marks that requirement complete on the candidate's active enrollment.
     # SET NULL requires nullable=True.
-    requirement_id = Column(
+    requirement_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_requirements.id", ondelete="SET NULL"),
         nullable=True,
@@ -159,28 +163,34 @@ class SkillTemplate(Base):
     # TrainingModuleConfig. Set here when one skill needs different handling
     # from the department norm: a promotional evaluation may withhold results
     # that a routine SCBA drill shows in full.
-    result_disclosure = Column(String(20), nullable=True)
-    result_release = Column(String(20), nullable=True)
+    result_disclosure: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    result_release: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     # Corporate position slugs whose holders may view results of tests taken
     # against this template, in addition to the candidate and officers. NULL or
     # empty grants no one extra. Mirrors InventoryItem.restricted_to_positions.
-    result_viewer_positions = Column(JSON, nullable=True)
+    result_viewer_positions: Mapped[Optional[list[str]]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Metadata
-    tags = Column(JSON, nullable=True)
+    tags: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
 
     # Relationships
-    tests = relationship("SkillTest", back_populates="template", lazy="select")
+    tests: Mapped[list["SkillTest"]] = relationship(
+        "SkillTest", back_populates="template", lazy="select"
+    )
 
     __table_args__ = (
         Index("idx_skill_template_org_status", "organization_id", "status"),
@@ -201,24 +211,24 @@ class SkillTest(Base):
 
     __tablename__ = "skill_tests"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    template_id = Column(
+    template_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("skill_templates.id", ondelete="CASCADE"),
         nullable=False,
     )
-    candidate_id = Column(
+    candidate_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    examiner_id = Column(
+    examiner_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
@@ -227,7 +237,7 @@ class SkillTest(Base):
     # Optional pipeline linkage — inherited from the template at creation but
     # overridable per test. A passing (non-practice) test marks this requirement
     # complete on the candidate's active enrollment. SET NULL → nullable=True.
-    requirement_id = Column(
+    requirement_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("training_requirements.id", ondelete="SET NULL"),
         nullable=True,
@@ -235,9 +245,9 @@ class SkillTest(Base):
     )
 
     # Test State
-    status = Column(String(20), default="draft")
-    result = Column(String(20), default="incomplete")
-    is_practice = Column(Boolean, default=False)
+    status: Mapped[Optional[str]] = mapped_column(String(20), default="draft")
+    result: Mapped[Optional[str]] = mapped_column(String(20), default="incomplete")
+    is_practice: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
 
     # Optimistic-concurrency counter, incremented on every mutation. A client
     # may send the version it last saw; a mismatch means someone else wrote in
@@ -246,7 +256,9 @@ class SkillTest(Base):
     # An integer rather than updated_at: MySQL DATETIME carries no fractional
     # seconds by default, so two writes inside the same second compare equal
     # and the conflict goes undetected.
-    version = Column(Integer, nullable=False, default=1, server_default="1")
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
 
     # Frozen copy of the template as it stood when this test was created:
     # {version, sections, passing_percentage, require_all_critical,
@@ -263,23 +275,29 @@ class SkillTest(Base):
     #
     # Nullable for rows created before the column existed; readers fall back to
     # the live template.
-    template_snapshot = Column(JSON, nullable=True)
+    template_snapshot: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Results — JSON array of SectionResult[] with nested CriterionResult[]
-    section_results = Column(JSON, nullable=True)
-    overall_score = Column(Float, nullable=True)
-    elapsed_seconds = Column(Integer, nullable=True)
+    section_results: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, nullable=True
+    )
+    overall_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    elapsed_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Notes
-    notes = Column(Text, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Result disclosure for this specific test — NULL inherits the template's
     # setting, which in turn inherits the organization's.
-    result_disclosure = Column(String(20), nullable=True)
-    result_release = Column(String(20), nullable=True)
+    result_disclosure: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    result_release: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     # Extra position slugs for this test only, on top of the template's.
-    result_viewer_positions = Column(JSON, nullable=True)
+    result_viewer_positions: Mapped[Optional[list[str]]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Validation trail — an official result only counts against the candidate's
     # record once a training officer signs it off.
@@ -295,8 +313,10 @@ class SkillTest(Base):
     # authority the second step exists to obtain), so this is NULL only while a
     # peer-run test awaits review. SET NULL on the author: a validated result
     # must not revert to pending because the officer who signed it later left.
-    validated_at = Column(DateTime(timezone=True), nullable=True)
-    validated_by = Column(
+    validated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    validated_by: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
@@ -305,8 +325,10 @@ class SkillTest(Base):
     # Release trail — set when an officer releases the result under the
     # on_release mode. SET NULL on the author so a departed officer's departure
     # cannot un-release a result the member has already been shown.
-    released_at = Column(DateTime(timezone=True), nullable=True)
-    released_by = Column(
+    released_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    released_by: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
@@ -327,7 +349,9 @@ class SkillTest(Base):
     # Deliberately not an attempt to correct the figure. There is no honest way
     # to reconstruct what the stopwatch would have read, and a corrected-looking
     # number is worse than one openly marked as uncertain.
-    resume_count = Column(Integer, nullable=False, default=0, server_default="0")
+    resume_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
     # Return trail — set when an officer sends a submitted result back to its
     # examiner instead of accepting or voiding it.
@@ -348,42 +372,60 @@ class SkillTest(Base):
     #
     # SET NULL on the author, matching the other trails: a departed officer's
     # departure must not erase the fact that a test was returned.
-    returned_at = Column(DateTime(timezone=True), nullable=True)
-    returned_by = Column(
+    returned_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    returned_by: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    return_reason = Column(Text, nullable=True)
+    return_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # How many times this test has been sent back. An examiner's honest slip is
     # one return; a third is a training conversation, and an officer looking at
     # the queue should be able to see the difference without reading the log.
-    return_count = Column(Integer, nullable=False, default=0, server_default="0")
+    return_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
     # Void trail — set only when an official result is withdrawn. SET NULL on the
     # author (a departed officer must not erase the void record), so nullable.
-    voided_at = Column(DateTime(timezone=True), nullable=True)
-    voided_by = Column(
+    voided_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    voided_by: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    void_reason = Column(Text, nullable=True)
+    void_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Timing
-    started_at = Column(DateTime(timezone=True), nullable=True)
-    completed_at = Column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    template = relationship("SkillTemplate", back_populates="tests", lazy="select")
-    candidate = relationship("User", foreign_keys=[candidate_id], lazy="select")
-    examiner = relationship("User", foreign_keys=[examiner_id], lazy="select")
+    template: Mapped["SkillTemplate"] = relationship(
+        "SkillTemplate", back_populates="tests", lazy="select"
+    )
+    candidate: Mapped["User"] = relationship(
+        "User", foreign_keys=[candidate_id], lazy="select"
+    )
+    examiner: Mapped["User"] = relationship(
+        "User", foreign_keys=[examiner_id], lazy="select"
+    )
 
     __table_args__ = (
         Index("idx_skill_test_org_status", "organization_id", "status"),
@@ -421,26 +463,28 @@ class SkillTestViewer(Base):
 
     __tablename__ = "skill_test_viewers"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    test_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    test_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("skill_tests.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
     # SET NULL requires nullable: the grant outlives the officer who made it.
-    granted_by = Column(
+    granted_by: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    granted_at = Column(DateTime(timezone=True), server_default=func.now())
+    granted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     __table_args__ = (
         # One grant per person per test — re-granting is idempotent rather than

@@ -462,6 +462,25 @@ export interface CallVolumeReport {
    * count-only source, where nothing yet links two units to one incident.
    */
   counts_unit_responses?: boolean;
+  /**
+   * True on detailed tracking, where the figures sum the calls each member's
+   * shift completion report recorded. Two members reporting one shift count
+   * its calls twice, so this is not an incident count and is not labelled as
+   * one (SCHED-15).
+   */
+  counts_member_reports?: boolean;
+  /** The tracking mode the whole range was read under. */
+  tracking_mode?: string;
+  /**
+   * The department-calendar date the current mode was adopted, or null when
+   * no change has been recorded (stamped from 2026-10-11, never backfilled).
+   */
+  mode_since?: string | null;
+  /**
+   * True when the range starts before `mode_since`: figures recorded under
+   * the previous mode are not in this report (SCHED-14).
+   */
+  range_predates_mode?: boolean;
   /** Apparatus id to unit number or name, for `summary.by_apparatus_runs`. */
   apparatus_labels?: Record<string, string>;
   /**

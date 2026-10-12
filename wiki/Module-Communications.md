@@ -638,3 +638,7 @@ A member dropped from a corrected audience now **keeps their read/acknowledgment
 record**, marked as no longer active rather than deleted. An acknowledgment
 report therefore stays accurate after the audience is adjusted, and the member's
 access to the message is still correctly withdrawn.
+
+## Suggestion box intake questions _(2026-10-11)_
+
+A box can ask its own questions before the title and details (`suggestion_boxes.intake_questions`; answers are stored on `suggestions.intake_answers` with their question wording). A question can be shown only after an earlier answer matches a rule (the Forms module's branching rule, shared). A dropdown or single-choice option can **route** the submission to another box: the destination must be in the same department, not the box itself, and open (a route to a closed box is ignored). Only the destination's reviewers and watchers are notified and can read it (`suggestions.routed_from_box_id`, `SET NULL`). A box that requires anonymity cannot route to one that refuses it. Every department's Compliance box is seeded with a required "What kind of concern is this?" question (and a safety follow-up); existing unedited Compliance boxes are backfilled by migration `4b7e1f0c9a2d`. Detail: `docs/training/07-documents-forms.md`.

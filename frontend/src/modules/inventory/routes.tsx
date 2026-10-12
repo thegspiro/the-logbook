@@ -33,6 +33,7 @@ const ChargesPage = lazyWithRetry(() => import('./pages/ChargesPage'));
 const ReturnRequestsPage = lazyWithRetry(() => import('./pages/ReturnRequestsPage'));
 const EquipmentRequestsPage = lazyWithRetry(() => import('./pages/EquipmentRequestsPage'));
 const WriteOffsPage = lazyWithRetry(() => import('./pages/WriteOffsPage'));
+const DepartureClearancePage = lazyWithRetry(() => import('./pages/DepartureClearancePage'));
 const ReorderRequestsPage = lazyWithRetry(() => import('./pages/ReorderRequestsPage'));
 const EquipmentKitsPage = lazyWithRetry(() => import('./pages/EquipmentKitsPage'));
 const VariantGroupsPage = lazyWithRetry(() => import('./pages/VariantGroupsPage'));
@@ -232,6 +233,17 @@ export const getInventoryRoutes = () => {
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <EquipmentRequestsPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/inventory/admin/clearances/:clearanceId"
+        element={
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
+            <Suspense fallback={null}>
+              <DepartureClearancePage />
             </Suspense>
           </ProtectedRoute>
         }

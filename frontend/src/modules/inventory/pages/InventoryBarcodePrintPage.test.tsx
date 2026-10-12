@@ -58,6 +58,7 @@ vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() 
 
 import InventoryBarcodePrintPage from './InventoryBarcodePrintPage';
 import JsBarcode from 'jsbarcode';
+import { withoutKeys } from '../../../test/withoutKeys';
 
 const makeItem = (overrides: Partial<InventoryItem> = {}): InventoryItem => ({
   id: 'it-1',
@@ -457,7 +458,7 @@ describe('InventoryBarcodePrintPage', () => {
 
   it('uses the canonicalizing PDF path when printing an item without a stored identifier', async () => {
     const user = userEvent.setup();
-    mockGetItem.mockResolvedValue(makeItem({ barcode: undefined, asset_tag: undefined, serial_number: undefined }));
+    mockGetItem.mockResolvedValue(withoutKeys(makeItem(), 'barcode', 'asset_tag', 'serial_number'));
     renderPage('?ids=it-1');
     await screen.findAllByText('Thermal Camera');
 
@@ -952,7 +953,7 @@ describe('InventoryBarcodePrintPage', () => {
     });
 
     it('sends an item without a barcode to the PDF path first', async () => {
-      mockGetItem.mockResolvedValue(makeItem({ barcode: undefined, asset_tag: undefined, serial_number: undefined }));
+      mockGetItem.mockResolvedValue(withoutKeys(makeItem(), 'barcode', 'asset_tag', 'serial_number'));
       renderPage('?ids=it-1');
 
       expect(await screen.findByText(/download the PDF once to assign them/)).toBeInTheDocument();

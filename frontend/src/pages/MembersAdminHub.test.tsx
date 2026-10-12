@@ -48,18 +48,18 @@ describe('MembersAdminHub', () => {
     });
   });
 
+  // Each tab is a card carrying a description as well as its name, so the bar
+  // is compared by accessible name (the label alone), in order.
+  const tabsNamed = (names: string[]) => names.map((name) => screen.getByRole('tab', { name }));
+
   it('offers the create tabs to a member who may create', async () => {
     mockCheckPermission.mockReturnValue(true);
     renderAt('');
 
     await waitFor(() => {
-      expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
-        'Member Management',
-        'Add Member',
-        'Import Members',
-        'Import Qualifications',
-        'Settings',
-      ]);
+      expect(screen.getAllByRole('tab')).toEqual(
+        tabsNamed(['Member Management', 'Add Member', 'Import Members', 'Import Qualifications', 'Settings'])
+      );
     });
   });
 
@@ -83,13 +83,15 @@ describe('MembersAdminHub', () => {
     renderAt('');
 
     await waitFor(() => {
-      expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
-        'Member Management',
-        // Writes onto existing members, so members.manage — which the hub
-        // already requires — is enough; no users.create.
-        'Import Qualifications',
-        'Settings',
-      ]);
+      expect(screen.getAllByRole('tab')).toEqual(
+        tabsNamed([
+          'Member Management',
+          // Writes onto existing members, so members.manage — which the hub
+          // already requires — is enough; no users.create.
+          'Import Qualifications',
+          'Settings',
+        ])
+      );
     });
   });
 

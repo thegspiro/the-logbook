@@ -22,6 +22,7 @@ from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple, Union
 
 from loguru import logger
 
+from app.core import file_encryption
 from app.core.config import settings
 from app.models.email_template import EmailTemplateType
 from app.models.user import Organization
@@ -907,8 +908,11 @@ class EmailService:
             if not os.path.isfile(resolved):
                 logger.warning("Attachment not found, skipping")
                 continue
-            with open(resolved, "rb") as f:
-                content_b64 = base64.b64encode(f.read()).decode("ascii")
+            # Stored attachments are encrypted at rest; the recipient gets
+            # the plaintext.
+            content_b64 = base64.b64encode(
+                file_encryption.read_plaintext(resolved)
+            ).decode("ascii")
             if used + len(content_b64) > budget:
                 logger.warning(
                     "Attachment exceeds Cloudflare 5 MiB message cap, " "skipping: {}",
@@ -1412,7 +1416,7 @@ class EmailService:
                 if not os.path.isfile(resolved):
                     logger.warning("Attachment not found, skipping")
                     continue
-                file_size = os.path.getsize(resolved)
+                file_size = file_encryption.plaintext_size(resolved)
                 if attachment_bytes_used + file_size > self._SMTP_ATTACHMENT_BUDGET:
                     logger.warning(
                         "Attachment exceeds per-message size budget, skipping: {}",
@@ -1420,9 +1424,8 @@ class EmailService:
                     )
                     continue
                 attachment_bytes_used += file_size
-                with open(resolved, "rb") as f:
-                    part = MIMEBase("application", "octet-stream")
-                    part.set_payload(f.read())
+                part = MIMEBase("application", "octet-stream")
+                part.set_payload(file_encryption.read_plaintext(resolved))
                 encoders.encode_base64(part)
                 filename = _sanitize_header(display_name)
                 part.add_header("Content-Disposition", "attachment", filename=filename)

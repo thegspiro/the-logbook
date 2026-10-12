@@ -44,5 +44,29 @@ class TestOfficerDirectorySyncIsolation:
         assert db.rollback.await_count == 1
 
 
+class TestForEachOrgAfterARollback:
+    async def test_later_orgs_are_refreshed_before_their_callback(self):
+        # A rollback expires every Organization the loop holds; reading one
+        # afterwards without a refresh lazy-loads outside the async context.
+        orgs = [SimpleNamespace(id=org_id) for org_id in ("A", "B", "C")]
+        db = _db_with_orgs(orgs)
+        db.refresh = AsyncMock()
+        seen = []
+
+        async def _callback(_db, org):
+            seen.append(org.id)
+            if org.id == "A":
+                raise RuntimeError("boom on A")
+            return 1
+
+        with patch.object(scheduled_tasks, "persist_task_error_log", AsyncMock()):
+            out = await scheduled_tasks._for_each_org(db, "t", _callback)
+
+        assert seen == ["A", "B", "C"]
+        assert out["total"] == 2
+        assert out["errors"] == [{"org_id": "A", "error": "boom on A"}]
+        assert [c.args[0] for c in db.refresh.await_args_list] == orgs[1:]
+
+
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

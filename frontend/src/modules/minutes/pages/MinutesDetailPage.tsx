@@ -24,6 +24,7 @@ import type {
   MeetingMinutes,
   MotionCreate,
   MotionStatus,
+  ActionItemAssignee,
   ActionItemCreate,
   ActionItemPriority,
   SectionEntry,
@@ -115,10 +116,25 @@ export const MinutesDetailPage: React.FC = () => {
   const [showActionForm, setShowActionForm] = useState(false);
   const [actionForm, setActionForm] = useState<ActionItemCreate>({
     description: '',
-    assignee_name: '',
+    assignee_id: '',
     due_date: undefined,
     priority: 'medium',
   });
+  // Any active member may be assigned (W52-6). Loaded the first time the form
+  // opens; null until then, so a failed load can be told from an empty list.
+  const [assignees, setAssignees] = useState<ActionItemAssignee[] | null>(null);
+  const [assigneesError, setAssigneesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!showActionForm || !canManage || assignees !== null) return;
+    minutesService
+      .getActionItemAssignees()
+      .then((list) => {
+        setAssignees(list);
+        setAssigneesError(null);
+      })
+      .catch((err: unknown) => setAssigneesError(getErrorMessage(err, 'Could not load members')));
+  }, [showActionForm, canManage, assignees]);
 
   // Linked event
   const [linkedEvent, setLinkedEvent] = useState<EventDetail | null>(null);
@@ -383,9 +399,16 @@ export const MinutesDetailPage: React.FC = () => {
     runActionItem(async () => {
       if (!minutesId || !actionForm.description.trim()) return;
       try {
-        await minutesService.addActionItem(minutesId, actionForm);
+        // The server stores the member's name beside the id; a typed name is
+        // no longer offered, so an item is either a member's or unassigned.
+        await minutesService.addActionItem(minutesId, {
+          description: actionForm.description,
+          assignee_id: actionForm.assignee_id || undefined,
+          due_date: actionForm.due_date || undefined,
+          priority: actionForm.priority,
+        });
         setShowActionForm(false);
-        setActionForm({ description: '', assignee_name: '', due_date: undefined, priority: 'medium' });
+        setActionForm({ description: '', assignee_id: '', due_date: undefined, priority: 'medium' });
         void fetchMinutes();
         toast.success('Action item added');
       } catch (err: unknown) {
@@ -1161,17 +1184,30 @@ export const MinutesDetailPage: React.FC = () => {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>
                   <label htmlFor="action-assignee" className="sr-only">
-                    Assignee name
+                    Assignee
                   </label>
-                  <input
+                  <select
                     id="action-assignee"
-                    type="text"
-                    value={actionForm.assignee_name || ''}
-                    onChange={(e) => setActionForm({ ...actionForm, assignee_name: e.target.value })}
-                    placeholder="Assignee name"
-                    aria-label="Assignee name"
+                    value={actionForm.assignee_id || ''}
+                    onChange={(e) => setActionForm({ ...actionForm, assignee_id: e.target.value })}
+                    aria-label="Assignee"
+                    disabled={assignees === null && !assigneesError}
                     className="form-input"
-                  />
+                  >
+                    <option value="">
+                      {assignees === null && !assigneesError ? 'Loading members…' : 'Unassigned'}
+                    </option>
+                    {(assignees ?? []).map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                  {assigneesError && (
+                    <p role="alert" className="mt-1 text-xs text-red-700 dark:text-red-400">
+                      {assigneesError}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label htmlFor="action-due-date" className="sr-only">

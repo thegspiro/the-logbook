@@ -85,7 +85,9 @@ def _member_requirement(requirement) -> TrainingRequirementEnhancedResponse:
     while the component test asserted it against a payload the API never
     produced.
     """
-    response = TrainingRequirementEnhancedResponse.model_validate(requirement)
+    response: TrainingRequirementEnhancedResponse = (
+        TrainingRequirementEnhancedResponse.model_validate(requirement)
+    )
     redacted = [
         (
             item
@@ -96,12 +98,17 @@ def _member_requirement(requirement) -> TrainingRequirementEnhancedResponse:
         )
         for item in (response.checklist_items or [])
     ]
-    return response.model_copy(update={"checklist_items": redacted})
+    member_view: TrainingRequirementEnhancedResponse = response.model_copy(
+        update={"checklist_items": redacted}
+    )
+    return member_view
 
 
 def _member_progress(progress) -> RequirementProgressResponse:
     """Return progress without officer-only checklist identifiers."""
-    response = RequirementProgressResponse.model_validate(progress)
+    response: RequirementProgressResponse = RequirementProgressResponse.model_validate(
+        progress
+    )
     requirement = response.requirement
     if requirement is None:
         return response
@@ -132,19 +139,23 @@ def _member_progress(progress) -> RequirementProgressResponse:
             for item_id in notes["checklist_claimed"]
             if str(item_id) in claimable_ids
         ]
-    return response.model_copy(
+    member_view: RequirementProgressResponse = response.model_copy(
         update={"requirement": visible_requirement, "progress_notes": notes or None}
     )
+    return member_view
 
 
 def _member_program_requirement(program_requirement) -> ProgramRequirementResponse:
     """Return a program-requirement link without officer-only checklist steps."""
-    response = ProgramRequirementResponse.model_validate(program_requirement)
+    response: ProgramRequirementResponse = ProgramRequirementResponse.model_validate(
+        program_requirement
+    )
     if response.requirement is None:
         return response
-    return response.model_copy(
+    member_view: ProgramRequirementResponse = response.model_copy(
         update={"requirement": _member_requirement(response.requirement)}
     )
+    return member_view
 
 
 # Registry JSON files, resolved relative to the app package (…/backend/app/data)
@@ -479,8 +490,11 @@ async def create_training_program(
         created_by=current_user.id,
     )
 
-    if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    if error or program is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
 
     await log_audit_event(
         db=db,
@@ -526,9 +540,12 @@ async def build_training_program(
         created_by=current_user.id,
     )
 
-    if error:
+    if error or program is None:
         await db.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
 
     await log_audit_event(
         db=db,
@@ -605,9 +622,12 @@ async def instantiate_sample_template(
         created_by=current_user.id,
     )
 
-    if error:
+    if error or program is None:
         await db.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
 
     await log_audit_event(
         db=db,
@@ -1070,8 +1090,11 @@ async def update_program_requirement(
         updates=updates,
     )
 
-    if error:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    if error or program_requirement is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error or "An unexpected error occurred",
+        )
 
     if str(program_requirement.program_id) != str(program_id):
         raise HTTPException(
@@ -1648,8 +1671,11 @@ async def advance_enrollment_phase(
         force=force,
     )
 
-    if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    if error or enrollment is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
 
     await log_audit_event(
         db=db,
@@ -1732,8 +1758,11 @@ async def reset_requirement_progress(
         progress_id=progress_id,
         organization_id=current_user.organization_id,
     )
-    if error:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    if error or progress is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error or "An unexpected error occurred",
+        )
 
     await log_audit_event(
         db=db,
@@ -1772,8 +1801,11 @@ async def reset_enrollment_progress(
         enrollment_id=enrollment_id,
         organization_id=current_user.organization_id,
     )
-    if error:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    if error or enrollment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error or "An unexpected error occurred",
+        )
 
     await log_audit_event(
         db=db,
@@ -1817,8 +1849,11 @@ async def reopen_enrollment(
     )
     if error == "Enrollment not found":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
-    if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    if error or enrollment is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
 
     await log_audit_event(
         db=db,
@@ -1873,8 +1908,11 @@ async def withdraw_enrollment(
     )
     if error == "Enrollment not found":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
-    if error:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=error)
+    if error or enrollment is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=error or "An unexpected error occurred",
+        )
 
     await log_audit_event(
         db=db,
@@ -2027,8 +2065,11 @@ async def duplicate_program(
         increment_version=increment_version,
     )
 
-    if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    if error or new_program is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
 
     await log_audit_event(
         db=db,
@@ -2123,7 +2164,7 @@ async def import_program(
     await log_audit_event(
         db,
         event_type="training.program.imported",
-        resource="training",
+        event_category="training",
         severity="info",
         event_data={
             "program_id": str(program.id),

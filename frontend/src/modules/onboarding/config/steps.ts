@@ -10,7 +10,8 @@
  *
  * Order reflects what a department can answer rather than what the system
  * wants to store. Identity comes second so the rest of setup belongs to a real
- * account; what the department uses (modules, ranks, stations, apparatus)
+ * account, and the encryption key third — the one thing setup cannot finish
+ * without, confirmed by the account just created. What the department uses (modules, ranks, stations, apparatus)
  * comes before the external integrations (email, storage, sign-in), which are
  * the steps that send someone off to find credentials and are all skippable.
  */
@@ -23,8 +24,9 @@ export interface OnboardingStep {
   path: string;
   /**
    * True when setup can complete without the step being answered. Only the
-   * organization and the administrator account are genuinely required — see
-   * `required_steps` in `OnboardingService.complete_onboarding`.
+   * organization, the administrator account and the encryption key
+   * confirmation are genuinely required — see `required_steps` in
+   * `OnboardingService.complete_onboarding`.
    */
   optional: boolean;
 }
@@ -42,6 +44,13 @@ export const ONBOARDING_STEPS = [
     name: 'Administrator Account',
     shortName: 'Administrator',
     path: '/onboarding/system-owner',
+    optional: false,
+  },
+  {
+    key: 'key_custody',
+    name: 'Encryption Key',
+    shortName: 'Key',
+    path: '/onboarding/encryption-key',
     optional: false,
   },
   {
