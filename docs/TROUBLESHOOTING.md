@@ -8076,7 +8076,7 @@ Facilities now include NFPA compliance tracking:
 - Events: `EventRequestStatusPage`, `EventRequestsTab`, `EventsSettingsTab`
 - Scheduling: `OpenShiftsTab`, `PatternsTab`, `ShiftReportsTab`, `MyShiftsTab`
 - Inventory: `ImportInventory`
-- Prospective Members: `ApplicantDetailDrawer`, `ConversionModal`, `CreatePipelinePage`, `PipelineDetailPage`
+- Prospective Members: `ApplicantDetailDialog`, `ConversionModal`, `CreatePipelinePage`, `PipelineDetailPage`
 - Training: `SubmitTrainingPage`, `TrainingRequirementsPage`
 - Other: `PublicFormPage`, `ReviewSubmissionsPage`, `WaiverManagementPage`, `MemberProfilePage`, `MyEquipmentPage`
 
@@ -8148,7 +8148,7 @@ ESLint also cleaned to 0 errors, 0 warnings across 59 files.
 
 - New `prospect_event_links` table stores the link between applicants and events
 - When a pipeline stage of type `meeting` activates for an applicant, the system auto-links the next upcoming matching event
-- The ApplicantDetailDrawer shows linked events with date, time, type, and status
+- The ApplicantDetailDialog shows linked events with date, time, type, and status
 - Coordinators can manually add/remove event links
 
 **Edge Cases:**

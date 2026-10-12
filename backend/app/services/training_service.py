@@ -1041,6 +1041,7 @@ class TrainingService:
         # calendar_period, rolling, or certification_period, all three of
         # which compute their own deadline below.
         honors_explicit_due_date = due_date_type in (None, "fixed_date")
+        effective_due_date: Optional[date]
         if requirement.due_date and honors_explicit_due_date:
             effective_due_date = requirement.due_date
         elif rolling_months and counts_shift_attendance(requirement):

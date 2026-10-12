@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { renderWithRouter } from '../../test/utils';
@@ -7,11 +7,13 @@ import { renderWithRouter } from '../../test/utils';
 const mockGetPatterns = vi.fn();
 const mockGetTemplates = vi.fn();
 const mockGenerate = vi.fn();
+const mockCreatePattern = vi.fn();
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
     getPatterns: (...a: unknown[]) => mockGetPatterns(...a) as unknown,
     getTemplates: (...a: unknown[]) => mockGetTemplates(...a) as unknown,
     generateShiftsFromPattern: (...a: unknown[]) => mockGenerate(...a) as unknown,
+    createPattern: (...a: unknown[]) => mockCreatePattern(...a) as unknown,
   },
 }));
 
@@ -66,6 +68,8 @@ beforeEach(() => {
   mockGetTemplates.mockResolvedValue([TEMPLATE]);
   mockGenerate.mockReset();
   mockGenerate.mockResolvedValue({ shifts_created: 11 });
+  mockCreatePattern.mockReset();
+  mockCreatePattern.mockResolvedValue({ ...PATTERN, id: 'pat-2' });
   mockToastSuccess.mockReset();
   mockToastError.mockReset();
 });
@@ -93,6 +97,159 @@ describe('PatternsTab', () => {
     expect(screen.getByRole('group', { name: 'Active Days' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mon' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Sun' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('creates the Weekend Only preset as a weekly pattern with per-weekday shifts', async () => {
+    mockGetTemplates.mockResolvedValue([
+      TEMPLATE,
+      { ...TEMPLATE, id: 'tpl-2', name: 'Night Shift A', start_time_of_day: '19:00', end_time_of_day: '07:00' },
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<PatternsTab />);
+
+    await user.click(await screen.findByRole('button', { name: 'New Pattern' }));
+    await user.click(await screen.findByRole('button', { name: /Weekend Only/ }));
+
+    expect(screen.getByLabelText('Pattern Name *')).toHaveValue('Weekend Only');
+    await user.selectOptions(screen.getByLabelText(/Day Shift Template/), 'tpl-1');
+    await user.selectOptions(screen.getByLabelText(/Night Shift Template/), 'tpl-2');
+    await user.type(screen.getByLabelText('Start Date *'), '2026-10-09');
+    await user.click(screen.getByRole('button', { name: 'Create Pattern' }));
+
+    expect(mockCreatePattern).toHaveBeenCalledWith({
+      name: 'Weekend Only',
+      description: expect.stringContaining('Friday night') as unknown,
+      pattern_type: 'weekly',
+      template_id: 'tpl-1',
+      start_date: '2026-10-09',
+      end_date: undefined,
+      days_on: undefined,
+      days_off: undefined,
+      rotation_days: undefined,
+      schedule_config: {
+        weekday_shifts: { 0: ['day'], 5: ['night'], 6: ['day', 'night'] },
+        weekdays: [0, 5, 6],
+        day_template_id: 'tpl-1',
+        night_template_id: 'tpl-2',
+      },
+    });
+  });
+
+  describe('manual weekly pattern with separate day and night shifts', () => {
+    const NIGHT_TEMPLATE = {
+      ...TEMPLATE,
+      id: 'tpl-2',
+      name: 'Night Shift A',
+      start_time_of_day: '19:00',
+      end_time_of_day: '07:00',
+    };
+
+    beforeEach(() => {
+      mockGetTemplates.mockReset();
+      mockGetTemplates.mockResolvedValue([TEMPLATE, NIGHT_TEMPLATE]);
+    });
+
+    const openWeekendByHand = async (user: ReturnType<typeof userEvent.setup>) => {
+      renderWithRouter(<PatternsTab />);
+      await user.click(await screen.findByRole('button', { name: 'New Pattern' }));
+      await user.click(screen.getByRole('button', { name: /Manual Setup/ }));
+      await user.selectOptions(screen.getByLabelText('Pattern Type'), 'weekly');
+      // Defaults to Mon-Fri; switch to Sat and Sun.
+      for (const day of ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']) {
+        await user.click(screen.getByRole('button', { name: day }));
+      }
+      await user.click(screen.getByLabelText('Separate day and night shifts'));
+      await user.type(screen.getByLabelText('Pattern Name *'), 'Weekends by hand');
+      await user.type(screen.getByLabelText('Start Date *'), '2026-10-09');
+    };
+
+    it('sends the chosen shifts for each active day, defaulting a day to both', async () => {
+      const user = userEvent.setup();
+      await openWeekendByHand(user);
+
+      const saturday = screen.getByRole('group', { name: 'Sat shifts' });
+      await user.click(within(saturday).getByRole('button', { name: 'Day' }));
+      expect(within(saturday).getByRole('button', { name: 'Day' })).toHaveAttribute('aria-pressed', 'false');
+
+      await user.selectOptions(screen.getByLabelText(/Day Shift Template/), 'tpl-1');
+      await user.selectOptions(screen.getByLabelText(/Night Shift Template/), 'tpl-2');
+      await user.click(screen.getByRole('button', { name: 'Create Pattern' }));
+
+      expect(mockCreatePattern).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pattern_type: 'weekly',
+          template_id: 'tpl-1',
+          schedule_config: {
+            weekdays: [0, 6],
+            weekday_shifts: { 0: ['day', 'night'], 6: ['night'] },
+            day_template_id: 'tpl-1',
+            night_template_id: 'tpl-2',
+          },
+        })
+      );
+    });
+
+    it('refuses a day with neither shift chosen', async () => {
+      const user = userEvent.setup();
+      await openWeekendByHand(user);
+
+      const sunday = screen.getByRole('group', { name: 'Sun shifts' });
+      await user.click(within(sunday).getByRole('button', { name: 'Day' }));
+      await user.click(within(sunday).getByRole('button', { name: 'Night' }));
+      await user.selectOptions(screen.getByLabelText(/Day Shift Template/), 'tpl-1');
+      await user.selectOptions(screen.getByLabelText(/Night Shift Template/), 'tpl-2');
+      await user.click(screen.getByRole('button', { name: 'Create Pattern' }));
+
+      expect(mockToastError).toHaveBeenCalledWith('Choose Day, Night or both for every active day');
+      expect(mockCreatePattern).not.toHaveBeenCalled();
+    });
+
+    it('will not let a night shift fall back to the day template', async () => {
+      const user = userEvent.setup();
+      await openWeekendByHand(user);
+
+      await user.selectOptions(screen.getByLabelText(/Day Shift Template/), 'tpl-1');
+      await user.click(screen.getByRole('button', { name: 'Create Pattern' }));
+
+      expect(mockToastError).toHaveBeenCalledWith('Choose a night shift template');
+      expect(mockCreatePattern).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('weekly pattern shifts in the list', () => {
+    const WEEKEND = {
+      ...PATTERN,
+      id: 'pat-w',
+      name: 'Weekend Only',
+      pattern_type: 'weekly' as const,
+      schedule_config: {
+        weekdays: [0, 5, 6],
+        weekday_shifts: { 5: ['night'], 6: ['day', 'night'], 0: ['day'] },
+      },
+    };
+
+    it('names the shifts each covered weekday carries', async () => {
+      mockGetPatterns.mockResolvedValue([WEEKEND]);
+      renderWithRouter(<PatternsTab />);
+
+      expect(await screen.findByText('Friday: Night')).toBeInTheDocument();
+      expect(screen.getByText('Saturday: Day + Night')).toBeInTheDocument();
+      expect(screen.getByText('Sunday: Day')).toBeInTheDocument();
+      expect(screen.queryByText(/^Monday:/)).not.toBeInTheDocument();
+    });
+
+    it('ignores malformed weekday_shifts and keeps a plain weekly pattern as it was', async () => {
+      mockGetPatterns.mockResolvedValue([
+        {
+          ...WEEKEND,
+          schedule_config: { weekdays: [1], weekday_shifts: { 9: ['day'], x: ['night'], 1: 'day' } },
+        },
+      ]);
+      renderWithRouter(<PatternsTab />);
+
+      await screen.findByText('Weekend Only');
+      expect(screen.queryByText('Weekly shifts')).not.toBeInTheDocument();
+    });
   });
 
   it('tells the officer about driver seats generation left unfilled', async () => {

@@ -27,7 +27,7 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 // Neither is open in these tests, and each reads store fields of its own.
-vi.mock('../components/ApplicantDetailDrawer', () => ({ ApplicantDetailDrawer: () => null }));
+vi.mock('../components/ApplicantDetailDialog', () => ({ ApplicantDetailDialog: () => null }));
 vi.mock('../components/ConversionModal', () => ({ ConversionModal: () => null }));
 
 const row = (id: string, first: string, last: string): ApplicantListItem => ({
